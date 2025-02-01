@@ -199,6 +199,7 @@ struct SamplerDisplayWithTimeline : public Component, public TempoListener
 
 	struct Properties
 	{
+		double sampleStart;
 		double sampleLength;
 		double sampleRate;
 		double bpm;
