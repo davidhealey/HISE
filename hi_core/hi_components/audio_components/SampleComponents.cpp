@@ -914,6 +914,7 @@ void SamplerSoundWaveform::setSoundToDisplay(const ModulatorSamplerSound *s, int
 			preview->setReader(afr, numSamplesInCurrentSample);
 
 			timeProperties.sampleLength = (double)currentSound->getReferenceToSound(0)->getLengthInSamples();
+			timeProperties.sampleStart = (double)currentSound->getReferenceToSound(0)->getSampleStart();
 			timeProperties.sampleRate = (double)currentSound->getReferenceToSound(0)->getSampleRate();
 
 			updateRanges();
@@ -1289,7 +1290,7 @@ String SamplerDisplayWithTimeline::getText(const Properties& p, float normalised
 {
 	if (p.sampleRate > 0.0)
 	{
-		auto sampleValue = roundToInt(normalisedX * p.sampleLength);
+		auto sampleValue = roundToInt(normalisedX * p.sampleLength - p.sampleStart);
 
 		if (p.currentDomain == TimeDomain::Samples)
 			return String(roundToInt(sampleValue));
@@ -1348,20 +1349,26 @@ void SamplerDisplayWithTimeline::paint(Graphics& g)
 
 	g.setFont(GLOBAL_FONT());
 
+	int xOffset = 0;
 	int delta = 200;
-			
+		
 	if (auto s = getWaveform()->getCurrentSound())
 	{
 		props.sampleLength = s->getReferenceToSound(0)->getLengthInSamples();
 		props.sampleRate = s->getReferenceToSound(0)->getSampleRate();
+		props.sampleStart = s->getReferenceToSound(0)->getSampleStart();
+
+		xOffset = roundToInt(getWidth() / props.sampleLength * props.sampleStart);
 
 		if (props.currentDomain == TimeDomain::Beats)
 			delta = roundToInt(getWidth() / getNumBeats(props.sampleLength, props.sampleRate, props.bpm));
 	}
 
-	for (int i = 0; i < getWidth(); i += delta)
+	for (int i = xOffset; i < getWidth(); i += delta)
 	{
 		auto textArea = b.removeFromLeft(delta).toFloat();
+
+		textArea.setX(textArea.getX() + xOffset);
 
 		g.setColour(Colours::white.withAlpha(0.1f));
 		g.drawVerticalLine(i, 3.0f, (float)TimelineHeight);
@@ -1373,7 +1380,6 @@ void SamplerDisplayWithTimeline::paint(Graphics& g)
 		g.drawText(getText(props, normalisedX), textArea.reduced(5.0f, 0.0f), Justification::centredLeft);
 	}
 }
-
 
 struct EnvelopeLaf : public TableEditor::LookAndFeelMethods,
 			 public LookAndFeel_V3
