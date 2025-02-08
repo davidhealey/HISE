@@ -968,7 +968,7 @@ void ScriptingApi::Message::setStartOffset(int newStartOffset)
 	}
 
 	if (newStartOffset > UINT16_MAX)
-		reportScriptError("Max start offset is 65536 (2^16)");
+		reportScriptError("Max start offset is 65535 (2^16-1)");
 
 #endif
 
@@ -3764,6 +3764,7 @@ struct ScriptingApi::Sampler::Wrapper
 	API_METHOD_WRAPPER_2(Sampler, setAllowReleaseStart);
 	API_VOID_METHOD_WRAPPER_2(Sampler, setGUISelection);
 	API_VOID_METHOD_WRAPPER_1(Sampler, setSortByRRGroup);
+	API_VOID_METHOD_WRAPPER_1(Sampler, setOffsetMultiplier);
 };
 
 
@@ -3826,6 +3827,7 @@ sampler(sampler_)
 	ADD_API_METHOD_0(getTimestretchOptions);
 	ADD_API_METHOD_0(getReleaseStartOptions);
 	ADD_API_METHOD_1(setReleaseStartOptions);
+	ADD_API_METHOD_1(setOffsetMultiplier);
 
 	sampleIds = SampleIds::Helpers::getAllIds();
 
@@ -4749,6 +4751,16 @@ void ScriptingApi::Sampler::setReleaseStartOptions(var data)
 #else
 	reportScriptError("HISE_SAMPLER_ALLOW_RELEASE_START is not enabled");
 #endif
+}
+
+void ScriptingApi::Sampler::setOffsetMultiplier(int multiplier)
+{
+		ModulatorSampler* s = dynamic_cast<ModulatorSampler*>(sampler.get());
+		
+		if (s == nullptr)
+			reportScriptError("Invalid sampler call");
+			
+		s->setStartOffsetMultiplier(multiplier);
 }
 
 String ScriptingApi::Sampler::getAudioWaveformContentAsBase64(var presetObj)

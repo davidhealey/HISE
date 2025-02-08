@@ -1286,7 +1286,7 @@ void ModulatorSampler::preStartVoice(int voiceIndex, const HiseEvent& e)
 	else
 	{
 		// hack: the sample start value is normalized so we need to just flip the sign in order to tell startVoice to use a direct sample value
-		sampleStartModValue = -1.0f * static_cast<ModulatorSynthVoice*>(getVoice(voiceIndex))->getCurrentHiseEvent().getStartOffset();
+		sampleStartModValue = -1.0f * static_cast<ModulatorSynthVoice*>(getVoice(voiceIndex))->getCurrentHiseEvent().getStartOffset() * startOffsetMultiplier;
 		samplerDisplayValues.currentSampleStartPos = 0.0f;
 	}
 
@@ -1776,6 +1776,11 @@ bool ModulatorSampler::setCurrentGroupIndex(int currentIndex, int eventId)
 	{
 		return false;
 	}
+}
+
+void ModulatorSampler::setStartOffsetMultiplier(int multiplier)
+{
+	startOffsetMultiplier = multiplier;
 }
 
 void ModulatorSampler::setRRGroupVolume(int groupIndex, float gainValue)
