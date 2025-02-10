@@ -310,6 +310,7 @@ struct FilterDragOverlay::Panel : public PanelWithProcessorConnection
 		ResetOnDoubleClick,
 		AllowContextMenu,
 		GainRange,
+		HandleSize,
 		numSpecialProperties
 	};
 
@@ -331,6 +332,7 @@ struct FilterDragOverlay::Panel : public PanelWithProcessorConnection
 		RETURN_DEFAULT_PROPERTY_ID(index, SpecialProperties::ResetOnDoubleClick, "ResetOnDoubleClick");
 		RETURN_DEFAULT_PROPERTY_ID(index, SpecialProperties::AllowContextMenu, "AllowContextMenu");
 		RETURN_DEFAULT_PROPERTY_ID(index, SpecialProperties::GainRange, "GainRange");
+		RETURN_DEFAULT_PROPERTY_ID(index, SpecialProperties::HandleSize, "HandleSize");
 
 		jassertfalse;
 		return {};
@@ -347,6 +349,7 @@ struct FilterDragOverlay::Panel : public PanelWithProcessorConnection
 		RETURN_DEFAULT_PROPERTY(index, SpecialProperties::ResetOnDoubleClick, var(false));
 		RETURN_DEFAULT_PROPERTY(index, SpecialProperties::AllowContextMenu, var(true));
 		RETURN_DEFAULT_PROPERTY(index, SpecialProperties::GainRange, var(24.0));
+		RETURN_DEFAULT_PROPERTY(index, SpecialProperties::HandleSize, var(24));
 
 		jassertfalse;
 
@@ -364,6 +367,8 @@ struct FilterDragOverlay::Panel : public PanelWithProcessorConnection
 
 			auto u = (bool)getPropertyWithDefault(object, (int)SpecialProperties::UseUndoManager);
 			auto rd = (bool)getPropertyWithDefault(object, (int)SpecialProperties::ResetOnDoubleClick);
+			
+			auto hs = (int)getPropertyWithDefault(object, (int)SpecialProperties::HandleSize);
 
 			if (u)
 				fd->setUndoManager(getMainController()->getControlUndoManager());
@@ -378,6 +383,7 @@ struct FilterDragOverlay::Panel : public PanelWithProcessorConnection
 			fd->setResetOnDoubleClick(rd);
 			fd->setAllowFilterResizing(r);
 			fd->setSpectrumVisibility((SpectrumVisibility)s);
+			fd->setHandleSize(hs);
 		}
 	}
 
@@ -395,6 +401,8 @@ struct FilterDragOverlay::Panel : public PanelWithProcessorConnection
 
 			storePropertyInObject(obj, (int)SpecialProperties::GainRange, fd->gainRange);
 			storePropertyInObject(obj, (int)SpecialProperties::AllowContextMenu, fd->allowContextMenu);
+			
+			storePropertyInObject(obj, (int)SpecialProperties::HandleSize, fd->handleSize);
 		}
 
 		return obj;
@@ -564,7 +572,7 @@ void FilterDragOverlay::checkEnabledBands()
 
 void FilterDragOverlay::resized()
 {
-	constrainer->setMinimumOnscreenAmounts(24, 24, 24, 24);
+	constrainer->setMinimumOnscreenAmounts(handleSize, handleSize, handleSize, handleSize);
 
 	fftAnalyser.setBounds(getLocalBounds().reduced(offset));
 	filterGraph.setBounds(getLocalBounds().reduced(offset));
@@ -668,7 +676,7 @@ void FilterDragOverlay::updatePositions(bool forceUpdate)
 
 		Rectangle<int> b(point, point);
 
-		dragComponents[i]->setBounds(b.withSizeKeepingCentre(24, 24));
+		dragComponents[i]->setBounds(b.withSizeKeepingCentre(handleSize, handleSize));
 	}
 }
 

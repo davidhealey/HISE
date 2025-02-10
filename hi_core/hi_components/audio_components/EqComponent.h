@@ -150,6 +150,8 @@ public:
 
 	void setResetOnDoubleClick(bool shouldReset) { resetOnDoubleClick = shouldReset; }
 
+	void setHandleSize(int newSize)	{	handleSize = newSize;	}
+
 	void setAllowContextMenu(bool shouldAllow)
 	{
 		allowContextMenu = shouldAllow;
@@ -250,6 +252,7 @@ private:
 
 	bool allowContextMenu = true;
 	double gainRange = 24.0;
+	int handleSize = 24;
 
 	bool resetOnDoubleClick = false;
 	bool allowFilterResizing = true;
