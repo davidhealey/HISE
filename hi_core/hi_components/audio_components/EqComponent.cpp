@@ -1050,6 +1050,7 @@ void FilterDragOverlay::FilterDragComponent::mouseDrag(const MouseEvent& e)
 	{
 		auto pi = parent.eq->getParameterIndex(index, CurveEq::BandParameter::Q);
 		dragQStart = parent.eq->getAttribute(pi);
+		broadcasterValue->setProperty("Q", dragQStart);
 	}
 
 	auto te = e.getEventRelativeTo(this);
