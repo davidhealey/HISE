@@ -1023,6 +1023,9 @@ void FilterDragOverlay::FilterDragComponent::mouseDrag(const MouseEvent& e)
 {
 	CHECK_MIDDLE_MOUSE_DRAG(e);
 
+	auto* broadcasterValue = new DynamicObject();
+	broadcasterValue->setProperty("Index", index);
+
 	if (e.mods.isShiftDown())
 	{
 		auto deltaNormalised = (float)e.getDistanceFromDragStartY() / (float)getParentComponent()->getHeight();
@@ -1037,6 +1040,9 @@ void FilterDragOverlay::FilterDragComponent::mouseDrag(const MouseEvent& e)
 		auto newValue = jlimit(0.0, 1.0, start + deltaNormalised);
 
 		parent.setEqAttribute(CurveEq::BandParameter::Q, index, qRange.convertFrom0to1(newValue));
+
+		broadcasterValue->setProperty("Q", qRange.convertFrom0to1(newValue));
+		parent.eq->sendBroadcasterMessage("QChanged", broadcasterValue);
 
 		return;
 	}
@@ -1081,15 +1087,19 @@ void FilterDragOverlay::FilterDragComponent::mouseDrag(const MouseEvent& e)
 
 	parent.setEqAttribute(CurveEq::BandParameter::Freq, index, freq);
 	parent.setEqAttribute(CurveEq::BandParameter::Gain, index, gain);
+
+	broadcasterValue->setProperty("Frequency", freq);
+	broadcasterValue->setProperty("Gain", gain);	
+	parent.eq->sendBroadcasterMessage("BandMoved", broadcasterValue);
 }
-
-
-
 
 void FilterDragOverlay::FilterDragComponent::mouseWheelMove(const MouseEvent &e, const MouseWheelDetails &d)
 {
 	if (parent.eq == nullptr)
 		return;
+		
+	auto* broadcasterValue = new DynamicObject();
+	broadcasterValue->setProperty("Index", index);
 
 	if (e.mods.isCtrlDown() || parent.isInFloatingTile)
 	{
@@ -1107,14 +1117,14 @@ void FilterDragOverlay::FilterDragComponent::mouseWheelMove(const MouseEvent &e,
         q = jlimit(0.1, 8.0, q * amp);
 
 		parent.setEqAttribute(CurveEq::BandParameter::Q, index, q);
+		broadcasterValue->setProperty("Q", q);
+		parent.eq->sendBroadcasterMessage("QChanged", broadcasterValue);
 	}
 	else
 	{
 		getParentComponent()->mouseWheelMove(e, d);
 	}
 }
-
-
 
 void FilterDragOverlay::FilterDragComponent::mouseDoubleClick(const MouseEvent& e)
 {
@@ -1156,12 +1166,24 @@ void FilterDragOverlay::FilterDragComponent::setConstrainer(ComponentBoundsConst
 void FilterDragOverlay::FilterDragComponent::mouseEnter(const MouseEvent& e)
 {
 	over = true;
+	
+	auto* broadcasterValue = new DynamicObject();
+	broadcasterValue->setProperty("Index", index);
+	broadcasterValue->setProperty("Over", true);
+	parent.eq->sendBroadcasterMessage("MouseOver", broadcasterValue);
+	
 	parent.repaint();
 }
 
 void FilterDragOverlay::FilterDragComponent::mouseExit(const MouseEvent& e)
 {
 	over = false;
+	
+	auto* broadcasterValue = new DynamicObject();
+	broadcasterValue->setProperty("Index", index);
+	broadcasterValue->setProperty("Over", false);
+	parent.eq->sendBroadcasterMessage("MouseOver", broadcasterValue);
+	
 	parent.repaint();
 }
 

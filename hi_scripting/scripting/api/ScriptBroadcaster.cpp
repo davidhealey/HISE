@@ -4378,7 +4378,7 @@ void ScriptBroadcaster::attachToEqEvents(var moduleIds, var events, var optional
 	}
 
 	StringArray eventTypes;
-	StringArray legitEventTypes = { "BandAdded", "BandRemoved", "BandSelected", "FFTEnabled" };
+	StringArray legitEventTypes = { "BandAdded", "BandRemoved", "BandSelected", "BandMoved", "QChanged", "MouseOver", "FFTEnabled" };
 
 	if (events.isString() && events.toString().isNotEmpty())
 	{
