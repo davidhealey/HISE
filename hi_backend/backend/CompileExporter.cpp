@@ -2480,7 +2480,7 @@ int CppBuilder::exportValueTreeAsCpp(const File &sourceDirectory, const File &de
 
 #define ADD_LINE(x) (batchContent << x << NewLine::getDefault())
 
-void CompileExporter::BatchFileCreator::createBatchFile(CompileExporter* exporter, BuildOption buildOption, TargetTypes types, ChildProcessManager* manager)
+void CompileExporter::Batch FileCreator::createBatchFile(CompileExporter* exporter, BuildOption buildOption, TargetTypes types, ChildProcessManager* manager)
 {
 	ModulatorSynthChain* chainToExport = exporter->chainToExport;
     ignoreUnused(chainToExport);
