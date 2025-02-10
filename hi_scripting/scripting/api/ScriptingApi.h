@@ -658,6 +658,7 @@ public:
 		/** Returns the width of the string for the given font properties. */
 		float getStringWidth(String text, String fontName, float fontSize, float fontSpacing);
 
+        /** Returns a number as string in hexadecimal format (0xFFFFFFFF). */
 		String intToHexString(int value);
 
 		/** Signals that the application should terminate. */
