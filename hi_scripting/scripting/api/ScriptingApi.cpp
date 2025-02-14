@@ -2431,6 +2431,7 @@ var ScriptingApi::Engine::createBXLicenser ()
 	return var(new ScriptingObjects::ScriptBXLicenser(getScriptProcessor()));
 #else
 	reportScriptError ("BX Licenser is not enabled");
+    RETURN_IF_NO_THROW({});
 #endif
 
 }
