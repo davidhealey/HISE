@@ -12,7 +12,9 @@ chmod +x "tools/Projucer/Projucer.app/Contents/MacOS/Projucer"
 
 echo "Compiling Standalone App..."
 
-xcodebuild -project "$standalone_folder/Builds/MacOSX/HISE Standalone.xcodeproj" -configuration "CI" | xcpretty || exit 1
+set -o pipefail && xcodebuild -project "$standalone_folder/Builds/MacOSX/HISE Standalone.xcodeproj" -configuration "CI" | ./tools/Projucer/xcbeautify --renderer github-actions
+
+#xcodebuild  | xcpretty || exit 1
 
 if [ $? != 0 ];
 then

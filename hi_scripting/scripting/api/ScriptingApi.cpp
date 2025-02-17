@@ -1227,6 +1227,7 @@ struct ScriptingApi::Engine::Wrapper
 	API_METHOD_WRAPPER_1(Engine, setCurrentExpansion);
 	API_METHOD_WRAPPER_0(Engine, createGlobalScriptLookAndFeel);
 	API_METHOD_WRAPPER_1(Engine, createBackgroundTask);
+	API_METHOD_WRAPPER_0(Engine, createBXLicenser);
     API_METHOD_WRAPPER_1(Engine, createFixObjectFactory);
 	API_METHOD_WRAPPER_0(Engine, createErrorHandler);
 	API_METHOD_WRAPPER_1(Engine, createModulationMatrix);
@@ -1324,6 +1325,7 @@ parentMidiProcessor(dynamic_cast<ScriptBaseMidiProcessor*>(p))
 	ADD_API_METHOD_0(createUserPresetHandler);
 	ADD_API_METHOD_0(createMidiAutomationHandler);
 	ADD_API_METHOD_0(createMacroHandler);
+	ADD_API_METHOD_0(createBXLicenser);
   ADD_API_METHOD_1(loadNextUserPreset);
 	ADD_API_METHOD_1(loadPreviousUserPreset);
 	ADD_API_METHOD_1(isUserPresetReadOnly);
@@ -2421,6 +2423,17 @@ var ScriptingApi::Engine::createUserPresetHandler()
 juce::var ScriptingApi::Engine::createBroadcaster(var defaultValues)
 {
 	return var(new ScriptingObjects::ScriptBroadcaster(getScriptProcessor(), defaultValues));
+}
+
+var ScriptingApi::Engine::createBXLicenser ()
+{
+#if HISE_INCLUDE_BX_LICENSER
+	return var(new ScriptingObjects::ScriptBXLicenser(getScriptProcessor()));
+#else
+	reportScriptError ("BX Licenser is not enabled");
+    RETURN_IF_NO_THROW({});
+#endif
+
 }
 
 var ScriptingApi::Engine::getDspNetworkReference(String processorId, String id)

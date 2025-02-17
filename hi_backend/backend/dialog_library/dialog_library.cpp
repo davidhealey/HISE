@@ -409,11 +409,7 @@ var ExportSetupWizard::checkIDE(const var::NativeFunctionArgs& args)
             writeState("xcodeExists", xcodeExists);
         }
         {
-            juce::ChildProcess xcp;
-            xcp.start("gem list xcpretty");
-            auto output = xcp.readAllProcessOutput();
-            auto xcPrettyExists = output.contains("xcpretty");
-            writeState("xcPrettyExists", xcPrettyExists);
+            writeState("xcPrettyExists", true);
         }
 #endif
 

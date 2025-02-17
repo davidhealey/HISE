@@ -84,6 +84,10 @@
 #include "scripting/engine/JavascriptEngineAdditionalMethods.cpp"
 #include "scripting/engine/JavascriptEngineCyclicReferenceChecks.cpp"
 
+#if HISE_INCLUDE_BX_LICENSER
+#include "scripting/api/bx/bx_wrapper.cpp"
+#endif
+
 #include "scripting/api/ScriptingApiObjects.cpp"
 #include "scripting/api/ScriptModulationMatrix.cpp"
 #include "scripting/api/ScriptBroadcaster.cpp"

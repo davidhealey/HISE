@@ -370,6 +370,9 @@ public:
 		/** Creates a broadcaster that can send messages to attached listeners. */
 		var createBroadcaster(var defaultValues);
 
+        /** Creates a BX Licenser object (requires the proprietary SDK). */
+        var createBXLicenser();
+        
 		/** Creates a reference to the DSP network of another script processor. */
 		var getDspNetworkReference(String processorId, String id);
 
@@ -658,6 +661,7 @@ public:
 		/** Returns the width of the string for the given font properties. */
 		float getStringWidth(String text, String fontName, float fontSize, float fontSpacing);
 
+        /** Returns a number as string in hexadecimal format (0xFFFFFFFF). */
 		String intToHexString(int value);
 
 		/** Signals that the application should terminate. */
