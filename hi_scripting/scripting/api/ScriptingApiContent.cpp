@@ -1758,8 +1758,11 @@ juce::LookAndFeel* ScriptingApi::Content::ScriptComponent::createLocalLookAndFee
 				simple_css::Selector classType(simple_css::SelectorType::Class, propertyTree["type"].toString().toLowerCase());
 				styleSheetProperties.setProperty("class", classType.toString(), nullptr);
 			}
-			
-			return new ScriptingObjects::ScriptedLookAndFeel::CSSLaf(l, contentComponent, componentToRegister, this->propertyTree, this->styleSheetProperties);
+
+			if(l->isUsingScriptFunctions())
+				return new ScriptingObjects::ScriptedLookAndFeel::CombinedLaf(l, contentComponent, componentToRegister, this->propertyTree, this->styleSheetProperties);
+			else
+				return new ScriptingObjects::ScriptedLookAndFeel::CSSLaf(l, contentComponent, componentToRegister, this->propertyTree, this->styleSheetProperties);
 		}
 		else
 		{

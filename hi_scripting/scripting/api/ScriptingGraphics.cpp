@@ -2421,6 +2421,7 @@ void ScriptingObjects::ScriptedLookAndFeel::registerFunction(var functionName, v
 {
 	if (HiseJavascriptEngine::isJavascriptFunction(function))
 	{
+		hasScriptFunctions = true;
 		addOptimizableFunction(function);
 		functions.getDynamicObject()->setProperty(Identifier(functionName.toString()), function);
 	}
@@ -3557,6 +3558,12 @@ Font ScriptingObjects::ScriptedLookAndFeel::Laf::getPopupMenuFont()
 
 Font ScriptingObjects::ScriptedLookAndFeel::Laf::getAlertWindowFont()
 { return getFont(); }
+
+ScriptingObjects::ScriptedLookAndFeel::CombinedLaf::CombinedLaf(ScriptedLookAndFeel* parent_,
+	ScriptContentComponent* content, Component* c, const ValueTree& dataTree, const ValueTree& additionalPropertyTree):
+	LocalLaf(parent_),
+	css(parent_, content, c, dataTree, additionalPropertyTree)
+{}
 
 Identifier ScriptingObjects::ScriptedLookAndFeel::getObjectName() const
 { return "ScriptLookAndFeel"; }
