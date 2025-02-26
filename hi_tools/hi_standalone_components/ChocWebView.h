@@ -56,10 +56,7 @@ struct WebViewData : public ReferenceCountedObject
 	~WebViewData();
 
 	/** Setup an error logger that will be notified whenever a resource isn't found. */
-	void setErrorLogger(const std::function<void(const String& m)>& errorFunction)
-	{
-		errorLogger = errorFunction;
-	}
+	void setErrorLogger(const std::function<void(const String& m)>& errorFunction);
 
 	/** Adds a custom JS script to the web view. */
 	void addScript(const String& script)
@@ -108,10 +105,7 @@ struct WebViewData : public ReferenceCountedObject
 	*/
 	void setUsePersistentCalls(bool usePersistentCalls);
 
-	void setUseScaleFactorForZoom(bool shouldApplyScaleFactorAsZoom)
-	{
-		applyScaleFactorAsZoom = shouldApplyScaleFactorAsZoom;
-	}
+	void setUseScaleFactorForZoom(bool shouldApplyScaleFactorAsZoom);
 
 	/** Clears all caches and persistent calls and (optionally) the file resource information. */
 	void reset(bool resetFileStructure=false);

@@ -2670,8 +2670,11 @@ void CompileExporter::BatchFileCreator::createBatchFile(CompileExporter* exporte
 		String xcodeLine;
         
 		xcodeLine << "xcodebuild -project \"Builds/MacOSX/" << projectName << ".xcodeproj\" -configuration \"" << exporter->configurationName << "\" -jobs \"" << threads << "\"";
-		xcodeLine << " | xcpretty";
-		
+        
+        auto xcbeautify = exporter->hisePath.getChildFile("tools/Projucer/xcbeautify");
+        
+        xcodeLine << " | " << xcbeautify.getFullPathName().quoted();
+        
         ADD_LINE(xcodeLine);
     }
     

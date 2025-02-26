@@ -110,6 +110,11 @@ WebViewData::~WebViewData()
 	errorLogger = {};
 }
 
+void WebViewData::setErrorLogger(const std::function<void(const String& m)>& errorFunction)
+{
+	errorLogger = errorFunction;
+}
+
 void WebViewData::addCallback(const String& callbackName, const CallbackType& function)
 {
 	auto id = callbackName.toStdString();
@@ -210,6 +215,11 @@ void WebViewData::setRootDirectory(const File& newRootDirectory)
 void WebViewData::setUsePersistentCalls(bool shouldUsePersistentCalls)
 {
 	usePersistentCalls = shouldUsePersistentCalls;
+}
+
+void WebViewData::setUseScaleFactorForZoom(bool shouldApplyScaleFactorAsZoom)
+{
+	applyScaleFactorAsZoom = shouldApplyScaleFactorAsZoom;
 }
 
 void WebViewData::reset(bool resetFiles)
