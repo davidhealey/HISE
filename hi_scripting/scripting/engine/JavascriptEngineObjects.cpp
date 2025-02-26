@@ -8,14 +8,30 @@ struct HiseJavascriptEngine::RootObject::ObjectClass : public DynamicObject
 	{
 		setMethod("dump", dump);
 		setMethod("clone", cloneFn);
+		setMethod("keys", keys);
 	}
 
 	static Identifier getClassName()   { static const Identifier i("Object"); return i; }
 	static var dump(Args a)          { DBG(JSON::toString(a.thisObject)); ignoreUnused(a); return var::undefined(); }
 	static var cloneFn(Args a)        { return a.thisObject.clone(); }
+	
+	static var keys(Args a)  
+	{ 
+		DynamicObject* obj = a.thisObject.getDynamicObject();
+
+		Array<var> keys;
+
+		if (!obj)
+				return keys;
+
+    const NamedValueSet& properties = obj->getProperties();
+
+    for (int i = 0; i < properties.size(); ++i)
+        keys.add(properties.getName(i).toString());
+
+    return var(keys);
+	}	
 };
-
-
 
 //==============================================================================
 struct HiseJavascriptEngine::RootObject::ArrayClass : public DynamicObject
