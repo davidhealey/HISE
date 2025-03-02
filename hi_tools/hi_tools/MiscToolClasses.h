@@ -2292,6 +2292,10 @@ struct Spectrum2D
 		int gainFactorDb = 1000;
 		int gammaPercent = 60;
 
+		bool standardize = false;
+
+		int freqGamma = 100;
+
 		float getGamma() const
 		{
 			return (float)gammaPercent / 100.0f;

@@ -2519,14 +2519,71 @@ Image Spectrum2D::createSpectrumImage(AudioSampleBuffer& lastBuffer)
     auto newImage = Image(Image::ARGB, lastBuffer.getNumSamples(), lastBuffer.getNumChannels(), true);
 
 	Image::BitmapData bd(newImage, Image::BitmapData::writeOnly);
-	
+
+	float stddev = 1.0f;
+	float mean = 0.0f;
+
+	if(parameters->standardize)
+	{
+		size_t rows = lastBuffer.getNumSamples();
+	    size_t cols = lastBuffer.getNumChannels();
+	    size_t total = rows * cols;
+
+	    // Compute mean
+	    float sum = 0.0f;
+
+	    for (int i = 0; i < lastBuffer.getNumChannels(); i++)
+	    {
+			for(int j = 0; j < lastBuffer.getNumSamples(); j++)
+				sum += lastBuffer.getSample(i, j);
+		}
+
+	    mean = sum / total;
+
+	    // Compute standard deviation
+	    float sq_sum = 0.0f;
+
+		for (int i = 0; i < lastBuffer.getNumChannels(); i++)
+	    {
+			for(int j = 0; j < lastBuffer.getNumSamples(); j++)
+			{
+				auto val = lastBuffer.getSample(i, j);
+				sq_sum += (val - mean) * (val - mean);
+			}
+		}
+		
+	    stddev = std::sqrt(sq_sum / total);
+
+	    // Avoid division by zero
+	    float epsilon = 1e-6f;
+	    stddev = std::max(stddev, epsilon);
+	}
+
 	for(int y = 0; y < lastBuffer.getNumChannels(); y++)
 	{
 		auto src = lastBuffer.getReadPointer(y);
-		
+
 		for(int x = 0; x < lastBuffer.getNumSamples(); x++)
 		{
-			auto lutValue = parameters->lut->getColouredPixel(src[x], useAlphaChannel);
+			auto inputValue = src[x];
+
+			if(parameters->freqGamma != 100)
+			{
+				float normX = (float)x / lastBuffer.getNumSamples();
+				normX = std::pow(normX, (float)parameters->freqGamma * 0.01f);
+				normX *= (lastBuffer.getNumSamples());
+				auto low = (int)normX;
+				auto high = low + 1;
+				auto alpha = std::fmod(normX, 1.0f);
+				inputValue = Interpolator::interpolateLinear(src[low], src[high], alpha);
+			}
+
+			if(parameters->standardize)
+			{
+				inputValue = (inputValue - mean) / stddev;
+			}
+
+			auto lutValue = parameters->lut->getColouredPixel(inputValue, useAlphaChannel);
 			auto pp = (PixelARGB*)(bd.getPixelPointer(x, y));
 			pp->set(lutValue);
 		}
@@ -2678,6 +2735,10 @@ void Spectrum2D::Parameters::set(const Identifier& id, var value, NotificationTy
 		lut->setColourScheme((LookupTable::ColourScheme)(int)value);
 	if (id == Identifier("WindowType"))
 		currentWindowType = (FFTHelpers::WindowType)(int)value;
+	if(id == Identifier("FrequencyGamma"))
+		freqGamma = jlimit(100, 200, (int)value);
+	if(id == Identifier("Standardize"))
+		standardize = (bool)value;
 	if(id == Identifier("ResamplingQuality"))
 	{
 		StringArray q("Low", "Mid", "High");
@@ -2708,6 +2769,10 @@ var Spectrum2D::Parameters::get(const Identifier& id) const
 		return gainFactorDb;
 	if (id == Identifier("Gamma"))
 		return gammaPercent;
+	if( id == Identifier("FrequencyGamma"))
+		return freqGamma;
+	if(id == Identifier("Standardize"))
+		return standardize;
 	if (id == Identifier("ResamplingQuality"))
 	{
 		StringArray q("Low", "Mid", "High");
@@ -2750,6 +2815,8 @@ juce::Array<juce::Identifier> Spectrum2D::Parameters::getAllIds()
 		Identifier("GainFactor"),
 		Identifier("ResamplingQuality"),
 		Identifier("Gamma"),
+		Identifier("Standardize"),
+		Identifier("FrequencyGamma"),
 		Identifier("WindowType")
 	};
 	
@@ -2769,6 +2836,8 @@ Spectrum2D::Parameters::Editor::Editor(Parameters::Ptr p) :
     addEditor("DynamicRange");
 	addEditor("ColourScheme");
 	addEditor("Gamma");
+	addEditor("Standardize");
+	addEditor("FrequencyGamma");
 	addEditor("ResamplingQuality");
 	addEditor("GainFactor");
 
@@ -2835,6 +2904,23 @@ void Spectrum2D::Parameters::Editor::addEditor(const Identifier& id)
 		cb->addItem("Low", 1);
 		cb->addItem("Mid", 2);
 		cb->addItem("High", 3);
+	}
+	if(id == Identifier("Standardize"))
+	{
+		
+	}
+	if(id == Identifier("FrequencyGamma"))
+	{
+		cb->addItem("100%", 101);
+		cb->addItem("110%", 111);
+		cb->addItem("120%", 121);
+		cb->addItem("130%", 131);
+		cb->addItem("140%", 141);
+	}
+	if(id == Identifier("Standardize"))
+	{
+		cb->addItem("No", 1);
+		cb->addItem("Yes", 2);
 	}
 	if (id == Identifier("GainFactor"))
 	{
