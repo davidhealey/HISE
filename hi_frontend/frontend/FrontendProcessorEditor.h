@@ -103,35 +103,9 @@ public:
 
 	}
 
-	void setControlHighlight (ParameterControlHighlightInfo p) override
-	{
-		callRecursive<Component>(this, [this, p](Component* c)
-		{
-			if(getControlParameterIndex(*c) == p.parameterIndex)
-			{
-				auto colour = p.isHighlighted ? p.suggestedColour : Colours::transparentBlack;
+	void setControlHighlight (ParameterControlHighlightInfo p) override;
 
-				auto cv = (int64)colour.getARGB();
-				c->getProperties().set("AAXPluginParameterColour", var(cv));
-				c->repaint();
-				return true;
-			}
-
-			return false;
-		});
-	}
-
-    int getControlParameterIndex (Component& c) override
-	{
-		const auto& prop = c.getProperties();
-
-		if(prop.contains("AAXPluginParameterIndex"))
-		{
-			return jlimit(0, getAudioProcessor()->getNumParameters(), (int)prop["AAXPluginParameterIndex"]);
-		}
-
-		return -1;
-	}
+	int getControlParameterIndex (Component& c) override;
 
 	void newHisePresetLoaded() override;
 
