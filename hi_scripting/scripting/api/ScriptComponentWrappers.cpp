@@ -1710,6 +1710,24 @@ public:
 	}
 };
 
+struct ViewportWithProfiler: public Viewport,
+						     public ProfiledComponent
+{
+	paintAndProfileChildren(g);
+};
+
+struct ListboxWithProfiler: public ListBox,
+						    public ProfiledComponent
+{
+	paintAndProfileChildren(g);
+};
+
+struct TableListBoxWithProfiler: public TableListBox,
+								 public ProfiledComponent
+{
+	paintAndProfileChildren(g);
+};
+
 ScriptCreatedComponentWrappers::ViewportWrapper::ViewportWrapper(ScriptContentComponent* content, ScriptingApi::Content::ScriptedViewport* viewport, int index):
 	ScriptCreatedComponentWrapper(content, index)
 {
@@ -1727,7 +1745,7 @@ ScriptCreatedComponentWrappers::ViewportWrapper::ViewportWrapper(ScriptContentCo
 
 	if (mode == Mode::Viewport)
 	{
-		vp = new Viewport();
+		vp = new ViewportWithProfiler();
 		vp->setName(viewport->name.toString());
 		vp->setViewedComponent(new DummyComponent(), true);
 
@@ -1744,7 +1762,7 @@ ScriptCreatedComponentWrappers::ViewportWrapper::ViewportWrapper(ScriptContentCo
 	else if (mode == Mode::List)
 	{
 		model = new ColumnListBoxModel(this);
-		auto table = new ListBox();
+		auto table = new ListboxWithProfiler();
 
 		table->setModel(model);
 

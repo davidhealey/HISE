@@ -570,6 +570,8 @@ void ScriptContentComponent::setNewContent(ScriptingApi::Content *c)
     
 	valuePopupProperties = new ScriptCreatedComponentWrapper::ValuePopup::Properties(p->getMainController(), c->getValuePopupProperties());
 
+	int pluginParameterCount = 0;
+
 	for (int i = 0; i < contentData->components.size(); i++)
 	{
 		auto sc = contentData->components[i].get();
@@ -598,6 +600,11 @@ void ScriptContentComponent::setNewContent(ScriptingApi::Content *c)
 		{
 			addChildComponent(newComponent);
 			newComponent->setVisible(sc->isShowing(false));
+		}
+
+		if(sc->getScriptObjectProperty(ScriptComponent::Properties::isPluginParameter))
+		{
+			newComponent->getProperties().set("AAXPluginParameterIndex", pluginParameterCount++);
 		}
 	}
 
