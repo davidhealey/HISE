@@ -255,8 +255,21 @@ juce::URL GlobalServer::getWithParameters(String subURL, var parameters)
 
 	if (auto d = parameters.getDynamicObject())
 	{
-		for (auto& p : d->getProperties())
-			url = url.withParameter(p.name.toString(), p.value.toString());
+		bool isComplexObject = false;
+
+		for(const auto& v: d->getProperties())
+			isComplexObject |= v.value.isArray() || v.value.getDynamicObject() != nullptr;
+
+		if(isComplexObject)
+		{
+			extraHeader = "Content-Type: application/json";
+			url = url.withPOSTData(JSON::toString(parameters, true));
+		}
+		else
+		{
+			for (auto& p : d->getProperties())
+				url = url.withParameter(p.name.toString(), p.value.toString());
+		}
 	}
     else if (parameters.isString())
     {

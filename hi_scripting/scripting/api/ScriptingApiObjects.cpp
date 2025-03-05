@@ -4488,7 +4488,7 @@ void ScriptingObjects::ScriptingAudioSampleProcessor::setAttribute(int parameter
 {
 	if (checkValidObject())
 	{
-		audioSampleProcessor->setAttribute(parameterIndex, newValue, sendNotification);
+		audioSampleProcessor->setAttribute(parameterIndex, newValue, sendNotificationAsync);
 	}
 }
 
@@ -5378,7 +5378,12 @@ var ScriptingObjects::ScriptNeuralNetwork::processFFTSpectrum(var fftObject, int
 			auto parameters = fft->getSpectrum2DParameters();
 			auto isGreyscale = (int)parameters["ColourScheme"] == 0;
 
-			onnx->run(img, onnxOutput, isGreyscale);
+			auto ok = onnx->run(img, onnxOutput, isGreyscale);
+
+			if(!ok)
+			{
+				reportScriptError(onnx->getLastError().getErrorMessage());
+			}
 
 			Array<var> outputValues;
 
@@ -7394,7 +7399,9 @@ ScriptingObjects::ScriptFFT::ScriptFFT(ProcessorWithScriptingContent* p) :
 	ADD_API_METHOD_0(getSpectrum2DParameters);
 	ADD_API_METHOD_4(dumpSpectrum);
 	ADD_API_METHOD_1(setUseFallbackEngine);
-	
+
+	ADD_API_METHOD_1(setUseSpectrumList);
+
 	spectrumParameters = new Spectrum2D::Parameters();
 }
 
@@ -7712,7 +7719,10 @@ var ScriptingObjects::ScriptFFT::getSpectrum2DParameters() const
 	return d;
 }
 
-
+void ScriptingObjects::ScriptFFT::setUseSpectrumList(int numRows)
+{
+	spectrumList = new SpectrumList(numRows);
+}
 
 Image ScriptingObjects::ScriptFFT::getRescaledAndRotatedSpectrum(bool getOutput, int numFreqPixels, int numTimePixels)
 {
@@ -7722,7 +7732,12 @@ Image ScriptingObjects::ScriptFFT::getRescaledAndRotatedSpectrum(bool getOutput,
 	if(!useFallback || !fft->isFallbackEngine())
 		reportScriptError("You must use the fallback engine if you want to dump FFT images");
 
-	auto thisImg = gin::applyResize(getSpectrum(getOutput), numFreqPixels, numTimePixels);
+	auto img = getSpectrum(getOutput);
+
+	if(img.isNull())
+		reportScriptError("The spectrum was not created");
+
+	auto thisImg = gin::applyResize(img, numFreqPixels, numTimePixels);
 	
 	Image rotated(Image::PixelFormat::ARGB, thisImg.getHeight(), thisImg.getWidth(), false);
 	Image::BitmapData r(rotated, Image::BitmapData::writeOnly);
@@ -7739,13 +7754,92 @@ Image ScriptingObjects::ScriptFFT::getRescaledAndRotatedSpectrum(bool getOutput,
 	return rotated;
 }
 
+ScriptingObjects::ScriptFFT::SpectrumList::SpectrumList(int numItems)
+{
+	for(int i = 0; i < numItems; i++)
+		images.push_back({});
+}
+
+bool ScriptingObjects::ScriptFFT::SpectrumList::dump(const File& outputFile)
+{
+	int w = -1;
+	int h = -1;
+
+	int idx = 0;
+
+	for(auto& v: images)
+	{
+		if(v.isNull())
+		{
+			throw Result::fail("image at position " + String(idx) + " was not set");
+		}
+
+		if(w == -1)
+			w = v.getWidth();
+		if(h == -1)
+			h = v.getHeight();
+
+		if(w != v.getWidth() || h != v.getHeight())
+		{
+			throw Result::fail("image at position " + String(idx) + " has wrong dimensions");
+		}
+
+		idx++;
+	}
+	
+	Image fullImage(images[0].getFormat(), w, h, true);
+
+	int yOffset = 0;
+
+	for(auto& v: images)
+	{
+		Image::BitmapData w(fullImage, Image::BitmapData::readWrite);
+		Image::BitmapData r(v, Image::BitmapData::readOnly);
+
+		for(int y = 0; y < h; y++)
+		{
+			auto src = r.getLinePointer(y);
+			auto dst = w.getLinePointer(y + yOffset);
+
+			memcpy(dst, src, r.lineStride);
+		}
+
+		yOffset += h;
+	}
+
+	FileOutputStream fos(outputFile);
+	PNGImageFormat f;
+	return f.writeImageToStream(fullImage, fos);
+}
+
+bool ScriptingObjects::ScriptFFT::SpectrumList::setImage(int imageIndex, const Image& img)
+{
+	if(isPositiveAndBelow(imageIndex, images.size()))
+	{
+		images[imageIndex] = img;
+
+		return true;
+	}
+
+	return false;
+}
+
 bool ScriptingObjects::ScriptFFT::dumpSpectrum(var file, bool output, int numFreqPixels, int numTimePixels)
 {
-	if(auto sf = dynamic_cast<ScriptFile*>(file.getObject()))
+	auto sf = dynamic_cast<ScriptFile*>(file.getObject());
+
+	auto rotated = getRescaledAndRotatedSpectrum(output, numFreqPixels, numTimePixels);
+
+	if(sf == nullptr && spectrumList != nullptr)
+	{
+		auto idx = (int)file;
+		spectrumList->setImage(idx, rotated);
+	}
+
+	else if(sf != nullptr)
 	{
 		sf->f.deleteFile();
 		FileOutputStream fos(sf->f);
-		auto rotated = getRescaledAndRotatedSpectrum(output, numFreqPixels, numTimePixels);
 		PNGImageFormat f;
 		return f.writeImageToStream(rotated, fos);
 	}

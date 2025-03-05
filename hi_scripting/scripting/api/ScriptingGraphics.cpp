@@ -2821,6 +2821,9 @@ bool ScriptingObjects::ScriptedLookAndFeel::Laf::writeId(DynamicObject* obj, Com
 		return true;
 	}
 
+	if(c->getProperties().contains("AAXPluginParameterColour"))
+		obj->setProperty("AAXPluginParameterColour", c->getProperties()["AAXPluginParameterColour"]);
+
 	c = c->findParentComponentOfClass<FloatingTile>();
 
 	if(c != nullptr)
