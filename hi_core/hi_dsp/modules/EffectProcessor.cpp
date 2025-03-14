@@ -136,6 +136,8 @@ void EffectProcessor::finaliseModChains()
 
 MasterEffectProcessor::MasterEffectProcessor(MainController* mc, const String& uid): EffectProcessor(mc, uid, 1)
 {
+	PROFILE_ONLY(addProfileDataSource(getId() + ".processBlock()")->colour = getColour());
+
 	softBypassRamper.setValueWithoutSmoothing(1.0f);
 
 	getMatrix().init();
@@ -472,6 +474,8 @@ void MonophonicEffectProcessor::renderNextBlock(AudioSampleBuffer& buffer, int s
 VoiceEffectProcessor::VoiceEffectProcessor(MainController* mc, const String& uid, int numVoices_): 
 	EffectProcessor(mc, uid, numVoices_)
 {
+	PROFILE_ONLY(addProfileDataSource("VoiceFX", false)->colour = getColour());
+
 	for (int i = 0; i < numVoices_; i++)
 		polyState.add({});
 }
@@ -506,6 +510,8 @@ void VoiceEffectProcessor::preVoiceRendering(int voiceIndex, int startSample, in
 void VoiceEffectProcessor::renderVoice(int voiceIndex, AudioSampleBuffer& b, int startSample, int numSamples)
 {
 	jassert(isOnAir());
+
+	Profiler p(*this, 0);
 
 	preVoiceRendering(voiceIndex, startSample, numSamples);
 

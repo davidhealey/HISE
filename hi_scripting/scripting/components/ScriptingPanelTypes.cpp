@@ -570,6 +570,8 @@ public:
 
 private:
 
+	std::vector<std::pair<Rectangle<int>, float>> heatmap;
+
 	float overlayAlpha = 0.0f;
 	Image overlayImage;
 
@@ -816,6 +818,7 @@ void ScriptContentPanel::Editor::rebuildAfterContentChange()
 
 	addButton("edit-json");
 	addButton("debug-css");
+	addButton("profile");
 
 	addCustomComponent(overlaySelector);
 	addCustomComponent(overlayAlphaSlider);
@@ -903,6 +906,56 @@ void ScriptContentPanel::Editor::addButton(const String& name)
 		};
 
 		b->enabledFunction = isSingleSelection;
+	}
+	if(name == "profile")
+	{
+#if HISE_INCLUDE_PROFILING_TOOLKIT
+		b->stateFunction = [](Editor& e)
+		{
+			return e.canvas.getContent<Canvas>()->content->isProfiling();
+		};
+
+		b->actionFunction = [b](Editor& e)
+		{
+			auto content = e.canvas.getContent<Canvas>()->content.get();
+			auto jp = const_cast<JavascriptProcessor*>(content->getScriptProcessor());
+			auto mc = dynamic_cast<Processor*>(jp)->getMainController();
+
+			auto isProfiling = content->isProfiling();
+
+			content->setEnableProfiling(!isProfiling, jp, true);
+
+			if(content->isProfiling())
+			{
+				ProfiledComponent::ComponentHeatmapGenerator hg(content);
+				hg.generateHeatmapIndexes();
+				mc->getDebugSession().clearData(jp);
+
+				jp->heatmapManager.heatmapBroadcaster.addListener(*content, [](ScriptContentComponent& c, DebugInformationBase::Ptr p, const std::map<int, double>* map)
+				{
+					c.setHeatmap(p, map);
+				});
+			}
+			else
+			{
+				jp->heatmapManager.heatmapBroadcaster.removeAllListeners();
+
+				content->setHeatmap(nullptr, nullptr);
+
+				auto dh = &dynamic_cast<const Processor*>(content->getScriptProcessor())->getMainController()->getDebugSession();
+
+				if(auto r = dh->getLastProfileRoot(DebugSession::ThreadIdentifier::Type::UIThread))
+				{
+					auto c = const_cast<DebugSession*>(dh)->createPopupViewer(r);
+					GET_BACKEND_ROOT_WINDOW(content)->getRootFloatingTile()->showComponentInRootPopup(c, b, { b->getWidth() / 2, b->getHeight() }, false);
+				}
+			}
+
+			content->repaint();
+
+			return true;
+		};
+#endif
 	}
 	if (name == "lock")
 	{
@@ -2152,7 +2205,7 @@ Component* ScriptWatchTablePanel::createContentComponent(int /*index*/)
 
 	auto f = [this](Component* p, Component* c, Point<int> s)
 	{
-		findParentComponentOfClass<FloatingTile>()->getRootFloatingTile()->showComponentInRootPopup(p, c, s, true);
+		findParentComponentOfClass<FloatingTile>()->getRootFloatingTile()->showComponentInRootPopup(p, c, s);
 	};
 
 	swt->setPopupFunction(f);

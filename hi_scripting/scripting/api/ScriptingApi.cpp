@@ -1191,7 +1191,6 @@ struct ScriptingApi::Engine::Wrapper
 	API_METHOD_WRAPPER_1(Engine, loadFromJSON);
 	API_METHOD_WRAPPER_1(Engine, compressJSON);
 	API_METHOD_WRAPPER_1(Engine, uncompressJSON);
-	API_VOID_METHOD_WRAPPER_1(Engine, setCompileProgress);
 	API_METHOD_WRAPPER_2(Engine, matchesRegex);
 	API_METHOD_WRAPPER_2(Engine, getRegexMatches);
 	API_METHOD_WRAPPER_2(Engine, doubleToString);
@@ -1348,7 +1347,6 @@ parentMidiProcessor(dynamic_cast<ScriptBaseMidiProcessor*>(p))
 	ADD_API_METHOD_0(getPlayHead);
 	ADD_API_METHOD_2(dumpAsJSON);
 	ADD_API_METHOD_1(loadFromJSON);
-	ADD_API_METHOD_1(setCompileProgress);
 	ADD_API_METHOD_2(matchesRegex);
 	ADD_API_METHOD_2(getRegexMatches);
 	ADD_API_METHOD_2(doubleToString);
@@ -3513,16 +3511,6 @@ var ScriptingApi::Engine::loadFromJSON(String fileName)
 	else
 		return {};
 }
-
-
-void ScriptingApi::Engine::setCompileProgress(var progress)
-{
-	JavascriptProcessor *sp = dynamic_cast<JavascriptProcessor*>(getScriptProcessor());
-
-	if (sp != nullptr)
-		sp->setCompileProgress((double)progress);
-}
-
 
 
 bool ScriptingApi::Engine::matchesRegex(String stringToMatch, String wildcard)
@@ -6581,6 +6569,8 @@ struct ScriptingApi::Console::Wrapper
 	API_VOID_METHOD_WRAPPER_1(Console, assertNoString);
 	API_VOID_METHOD_WRAPPER_0(Console, breakInDebugger);
 	API_VOID_METHOD_WRAPPER_0(Console, blink);
+	API_VOID_METHOD_WRAPPER_1(Console, startSampling);
+	API_VOID_METHOD_WRAPPER_2(Console, sample);
 };
 
 ScriptingApi::Console::Console(ProcessorWithScriptingContent *p) :
@@ -6603,6 +6593,13 @@ startTime(0.0)
 
 	ADD_API_METHOD_0(breakInDebugger);
 	ADD_API_METHOD_1(assertNoString);
+	ADD_API_METHOD_1(startSampling);
+	ADD_API_METHOD_2(sample);
+
+	consoleProfile.setSourceType(DebugSession::ProfileDataSource::SourceType::Trace);
+	consoleProfile.setHolder(dynamic_cast<JavascriptProcessor*>(p), true);
+	consoleProfile.setColour(Colour(0xFF777777));
+	pLog = consoleProfile.add("Console.print");
 }
 
 
@@ -6613,10 +6610,26 @@ void ScriptingApi::Console::print(var x)
 
 	AudioThreadGuard::Suspender suspender;
 	ignoreUnused(suspender);
-	
+
+#if HISE_INCLUDE_PROFILING_TOOLKIT
+	auto& dh = getScriptProcessor()->getMainController_()->getDebugSession();
+
+	if(dh.isRecordingMultithread())
+	{
+		auto sp = consoleProfile.profile(0);
+
+		auto ni = new DebugSession::DataItem();
+		ni->id = id;
+		ni->lineNumber = lineNumber;
+		ni->label = "print";
+		ni->data = x.clone();
+
+		dh.addDataItem(ni);
+	}
+#endif
 
     auto jp = dynamic_cast<JavascriptProcessor*>(getScriptProcessor());
-    jp->addInplaceDebugValue(id, lineNumber, x.toString());
+    jp->addInplaceDebugValue(id, lineNumber, x.toString(), nullptr);
     
 	debugToConsole(getProcessor(), x);
 #else
@@ -6804,6 +6817,48 @@ void ScriptingApi::Console::breakInDebugger()
 {
 	// There you go...
 	jassertfalse;
+}
+
+void ScriptingApi::Console::startSampling(const String& sessionId)
+{
+	auto& dh = getScriptProcessor()->getMainController_()->getDebugSession();
+
+#if HISE_INCLUDE_PROFILING_TOOLKIT
+	if(auto s = dh.startSession(dynamic_cast<JavascriptProcessor*>(getScriptProcessor()), sessionId))
+	{
+		dynamic_cast<JavascriptProcessor*>(getScriptProcessor())->addInplaceDebugValue(id, lineNumber, s->getTextForName(), s);
+	}
+#endif
+}
+
+void ScriptingApi::Console::sample(const String& label, var dataToSample)
+{
+#if HISE_INCLUDE_PROFILING_TOOLKIT
+	auto& dh = getScriptProcessor()->getMainController_()->getDebugSession();
+
+	if(dh.isActive())
+	{
+		auto ni = new DebugSession::DataItem();
+
+		ni->data = dataToSample.clone();
+		ni->p = dynamic_cast<JavascriptProcessor*>(getScriptProcessor());
+		ni->id = id;
+		ni->label = label;
+		ni->lineNumber = lineNumber;
+
+		if(dh.addDataItem(ni))
+		{
+			dynamic_cast<JavascriptProcessor*>(getScriptProcessor())->addInplaceDebugValue(id, lineNumber, ni->getTextForName(), ni);
+			return;
+		}
+	}
+
+	if(warnIfNoSession)
+	{
+		debugToConsole(dynamic_cast<Processor*>(getScriptProcessor()), "no session started, skip, sampling");
+		warnIfNoSession = false;
+	}
+#endif
 }
 
 #undef SEND_MESSAGE
@@ -7519,11 +7574,13 @@ struct ScriptingApi::Threads::Wrapper
 	API_METHOD_WRAPPER_1(ScriptingApi::Threads, toString);
 	API_METHOD_WRAPPER_0(ScriptingApi::Threads, getCurrentThreadName);
     API_METHOD_WRAPPER_1(ScriptingApi::Threads, killVoicesAndCall);
+	API_VOID_METHOD_WRAPPER_2(ScriptingApi::Threads, startProfiling);
 };
 
 ScriptingApi::Threads::Threads(ProcessorWithScriptingContent* p):
 	ApiClass(6),
-	ScriptingObject(p)
+	ScriptingObject(p),
+	threadProfileCallback(p, this, var(), 1)
 {
 	addConstant("Audio", (int)LockHelpers::Type::AudioLock);
 	addConstant("Scripting", (int)LockHelpers::Type::ScriptLock);
@@ -7541,6 +7598,7 @@ ScriptingApi::Threads::Threads(ProcessorWithScriptingContent* p):
     ADD_API_METHOD_1(killVoicesAndCall);
 	ADD_API_METHOD_1(toString);
 	ADD_API_METHOD_0(getCurrentThreadName);
+	ADD_API_METHOD_2(startProfiling);
 }
 
 int ScriptingApi::Threads::getCurrentThread() const
@@ -7586,6 +7644,40 @@ bool ScriptingApi::Threads::isLocked(int thread) const
 {
 	auto t = (LockId)getLockerThread(thread);
 	return t != LockId::unused;
+}
+
+void ScriptingApi::Threads::startProfiling(double millisecondsToProfile, var finishCallback)
+{
+#if HISE_INCLUDE_PROFILING_TOOLKIT
+	if(HiseJavascriptEngine::isJavascriptFunction(finishCallback))
+	{
+		bool add = !threadProfileCallback;
+
+		threadProfileCallback = WeakCallbackHolder(getScriptProcessor(), this, finishCallback, 1);
+
+		if(add)
+		{
+			getScriptProcessor()->getMainController_()->getDebugSession().recordingFlushBroadcaster.addListener(*this, [](Threads& t, DebugSession::ProfileDataSource::ProfileInfoBase::Ptr p)
+			{
+				if(p != nullptr)
+				{
+
+					auto b64 = p->toBase64();
+					t.threadProfileCallback.call1(b64);
+				}
+
+			}, false);
+		}
+	}
+
+	millisecondsToProfile = jlimit(10.0, 10000.0, millisecondsToProfile);
+
+	auto h = dynamic_cast<ApiProviderBase::Holder*>(getScriptProcessor());
+	getScriptProcessor()->getMainController_()->getDebugSession().startRecording(millisecondsToProfile, h);
+	
+#else
+	reportScriptError("Profiling is not enabled");
+#endif
 }
 
 String ScriptingApi::Threads::toString(int thread) const
@@ -7712,6 +7804,22 @@ void ScriptingApi::Server::callWithGET(String subURL, var parameters, var callba
 	if (HiseJavascriptEngine::isJavascriptFunction(callback))
 	{
 		GlobalServer::PendingCallback::Ptr p = new GlobalServer::PendingCallback(getScriptProcessor(), callback);
+
+#if HISE_INCLUDE_PROFILING_TOOLKIT
+		if(auto sp = globalServer.webProfile.profile(globalServer.pCallGET))
+		{
+			p->f.addAsSource(this, "callWithGET", false);
+			p->profileTrackId = globalServer.webProfile.openTrack(globalServer.pCallGET);
+			auto ni = new DebugSession::DataItem();
+			DynamicObject::Ptr no = new DynamicObject();
+			no->setProperty("URL", subURL);
+			no->setProperty("parameters", parameters.clone());
+			ni->label = "call parameters";
+			ni->data = var(no.get());
+			getScriptProcessor()->getMainController_()->getDebugSession().addDataItem(ni);
+		}
+#endif
+
 		p->url = getWithParameters(subURL, parameters);
 		p->isPost = false;
 		globalServer.addPendingCallback(p);
@@ -7728,7 +7836,21 @@ void ScriptingApi::Server::callWithPOST(String subURL, var parameters, var callb
 	if (HiseJavascriptEngine::isJavascriptFunction(callback))
 	{
 		GlobalServer::PendingCallback::Ptr p = new GlobalServer::PendingCallback(getScriptProcessor(), callback);
-        
+
+#if HISE_INCLUDE_PROFILING_TOOLKIT
+		if(auto sp = globalServer.webProfile.profile(globalServer.pCallPOST))
+		{
+			p->profileTrackId = globalServer.webProfile.openTrack(globalServer.pCallPOST);
+			auto ni = new DebugSession::DataItem();
+			DynamicObject::Ptr no = new DynamicObject();
+			no->setProperty("URL", subURL);
+			no->setProperty("parameters", parameters.clone());
+			ni->label = "call parameters";
+			ni->data = var(no.get());
+			getScriptProcessor()->getMainController_()->getDebugSession().addDataItem(ni);
+		}
+#endif
+
         const bool isNotAFile = !subURL.containsChar('.');
         const bool trailingSlashMissing = !subURL.endsWithChar('/');
         

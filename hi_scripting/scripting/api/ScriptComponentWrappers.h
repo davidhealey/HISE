@@ -308,6 +308,12 @@ public:
 
 	const Component *getComponent() const { return component; }
 
+	void clearQueue() override
+	{
+		auto sp = getScriptComponent()->profile(getScriptComponent()->pOnProperty);
+		AsyncValueTreePropertyListener::clearQueue();
+	}
+
 	virtual void asyncValueTreePropertyChanged(ValueTree& v, const Identifier& id);
 
 	virtual void valueTreeParentChanged(ValueTree& v) override;

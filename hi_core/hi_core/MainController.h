@@ -1067,6 +1067,8 @@ public:
 
     private:
 
+		DebugSession::ProfileDataSource::Ptr userPresetSource;
+
 		friend class UserPresetHelpers;
 		friend class FrontendProcessor;
 
@@ -1769,6 +1771,18 @@ public:
 
 #endif
 
+	DebugSession::ProfileDataSource::Ptr getProfileDataSourceForLock(LockHelpers::Type t, bool useRealLock, bool getWaitSource) const
+	{
+#if HISE_INCLUDE_PROFILING_TOOLKIT
+		auto idx = (int)t;
+		idx *= (int)getDebugSession().isRecordingMultithread();
+		idx *= (int)useRealLock;
+		idx += ((int)getWaitSource * (int)LockHelpers::Type::numLockTypes);
+		return lockProfile.getSource(idx);
+#else
+		return nullptr;
+#endif
+	}
 
 	void setPlotter(Plotter *p);
 
@@ -1967,6 +1981,11 @@ public:
 		allowSoftBypassRamps = shouldBeAllowed;
 	}
 
+	
+
+	DebugSession& getDebugSession() { return debugSessionHandler; }
+	const DebugSession& getDebugSession() const { return debugSessionHandler; }
+
 	bool shouldUseSoftBypassRamps() const noexcept;
 
 	void setCurrentMarkdownPreview(MarkdownContentProcessor* p)
@@ -2154,6 +2173,11 @@ private:
 	CriticalSection iteratorLock;
 
 	ScopedPointer<UndoManager> controlUndoManager;
+
+	DebugSession debugSessionHandler;
+
+	ProfileCollection lockProfile;
+	ProfileCollection loadProfile;
 
 	ScopedPointer<JavascriptThreadPool> javascriptThreadPool;
 

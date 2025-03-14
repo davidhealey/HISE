@@ -211,7 +211,7 @@ struct HiseJavascriptEngine::RootObject::CodeLocation
 		return (int)(location - program.getCharPointer());
 	}
 
-	String getEncodedLocationString(const String& processorId, const File& scriptRoot) const
+	String getEncodedLocationString(const String& processorId, const File& scriptRoot, int col, int line) const
 	{
 		int charIndex = getCharIndex();
 
@@ -229,7 +229,13 @@ struct HiseJavascriptEngine::RootObject::CodeLocation
 		}
 		
 		l << "|" << String(charIndex);
-		
+		l << "|" << String(col) << "|" << String(line);
+
+		return "{" + Base64::toBase64(l) + "}";
+	}
+
+	String getEncodedLocationString(const String& processorId, const File& scriptRoot) const
+	{
 		int col = 1, line = 1;
 
 		for (String::CharPointerType i(program.getCharPointer()); i < location && !i.isEmpty(); ++i)
@@ -238,9 +244,7 @@ struct HiseJavascriptEngine::RootObject::CodeLocation
 			if (*i == '\n') { col = 1; ++line; }
 		}
 
-		l << "|" << String(col) << "|" << String(line);
-
-		return "{" + Base64::toBase64(l) + "}";
+		return getEncodedLocationString(processorId, scriptRoot, col, line);
 	}
 
 	struct Helpers
@@ -598,6 +602,23 @@ struct HiseJavascriptEngine::RootObject::Statement
 
 	virtual bool isConstant() const { return false; }
 
+#if HISE_INCLUDE_PROFILING_TOOLKIT
+	mutable DebugSession::ProfileDataSource::Ptr currentProfileRoot;
+
+	void setCurrentProfileRoot(DebugSession::ProfileDataSource::Ptr newRoot) const
+	{
+		currentProfileRoot = newRoot;
+
+		int i = 0;
+		while(auto s = const_cast<Statement*>(this)->getChildStatement(i++))
+		{
+			s->setCurrentProfileRoot(newRoot);
+		}
+	}
+#endif
+
+	virtual String getProfileName() const { return {}; }
+
 	CodeLocation location;
 	
 	/** Return nullptr if there is no child, otherwise a reference to the child statement. 
@@ -651,6 +672,8 @@ struct HiseJavascriptEngine::RootObject::Expression : public Statement
 
 	virtual var getResult(const Scope&) const            { return var::undefined(); }
 	virtual void assign(const Scope&, const var&) const  { location.throwError("Cannot assign to this expression!"); }
+
+	String getProfileName() const override { return getVariableName().toString(); }
 
 	virtual Identifier getVariableName() const { return {}; }
 
@@ -811,6 +834,8 @@ Result HiseJavascriptEngine::execute(const String& javascriptCode, bool allowCon
 #else
         auto& copy = javascriptCode;
 #endif
+
+		root->setEnableOnInitProfiling(enableOnInitProfiling);
 
 		root->execute(copy, allowConstDeclarations);
 	}
@@ -1096,6 +1121,23 @@ void HiseJavascriptEngine::rebuildDebugInformation()
 	root->hiseSpecialData.clearDebugInformation();
 
 	root->hiseSpecialData.createDebugInformation(root.get());
+
+	for(const auto& f: debugInfoListeners)
+	{
+		for(int i = 0; i < getNumDebugObjects(); i++)
+		{
+			auto ptr = getDebugInformation(i);
+
+			if(auto obj = ptr->getObject())
+			{
+				if(f.first.get() == obj)
+				{
+					f.second(ptr);
+					break;
+				}
+			}
+		}
+	}
 }
 
 var HiseJavascriptEngine::executeWithoutAllocation(const Identifier &function, const var::NativeFunctionArgs& args, Result* result /*= nullptr*/, DynamicObject *scopeToUse)

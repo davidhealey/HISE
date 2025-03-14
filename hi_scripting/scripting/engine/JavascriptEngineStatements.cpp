@@ -4,14 +4,46 @@ struct HiseJavascriptEngine::RootObject::ScopedBlockStatement: public Statement
 {
 	ScopedBlockStatement(const CodeLocation& l, ExpPtr condition_) noexcept:
 	  Statement(l),
-      condition(condition_)
+      condition(condition_),
+	  callback(getIdForLocation())
 	{}
+
+	Identifier callback;
 
 	virtual bool isDebugStatement() const = 0;
 
 	void writeLocation(dispatch::StringBuilder& n)
 	{
 		n << "goto " << location.externalFile << "@" << (int)(location.location - location.program.getCharPointer());
+	}
+
+	Identifier getIdForLocation() const
+	{
+		auto id = location.externalFile;
+
+		if(id.isEmpty())
+		{
+			id = location.program.upToFirstOccurrenceOf("\n", false, false);
+
+			if(id.startsWith("function "))
+				id = id.fromFirstOccurrenceOf("function ", false, false).upToFirstOccurrenceOf("(", false, false);
+			else
+				id = "onInit";
+		}
+		else
+		{
+			id = File(id).getFileName();
+		}
+
+		return Identifier(id);
+	}
+
+	void addInplaceDebugValue(JavascriptProcessor* jp, DebugInformationBase::Ptr info) const
+	{
+		int col, line;
+		
+		location.fillColumnAndLines(col, line);
+		jp->addInplaceDebugValue(callback, line, info->getTextForName(), info);
 	}
 
 	bool checkCondition(const Scope& s, bool before)
@@ -138,8 +170,16 @@ struct HiseJavascriptEngine::RootObject::ScopedLocker: public HiseJavascriptEngi
 				TRACE_EVENT("scripting", DYNAMIC_STRING_BUILDER(n2));
 #endif
 
+				DebugSession::ProfileDataSource::Profiler wp(mc->getProfileDataSourceForLock(lockType, true, true));
+				wp.startProfiling(&mc->getDebugSession());
+
 				auto& lock = LockHelpers::getLockChecked(mc, lockType);
 				lock.enter();
+
+				wp.stopProfiling();
+				DebugSession::ProfileDataSource::Profiler lp(mc->getProfileDataSourceForLock(lockType, true, false));
+				lp.startProfiling(&mc->getDebugSession());
+
 				holdsLock = true;
 			}
 
@@ -160,6 +200,10 @@ struct HiseJavascriptEngine::RootObject::ScopedLocker: public HiseJavascriptEngi
 			auto& lock = LockHelpers::getLockUnchecked(mc, lockType);
 			lock.exit();
 
+			DebugSession::ProfileDataSource::Profiler lp(mc->getProfileDataSourceForLock(lockType, true, false));
+			lp.stopProfiling(&mc->getDebugSession());
+			
+
 			if(lockType == LockHelpers::Type::ScriptLock)
 			{
 				mc->getJavascriptThreadPool().notify();
@@ -169,6 +213,7 @@ struct HiseJavascriptEngine::RootObject::ScopedLocker: public HiseJavascriptEngi
 		}
 	}
 
+	
 	mutable MainController* mc = nullptr;
 	const LockHelpers::Type lockType;
 
@@ -209,13 +254,23 @@ struct HiseJavascriptEngine::RootObject::ScopedTracer: public HiseJavascriptEngi
 	ScopedTracer(CodeLocation l, ExpPtr c, const String& v):
 	  ScopedBlockStatement(l, c)
 	{
+#if HISE_INCLUDE_PROFILING_TOOLKIT
+		dataSource = new DebugSession::ProfileDataSource();
+		dataSource->name = v;
+		dataSource->sourceType = DebugSession::ProfileDataSource::SourceType::Trace;
+		location.fillColumnAndLines(col, line);
+#endif
+
 		n << v;
 		writeLocation(loc);
 	}
-	
+
+	int col = 0;
+	int line = 0;
+
 	SN_NODE_ID("trace");
 
-#if PERFETTO
+#if PERFETTO || HISE_INCLUDE_PROFILING_TOOLKIT
 	bool isDebugStatement() const override { return false; }
 #else
 	bool isDebugStatement() const override { return true; }
@@ -224,14 +279,40 @@ struct HiseJavascriptEngine::RootObject::ScopedTracer: public HiseJavascriptEngi
 	ResultCode perform(const Scope& s, var*) const override
 	{
 		TRACE_EVENT_BEGIN("scripting", DYNAMIC_STRING_BUILDER(n), "location", DYNAMIC_STRING_BUILDER(loc));
+
+#if HISE_INCLUDE_PROFILING_TOOLKIT
+		if(s.root->hiseSpecialData.processor->getDebugSession()->isRecordingMultithread())
+		{
+			DebugSession::ProfileDataSource::Profiler p(dataSource);
+
+			if(dataSource->locationString.isEmpty())
+			{
+				auto p = dynamic_cast<Processor*>(s.root->hiseSpecialData.processor);
+				auto sf = p->getMainController()->getActiveFileHandler()->getSubDirectory(FileHandlerBase::Scripts);
+				dataSource->locationString = location.getEncodedLocationString(p->getId(), sf, col, line);
+			}
+
+			p.startProfiling(s.root->hiseSpecialData.processor);
+		}
+#endif
+
 		return ResultCode::ok;
 	}
 
 	void cleanup(const Scope& s) const override
 	{
 		TRACE_EVENT_END("scripting");
+
+#if HISE_INCLUDE_PROFILING_TOOLKIT
+		if(s.root->hiseSpecialData.processor->getDebugSession()->isRecordingMultithread())
+		{
+			DebugSession::ProfileDataSource::Profiler p(dataSource);
+			p.stopProfiling(s.root->hiseSpecialData.processor);
+		}
+#endif
 	}
 
+	DebugSession::ProfileDataSource::Ptr dataSource;
 	dispatch::StringBuilder n, loc;
 
 };
@@ -349,34 +430,60 @@ struct HiseJavascriptEngine::RootObject::ScopedCounter: public HiseJavascriptEng
 };
 
 
+
 struct HiseJavascriptEngine::RootObject::ScopedProfiler: public HiseJavascriptEngine::RootObject::ScopedBlockStatement
 {
 	ScopedProfiler(CodeLocation l, ExpPtr c, const String& name_):
 	  ScopedBlockStatement(l, c),
-	  name(name_)
-	{}
+	  dataSource(new DebugSession::ProfileDataSource()),
+	  profiler(dataSource)
+	{
+#if HISE_INCLUDE_PROFILING_TOOLKIT
+		dataSource->name = name_;
+		dataSource->locationString = location.getEncodedLocationString("", File());
+		dataSource->sourceType = DebugSession::ProfileDataSource::SourceType::Script;
+
+		int col = 0;
+		int line = 0;
+
+		location.fillColumnAndLines(col, line);
+
+		auto id = callback;
+
+		dataSource->onMessageFlush = [id, line](ApiProviderBase::Holder* h, DebugInformationBase::Ptr info)
+		{
+			if(auto jp = dynamic_cast<JavascriptProcessor*>(h))
+				jp->addInplaceDebugValue(id, line, info->getTextForName(), info);
+		};
+#endif
+	}
+
+	
 
 	SN_NODE_ID("profile");
 
-	bool isDebugStatement() const override { return true; }
-
+	bool isDebugStatement() const override { return false; }
+	
 	ResultCode perform(const Scope& s, var*) const override
 	{
-		start = Time::getMillisecondCounterHiRes();
+		profiler.startProfiling(s.root->hiseSpecialData.processor);
+
+		
+
+
+		PROFILE_ONLY(currentProfileRoot = dataSource);
 
 		return ResultCode::ok;
 	}
 
 	void cleanup(const Scope& s) const override
 	{
-		auto delta = Time::getMillisecondCounterHiRes() - start;
-		String m;
-		m << "profile" << name << ": " << String(delta, 3) << " ms";
-		debugToConsole(dynamic_cast<Processor*>(s.root->hiseSpecialData.processor), m);
+		profiler.stopProfiling();
+		PROFILE_ONLY(currentProfileRoot = nullptr);
 	}
 
-	const String name;
-	mutable double start;
+	DebugSession::ProfileDataSource::Ptr dataSource;
+	mutable DebugSession::ProfileDataSource::Profiler profiler;
 };
 
 struct HiseJavascriptEngine::RootObject::ScopedPrinter: public HiseJavascriptEngine::RootObject::ScopedBlockStatement
@@ -409,6 +516,41 @@ struct HiseJavascriptEngine::RootObject::ScopedPrinter: public HiseJavascriptEng
 	}
 
 	dispatch::StringBuilder b1, b2;
+};
+
+struct HiseJavascriptEngine::RootObject::ScopedSampling: public HiseJavascriptEngine::RootObject::ScopedBlockStatement
+{
+	ScopedSampling(HiseJavascriptEngine::RootObject::CodeLocation l, ExpPtr c):
+	  ScopedBlockStatement(l, c)
+	{}
+
+	SN_NODE_ID("sample");
+
+	bool isDebugStatement() const override { return true; }
+
+	ResultCode perform(const Scope& s, var*) const override
+	{
+		auto p = dynamic_cast<Processor*>(s.root->hiseSpecialData.processor);
+		auto jp = dynamic_cast<JavascriptProcessor*>(p);
+		auto sessionId = name->getResult(s).toString();
+		auto& dh = p->getMainController()->getDebugSession();
+		ignoreUnused(sessionId, dh, jp);
+		PROFILE_ONLY(if(auto s = dh.startSession(jp, sessionId)) addInplaceDebugValue(jp, s));
+
+		return ResultCode::ok;
+	}
+
+	void cleanup(const Scope& s) const override
+	{
+		auto p = dynamic_cast<Processor*>(s.root->hiseSpecialData.processor);
+		auto jp = dynamic_cast<JavascriptProcessor*>(p);
+		auto& dh = p->getMainController()->getDebugSession();
+		ignoreUnused(p, jp, dh);
+		PROFILE_ONLY(dh.popSession());
+
+	}
+
+	ExpPtr name;
 };
 
 template <bool CheckBefore> struct ScopedAssert: public HiseJavascriptEngine::RootObject::ScopedBlockStatement
@@ -462,10 +604,7 @@ struct HiseJavascriptEngine::RootObject::ScopedAfter:  public ScopedAssert<false
 
 struct HiseJavascriptEngine::RootObject::BlockStatement : public Statement
 {
-	BlockStatement(const CodeLocation& l) noexcept : Statement(l) 
-	{
-		
-	}
+	BlockStatement(const CodeLocation& l) noexcept : Statement(l), closeLocation(nullptr) {}
 
 	void cleanup(const Scope& s) const
 	{
@@ -489,7 +628,11 @@ struct HiseJavascriptEngine::RootObject::BlockStatement : public Statement
 			try
 			{
 				if(sbs->checkCondition(s, false))
+				{
+					PROFILE_ONLY(if(sbs->currentProfileRoot == nullptr) setCurrentProfileRoot(nullptr));
 					sbs->cleanup(s);
+				}
+					
 			}
 			catch(const String& e)
 			{
@@ -510,11 +653,82 @@ struct HiseJavascriptEngine::RootObject::BlockStatement : public Statement
 		}
 	}
 
+	String getProfileName() const override
+	{
+		int line, col;
+		location.fillColumnAndLines(col, line);
+
+		if(line == 1 && location.externalFile.isNotEmpty())
+		{
+			return File(location.externalFile).getFileName();
+		}
+
+		String s;
+		s << "{...} (Line " + String(line) + ")";
+		return s;
+	}
+
+	using ScopedBlockProfiler = DebugSession::ProfileDataSource::ScopedProfiler;
+
 	ResultCode performWithinScope(const Scope& s, var* returnedValue) const
 	{
+#if HISE_INCLUDE_PROFILING_TOOLKIT
+		if(currentProfileRoot != nullptr)
+		{
+			String pid;
+			File sf;
+
+			if(blockData == nullptr)
+			{
+				auto pr = dynamic_cast<Processor*>(s.root->hiseSpecialData.processor);
+				pid = pr->getId();
+#if USE_BACKEND
+				sf = pr->getMainController()->getCurrentFileHandler().getSubDirectory(FileHandlerBase::Scripts);
+#endif
+
+				blockData = new DebugSession::ProfileDataSource();
+				blockData->sourceType = DebugSession::ProfileDataSource::SourceType::Script;
+				blockData->name = getProfileName();
+
+				CodeLocation e(location);
+				e.location = closeLocation;
+
+				int col, line;
+				e.fillColumnAndLines(col, line);
+				auto endLine = line;
+				location.fillColumnAndLines(col, line);
+				auto startLine = line-1;
+				blockData->lineRange = { startLine, endLine };
+				blockData->locationString = location.getEncodedLocationString(pid, sf, col, line);
+			}
+
+			if(statements.size() != statementData.size())
+			{
+				for(auto st: statements)
+				{
+					statementData.add(new DebugSession::ProfileDataSource());
+					
+					statementData.getLast()->name = st->getProfileName();
+					statementData.getLast()->sourceType = DebugSession::ProfileDataSource::SourceType::Script;
+					statementData.getLast()->isLoop = st->getProfileName() == "loop {}";
+					
+					int col, line;
+					st->location.fillColumnAndLines(col, line);
+
+					statementData.getLast()->locationString = st->location.getEncodedLocationString(pid, sf, col, line);
+
+					statementData.getLast()->lineRange = { line, line + 1};
+				}
+			}
+		}
+#endif
+
+		ScopedBlockProfiler b(blockData, s.root->hiseSpecialData.processor);
+
 		for (int i = 0; i < statements.size(); ++i)
 		{
 #if ENABLE_SCRIPTING_BREAKPOINTS
+
 			ScriptAudioThreadGuard guard(statements[i]->location);
 
 			if (statements.getUnchecked(i)->breakpointReference.index != -1)
@@ -534,6 +748,17 @@ struct HiseJavascriptEngine::RootObject::BlockStatement : public Statement
 				throw bp;
 			}
 #endif
+
+#if HISE_INCLUDE_PROFILING_TOOLKIT
+			if(currentProfileRoot != nullptr)
+			{
+				if(auto bl = dynamic_cast<BlockStatement*>(statements[i]))
+					bl->currentProfileRoot = currentProfileRoot;
+			}
+
+			ScopedBlockProfiler sp2(statementData[i], s.root->hiseSpecialData.processor);
+#endif
+
 			if (ResultCode r = statements.getUnchecked(i)->perform(s, returnedValue))
 				return r;
 		}
@@ -556,7 +781,16 @@ struct HiseJavascriptEngine::RootObject::BlockStatement : public Statement
 				scopedBlockCounter = i;
 
 				if(scopedBlockStatements[i]->checkCondition(s, true))
+				{
 					scopedBlockStatements[i]->perform(s, returnedValue);
+
+#if HISE_INCLUDE_PROFILING_TOOLKIT
+					auto newRoot = scopedBlockStatements[i]->currentProfileRoot;
+
+					if(newRoot != currentProfileRoot)
+						setCurrentProfileRoot(newRoot);
+#endif
+				}
 			}
 
 			auto rv = performWithinScope(s, returnedValue);
@@ -619,6 +853,11 @@ struct HiseJavascriptEngine::RootObject::BlockStatement : public Statement
 
 	OwnedArray<ScopedBlockStatement> scopedBlockStatements;
 
+	mutable DebugSession::ProfileDataSource::Ptr blockData;
+	mutable DebugSession::ProfileDataSource::List statementData;
+
+	String::CharPointerType closeLocation;
+
 	mutable int scopedBlockCounter = 0;
 };
 
@@ -629,6 +868,13 @@ struct HiseJavascriptEngine::RootObject::IfStatement : public Statement
 	ResultCode perform(const Scope& s, var* returnedValue) const override
 	{
 		return (condition->getResult(s) ? trueBranch : falseBranch)->perform(s, returnedValue);
+	}
+
+	String getProfileName() const override
+	{
+		int col, line;
+		location.fillColumnAndLines(col, line);
+		return "if(...) (line " + String(line) + ")";
 	}
 
 	Statement* getChildStatement(int index) override
@@ -744,6 +990,15 @@ struct HiseJavascriptEngine::RootObject::VarStatement : public Expression
 {
 	VarStatement(const CodeLocation& l) noexcept : Expression(l) {}
 
+	String getProfileName() const override
+	{
+		String s;
+		int col, line;
+		location.fillColumnAndLines(col, line);
+		s << "var " << name << " = [...] (line " << String(line) << ")";
+		return s;
+	}
+
 	ResultCode perform(const Scope& s, var*) const override
 	{
 		s.scope->setProperty(name, initialiser->getResult(s));
@@ -773,6 +1028,11 @@ struct HiseJavascriptEngine::RootObject::ConstVarStatement : public Statement
 
 		return ok;
 		
+	}
+
+	String getProfileName() const override
+	{
+		return name.toString() + initialiser->getProfileName().fromFirstOccurrenceOf(".", false, false);
 	}
 
 	Statement* getChildStatement(int index) override { return index == 0 ? initialiser.get() : nullptr; }
@@ -937,6 +1197,14 @@ struct HiseJavascriptEngine::RootObject::LoopStatement : public Statement
 		}
 		
 		return nullptr;
+	}
+
+	String getProfileName() const override
+	{
+		if(dynamic_cast<BlockStatement*>(body.get()) != nullptr)
+			return "loop {}";
+		else
+			return "loop: " + body->getProfileName();
 	}
 
 	bool replaceChildStatement(Ptr& s, Statement* n) override

@@ -142,6 +142,15 @@ struct HiseJavascriptEngine::RootObject::ApiCall : public Expression
 		}
 	};
 
+	String getProfileName() const override
+	{
+		auto s = apiClass->getObjectName().toString();
+		s << ".";
+		s << functionName;
+		s << "()";
+		return s;
+	}
+
 	var getResult(const Scope& s) const override
 	{
 #if JUCE_ENABLE_AUDIO_GUARD
@@ -226,6 +235,7 @@ struct HiseJavascriptEngine::RootObject::ApiCall : public Expression
     VarTypeChecker::ParameterTypes types;
 #endif
 
+	String functionName;
 	Identifier callbackName;
 
 	const ReferenceCountedObjectPtr<ApiClass> apiClass;
@@ -253,6 +263,11 @@ struct HiseJavascriptEngine::RootObject::ConstObjectApiCall : public Expression
 		// this might be turned into a constant...
 		jassertfalse;
 		return false;
+	}
+
+	String getProfileName() const override
+	{
+		return functionName.toString() + "()";
 	}
 
 	var getResult(const Scope& s) const override
@@ -720,6 +735,11 @@ struct HiseJavascriptEngine::RootObject::InlineFunction
 		void addParameter(Expression *e)
 		{
 			parameterExpressions.add(e);
+		}
+
+		String getProfileName() const override
+		{
+			return referenceToObject->name.toString() + "()";
 		}
 
 		var getResult(const Scope& s) const override

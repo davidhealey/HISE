@@ -354,7 +354,9 @@ struct WeakCallbackHolder : private ScriptingObject
 		anonymousFunctionRef = var();
 	}
 
-	void addAsSource(DebugableObjectBase* sourceObject, const String& callbackId);
+	void addAsSource(DebugableObjectBase* sourceObject, const String& callbackId, bool lookupVariableNameLater=true);
+
+	void addProfileSources(DebugInformationBase::Ptr p);
 
 	void clear();
 
@@ -395,6 +397,8 @@ private:
 	var refCountedThisObject;
 
 	WeakReference<HiseJavascriptEngine> engineToUse;
+	ProfileCollection::ID pTrigger = -1;
+	ProfileCollection::ID pCall = -1;
 };
 
 class AssignableDotObject

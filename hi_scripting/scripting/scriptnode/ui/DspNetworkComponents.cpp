@@ -405,6 +405,7 @@ void DspNetworkGraph::rebuildNodes()
 
 void DspNetworkGraph::resizeNodes()
 {
+	heatmap.clear();
 	ScopedValueSetter<bool> svs(dynamic_cast<NodeContainer*>(getCurrentRootNode())->forceNoLock, true);
 
     Component::callRecursive<NodeComponent>(this, [](NodeComponent* nc)
@@ -1525,7 +1526,17 @@ void DspNetworkGraph::paintOverChildren(Graphics& g)
 		lastMousePos.setY(lastMousePos.getY() * dragSmoothAlpha + currentPosition.getY() * (1.0f - dragSmoothAlpha));
 	}
 
-	
+	for(const auto& h: heatmap)
+	{
+		
+		auto alpha = std::pow((float)h.second, JUCE_LIVE_CONSTANT_OFF(3.0f));
+		FloatSanitizers::sanitizeFloatNumber(alpha);
+		alpha = jlimit(0.0f, 1.0f, alpha);
+		g.setColour(Colour(HISE_WARNING_COLOUR).withAlpha(alpha));
+		g.drawRect(h.first, 3);
+		g.setColour(Colour(HISE_WARNING_COLOUR).withAlpha(alpha * 0.2f));
+		g.fillRect(h.first);
+	}
 }
 
 scriptnode::NodeComponent* DspNetworkGraph::getComponent(NodeBase::Ptr node)
@@ -1914,12 +1925,60 @@ bool DspNetworkGraph::Actions::toggleComments(DspNetworkGraph& g)
 
 bool DspNetworkGraph::Actions::toggleCpuProfiling(DspNetworkGraph& g)
 {
+#if HISE_INCLUDE_PROFILING_TOOLKIT
 	auto& b = g.network->getCpuProfileFlag();
 	b = !b;
-	
-	g.enablePeriodicRepainting(b);
 
+	if(b)
+	{
+		auto jp = dynamic_cast<JavascriptProcessor*>(g.network->getScriptProcessor());
+		g.network->getScriptProcessor()->getMainController_()->getDebugSession().clearData(jp);
+
+		DspNetworkHeatmapGenerator hg(g.network->getRootNode());
+		hg.generateHeatmapIndexes();
+
+		jp->heatmapManager.heatmapBroadcaster.addListener(g, [](DspNetworkGraph& g, DebugInformationBase::Ptr p, const std::map<int, double>* map)
+		{
+			g.heatmap.clear();
+
+			if(map != nullptr)
+			{
+				Array<NodeComponent*> list;
+				fillChildComponentList(list, &g);
+
+				for(auto nc: list)
+				{
+					auto idx = nc->node->profileData->lineRange.getStart();
+					auto ex = map->find(idx);
+
+					if(ex != map->end())
+					{
+						auto alpha = ex->second;
+						auto b = g.getLocalArea(nc, nc->getLocalBounds());
+						g.heatmap.push_back({ b, alpha });
+					}
+				}
+
+				g.repaint();
+			}
+		});
+	}
+	else
+	{
+#if USE_BACKEND
+		if(auto r = g.network->getScriptProcessor()->getMainController_()->getDebugSession().getLastProfileRoot(DebugSession::ThreadIdentifier::Type::AudioThread))
+		{
+			auto ptr = &g;
+			auto c = g.network->getScriptProcessor()->getMainController_()->getDebugSession().createPopupViewer(r);
+
+			GET_BACKEND_ROOT_WINDOW(ptr)->getRootFloatingTile()->showComponentInRootPopup(c, &g, { g.getWidth() / 2 , 15 } , false);
+		}
+#endif
+	}
+
+	g.enablePeriodicRepainting(b);
 	g.repaint();
+#endif
 
 	return true;
 }

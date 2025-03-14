@@ -67,7 +67,7 @@ struct JavascriptTokeniserFunctions
             { "count", "print", "defer", "after", "trace", nullptr };
 
         static const char* const keywords6Char[] =
-            { "before", "bypass", nullptr };
+            { "before", "bypass", "sample", nullptr };
 
         static const char* const keywords7Char[] =
             { "profile", nullptr };

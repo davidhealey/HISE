@@ -1125,6 +1125,548 @@ bool ZoomableViewport::WASDScroller::keyChangedWASD(bool isKeyDown, Component* c
 	return false;
 }
 
+AbstractZoomableView::WASDKeyListener::WASDKeyListener(Component& c):
+	p(c)
+{
+	p.setWantsKeyboardFocus(true);
+	p.grabKeyboardFocusAsync();
+	p.addKeyListener(this);
+
+	delta[0].setValueAndRampTime(0.0f, 60.0, 0.12);
+	delta[1].setValueAndRampTime(0.0f, 60.0, 0.12);
+}
+
+AbstractZoomableView::WASDKeyListener::~WASDKeyListener()
+{
+	p.removeKeyListener(this);
+}
+
+bool AbstractZoomableView::WASDKeyListener::keyPressed(const KeyPress& key, Component* originatingComponent)
+{
+	return false;
+}
+
+void AbstractZoomableView::WASDKeyListener::setShiftMultiplier(float horizontalFactor, float verticalFactor)
+{
+	shiftMultipliers[0] = horizontalFactor;
+	shiftMultipliers[1] = verticalFactor;
+}
+
+void AbstractZoomableView::WASDKeyListener::timerCallback()
+{
+	auto mods = ComponentPeer::getCurrentModifiersRealtime();
+
+	float thisDelta[2] = { 0.0f, 0.0f };
+
+	for(auto s: state)
+	{
+		if(s.second)
+		{
+			auto horizontal = isHorizontal(s.first);
+
+			thisDelta[horizontal] = (float)getDelta(s.first);
+
+			if(mods.isShiftDown())
+				thisDelta[horizontal] *= shiftMultipliers[(int)horizontal];
+		}
+	}
+
+	delta[0].setTargetValue(thisDelta[0]);
+	delta[1].setTargetValue(thisDelta[1]);
+
+
+	if(!onDirection)
+		return;
+
+	bool movement = std::abs(delta[0].getTargetValue()) > 0.5f || std::abs(delta[1].getTargetValue()) > 0.5f;
+
+	if(auto x = delta[0].getNextValue())
+	{
+		onDirection(false, x);
+		movement |= std::abs(x) > 0.0005f;
+	}
+				
+	if(auto y = delta[1].getNextValue())
+	{
+		onDirection(true, y);
+		movement |= std::abs(y) > 0.0005f;
+	}
+				
+	if(!movement)
+		stopTimer();
+}
+
+void AbstractZoomableView::WASDKeyListener::handlePressedKey(Direction d)
+{
+	switch(d)
+	{
+	case Direction::Up: DBG("UP"); break;
+	case Direction::Down: DBG("DOWN"); break;
+	case Direction::Left: DBG("LEFT"); break;
+	case Direction::Right: DBG("RIGHT"); break;
+	default: ;
+	}
+}
+
+bool AbstractZoomableView::WASDKeyListener::keyStateChanged(bool isKeyDown, Component* originatingComponent)
+{
+	state[Direction::Left] = KeyPress::isKeyCurrentlyDown((int)Direction::Left);
+	state[Direction::Up] = KeyPress::isKeyCurrentlyDown((int)Direction::Up);
+	state[Direction::Down] = KeyPress::isKeyCurrentlyDown((int)Direction::Down);
+	state[Direction::Right] = KeyPress::isKeyCurrentlyDown((int)Direction::Right);
+
+	if(state[Direction::Left] && state[Direction::Right])
+	{
+		state[Direction::Left] = false;
+		state[Direction::Right] = false;
+	}
+
+	if(state[Direction::Up] && state[Direction::Down])
+	{
+		state[Direction::Up] = false;
+		state[Direction::Down] = false;
+	}
+
+	auto somePressed = false;
+
+	for(auto& s: state)
+		somePressed |= s.second;
+
+	if(somePressed && !isTimerRunning())
+		startTimer(15);
+			
+	return false;
+}
+
+AbstractZoomableView::DragZoomAction::DragZoomAction(AbstractZoomableView& parent_, Range<double> newRange_,
+	Range<double> oldRange_, float newZoom_, float oldZoom_):
+	UndoableAction(),
+	parent(parent_),
+	newRange(newRange_),
+	oldRange(oldRange_),
+	newZoom(newZoom_),
+	oldZoom(oldZoom_)
+{}
+
+bool AbstractZoomableView::DragZoomAction::perform()
+{
+	parent.zoomAnimator.setTarget(newRange, newZoom);
+	return true;
+}
+
+bool AbstractZoomableView::DragZoomAction::undo()
+{
+	parent.zoomAnimator.setTarget(oldRange, oldZoom);
+	return true;
+}
+
+void AbstractZoomableView::ZoomAnimator::setTarget(Range<double> newTarget, float newZoom)
+{
+	start = parent.scrollbar.getCurrentRange();
+	startZoom = parent.zoomFactor;
+
+	alpha = 0.0f;
+
+	zoom = newZoom;
+	target = newTarget;
+	startTimer(15);
+}
+
+void AbstractZoomableView::ZoomAnimator::timerCallback()
+{
+	auto a = jlimit(0.0f, 1.0f, std::pow(alpha, JUCE_LIVE_CONSTANT_OFF(2.0f)));
+	auto invAlpha = 1.0f - a;
+
+	Range<double> thisRange(start.getStart() * invAlpha + target.getStart() * a, start.getEnd() * invAlpha + target.getEnd() * a);
+
+	float thisZoom = start.getLength() / thisRange.getLength();
+
+	parent.zoomFactor = startZoom * thisZoom;
+	parent.scrollbar.setCurrentRange(thisRange, sendNotificationSync);
+
+	alpha += JUCE_LIVE_CONSTANT_OFF(0.04f);
+
+	if(alpha >= 1.0f)
+	{
+		parent.scrollbar.setCurrentRange(target, sendNotificationSync);
+		parent.zoomFactor = zoom;
+
+		stopTimer();
+	}
+				
+}
+
+AbstractZoomableView::AbstractZoomableView():
+	zoomAnimator(*this),
+	scrollbar(false)
+{
+	sf.addScrollBarToAnimate(scrollbar);
+}
+
+void AbstractZoomableView::setAsParentComponent(Component* p)
+{
+	jassert(p == dynamic_cast<Component*>(this));
+	asComponent = p;
+
+	wasd = new WASDKeyListener(*asComponent);
+
+	p->addAndMakeVisible(scrollbar);
+	sf.addScrollBarToAnimate(scrollbar);
+	scrollbar.addListener(this);
+	animator.addListener(this);
+
+	wasd->onDirection = [this](bool isHorizontal, float delta)
+	{
+		if(isHorizontal)
+		{
+			auto p = scrollbar.getCurrentRangeStart();
+
+			auto l = scrollbar.getCurrentRange().getLength();
+			auto d = l * delta;
+			d *= JUCE_LIVE_CONSTANT_OFF(0.02f);
+
+			p = jlimit(0.0, 1.0 - l, p + d);
+			scrollbar.setCurrentRangeStart(p, sendNotificationSync);
+		}
+		else
+		{
+			auto dx = 1.0 + delta * JUCE_LIVE_CONSTANT_OFF(0.1f);
+
+			auto z = zoomFactor * dx;
+
+			auto pos = asComponent->getWidth() / 2;
+
+			if(asComponent->isMouseOver(true))
+				pos = asComponent->getMouseXYRelative().getX();
+
+			changeZoom(z, pos);
+		}
+	};
+
+	scrollbar.setRangeLimits({0.0, 1.0});
+	animator.setLimits({0.0f, 1.0f});
+}
+
+void AbstractZoomableView::changeZoom(float newZoomFactor, int xPos)
+{
+	if(asComponent->getWidth() == 0)
+		return;
+
+	float mousePos = (float)xPos / (float)(asComponent->getWidth());
+	auto oldZoom = 1.0f / zoomFactor;
+
+	zoomFactor = jlimit(1.0f, 80000.0f, newZoomFactor);
+
+	auto pan = scrollbar.getCurrentRangeStart();
+		
+	// Adjust pan to keep zoom centered on mouse position
+	float deltaZoom = oldZoom - (1.0f / newZoomFactor);
+	pan += mousePos * deltaZoom;
+
+	auto nz = 1.0 / zoomFactor;
+
+	// Ensure pan stays within bounds
+	pan = jlimit(0.0, 1.0 - nz, pan);
+	    
+	scrollbar.setCurrentRange(pan, nz, sendNotificationSync);
+}
+
+void AbstractZoomableView::scrollBarMoved(ScrollBar*, double newRangeStart)
+{
+	asComponent->repaint();
+}
+
+void AbstractZoomableView::drawDragDistance(Graphics& g, Rectangle<int> viewportPosition)
+{
+	if(showDragDistance)
+	{
+		g.setColour(Colours::black.withAlpha(0.6f));
+		int y = viewportPosition.getY();
+		auto h = viewportPosition.getHeight();
+		Rectangle<int> a(dragDistance.getStart(), y, dragDistance.getLength(), h);
+		g.fillRect(a);
+		g.setColour(Colours::white.withAlpha(0.9f));
+		g.drawVerticalLine(dragDistance.getStart(), (float)y, (float)(y + h));
+		g.drawVerticalLine(dragDistance.getEnd(), (float)y, (float)(y + h));
+		auto w = (float)dragDistance.getLength() / (float)asComponent->getWidth();
+		w *= totalLength / zoomFactor;
+		auto x = getTextForDistance(w);
+		g.drawText(x, a.toFloat(), Justification::centred);
+	}
+}
+
+void AbstractZoomableView::drawBackgroundGrid(Graphics& g, Rectangle<int> viewportPosition)
+{
+	g.fillAll(Colour(0xFF1D1D1D));
+
+	auto r = getNormalisedZoomRange();
+
+	if(r.getLength() == 0.0)
+		return;
+
+	auto l_r = std::log10(r.getLength()) - 0.1;
+
+	auto l = std::floor(l_r);
+
+	auto alpha = 1.0f - jlimit(0.0f, 1.0f, (float)(l_r - l));
+
+	auto numAfterComma = jmax(0, -2 - roundToInt(l));
+
+	auto delta = std::pow(10.0, l);
+	auto x = r.getStart();
+
+	if(x != 0.0)
+		x += (delta - std::fmod(r.getStart(), delta));
+
+	x -= delta;
+
+	NormalisableRange<double> nr(r);
+
+	auto y = viewportPosition.getY();
+	auto h = viewportPosition.getBottom();
+
+	g.setColour(Colours::black.withAlpha(0.02f));
+	g.fillRect(viewportPosition);
+
+	g.setColour(Colours::white.withAlpha(0.3f));
+	g.setFont(GLOBAL_FONT());
+
+	auto smallDelta = delta * 0.1;
+
+	while(x <= r.getEnd() && delta != 0.0f)
+	{
+		if(nr.getRange().contains(x))
+		{
+			auto xpos = viewportPosition.getX() + roundToInt(nr.convertTo0to1(x) * (float)viewportPosition.getWidth());
+			Rectangle<float> tb((float)xpos + 5.0f, (float)y, 100.0f, (float)FirstItemOffset);
+			auto label = getTextForDistance(x * totalLength);
+			g.setColour(Colours::white.withAlpha(0.3f));
+			g.drawText(label, tb, Justification::centredLeft);
+			g.drawVerticalLine(xpos, y, h);
+		}
+
+		g.setColour(Colours::white.withAlpha(alpha * 0.25f));
+
+		for(int i = 1; i < 10; i++)
+		{
+			auto x2 = x + smallDelta * (float)i;
+
+			if(nr.getRange().contains(x2))
+			{
+				x2 = nr.convertTo0to1(x2);
+				g.drawVerticalLine(viewportPosition.getX() + roundToInt(x2 * (float)viewportPosition.getWidth()), y + (float)FirstItemOffset - 2.0f, h);
+			}
+		}
+
+		x += delta;
+	}
+}
+
+void AbstractZoomableView::onResize(Rectangle<int> viewportPosition)
+{
+	scrollbar.setBounds(viewportPosition.removeFromBottom(ScrollbarHeight));
+
+	totalLength = getTotalLength();
+
+	if(totalLength > 0.0)
+	{
+		scaleFactor = (float)asComponent->getWidth() / totalLength;
+		asComponent->repaint();
+	}
+}
+
+void AbstractZoomableView::positionChanged(Animator&, double newPosition)
+{
+	scrollbar.setCurrentRangeStart(newPosition, sendNotificationSync);
+}
+
+void AbstractZoomableView::handleMouseWheelEvent(const MouseEvent& e, const MouseWheelDetails& wheel)
+{
+	if(e.mods.isAnyModifierKeyDown())
+	{
+		if(wheel.deltaY > 0)
+			changeZoom(zoomFactor * 1.2f, e.getPosition().x);
+		else
+			changeZoom(zoomFactor * 0.8f, e.getPosition().x);
+	}
+	else
+	{
+			
+		float increment = wheel.deltaY;
+
+		if (increment < 0)
+			increment = -1.0 * scrollbar.getCurrentRange().getLength() * 0.33;
+		else if (increment > 0)
+			increment = 1.0 * scrollbar.getCurrentRange().getLength() * 0.33;
+
+		auto vr = scrollbar.getCurrentRange();
+		scrollbar.setCurrentRange (vr - increment, sendNotificationSync);
+	}
+}
+
+bool AbstractZoomableView::handleMouseEvent(const MouseEvent& e, MouseEventType t)
+{
+	updateMouseCursorForEvent(e);
+
+	switch(t)
+	{
+	case MouseEventType::MouseDown:
+		{
+			if(e.mods.isX1ButtonDown())
+			{
+				if(auto um = getUndoManager())
+					um->undo();
+				return true;
+			}
+			if(e.mods.isX2ButtonDown())
+			{
+				if(auto um = getUndoManager())
+					um->redo();
+				return true;
+			}
+			if (e.mods.isShiftDown())
+			{
+				showDragDistance = true;
+				return true;
+			}
+			if (!e.mods.isAnyModifierKeyDown())
+			{
+				animator.setPosition(scrollbar.getCurrentRangeStart());
+				animator.beginDrag();
+				return true;
+			}
+		}
+	case MouseEventType::MouseUp:
+		{
+			if(showDragDistance)
+			{
+				if(e.mods.isShiftDown())
+				{
+					auto x = (float)dragDistance.getStart() / (float)asComponent->getWidth();
+					auto w = (float)dragDistance.getLength() / (float)asComponent->getWidth();
+
+					auto sr = scrollbar.getCurrentRange();
+
+					auto newStart = sr.getStart() + x * sr.getLength();
+					auto newLength = sr.getLength() * w;
+
+					zoomToRange({newStart, newStart + newLength});
+				}
+
+				showDragDistance = false;
+				return false;
+			}
+			else
+			{
+				animator.endDrag();
+				return true;
+			}
+		}
+	case MouseEventType::MouseDoubleClick:
+		{
+			changeZoom(1.0);
+			return true;
+		}
+	case MouseEventType::MouseDrag:
+		{
+			if(showDragDistance)
+			{
+				auto x1 = e.getMouseDownPosition().x;
+				auto x2 = e.getPosition().x;
+
+				dragDistance = { jmin(x1, x2), jmax(x1, x2) };
+				asComponent->repaint();
+				return true;
+			}
+			else
+			{
+				auto dx = (float)e.getDistanceFromDragStartX() / (float)asComponent->getWidth();
+				dx *= scrollbar.getCurrentRange().getLength();
+				animator.drag(-1.0 * dx);
+				return true;
+			}
+		}
+		
+	case MouseEventType::MouseMove:
+		break;
+	default: ;
+	}
+
+	return false;
+		
+}
+
+void AbstractZoomableView::zoomToRange(Range<double> newScaledRange)
+{
+	auto sr = scrollbar.getCurrentRange();
+	auto w = newScaledRange.getLength() / sr.getLength();
+		
+	ScopedPointer<DragZoomAction> a = new DragZoomAction(*this, newScaledRange, sr, zoomFactor / w, zoomFactor);
+
+	if(auto um = getUndoManager())
+	{
+		um->beginNewTransaction();
+		um->perform(a.release());
+	}
+	else
+	{
+		a->perform();
+	}
+}
+
+void AbstractZoomableView::moveToRange(double normalisedNewXPosition)
+{
+	auto sr = scrollbar.getCurrentRange();
+	auto nr = sr.movedToStartAt(normalisedNewXPosition);
+	ScopedPointer<DragZoomAction> a = new DragZoomAction(*this, nr, sr, zoomFactor, zoomFactor);
+
+	if(auto um = getUndoManager())
+	{
+		um->beginNewTransaction();
+		um->perform(a.release());
+	}
+	else
+	{
+		a->perform();
+	}
+}
+
+void AbstractZoomableView::updateMouseCursorForEvent(const MouseEvent& e)
+{
+	if(e.mods.isShiftDown())
+		asComponent->setMouseCursor(MouseCursor::CrosshairCursor);
+	else
+		asComponent->setMouseCursor(getTooltip().isNotEmpty() ? MouseCursor::PointingHandCursor : MouseCursor::NormalCursor);
+}
+
+float AbstractZoomableView::getZoomScale() const
+{
+	return scaleFactor * zoomFactor;
+}
+
+float AbstractZoomableView::getZoomTranspose() const
+{
+	return scrollbar.getCurrentRangeStart() * totalLength;
+}
+
+Range<double> AbstractZoomableView::getScaledZoomRange() const
+{
+	auto nr = getNormalisedZoomRange();
+	return { nr.getStart() * totalLength, nr.getEnd() * totalLength };
+}
+
+Range<double> AbstractZoomableView::getNormalisedZoomRange() const
+{
+	return scrollbar.getCurrentRange();
+}
+
+void AbstractZoomableView::updateIndexToShow()
+{
+	totalLength = getTotalLength();
+	asComponent->resized();
+	changeZoom(1.0);
+}
+
 Point<float> ZoomableViewport::MouseWatcher::getDeltaAfterResize()
 {
 	auto newGraphPos = parent.getLocalPoint(parent.content, graphMousePos);

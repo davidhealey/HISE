@@ -392,6 +392,8 @@ struct HiseJavascriptEngine::RootObject::ExpressionTreeBuilder : private TokenIt
 			}
 		}
 
+		b->closeLocation = location.location;
+
 		return b.release();
 	}
 
@@ -724,6 +726,16 @@ private:
 			matchIf(TokenTypes::closeParen);
 
 			return new ScopedNoop(location, condition);
+		}
+		else if(typeId == ScopedSampling::getStaticId())
+		{
+			ScopedPointer<ScopedSampling> ss = new ScopedSampling(location, condition);
+			
+			match(TokenTypes::openParen);
+			ss->name = parseExpression();
+			match(TokenTypes::closeParen);
+
+			return ss.release();
 		}
 		else if(typeId == ScopedPrinter::getStaticId())
 		{
@@ -1916,6 +1928,10 @@ private:
         
 		ScopedPointer<ApiCall> s = new ApiCall(location, apiClass, numArgs, functionIndex, pt);
 
+#if ENABLE_SCRIPTING_BREAKPOINTS
+		s->functionName = functionName.toString();
+#endif
+
 		match(TokenTypes::openParen);
 
 		int numActualArguments = 0;
@@ -2733,6 +2749,8 @@ void HiseJavascriptEngine::RootObject::execute(const String& code, bool allowCon
 
 	{
 		TRACE_SCRIPTING("parse script");
+
+		PROFILE_ONLY(DebugSession::ProfileDataSource::ScopedProfiler sp(parseProfileSource, hiseSpecialData.processor));
 		sl = tb.parseStatementList();
 	}
 	
@@ -2742,6 +2760,10 @@ void HiseJavascriptEngine::RootObject::execute(const String& code, bool allowCon
 
 	{
 		TRACE_SCRIPTING("run onInit callback");
+
+		PROFILE_ONLY(DebugSession::ProfileDataSource::ScopedProfiler sp(onInitProfileSource, hiseSpecialData.processor));
+		PROFILE_ONLY(sl->currentProfileRoot = onInitProfileSource);
+
 		sl->perform(Scope(nullptr, this, this), nullptr);
 	}
 

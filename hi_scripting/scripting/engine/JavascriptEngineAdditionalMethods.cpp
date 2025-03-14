@@ -1567,7 +1567,7 @@ void LambdaValueInformation::setAutocompleteable(bool shouldBe)
 	autocompleteable = shouldBe;
 }
 
-const var LambdaValueInformation::getVariantCopy() const
+var LambdaValueInformation::getVariantCopy() const
 { return var(getCachedValueFunction(false)); }
 
 String LambdaValueInformation::getTextForValue() const

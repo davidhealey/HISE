@@ -287,6 +287,11 @@ void BackendProcessorEditor::loadNewContainer(const File &f)
 		GET_PROJECT_HANDLER(getMainSynthChain()).setWorkingProject(f.getParentDirectory().getParentDirectory());
 	}
 
+#if HISE_INCLUDE_PROFILING_TOOLKIT
+	if(owner->getDebugSession().shouldProfileInitialisation())
+		owner->getDebugSession().startRecording(30000, &owner->getDebugSession());
+#endif
+
 	owner->killAndCallOnLoadingThread([f](Processor* p) {p->getMainController()->loadPresetFromFile(f, nullptr); return SafeFunctionCall::OK; });
 }
 
@@ -312,11 +317,13 @@ void BackendProcessorEditor::loadNewContainer(const ValueTree &v)
 	}
 	else
 	{
+#if HISE_INCLUDE_PROFILING_TOOLKIT
+		if(owner->getDebugSession().shouldProfileInitialisation())
+			owner->getDebugSession().startRecording(30000, &owner->getDebugSession());
+#endif
+		
 		owner->killAndCallOnLoadingThread([v](Processor* p) {p->getMainController()->loadPresetFromValueTree(v, nullptr); return SafeFunctionCall::OK; });
-
 	}
-
-	
 }
 
 

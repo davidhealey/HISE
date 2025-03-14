@@ -451,6 +451,13 @@ Path FloatingTileContent::Factory::getPath(PopupMenuOptions type)
 		BACKEND_ONLY(path.loadPathFromData(BackendBinaryData::ToolbarIcons::fileTable, SIZE_OF_PATH(BackendBinaryData::ToolbarIcons::fileTable)));
 		break;
 	}
+	case PopupMenuOptions::ProfilerViewer:
+	case PopupMenuOptions::ProfilerManager:
+	case PopupMenuOptions::ProfilerStatistics:
+	{
+		BACKEND_ONLY(path.loadPathFromData(EditorIcons::profileIcon, EditorIcons::profileIcon_Size));
+		break;
+	}
 	case PopupMenuOptions::ImageTable:
 	{
 		BACKEND_ONLY(path.loadPathFromData(BackendBinaryData::ToolbarIcons::imageTable, SIZE_OF_PATH(BackendBinaryData::ToolbarIcons::imageTable)));
@@ -558,7 +565,6 @@ void FloatingTileContent::Factory::handlePopupMenu(PopupMenu& m, FloatingTile* p
 			addToPopupMenu(m, PopupMenuOptions::SampleMapEditor, "Sample Map Editor");
 			addToPopupMenu(m, PopupMenuOptions::SamplerTable, "Sampler Table");
 			addToPopupMenu(m, PopupMenuOptions::SamplePoolTable, "Global Sample Pool");
-
 			addToPopupMenu(m, PopupMenuOptions::ComplexGroupEditor, "Complex Group Editor");
 
 			m.addSectionHeader("Misc Tools");
@@ -578,6 +584,9 @@ void FloatingTileContent::Factory::handlePopupMenu(PopupMenu& m, FloatingTile* p
 			addToPopupMenu(m, PopupMenuOptions::SliderPackPanel, "Array Editor");
 			addToPopupMenu(m, PopupMenuOptions::MidiKeyboard, "Virtual Keyboard");
 			addToPopupMenu(m, PopupMenuOptions::PerfettoViewer, "Perfetto Viewer");
+			addToPopupMenu(m, PopupMenuOptions::ProfilerViewer, "Profiler Viewer");
+			addToPopupMenu(m, PopupMenuOptions::ProfilerManager, "Profiler Manager");
+			addToPopupMenu(m, PopupMenuOptions::ProfilerStatistics, "Profiler Statistics");
 
 			addToPopupMenu(m, PopupMenuOptions::Note, "Note");
 			addToPopupMenu(m, PopupMenuOptions::AudioFileTable, "Audio File Pool Table");
@@ -736,6 +745,9 @@ void FloatingTileContent::Factory::handlePopupMenu(PopupMenu& m, FloatingTile* p
 		break;
 #endif
     case PopupMenuOptions::PerfettoViewer:      parent->setNewContent(GET_PANEL_NAME(GenericPanel<PerfettoWebviewer>)); break;
+	case PopupMenuOptions::ProfilerViewer:      PROFILE_ONLY(parent->setNewContent(GET_PANEL_NAME(ProfilerViewer))); break;
+	case PopupMenuOptions::ProfilerManager:     PROFILE_ONLY(parent->setNewContent(GET_PANEL_NAME(ProfilerManager))); break;
+	case PopupMenuOptions::ProfilerStatistics:  PROFILE_ONLY(parent->setNewContent(GET_PANEL_NAME(ProfilerStatistics))); break;
 	case PopupMenuOptions::AudioFileTable:		parent->setNewContent(GET_PANEL_NAME(PoolTableSubTypes::AudioFilePoolTable)); break;
 	case PopupMenuOptions::SampleMapPoolTable:  parent->setNewContent(GET_PANEL_NAME(PoolTableSubTypes::SampleMapPoolTable)); break;
 	case PopupMenuOptions::ImageTable:			parent->setNewContent(GET_PANEL_NAME(PoolTableSubTypes::ImageFilePoolTable)); break;

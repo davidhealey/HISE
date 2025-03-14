@@ -44,7 +44,7 @@ namespace hise { using namespace juce;
 
 MainController::SampleManager::SampleManager(MainController *mc_) :
 	mc(mc_),
-	samplerLoaderThreadPool(new SampleThreadPool()),
+	samplerLoaderThreadPool(new ProfiledSampleThreadPool(&mc->getDebugSession())),
 	projectHandler(mc_),
 	sampleClipboard(ValueTree("clipboard")),
 	internalPreloadJob(mc_),
