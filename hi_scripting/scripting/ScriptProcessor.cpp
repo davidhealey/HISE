@@ -1549,11 +1549,12 @@ void JavascriptProcessor::compileScript(const ResultFunction& rf /*= ResultFunct
 {
     inplaceValues.clearQuick();
 
-	auto& ds = dynamic_cast<Processor*>(this)->getMainController()->getDebugSession();
+	
 
 	bool stopAfterCompilation = false;
 
 #if HISE_INCLUDE_PROFILING_TOOLKIT
+    auto& ds = dynamic_cast<Processor*>(this)->getMainController()->getDebugSession();
 	if(ds.shouldProfileInitialisation() && !ds.isRecordingMultithread())
 	{
 		ds.startRecording(10000.0, this);
