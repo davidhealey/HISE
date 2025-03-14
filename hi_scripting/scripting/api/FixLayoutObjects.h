@@ -322,7 +322,6 @@ public:
 
 struct Array : public LayoutBase,
 	public AssignableObject,
-	public ObjectWithJSONConverter,
 	public ConstScriptingObject
 {
 	ObjectReference::CompareFunction compareFunction;
