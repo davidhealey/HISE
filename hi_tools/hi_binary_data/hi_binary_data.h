@@ -155,7 +155,10 @@ namespace EditorIcons
 	DECLARE_DATA(tableIcon, 377);
 	DECLARE_DATA(backIcon, 1275);
 	DECLARE_DATA(forwardIcon, 1275);
+	DECLARE_DATA(scissorIcon, 842);
+	DECLARE_DATA(favoriteIcon, 541);
 	DECLARE_DATA(searchIcon, 349);
+	DECLARE_DATA(clearTextEditorIcon, 232);
 	DECLARE_DATA(dragIcon, 230);
 	DECLARE_DATA(selectIcon, 122);
 	DECLARE_DATA(sunIcon, 1606);
@@ -171,6 +174,8 @@ namespace EditorIcons
 	DECLARE_DATA(horizontalAlign, 188);
 	DECLARE_DATA(xyAlign, 206);
 	DECLARE_DATA(warningIcon, 1549);
+	DECLARE_DATA(profileIcon, 1160);
+	DECLARE_DATA(peakIcon, 186);
 };
 
 namespace SampleToolbarIcons

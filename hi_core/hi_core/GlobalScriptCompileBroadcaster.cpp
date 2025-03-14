@@ -67,12 +67,6 @@ void GlobalScriptCompileBroadcaster::removeScriptListener(GlobalScriptCompileLis
 	listenerListEnd.removeAllInstancesOf(listener);
 }
 
-void GlobalScriptCompileBroadcaster::setShouldUseBackgroundThreadForCompiling(bool shouldBeEnabled) noexcept
-{ useBackgroundCompiling = shouldBeEnabled; }
-
-bool GlobalScriptCompileBroadcaster::isUsingBackgroundThreadForCompiling() const noexcept
-{ return useBackgroundCompiling; }
-
 void GlobalScriptCompileBroadcaster::setEnableCompileAllScriptsOnPresetLoad(bool shouldBeEnabled) noexcept
 { enableGlobalRecompile = shouldBeEnabled; }
 

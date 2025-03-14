@@ -299,7 +299,7 @@ struct RRDisplayComponent : public Component,
 	{
 		Path p;
 
-		LOAD_PATH_IF_URL("lock", ColumnIcons::lockIcon);
+		LOAD_EPATH_IF_URL("lock", ColumnIcons::lockIcon);
 		LOAD_EPATH_IF_URL("midi", SampleToolbarIcons::selectMidi);
 
 		return p;
@@ -1776,7 +1776,7 @@ juce::Path SampleMapEditor::Factory::createPath(const String& name) const
 	
 	LOAD_EPATH_IF_URL("trim-sample-start", SampleMapIcons::trimSampleStart);
 	
-	LOAD_PATH_IF_URL("rebuild", ColumnIcons::moveIcon);
+	LOAD_EPATH_IF_URL("rebuild", ColumnIcons::moveIcon);
 	
 	return p;
 }

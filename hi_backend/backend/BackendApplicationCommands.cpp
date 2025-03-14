@@ -1729,13 +1729,6 @@ void BackendCommandTarget::Actions::setCompileTimeOut(BackendRootWindow * /*bpe*
 	jassertfalse;
 }
 
-void BackendCommandTarget::Actions::toggleUseBackgroundThreadsForCompiling(BackendRootWindow * bpe)
-{
-	const bool lastState = bpe->getBackendProcessor()->isUsingBackgroundThreadForCompiling();
-
-	bpe->getBackendProcessor()->setShouldUseBackgroundThreadForCompiling(!lastState);
-}
-
 void BackendCommandTarget::Actions::toggleCompileScriptsOnPresetLoad(BackendRootWindow * bpe)
 {
 	const bool lastState = bpe->getBackendProcessor()->isCompilingAllScriptsOnPresetLoad();

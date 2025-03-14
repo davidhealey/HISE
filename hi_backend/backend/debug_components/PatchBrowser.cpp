@@ -30,8 +30,6 @@
 *   ===========================================================================
 */
 
-#include "PatchBrowser.h"
-#include "PatchBrowser.h"
 
 namespace hise { using namespace juce;
 
@@ -2458,11 +2456,12 @@ juce::Path PatchBrowser::Factory::createPath(const String& url) const
 {
 	Path p;
 	LOAD_EPATH_IF_URL("add", EditorIcons::penShape);
-	LOAD_PATH_IF_URL("workspace", ColumnIcons::openWorkspaceIcon);
+	LOAD_EPATH_IF_URL("workspace", ColumnIcons::openWorkspaceIcon);
 	LOAD_EPATH_IF_URL("close", SampleMapIcons::deleteSamples);
 	LOAD_EPATH_IF_URL("create", HiBinaryData::ProcessorEditorHeaderIcons::addIcon);
 	LOAD_EPATH_IF_URL("folded", HiBinaryData::ProcessorEditorHeaderIcons::foldedIcon);
 	LOAD_EPATH_IF_URL("unfolded", HiBinaryData::ProcessorEditorHeaderIcons::foldedIcon);
+	LOAD_EPATH_IF_URL("profile", EditorIcons::profileIcon);
 
 	if (url == "unfolded")
 		p.applyTransform(AffineTransform::rotation(float_Pi * 0.5f));

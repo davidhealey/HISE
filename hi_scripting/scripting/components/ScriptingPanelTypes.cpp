@@ -2233,15 +2233,16 @@ juce::Path ScriptContentPanel::Factory::createPath(const String& id) const
 	LOAD_EPATH_IF_URL("cancel", EditorIcons::cancelIcon);
 	LOAD_EPATH_IF_URL("undo", EditorIcons::undoIcon);
 	LOAD_EPATH_IF_URL("redo", EditorIcons::redoIcon);
-	LOAD_PATH_IF_URL("rebuild", ColumnIcons::moveIcon);
+	LOAD_EPATH_IF_URL("rebuild", ColumnIcons::moveIcon);
 	LOAD_EPATH_IF_URL("learn", EditorIcons::connectIcon);
-	LOAD_PATH_IF_URL("vertical-align", ColumnIcons::verticalAlign);
-	LOAD_PATH_IF_URL("horizontal-align", ColumnIcons::horizontalAlign);
-	LOAD_PATH_IF_URL("vertical-distribute", ColumnIcons::verticalDistribute);
-	LOAD_PATH_IF_URL("horizontal-distribute", ColumnIcons::horizontalDistribute);
+	LOAD_EPATH_IF_URL("vertical-align", ColumnIcons::verticalAlign);
+	LOAD_EPATH_IF_URL("horizontal-align", ColumnIcons::horizontalAlign);
+	LOAD_EPATH_IF_URL("vertical-distribute", ColumnIcons::verticalDistribute);
+	LOAD_EPATH_IF_URL("horizontal-distribute", ColumnIcons::horizontalDistribute);
 	LOAD_EPATH_IF_URL("edit-json", HiBinaryData::SpecialSymbols::scriptProcessor);
-	LOAD_PATH_IF_URL("debug-css", ColumnIcons::debugCSS);
+	LOAD_EPATH_IF_URL("debug-css", ColumnIcons::debugCSS);
 	LOAD_EPATH_IF_URL("suspend", EditorIcons::nightIcon);
+	LOAD_EPATH_IF_URL("profile", EditorIcons::profileIcon);
 
 	return p;
 }
@@ -2371,7 +2372,7 @@ juce::Path OSCLogger::createPath(const String& url) const
 {
 	Path p;
 
-	LOAD_PATH_IF_URL("filter", ColumnIcons::filterIcon);
+	LOAD_EPATH_IF_URL("filter", ColumnIcons::filterIcon);
 	LOAD_EPATH_IF_URL("clear", SampleMapIcons::deleteSamples);
 	LOAD_EPATH_IF_URL("pause", HiBinaryData::ProcessorEditorHeaderIcons::bypassShape);
 	LOAD_EPATH_IF_URL("scale", ScriptnodeIcons::scaleIcon);

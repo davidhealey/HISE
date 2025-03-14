@@ -66,7 +66,7 @@ struct EditorBottomBar : public Component,
 		{
 			Path p;
 
-			LOAD_PATH_IF_URL("error", ColumnIcons::errorIcon);
+			LOAD_EPATH_IF_URL("error", ColumnIcons::errorIcon);
 
 			return p;
 		}

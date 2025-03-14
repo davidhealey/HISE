@@ -434,7 +434,7 @@ MainTopBar::MainTopBar(FloatingTile* parent) :
 	layoutButton->setCommandToTrigger(getRootWindow()->getBackendProcessor()->getCommandManager(), BackendCommandTarget::MenuViewEnableGlobalLayoutMode, true);
 	
 	Path layoutPath;
-	layoutPath.loadPathFromData(ColumnIcons::layoutIcon, sizeof(ColumnIcons::layoutIcon));
+	layoutPath.loadPathFromData(ColumnIcons::layoutIcon, ColumnIcons::layoutIcon_Size);
 	layoutButton->setShape(layoutPath, false, true, true);
 
 	addAndMakeVisible(quickPlayButton);
@@ -773,7 +773,7 @@ struct PopupFloatingTile: public Component,
 		LOAD_EPATH_IF_URL("clear", SampleMapIcons::newSampleMap);
 		LOAD_EPATH_IF_URL("load", SampleMapIcons::loadSampleMap);
 		LOAD_EPATH_IF_URL("save", SampleMapIcons::saveSampleMap);
-		LOAD_PATH_IF_URL("layout", ColumnIcons::customizeIcon);
+		LOAD_EPATH_IF_URL("layout", ColumnIcons::customizeIcon);
 		return p;
 	}
     

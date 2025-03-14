@@ -51,7 +51,7 @@ struct HelpManager : ControlledObject,
 	Path createPath(const String& id) const override
 	{
 		Path path;
-		path.loadPathFromData (ColumnIcons::commentIcon, sizeof(ColumnIcons::commentIcon));
+		path.loadPathFromData (ColumnIcons::commentIcon, SIZE_OF_PATH(ColumnIcons::commentIcon));
 		return path;
 	}
 

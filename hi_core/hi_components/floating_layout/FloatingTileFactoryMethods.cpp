@@ -174,7 +174,7 @@ Path FloatingTileContent::Factory::getPath(PopupMenuOptions type)
 	case FloatingTileContent::Factory::PopupMenuOptions::Spacer:
 	{
 		
-		path.loadPathFromData(ColumnIcons::layoutIcon, sizeof(ColumnIcons::layoutIcon));
+		path.loadPathFromData(ColumnIcons::layoutIcon, ColumnIcons::layoutIcon_Size);
 		//path.loadPathFromData(pathData, sizeof(pathData));
 
 		return path;

@@ -71,6 +71,47 @@ namespace BackendBinaryData
 	};
 }
 
+
+namespace ColumnIcons
+{
+	DECLARE_DATA(errorIcon, 195);
+	DECLARE_DATA(commentIcon, 367);
+	DECLARE_DATA(pathData1, 41);
+	DECLARE_DATA(pathData2, 96);
+	DECLARE_DATA(pathData3, 142);
+	DECLARE_DATA(pathData4, 188);
+	DECLARE_DATA(tabIcon, 142);
+	DECLARE_DATA(columnIcon, 96);
+	DECLARE_DATA(bigResizeIcon, 150);
+	DECLARE_DATA(customizeIcon, 495);
+	DECLARE_DATA(absoluteIcon, 152);
+	DECLARE_DATA(moveIcon, 196);
+	DECLARE_DATA(relativeIcon, 150);
+	DECLARE_DATA(addRowIcon, 760);
+	DECLARE_DATA(connectionIcon, 1560);
+	DECLARE_DATA(addColumnIcon, 760);
+	DECLARE_DATA(layoutIcon,1695);
+	DECLARE_DATA(lockIcon, 432);
+	DECLARE_DATA(scriptWorkspaceIcon, 1159);
+	DECLARE_DATA(threeDots, 334);
+	DECLARE_DATA(resetIcon, 259);
+	DECLARE_DATA(delayIcon, 332);
+	DECLARE_DATA(breakpointIcon, 378);
+	DECLARE_DATA(openWorkspaceIcon, 186);
+	DECLARE_DATA(verticalAlign, 188);
+	DECLARE_DATA(horizontalAlign, 188);
+	DECLARE_DATA(verticalDistribute, 342);
+	DECLARE_DATA(horizontalDistribute, 342);
+	DECLARE_DATA(debugCSS, 583);
+	DECLARE_DATA(filterIcon, 368);
+	DECLARE_DATA(targetIcon, 698);
+	DECLARE_DATA(localIcon, 556);
+	DECLARE_DATA(nextIcon, 96);
+}
+
+
+
+
 } // namespace hise
 
 #endif  // BACKENDBINARYDATA_H_INCLUDED

@@ -236,8 +236,8 @@ juce::Path DspNetworkPathFactory::createPath(const String& url) const
 	LOAD_EPATH_IF_URL("undo", EditorIcons::undoIcon);
     LOAD_PATH_IF_URL("eject", ScriptnodeIcons::ejectIcon);
 	LOAD_EPATH_IF_URL("redo", EditorIcons::redoIcon);
-	LOAD_PATH_IF_URL("rebuild", ColumnIcons::moveIcon);
-	LOAD_PATH_IF_URL("comment", ColumnIcons::commentIcon);
+	LOAD_EPATH_IF_URL("rebuild", ColumnIcons::moveIcon);
+	LOAD_EPATH_IF_URL("comment", ColumnIcons::commentIcon);
 	LOAD_PATH_IF_URL("goto", ScriptnodeIcons::gotoIcon);
 	LOAD_PATH_IF_URL("properties", ScriptnodeIcons::propertyIcon);
 	LOAD_EPATH_IF_URL("bypass", HiBinaryData::ProcessorEditorHeaderIcons::bypassShape);
@@ -260,7 +260,7 @@ juce::Path DspNetworkPathFactory::createPath(const String& url) const
 	LOAD_EPATH_IF_URL("surround", HnodeIcons::injectNodeIcon);
     LOAD_EPATH_IF_URL("save", SampleMapIcons::saveSampleMap);
     LOAD_EPATH_IF_URL("export", SampleMapIcons::monolith);
-	LOAD_PATH_IF_URL("lock", ColumnIcons::lockIcon);
+	LOAD_EPATH_IF_URL("lock", ColumnIcons::lockIcon);
 	LOAD_PATH_IF_URL("debug", SnexIcons::bugIcon);
 #endif
 

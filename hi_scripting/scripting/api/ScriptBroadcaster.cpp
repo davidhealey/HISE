@@ -533,11 +533,11 @@ struct ScriptBroadcaster::Display: public Component,
 	{
 		Path p;
 
-		LOAD_PATH_IF_URL("workspace", ColumnIcons::openWorkspaceIcon);
-		LOAD_PATH_IF_URL("reset", ColumnIcons::resetIcon);
-		LOAD_PATH_IF_URL("breakpoint", ColumnIcons::breakpointIcon);
+		LOAD_EPATH_IF_URL("workspace", ColumnIcons::openWorkspaceIcon);
+		LOAD_EPATH_IF_URL("reset", ColumnIcons::resetIcon);
+		LOAD_EPATH_IF_URL("breakpoint", ColumnIcons::breakpointIcon);
 		LOAD_EPATH_IF_URL("enable", HiBinaryData::ProcessorEditorHeaderIcons::bypassShape);
-		LOAD_PATH_IF_URL("delay", ColumnIcons::delayIcon);
+		LOAD_EPATH_IF_URL("delay", ColumnIcons::delayIcon);
 
 		return p;
 	}
@@ -2639,7 +2639,7 @@ void ScriptBroadcaster::DebugableObjectListener::registerSpecialBodyItems(Compon
 		Path createPath(const String& url) const override
 		{
 			Path p;
-			p.loadPathFromData(ColumnIcons::openWorkspaceIcon, sizeof(ColumnIcons::openWorkspaceIcon));
+			p.loadPathFromData(ColumnIcons::openWorkspaceIcon, ColumnIcons::openWorkspaceIcon_Size);
 			return p;
 		}
 
@@ -2796,7 +2796,7 @@ void ScriptBroadcaster::ScriptCallListener::registerSpecialBodyItems(ComponentWi
 		Path createPath(const String& url) const override
 		{
 			Path p;
-			p.loadPathFromData(ColumnIcons::openWorkspaceIcon, sizeof(ColumnIcons::openWorkspaceIcon));
+			p.loadPathFromData(ColumnIcons::openWorkspaceIcon, ColumnIcons::openWorkspaceIcon_Size);
 			return p;
 		}
 

@@ -427,8 +427,9 @@ void VariantBuffer::addMethods()
             auto newSize = bf->size - numToTrimFromStart - numToTrimFromEnd;
             
             auto newBuffer = new VariantBuffer(newSize);
-            
-            FloatVectorOperations::copy(newBuffer->buffer.getWritePointer(0), ptr, newSize);
+
+			if(newSize > 0)
+				FloatVectorOperations::copy(newBuffer->buffer.getWritePointer(0), ptr, newSize);
             
             return var(newBuffer);
         }
