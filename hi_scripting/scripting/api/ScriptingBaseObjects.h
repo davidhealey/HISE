@@ -345,11 +345,7 @@ struct WeakCallbackHolder : private ScriptingObject
 	/** Increases the reference count for the callback object. 
 		Use this in order to assure the liveness of the callback, but beware of leaking. 
 	*/
-	void incRefCount()
-	{
-		if(weakCallback != nullptr && weakCallback->allowRefCount())
-			anonymousFunctionRef = var(dynamic_cast<ReferenceCountedObject*>(weakCallback.get()));
-	}
+	void incRefCount();
 
 	DebugInformationBase* createDebugObject(const String& n) const;
 

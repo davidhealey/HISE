@@ -330,6 +330,7 @@ public:
 			SampleEditor,
 			SampleMapEditor,
 			SamplerTable,
+			ComplexGroupEditor,
 			ComplexDataManager,
 			ScriptConnectorPanel,
 			ScriptEditor,

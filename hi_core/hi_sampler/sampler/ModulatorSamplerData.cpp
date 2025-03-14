@@ -1027,7 +1027,7 @@ void RoundRobinMap::addSample(const ModulatorSamplerSound *sample)
 	Range<int> veloRange = sample->getVelocityRange();
 	Range<int> noteRange = sample->getNoteRange();
 
-	char thisGroup = (char)sample->getRRGroup();
+	char thisGroup = (char)sample->getBitmask();
 
 	for (int i = noteRange.getStart(); i < noteRange.getEnd(); i++)
 	{

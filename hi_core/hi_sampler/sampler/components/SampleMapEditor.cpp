@@ -619,6 +619,20 @@ SampleMapEditor::SampleMapEditor (ModulatorSampler *s, SamplerBody *b):
 
 	addAndMakeVisible(newRRDisplay = new RRDisplayComponent(sampler));
 
+	handler->complexGroupEventBroadcaster.addListener(*this, [](SampleMapEditor& editor, SampleEditHandler::ComplexGroupEvent e)
+	{
+		if(e == SampleEditHandler::ComplexGroupEvent::ComplexManagerDisabled)
+		{
+			editor.newRRDisplay->setVisible(true);
+			editor.rrGroupSetter->setVisible(true);
+		}
+		else
+		{
+			editor.newRRDisplay->setVisible(false);
+			editor.rrGroupSetter->setVisible(false);
+		}
+	});
+
     addAndMakeVisible (viewport = new Viewport ("new viewport"));
     viewport->setScrollBarsShown (false, true);
     viewport->setScrollBarThickness (12);
@@ -743,11 +757,11 @@ SampleMapEditor::SampleMapEditor (ModulatorSampler *s, SamplerBody *b):
 
 	getCommandManager()->commandStatusChanged();
 
-	handler->groupBroadcaster.addListener(*map->map, [](SamplerSoundMap& m, int rrGroup, BigInteger* displayedGroup)
-	{
-		if(displayedGroup != nullptr)
-			m.soloGroup(*displayedGroup);
-	});
+	
+
+	
+
+	
 
 	setFocusContainerType(FocusContainerType::keyboardFocusContainer);
 

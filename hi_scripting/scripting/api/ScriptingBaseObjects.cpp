@@ -676,6 +676,12 @@ hise::WeakCallbackHolder& WeakCallbackHolder::operator=(WeakCallbackHolder&& oth
 	return *this;
 }
 
+void WeakCallbackHolder::incRefCount()
+{
+	if(weakCallback != nullptr && weakCallback->allowRefCount())
+		anonymousFunctionRef = var(dynamic_cast<ReferenceCountedObject*>(weakCallback.get()));
+}
+
 hise::DebugInformationBase* WeakCallbackHolder::createDebugObject(const String& n) const
 {
 	if (weakCallback != nullptr)

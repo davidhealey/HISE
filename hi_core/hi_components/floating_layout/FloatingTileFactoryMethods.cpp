@@ -92,6 +92,7 @@ void FloatingTileContent::Factory::registerAllPanelTypes()
 
 	registerType<SampleEditorPanel>(PopupMenuOptions::SampleEditor);
 	registerType<SampleMapEditorPanel>(PopupMenuOptions::SampleMapEditor);
+	registerType<ComplexGroupManagerFloatingTile>(PopupMenuOptions::ComplexGroupEditor);
 
 #endif
 
@@ -558,6 +559,7 @@ void FloatingTileContent::Factory::handlePopupMenu(PopupMenu& m, FloatingTile* p
 			addToPopupMenu(m, PopupMenuOptions::SamplerTable, "Sampler Table");
 			addToPopupMenu(m, PopupMenuOptions::SamplePoolTable, "Global Sample Pool");
 
+			addToPopupMenu(m, PopupMenuOptions::ComplexGroupEditor, "Complex Group Editor");
 
 			m.addSectionHeader("Misc Tools");
 
@@ -684,6 +686,7 @@ void FloatingTileContent::Factory::handlePopupMenu(PopupMenu& m, FloatingTile* p
 	case PopupMenuOptions::SampleEditor:		parent->setNewContent(GET_PANEL_NAME(SampleEditorPanel)); break;
 	case PopupMenuOptions::SampleMapEditor:		parent->setNewContent(GET_PANEL_NAME(SampleMapEditorPanel)); break;
 	case PopupMenuOptions::SamplerTable:		parent->setNewContent(GET_PANEL_NAME(SamplerTablePanel)); break;
+	case PopupMenuOptions::ComplexGroupEditor:	parent->setNewContent(GET_PANEL_NAME(ComplexGroupManagerFloatingTile)); break;
 	case PopupMenuOptions::WavetablePreview:	parent->setNewContent(GET_PANEL_NAME(WaveformComponent::Panel)); break;
 	case PopupMenuOptions::AHDSRGraph:			parent->setNewContent(GET_PANEL_NAME(AhdsrEnvelope::Panel)); break;
 	case PopupMenuOptions::MarkdownPreviewPanel:parent->setNewContent(GET_PANEL_NAME(MarkdownPreviewPanel)); break;
