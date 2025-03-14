@@ -1410,8 +1410,6 @@ void AbstractZoomableView::drawBackgroundGrid(Graphics& g, Rectangle<int> viewpo
 
 	auto alpha = 1.0f - jlimit(0.0f, 1.0f, (float)(l_r - l));
 
-	auto numAfterComma = jmax(0, -2 - roundToInt(l));
-
 	auto delta = std::pow(10.0, l);
 	auto x = r.getStart();
 

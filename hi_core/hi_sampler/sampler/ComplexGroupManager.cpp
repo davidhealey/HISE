@@ -456,6 +456,8 @@ struct ComplexGroupManager::XFadeLayer final : public ComplexGroupManager::Layer
 			return getFaderValueInternal<6>(input, numItems, currentType);
 		if(groupValue == 8)
 			return getFaderValueInternal<7>(input, numItems, currentType);
+
+		return 0.0;
 	}
 
 	template <int N> static double getFaderValueInternal(double input, int numItems, FaderTypes t)
@@ -476,7 +478,7 @@ struct ComplexGroupManager::XFadeLayer final : public ComplexGroupManager::Layer
 
 	bool calculateGroupModulationValuesForVoice(const HiseEvent& e, int voiceIndex, float* data, int startSample, int numSamples, Bitmask m) override
 	{
-		float value;
+		float value = 0.0f;
 		float const* values = nullptr;
 
 		if(currentSource == SourceTypes::EventData)

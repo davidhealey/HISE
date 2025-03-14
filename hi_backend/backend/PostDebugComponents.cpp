@@ -32,9 +32,9 @@ Component* FloatingPanelTemplates::createCodeEditorPanel(FloatingTile* root)
 	const int broadcasterMap = ib.addChild<ScriptingObjects::ScriptBroadcasterPanel>(navTabs);
 
 	const int profileRoot = ib.addChild<HorizontalTile>(navTabs);
-	auto profileManager = ib.addChild<ProfilerManager>(profileRoot);
-	auto profileViewer = ib.addChild<ProfilerViewer>(profileRoot);
-	auto profileStatistics = ib.addChild<ProfilerStatistics>(profileRoot);
+	ib.addChild<ProfilerManager>(profileRoot);
+	ib.addChild<ProfilerViewer>(profileRoot);
+	ib.addChild<ProfilerStatistics>(profileRoot);
 	ib.setDynamic(profileRoot, false);
 	ib.getPanel(profileRoot)->setForceShowTitle(false);
 

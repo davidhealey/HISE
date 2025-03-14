@@ -1102,8 +1102,8 @@ struct ZoomableDataViewer: public AbstractZoomableView,
 				d->label = label;
 				d->data.allocate(size, false);
 				d->size = size;
-				FloatVectorOperations::copy(d->data.get(), ptr, size);
-				d->valueRange = {FloatVectorOperations::findMinAndMax(ptr, size)};
+				FloatVectorOperations::copy(d->data.get(), ptr, (int)size);
+				d->valueRange = {FloatVectorOperations::findMinAndMax(ptr, (int)size)};
 				found = true;
 			}
 		}
@@ -1115,9 +1115,9 @@ struct ZoomableDataViewer: public AbstractZoomableView,
 			d->label = label;
 			d->data.allocate(size, false);
 			d->size = size;
-			d->valueRange = {FloatVectorOperations::findMinAndMax(ptr, size)};
+			d->valueRange = {FloatVectorOperations::findMinAndMax(ptr, (int)size)};
 
-			FloatVectorOperations::copy(d->data.get(), ptr, size);
+			FloatVectorOperations::copy(d->data.get(), ptr, (int)size);
 			data.add(d);
 		}
 

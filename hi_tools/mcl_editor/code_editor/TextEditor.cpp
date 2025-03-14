@@ -224,7 +224,7 @@ void TextEditor::setError(const String& errorMessage)
 	else
 		currentError = new Error(document, errorMessage, false);
 
-	addAndMakeVisible(autofixButton = new AutofixComponent(*this, *currentError));
+	//addAndMakeVisible(autofixButton = new AutofixComponent(*this, *currentError));
 
 	repaint();
 }
@@ -1556,6 +1556,7 @@ void mcl::TextEditor::scaleView (float scaleFactorMultiplier, float verticalCent
 
 void TextEditor::AutofixComponent::launchHTTPRequest()
 {
+#if 0
 	auto tokens = editor.tokenCollection->getTokens();
 
 	StringArray existingTokens;
@@ -1643,6 +1644,7 @@ void TextEditor::AutofixComponent::launchHTTPRequest()
 			});
 		}
 	});
+#endif
 }
 
 void mcl::TextEditor::updateViewTransform()

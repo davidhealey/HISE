@@ -164,7 +164,7 @@ void WebViewData::TCPServer::addBuffer(uint8 bufferIndex, VariantBuffer::Ptr buf
 {
 	for(auto b: buffers)
 	{
-		if(bufferIndex = b->index)
+		if(bufferIndex == b->index)
 		{
 			b->buffer = buffer;
 			b->initialSize = jmin(b->initialSize, buffer->size);
@@ -309,7 +309,7 @@ public:
             for (size_t i = 0; i < payload.size(); i += 4) {
                 float value;
 				std::memcpy(&value, &payload[i], sizeof(float));
-				buffer->setSample(i / 4, value);
+				buffer->setSample((int)i / 4, value);
             }
 			
         } else {
@@ -400,7 +400,7 @@ void WebViewData::TCPServer::CommunicationThread::run()
 					if(threadShouldExit())
 						break;
 
-					numParsed += p.parseFrame((uint8*)mos.getData() + numParsed, mos.getDataSize() - numParsed);
+					numParsed += (int)p.parseFrame((uint8*)mos.getData() + numParsed, mos.getDataSize() - numParsed);
 
 					auto ok = p.getError();
 
@@ -550,7 +550,7 @@ void WebViewData::TCPServer::BufferSlot::update(StreamingSocket* socket)
 
 bool WebViewData::TCPServer::Data::send(StreamingSocket* socket)
 {
-	return socket->write(mos.getData(), mos.getDataSize()) == mos.getDataSize();
+	return socket->write(mos.getData(), (int)mos.getDataSize()) == (int)mos.getDataSize();
 }
 
 }

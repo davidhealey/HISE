@@ -465,6 +465,8 @@ public:
 
 		if(auto gm = getComplexGroupManager())
 			return gm->calculateGroupModulationValuesForVoice(e, voiceIndex, startSample, numSamples, m);
+
+		return nullptr;
 	}
 
 	float getConstantGroupModulationValue(int voiceIndex, SynthSoundWithBitmask::Bitmask m) const

@@ -133,12 +133,9 @@ protected:
 
 class ObjectReference : public LayoutBase,
 						public ReferenceCountedObject,
-						public DebugableObjectBase,
-						public ObjectWithJSONConverter
+						public DebugableObjectBase
 {
 public:
-
-	
 
 	using Ptr = ReferenceCountedObjectPtr<ObjectReference>;
 	using CompareFunction = std::function<int(Ptr, Ptr)>;

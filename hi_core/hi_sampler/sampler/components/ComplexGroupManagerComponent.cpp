@@ -1514,7 +1514,7 @@ ComplexGroupManagerComponent::AddComponent::AddComponent(ComponentWithGroupManag
 		}
 
 		allTokens.sortNatural();
-		tokenEditor->setText(allTokens.joinIntoString(", "), sendNotificationAsync);
+		tokenEditor->setText(allTokens.joinIntoString(", "), true);
 	};
 
 	getSampleEditHandler()->allSelectionBroadcaster.addListener(*this, [](AddComponent& a, int numSelected)
@@ -2003,7 +2003,7 @@ Array<Component::SafePointer<Component>> ComplexGroupManagerComponent::AddCompon
 Component* ComplexGroupManagerComponent::AddComponent::addEditor(const Identifier& propertyId, const String& helpText,
                                                                  const String& type)
 {
-	Component* nc;
+	Component* nc = nullptr;
 
 	auto at = MarkdownHelpButton::AttachmentType::TopRight;
 
@@ -2034,6 +2034,8 @@ Component* ComplexGroupManagerComponent::AddComponent::addEditor(const Identifie
 		at = MarkdownHelpButton::AttachmentType::PropertyHelpOffsetXY;
 		nc = hb;
 	}
+	else
+		return nullptr;
 
 	nc->setName(propertyId.toString());
 	editors.add(nc);
@@ -2266,10 +2268,7 @@ ComplexGroupManagerComponent::Content::Content(ComponentWithGroupManagerConnecti
 
 void ComplexGroupManagerComponent::Content::updateSize()
 {
-	
 	height = 0;
-
-	bool showParser = false;
 
 	Array<LogicTypeComponent*> lp;
 
@@ -2323,7 +2322,6 @@ void ComplexGroupManagerComponent::Content::removeLayer(const ValueTree& d)
 
 void ComplexGroupManagerComponent::Content::resized()
 {
-	int y = 0;
 	auto b = getLocalBounds();
 
 	for(auto l: layerComponents)
