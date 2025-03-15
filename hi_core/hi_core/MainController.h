@@ -2143,6 +2143,7 @@ private:
 	bool embedAllResources = false;
 
 	PooledUIUpdater globalUIUpdater;
+    DebugSession debugSessionHandler;
 	dispatch::RootObject rootDispatcher;
 	dispatch::library::ProcessorHandler processorHandler;
 	dispatch::library::CustomAutomationSourceManager customAutomationSourceManager;
@@ -2174,7 +2175,7 @@ private:
 
 	ScopedPointer<UndoManager> controlUndoManager;
 
-	DebugSession debugSessionHandler;
+
 
 	ProfileCollection lockProfile;
 	ProfileCollection loadProfile;

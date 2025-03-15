@@ -63,8 +63,6 @@ SampleThreadPool::SampleThreadPool(void*) :
 	pimpl(new Pimpl())
 {
 
-	startThread(9);
-	
 }
 
 SampleThreadPool::~SampleThreadPool()
