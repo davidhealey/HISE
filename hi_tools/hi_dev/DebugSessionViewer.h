@@ -107,6 +107,11 @@ struct DebugSession::ProfileDataSource::ViewComponents::Viewer: public Component
 
 	bool activeViewer = true;
 
+    void mouseMagnify(const MouseEvent& e, float sf) override
+    {
+        hangleMouseMagnify(e, sf);
+    }
+    
 	void mouseMove(const MouseEvent& e) override;
 
 	void mouseUp(const MouseEvent& e) override;

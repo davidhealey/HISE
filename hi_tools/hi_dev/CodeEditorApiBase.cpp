@@ -1021,6 +1021,11 @@ struct ZoomableDataViewer: public AbstractZoomableView,
 		auto legend = b.removeFromTop(24);
 		onResize(b);
 	}
+    
+    void mouseMagnify(const MouseEvent& e, float sf) override
+    {
+        hangleMouseMagnify(e, sf);
+    }
 
 	void mouseDown(const MouseEvent& e) override
 	{

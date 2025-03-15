@@ -599,6 +599,11 @@ struct AbstractZoomableView: public ScrollBar::Listener,
 	void positionChanged(Animator&, double newPosition) override;
 	void handleMouseWheelEvent(const MouseEvent& e, const MouseWheelDetails& wheel);
 
+    void hangleMouseMagnify(const MouseEvent& e, float scaleFactor)
+    {
+        changeZoom(zoomFactor * scaleFactor, e.getPosition().x);
+    }
+    
 	bool handleMouseEvent(const MouseEvent& e, MouseEventType t);
 	void zoomToRange(Range<double> newScaledRange);
 	void moveToRange(double normalisedNewXPosition);
