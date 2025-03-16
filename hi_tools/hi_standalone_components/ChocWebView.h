@@ -399,7 +399,7 @@ using NativeUIBase = juce::HWNDComponent;
 #define resizeToFitCrossPlatform resizeToFit
 #else
 using NativeUIBase = juce::XEmbedComponent;
-#define resizeToFitCrossPlatform updateEmbeddedBounds
+#define resizeToFitCrossPlatform resized
 #endif
 
 	WebViewWrapper(WebViewData::Ptr data);
