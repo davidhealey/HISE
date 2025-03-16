@@ -74,9 +74,9 @@ struct DebugSession::ProfileDataSource::ViewComponents::ViewItem: public Referen
 	void drawTrack(Graphics& g, const DrawContext& ctx, Ptr target) const;
 	String getDuration(int currentIndex, bool, TimeDomain domain, double contextValue) const;
 
-	ViewItem::Ptr callRecursive(const std::function<bool(ViewItem&)>& f, bool callFoldedChildren);
-	ViewItem::Ptr callAllRecursive(const std::function<bool(ViewItem&)>& f) { return callRecursive(f, true); }
-	ViewItem::Ptr callUnfoldedRecursive(const std::function<bool(ViewItem&)>& f) { return callRecursive(f, false); }
+	ViewItem::Ptr callRecursive(const std::function<bool(ViewItem&)>& f, bool callFoldedChildren) const;
+	ViewItem::Ptr callAllRecursive(const std::function<bool(ViewItem&)>& f) const { return callRecursive(f, true); }
+	ViewItem::Ptr callUnfoldedRecursive(const std::function<bool(ViewItem&)>& f) const { return callRecursive(f, false); }
 
 	void setAsRoot();
 	ViewItem::Ptr updateSearch(const String& searchTerm);
@@ -112,7 +112,10 @@ struct DebugSession::ProfileDataSource::ViewComponents::ViewItem: public Referen
 	Identifier mode;
 
 	bool multiThreadMode = false;
-
+    bool hasTracks = false;
+    
+    bool cachedVisibility = true;
+    
 	ProfileInfoBase::Ptr infoItem;
 	SourceType sourceType = SourceType::Undefined;
 	ThreadIdentifier::Type threadType = ThreadIdentifier::Type::Undefined;

@@ -555,6 +555,10 @@ void DebugSession::ProfileDataSource::ViewComponents::Viewer::mouseDown(const Mo
 			if(r == 3)
 			{
 				drawTracks = !drawTracks;
+                
+                rootItem->setUseEquiDistance(drawTracks, getTypeFilter());
+                updateIndexToShow();
+                
 				repaint();
 			}
 
@@ -720,6 +724,8 @@ void DebugSession::ProfileDataSource::ViewComponents::Viewer::navigateInternal(V
 		currentlyHoveredItem = nullptr;
 		rootItem = newDisplayRoot;
 		rootItem->setAsRoot();
+        
+        breadcrumbs->setVisible(rootItem != originalRoot);
 
 		rootItem->callAllRecursive([](ViewItem& vi)
 		{
@@ -1089,7 +1095,39 @@ void DebugSession::ProfileDataSource::ViewComponents::MultiViewer::setCurrentTab
 	}
 }
 
-void DebugSession::ProfileDataSource::ViewComponents::MultiViewer::removeTab(TabButton* b)
+void DebugSession::ProfileDataSource::ViewComponents::MultiViewer::mouseDown(const MouseEvent& e)
+{
+    if(e.mods.isRightButtonDown())
+    {
+        PopupLookAndFeel plaf;
+        PopupMenu m;
+        m.setLookAndFeel(&plaf);
+        
+        m.addItem(1, "Close all tabs");
+        m.addItem(2, "Close all but this");
+
+        auto r = m.show();
+        
+        if(r == 1)
+        {
+            while(!tabButtons.isEmpty())
+                removeTab(tabButtons.getFirst(), sendNotificationSync);
+        }
+        if(r == 2)
+        {
+            for(int i = 0; i < tabButtons.size(); i++)
+            {
+                if(!tabButtons[i]->active)
+                {
+                    removeTab(tabButtons[i--], sendNotificationSync);
+                }
+            }
+        }
+        
+    }
+}
+
+void DebugSession::ProfileDataSource::ViewComponents::MultiViewer::removeTab(TabButton* b, NotificationType s)
 {
 	auto indexToRemove = tabButtons.indexOf(b);
 
@@ -1112,7 +1150,10 @@ void DebugSession::ProfileDataSource::ViewComponents::MultiViewer::removeTab(Tab
 		resized();
 	};
 
-	MessageManager::callAsync(f);
+    if(s == sendNotificationAsync)
+        MessageManager::callAsync(f);
+    else
+        f();
 }
 
 DebugSession::ProfileDataSource::ViewComponents::SingleThreadPopup::SingleThreadPopup(DebugSession& s,

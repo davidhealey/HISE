@@ -102,10 +102,9 @@ struct DebugSession::ProfileDataSource::ViewComponents::Viewer: public Component
 	StatisticsComponent* getStatistics();
 
 	void zoomToItem(ViewItem::Ptr ptr);
-
 	void setArrowNavigation(const ViewItem* ptr, Rectangle<float> area);
 
-	bool activeViewer = true;
+
 
     void mouseMagnify(const MouseEvent& e, float sf) override
     {
@@ -113,26 +112,19 @@ struct DebugSession::ProfileDataSource::ViewComponents::Viewer: public Component
     }
     
 	void mouseMove(const MouseEvent& e) override;
-
 	void mouseUp(const MouseEvent& e) override;
-
-	VoiceBitMap<32> getTypeFilter();
-
 	void mouseDoubleClick(const MouseEvent& e) override;
-
 	void mouseWheelMove(const MouseEvent& event, const MouseWheelDetails& wheel) override
 	{
 		handleMouseWheelEvent(event, wheel);
 	}
 
+    VoiceBitMap<32> getTypeFilter();
 	UndoManager* getUndoManager() override;
 
 	void navigateInternal(ViewItem::Ptr newDisplayRoot);
-
 	void setRootItems(ViewItem::Ptr newOriginalRoot, ViewItem::Ptr newDisplayRoot);
-
 	bool keyPressed(const KeyPress& k) override;
-
 	void paint(Graphics& g) override;
 
 	Rectangle<int> getViewportPosition() const
@@ -160,14 +152,11 @@ struct DebugSession::ProfileDataSource::ViewComponents::Viewer: public Component
 
 private:
 
+    bool activeViewer = true;
 	bool foldAll = false;
-
 	Rectangle<int> menuBar;
-
 	bool showTimeline = true;
-
 	Identifier mode;
-
 	StringArray allNames;
 	DebugSession& session;
 
@@ -225,7 +214,7 @@ private:
 
 	std::map<ViewItem*, Rectangle<float>> arrowNavigations;
 
-	bool drawTracks;
+    bool drawTracks = false;
 
 	JUCE_DECLARE_WEAK_REFERENCEABLE(Viewer);
 };
@@ -281,11 +270,13 @@ struct DebugSession::ProfileDataSource::ViewComponents::MultiViewer: public Comp
 		String name;
 	};
 
+    void mouseDown(const MouseEvent& e) override;
+    
 	void onNavigation(BaseWithManagerConnection* source, ViewItem::Ptr r, ViewItem::Ptr cr);
 
 	void setCurrentTab(TabButton* b);
 
-	void removeTab(TabButton* b);
+	void removeTab(TabButton* b, NotificationType s=sendNotificationAsync);
 
 	int currentTabIndex = 0;
 	DebugSession& session;

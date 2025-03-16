@@ -83,9 +83,9 @@ struct DebugSession::ProfileDataSource::ViewComponents::Manager: public Componen
 	
 	DebugSession& session;
 	Factory f;
-	HiseShapeButton openButton, saveButton, deleteButton, recordButton, initButton, trimButton;
+	HiseShapeButton openButton, saveButton, recordButton, initButton, trimButton;
 
-	HiseShapeButton undoButton, redoButton, homeButton;
+	HiseShapeButton undoButton, redoButton;
 	ScopedPointer<Component> searchBar;
 
 	UndoManager um;

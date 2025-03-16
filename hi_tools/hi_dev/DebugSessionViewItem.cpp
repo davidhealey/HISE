@@ -102,6 +102,8 @@ DebugSession::ProfileDataSource::ViewComponents::ViewItem::ViewItem(ProfileInfoB
 
 		c = p->data.source->colour;
 
+        hasTracks = p->data.trackSource != -1 || p->data.trackTarget != -1;
+        
 		if(first == -1.0f)
 			first = p->data.start;
 
@@ -331,10 +333,10 @@ String DebugSession::ProfileDataSource::ViewComponents::ViewItem::getDuration(in
 }
 
 DebugSession::ProfileDataSource::ViewComponents::ViewItem::Ptr DebugSession::ProfileDataSource::ViewComponents::ViewItem
-::callRecursive(const std::function<bool(ViewItem&)>& f, bool callFoldedChildren)
+::callRecursive(const std::function<bool(ViewItem&)>& f, bool callFoldedChildren) const
 {
-	if(f(*this))
-		return this;
+	if(f(*const_cast<ViewItem*>(this)))
+		return const_cast<ViewItem*>(this);
 
 	if(!folded || callFoldedChildren)
 	{
@@ -662,8 +664,11 @@ void DebugSession::ProfileDataSource::ViewComponents::ViewItem::paintItem(Graphi
 
 bool DebugSession::ProfileDataSource::ViewComponents::ViewItem::shouldBeDisplayed(const DrawContext& ctx) const
 {
+    if(!cachedVisibility)
+        return false;
+    
 	auto shouldBeDisplayed = ctx.typeFilter != nullptr && !(*ctx.typeFilter)[(int)sourceType];
-
+    
 	auto p = parent.get();
 
 	auto isChildOfRoot = (ctx.currentRoot == this) || (ctx.currentRoot == p);
@@ -796,7 +801,12 @@ int DebugSession::ProfileDataSource::ViewComponents::ViewItem::toggleFold(ViewIt
 void DebugSession::ProfileDataSource::ViewComponents::ViewItem::updateEquiDistanceRange(int& currentIndex, VoiceBitMap<32> typeFilter)
 {
 	if(!useEquiDistance)
-		return;
+    {
+        callAllRecursive([](ViewItem& v) { v.cachedVisibility = true; return false; });
+        
+        return;
+    }
+
 
 	auto thisStart = currentIndex;
 	auto thisEnd = 0;
@@ -812,13 +822,32 @@ void DebugSession::ProfileDataSource::ViewComponents::ViewItem::updateEquiDistan
 		ctx.typeFilter = &typeFilter;
 		ctx.currentlyHoveredItem = nullptr;
 
+        if(useEquiDistance)
+        {
+
+        }
+
 		for(auto thread: children)
 		{
 			for(auto topLevelEvent: thread->children)
 			{
 				if(!topLevelEvent->shouldBeDisplayed(ctx))
 					continue;
-
+                
+                auto hasTracks = topLevelEvent->callAllRecursive([](ViewItem& v) { return v.hasTracks; });
+                
+                
+                if(!hasTracks)
+                {
+                    topLevelEvent->callAllRecursive([](ViewItem& v) { v.cachedVisibility = false; return false; });
+                    
+                    continue;
+                }
+                else
+                {
+                    topLevelEvent->callAllRecursive([](ViewItem& v) { v.cachedVisibility = v.hasTracks; return false; });
+                }
+                    
 				topLevelItems.push_back(topLevelEvent);
 			}
 		}
@@ -844,11 +873,15 @@ void DebugSession::ProfileDataSource::ViewComponents::ViewItem::updateEquiDistan
 	}
 	else
 	{
+        int before = currentIndex;
+        
 		for(auto c: children)
 			c->updateEquiDistanceRange(currentIndex, typeFilter);
 
-		if(children.isEmpty())
+		if(cachedVisibility && children.isEmpty())
 			currentIndex++;
+        else if(cachedVisibility && !children.isEmpty() && currentIndex == before)
+            currentIndex++;
 
 		thisEnd = currentIndex;
 	}

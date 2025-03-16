@@ -1129,11 +1129,10 @@ AbstractZoomableView::WASDKeyListener::WASDKeyListener(Component& c):
 	p(c)
 {
 	p.setWantsKeyboardFocus(true);
-	p.grabKeyboardFocusAsync();
 	p.addKeyListener(this);
 
-	delta[0].setValueAndRampTime(0.0f, 60.0, 0.12);
-	delta[1].setValueAndRampTime(0.0f, 60.0, 0.12);
+	delta[0].setValueAndRampTime(0.0, 60.0, 0.12);
+	delta[1].setValueAndRampTime(0.0, 60.0, 0.12);
 }
 
 AbstractZoomableView::WASDKeyListener::~WASDKeyListener()
@@ -1146,7 +1145,7 @@ bool AbstractZoomableView::WASDKeyListener::keyPressed(const KeyPress& key, Comp
 	return false;
 }
 
-void AbstractZoomableView::WASDKeyListener::setShiftMultiplier(float horizontalFactor, float verticalFactor)
+void AbstractZoomableView::WASDKeyListener::setShiftMultiplier(double horizontalFactor, double verticalFactor)
 {
 	shiftMultipliers[0] = horizontalFactor;
 	shiftMultipliers[1] = verticalFactor;
@@ -1156,7 +1155,7 @@ void AbstractZoomableView::WASDKeyListener::timerCallback()
 {
 	auto mods = ComponentPeer::getCurrentModifiersRealtime();
 
-	float thisDelta[2] = { 0.0f, 0.0f };
+	double thisDelta[2] = { 0.0, 0.0 };
 
 	for(auto s: state)
 	{
@@ -1178,18 +1177,18 @@ void AbstractZoomableView::WASDKeyListener::timerCallback()
 	if(!onDirection)
 		return;
 
-	bool movement = std::abs(delta[0].getTargetValue()) > 0.5f || std::abs(delta[1].getTargetValue()) > 0.5f;
+	bool movement = std::abs(delta[0].getTargetValue()) > 0.5 || std::abs(delta[1].getTargetValue()) > 0.5;
 
 	if(auto x = delta[0].getNextValue())
 	{
 		onDirection(false, x);
-		movement |= std::abs(x) > 0.0005f;
+		movement |= std::abs(x) > 0.0005;
 	}
 				
 	if(auto y = delta[1].getNextValue())
 	{
 		onDirection(true, y);
-		movement |= std::abs(y) > 0.0005f;
+		movement |= std::abs(y) > 0.0005;
 	}
 				
 	if(!movement)
@@ -1239,7 +1238,7 @@ bool AbstractZoomableView::WASDKeyListener::keyStateChanged(bool isKeyDown, Comp
 }
 
 AbstractZoomableView::DragZoomAction::DragZoomAction(AbstractZoomableView& parent_, Range<double> newRange_,
-	Range<double> oldRange_, float newZoom_, float oldZoom_):
+	Range<double> oldRange_, double newZoom_, double oldZoom_):
 	UndoableAction(),
 	parent(parent_),
 	newRange(newRange_),
@@ -1260,12 +1259,12 @@ bool AbstractZoomableView::DragZoomAction::undo()
 	return true;
 }
 
-void AbstractZoomableView::ZoomAnimator::setTarget(Range<double> newTarget, float newZoom)
+void AbstractZoomableView::ZoomAnimator::setTarget(Range<double> newTarget, double newZoom)
 {
 	start = parent.scrollbar.getCurrentRange();
 	startZoom = parent.zoomFactor;
 
-	alpha = 0.0f;
+	alpha = 0.0;
 
 	zoom = newZoom;
 	target = newTarget;
@@ -1274,19 +1273,19 @@ void AbstractZoomableView::ZoomAnimator::setTarget(Range<double> newTarget, floa
 
 void AbstractZoomableView::ZoomAnimator::timerCallback()
 {
-	auto a = jlimit(0.0f, 1.0f, std::pow(alpha, JUCE_LIVE_CONSTANT_OFF(2.0f)));
-	auto invAlpha = 1.0f - a;
+	auto a = jlimit(0.0, 1.0, std::pow(alpha, JUCE_LIVE_CONSTANT_OFF(2.0)));
+	auto invAlpha = 1.0 - a;
 
 	Range<double> thisRange(start.getStart() * invAlpha + target.getStart() * a, start.getEnd() * invAlpha + target.getEnd() * a);
 
-	float thisZoom = start.getLength() / thisRange.getLength();
+	auto thisZoom = start.getLength() / thisRange.getLength();
 
 	parent.zoomFactor = startZoom * thisZoom;
 	parent.scrollbar.setCurrentRange(thisRange, sendNotificationSync);
 
-	alpha += JUCE_LIVE_CONSTANT_OFF(0.04f);
+	alpha += JUCE_LIVE_CONSTANT_OFF(0.04);
 
-	if(alpha >= 1.0f)
+	if(alpha >= 1.0)
 	{
 		parent.scrollbar.setCurrentRange(target, sendNotificationSync);
 		parent.zoomFactor = zoom;
@@ -1323,14 +1322,14 @@ void AbstractZoomableView::setAsParentComponent(Component* p)
 
 			auto l = scrollbar.getCurrentRange().getLength();
 			auto d = l * delta;
-			d *= JUCE_LIVE_CONSTANT_OFF(0.02f);
+			d *= JUCE_LIVE_CONSTANT_OFF(0.02);
 
 			p = jlimit(0.0, 1.0 - l, p + d);
 			scrollbar.setCurrentRangeStart(p, sendNotificationSync);
 		}
 		else
 		{
-			auto dx = 1.0 + delta * JUCE_LIVE_CONSTANT_OFF(0.1f);
+			auto dx = 1.0 + delta * JUCE_LIVE_CONSTANT_OFF(0.1);
 
 			auto z = zoomFactor * dx;
 
@@ -1344,23 +1343,23 @@ void AbstractZoomableView::setAsParentComponent(Component* p)
 	};
 
 	scrollbar.setRangeLimits({0.0, 1.0});
-	animator.setLimits({0.0f, 1.0f});
+	animator.setLimits({0.0, 1.0});
 }
 
-void AbstractZoomableView::changeZoom(float newZoomFactor, int xPos)
+void AbstractZoomableView::changeZoom(double newZoomFactor, int xPos)
 {
 	if(asComponent->getWidth() == 0)
 		return;
 
-	float mousePos = (float)xPos / (float)(asComponent->getWidth());
-	auto oldZoom = 1.0f / zoomFactor;
+	double mousePos = (double)xPos / (double)(asComponent->getWidth());
+	auto oldZoom = 1.0 / zoomFactor;
 
-	zoomFactor = jlimit(1.0f, 80000.0f, newZoomFactor);
+	zoomFactor = jlimit(1.0, 80000000.0, newZoomFactor);
 
 	auto pan = scrollbar.getCurrentRangeStart();
 		
 	// Adjust pan to keep zoom centered on mouse position
-	float deltaZoom = oldZoom - (1.0f / newZoomFactor);
+	double deltaZoom = oldZoom - (1.0 / newZoomFactor);
 	pan += mousePos * deltaZoom;
 
 	auto nz = 1.0 / zoomFactor;

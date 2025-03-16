@@ -242,13 +242,13 @@ String DebugSession::ProfileDataSource::ViewComponents::StatisticsComponent::get
 		"Index",
 		"Depth",
 		"Name",
-		"# Calls",
+		"#",
 		"Thread",
 		"Type",
-		"Exclusive runtime",
-		"Total runtime",
-		"Average runtime",
-		"Peak runtime"
+		"Exclusive",
+		"Total",
+		"Average",
+		"Peak"
 	});
 
 	return names[columnId-1];
@@ -308,7 +308,7 @@ void DebugSession::ProfileDataSource::ViewComponents::StatisticsComponent::RowDa
 	if(columnId == Depth)
 		t << String(depth);
 	if(columnId == Thread)
-		t << ThreadIdentifier::getThreadName(threadType);
+		t << ThreadIdentifier::getThreadName(threadType).replace("Thread", "");
 	if(columnId == Num)
 		t << String(occurrences) << "x";
 	if(columnId == Source)
@@ -342,13 +342,13 @@ DebugSession::ProfileDataSource::ViewComponents::StatisticsComponent::Statistics
 	table.getHeader().addColumn(getColumnName(ColumnId::Index), ColumnId::Index, 50, 50, 50);
 	table.getHeader().addColumn(getColumnName(ColumnId::Depth), ColumnId::Depth, 50, 50, 50);
 	table.getHeader().addColumn(getColumnName(ColumnId::Name), ColumnId::Name, 100, 100, -1);
-	table.getHeader().addColumn(getColumnName(ColumnId::Thread), ColumnId::Thread, 100, 100, 100);
-	table.getHeader().addColumn(getColumnName(ColumnId::Source), ColumnId::Source, 120, 120, 120);
-	table.getHeader().addColumn(getColumnName(ColumnId::Num), ColumnId::Num, 50, 50, 50);
-	table.getHeader().addColumn(getColumnName(ColumnId::Duration), ColumnId::Duration, 100, 100, -1);
-	table.getHeader().addColumn(getColumnName(ColumnId::Exclusive), ColumnId::Exclusive, 100, 100, -1);
-	table.getHeader().addColumn(getColumnName(ColumnId::Average), ColumnId::Average, 100, 100, -1);
-	table.getHeader().addColumn(getColumnName(ColumnId::Peak), ColumnId::Peak, 100, 100, -1);
+	table.getHeader().addColumn(getColumnName(ColumnId::Thread), ColumnId::Thread, 100, 50, 100);
+	table.getHeader().addColumn(getColumnName(ColumnId::Source), ColumnId::Source, 120, 50, 120);
+	table.getHeader().addColumn(getColumnName(ColumnId::Num), ColumnId::Num, 40, 40, 40);
+	table.getHeader().addColumn(getColumnName(ColumnId::Duration), ColumnId::Duration, 80, 40, -1);
+	table.getHeader().addColumn(getColumnName(ColumnId::Exclusive), ColumnId::Exclusive, 80, 40, -1);
+	table.getHeader().addColumn(getColumnName(ColumnId::Average), ColumnId::Average, 80, 40,  -1);
+	table.getHeader().addColumn(getColumnName(ColumnId::Peak), ColumnId::Peak, 80, 40, -1);
 
 	table.getViewport()->setScrollBarThickness(12.0f);
 	sf.addScrollBarToAnimate(table.getViewport()->getVerticalScrollBar());
@@ -919,32 +919,35 @@ DebugSession::ProfileDataSource::ViewComponents::Manager::Manager(DebugSession& 
 	session(s),
 	openButton("open", nullptr, f),
 	saveButton("save", nullptr, f),
-	deleteButton("delete", nullptr, f),
 	recordButton("record", nullptr, f),
 	trimButton("trim", nullptr, f),
 	initButton("init", nullptr, f),
 	undoButton("undo", nullptr, f),
 	redoButton("redo", nullptr, f),
-	homeButton("home", nullptr, f),
 	searchBar(new SearchBar()) 
 {
 	addAndMakeVisible(openButton);
 	addAndMakeVisible(saveButton);
-	addAndMakeVisible(deleteButton);
 	addAndMakeVisible(recordButton);
 	addAndMakeVisible(initButton);
 	addAndMakeVisible(trimButton);
 	addAndMakeVisible(undoButton);
 	addAndMakeVisible(redoButton);
-	addAndMakeVisible(homeButton);
 	addAndMakeVisible(searchBar);
 
+    openButton.setTooltip("Import a profile session from the clipboard");
+    saveButton.setTooltip("Copy the current profiling session to the clipboard");
+    recordButton.setTooltip("Toggle the profiling recording session");
+    initButton.setTooltip("Enable automatic profiling of compilation / project load");
+    undoButton.setTooltip("Navigate back");
+    redoButton.setTooltip("Navigate forward");
+    trimButton.setTooltip("Copy the currently displayed range into a new profiling session");
+    
 	recordButton.onColour = Colour(HISE_ERROR_COLOUR);
 	recordButton.setToggleModeWithColourChange(true);
 
 	initButton.setToggleModeWithColourChange(true);
 
-	homeButton.onClick = [this](){ navigate(currentViewer.get(), totalRoot, true); };
 	undoButton.onClick = [this](){ um.undo(); };
 	redoButton.onClick = [this](){ um.redo(); };
 
@@ -1002,17 +1005,15 @@ void DebugSession::ProfileDataSource::ViewComponents::Manager::resized()
 	searchBar->setBounds(menuBar.removeFromRight(300).reduced(5));
 
 	int ButtonMargin = 10;
-	homeButton.setBounds(menuBar.removeFromLeft(MultiViewerMenuBarHeight).reduced(ButtonMargin));
 	undoButton.setBounds(menuBar.removeFromLeft(MultiViewerMenuBarHeight).reduced(ButtonMargin));
 	redoButton.setBounds(menuBar.removeFromLeft(MultiViewerMenuBarHeight).reduced(ButtonMargin));
+    menuBar.removeFromLeft(ButtonMargin);
+    initButton.setBounds(menuBar.removeFromLeft(MultiViewerMenuBarHeight).reduced(ButtonMargin));
+    recordButton.setBounds(menuBar.removeFromLeft(MultiViewerMenuBarHeight).reduced(ButtonMargin));
 	menuBar.removeFromLeft(ButtonMargin);
 	openButton.setBounds(menuBar.removeFromLeft(MultiViewerMenuBarHeight).reduced(ButtonMargin));
 	saveButton.setBounds(menuBar.removeFromLeft(MultiViewerMenuBarHeight).reduced(ButtonMargin));
-	deleteButton.setBounds(menuBar.removeFromLeft(MultiViewerMenuBarHeight).reduced(ButtonMargin));
-	menuBar.removeFromLeft(ButtonMargin);
-	initButton.setBounds(menuBar.removeFromLeft(MultiViewerMenuBarHeight).reduced(ButtonMargin));
-	recordButton.setBounds(menuBar.removeFromLeft(MultiViewerMenuBarHeight).reduced(ButtonMargin));
-	trimButton.setBounds(menuBar.removeFromLeft(MultiViewerMenuBarHeight).reduced(ButtonMargin));
+    trimButton.setBounds(menuBar.removeFromLeft(MultiViewerMenuBarHeight).reduced(ButtonMargin));
 }
 
 void DebugSession::ProfileDataSource::ViewComponents::Manager::setRecording(bool isRecording)

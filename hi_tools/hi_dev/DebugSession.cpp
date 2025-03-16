@@ -621,8 +621,8 @@ void DebugSession::ProfileDataSource::ProfileInfo::fromSerialisedData(Serialised
 	data.runIndex = (int64)v[ProfileIds::runIndex];
 	data.loopIndex = (int64)v[ProfileIds::loopCounter];
 	data.threadType = (ThreadIdentifier::Type)(int)v[ProfileIds::thread];
-	data.trackSource = v[ProfileIds::trackSource];
-	data.trackTarget = v[ProfileIds::trackTarget];
+	data.trackSource = (int)v[ProfileIds::trackSource];
+	data.trackTarget = (int)v[ProfileIds::trackTarget];
 	data.holder = h;
 
 	ProfileInfoBase::fromSerialisedData(v_, existingSources, existingList, parent, h);

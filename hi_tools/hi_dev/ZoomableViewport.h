@@ -531,13 +531,13 @@ struct AbstractZoomableView: public ScrollBar::Listener,
 		static bool isHorizontal(Direction d) { return d == Direction::Left || d == Direction::Right; }
 
 		bool keyPressed(const KeyPress& key, Component* originatingComponent) override;
-		void setShiftMultiplier(float horizontalFactor, float verticalFactor);
+		void setShiftMultiplier(double horizontalFactor, double verticalFactor);
 		void timerCallback() override;
 		void handlePressedKey(Direction d);
 		bool keyStateChanged (bool isKeyDown, Component* originatingComponent) override;
 
-		LinearSmoothedValue<float> delta[2];
-		float shiftMultipliers[2] = { 3.0f, 3.0f };
+		LinearSmoothedValue<double> delta[2];
+		double shiftMultipliers[2] = { 3.0, 3.0 };
 		std::map<Direction, bool> state;
 		AnimatedPositionBehaviours::ContinuousWithMomentum behaviour[2];
 		std::function<void(bool, float)> onDirection;
@@ -546,14 +546,14 @@ struct AbstractZoomableView: public ScrollBar::Listener,
 
 	struct DragZoomAction: public UndoableAction
 	{
-		DragZoomAction(AbstractZoomableView& parent_, Range<double> newRange_, Range<double> oldRange_, float newZoom_, float oldZoom_);
+		DragZoomAction(AbstractZoomableView& parent_, Range<double> newRange_, Range<double> oldRange_, double newZoom_, double oldZoom_);
 
 		bool perform() override;
 		bool undo() override;
 
 		AbstractZoomableView& parent;
 		Range<double> oldRange, newRange;
-		float oldZoom, newZoom;
+		double oldZoom, newZoom;
 	};
 
 	struct ZoomAnimator: public Timer
@@ -562,15 +562,15 @@ struct AbstractZoomableView: public ScrollBar::Listener,
 		  parent(parent_)
 		{}
 
-		void setTarget(Range<double> newTarget, float newZoom);
+		void setTarget(Range<double> newTarget, double newZoom);
 		void timerCallback() override;
 
 		AbstractZoomableView& parent;
 		Range<double> start;
-		float startZoom;
-		float alpha = 0.0f;
+		double startZoom;
+		double alpha = 0.0f;
 		Range<double> target;
-		float zoom;
+		double zoom;
 	};
 
 	AbstractZoomableView();
@@ -589,7 +589,7 @@ struct AbstractZoomableView: public ScrollBar::Listener,
 	/** Override this and return the total absolute length of the items you want to display. */
 	virtual double getTotalLength() const = 0;
 
-	void changeZoom(float newZoomFactor, int xPos=0);
+	void changeZoom(double newZoomFactor, int xPos=0);
 	void scrollBarMoved (ScrollBar* , double newRangeStart) override;
 
 	void drawDragDistance(Graphics& g, Rectangle<int> viewportPosition);
@@ -601,7 +601,7 @@ struct AbstractZoomableView: public ScrollBar::Listener,
 
     void hangleMouseMagnify(const MouseEvent& e, float scaleFactor)
     {
-        changeZoom(zoomFactor * scaleFactor, e.getPosition().x);
+        changeZoom(zoomFactor * (double)scaleFactor, e.getPosition().x);
     }
     
 	bool handleMouseEvent(const MouseEvent& e, MouseEventType t);
@@ -611,8 +611,8 @@ struct AbstractZoomableView: public ScrollBar::Listener,
 
 	double totalLength = 0.0;
 	Animator animator;
-	float scaleFactor = 1.0f;
-	float zoomFactor = 1.0f;
+	double scaleFactor = 1.0;
+	double zoomFactor = 1.0;
 	
 	double first = -1.0;
 	float x = 0.0f;
