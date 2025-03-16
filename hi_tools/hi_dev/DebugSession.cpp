@@ -1437,12 +1437,14 @@ void DebugSession::processEventQueue()
 						ni->data.delta = e.getTime() - ni->data.start;
 						t->stack.pop_back();
 
+                        if(ni->data.source->onMessageFlush)
+                        {
+                            ni->data.source->onMessageFlush(ni->data.holder, ni);
+                        }
+                        
 						if(t->stack.empty())
 						{
-							if(ni->data.source->onMessageFlush)
-							{
-								ni->data.source->onMessageFlush(ni->data.holder, ni);
-							}
+							
 
 							ni->optimize();
 

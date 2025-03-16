@@ -63,6 +63,11 @@ struct DebugSession::ProfileDataSource::ViewComponents::Manager: public Componen
 	void sendRootChangeMessage(BaseWithManagerConnection* source);
 	void setActiveViewer(Viewer* newViewer);
 
+    void paint(Graphics& g) override
+    {
+        session.initUIThread();
+    }
+    
 	VoiceBitMap<32> typeFilters;
 
 	TimeDomain currentDomain;
