@@ -370,18 +370,7 @@ private:
 	JUCE_DECLARE_WEAK_REFERENCEABLE(WebViewData);
 };
 
-struct SorryDavid: public Component
-{
-    void paint(Graphics& g) override
-    {
-        g.fillAll(Colours::grey);
-        g.setColour(Colours::black);
-        g.drawText("Not there yet...", getLocalBounds().toFloat(), Justification::centred);
-    }
-    void doNothing(float){}
-    void doNothing(void*){};
-	void doNothing(){};
-};
+
 
 class WebViewWrapper : public Component
 {

@@ -31,9 +31,7 @@
 */
 
 
-#if !JUCE_LINUX
 #include "choc/gui/choc_webview.h"
-#endif
 
 #include "sha1.h"
 
@@ -65,7 +63,6 @@ struct WebViewData::CallbackItem
 		callback(f_)
 	{};
 
-#if !JUCE_LINUX
 	choc::value::Value operator()(const choc::value::ValueView& args)
 	{
 		auto x = choc::json::toString(args);
@@ -90,7 +87,6 @@ struct WebViewData::CallbackItem
 		if (callback)
 			wv->bind(name, *this);
 	}
-#endif
 
 	std::string name;
 	CallbackType callback;
@@ -561,9 +557,7 @@ WebViewWrapper::~WebViewWrapper()
 void WebViewWrapper::unload()
 {
 	content = nullptr;
-#if !JUCE_LINUX
 	webView = nullptr;
-#endif
 	data = nullptr;
 }
 
@@ -579,18 +573,14 @@ void WebViewWrapper::resized()
 
 void WebViewWrapper::call(const String& jsCode)
 {
-#if !JUCE_LINUX
 	if(webView != nullptr)
 		webView->evaluateJavascript(jsCode.toStdString());
-#endif
 }
 
 void WebViewWrapper::setHtml(const String& htmlCode)
 {
-#if !JUCE_LINUX
 	if(webView != nullptr)
 		webView->setHTML(htmlCode.toStdString());
-#endif
 }
 
 void WebViewWrapper::navigateToURL(const URL& url)
@@ -600,20 +590,13 @@ void WebViewWrapper::navigateToURL(const URL& url)
 
     auto currentFocusComponent = Component::getCurrentlyFocusedComponent();
 
-    
-
-#if !JUCE_LINUX
     choc::ui::WebView::Options options;
     webView = new choc::ui::WebView(options);
 	content = dynamic_cast<NativeUIBase*>(choc::ui::createJUCEWebViewHolder(*webView).release());
-    
-#endif
 
     addAndMakeVisible(content);
 
-#if !JUCE_LINUX
     webView->navigate(url.toString(false).toStdString());
-#endif
     
     if(currentFocusComponent != nullptr)
         currentFocusComponent->grabKeyboardFocusAsync();
@@ -625,9 +608,6 @@ void WebViewWrapper::refresh()
 
 	auto currentFocusComponent = Component::getCurrentlyFocusedComponent();
 
-	
-
-#if !JUCE_LINUX
 	choc::ui::WebView::Options options;
 	options.enableDebugMode = data->isDebugModeEnabled();
 	options.transparentBackground = true;
@@ -669,7 +649,6 @@ void WebViewWrapper::refresh()
 		c->registerToWebView(webView);
 
 	content = dynamic_cast<NativeUIBase*>(choc::ui::createJUCEWebViewHolder(*webView).release());
-#endif
 
 	addAndMakeVisible(content);
 	
@@ -708,14 +687,12 @@ void WebViewWrapper::refreshBounds(float newScaleFactor)
 
     data->evaluate("scaleFactor", s);
     
-#if !JUCE_LINUX
 	if (webView != nullptr)
     {
         String asyncCode;
         asyncCode << "document.addEventListener('DOMContentLoaded', function() { " << s << "}, false);";
         webView->addInitScript(asyncCode.toStdString());
     }
-#endif
 		
 	resized();
 }
