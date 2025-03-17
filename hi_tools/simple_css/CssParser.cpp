@@ -1338,7 +1338,7 @@ bool Parser::matchIf(TokenType t)
 		{
 			currentToken = "";
 
-			while(CharacterFunctions::isLetterOrDigit(*ptr) || *ptr == '-')
+			while(CharacterFunctions::isLetterOrDigit(*ptr) || *ptr == '-' || *ptr == '_')
 				currentToken << *ptr++;
 
 			return currentToken.isNotEmpty();
