@@ -144,6 +144,73 @@ struct HiseJavascriptEngine::RootObject::ScopedBypasser: public HiseJavascriptEn
     ExpPtr send;
 };
 
+struct HiseJavascriptEngine::RootObject::ScopedCall: public HiseJavascriptEngine::RootObject::ScopedBlockStatement
+{
+    ScopedCall(CodeLocation l, ExpPtr c, ExpPtr callable_):
+      ScopedBlockStatement(l, c),
+      callable(callable_)
+    {}
+
+    SN_NODE_ID("call");
+
+    bool isDebugStatement() const override { return false; }
+
+    ResultCode perform(const Scope& s, var*) const override
+    {
+        auto br = callable->getResult(s);
+        f = dynamic_cast<WeakCallbackHolder::CallableObject*>(br.getObject());
+
+        if(f != nullptr)
+        {
+            
+            for(int i = 0; i < args.size(); i++)
+                argValues.set(i, args[i]->getResult(s));
+            
+            var::NativeFunctionArgs a(var(), argValues.getRawDataPointer(), argValues.size());
+            
+            auto engine = s.root->hiseSpecialData.processor->getScriptEngine();
+            auto ok = f->call(engine, a, nullptr);
+            
+            for(int i = 0; i < argValues.size(); i++)
+                argValues.set(i, var());
+            
+            if(!ok)
+                location.throwError(ok.getErrorMessage());
+        }
+        else
+        {
+            location.throwError("expression is not a callable object");
+        }
+
+        return ResultCode::ok;
+    }
+
+    void cleanup(const Scope& s) const override
+    {
+        if(f != nullptr)
+        {
+            for(int i = 0; i < args.size(); i++)
+                argValues.set(i, args[i]->getResult(s));
+            
+            var::NativeFunctionArgs a(var(), argValues.getRawDataPointer(), argValues.size());
+            
+            auto engine = s.root->hiseSpecialData.processor->getScriptEngine();
+            auto ok = f->call(engine, a, nullptr);
+            
+            for(int i = 0; i < argValues.size(); i++)
+                argValues.set(i, var());
+            
+            if(!ok)
+                location.throwError(ok.getErrorMessage());
+        }
+    }
+
+    mutable WeakReference<WeakCallbackHolder::CallableObject> f;
+    ExpPtr callable;
+    OwnedArray<Expression> args;
+    mutable Array<var> argValues;
+};
+
 struct HiseJavascriptEngine::RootObject::ScopedLocker: public HiseJavascriptEngine::RootObject::ScopedBlockStatement
 {
 	ScopedLocker(CodeLocation l, ExpPtr c, LockHelpers::Type lockToAcquire):

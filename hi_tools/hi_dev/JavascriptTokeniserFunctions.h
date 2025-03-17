@@ -61,7 +61,7 @@ struct JavascriptTokeniserFunctions
             { "set", nullptr };
 
         static const char* const keywords4Char[] =
-            { "lock", "dump", "noop", nullptr };
+            { "lock", "call", "dump", "noop", nullptr };
 
         static const char* const keywords5Char[] =
             { "count", "print", "defer", "after", "trace", nullptr };

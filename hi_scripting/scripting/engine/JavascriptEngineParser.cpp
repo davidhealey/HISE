@@ -677,6 +677,41 @@ private:
 
 			return new ScopedProfiler(location, condition, name);
 		}
+        else if(typeId == ScopedCall::getStaticId())
+        {
+            match(TokenTypes::openParen);
+            
+            ExpPtr f = parseExpression();
+
+            ScopedPointer<ScopedCall> c = new ScopedCall(location, condition, f.release());
+
+            OwnedArray<Expression> args;
+            
+            if(matchIf(TokenTypes::comma))
+            {
+                while(true)
+                {
+                    if(matchIf(TokenTypes::closeParen))
+                        break;
+                    if(matchIf(TokenTypes::eof))
+                        break;
+
+                    args.add(parseExpression());
+                    
+                    matchIf(TokenTypes::comma);
+                }
+            }
+            else
+                match(TokenTypes::closeParen);
+            
+            for(int i = 0; i < args.size(); i++)
+                c->argValues.add(var());
+            
+            c->args.swapWith(args);
+            
+            return c.release();
+        }
+        
 		else if(typeId == ScopedCounter::getStaticId())
 		{
 			match(TokenTypes::openParen);
