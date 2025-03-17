@@ -652,10 +652,12 @@ private:
 		else if(typeId == ScopedBypasser::getStaticId())
 		{
 			match(TokenTypes::openParen);
-			auto b = parseExpression();
+			ExpPtr b = parseExpression();
+            match(TokenTypes::comma);
+            ExpPtr send = parseExpression();
 			match(TokenTypes::closeParen);
 
-			return new ScopedBypasser(location, condition, b);
+			return new ScopedBypasser(location, condition, b.release(), send.release());
 		}
 		else if(typeId == ScopedTracer::getStaticId())
 		{
@@ -749,7 +751,10 @@ private:
 		else if(typeId == ScopedLocker::getStaticId())
 		{
 			match(TokenTypes::openParen);
-			auto l = (int)parseExpression()->getResult(Scope(nullptr, nullptr, nullptr));
+            
+            ExpPtr lt = parseExpression();
+            
+			auto l = (int)lt->getResult(Scope(nullptr, nullptr, nullptr));
 			match(TokenTypes::closeParen);
 
 			return new ScopedLocker(location, condition, (LockHelpers::Type)l);

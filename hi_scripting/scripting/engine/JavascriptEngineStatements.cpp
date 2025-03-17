@@ -88,9 +88,10 @@ struct HiseJavascriptEngine::RootObject::ScopedSetter: public HiseJavascriptEngi
 
 struct HiseJavascriptEngine::RootObject::ScopedBypasser: public HiseJavascriptEngine::RootObject::ScopedBlockStatement
 {
-	ScopedBypasser(CodeLocation l, ExpPtr c, ExpPtr broadcaster):
+	ScopedBypasser(CodeLocation l, ExpPtr c, ExpPtr broadcaster, ExpPtr send_):
 	  ScopedBlockStatement(l, c),
-	  be(broadcaster)
+	  be(broadcaster),
+      send(send_)
 	{}
 
 	SN_NODE_ID("bypass");
@@ -130,14 +131,17 @@ struct HiseJavascriptEngine::RootObject::ScopedBypasser: public HiseJavascriptEn
 			TRACE_EVENT_END("scripting");
 		}
 
+        auto sendMessage = (bool)send->getResult(s);
+        
 		if(b != nullptr)
-			b->setBypassed(state, true, false);
+			b->setBypassed(state, sendMessage, false);
 	}
 
 	mutable WeakReference<ScriptingObjects::ScriptBroadcaster> b;
 	mutable bool state = false;
 
 	ExpPtr be;
+    ExpPtr send;
 };
 
 struct HiseJavascriptEngine::RootObject::ScopedLocker: public HiseJavascriptEngine::RootObject::ScopedBlockStatement

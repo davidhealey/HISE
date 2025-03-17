@@ -4694,7 +4694,7 @@ void ScriptBroadcaster::initItem(TargetBase* ni)
 {
 	checkMetadataAndCallWithInitValues(ni);
 
-	if (!attachedListeners.isEmpty())
+	if (!attachedListeners.isEmpty() && !isBypassed())
 	{
 		for (auto attachedListener : attachedListeners)
 		{
@@ -4712,7 +4712,7 @@ void ScriptBroadcaster::initItem(TargetBase* ni)
 		for (const auto& v : lastValues)
 			callListener &= (!v.isUndefined() && !v.isVoid());
 
-		if (callListener || sendWhenUndefined)
+		if ((callListener || sendWhenUndefined) && !isBypassed())
 		{
 			auto r = ni->callSyncWithProfile(*this, lastValues);
 
@@ -4729,6 +4729,9 @@ void ScriptBroadcaster::checkMetadataAndCallWithInitValues(ItemBase* i)
 
 	i->profileIndex = broadcasterProfile.add(i->metadata.id.toString());
 
+    if(isBypassed())
+        return;
+    
 	if (auto l = dynamic_cast<ListenerBase*>(i))
 	{
 		int numInitArgs = l->getNumInitialCalls();
