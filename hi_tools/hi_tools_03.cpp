@@ -33,8 +33,9 @@
 #include "../hi_dsp_library/hi_dsp_library.h"
 #include "hi_tools.h"
 
-
+#if !HISE_NO_GUI_TOOLS
 #include "hi_dev/CodeEditorApiBase.cpp"
+#endif
 
 #if HISE_INCLUDE_PROFILING_TOOLKIT
 #include "hi_dev/DebugProfileTools.cpp"
@@ -44,11 +45,9 @@
 #include "hi_dev/DebugSession.cpp"
 #endif
 
+#if !HISE_NO_GUI_TOOLS
 #include "hi_dev/AdvancedCodeEditor.cpp"
 #include "hi_dev/ScriptWatchTable.cpp"
-
-
-
 #include "hi_dev/JavascriptTokeniserFunctions.h"
 #include "hi_dev/JavascriptTokeniser.cpp"
 
@@ -56,14 +55,12 @@
 #include "hi_dev/FaustTokeniser.cpp"
 #endif
 
-
-#if !HISE_NO_GUI_TOOLS
 #include "hi_dev/ZoomableViewport.cpp"
 #if USE_BACKEND
 #include "hi_standalone_components/PerfettoWebViewer.cpp"
 #endif
-#endif
 
 #if HISE_INCLUDE_RLOTTIE
 #include "hi_dev/RLottieDevComponent.cpp"
+#endif
 #endif

@@ -285,7 +285,12 @@ will break compatibility with older projects / presets because the tempo indexes
 #if USE_BACKEND
 #include "hi_standalone_components/PerfettoWebViewer.h"
 #endif
-#else
+
+#else // HISE_NO_GUI_TOOLS
+
+#include "hi_dev/CodeEditorApiBase.h"
+#include "hi_dev/DummyDebugSession.h"
+
 using ComponentWithMiddleMouseDrag = juce::Component;
 #define CHECK_MIDDLE_MOUSE_DOWN(e) ignoreUnused(e);
 #define CHECK_MIDDLE_MOUSE_UP(e) ignoreUnused(e);

@@ -1853,5 +1853,751 @@ void ZoomableViewport::Holder::paint(Graphics& g)
 	g.drawText(content->getName(), b, Justification::centred);
 }
 
+struct ZoomableDataViewer: public AbstractZoomableView,
+                           public Component
+{
+    static constexpr int LabelHeight = 20;
+
+    struct DrawContext
+    {
+        Rectangle<float> fullBounds;
+        Rectangle<float> legend;
+        Range<double> dataRangeToShow;
+    };
+
+    enum class IndexDomain
+    {
+        Absolute,
+        Relative,
+        Time
+    };
+
+    static StringArray getIndexDomainTypes() { return { "Absolute", "Relative", "Time" }; }
+
+    enum class ValueDomain
+    {
+        Absolute,
+        Relative,
+        Decibel
+    };
+
+    static StringArray getValueDomainTypes() { return { "Absolute", "Relative", "Decibel" }; }
+
+    struct Data
+    {
+        Colour getColour() const
+        {
+            return Colour(label.hash()).withSaturation(0.5).withBrightness(0.7f).withAlpha(1.0f);
+        }
+
+        void draw(Graphics& g, DrawContext& ctx)
+        {
+            auto tw = (float)LabelHeight + GLOBAL_MONOSPACE_FONT().getStringWidthFloat(label) + 20.0f;
+            
+            auto tl = ctx.legend.removeFromLeft(tw);
+
+            auto c = getColour();
+
+            g.setColour(c);
+
+            auto thisRange = ctx.dataRangeToShow;//.expanded(1.0).getIntersectionWith({0.0, (double)size});
+
+            if(!thisRange.isEmpty() && enabled)
+            {
+                bool first = true;
+
+                float xDelta = ctx.fullBounds.getWidth() / (ctx.dataRangeToShow.getLength() - 1);
+
+                if(xDelta < 0.25)
+                {
+                    RectangleList<float> list;
+
+                    auto samplesPerPixel = 1.0 / xDelta;
+                    auto sampleIndex = thisRange.getStart();
+
+                    for(int i = (int)ctx.fullBounds.getX(); i < (int)ctx.fullBounds.getRight(); i++)
+                    {
+                        auto thisIndex = (int)(sampleIndex);
+                        auto numThisTime = jmin<int>((int)size - sampleIndex, roundToInt(samplesPerPixel + 1.0));
+
+                        auto range = FloatVectorOperations::findMinAndMax(data.get() + thisIndex, numThisTime);
+
+                        auto yMax = valueRange.convertTo0to1(range.getEnd());
+                        auto yMin = valueRange.convertTo0to1(range.getStart());
+
+                        auto y = ctx.fullBounds.getY() + (1.0f - yMax) * ctx.fullBounds.getHeight();
+                        auto bottom = ctx.fullBounds.getY() + (1.0f - yMin) * ctx.fullBounds.getHeight();
+                        auto h = bottom - y;
+
+                        auto x = (float)i - 0.25f;
+                        auto w = 1.5f;
+
+                        list.addWithoutMerging({x, y, w, h});
+
+                        sampleIndex += samplesPerPixel;
+                    }
+
+                    g.fillRectList(list);
+                }
+                else
+                {
+                    Path p;
+
+                    g.saveState();
+                    g.reduceClipRegion(ctx.fullBounds.toNearestInt());
+
+                    RectangleList<float> points;
+
+                    for(int i = (int)thisRange.getStart(); i < ((int)thisRange.getEnd() + 1); i++)
+                    {
+                        auto x = -1.0 *  (thisRange.getStart() - (double)i) * xDelta;
+                        x += ctx.fullBounds.getX();
+
+                        auto y = 1.0f - valueRange.convertTo0to1(data[i]);
+
+                        Point<float> pos { (float)x, ctx.fullBounds.getY() + y * ctx.fullBounds.getHeight() };
+
+                        if(thisRange.getLength() < 20.0)
+                            points.add(Rectangle<float>(pos, pos).withSizeKeepingCentre(6.0f, 6.0f));
+
+                        if(first)
+                        {
+                            p.startNewSubPath(pos);
+                            first = false;
+                        }
+                        else
+                            p.lineTo(pos);
+                    }
+
+                    g.strokePath(p, PathStrokeType(1.5f));
+                    g.restoreState();
+
+                    if(!points.isEmpty())
+                        g.fillRectList(points);
+                }
+            }
+
+
+            g.setColour(c);
+
+            if(enabled)
+                g.fillRoundedRectangle(tl.removeFromLeft(tl.getHeight()).reduced(2.0f), 4.0f);
+            else
+                g.drawRoundedRectangle(tl.removeFromLeft(tl.getHeight()).reduced(2.0f), 4.0f, 2.0f);
+            
+            tl.removeFromLeft(5.0f);
+            g.setFont(GLOBAL_MONOSPACE_FONT());
+            g.setColour(Colours::white.withAlpha(enabled ? 0.7f : 0.4f));
+            g.drawText(label, tl, Justification::left);
+        }
+
+        int index;
+        String label;
+        HeapBlock<float> data;
+        NormalisableRange<float> valueRange;
+        size_t size;
+        bool enabled = true;
+    };
+
+    ZoomableDataViewer()
+    {
+        setOpaque(true);
+        setAsParentComponent(this);
+    }
+
+    UndoManager um;
+    OwnedArray<Data> data;
+
+    double getTotalLength() const override { return (double)maxLength; }
+
+    UndoManager* getUndoManager() override { return &um; }
+
+    
+
+    void paint(Graphics& g) override
+    {
+        DrawContext ctx;
+        auto b = getLocalBounds().toFloat().reduced(10.0f);
+        ctx.legend = b.removeFromTop(24.0f);
+
+        drawBackgroundGrid(g, b.toNearestInt());
+
+        drawDragDistance(g, getViewportPosition());
+
+        b.removeFromTop((float)FirstItemOffset);
+        
+        ctx.fullBounds = b;
+        ctx.dataRangeToShow = getScaledZoomRange();
+
+        for(auto d: data)
+            d->draw(g, ctx);
+
+        String v;
+
+        auto zr = getScaledZoomRange();
+        auto vr = yRange;
+
+        v << "X: [" << getXString(zr.getStart(), timeDomain,  xRange) << " - " << getXString(zr.getEnd(), timeDomain, xRange) << "]";
+        v << "Y: [" << getYString(vr.getStart(), valueDomain, vr)     << " - " << getYString(vr.getEnd(), valueDomain, vr)    << "]";
+
+        g.setFont(GLOBAL_MONOSPACE_FONT());
+        g.drawText(v, ctx.legend, Justification::right);
+
+        if(currentTooltipData)
+        {
+            g.setColour(currentTooltipData.d->getColour());
+
+            auto r = Rectangle<int>(currentTooltipData.position, currentTooltipData.position).withSizeKeepingCentre(14, 14).toFloat();
+            g.drawEllipse(r, 3.0f);
+        }
+    }
+
+    static String getXString(float xValue, IndexDomain d, Range<float> contextValue)
+    {
+        switch(d)
+        {
+        case IndexDomain::Absolute:
+            return String(xValue, 1);
+        case IndexDomain::Relative:
+            return String(xValue / contextValue.getLength(), 1) + "%";
+        case IndexDomain::Time:
+            return String(1000.0 * xValue / contextValue.getLength()) + "ms";
+        }
+
+        return String(xValue, 1);
+    }
+
+    static String getYString(float yValue, ValueDomain d, Range<float> contextRange)
+    {
+        switch(d)
+        {
+        case ValueDomain::Absolute:
+            return String(yValue);
+        case ValueDomain::Relative:
+            return String(100.0 * NormalisableRange<float>(contextRange).convertTo0to1(yValue), 1) + "%";
+        case ValueDomain::Decibel:
+            return String(Decibels::gainToDecibels(std::abs(yValue)), 1) + "dB";
+        default: ;
+        }
+
+        return String(yValue);
+    }
+
+    struct TooltipData
+    {
+        operator bool() const { return d != nullptr; }
+        Data* d = nullptr;
+
+        String toString(ValueDomain vd, Range<float> r) const
+        {
+            jassert(*this);
+
+            String s;
+            s << d->label << "[";
+            s << String(value.first) << "] = " << getYString(value.second, vd, r);
+            return s;
+        }
+        std::pair<int, float> value;
+        Point<int> position;
+    };
+
+    Rectangle<int> getViewportPosition() const
+    {
+        auto b = getLocalBounds().reduced(10);
+        b.removeFromTop(24 + FirstItemOffset);
+        return b;
+    }
+
+    TooltipData getTooltipData(const MouseEvent& e)
+    {
+        auto vp = getViewportPosition();
+
+        if(!vp.contains(e.getPosition()))
+            return {};
+
+        auto normX = (double)(e.getPosition().getX() - vp.getX()) / (double)vp.getWidth();
+
+        auto zr = getScaledZoomRange();
+
+        if(zr.getLength() == 0.0)
+            return {};
+
+        zr.setEnd(zr.getEnd() - 1);
+
+        NormalisableRange<double> scaled(zr);
+        auto index = roundToInt((float)scaled.convertFrom0to1(normX));
+
+        auto xPos = scaled.convertTo0to1((double)index);
+
+        auto x = vp.getX() + roundToInt(xPos * (float)vp.getWidth());
+
+        std::vector<TooltipData> matches;
+
+        for(auto d: data)
+        {
+            TooltipData nd;
+            nd.d = d;
+            auto v = d->data[index];
+            nd.value = { index, v };
+            auto yPos = vp.getY() + roundToInt((1.0f - d->valueRange.convertTo0to1(v)) * (float)vp.getHeight());
+            nd.position = { x, yPos};
+            matches.push_back(nd);
+        }
+
+        
+
+        auto distance = INT_MAX;
+        TooltipData bestMatch;
+
+        for(const auto& d: matches)
+        {
+            auto thisDistance = d.position.getDistanceFrom(e.getPosition());
+            if(thisDistance < distance)
+            {
+                distance = thisDistance;
+                bestMatch = d;
+            }
+        }
+
+        return distance < 30 ? bestMatch : TooltipData();
+    }
+
+    TooltipData currentTooltipData;
+
+    String getTooltip() override
+    {
+        if(currentTooltipData)
+            return currentTooltipData.toString(valueDomain, yRange);
+
+        return "";
+    }
+
+    String getTextForDistance(float width) const override
+    {
+        return getXString(width, timeDomain, xRange);
+    }
+
+    void resized() override
+    {
+        auto b = getLocalBounds();
+        auto legend = b.removeFromTop(24);
+        onResize(b);
+    }
+    
+    void mouseMagnify(const MouseEvent& e, float sf) override
+    {
+        hangleMouseMagnify(e, sf);
+    }
+
+    void mouseDown(const MouseEvent& e) override
+    {
+        if(e.mods.isRightButtonDown())
+        {
+            PopupLookAndFeel plaf;
+            PopupMenu m;
+            m.setLookAndFeel(&plaf);
+
+            m.addSectionHeader("Toggle graphs");
+
+            for(int i = 0; i < data.size(); i++)
+            {
+                m.addItem(i + 30, data[i]->label, true, data[i]->enabled);
+            }
+
+            m.addSectionHeader("Select X Domain");
+
+            auto xdomains = getIndexDomainTypes();
+            auto ydomains = getValueDomainTypes();
+
+            for(int i = 0; i < xdomains.size(); i++)
+                m.addItem(i+10, xdomains[i], true, (int)timeDomain == i);
+
+            m.addSectionHeader("Select Y Domain");
+
+            for(int i = 0; i < ydomains.size(); i++)
+                m.addItem(i+20, ydomains[i], true, (int)valueDomain == i);
+
+            auto r = m.show();
+
+            if(r >= 30)
+            {
+                data[r-30]->enabled = !data[r-30]->enabled;
+            }
+            if(r >= 20)
+                valueDomain = (ValueDomain)(r - 20);
+            else if(r >= 10)
+                timeDomain = (IndexDomain)(r - 10);
+
+            repaint();
+            return;
+        }
+
+        handleMouseEvent(e, MouseEventType::MouseDown);
+    }
+    void mouseDrag(const MouseEvent& e) override { handleMouseEvent(e, MouseEventType::MouseDrag); }
+    void mouseDoubleClick(const MouseEvent& e) override { handleMouseEvent(e, MouseEventType::MouseDoubleClick); }
+    void mouseUp(const MouseEvent& e) override { handleMouseEvent(e, MouseEventType::MouseUp); }
+    void mouseMove(const MouseEvent& e) override
+    {
+        handleMouseEvent(e, MouseEventType::MouseMove);
+        currentTooltipData = getTooltipData(e);
+        repaint();
+    }
+    void mouseWheelMove(const MouseEvent& e, const MouseWheelDetails& wheel) override { handleMouseWheelEvent(e, wheel); }
+
+    void applyPosition(const Rectangle<int>& screenBoundsOfTooltipClient, Rectangle<int>& tooltipRectangleAtOrigin) override
+    {
+        if(currentTooltipData)
+        {
+            auto pos = screenBoundsOfTooltipClient.getPosition();
+            auto center = pos + currentTooltipData.position;
+            center = center.translated(0, 30);
+            tooltipRectangleAtOrigin.setCentre(center.x, center.y);
+        }
+    }
+
+    void setData(const var& var, const float* ptr, size_t size)
+    {
+        auto index = (int)var["index"];
+        auto label = var["graph"].toString();
+        bool found = false;
+
+        for(auto d: data)
+        {
+            if(d->index == index)
+            {
+                d->label = label;
+                d->data.allocate(size, false);
+                d->size = size;
+                FloatVectorOperations::copy(d->data.get(), ptr, (int)size);
+                d->valueRange = {FloatVectorOperations::findMinAndMax(ptr, (int)size)};
+                found = true;
+            }
+        }
+
+        if(!found)
+        {
+            auto d = new Data();
+            d->index = index;
+            d->label = label;
+            d->data.allocate(size, false);
+            d->size = size;
+            d->valueRange = {FloatVectorOperations::findMinAndMax(ptr, (int)size)};
+
+            FloatVectorOperations::copy(d->data.get(), ptr, (int)size);
+            data.add(d);
+        }
+
+        maxLength = 0;
+        yRange = {};
+        xRange = {};
+
+        for(auto d: data)
+        {
+            yRange = yRange.getUnionWith(d->valueRange.getRange());
+            maxLength = jmax(maxLength, d->size);
+            xRange = xRange.getUnionWith({0.0f, (float)d->size});
+        }
+            
+
+        updateIndexToShow();
+    }
+
+    Range<float> yRange;
+    Range<float> xRange;
+
+    size_t maxLength = 0;
+
+    ValueDomain valueDomain = ValueDomain::Absolute;
+    IndexDomain timeDomain = IndexDomain::Absolute;
+};
+
+BufferViewer::BufferViewer(DebugInformationBase* info, ApiProviderBase::Holder* holder_):
+    ApiComponentBase(holder_),
+    Component("Graph Viewer: " + info->getCodeToInsert()),
+    resizer(this, nullptr)
+{
+    addAndMakeVisible(newViewer = new ZoomableDataViewer());
+    addAndMakeVisible(resizer);
+    setFromDebugInformation(info);
+    startTimer(30);
+    setSize(700, 500);
+}
+
+void BufferViewer::providerCleared()
+{
+    dataToShow = var();
+}
+
+void BufferViewer::providerWasRebuilt()
+{
+    if (auto p = getProviderBase())
+    {
+        for (int i = 0; i < p->getNumDebugObjects(); i++)
+        {
+            auto di = p->getDebugInformation(i);
+
+            di->callRecursive([&](DebugInformationBase& info)
+            {
+                if (info.getCodeToInsert() == codeToInsert)
+                {
+                    setFromDebugInformation(&info);
+                    dirty = true;
+                    return true;
+                }
+
+                return false;
+            });
+        };
+    }
+}
+
+void BufferViewer::removeSizeOneArrays(var& dataToReduce)
+{
+    if(dataToReduce.isArray())
+    {
+        if(dataToReduce.size() == 1)
+        {
+            auto firstValue = dataToReduce[0];
+            dataToReduce = firstValue;
+        }
+        else
+        {
+            for(auto& v: *dataToReduce.getArray())
+                removeSizeOneArrays(v);
+        }
+    }
+}
+
+void BufferViewer::setFromDebugInformation(DebugInformationBase* info)
+{
+    if (info != nullptr)
+    {
+        codeToInsert = info->getCodeToInsert();
+        dataToShow = info->getVariantCopy();
+
+        labels.clear();
+
+        for(int i = 0; i < info->getNumChildElements(); i++)
+            labels.add(info->getChildElement(i)->getCodeToInsert());
+    }
+}
+
+std::string BufferViewer::btoa(const void* data, size_t numBytes)
+{
+    auto isBase64 = [](uint8 c)
+    {
+        return (std::isalnum(c) || (c == '+') || (c == '/'));
+    };
+
+    static const std::string b64Characters =
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+        "abcdefghijklmnopqrstuvwxyz"
+        "0123456789+/";
+
+    auto bytesToEncode = reinterpret_cast<const uint8*>(data);
+
+    std::string ret;
+    ret.reserve(numBytes);
+    int i = 0;
+    int j = 0;
+    uint8 d1[3];
+    uint8 d2[4];
+
+    while (numBytes--)
+    {
+        d1[i++] = *(bytesToEncode++);
+        if (i == 3)
+        {
+            d2[0] = (d1[0] & 0xfc) >> 2;
+            d2[1] = ((d1[0] & 0x03) << 4) + ((d1[1] & 0xf0) >> 4);
+            d2[2] = ((d1[1] & 0x0f) << 2) + ((d1[2] & 0xc0) >> 6);
+            d2[3] = d1[2] & 0x3f;
+
+            for(i = 0; (i <4) ; i++)
+                ret += b64Characters[d2[i]];
+
+            i = 0;
+        }
+    }
+
+    if (i)
+    {
+        for(j = i; j < 3; j++)
+            d1[j] = '\0';
+
+        d2[0] = (d1[0] & 0xfc) >> 2;
+        d2[1] = ((d1[0] & 0x03) << 4) + ((d1[1] & 0xf0) >> 4);
+        d2[2] = ((d1[1] & 0x0f) << 2) + ((d1[2] & 0xc0) >> 6);
+        d2[3] = d1[2] & 0x3f;
+
+        for (j = 0; (j < i + 1); j++)
+            ret += b64Characters[d2[j]];
+
+        while((i++ < 3))
+            ret += '=';
+    }
+
+    return ret;
+}
+
+struct JSONViewer: public Component
+{
+    static std::string toString(const var& obj)
+    {
+        std::string x;
+
+        if(auto dbg = dynamic_cast<DebugableObjectBase*>(obj.getObject()))
+        {
+            x += dbg->getDebugName().toStdString();
+            x += ": ";
+            x += dbg->getDebugValue().toStdString();
+        }
+    }
+
+    JSONViewer(const var& obj)
+    {
+        auto data = JSON::toString(obj, false);
+        doc.setDisableUndo(true);
+        doc.replaceAllContent(data);
+
+        editor = new CodeEditorComponent(doc, &tokeniser);
+        editor->setReadOnly(true);
+        editor->setColour(CodeEditorComponent::ColourIds::backgroundColourId, Colour(0xFF242424));
+        editor->setColour(CodeEditorComponent::ColourIds::lineNumberBackgroundId, Colour(0xFF333333));
+        editor->setColour(CodeEditorComponent::ColourIds::lineNumberTextId, Colour(0xFF666666));
+
+        addAndMakeVisible(editor);
+
+        sf.addScrollBarToAnimate(editor->getScrollbar(false));
+        sf.addScrollBarToAnimate(editor->getScrollbar(true));
+
+        auto height = jmin(14, doc.getNumLines() + 2) * editor->getLineHeight();
+
+        setSize(600, height);
+    }
+
+    void resized() override
+    {
+        editor->setBounds(getLocalBounds());
+    }
+
+    ScrollbarFader sf;
+    CodeDocument doc;
+    JavascriptTokeniser tokeniser;
+    ScopedPointer<CodeEditorComponent> editor;
+};
+
+
+bool BufferViewer::isArrayOrBuffer(const var& v, bool numbersAreOK)
+{
+    if(v.isArray())
+    {
+        auto isArray = true;
+
+        for(const auto& c: *v.getArray())
+            isArray &= isArrayOrBuffer(c, true);
+
+        return isArray;
+    }
+    if(v.isBuffer())
+        return true;
+    if(auto obj = v.getDynamicObject())
+    {
+        return false;
+    }
+    if(v.isInt() || v.isDouble() || v.isInt64() || v.isBool())
+        return numbersAreOK;
+
+    return false;
+}
+
+void BufferViewer::timerCallback()
+{
+    if (dirty && !dataToShow.isUndefined())
+    {
+        if(!isArrayOrBuffer(dataToShow))
+            return;
+
+        removeSizeOneArrays(dataToShow);
+
+        auto createCode = [&](int index, const String& name, const var& d)
+        {
+            DynamicObject::Ptr obj = new DynamicObject();
+            obj->setProperty("index", index);
+            obj->setProperty("graph", name);
+
+            auto header = JSON::toString(var(obj.get()), true);
+
+            if(d.isBuffer())
+            {
+                auto ptr = d.getBuffer()->buffer.getReadPointer(0);
+                auto size = d.getBuffer()->size;
+
+                setData(var(obj.get()), ptr, size);
+            }
+                
+            if(d.isArray())
+            {
+                heap<float> data;
+                data.setSize(d.size());
+                for(int i = 0; i < d.size(); i++)
+                    data[i] = (float)d[i];
+
+                auto ptr = data.begin();
+                auto size = data.size();
+
+                setData(var(obj.get()), ptr, size);
+            }
+        };
+
+        if(dataToShow.isBuffer())
+        {
+            createCode(0, codeToInsert, dataToShow);
+        }
+
+        if(dataToShow.isArray())
+        {
+            auto numElements = dataToShow.size();
+
+            if(numElements == 0)
+                createCode(0, "empty", var(Array<var>()));
+            else if(numElements == 1)
+            {
+                if(isArrayOrBuffer(dataToShow[0]))
+                    createCode(0, labels[0], dataToShow[0]);
+            }
+            else
+            {
+                auto multiArray = dataToShow[0].isArray() || dataToShow[0].isBuffer();
+
+                if(multiArray)
+                {
+                    int idx = 0;
+                    for(const auto& d: *dataToShow.getArray())
+                    {
+                        createCode(idx, labels[idx], d);
+                        idx++;
+                    }
+                }
+                else
+                    createCode(0, codeToInsert, dataToShow);
+            }
+        }
+        dirty = false;
+    }
+}
+
+void BufferViewer::resized()
+{
+    auto b = getLocalBounds();
+    resizer.setBounds(b.removeFromBottom(20).removeFromRight(20));
+    newViewer->setBounds(b);
+}
+
+void BufferViewer::setData(const var& obj, const float* data, size_t numElements)
+{
+    dynamic_cast<ZoomableDataViewer*>(newViewer.get())->setData(obj, data, numElements);
+}
 
 }

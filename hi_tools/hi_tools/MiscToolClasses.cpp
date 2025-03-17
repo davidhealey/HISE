@@ -3179,8 +3179,10 @@ struct TextEditorWithAutocompleteComponent::Autocomplete: public Component,
 				top = dynamic_cast<Component*>(pp);
 		}
 		
+#if !HISE_NO_GUI_TOOLS
         if(top == nullptr)
 			top = TopLevelWindowWithOptionalOpenGL::findRoot(getParentAsComponent());
+#endif
 
         if(top == nullptr)
             top = getParentAsComponent()->getTopLevelComponent();
