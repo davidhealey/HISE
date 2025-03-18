@@ -2441,52 +2441,7 @@ std::string BufferViewer::btoa(const void* data, size_t numBytes)
     return ret;
 }
 
-struct JSONViewer: public Component
-{
-    static std::string toString(const var& obj)
-    {
-        std::string x;
 
-        if(auto dbg = dynamic_cast<DebugableObjectBase*>(obj.getObject()))
-        {
-            x += dbg->getDebugName().toStdString();
-            x += ": ";
-            x += dbg->getDebugValue().toStdString();
-        }
-    }
-
-    JSONViewer(const var& obj)
-    {
-        auto data = JSON::toString(obj, false);
-        doc.setDisableUndo(true);
-        doc.replaceAllContent(data);
-
-        editor = new CodeEditorComponent(doc, &tokeniser);
-        editor->setReadOnly(true);
-        editor->setColour(CodeEditorComponent::ColourIds::backgroundColourId, Colour(0xFF242424));
-        editor->setColour(CodeEditorComponent::ColourIds::lineNumberBackgroundId, Colour(0xFF333333));
-        editor->setColour(CodeEditorComponent::ColourIds::lineNumberTextId, Colour(0xFF666666));
-
-        addAndMakeVisible(editor);
-
-        sf.addScrollBarToAnimate(editor->getScrollbar(false));
-        sf.addScrollBarToAnimate(editor->getScrollbar(true));
-
-        auto height = jmin(14, doc.getNumLines() + 2) * editor->getLineHeight();
-
-        setSize(600, height);
-    }
-
-    void resized() override
-    {
-        editor->setBounds(getLocalBounds());
-    }
-
-    ScrollbarFader sf;
-    CodeDocument doc;
-    JavascriptTokeniser tokeniser;
-    ScopedPointer<CodeEditorComponent> editor;
-};
 
 
 bool BufferViewer::isArrayOrBuffer(const var& v, bool numbersAreOK)

@@ -569,6 +569,40 @@ private:
 };
 
 
+struct JSONViewer: public Component
+{
+    JSONViewer(const var& obj)
+    {
+        auto data = JSON::toString(obj, false);
+        doc.setDisableUndo(true);
+        doc.replaceAllContent(data);
+
+        editor = new CodeEditorComponent(doc, &tokeniser);
+        editor->setReadOnly(true);
+        editor->setColour(CodeEditorComponent::ColourIds::backgroundColourId, Colour(0xFF242424));
+        editor->setColour(CodeEditorComponent::ColourIds::lineNumberBackgroundId, Colour(0xFF333333));
+        editor->setColour(CodeEditorComponent::ColourIds::lineNumberTextId, Colour(0xFF666666));
+
+        addAndMakeVisible(editor);
+
+        sf.addScrollBarToAnimate(editor->getScrollbar(false));
+        sf.addScrollBarToAnimate(editor->getScrollbar(true));
+
+        auto height = jmin(14, doc.getNumLines() + 2) * editor->getLineHeight();
+
+        setSize(600, height);
+    }
+
+    void resized() override
+    {
+        editor->setBounds(getLocalBounds());
+    }
+
+    ScrollbarFader sf;
+    CodeDocument doc;
+    JavascriptTokeniser tokeniser;
+    ScopedPointer<CodeEditorComponent> editor;
+};
 
 struct BufferViewer : public Component,
 					  public ApiProviderBase::ApiComponentBase,
