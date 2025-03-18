@@ -234,8 +234,8 @@ void DebugSession::ProfileDataSource::ViewComponents::ViewItem::drawTrack(Graphi
 	if(!shouldBeDisplayed(ctx) || !target->shouldBeDisplayed(ctx))
 		return;
 
-	auto b1 = getBounds(ctx.transpose, ctx.showTimeline, ctx.scaleFactor, ctx.currentIndex);
-	auto b2 = target->getBounds(ctx.transpose, ctx.showTimeline, ctx.scaleFactor, ctx.currentIndex);
+	auto b1 = getBounds(ctx.transpose, ctx.showTimeline, ctx.scaleFactor, ctx.depthRange.getStart(), ctx.currentIndex);
+	auto b2 = target->getBounds(ctx.transpose, ctx.showTimeline, ctx.scaleFactor, ctx.depthRange.getStart(), ctx.currentIndex);
 
 	Point<float> start(b1.getRight(), b1.getCentreY());
 	Point<float> end(b2.getX(), b2.getCentreY());
@@ -328,7 +328,7 @@ void DebugSession::ProfileDataSource::ViewComponents::ViewItem::drawTrack(Graphi
 String DebugSession::ProfileDataSource::ViewComponents::ViewItem::getDuration(int currentIndex, bool, TimeDomain domain,
 	double contextValue) const
 {
-	auto w = getBounds(0.0f, false, 1.0f, currentIndex).getWidth();
+	auto w = getBounds(0.0f, false, 1.0f, 0, currentIndex).getWidth();
 	return Helpers::getDuration(w, domain, contextValue);
 }
 
@@ -549,9 +549,12 @@ void DebugSession::ProfileDataSource::ViewComponents::ViewItem::addRun(double fi
 }
 
 Rectangle<float> DebugSession::ProfileDataSource::ViewComponents::ViewItem::getBounds(float transpose, bool showTimeline,
-                                                                                      float scaleFactor, int index) const
+                                                                                      float scaleFactor, int topItemDepth, int index) const
 {
-	auto y = (float)(Viewer::getTimelineOffsetY(showTimeline) + (depth-1) * (ItemHeight + ItemMargin));
+
+	auto thisDepth = depth - 1 - topItemDepth;
+
+	auto y = (float)(Viewer::getTimelineOffsetY(showTimeline) + thisDepth * (ItemHeight + ItemMargin));
 	auto h = (float)ItemHeight-1.0f;
 
 	float x = 0.0f;
@@ -591,16 +594,16 @@ void DebugSession::ProfileDataSource::ViewComponents::ViewItem::getNames(StringA
 }
 
 DebugSession::ProfileDataSource::ViewComponents::ViewItem* DebugSession::ProfileDataSource::ViewComponents::ViewItem::
-isHovered(const MouseEvent& e, float transpose, bool showTimeline, float scaleFactor, int currentIndex)
+isHovered(const MouseEvent& e, float transpose, bool showTimeline, float scaleFactor, int topItemDepth, int currentIndex)
 {
-	auto a = getBounds(transpose, showTimeline, scaleFactor, currentIndex);
+	auto a = getBounds(transpose, showTimeline, scaleFactor, topItemDepth, currentIndex);
 
 	if(a.contains(e.getPosition().toFloat()))
 		return this;
 
 	for(auto i: children)
 	{
-		if(auto m = i->isHovered(e, transpose, showTimeline, scaleFactor, currentIndex))
+		if(auto m = i->isHovered(e, transpose, showTimeline, scaleFactor, topItemDepth, currentIndex))
 			return m;
 	}
 
@@ -666,7 +669,10 @@ bool DebugSession::ProfileDataSource::ViewComponents::ViewItem::shouldBeDisplaye
 {
     if(!cachedVisibility)
         return false;
-    
+
+	if(!ctx.depthRange.isEmpty() && !ctx.depthRange.contains(depth-1))
+		return false;
+
 	auto shouldBeDisplayed = ctx.typeFilter != nullptr && !(*ctx.typeFilter)[(int)sourceType];
     
 	auto p = parent.get();
@@ -698,7 +704,7 @@ void DebugSession::ProfileDataSource::ViewComponents::ViewItem::draw(Graphics& g
 		return;
 	}
 
-	auto normBounds = getBounds(0.0, false, 1.0f, ctx.currentIndex);
+	auto normBounds = getBounds(0.0, false, 1.0f, ctx.depthRange.getStart(), ctx.currentIndex);
 
 	Range<double> normRange = { normBounds.getX(), normBounds.getRight() };
 
@@ -713,7 +719,7 @@ void DebugSession::ProfileDataSource::ViewComponents::ViewItem::draw(Graphics& g
 		return;
 	}
 			
-	auto thisBounds = getBounds(ctx.transpose, ctx.showTimeline, ctx.scaleFactor, ctx.currentIndex);
+	auto thisBounds = getBounds(ctx.transpose, ctx.showTimeline, ctx.scaleFactor, ctx.depthRange.getStart(), ctx.currentIndex);
 
 	thisBounds = thisBounds.getIntersection(ctx.fullBounds);
 
@@ -738,8 +744,8 @@ void DebugSession::ProfileDataSource::ViewComponents::ViewItem::draw(Graphics& g
 
 	for(auto lr: loopRanges.getRanges())
 	{
-		auto first = children[lr.getStart()]->getBounds(ctx.transpose, ctx.showTimeline, ctx.scaleFactor, ctx.currentIndex);
-		auto last = children[lr.getEnd()]->getBounds(ctx.transpose, ctx.showTimeline, ctx.scaleFactor, ctx.currentIndex);
+		auto first = children[lr.getStart()]->getBounds(ctx.transpose, ctx.showTimeline, ctx.scaleFactor, ctx.depthRange.getStart(), ctx.currentIndex);
+		auto last = children[lr.getEnd()]->getBounds(ctx.transpose, ctx.showTimeline, ctx.scaleFactor, ctx.depthRange.getStart(), ctx.currentIndex);
 		auto loopArea = first.getUnion(last);
 
 		Path p;

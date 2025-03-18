@@ -52,7 +52,7 @@ struct DebugSession::ProfileDataSource::ViewComponents::Viewer: public Component
 
 	double getTotalLength() const override
 	{
-		return rootItem->getBounds(0.0f, showTimeline, 1.0f, currentIndex).getWidth();
+		return rootItem->getBounds(0.0f, showTimeline, 1.0f, 0, currentIndex).getWidth();
 	}
 
 	void applyPosition(const Rectangle<int>& screenBoundsOfTooltipClient, Rectangle<int>& t) override;
@@ -104,22 +104,14 @@ struct DebugSession::ProfileDataSource::ViewComponents::Viewer: public Component
 	void zoomToItem(ViewItem::Ptr ptr);
 	void setArrowNavigation(const ViewItem* ptr, Rectangle<float> area);
 
+    void mouseMagnify(const MouseEvent& e, float sf) override;
 
-
-    void mouseMagnify(const MouseEvent& e, float sf) override
-    {
-        hangleMouseMagnify(e, sf);
-    }
-    
 	void mouseMove(const MouseEvent& e) override;
 	void mouseUp(const MouseEvent& e) override;
 	void mouseDoubleClick(const MouseEvent& e) override;
-	void mouseWheelMove(const MouseEvent& event, const MouseWheelDetails& wheel) override
-	{
-		handleMouseWheelEvent(event, wheel);
-	}
+	void mouseWheelMove(const MouseEvent& event, const MouseWheelDetails& wheel) override;
 
-    VoiceBitMap<32> getTypeFilter();
+	VoiceBitMap<32> getTypeFilter();
 	UndoManager* getUndoManager() override;
 
 	void navigateInternal(ViewItem::Ptr newDisplayRoot);
@@ -127,10 +119,7 @@ struct DebugSession::ProfileDataSource::ViewComponents::Viewer: public Component
 	bool keyPressed(const KeyPress& k) override;
 	void paint(Graphics& g) override;
 
-	Rectangle<int> getViewportPosition() const
-	{
-		return { 0, getTimelineOffsetY(showTimeline), getWidth(), maxDepth * (ItemHeight + ItemMargin)};
-	}
+	Rectangle<int> getViewportPosition() const;
 
 	String getTextForDistance(float dragWidth) const
 	{
@@ -138,6 +127,7 @@ struct DebugSession::ProfileDataSource::ViewComponents::Viewer: public Component
 	}
 
 	void resized() override;
+	void updateRowScrollbar();
 
 	StringArray getAutocompleteItems(const Identifier& id) override
 	{
@@ -150,8 +140,11 @@ struct DebugSession::ProfileDataSource::ViewComponents::Viewer: public Component
 
 	void onSearchUpdate(const String& s, bool zoomToFirst) override;
 
+	bool onWASDMovement(WASDKeyListener::MovementType t, double delta) override;
+
 private:
 
+	double rowPositionDouble = 0.0;
     bool activeViewer = true;
 	bool foldAll = false;
 	Rectangle<int> menuBar;
@@ -179,6 +172,8 @@ private:
 	ViewItem::Ptr rootItem;
 	ScopedPointer<Component> timeline;
 	ScopedPointer<Component> breadcrumbs;
+
+	ScrollBar rowScrollBar;
 
 	std::vector<std::pair<ViewItem::Ptr, ViewItem::Ptr>> tracks;
 	

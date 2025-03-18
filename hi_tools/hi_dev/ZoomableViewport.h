@@ -521,26 +521,40 @@ struct AbstractZoomableView: public ScrollBar::Listener,
 			Up = 'w',
 			Down = 's',
 			Left = 'a',
-			Right = 'd'
+			Right = 'd',
+			In = 'e',
+			Out = 'q'
 		};
+
+		enum class MovementType
+		{
+			Vertical,
+			Horizontal,
+			Zoom,
+			numMovementTypes
+		};
+
+		static constexpr int NumMovementTypes = (int)MovementType::numMovementTypes;
 
 		WASDKeyListener(Component& c);
 		~WASDKeyListener();
 
-		static int getDelta(Direction d) { return (d == Direction::Up || d == Direction::Right) ? 1 : -1; }
+		static int getDelta(Direction d) { return (d == Direction::Up || d == Direction::Right || d == Direction::In) ? 1 : -1; }
 		static bool isHorizontal(Direction d) { return d == Direction::Left || d == Direction::Right; }
+		static bool isVertical(Direction d) { return d == Direction::Up || d == Direction::Down; }
+		static bool isZoom(Direction d) { return d == Direction::In || d == Direction::Out; }
+		static MovementType getMovementType(Direction d) { return isHorizontal(d) ? MovementType::Horizontal : (isVertical(d) ? MovementType::Vertical : MovementType::Zoom); }
 
 		bool keyPressed(const KeyPress& key, Component* originatingComponent) override;
-		void setShiftMultiplier(double horizontalFactor, double verticalFactor);
+		void setShiftMultiplier(double horizontalFactor, double verticalFactor, double zoomFactor);
 		void timerCallback() override;
-		void handlePressedKey(Direction d);
 		bool keyStateChanged (bool isKeyDown, Component* originatingComponent) override;
 
-		LinearSmoothedValue<double> delta[2];
-		double shiftMultipliers[2] = { 3.0, 3.0 };
+		LinearSmoothedValue<double> delta[NumMovementTypes];
+		double shiftMultipliers[NumMovementTypes] = { 3.0, 3.0, 3.0 };
 		std::map<Direction, bool> state;
-		AnimatedPositionBehaviours::ContinuousWithMomentum behaviour[2];
-		std::function<void(bool, float)> onDirection;
+		AnimatedPositionBehaviours::ContinuousWithMomentum behaviour[NumMovementTypes];
+		std::function<void(MovementType, double)> onMovement;
 		Component& p;
 	};
 
@@ -597,13 +611,9 @@ struct AbstractZoomableView: public ScrollBar::Listener,
 
 	void onResize(Rectangle<int> viewportPosition);
 	void positionChanged(Animator&, double newPosition) override;
-	void handleMouseWheelEvent(const MouseEvent& e, const MouseWheelDetails& wheel);
 
-    void hangleMouseMagnify(const MouseEvent& e, float scaleFactor)
-    {
-        changeZoom(zoomFactor * (double)scaleFactor, e.getPosition().x);
-    }
-    
+	void handleMouseWheelEvent(const MouseEvent& e, const MouseWheelDetails& wheel);
+    void hangleMouseMagnify(const MouseEvent& e, float scaleFactor);
 	bool handleMouseEvent(const MouseEvent& e, MouseEventType t);
 	void zoomToRange(Range<double> newScaledRange);
 	void moveToRange(double normalisedNewXPosition);
@@ -619,6 +629,8 @@ struct AbstractZoomableView: public ScrollBar::Listener,
 
 protected:
 
+	virtual bool onWASDMovement(WASDKeyListener::MovementType t, double delta);
+
 	virtual UndoManager* getUndoManager() = 0;
 
 	float getZoomScale() const;
@@ -626,6 +638,8 @@ protected:
 	Range<double> getScaledZoomRange() const;
 	Range<double> getNormalisedZoomRange() const;
 	void updateIndexToShow();
+
+	ScrollbarFader& getFader() { return sf; }
 
 private:
 

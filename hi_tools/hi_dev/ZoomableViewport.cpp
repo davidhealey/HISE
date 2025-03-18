@@ -1133,6 +1133,7 @@ AbstractZoomableView::WASDKeyListener::WASDKeyListener(Component& c):
 
 	delta[0].setValueAndRampTime(0.0, 60.0, 0.12);
 	delta[1].setValueAndRampTime(0.0, 60.0, 0.12);
+	delta[2].setValueAndRampTime(0.0, 60.0, 0.12);
 }
 
 AbstractZoomableView::WASDKeyListener::~WASDKeyListener()
@@ -1145,66 +1146,63 @@ bool AbstractZoomableView::WASDKeyListener::keyPressed(const KeyPress& key, Comp
 	return false;
 }
 
-void AbstractZoomableView::WASDKeyListener::setShiftMultiplier(double horizontalFactor, double verticalFactor)
+void AbstractZoomableView::WASDKeyListener::setShiftMultiplier(double horizontalFactor, double verticalFactor, double zoomFactor)
 {
 	shiftMultipliers[0] = horizontalFactor;
 	shiftMultipliers[1] = verticalFactor;
+	shiftMultipliers[2] = zoomFactor;
 }
 
 void AbstractZoomableView::WASDKeyListener::timerCallback()
 {
 	auto mods = ComponentPeer::getCurrentModifiersRealtime();
 
-	double thisDelta[2] = { 0.0, 0.0 };
+	double thisDelta[NumMovementTypes] = { 0.0, 0.0, 0.0 };
 
 	for(auto s: state)
 	{
 		if(s.second)
 		{
-			auto horizontal = isHorizontal(s.first);
+			auto idx = (int)getMovementType(s.first);
 
-			thisDelta[horizontal] = (float)getDelta(s.first);
+			thisDelta[idx] = (float)getDelta(s.first);
 
 			if(mods.isShiftDown())
-				thisDelta[horizontal] *= shiftMultipliers[(int)horizontal];
+				thisDelta[idx] *= shiftMultipliers[idx];
 		}
 	}
 
 	delta[0].setTargetValue(thisDelta[0]);
 	delta[1].setTargetValue(thisDelta[1]);
+	delta[2].setTargetValue(thisDelta[2]);
 
-
-	if(!onDirection)
+	if(!onMovement)
 		return;
 
-	bool movement = std::abs(delta[0].getTargetValue()) > 0.5 || std::abs(delta[1].getTargetValue()) > 0.5;
+	bool movement = std::abs(delta[0].getTargetValue()) > 0.5 || 
+		            std::abs(delta[1].getTargetValue()) > 0.5 ||
+					std::abs(delta[2].getTargetValue()) > 0.5;
 
-	if(auto x = delta[0].getNextValue())
+	if(auto x = delta[(int)MovementType::Horizontal].getNextValue())
 	{
-		onDirection(false, x);
+		onMovement(MovementType::Horizontal, x);
 		movement |= std::abs(x) > 0.0005;
 	}
 				
-	if(auto y = delta[1].getNextValue())
+	if(auto y = delta[(int)MovementType::Vertical].getNextValue())
 	{
-		onDirection(true, y);
+		onMovement(MovementType::Vertical, y);
 		movement |= std::abs(y) > 0.0005;
+	}
+
+	if(auto z = delta[(int)MovementType::Zoom].getNextValue())
+	{
+		onMovement(MovementType::Zoom, z);
+		movement |= std::abs(z) > 0.0005;
 	}
 				
 	if(!movement)
 		stopTimer();
-}
-
-void AbstractZoomableView::WASDKeyListener::handlePressedKey(Direction d)
-{
-	switch(d)
-	{
-	case Direction::Up: DBG("UP"); break;
-	case Direction::Down: DBG("DOWN"); break;
-	case Direction::Left: DBG("LEFT"); break;
-	case Direction::Right: DBG("RIGHT"); break;
-	default: ;
-	}
 }
 
 bool AbstractZoomableView::WASDKeyListener::keyStateChanged(bool isKeyDown, Component* originatingComponent)
@@ -1213,11 +1211,19 @@ bool AbstractZoomableView::WASDKeyListener::keyStateChanged(bool isKeyDown, Comp
 	state[Direction::Up] = KeyPress::isKeyCurrentlyDown((int)Direction::Up);
 	state[Direction::Down] = KeyPress::isKeyCurrentlyDown((int)Direction::Down);
 	state[Direction::Right] = KeyPress::isKeyCurrentlyDown((int)Direction::Right);
+	state[Direction::In] = KeyPress::isKeyCurrentlyDown((int)Direction::In);
+	state[Direction::Out] = KeyPress::isKeyCurrentlyDown((int)Direction::Out);
 
 	if(state[Direction::Left] && state[Direction::Right])
 	{
 		state[Direction::Left] = false;
 		state[Direction::Right] = false;
+	}
+
+	if(state[Direction::In] && state[Direction::Out])
+	{
+		state[Direction::In] = false;
+		state[Direction::Out] = false;
 	}
 
 	if(state[Direction::Up] && state[Direction::Down])
@@ -1314,33 +1320,7 @@ void AbstractZoomableView::setAsParentComponent(Component* p)
 	scrollbar.addListener(this);
 	animator.addListener(this);
 
-	wasd->onDirection = [this](bool isHorizontal, float delta)
-	{
-		if(isHorizontal)
-		{
-			auto p = scrollbar.getCurrentRangeStart();
-
-			auto l = scrollbar.getCurrentRange().getLength();
-			auto d = l * delta;
-			d *= JUCE_LIVE_CONSTANT_OFF(0.02);
-
-			p = jlimit(0.0, 1.0 - l, p + d);
-			scrollbar.setCurrentRangeStart(p, sendNotificationSync);
-		}
-		else
-		{
-			auto dx = 1.0 + delta * JUCE_LIVE_CONSTANT_OFF(0.1);
-
-			auto z = zoomFactor * dx;
-
-			auto pos = asComponent->getWidth() / 2;
-
-			if(asComponent->isMouseOver(true))
-				pos = asComponent->getMouseXYRelative().getX();
-
-			changeZoom(z, pos);
-		}
-	};
+	wasd->onMovement = BIND_MEMBER_FUNCTION_2(AbstractZoomableView::onWASDMovement);
 
 	scrollbar.setRangeLimits({0.0, 1.0});
 	animator.setLimits({0.0, 1.0});
@@ -1501,6 +1481,11 @@ void AbstractZoomableView::handleMouseWheelEvent(const MouseEvent& e, const Mous
 	}
 }
 
+void AbstractZoomableView::hangleMouseMagnify(const MouseEvent& e, float scaleFactor)
+{
+	changeZoom(zoomFactor * (double)scaleFactor, e.getPosition().x);
+}
+
 bool AbstractZoomableView::handleMouseEvent(const MouseEvent& e, MouseEventType t)
 {
 	updateMouseCursorForEvent(e);
@@ -1634,6 +1619,38 @@ void AbstractZoomableView::updateMouseCursorForEvent(const MouseEvent& e)
 		asComponent->setMouseCursor(MouseCursor::CrosshairCursor);
 	else
 		asComponent->setMouseCursor(getTooltip().isNotEmpty() ? MouseCursor::PointingHandCursor : MouseCursor::NormalCursor);
+}
+
+bool AbstractZoomableView::onWASDMovement(WASDKeyListener::MovementType t, double delta)
+{
+	if(t == WASDKeyListener::MovementType::Horizontal)
+	{
+		auto p = scrollbar.getCurrentRangeStart();
+
+		auto l = scrollbar.getCurrentRange().getLength();
+		auto d = l * delta;
+		d *= JUCE_LIVE_CONSTANT_OFF(0.02);
+
+		p = jlimit(0.0, 1.0 - l, p + d);
+		scrollbar.setCurrentRangeStart(p, sendNotificationSync);
+		return true;
+	}
+	else if (t == WASDKeyListener::MovementType::Zoom)
+	{
+		auto dx = 1.0 + delta * JUCE_LIVE_CONSTANT_OFF(0.1);
+
+		auto z = zoomFactor * dx;
+
+		auto pos = asComponent->getWidth() / 2;
+
+		if(asComponent->isMouseOver(true))
+			pos = asComponent->getMouseXYRelative().getX();
+
+		changeZoom(z, pos);
+		return true;
+	}
+
+	return false;
 }
 
 float AbstractZoomableView::getZoomScale() const

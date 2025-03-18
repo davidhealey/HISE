@@ -332,7 +332,7 @@ DebugSession::ProfileDataSource::ViewComponents::StatisticsComponent::Statistics
 	addAndMakeVisible(table);
 
 	table.setClickingTogglesRowSelection(true);
-	table.setMouseMoveSelectsRows(true);
+	
 
 	//table.setMultipleSelectionEnabled(true);
 	table.setModel(this);
@@ -356,18 +356,7 @@ DebugSession::ProfileDataSource::ViewComponents::StatisticsComponent::Statistics
 
 void DebugSession::ProfileDataSource::ViewComponents::StatisticsComponent::selectedRowsChanged(int lastSelected)
 {
-	currentSelection = lastSelected;
-
-	if(auto m = getManager())
-	{
-		String s;
-
-		if(auto r = sorted[currentSelection])
-			s = r->name;
-
-		ScopedValueSetter<bool> svs(ignoreSearch, true);
-		m->setSearchTerm(s, false);
-	}
+	
 }
 
 void DebugSession::ProfileDataSource::ViewComponents::StatisticsComponent::cellClicked(int rowNumber,
@@ -390,15 +379,28 @@ void DebugSession::ProfileDataSource::ViewComponents::StatisticsComponent::cellC
 					return;
 				}
 			}
+			else if(e.mods.isCommandDown() && m->currentViewer != nullptr)
+			{
+				getManager()->navigate(this, r->firstItem, true);
+			}
 			else
 			{
-				m->zoomToFirstMatch(r->firstItem);
+				if(rowNumber == currentSelection)
+				{
+					table.deselectRow(rowNumber);
+					currentSelection = -1;
+					ScopedValueSetter<bool> svs(ignoreSearch, true);
+					m->setSearchTerm({}, false);
+				}
+				else
+				{
+					currentSelection = rowNumber;
+					String s = r->name;
+					ScopedValueSetter<bool> svs(ignoreSearch, true);
+					m->setSearchTerm(s, false);
+				}
 			}
 		}
-
-		
-
-		
 	}
 }
 
@@ -410,9 +412,8 @@ void DebugSession::ProfileDataSource::ViewComponents::StatisticsComponent::cellD
 
 	if(auto r = sorted[rowNumber])
 	{
-		getManager()->navigate(this, r->firstItem, true);
-
-		//parent->navigate(r->firstItem, true);
+		if(auto m = getManager())
+			m->zoomToFirstMatch(r->firstItem);
 	}
 }
 
