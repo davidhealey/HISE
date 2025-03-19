@@ -543,6 +543,12 @@ struct AbstractZoomableView: public ScrollBar::Listener,
 		static bool isHorizontal(Direction d) { return d == Direction::Left || d == Direction::Right; }
 		static bool isVertical(Direction d) { return d == Direction::Up || d == Direction::Down; }
 		static bool isZoom(Direction d) { return d == Direction::In || d == Direction::Out; }
+
+		static bool isDirection(int kc)
+		{
+			return kc == (int)Direction::In || kc == (int)Direction::Out || kc == (int)Direction::Left ||
+                   kc == (int)Direction::Right || kc == (int)Direction::Up || kc == (int)Direction::Down;   
+		}
 		static MovementType getMovementType(Direction d) { return isHorizontal(d) ? MovementType::Horizontal : (isVertical(d) ? MovementType::Vertical : MovementType::Zoom); }
 
 		bool keyPressed(const KeyPress& key, Component* originatingComponent) override;

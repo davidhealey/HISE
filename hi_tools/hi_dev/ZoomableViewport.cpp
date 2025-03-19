@@ -1143,7 +1143,7 @@ AbstractZoomableView::WASDKeyListener::~WASDKeyListener()
 
 bool AbstractZoomableView::WASDKeyListener::keyPressed(const KeyPress& key, Component* originatingComponent)
 {
-	return false;
+	return isDirection(key.getKeyCode());
 }
 
 void AbstractZoomableView::WASDKeyListener::setShiftMultiplier(double horizontalFactor, double verticalFactor, double zoomFactor)
@@ -1239,8 +1239,8 @@ bool AbstractZoomableView::WASDKeyListener::keyStateChanged(bool isKeyDown, Comp
 
 	if(somePressed && !isTimerRunning())
 		startTimer(15);
-			
-	return false;
+
+	return somePressed;
 }
 
 AbstractZoomableView::DragZoomAction::DragZoomAction(AbstractZoomableView& parent_, Range<double> newRange_,

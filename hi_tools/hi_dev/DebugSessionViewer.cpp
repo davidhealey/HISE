@@ -292,7 +292,7 @@ DebugSession::ProfileDataSource::ViewComponents::Viewer::Viewer(ProfileInfoBase*
 	rowScrollBar.setSingleStepSize(1.0);
 	rowScrollBar.addListener(this);
 	setRootItems(r, r);
-	setSize(DefaultWidth, getTimelineOffsetY(showTimeline) + maxDepth * (ItemHeight + ItemMargin) + ScrollbarHeight + MenuBarHeight);
+	setSize(DefaultWidth, getTimelineOffsetY(showTimeline) + jmin(12, maxDepth) * (ItemHeight + ItemMargin) + ScrollbarHeight + MenuBarHeight);
 }
 
 
