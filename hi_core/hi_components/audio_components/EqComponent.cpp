@@ -532,7 +532,7 @@ void FilterDragOverlay::paintOverChildren(Graphics& g)
 			d.q = b->getQ();
 			d.type = b->getModes()[b->getType()];
 
-			lafToUse->drawFilterDragHandle(g, *this, c->getIndex(), c->getBoundsInParent().toFloat(), d);
+			lafToUse->drawFilterDragHandle(g, filterGraph, *this, c->getIndex(), c->getBoundsInParent().toFloat(), d);
 		}
 	};
 
@@ -1339,7 +1339,7 @@ juce::Path FilterDragOverlay::Factory::createPath(const String& url) const
 
 
 
-void FilterDragOverlay::LookAndFeelMethods::drawFilterDragHandle(Graphics& g, FilterDragOverlay& o, int index, Rectangle<float> handleBounds, const DragData& d)
+void FilterDragOverlay::LookAndFeelMethods::drawFilterDragHandle(Graphics& g, FilterGraph& fg, FilterDragOverlay& o, int index, Rectangle<float> handleBounds, const DragData& d)
 {
 	handleBounds.reduce(6.0f, 6.0f);
 	auto tc = o.findColour(ColourIds::textColour);

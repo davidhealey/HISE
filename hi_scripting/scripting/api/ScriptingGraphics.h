@@ -743,7 +743,7 @@ namespace ScriptingObjects
 
             void getIdealPopupMenuItemSize(const String &text, bool isSeparator, int standardMenuItemHeight, int &idealWidth, int &idealHeight) override;
             
-			void drawFilterDragHandle(Graphics& g, FilterDragOverlay& o, int index, Rectangle<float> handleBounds, const FilterDragOverlay::DragData& d) override;
+			void drawFilterDragHandle(Graphics& g, FilterGraph& fg, FilterDragOverlay& o, int index, Rectangle<float> handleBounds, const FilterDragOverlay::DragData& d) override;
 
 			void drawFilterBackground(Graphics &g, FilterGraph& fg) override;
 			void drawFilterPath(Graphics& g, FilterGraph& fg, const Path& p) override;
