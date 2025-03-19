@@ -411,7 +411,7 @@ NodeComponent::NodeComponent(NodeBase* b) :
 
 	node->getRootNetwork()->getExceptionHandler().errorBroadcaster.addListener(*this, [](NodeComponent& n, NodeBase* node, Error e)
 	{
-		auto shouldBeVisible = node != nullptr && n.node == node && !e.isOk() && node->getRootNetwork()->getExceptionHandler().canBeAutofixed(node, e);
+		auto shouldBeVisible = node != nullptr && n.node.get() == node && !e.isOk() && node->getRootNetwork()->getExceptionHandler().canBeAutofixed(node, e);
 
 		if(n.header.autofixButton.isVisible() != shouldBeVisible)
 		{
