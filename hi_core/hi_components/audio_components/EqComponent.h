@@ -150,7 +150,11 @@ public:
 
 	void setResetOnDoubleClick(bool shouldReset) { resetOnDoubleClick = shouldReset; }
 
-	void setHandleSize(int newSize)	{	handleSize = newSize;	}
+	void setHandleSize(int newSize)
+	{
+		handleSize = newSize;
+		offset = newSize / 2;
+	}
 
 	void setAllowContextMenu(bool shouldAllow)
 	{
