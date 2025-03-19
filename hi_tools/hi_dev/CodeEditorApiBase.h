@@ -568,7 +568,7 @@ private:
 	WeakReference<DebugableObjectBase> obj;
 };
 
-
+#if !HISE_NO_GUI_TOOLS
 struct JSONViewer: public Component
 {
     JSONViewer(const var& obj)
@@ -603,6 +603,7 @@ struct JSONViewer: public Component
     JavascriptTokeniser tokeniser;
     ScopedPointer<CodeEditorComponent> editor;
 };
+#endif
 
 struct BufferViewer : public Component,
 					  public ApiProviderBase::ApiComponentBase,
