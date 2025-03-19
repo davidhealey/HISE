@@ -3746,8 +3746,8 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawFilterPath(Graphics& g_, Fi
 		obj->setProperty("pathArea", ApiHelpers::getVarRectangle(p.getBounds()));
 
 		setColourOrBlack(obj, "bgColour", fg, FilterGraph::ColourIds::bgColour);
-		setColourOrBlack(obj, "itemColour1", fg, FilterGraph::ColourIds::lineColour);
-		setColourOrBlack(obj, "itemColour2", fg, FilterGraph::ColourIds::fillColour);
+		setColourOrBlack(obj, "itemColour1", fg, FilterGraph::ColourIds::fillColour);
+		setColourOrBlack(obj, "itemColour2", fg, FilterGraph::ColourIds::lineColour);
 		setColourOrBlack(obj, "itemColour3", fg, FilterGraph::ColourIds::gridColour);
 		setColourOrBlack(obj, "textColour", fg, FilterGraph::ColourIds::textColour);
 
