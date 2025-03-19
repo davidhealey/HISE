@@ -413,6 +413,14 @@ private:
 	juce::KeyPressMappingSet keyMap;
 };
 
+struct TooltipClientWithCustomPosition: public TooltipClient
+{
+	virtual ~TooltipClientWithCustomPosition() {};
+
+	/** Override this method and apply the custom (global position). */
+	virtual void applyPosition(const Rectangle<int>& screenBoundsOfTooltipClient, Rectangle<int>& tooltipRectangleAtOrigin) = 0;
+};
+
 /** A small helper interface class that allows you to find the topmost component
 	that might have a OpenGL context attached.
 
@@ -2292,6 +2300,10 @@ struct Spectrum2D
 		int gainFactorDb = 1000;
 		int gammaPercent = 60;
 
+		bool standardize = false;
+
+		int freqGamma = 100;
+
 		float getGamma() const
 		{
 			return (float)gammaPercent / 100.0f;
@@ -2491,5 +2503,94 @@ private:
 	BroadcasterType broadcaster;
 	std::array<std::array<std::pair<uint16, double>, NumDataSlots>, NumEventSlots> data;
 };
+
+/** A interface class for a component that has a text editor that should show a autocomplete popup. */
+struct TextEditorWithAutocompleteComponent: public Timer,
+											public TextEditor::Listener
+{
+	static constexpr int ItemHeight = 28;
+
+    /** This is the main top level component (or any other component) that will show the autocomplete. */
+    struct Parent
+    {
+	    virtual ~Parent() {};
+
+        /** Overwrite this and return a dynamic list of autocomplete items. */
+        virtual StringArray getAutocompleteItems(const Identifier& id) = 0;
+
+		/** Overwrite this and return false if you want to add the autocomplete to the top level window. */
+		virtual bool isTopLevel() const { return true; }
+    };
+
+    TextEditorWithAutocompleteComponent():
+      navigator(*this)
+    {};
+
+    /** Call this from your subclass. */
+    void initEditor()
+    {
+	    getTextEditor()->addListener(this);
+		getTextEditor()->addKeyListener(&navigator);
+    }
+    
+    virtual ~TextEditorWithAutocompleteComponent() {};
+
+    /** Overwrite this and return the text editor that should be used by the autocomplete popup. */
+	virtual TextEditor* getTextEditor() = 0;
+
+    void timerCallback() override
+    {
+		if(Component::getCurrentlyFocusedComponent() == getTextEditor())
+			showAutocomplete(getTextEditor()->getText());
+        
+		stopTimer();
+    }
+
+    struct AutocompleteNavigator: public KeyListener
+    {
+        AutocompleteNavigator(TextEditorWithAutocompleteComponent& parent_):
+          parent(parent_)
+        {}
+	    bool keyPressed (const KeyPress& key,
+                             Component* originatingComponent) override;
+
+        TextEditorWithAutocompleteComponent& parent;
+    } navigator;
+
+	struct LookAndFeelMethods
+    {
+        virtual ~LookAndFeelMethods() {};
+        
+	    virtual void drawAutocompleteBackground(Graphics& g, TextEditor& te, Rectangle<float> b, const StringArray& itemToShow, int selectedIndex);
+    };
+
+    void textEditorTextChanged(TextEditor&) override
+    {
+	    startTimer(400);
+    }
+
+    void textEditorReturnKeyPressed(TextEditor& e) override;
+
+    void textEditorEscapeKeyPressed(TextEditor& e) override;
+
+    void showAutocomplete(const String& currentText);
+    void dismissAutocomplete();
+
+    virtual Identifier getIdForAutocomplete() const = 0;
+
+    struct Autocomplete;
+
+    Autocomplete* getCurrentAutocomplete();
+
+    ScopedPointer<Component> currentAutocomplete;
+    StringArray autocompleteItems;
+
+    bool useDynamicAutocomplete = false;
+	int itemsToShow = 4;
+
+    JUCE_DECLARE_WEAK_REFERENCEABLE(TextEditorWithAutocompleteComponent);
+};
+
+
 
 }

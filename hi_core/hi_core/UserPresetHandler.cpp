@@ -424,8 +424,13 @@ float MainController::UserPresetHandler::CustomAutomationData::ProcessorConnecti
 
 
 MainController::UserPresetHandler::UserPresetHandler(MainController* mc_) :
-	mc(mc_)
+	mc(mc_),
+	userPresetSource(new DebugSession::ProfileDataSource()) 
 {
+	PROFILE_ONLY(userPresetSource->name = "Load user preset");
+	PROFILE_ONLY(userPresetSource->colour = Colour(0xFF555555));
+	PROFILE_ONLY(userPresetSource->sourceType = DebugSession::ProfileDataSource::SourceType::BackgroundTask);
+
 	timeOfLastPresetLoad = Time::getMillisecondCounter();
 }
 
@@ -538,6 +543,7 @@ void MainController::UserPresetHandler::saveUserPresetInternal(const String& nam
 
 void MainController::UserPresetHandler::loadUserPresetInternal()
 {
+	DebugSession::ProfileDataSource::ScopedProfiler sp(userPresetSource, &mc->getDebugSession());
 	ScopedValueSetter<void*> svs(currentThreadThatIsLoadingPreset, LockHelpers::getCurrentThreadHandleOrMessageManager());
 
 	{

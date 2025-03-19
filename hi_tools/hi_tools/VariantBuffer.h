@@ -119,7 +119,13 @@ public:
 	VariantBuffer& operator <<(const VariantBuffer &b);
 	VariantBuffer& operator << (float f);
 	void operator >>(VariantBuffer &destinationBuffer) const;
-	
+
+	DynamicObject::Ptr clone() override
+	{
+		auto nb = new VariantBuffer(size);
+		FloatVectorOperations::copy(nb->buffer.getWritePointer(0), buffer.getReadPointer(0), size);
+		return nb;
+	}
 	
 	const float &operator [](int sampleIndex) const;
 

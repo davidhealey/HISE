@@ -49,7 +49,7 @@ struct ValueTreeApiHelpers
 
 class DebugInformationBase;
 
-class DebugableObjectBase
+class DebugableObjectBase: public ObjectWithJSONConverter
 {
 public:
 
@@ -88,6 +88,8 @@ public:
 	virtual String getDebugName() const { return getInstanceName().toString(); };
 
 	virtual String getDebugDataType() const { return getDebugName(); }
+
+	void writeAsJSON (OutputStream&, int indentLevel, bool allOnOneLine, int maximumDecimalPlaces) override;
 
 	virtual AttributedString getDescription() const
 	{
@@ -169,11 +171,7 @@ public:
 	virtual String getDebugValue() const override;
 
 	virtual void getAllFunctionNames(Array<Identifier>& functions) const;;
-
 	virtual void getAllConstants(Array<Identifier>& ids) const;;
-
-	
-
 	virtual const var getConstantValue(int index) const;;
 
 	Identifier className;
@@ -205,9 +203,11 @@ public:
 	virtual bool isWatchable() const;
 	virtual bool isAutocompleteable() const;
 	virtual String getCodeToInsert() const;;
+	virtual String getIconPath() const { return ""; }
 	virtual AttributedString getDescription() const;
 	virtual DebugableObjectBase* getObject();
 	virtual const DebugableObjectBase* getObject() const;
+	virtual var getVariantCopy() const { return {}; }
 
 	virtual ~DebugInformationBase();;
 
@@ -215,7 +215,12 @@ public:
 
 	static String getVarType(const var &v);
 
+	/** Calls the given lambda for this element and each child element. */
+	bool callRecursive(const std::function<bool(DebugInformationBase& )>& f);
+
 	StringArray createTextArray() const;
+
+	JUCE_DECLARE_WEAK_REFERENCEABLE(DebugInformationBase)
 };
 
 
@@ -252,31 +257,17 @@ public:
 	AttributedString getDescription() const { return description; }
 };
 
-
-
 class ObjectDebugInformation : public DebugInformationBase
 {
 public:
 
-	ObjectDebugInformation(DebugableObjectBase* b, int type_=-1) :
-		obj(b),
-		type(type_)
-	{
-
-	}
+	ObjectDebugInformation(DebugableObjectBase* b, int type_=-1);
 
 	int getType() const override { return type >= 0 ? type : obj->getTypeNumber(); }
 
 	int type;
 
-	virtual String getCodeToInsert() const override 
-	{ 
-		if(obj != nullptr)
-			return obj->getInstanceName().toString(); 
-
-		return {};
-
-	};
+	virtual String getCodeToInsert() const override;;
 	DebugableObjectBase* getObject() override { return obj.get(); }
 	const DebugableObjectBase* getObject() const override { return obj.get(); }
 
@@ -365,6 +356,7 @@ private:
 };
 
 class JavascriptCodeEditor;
+class DebugSession;
 
 class ApiProviderBase
 {
@@ -382,6 +374,8 @@ public:
 
 		/** Override this method and return a provider if it exists. */
 		virtual ApiProviderBase* getProviderBase() = 0;
+
+		virtual DebugSession* getDebugSession() { return nullptr; }
 
 		void addEditor(Component* editor);
 
@@ -415,6 +409,24 @@ public:
 		juce::ReadWriteLock& getDebugLock();
 
 		bool shouldReleaseDebugLock() const;
+
+		struct HeatmapManager
+		{
+			HeatmapManager() = default;
+
+			void setHeatMap(DebugInformationBase::Ptr root, const std::map<int, double>& newHeatmap)
+			{
+				currentRoot = root;
+				currentHeatMap = newHeatmap;
+				heatmapBroadcaster.sendMessage(sendNotificationAsync, currentRoot, &currentHeatMap);
+			}
+
+			DebugInformationBase::Ptr currentRoot;
+			std::map<int, double> currentHeatMap;
+			LambdaBroadcaster<DebugInformationBase::Ptr, const std::map<int, double>*> heatmapBroadcaster;
+		};
+
+		HeatmapManager heatmapManager;
 
 	protected:
 
@@ -555,6 +567,76 @@ private:
 	WeakReference<ApiProviderBase::Holder> holder;
 	WeakReference<DebugableObjectBase> obj;
 };
+
+
+struct JSONViewer: public Component
+{
+    JSONViewer(const var& obj)
+    {
+        auto data = JSON::toString(obj, false);
+        doc.setDisableUndo(true);
+        doc.replaceAllContent(data);
+
+        editor = new CodeEditorComponent(doc, &tokeniser);
+        editor->setReadOnly(true);
+        editor->setColour(CodeEditorComponent::ColourIds::backgroundColourId, Colour(0xFF242424));
+        editor->setColour(CodeEditorComponent::ColourIds::lineNumberBackgroundId, Colour(0xFF333333));
+        editor->setColour(CodeEditorComponent::ColourIds::lineNumberTextId, Colour(0xFF666666));
+
+        addAndMakeVisible(editor);
+
+        sf.addScrollBarToAnimate(editor->getScrollbar(false));
+        sf.addScrollBarToAnimate(editor->getScrollbar(true));
+
+        auto height = jmin(14, doc.getNumLines() + 2) * editor->getLineHeight();
+
+        setSize(600, height);
+    }
+
+    void resized() override
+    {
+        editor->setBounds(getLocalBounds());
+    }
+
+    ScrollbarFader sf;
+    CodeDocument doc;
+    JavascriptTokeniser tokeniser;
+    ScopedPointer<CodeEditorComponent> editor;
+};
+
+struct BufferViewer : public Component,
+					  public ApiProviderBase::ApiComponentBase,
+					  public Timer
+{
+	BufferViewer(DebugInformationBase* info, ApiProviderBase::Holder* holder_);
+
+    void providerCleared() override;
+	void providerWasRebuilt() override;;
+	
+	static bool isArrayOrBuffer(const var& v, bool numbersAreOK=false);
+
+	void timerCallback() override;
+	void resized() override;
+
+	void setData(const var& obj, const float* data, size_t numElements);
+
+private:
+
+	static void removeSizeOneArrays(var& dataToReduce);
+
+	void setFromDebugInformation(DebugInformationBase* info);
+	static std::string btoa(const void* data, size_t numBytes);
+
+	bool dirty = true;
+	String codeToInsert;
+	StringArray labels;
+
+	var dataToShow;
+    ResizableCornerComponent resizer;
+	ScopedPointer<Component> newViewer;
+};
+
+
 
 } // namespace hise
 

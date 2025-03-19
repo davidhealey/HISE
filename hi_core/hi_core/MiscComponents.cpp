@@ -790,13 +790,15 @@ void DrawActions::Handler::endLayer()
 
 void DrawActions::Handler::addDrawAction(ActionBase* newDrawAction)
 {
+	PROFILE_ONLY(newDrawAction->setEnableProfiling(isProfiling()));
+
 	if (layerStack.getLast() != nullptr)
 		layerStack.getLast()->addDrawAction(newDrawAction);
 	else
 		currentActions.add(newDrawAction);
 }
 
-void DrawActions::Handler::flush(uint64_t perfettoTrackId)
+void DrawActions::Handler::flush(uint64_t perfettoTrackId, uint32 profileTrackId)
 {
 	{
 		SpinLock::ScopedLockType sl(lock);
@@ -808,6 +810,9 @@ void DrawActions::Handler::flush(uint64_t perfettoTrackId)
 
 	if(perfettoTrackId != 0)
 		flowManager.continueFlow(perfettoTrackId, "flush draw handler");
+
+	if(profileTrackId != 0)
+		currentProfileId = profileTrackId;
 
 	triggerAsyncUpdate();
 }
@@ -843,6 +848,9 @@ DrawActions::NoiseMapManager* DrawActions::Handler::getNoiseMapManager()
 void DrawActions::Handler::handleAsyncUpdate()
 {
 	auto x = flowManager.flushAllButLastOne("flush draw handler", {});
+
+	if(currentProfileId != 0)
+		x = currentProfileId;
 
 	for (auto l : listeners)
 	{
@@ -943,8 +951,8 @@ void BorderPanel::openGLContextClosing()
 
 void BorderPanel::newPaintActionsAvailable(uint64_t flowId)
 {
+	repaintWithProfileTrack((uint32)flowId);
 	flowManager.continueFlow(flowId, "repaint request");
-	repaint();
 }
 
 void BorderPanel::registerToTopLevelComponent()
@@ -1469,6 +1477,8 @@ void DrawActions::Handler::Iterator::render(Graphics& g, Component* c)
 			TRACE_EVENT("drawactions", DYNAMIC_STRING_BUILDER(b));
 #endif
 
+			DebugSession::ProfileDataSource::ScopedProfiler sp(action->profileData, handler->profileHolder);
+
 			if (action->wantsCachedImage())
 			{
 				Image actionImage;
@@ -1507,6 +1517,8 @@ void DrawActions::Handler::Iterator::render(Graphics& g, Component* c)
 			b << "g." << action->getDispatchId() << "()";
 			TRACE_EVENT("drawactions", DYNAMIC_STRING_BUILDER(b));
 #endif
+
+			DebugSession::ProfileDataSource::ScopedProfiler sp(action->profileData, handler->profileHolder);
 
 			action->perform(g);
 		}

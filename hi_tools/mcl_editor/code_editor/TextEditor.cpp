@@ -205,6 +205,7 @@ void TextEditor::setGotoFunction(const GotoFunction& f)
 
 void TextEditor::clearWarningsAndErrors()
 {
+	autofixButton = nullptr;
 	currentError = nullptr;
 	warnings.clear();
 	repaint();
@@ -222,6 +223,8 @@ void TextEditor::setError(const String& errorMessage)
 		currentError = nullptr;
 	else
 		currentError = new Error(document, errorMessage, false);
+
+	//addAndMakeVisible(autofixButton = new AutofixComponent(*this, *currentError));
 
 	repaint();
 }
@@ -445,6 +448,7 @@ void TextEditor::updateLineRanges()
 {
 	auto ranges = languageManager->createLineRange(document.getCodeDocument());
 	document.getFoldableLineRangeHolder().setRanges(ranges);
+	rebuildInplaceDebugValues();
 }
 
 void TextEditor::updateAfterTextChange(Range<int> rangeToInvalidate)
@@ -565,6 +569,100 @@ LanguageManager* TextEditor::getLanguageManager()
 
 ScrollBar& TextEditor::getVerticalScrollBar()
 { return scrollBar; }
+
+TextEditor::InplaceDebugValueComponent::InplaceDebugValueComponent(TextEditor& parent_,
+	const LanguageManager::InplaceDebugValue::Ptr ipv):
+	value(ipv),
+	parent(parent_)
+{
+	setRepaintsOnMouseActivity(true);
+
+	if(ipv->info != nullptr)
+	{
+		setMouseCursor(MouseCursor::PointingHandCursor);
+		p = createPath(ipv->info->getIconPath());
+	}
+		
+
+	updatePosition();
+}
+
+void TextEditor::InplaceDebugValueComponent::updatePosition()
+{
+	auto& document = parent.document;
+
+	auto line = value->location.getLineNumber();
+	auto col = value->location.getIndexInLine();
+
+	auto b = document.getBoundsOnRow(line, {col, col+1}, GlyphArrangementArray::ReturnBeyondLastCharacter).getRectangle(0);
+            
+	b = b.translated(document.getCharacterRectangle().getWidth() * 1.0f, 0.0f);
+
+	vf = document.getFont().withHeight(document.getFontHeight() * parent.viewScaleFactor * 0.7f);
+	
+	auto w = vf.getStringWidthFloat(value->value) + 20.0f;
+
+	if(!p.isEmpty())
+		w += b.getHeight();
+
+	auto area = b.transformed(parent.transform);
+
+	area = area.withWidth(w);
+
+	setBounds(area.toNearestInt());
+
+	if(!p.isEmpty())
+	{
+		auto x = getLocalBounds().removeFromRight(getHeight()).reduced(3).toFloat();
+		scalePath(p, x);
+	}
+}
+
+void TextEditor::InplaceDebugValueComponent::paint(Graphics& g)
+{
+	g.setFont(vf);
+
+	float alpha = 0.05f;
+
+	if(value->info != nullptr && isMouseOver(true))
+		alpha += 0.05f;
+
+	g.setColour(Colours::white.withAlpha(alpha));
+            
+	auto area = getLocalBounds().toFloat();
+	auto r = area;
+	r = r.removeFromLeft(vf.getStringWidthFloat(value->value) + 20.0f);
+            
+	g.fillRoundedRectangle(r, r.getHeight() / 2.0f);
+            
+	g.setColour(Colour(SIGNAL_COLOUR).withAlpha(0.5f));
+	g.drawText(value->value, area.reduced(10.0f, 0.0f), Justification::left);
+
+	if(!p.isEmpty())
+	{
+		g.setColour(Colours::white.withAlpha(alpha * 6.0f));
+		g.fillPath(p);
+	}
+		
+}
+
+void TextEditor::rebuildInplaceDebugValues()
+{
+	heatmap.clear();
+	inplaceDebugValueComponents.clear();
+	LanguageManager::InplaceDebugValue::List inplaceDebugValues;
+
+	if(languageManager != nullptr && languageManager->getInplaceDebugValues(inplaceDebugValues))
+	{
+		for(auto ip: inplaceDebugValues)
+		{
+			inplaceDebugValueComponents.add(new InplaceDebugValueComponent(*this, ip));
+			addAndMakeVisible(inplaceDebugValueComponents.getLast());
+		}
+	}
+
+	repaint();
+}
 
 TextEditor::AutocompleteTimer::AutocompleteTimer(TextEditor& p):
 	parent(p)
@@ -1456,6 +1554,99 @@ void mcl::TextEditor::scaleView (float scaleFactorMultiplier, float verticalCent
 	
 }
 
+void TextEditor::AutofixComponent::launchHTTPRequest()
+{
+#if 0
+	auto tokens = editor.tokenCollection->getTokens();
+
+	StringArray existingTokens;
+
+	for(auto t: tokens)
+	{
+		existingTokens.addIfNotAlreadyThere(t->tokenContent);
+#if 0
+		auto tt = StringArray::fromTokens(t->tokenContent, ".", "");
+
+		for(auto& t_: tt)
+			existingTokens.addIfNotAlreadyThere(t_.upToFirstOccurrenceOf("(", false, false));
+#endif
+	}
+
+	auto et = existingTokens.joinIntoString(";");
+
+	et = "";
+
+	String json(R"({
+    "model": "qwen2.5-coder-32b-instruct",
+     "messages": [
+      { "role": "system", "content": "You are a coding assistant that helps developers writing scripts for HISE. The prompt of the user will be: 
+                                      1. $Tokens: a list of available variable names and functions, separated by a semicolon
+									  2. $Code: the line of code that contains a compilation error
+									  3. $Error: the HISE console output error message. 
+									  Your task is to return the corrected line of code without any formatting or explanation. If you detect a spelling error, try to use the provided list of available variable names and functions." },
+      { "role": "user", "content": "$Tokens:
+    %TOKENS%
+    $Code:
+    %CODE%
+	$Error: 
+    %ERROR%" }
+    ],
+    "temperature": 0.1,
+    "max_tokens": -1,
+    "stream": false
+  })");
+
+	json = json.replace("%TOKENS%", et.replace("\"", "\\\""));
+	json = json.replace("%CODE%", errorLine.replace("\"", "\\\""));
+	json = json.replace("%ERROR%", errorMessage.replace("\"", "\\\""));
+
+	WeakReference<mcl::TextEditor> safeParent(&editor);
+
+	auto v = JSON::parse(json);
+	json = JSON::toString(v, true);
+
+	auto sel = editor.currentError->getSelection().horizontallyMaximized(editor.getTextDocument());
+
+	editor.getTextDocument().navigate(sel.head, TextDocument::Target::firstnonwhitespaceAfterLineBreak, TextDocument::Direction::forwardCol);
+
+	errorLine = editor.getTextDocument().getSelectionContent(sel);
+
+	button.setButtonText("Fixing...");
+
+	
+
+	Thread::launch([json, safeParent, sel]()
+	{
+		URL u("http://localhost:1234/api/v0/chat/completions/");
+
+		auto header = "Content-Type: application/json";
+		u = u.withPOSTData(json);
+
+		int status;
+
+		auto stream = u.createInputStream(true, nullptr, nullptr, header, 0, nullptr, &status);
+		auto response = stream->readEntireStreamAsString();
+
+		auto x = JSON::parse(response);
+		auto correction = x["choices"][0]["message"]["content"].toString();
+
+		correction = correction.replace("```javascript", "");
+		correction = correction.replace("```", "");
+		correction = correction.trim();
+		
+		if(safeParent != nullptr)
+		{
+			SafeAsyncCall::call<TextEditor>(*safeParent, [correction, sel](TextEditor& t)
+			{
+				t.getTextDocument().setSelection(0, sel, false);
+				t.insert(correction);
+				t.clearWarningsAndErrors();
+			});
+		}
+	});
+#endif
+}
+
 void mcl::TextEditor::updateViewTransform()
 {
 	auto thisGutterWidth = gutter.getGutterWidth();
@@ -1503,7 +1694,10 @@ void mcl::TextEditor::updateViewTransform()
             fe->foldMap.addLineNumbersForParentItems(currentTitles, rows.getStart()+1);
         }        
     }
-    
+
+	for(auto ipv: inplaceDebugValueComponents)
+		ipv->updatePosition();
+
     repaint();
 }
 
@@ -1584,6 +1778,9 @@ void mcl::TextEditor::resized()
     {
         currentSearchBox->setBounds(getLocalBounds().removeFromBottom(document.getRowHeight() * transform.getScaleFactor() * 1.2f + 5));
     }
+
+	for(auto p: inplaceDebugValueComponents)
+		p->updatePosition();
 }
 
 void mcl::TextEditor::paint (Graphics& g)
@@ -1656,36 +1853,27 @@ void mcl::TextEditor::paint (Graphics& g)
 		g.fillRect(b);
 	}
     
-    Array<LanguageManager::InplaceDebugValue> inplaceDebugValues;
-    
-    if(languageManager != nullptr && languageManager->getInplaceDebugValues(inplaceDebugValues))
-    {
-        for(const auto& ip: inplaceDebugValues)
-        {
-			auto line = ip.location.getLineNumber();
-			auto col = ip.location.getIndexInLine();
-
-            auto b = document.getBoundsOnRow(line, {col, col+1}, GlyphArrangementArray::ReturnBeyondLastCharacter).getRectangle(0);
-            
-            b = b.translated(document.getCharacterRectangle().getWidth() * 1.0f, 0.0f);
-            
-            auto area = b.transformed(transform).withRight(getWidth());
-            auto vf = document.getFont().withHeight(document.getFontHeight() * viewScaleFactor * 0.7f);
-            g.setFont(vf);
-            g.setColour(Colours::white.withAlpha(0.05f));
-            
-            auto r = area;
-            r = r.removeFromLeft(vf.getStringWidthFloat(ip.value) + 20.0f);
-            
-            g.fillRoundedRectangle(r, r.getHeight() / 2.0f);
-            
-            g.setColour(Colour(SIGNAL_COLOUR).withAlpha(0.5f));
-            g.drawText(ip.value, area.reduced(10.0f, 0.0f), Justification::left);
-        }
-    }
-    
 	for (auto w : warnings)
 		w->paintLines(g, transform, w->isWarning ? Colours::yellow : Colours::red);
+
+	for(auto& h: heatmap)
+	{
+		auto row = h.first.getLineNumber();
+
+		auto x = document.getBoundsOnRow(row, {0, 1}, GlyphArrangementArray::OutOfBoundsMode::ReturnLastCharacter).getRectangle(0);
+		x = x.withHeight(document.getRowHeight()).reduced(0.0f, 1.0f);
+		x = x.transformedBy(transform).withWidth(getWidth());
+
+		auto alpha = std::pow((float)h.second, JUCE_LIVE_CONSTANT(2.0f));
+		FloatSanitizers::sanitizeFloatNumber(alpha);
+		alpha = jlimit(0.0f, 1.0f, alpha);
+
+		g.setColour(Colour(HISE_WARNING_COLOUR).withAlpha(alpha));
+		g.fillRect(x.removeFromLeft(3.0f));
+
+		g.setColour(Colour(HISE_WARNING_COLOUR).withAlpha(alpha * 0.1f));
+		g.fillRect(x);
+	}
 
 	if (xPos < -10.0f * transform.getScaleFactor())
 	{
@@ -1763,7 +1951,7 @@ void mcl::TextEditor::paintOverChildren (Graphics& g)
                 if (tokeniser != nullptr)
                     tokenType = tokeniser->readNextToken(it);
                 else
-                    tokenType = JavascriptTokeniserFunctions::readNextToken(it);
+                    tokenType = JavascriptTokeniser::readNextTokenStatic(it);
             
                 int now;
                 
@@ -3074,7 +3262,7 @@ void mcl::TextEditor::renderTextUsingGlyphArrangement (juce::Graphics& g)
                 if(dr->contains(cpos))
                 {
                     tokenType = JavascriptTokeniser::tokenType_deactivated;
-                    JavascriptTokeniserFunctions::readNextToken(it);
+					JavascriptTokeniser::readNextTokenStatic(it);
                     break;
                 }
             }
@@ -3084,7 +3272,7 @@ void mcl::TextEditor::renderTextUsingGlyphArrangement (juce::Graphics& g)
                 if (tokeniser != nullptr)
                     tokenType = tokeniser->readNextToken(it);
                 else
-                    tokenType = JavascriptTokeniserFunctions::readNextToken(it);
+                    tokenType = JavascriptTokeniser::readNextTokenStatic(it);
             }
 
 			Point<int> now(it.getLine(), it.getIndexInLine());

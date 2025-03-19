@@ -384,6 +384,19 @@ void ScriptCreatedComponentWrapper::asyncValueTreePropertyChanged(ValueTree& v, 
 		debugError(getProcessor(), "invalid property " + id.toString() + " with value: '" + value.toString() + "'");
 	}
 
+#if HISE_INCLUDE_PROFILING_TOOLKIT
+	auto& dh = getScriptComponent()->getScriptProcessor()->getMainController_()->getDebugSession();
+
+	if(dh.isRecordingMultithread())
+	{
+		if(auto trackId = getScriptComponent()->getProfilePropertyTrackId(id))
+			dh.closeTrackEvent(trackId);
+
+		if(auto pc = dynamic_cast<ProfiledComponent*>(getComponent()))
+			pc->setRepaintTrackId(dh.openTrackEvent());
+	}
+#endif
+
 	updateComponent(idIndex, value);
 }
 

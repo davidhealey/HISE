@@ -459,9 +459,17 @@ private:
 
 
 #if USE_BACKEND
-#define CHECK_MIDDLE_MOUSE_DOWN(e) if(ZoomableViewport::checkMiddleMouseDrag(e, MouseEventFlags::Down)) return;
-#define CHECK_MIDDLE_MOUSE_UP(e) if(ZoomableViewport::checkMiddleMouseDrag(e, MouseEventFlags::Up)) return;
-#define CHECK_MIDDLE_MOUSE_DRAG(e) if(ZoomableViewport::checkMiddleMouseDrag(e, MouseEventFlags::Drag)) return;
+#if HISE_INCLUDE_PROFILING_TOOLKIT
+#define CHECK_TRIGGER(e) if(auto pc = dynamic_cast<ProfiledComponent*>(this)) pc->checkTriggerRecord(e);
+#else
+#define CHECK_TRIGGER(e) ;
+
+#endif
+
+
+#define CHECK_MIDDLE_MOUSE_DOWN(e) CHECK_TRIGGER(e); if(ZoomableViewport::checkMiddleMouseDrag(e, MouseEventFlags::Down)) return;
+#define CHECK_MIDDLE_MOUSE_UP(e) CHECK_TRIGGER(e); if(ZoomableViewport::checkMiddleMouseDrag(e, MouseEventFlags::Up)) return;
+#define CHECK_MIDDLE_MOUSE_DRAG(e) CHECK_TRIGGER(e); if(ZoomableViewport::checkMiddleMouseDrag(e, MouseEventFlags::Drag)) return;
 #define CHECK_VIEWPORT_SCROLL(e, details) if(ZoomableViewport::checkViewportScroll(e, details)) return;
 
 struct ComponentWithMiddleMouseDrag: public Component
@@ -486,5 +494,151 @@ struct ComponentWithMiddleMouseDrag: public Component
 #define CHECK_VIEWPORT_SCROLL(e, details) ignoreUnused(e, details);
 using ComponentWithMiddleMouseDrag = juce::Component;
 #endif
+
+using Animator = AnimatedPosition<AnimatedPositionBehaviours::ContinuousWithMomentum>;
+
+struct AbstractZoomableView: public ScrollBar::Listener,
+							 public Animator::Listener,
+							 public TooltipClientWithCustomPosition
+{
+	static constexpr int ScrollbarHeight = 14;
+	static constexpr int FirstItemOffset = 18;
+
+	enum class MouseEventType
+	{
+		MouseDown,
+		MouseUp,
+		MouseDrag,
+		MouseMove,
+		MouseDoubleClick
+	};
+
+	struct WASDKeyListener: public juce::KeyListener,
+							public Timer 
+	{
+		enum class Direction: uint8
+		{
+			Up = 'w',
+			Down = 's',
+			Left = 'a',
+			Right = 'd'
+		};
+
+		WASDKeyListener(Component& c);
+		~WASDKeyListener();
+
+		static int getDelta(Direction d) { return (d == Direction::Up || d == Direction::Right) ? 1 : -1; }
+		static bool isHorizontal(Direction d) { return d == Direction::Left || d == Direction::Right; }
+
+		bool keyPressed(const KeyPress& key, Component* originatingComponent) override;
+		void setShiftMultiplier(double horizontalFactor, double verticalFactor);
+		void timerCallback() override;
+		void handlePressedKey(Direction d);
+		bool keyStateChanged (bool isKeyDown, Component* originatingComponent) override;
+
+		LinearSmoothedValue<double> delta[2];
+		double shiftMultipliers[2] = { 3.0, 3.0 };
+		std::map<Direction, bool> state;
+		AnimatedPositionBehaviours::ContinuousWithMomentum behaviour[2];
+		std::function<void(bool, float)> onDirection;
+		Component& p;
+	};
+
+	struct DragZoomAction: public UndoableAction
+	{
+		DragZoomAction(AbstractZoomableView& parent_, Range<double> newRange_, Range<double> oldRange_, double newZoom_, double oldZoom_);
+
+		bool perform() override;
+		bool undo() override;
+
+		AbstractZoomableView& parent;
+		Range<double> oldRange, newRange;
+		double oldZoom, newZoom;
+	};
+
+	struct ZoomAnimator: public Timer
+	{
+		ZoomAnimator(AbstractZoomableView& parent_):
+		  parent(parent_)
+		{}
+
+		void setTarget(Range<double> newTarget, double newZoom);
+		void timerCallback() override;
+
+		AbstractZoomableView& parent;
+		Range<double> start;
+		double startZoom;
+		double alpha = 0.0f;
+		Range<double> target;
+		double zoom;
+	};
+
+	AbstractZoomableView();
+
+	virtual ~AbstractZoomableView()
+	{
+		scrollbar.removeListener(this);
+	}
+
+	/** Call this from your constructor to initialise the zoom handler. */
+	void setAsParentComponent(Component* p);
+
+	/** Override this and return the text for the distance of the drag zoom. */
+	virtual String getTextForDistance(float width) const = 0;
+
+	/** Override this and return the total absolute length of the items you want to display. */
+	virtual double getTotalLength() const = 0;
+
+	void changeZoom(double newZoomFactor, int xPos=0);
+	void scrollBarMoved (ScrollBar* , double newRangeStart) override;
+
+	void drawDragDistance(Graphics& g, Rectangle<int> viewportPosition);
+	void drawBackgroundGrid(Graphics& g, Rectangle<int> viewportPosition);
+
+	void onResize(Rectangle<int> viewportPosition);
+	void positionChanged(Animator&, double newPosition) override;
+	void handleMouseWheelEvent(const MouseEvent& e, const MouseWheelDetails& wheel);
+
+    void hangleMouseMagnify(const MouseEvent& e, float scaleFactor)
+    {
+        changeZoom(zoomFactor * (double)scaleFactor, e.getPosition().x);
+    }
+    
+	bool handleMouseEvent(const MouseEvent& e, MouseEventType t);
+	void zoomToRange(Range<double> newScaledRange);
+	void moveToRange(double normalisedNewXPosition);
+	void updateMouseCursorForEvent(const MouseEvent& e);
+
+	double totalLength = 0.0;
+	Animator animator;
+	double scaleFactor = 1.0;
+	double zoomFactor = 1.0;
+	
+	double first = -1.0;
+	float x = 0.0f;
+
+protected:
+
+	virtual UndoManager* getUndoManager() = 0;
+
+	float getZoomScale() const;
+	float getZoomTranspose() const;
+	Range<double> getScaledZoomRange() const;
+	Range<double> getNormalisedZoomRange() const;
+	void updateIndexToShow();
+
+private:
+
+	Component* asComponent = nullptr;
+
+	ZoomAnimator zoomAnimator;
+
+	bool showDragDistance = false;
+	Range<int> dragDistance;
+
+	ScrollBar scrollbar;
+	ScrollbarFader sf;
+	ScopedPointer<WASDKeyListener> wasd;
+};
 
 }

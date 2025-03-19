@@ -136,6 +136,13 @@ scriptUnlocker(this)
     
 	synthChain->addProcessorsWhenEmpty();
 
+#if HISE_INCLUDE_PROFILING_TOOLKIT
+	getDebugSession().syncRecordingBroadcaster.addListener(*synthChain, [](ModulatorSynthChain& c, bool isEnabled)
+	{
+		c.setEnableProfiling(isEnabled, &c.getMainController()->getDebugSession(), 0);
+	}, false);
+#endif
+
 	getSampleManager().getModulatorSamplerSoundPool()->setDebugProcessor(synthChain);
 	getMacroManager().setMacroChain(synthChain);
 

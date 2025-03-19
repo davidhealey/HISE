@@ -959,9 +959,9 @@ juce::Path NodeComponentFactory::createPath(const String& id) const
 	LOAD_EPATH_IF_URL("fold", HiBinaryData::ProcessorEditorHeaderIcons::foldedIcon);
 	LOAD_EPATH_IF_URL("close", HiBinaryData::ProcessorEditorHeaderIcons::closeIcon);
 	LOAD_EPATH_IF_URL("delete", SampleMapIcons::deleteSamples);
-	LOAD_PATH_IF_URL("move", ColumnIcons::moveIcon);
+	LOAD_EPATH_IF_URL("move", ColumnIcons::moveIcon);
 	LOAD_EPATH_IF_URL("soft_bypass", HiBinaryData::ProcessorEditorHeaderIcons::bypassShape);
-	LOAD_PATH_IF_URL("goto", ColumnIcons::targetIcon);
+	LOAD_EPATH_IF_URL("goto", ColumnIcons::targetIcon);
 	LOAD_EPATH_IF_URL("parameter", HiBinaryData::SpecialSymbols::macros);
 	LOAD_EPATH_IF_URL("split", ScriptnodeIcons::splitIcon);
 	LOAD_EPATH_IF_URL("freeze", HnodeIcons::freezeIcon);
@@ -977,10 +977,10 @@ juce::Path NodeComponentFactory::createPath(const String& id) const
 	LOAD_EPATH_IF_URL("newnode", HiBinaryData::ProcessorEditorHeaderIcons::addIcon);
 	LOAD_EPATH_IF_URL("oldnode", EditorIcons::swapIcon);
 	LOAD_EPATH_IF_URL("clone", SampleMapIcons::copySamples);
-	LOAD_PATH_IF_URL("local", ColumnIcons::localIcon);
-	LOAD_PATH_IF_URL("drag", ColumnIcons::targetIcon);
-	LOAD_PATH_IF_URL("next", ColumnIcons::nextIcon);
-	LOAD_PATH_IF_URL("workspace", ColumnIcons::openWorkspaceIcon);
+	LOAD_EPATH_IF_URL("local", ColumnIcons::localIcon);
+	LOAD_EPATH_IF_URL("drag", ColumnIcons::targetIcon);
+	LOAD_EPATH_IF_URL("next", ColumnIcons::nextIcon);
+	LOAD_EPATH_IF_URL("workspace", ColumnIcons::openWorkspaceIcon);
 
 	if (url.startsWith("fix"))
 		p.loadPathFromData(ScriptnodeIcons::fixIcon, ScriptnodeIcons::fixIcon_Size);

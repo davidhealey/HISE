@@ -70,6 +70,28 @@ public:
 	void scrollToLine(float centerLine, bool roundToLine);
 
 	void timerCallback() override;
+	void setHeatMap(DebugInformationBase::Ptr ptr, const std::map<int, double>* map)
+	{
+		for(auto p: inplaceDebugValueComponents)
+		{
+			if(p->value->info == ptr)
+			{
+				heatmap.clear();
+
+				for(auto& i: *map)
+				{
+					if(i.second < 0.1)
+						continue;
+
+					heatmap.push_back({CodeDocument::Position(getDocument(), i.first-1, 0), i.second});
+					heatmap.back().first.setPositionMaintained(true);
+				}
+
+				repaint();
+				return;
+			}
+		}
+	}
 
 	static void setNewTokenCollectionForAllChildren(Component* any, const Identifier& languageId, TokenCollection::Ptr newCollection);
 
@@ -258,7 +280,95 @@ public:
 
 	ScrollBar& getVerticalScrollBar();
 
+	void rebuildInplaceDebugValues();
+
 private:
+
+	struct InplaceDebugValueComponent: public Component,
+									   public PathFactory	
+	{
+		InplaceDebugValueComponent(TextEditor& parent_, const LanguageManager::InplaceDebugValue::Ptr ipv);;
+
+		void updatePosition();
+
+		Path createPath(const String& url) const override
+		{
+			Path p;
+			LOAD_EPATH_IF_URL("profile", EditorIcons::profileIcon);
+			LOAD_EPATH_IF_URL("graph", EditorIcons::searchIcon2);
+			return p;
+		}
+
+		struct WrapperComponent: public Component,
+								 public ComponentListener
+		{
+			static constexpr int margin = 10;
+
+			WrapperComponent(Component* c):
+			  child(c)
+			{
+				setVisible(true);
+				addAndMakeVisible(c);
+				c->addComponentListener(this);
+				setSize(c->getWidth() + 2 * margin, c->getHeight() + 2 * margin);
+			}
+
+			~WrapperComponent()
+			{
+				getChildComponent(0)->removeComponentListener(this);
+			}
+
+			void componentMovedOrResized(Component& c, bool wasMoved, bool wasResized) override
+			{
+				setSize(c.getWidth() + 2 * margin, c.getHeight() + 2 * margin);
+			}
+
+			void paint(Graphics& g) override
+			{
+				g.fillAll(Colour(0xFF242424));
+			}
+
+			void resized() override
+			{
+				getChildComponent(0)->setBounds(getLocalBounds().reduced(margin));
+			}
+
+			static std::unique_ptr<Component> wrap(Component* c)
+			{
+				auto n = new WrapperComponent(c);
+
+				std::unique_ptr<Component> v;
+				v.reset(n);
+
+				return std::move(v);
+			}
+
+			ScopedPointer<Component> child;
+		};
+
+		void mouseDown(const MouseEvent& e) override
+		{
+			if(value->info != nullptr)
+			{
+				if(auto c = value->info->createPopupComponent(e, this))
+				{
+					auto tc = TopLevelWindowWithOptionalOpenGL::findRoot(this);
+					auto area = tc->getLocalArea(this, getLocalBounds());
+
+					CallOutBox::launchAsynchronously(WrapperComponent::wrap(c), area, tc);
+				}
+			}
+		}
+
+		void paint(Graphics& g) override;
+
+		Font vf;
+		LanguageManager::InplaceDebugValue::Ptr value;
+		TextEditor& parent;
+		Path p;
+	};
+
+	OwnedArray<InplaceDebugValueComponent> inplaceDebugValueComponents;
 
     Array<int> currentTitles;
     
@@ -317,12 +427,110 @@ private:
 		bool isWarning;
 	};
 
+	class AutofixComponent : public juce::Component, public juce::ButtonListener, public CodeDocument::Listener {
+	public:
+	    AutofixComponent(mcl::TextEditor& editor_, const Error& error)
+	        : editor(editor_) {
+	        addAndMakeVisible(button);
+	        button.setButtonText("Autofix");
+	        button.addListener(this);
+
+			errorMessage = error.errorMessage;
+
+			Selection el(error.start.getLineNumber(), 0, error.start.getLineNumber()+1, 0);
+
+			errorLine = editor.getTextDocument().getSelectionContent(el).trim();
+
+	        // Position the component based on the error's area
+	        updatePosition();
+
+	        // Listen to CodeDocument for text changes
+	        codeDoc = &editor.getDocument();
+	        codeDoc->addListener(this);
+	    }
+
+		String errorMessage;
+		String errorLine;
+
+	    ~AutofixComponent() {
+	        if (codeDoc != nullptr) {
+	            codeDoc->removeListener(this);
+	        }
+	    }
+
+	    void paint(juce::Graphics& g) override {
+	        juce::Colour baseColour(0xFFBB3434);
+	        juce::Colour hoverColour(baseColour.brighter());
+	        juce::Colour clickedColour(hoverColour.darker());
+
+	        if (button.isDown()) {
+	            g.setGradientFill(juce::ColourGradient(clickedColour, 0.0f, 0.0f,
+	                                                   baseColour, 1.0f, getHeight(), false));
+	        } else if (button.isOver()) {
+	            g.setGradientFill(juce::ColourGradient(hoverColour, 0.0f, 0.0f,
+	                                                   baseColour, 1.0f, getHeight(), false));
+	        } else {
+	            g.setGradientFill(juce::ColourGradient(baseColour, 0.0f, 0.0f,
+	                                                   hoverColour, 1.0f, getHeight(), false));
+	        }
+
+	        g.fillRoundedRectangle(getLocalBounds().toFloat(), 5.0f);
+	    }
+
+	    void resized() override {
+	        button.setBounds(2, 2, getWidth() - 4, getHeight() - 4);
+	    }
+
+	    void buttonClicked(juce::Button* b) override {
+	        if (b == &button) {
+	            launchHTTPRequest();
+	        }
+	    }
+
+		void codeDocumentTextDeleted(int startIndex, int endIndex) override
+	    {
+		    updatePosition();
+	    }
+
+		void codeDocumentTextInserted(const String& newText, int insertIndex) override
+	    {
+		    updatePosition();
+	    }
+
+
+	private:
+	    mcl::TextEditor& editor;
+	    juce::TextButton button;
+	    CodeDocument* codeDoc;
+
+	    void updatePosition() {
+
+			if(editor.currentError != nullptr)
+			{
+				auto& document = editor.getTextDocument();
+				auto line = editor.currentError->start.getLineNumber();
+				auto col = 10000;
+				auto b = document.getBoundsOnRow(line, {col, col+1}, GlyphArrangementArray::ReturnBeyondLastCharacter).getRectangle(0);
+				b = b.translated(document.getCharacterRectangle().getWidth() * 1.0f, 0.0f);
+				auto area = b.transformed(editor.transform).withWidth(100);
+				setBounds(area.toNearestInt());
+			}
+	    }
+
+	    // Implement this method to handle the HTTP request
+	    void launchHTTPRequest();
+	};
+
+	ScopedPointer<AutofixComponent> autofixButton;
+
 	TooltipWithArea tooltipManager;
     
     ScrollbarFader sf;
 
 	bool tokenRebuildPending = false;
-	
+
+	std::vector<std::pair<CodeDocument::Position, double>> heatmap;
+
 	bool skipTextUpdate = false;
 	Selection autocompleteSelection;
 	ScopedPointer<Autocomplete> currentAutoComplete;

@@ -431,6 +431,7 @@ struct NetworkCompiler: public EncodedDialogBase,
 	{
 		MULTIPAGE_BIND_CPP(NetworkCompiler, compileTask);
 		MULTIPAGE_BIND_CPP(NetworkCompiler, onInit);
+		MULTIPAGE_BIND_CPP(NetworkCompiler, onClipboard);
 	}
 
 	void setProgress(double progress) override
@@ -443,6 +444,7 @@ struct NetworkCompiler: public EncodedDialogBase,
 
 	var onInit(const var::NativeFunctionArgs& args);
 	var compileTask(const var::NativeFunctionArgs& args);
+	var onClipboard(const var::NativeFunctionArgs& args);
 
 	
 	BackendRootWindow* bpe;

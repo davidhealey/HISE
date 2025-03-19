@@ -145,7 +145,7 @@ juce::Path GlobalRoutingManager::RoutingIcons::createPath(const String& url) con
 #if USE_BACKEND
 	LOAD_EPATH_IF_URL("new", SampleMapIcons::newSampleMap);
 	LOAD_EPATH_IF_URL("debug", BackendBinaryData::ToolbarIcons::viewPanel);
-	LOAD_PATH_IF_URL("goto", ColumnIcons::openWorkspaceIcon);
+	LOAD_EPATH_IF_URL("goto", ColumnIcons::openWorkspaceIcon);
 	LOAD_EPATH_IF_URL("global", HiBinaryData::SpecialSymbols::globalCableIcon);
 #endif
 

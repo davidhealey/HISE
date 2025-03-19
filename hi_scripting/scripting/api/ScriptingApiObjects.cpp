@@ -2882,7 +2882,7 @@ void ScriptingObjects::ScriptingModulator::doubleClickCallback(const MouseEvent 
 
 Component* ScriptingObjects::ScriptingModulator::createPopupComponent(const MouseEvent& e, Component* t)
 {
-	return DebugableObject::Helpers::showProcessorEditorPopup(e, t, mod);
+	return DebugableObject::Helpers::showProcessorEditorPopup(t, mod);
 }
 
 void ScriptingObjects::ScriptingModulator::setIntensity(float newIntensity)
@@ -3176,7 +3176,7 @@ moduleHandler(fx, dynamic_cast<JavascriptProcessor*>(p))
 
 Component* ScriptingObjects::ScriptingEffect::createPopupComponent(const MouseEvent& e, Component* t)
 {
-	return DebugableObject::Helpers::showProcessorEditorPopup(e, t, effect.get());
+	return DebugableObject::Helpers::showProcessorEditorPopup(t, effect.get());
 }
 
 juce::String ScriptingObjects::ScriptingEffect::getId() const
@@ -3926,7 +3926,7 @@ ScriptingObjects::ScriptingSynth::ScriptingSynth(ProcessorWithScriptingContent *
 
 Component* ScriptingObjects::ScriptingSynth::createPopupComponent(const MouseEvent& e, Component* t)
 {
-	return DebugableObject::Helpers::showProcessorEditorPopup(e, t, synth);
+	return DebugableObject::Helpers::showProcessorEditorPopup(t, synth);
 }
 
 String ScriptingObjects::ScriptingSynth::getId() const
@@ -4229,7 +4229,7 @@ mp(mp_)
 
 Component* ScriptingObjects::ScriptingMidiProcessor::createPopupComponent(const MouseEvent& e, Component* t)
 {
-	return DebugableObject::Helpers::showProcessorEditorPopup(e, t, mp);
+	return DebugableObject::Helpers::showProcessorEditorPopup(t, mp);
 }
 
 int ScriptingObjects::ScriptingMidiProcessor::getCachedIndex(const var &indexExpression) const
@@ -4452,7 +4452,7 @@ void ScriptingObjects::ScriptingAudioSampleProcessor::setAttribute(int parameter
 {
 	if (checkValidObject())
 	{
-		audioSampleProcessor->setAttribute(parameterIndex, newValue, sendNotification);
+		audioSampleProcessor->setAttribute(parameterIndex, newValue, sendNotificationAsync);
 	}
 }
 
@@ -4824,7 +4824,7 @@ void ScriptingObjects::TimerObject::setTimerCallback(var callbackFunction)
 	tc = WeakCallbackHolder(getScriptProcessor(), this, callbackFunction, 0);
 	tc.incRefCount();
 	tc.setThisObject(this);
-	tc.addAsSource(this, "onTimerCallback");
+	tc.addAsSource(this, "timerCallback");
 }
 
 
@@ -5342,7 +5342,12 @@ var ScriptingObjects::ScriptNeuralNetwork::processFFTSpectrum(var fftObject, int
 			auto parameters = fft->getSpectrum2DParameters();
 			auto isGreyscale = (int)parameters["ColourScheme"] == 0;
 
-			onnx->run(img, onnxOutput, isGreyscale);
+			auto ok = onnx->run(img, onnxOutput, isGreyscale);
+
+			if(!ok)
+			{
+				reportScriptError(onnx->getLastError().getErrorMessage());
+			}
 
 			Array<var> outputValues;
 
@@ -6929,8 +6934,11 @@ ScriptingObjects::ScriptBackgroundTask::ScriptBackgroundTask(ProcessorWithScript
 	ConstScriptingObject(p, 0),
 	Thread(name),
 	currentTask(p, this, var(), 1),
-	finishCallback(p, this, var(), 2)
+	finishCallback(p, this, var(), 2),
+	recordingSession(new ProfiledRecordingSession(p->getMainController_()->getDebugSession(), DebugSession::ThreadIdentifier::Type::WorkerThread)) 
 {
+	PROFILE_ONLY(recordingSession->getDataSource()->name = name);
+
 	String s;
 	s << getThreadName() << "abort checks";
 	abortId = Identifier(s);
@@ -7079,6 +7087,8 @@ bool ScriptingObjects::ScriptBackgroundTask::killVoicesAndCall(var loadingFuncti
 			if (safeThis != nullptr)
 			{
 				auto r = safeThis->currentTask.callSync(nullptr, 0, nullptr);
+
+				safeThis->currentTask.clear();
 
 				if (!r.wasOk())
 					debugError(p, r.getErrorMessage());
@@ -7245,6 +7255,11 @@ void ScriptingObjects::ScriptBackgroundTask::run()
 	TRACE_COUNTER("scripting", ct, numAbortChecks);
 #endif
 
+
+	recordingSession->initIfEmpty(DebugSession::ThreadIdentifier::getCurrent());
+	recordingSession->checkRecording();
+	DebugSession::ProfileDataSource::ScopedProfiler sp(recordingSession->getDataSource(), dynamic_cast<JavascriptProcessor*>(getScriptProcessor()));
+	
 	if (currentTask || childProcessData)
 	{
 		if (forwardToLoadingThread)
@@ -7256,7 +7271,6 @@ void ScriptingObjects::ScriptBackgroundTask::run()
 		{
 			childProcessData->run();
 			childProcessData = nullptr;
-
 		}
 		else
 		{
@@ -7269,6 +7283,8 @@ void ScriptingObjects::ScriptBackgroundTask::run()
 				getScriptProcessor()->getMainController_()->writeToConsole(r.getErrorMessage(), 1, dynamic_cast<Processor*>(getScriptProcessor()));
 #endif
 		}
+
+		currentTask.clear();
 
 		if (forwardToLoadingThread)
 		{
@@ -7358,7 +7374,9 @@ ScriptingObjects::ScriptFFT::ScriptFFT(ProcessorWithScriptingContent* p) :
 	ADD_API_METHOD_0(getSpectrum2DParameters);
 	ADD_API_METHOD_4(dumpSpectrum);
 	ADD_API_METHOD_1(setUseFallbackEngine);
-	
+
+	ADD_API_METHOD_1(setUseSpectrumList);
+
 	spectrumParameters = new Spectrum2D::Parameters();
 }
 
@@ -7676,7 +7694,10 @@ var ScriptingObjects::ScriptFFT::getSpectrum2DParameters() const
 	return d;
 }
 
-
+void ScriptingObjects::ScriptFFT::setUseSpectrumList(int numRows)
+{
+	spectrumList = new SpectrumList(numRows);
+}
 
 Image ScriptingObjects::ScriptFFT::getRescaledAndRotatedSpectrum(bool getOutput, int numFreqPixels, int numTimePixels)
 {
@@ -7686,7 +7707,12 @@ Image ScriptingObjects::ScriptFFT::getRescaledAndRotatedSpectrum(bool getOutput,
 	if(!useFallback || !fft->isFallbackEngine())
 		reportScriptError("You must use the fallback engine if you want to dump FFT images");
 
-	auto thisImg = gin::applyResize(getSpectrum(getOutput), numFreqPixels, numTimePixels);
+	auto img = getSpectrum(getOutput);
+
+	if(img.isNull())
+		reportScriptError("The spectrum was not created");
+
+	auto thisImg = gin::applyResize(img, numFreqPixels, numTimePixels);
 	
 	Image rotated(Image::PixelFormat::ARGB, thisImg.getHeight(), thisImg.getWidth(), false);
 	Image::BitmapData r(rotated, Image::BitmapData::writeOnly);
@@ -7703,13 +7729,92 @@ Image ScriptingObjects::ScriptFFT::getRescaledAndRotatedSpectrum(bool getOutput,
 	return rotated;
 }
 
+ScriptingObjects::ScriptFFT::SpectrumList::SpectrumList(int numItems)
+{
+	for(int i = 0; i < numItems; i++)
+		images.push_back({});
+}
+
+bool ScriptingObjects::ScriptFFT::SpectrumList::dump(const File& outputFile)
+{
+	int w = -1;
+	int h = -1;
+
+	int idx = 0;
+
+	for(auto& v: images)
+	{
+		if(v.isNull())
+		{
+			throw Result::fail("image at position " + String(idx) + " was not set");
+		}
+
+		if(w == -1)
+			w = v.getWidth();
+		if(h == -1)
+			h = v.getHeight();
+
+		if(w != v.getWidth() || h != v.getHeight())
+		{
+			throw Result::fail("image at position " + String(idx) + " has wrong dimensions");
+		}
+
+		idx++;
+	}
+	
+	Image fullImage(images[0].getFormat(), w, h, true);
+
+	int yOffset = 0;
+
+	for(auto& v: images)
+	{
+		Image::BitmapData w(fullImage, Image::BitmapData::readWrite);
+		Image::BitmapData r(v, Image::BitmapData::readOnly);
+
+		for(int y = 0; y < h; y++)
+		{
+			auto src = r.getLinePointer(y);
+			auto dst = w.getLinePointer(y + yOffset);
+
+			memcpy(dst, src, r.lineStride);
+		}
+
+		yOffset += h;
+	}
+
+	FileOutputStream fos(outputFile);
+	PNGImageFormat f;
+	return f.writeImageToStream(fullImage, fos);
+}
+
+bool ScriptingObjects::ScriptFFT::SpectrumList::setImage(int imageIndex, const Image& img)
+{
+	if(isPositiveAndBelow(imageIndex, images.size()))
+	{
+		images[imageIndex] = img;
+
+		return true;
+	}
+
+	return false;
+}
+
 bool ScriptingObjects::ScriptFFT::dumpSpectrum(var file, bool output, int numFreqPixels, int numTimePixels)
 {
-	if(auto sf = dynamic_cast<ScriptFile*>(file.getObject()))
+	auto sf = dynamic_cast<ScriptFile*>(file.getObject());
+
+	auto rotated = getRescaledAndRotatedSpectrum(output, numFreqPixels, numTimePixels);
+
+	if(sf == nullptr && spectrumList != nullptr)
+	{
+		auto idx = (int)file;
+		spectrumList->setImage(idx, rotated);
+	}
+
+	else if(sf != nullptr)
 	{
 		sf->f.deleteFile();
 		FileOutputStream fos(sf->f);
-		auto rotated = getRescaledAndRotatedSpectrum(output, numFreqPixels, numTimePixels);
 		PNGImageFormat f;
 		return f.writeImageToStream(rotated, fos);
 	}

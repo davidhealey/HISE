@@ -258,7 +258,14 @@ updater(*this)
     
 	GlobalSettingManager::initData(this);
 	GlobalSettingManager::restoreGlobalSettings(this, false);
-    
+
+#if HISE_INCLUDE_PROFILING_TOOLKIT
+    getDebugSession().syncRecordingBroadcaster.addListener(*synthChain, [](ModulatorSynthChain& c, bool isEnabled)
+    {
+        c.setEnableProfiling(isEnabled, &c.getMainController()->getDebugSession(), 0);
+    }, false);
+#endif
+
 #if HISE_INCLUDE_LORIS
     auto f = FrontendHandler::getAppDataDirectory(this).getChildFile("loris_library");
     

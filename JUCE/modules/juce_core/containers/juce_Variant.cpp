@@ -318,6 +318,13 @@ namespace juce
 			if (auto* d = original.getDynamicObject())
 				return d->clone().get();
 
+			if (auto x = dynamic_cast<ObjectWithJSONConverter*>(original.getObject()))
+			{
+				MemoryOutputStream mos;
+				x->writeAsJSON(mos, 0, true, 8);
+				return var(mos.toString());
+			}
+
 			jassertfalse; // can only clone DynamicObjects!
 			return {};
 		}
@@ -376,6 +383,16 @@ namespace juce
 
 		static var bufferClone(const var& original)
 		{
+			if(original.isBuffer())
+			{
+				// This is ugly, the VariantBuffer::clone() method
+				// does not cause the internal type to switch to buffer
+				// so you get a var::instanceObject type
+				auto ptr = original.getDynamicObject()->clone();
+				var dyn(ptr.get());
+				return var((VariantBuffer*)dyn.getObject());
+			}
+			
 			if (DynamicObject* d = original.getDynamicObject())
 				return d->clone().get();
 
