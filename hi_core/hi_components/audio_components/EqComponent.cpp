@@ -415,7 +415,7 @@ struct FilterDragOverlay::Panel : public PanelWithProcessorConnection
 		setDefaultPanelColour(PanelColourId::textColour, Colours::white);
 		setDefaultPanelColour(PanelColourId::itemColour1, Colours::white.withAlpha(0.5f));
 		setDefaultPanelColour(PanelColourId::itemColour2, Colours::white.withAlpha(0.8f));
-		setDefaultPanelColour(PanelColourId::itemColour2, Colours::black.withAlpha(0.2f));
+		setDefaultPanelColour(PanelColourId::itemColour3, Colours::black.withAlpha(0.2f));
 	}
 
 	juce::Identifier getProcessorTypeId() const
@@ -431,8 +431,11 @@ struct FilterDragOverlay::Panel : public PanelWithProcessorConnection
 
 			c->setColour(ColourIds::bgColour, findPanelColour(PanelColourId::bgColour));
 			c->setColour(ColourIds::textColour, findPanelColour(PanelColourId::textColour));
+			c->filterGraph.setColour(FilterGraph::ColourIds::bgColour, findPanelColour(PanelColourId::bgColour));
 			c->filterGraph.setColour(FilterGraph::ColourIds::fillColour, findPanelColour(PanelColourId::itemColour1));
 			c->filterGraph.setColour(FilterGraph::ColourIds::lineColour, findPanelColour(PanelColourId::itemColour2));
+			c->filterGraph.setColour(FilterGraph::ColourIds::gridColour, findPanelColour(PanelColourId::itemColour3));
+			c->filterGraph.setColour(FilterGraph::ColourIds::textColour, findPanelColour(PanelColourId::textColour));
 			c->fftAnalyser.setColour(RingBufferComponentBase::ColourId::fillColour, findPanelColour(PanelColourId::itemColour3));
 
 			c->setOpaque(c->findColour(ColourIds::bgColour).isOpaque());
