@@ -176,6 +176,8 @@ public:
 		HiseShapeButton deleteButton;
 		HiseShapeButton parameterButton;
 
+		TextButton autofixButton;
+
 		bool isDragging = false;
 
 		ComponentDragger d;
