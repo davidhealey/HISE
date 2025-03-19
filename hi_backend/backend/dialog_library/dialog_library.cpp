@@ -1230,7 +1230,7 @@ var CompileProjectDialog::compileTask(const var::NativeFunctionArgs& args)
 		for(auto m: modulesToReplace)
 			logMessage("  " + m);
 
-		ScriptReplaceHelpers::replace(bpe->getBackendProcessor(), modulesToReplace, dontSendNotification);
+		ScriptReplaceHelpers::replace(bpe->getBackendProcessor(), modulesToReplace, sendNotificationAsync);
 	}
 
 	ep.manager = this;
@@ -1564,11 +1564,8 @@ var NetworkCompiler::compileTask(const var::NativeFunctionArgs& args)
 
 	if(ok != CompileExporter::OK)
 	{
-		auto errorMessage = CompileExporter::getCompileResult(ok);
-		throw Result::fail(errorMessage);
+		throw nc->getCompilationResult();
 	}
-
-	
 
 	return var();
 }
