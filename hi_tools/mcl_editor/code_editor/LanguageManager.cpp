@@ -51,15 +51,31 @@ void LanguageManager::toggleCommentForLine(TextEditor* editor, bool shouldBeComm
 
 String LanguageManager::beautify(const String& input)
 {
+    // Check this property dynamically
+    File::SpecialLocationType appDataDirectoryToUse = File::userApplicationDataDirectory;
+    
+#if JUCE_MAC
+	File appData = File::getSpecialLocation(appDataDirectoryToUse).getChildFile("Application Support");
+#else // WINDOWS
+	File appData = File::getSpecialLocation(appDataDirectoryToUse);
+#endif
+
+    File hiseRoot;
+
+    if(auto xml = XmlDocument::parse(appData.getChildFile("HISE").getChildFile("compilerSettings.xml"))
+    {
+	    if(auto hp = xml->getChildByName("HisePath"))
+		    hiseRoot = File(hp->getStringAttribute("value"));
+    }
+
+    auto astylePath = hiseRoot.getChildFile("tools").getChildFile("astyle");
+    auto tempFile = astylePath.getChildFile("tmp.js");
+    
+
 #if JUCE_WINDOWS
     ChildProcess cp;
-
-    auto hiseRoot = File("D:\\Development\\HISE modules");
-    auto astylePath = hiseRoot.getChildFile("tools").getChildFile("astyle");
-
-    auto tempFile = astylePath.getChildFile("tmp.js");
+	
     auto ok = tempFile.replaceWithText(input);
-
     auto astyle = astylePath.getChildFile("astyle.exe").getFullPathName();
 
     String command = astyle.quoted() + " " + tempFile.getFullPathName().quoted() + " --options=" + astylePath.getChildFile("astylerc.sh").getFullPathName().quoted();
