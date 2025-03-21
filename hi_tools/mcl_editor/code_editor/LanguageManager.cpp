@@ -51,18 +51,18 @@ void LanguageManager::toggleCommentForLine(TextEditor* editor, bool shouldBeComm
 
 String LanguageManager::beautify(const String& input)
 {
-    // Check this property dynamically
-    File::SpecialLocationType appDataDirectoryToUse = File::userApplicationDataDirectory;
     
 #if JUCE_MAC
-	File appData = File::getSpecialLocation(appDataDirectoryToUse).getChildFile("Application Support");
-#else // WINDOWS
-	File appData = File::getSpecialLocation(appDataDirectoryToUse);
+	File appData = File::getSpecialLocation(File::userApplicationDataDirectory).getChildFile("Application Support");
+    File hiseRoot = appData.getChildFile("HISE");
+#elif JUCE_WINDOWS
+	File appData = File::getSpecialLocation(File::userApplicationDataDirectory);
+    File hiseRoot = appData.getChildFile("HISE");
+#else // JUCE_LINUX
+    File hiseRoot = File::getSpecialLocation(File::SpecialLocationType::userHomeDirectory).getChildFile(".hise/");
 #endif
 
-    File hiseRoot;
-
-    if(auto xml = XmlDocument::parse(appData.getChildFile("HISE").getChildFile("compilerSettings.xml")))
+    if(auto xml = XmlDocument::parse(hiseRoot.getChildFile("compilerSettings.xml")))
     {
 	    if(auto hp = xml->getChildByName("HisePath"))
 		    hiseRoot = File(hp->getStringAttribute("value"));
@@ -83,7 +83,7 @@ String LanguageManager::beautify(const String& input)
     auto astyle = astylePath.getChildFile("astyle.exe").getFullPathName();
 #elif JUCE_MAC
     auto astyle = astylePath.getChildFile("astyle_macos").getFullPathName();
-#else
+#else // JUCE_LINUX
     auto astyle = astylePath.getChildFile("astyle_linux").getFullPathName();
 #endif
     

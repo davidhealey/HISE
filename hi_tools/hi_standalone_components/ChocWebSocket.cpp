@@ -339,6 +339,8 @@ public:
 				}
 			}
 	    }
+
+		return var();
     }
 
 private:
@@ -504,7 +506,7 @@ void WebViewData::TCPServer::Data::append(bool isString, const void* data, size_
 		uint8_t payloadLen = 126; // Extended length 16-bit
 		mos.writeByte(payloadLen);
 		headerLength++;
-		uint16_t len = juce::ByteOrder::swapIfLittleEndian(static_cast<uint16_t>(totalLength));
+		uint16_t len = static_cast<uint16_t>(totalLength);
 		mos.write(&len, sizeof(uint16_t));
 		headerLength += sizeof(uint16_t);
 	}
@@ -513,7 +515,7 @@ void WebViewData::TCPServer::Data::append(bool isString, const void* data, size_
 		uint8_t payloadLen = 127; // Extended length 64-bit
 		mos.writeByte(payloadLen);
 		headerLength++;
-		uint64_t len = juce::ByteOrder::swapIfLittleEndian(static_cast<uint64_t>(totalLength));
+		uint64_t len = static_cast<uint64>(totalLength);
 		mos.write(&len, sizeof(uint64_t));
 		headerLength += sizeof(sizeof(uint64_t));
 	}
