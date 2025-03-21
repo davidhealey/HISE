@@ -62,25 +62,37 @@ String LanguageManager::beautify(const String& input)
 
     File hiseRoot;
 
-    if(auto xml = XmlDocument::parse(appData.getChildFile("HISE").getChildFile("compilerSettings.xml"))
+    if(auto xml = XmlDocument::parse(appData.getChildFile("HISE").getChildFile("compilerSettings.xml")))
     {
 	    if(auto hp = xml->getChildByName("HisePath"))
 		    hiseRoot = File(hp->getStringAttribute("value"));
     }
 
+    if(!hiseRoot.isDirectory())
+        return input;
+    
     auto astylePath = hiseRoot.getChildFile("tools").getChildFile("astyle");
     auto tempFile = astylePath.getChildFile("tmp.js");
     
-
-#if JUCE_WINDOWS
     ChildProcess cp;
-	
+
     auto ok = tempFile.replaceWithText(input);
+    
+#if JUCE_WINDOWS
+    
     auto astyle = astylePath.getChildFile("astyle.exe").getFullPathName();
-
-    String command = astyle.quoted() + " " + tempFile.getFullPathName().quoted() + " --options=" + astylePath.getChildFile("astylerc.sh").getFullPathName().quoted();
-
-    cp.start(command);
+#elif JUCE_MAC
+    auto astyle = astylePath.getChildFile("astyle_macos").getFullPathName();
+#else
+    auto astyle = astylePath.getChildFile("astyle_linux").getFullPathName();
+#endif
+    
+    StringArray args;
+    args.add(astyle);
+    args.add(tempFile.getFullPathName());
+    args.add(String("--options=" + astylePath.getChildFile("astylerc.sh").getFullPathName()));
+    
+    cp.start(args);
     cp.waitForProcessToFinish(2000);
     auto result = cp.readAllProcessOutput();
 
@@ -88,9 +100,6 @@ String LanguageManager::beautify(const String& input)
     tempFile.deleteFile();
     tempFile.getSiblingFile("tmp.js.orig").deleteFile();
     return r;
-#else
-    return input;
-#endif
 }
 
 CodeTokeniser* XmlLanguageManager::createCodeTokeniser()
