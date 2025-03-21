@@ -162,7 +162,7 @@ public:
     
 	bool gotoDefinition(Selection s1 = {});
 
-	void tokenListWasRebuild() override {};
+	void tokenListWasRebuild() override;;
 
 	void threadStateChanged(bool isRunning) override;
 
@@ -282,6 +282,81 @@ public:
 
 	void rebuildInplaceDebugValues();
 
+	struct Error
+	{
+		struct Helpers
+		{
+			static int getCharNumberFromBase64String(const String& base64EncodedString)
+			{
+				auto s = getDecodedString(base64EncodedString);
+
+				auto sa = StringArray::fromTokens(s, "|", "");
+
+				return sa[2].getIntValue();
+			}
+
+			static String getProcessorId(const String& base64EncodedString)
+			{
+				auto s = getDecodedString(base64EncodedString);
+
+				auto sa = StringArray::fromTokens(s, "|", "");
+
+				jassert(sa.size() > 0);
+
+				return sa[0];
+			}
+
+			static String getFileName(const String& base64EncodedString)
+			{
+				auto s = getDecodedString(base64EncodedString);
+
+				auto sa = StringArray::fromTokens(s, "|", "");
+
+				jassert(sa.size() > 1);
+
+				if (sa[1].isEmpty())
+					return String();
+
+				if (sa[1].contains("()"))
+					return sa[1];
+
+				return "{PROJECT_FOLDER}" + sa[1];
+			}
+
+			static String getDecodedString(const String& base64EncodedString)
+			{
+				MemoryOutputStream mos;
+				Base64::convertFromBase64(mos, base64EncodedString.removeCharacters("{}"));
+				return String::createStringFromData(mos.getData(), (int)mos.getDataSize());
+			}
+		};
+
+		Error(TextDocument& doc_, const String& e, bool isWarning_);
+
+		Selection getSelection() const;
+
+		static void paintLine(Line<float> l, Graphics& g, const AffineTransform& transform, Colour c);
+
+		void paintLines(Graphics& g, const AffineTransform& transform, Colour c);
+
+		TooltipWithArea::Data getTooltip(const AffineTransform& transform, Point<float> position);
+
+		void rebuild();
+
+		bool isEntireLine = false;
+
+		TextDocument& document;
+
+		CodeDocument::Position start;
+		CodeDocument::Position end;
+
+		juce::Rectangle<float> area;
+		Array<Line<float>> errorLines;
+
+		String errorMessage;
+		bool isWarning;
+	};
+
 private:
 
 	struct InplaceDebugValueComponent: public Component,
@@ -399,95 +474,32 @@ private:
 
 	bool nav(ModifierKeys mods, TextDocument::Target target, TextDocument::Direction direction);
 
-	struct Error
+	
+
+	class AutofixComponent : public juce::Component,
+							 public SettableTooltipClient,
+							 public CodeDocument::Listener
 	{
-		Error(TextDocument& doc_, const String& e, bool isWarning_);
-
-		Selection getSelection() const;
-
-		static void paintLine(Line<float> l, Graphics& g, const AffineTransform& transform, Colour c);
-
-		void paintLines(Graphics& g, const AffineTransform& transform, Colour c);
-
-		TooltipWithArea::Data getTooltip(const AffineTransform& transform, Point<float> position);
-
-		void rebuild();
-
-		bool isEntireLine = false;
-
-		TextDocument& document;
-
-		CodeDocument::Position start;
-		CodeDocument::Position end;
-
-		juce::Rectangle<float> area;
-		Array<Line<float>> errorLines;
-
-		String errorMessage;
-		bool isWarning;
-	};
-
-	class AutofixComponent : public juce::Component, public juce::ButtonListener, public CodeDocument::Listener {
 	public:
-	    AutofixComponent(mcl::TextEditor& editor_, const Error& error)
-	        : editor(editor_) {
-	        addAndMakeVisible(button);
-	        button.setButtonText("Autofix");
-	        button.addListener(this);
-
-			errorMessage = error.errorMessage;
-
-			Selection el(error.start.getLineNumber(), 0, error.start.getLineNumber()+1, 0);
-
-			errorLine = editor.getTextDocument().getSelectionContent(el).trim();
-
-	        // Position the component based on the error's area
-	        updatePosition();
-
-	        // Listen to CodeDocument for text changes
-	        codeDoc = &editor.getDocument();
-	        codeDoc->addListener(this);
-	    }
+	    AutofixComponent(mcl::TextEditor& editor_, const Error& error);
 
 		String errorMessage;
 		String errorLine;
 
-	    ~AutofixComponent() {
+	    ~AutofixComponent()
+		{
 	        if (codeDoc != nullptr) {
 	            codeDoc->removeListener(this);
 	        }
 	    }
 
-	    void paint(juce::Graphics& g) override {
-	        juce::Colour baseColour(0xFFBB3434);
-	        juce::Colour hoverColour(baseColour.brighter());
-	        juce::Colour clickedColour(hoverColour.darker());
+	    void paint(juce::Graphics& g) override;
+	    void resized() override;
 
-	        if (button.isDown()) {
-	            g.setGradientFill(juce::ColourGradient(clickedColour, 0.0f, 0.0f,
-	                                                   baseColour, 1.0f, getHeight(), false));
-	        } else if (button.isOver()) {
-	            g.setGradientFill(juce::ColourGradient(hoverColour, 0.0f, 0.0f,
-	                                                   baseColour, 1.0f, getHeight(), false));
-	        } else {
-	            g.setGradientFill(juce::ColourGradient(baseColour, 0.0f, 0.0f,
-	                                                   hoverColour, 1.0f, getHeight(), false));
-	        }
+	    void mouseEnter(const MouseEvent& e) override;
+	    void mouseDown(const MouseEvent& e) override;
 
-	        g.fillRoundedRectangle(getLocalBounds().toFloat(), 5.0f);
-	    }
-
-	    void resized() override {
-	        button.setBounds(2, 2, getWidth() - 4, getHeight() - 4);
-	    }
-
-	    void buttonClicked(juce::Button* b) override {
-	        if (b == &button) {
-	            launchHTTPRequest();
-	        }
-	    }
-
-		void codeDocumentTextDeleted(int startIndex, int endIndex) override
+	    void codeDocumentTextDeleted(int startIndex, int endIndex) override
 	    {
 		    updatePosition();
 	    }
@@ -497,28 +509,21 @@ private:
 		    updatePosition();
 	    }
 
+		bool calculateFix();
+		void updatePosition();
 
 	private:
+
+		String getCurrentNamespaceId() const;
+
+	    String fixMessage;
+		String correctLine;
+		Selection sel;
+
+		Path icon;
+
 	    mcl::TextEditor& editor;
-	    juce::TextButton button;
 	    CodeDocument* codeDoc;
-
-	    void updatePosition() {
-
-			if(editor.currentError != nullptr)
-			{
-				auto& document = editor.getTextDocument();
-				auto line = editor.currentError->start.getLineNumber();
-				auto col = 10000;
-				auto b = document.getBoundsOnRow(line, {col, col+1}, GlyphArrangementArray::ReturnBeyondLastCharacter).getRectangle(0);
-				b = b.translated(document.getCharacterRectangle().getWidth() * 1.0f, 0.0f);
-				auto area = b.transformed(editor.transform).withWidth(100);
-				setBounds(area.toNearestInt());
-			}
-	    }
-
-	    // Implement this method to handle the HTTP request
-	    void launchHTTPRequest();
 	};
 
 	ScopedPointer<AutofixComponent> autofixButton;

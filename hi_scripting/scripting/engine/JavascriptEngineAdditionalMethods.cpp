@@ -414,7 +414,7 @@ var HiseJavascriptEngine::RootObject::FunctionCall::getResult(const Scope& s) co
 				}
 			}
 
-			return invokeFunction(s, s.findFunctionCall(location, thisObject, dot->child), thisObject);
+			return invokeFunction(s, s.findFunctionCall(dot->parent->location, thisObject, dot->child), thisObject);
 		}
 
 		var r = object->getResult(s);

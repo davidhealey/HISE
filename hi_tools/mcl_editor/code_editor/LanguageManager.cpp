@@ -49,6 +49,34 @@ void LanguageManager::toggleCommentForLine(TextEditor* editor, bool shouldBeComm
 	    
 }
 
+String LanguageManager::beautify(const String& input)
+{
+#if JUCE_WINDOWS
+    ChildProcess cp;
+
+    auto hiseRoot = File("D:\\Development\\HISE modules");
+    auto astylePath = hiseRoot.getChildFile("tools").getChildFile("astyle");
+
+    auto tempFile = astylePath.getChildFile("tmp.js");
+    auto ok = tempFile.replaceWithText(input);
+
+    auto astyle = astylePath.getChildFile("astyle.exe").getFullPathName();
+
+    String command = astyle.quoted() + " " + tempFile.getFullPathName().quoted() + " --options=" + astylePath.getChildFile("astylerc.sh").getFullPathName().quoted();
+
+    cp.start(command);
+    cp.waitForProcessToFinish(2000);
+    auto result = cp.readAllProcessOutput();
+
+    auto r = tempFile.loadFileAsString();
+    tempFile.deleteFile();
+    tempFile.getSiblingFile("tmp.js.orig").deleteFile();
+    return r;
+#else
+    return input;
+#endif
+}
+
 CodeTokeniser* XmlLanguageManager::createCodeTokeniser()
 {
 	return new XmlTokeniser();
@@ -250,6 +278,16 @@ mcl::FoldableLineRange::List LanguageManager::createLineRange(const juce::CodeDo
     }
 
     return lineRanges;
+}
+
+void LanguageManager::InplaceDebugValue::init()
+{
+	if(!initialised)
+	{
+		location = CodeDocument::Position(*location.getOwner(), originalLineNumber, 99);
+		location.setPositionMaintained(true);
+		initialised = true;
+	}
 }
 
 FoldableLineRange::List MarkdownLanguageManager::createLineRange(const CodeDocument& doc)

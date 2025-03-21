@@ -247,52 +247,7 @@ struct HiseJavascriptEngine::RootObject::CodeLocation
 		return getEncodedLocationString(processorId, scriptRoot, col, line);
 	}
 
-	struct Helpers
-	{
-		static int getCharNumberFromBase64String(const String& base64EncodedString)
-		{
-			auto s = getDecodedString(base64EncodedString);
-
-			auto sa = StringArray::fromTokens(s, "|", "");
-
-			return sa[2].getIntValue();
-		}
-
-		static String getProcessorId(const String& base64EncodedString)
-		{
-			auto s = getDecodedString(base64EncodedString);
-
-			auto sa = StringArray::fromTokens(s, "|", "");
-
-			jassert(sa.size() > 0);
-
-			return sa[0];
-		}
-
-		static String getFileName(const String& base64EncodedString)
-		{
-			auto s = getDecodedString(base64EncodedString);
-
-			auto sa = StringArray::fromTokens(s, "|", "");
-
-			jassert(sa.size() > 1);
-
-			if (sa[1].isEmpty())
-				return String();
-
-			if (sa[1].contains("()"))
-				return sa[1];
-
-			return "{PROJECT_FOLDER}" + sa[1];
-		}
-
-		static String getDecodedString(const String& base64EncodedString)
-		{
-			MemoryOutputStream mos;
-			Base64::convertFromBase64(mos, base64EncodedString.removeCharacters("{}"));
-			return String::createStringFromData(mos.getData(), (int)mos.getDataSize());
-		}
-	};
+	using Helpers = mcl::TextEditor::Error::Helpers;
 
 	String getErrorMessage(const String &message) const
 	{
@@ -2103,7 +2058,7 @@ String HiseJavascriptEngine::RootObject::Error::getEncodedLocation(Processor* p)
 	l << "|" << String(charIndex);
 	l << "|" << String(lineNumber) << "|" << String(columnNumber);
 
-	return "{" + Base64::toBase64(l) + "}";
+	return "{{" + Base64::toBase64(l) + "}}";
 #else
 				return {};
 #endif

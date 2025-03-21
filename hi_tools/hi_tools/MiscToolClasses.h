@@ -1710,6 +1710,8 @@ public:
 	/** Returns a index array with the results for the given wordlist. */
 	static Array<int> searchForIndexes(const String &word, const StringArray &wordList, double fuzzyness);
 
+	static String suggestCorrection(const juce::String& wrongToken, const juce::StringArray& availableTokens, double fuzzyness = 0.3);
+
 private:
 
 	static void search(void *outputArray, bool useIndexes, const String &word, const StringArray &wordList, double fuzzyness);

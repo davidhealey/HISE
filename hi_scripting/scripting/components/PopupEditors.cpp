@@ -175,8 +175,8 @@ PopupIncludeEditor::PopupIncludeEditor(JavascriptProcessor* s, const Identifier 
 	{
 		if(errorMessage.isNotEmpty())
 		{
-			auto m = errorMessage.upToFirstOccurrenceOf("{", false, false);
-			auto encodedState = errorMessage.fromFirstOccurrenceOf("{", false, false).upToFirstOccurrenceOf("}", false, false);
+			auto m = errorMessage.upToFirstOccurrenceOf("{{", false, false);
+			auto encodedState = errorMessage.fromFirstOccurrenceOf("{{", false, false).upToFirstOccurrenceOf("}}", false, false);
 			auto pId = HiseJavascriptEngine::RootObject::CodeLocation::Helpers::getProcessorId(encodedState);
 
 			DebugableObject::Location loc;
