@@ -5008,7 +5008,7 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawTableCell(Graphics& g_, con
 
 		obj->setProperty("text", text);
 		obj->setProperty("rowIndex", rowNumber);
-		obj->setProperty("columnIndex", columnId - 1);
+		obj->setProperty("columnIndex", columnId);
 		obj->setProperty("selected", rowIsSelected);
 		obj->setProperty("clicked", cellIsClicked);
 		obj->setProperty("hover", cellIsHovered);
@@ -5061,7 +5061,7 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawTableHeaderColumn(Graphics&
 		obj->setProperty("textColour", d.textColour.getARGB());
 
 		obj->setProperty("text", columnName);
-		obj->setProperty("columnIndex", columnId - 1);
+		obj->setProperty("columnIndex", columnId);
 		obj->setProperty("hover", isMouseOver);
 		obj->setProperty("down", isMouseDown);
 
