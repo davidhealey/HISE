@@ -7,11 +7,6 @@ struct WebViewData::TCPServer::Helpers
 {
 	static std::string btoa(void* data, size_t numBytes)
 	{
-		auto isBase64 = [](uint8 c)
-		{
-			return (std::isalnum(c) || (c == '+') || (c == '/'));
-		};
-
 		static const std::string b64Characters =
 			"ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 			"abcdefghijklmnopqrstuvwxyz"
@@ -71,7 +66,7 @@ struct WebViewData::TCPServer::Helpers
 
 	    int bytesRead = socket->read(buffer, sizeof(buffer), false);
 
-	    if (bytesRead <= 0) 
+	    if (!ok || bytesRead <= 0) 
 			return false;
 
 	    juce::String request(buffer);

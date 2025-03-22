@@ -1904,7 +1904,7 @@ struct ZoomableDataViewer: public AbstractZoomableView,
     {
         Colour getColour() const
         {
-            return Colour(label.hash()).withSaturation(0.5).withBrightness(0.7f).withAlpha(1.0f);
+            return Colour((uint32)label.hash()).withSaturation(0.5).withBrightness(0.7f).withAlpha(1.0f);
         }
 
         void draw(Graphics& g, DrawContext& ctx)
@@ -2197,7 +2197,7 @@ struct ZoomableDataViewer: public AbstractZoomableView,
     void resized() override
     {
         auto b = getLocalBounds();
-        auto legend = b.removeFromTop(24);
+        b.removeFromTop(24);
         onResize(b);
     }
     

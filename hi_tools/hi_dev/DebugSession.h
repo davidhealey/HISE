@@ -308,7 +308,9 @@ public:
 			case SourceType::Server: return "Server";
 			case SourceType::BackgroundTask: return "Background Task";
 			case SourceType::RecordingSession: return "Threads";
-			}
+            case SourceType::numSourceTypes:
+                    break;
+            }
 
 			return {};
 		}

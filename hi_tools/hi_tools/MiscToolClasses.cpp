@@ -472,46 +472,6 @@ Array<int> FuzzySearcher::searchForIndexes(const String &word, const StringArray
 String FuzzySearcher::suggestCorrection(const juce::String& wrongToken, const juce::StringArray& availableTokens,
 	double fuzzyness)
 {
-	if(wrongToken.containsChar('.'))
-	{
-		auto wrongTokens = StringArray::fromTokens(wrongToken, ".", "");
-
-		std::vector<std::pair<double, String>> matches;
-
-		for(auto& t: availableTokens)
-		{
-			auto tokens = StringArray::fromTokens(t, ".", "");
-
-			int numMatches = 0;
-
-			for(const auto& wt: wrongTokens)
-			{
-				for(const auto& at: tokens)
-				{
-					auto dist = getLevenshteinDistance(wt, at);
-					int length = jmax<int>(at.length(), wt.length());
-					auto score = 1.0 - (double)dist / (double)length;
-
-					if(score > 0.8)
-					{
-						numMatches++;
-						break;
-					}
-				}
-			}
-
-			if(numMatches != 0)
-				matches.push_back({ numMatches, t });
-		}
-
-		for(auto& m: matches)
-		{
-			DBG(m.second + ": " + String(m.first));
-		}
-
-		int x = 5;
-	}
-
 	juce::Array<int> matchingIndexes = FuzzySearcher::searchForIndexes(wrongToken, availableTokens, fuzzyness);
 
 	if (matchingIndexes.isEmpty())

@@ -544,7 +544,7 @@ void DebugSession::ProfileDataSource::ViewComponents::ViewItem::addRun(double fi
 		if(auto existing = getChildForData(tc->data))
 			existing->addRun(first, tc, runIndex);
 		else
-			children.add(new ViewItem(tc, first, depth+1, runs.size(), runIndex));
+			children.add(new ViewItem(tc, first, depth+1, (int)runs.size(), runIndex));
 	}
 }
 
@@ -633,7 +633,7 @@ void DebugSession::ProfileDataSource::ViewComponents::ViewItem::paintItem(Graphi
 	}
 
 	auto numRuns = runs.size();
-	auto tc = c.withMultipliedBrightness(ctx.currentlyHoveredItem == this ? 1.3f : 1.0f);
+	auto tc = c.withMultipliedBrightness(ctx.currentlyHoveredItem.get() == this ? 1.3f : 1.0f);
 
 	g.setColour(tc.withMultipliedAlpha(searchAlpha).withMultipliedBrightness(0.5f));
 	g.fillRect(thisBounds.reduced(1.0f));
@@ -656,7 +656,7 @@ void DebugSession::ProfileDataSource::ViewComponents::ViewItem::paintItem(Graphi
 
 		auto t = title;
 
-		if(ctx.currentlyHoveredItem == this && !useEquiDistance)
+		if(ctx.currentlyHoveredItem.get() == this && !useEquiDistance)
 			t << " (" << getDuration(ctx.currentIndex, ctx.showTimeline, ctx.domain, ctx.domainContext) << ")";
 
 		g.drawText(t, textBounds, Justification::left);
@@ -677,13 +677,13 @@ bool DebugSession::ProfileDataSource::ViewComponents::ViewItem::shouldBeDisplaye
     
 	auto p = parent.get();
 
-	auto isChildOfRoot = (ctx.currentRoot == this) || (ctx.currentRoot == p);
+	auto isChildOfRoot = (ctx.currentRoot == this) || (ctx.currentRoot.get() == p);
 
 	auto isFolded = false;
 
 	while(p != nullptr && !isFolded)
 	{
-		isChildOfRoot |= p == ctx.currentRoot;
+		isChildOfRoot |= p == ctx.currentRoot.get();
 		isFolded |= p->folded;
 		p = p->parent.get();
 	}
@@ -775,7 +775,7 @@ void DebugSession::ProfileDataSource::ViewComponents::ViewItem::draw(Graphics& g
 
 		PathFactory::scalePath(p, copy.removeFromLeft(thisBounds.getHeight()).withSizeKeepingCentre(10.0f, 10.0f));
 
-		g.setColour(Colours::white.withAlpha(ctx.currentlyHoveredItem == this ? 0.4f : 0.1f));
+		g.setColour(Colours::white.withAlpha(ctx.currentlyHoveredItem.get() == this ? 0.4f : 0.1f));
 		g.fillPath(p);
 	}
 }
