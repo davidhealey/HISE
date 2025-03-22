@@ -3125,12 +3125,13 @@ void ScriptingApi::Engine::loadUserPreset(var file)
             userPresetToLoad = userPresetToLoad.withFileExtension(".preset");
 	}
 
-    if(!getProcessor()->getMainController()->isInitialised())
-    {
-        reportScriptError("Do not load user presets at startup.");
-    }
-    else if (userPresetToLoad.existsAsFile())
+    if (userPresetToLoad.existsAsFile())
 	{
+        if(!getProcessor()->getMainController()->isInitialised())
+        {
+            reportScriptError("Do not load user presets at startup.");
+        }
+        
 		getProcessor()->getMainController()->getUserPresetHandler().loadUserPreset(userPresetToLoad);
 	}
 	else
