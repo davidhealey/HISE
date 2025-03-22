@@ -335,6 +335,9 @@ bool TextEditor::gotoDefinition(Selection s1)
 
 void TextEditor::tokenListWasRebuild()
 {
+    if(tokenCollection->getTokens().isEmpty())
+        return;
+    
 	SafeAsyncCall::call<TextEditor>(*this, [](TextEditor& te)
 	{
 		if(te.currentError != nullptr)
@@ -906,6 +909,9 @@ bool TextEditor::AutofixComponent::calculateFix()
 
 	auto tokens = editor.tokenCollection->getTokens();
 
+	SimpleDocumentTokenProvider doc(editor.getDocument());
+	doc.addTokens (tokens);
+	
 	sel = editor.currentError->getSelection();
 	errorLine = editor.getTextDocument().getSelectionContent(sel);
 
@@ -920,10 +926,9 @@ bool TextEditor::AutofixComponent::calculateFix()
 		if(currentNamespace.isNotEmpty() && tk.startsWith(currentNamespace))
 			tk = tk.fromFirstOccurrenceOf(currentNamespace + ".", false, false);
 
-		existingTokens.addIfNotAlreadyThere(tk);
+        if(!errorLine.endsWith(tk))
+            existingTokens.addIfNotAlreadyThere(tk);
 	}
-
-	
 
 	correctLine = FuzzySearcher::suggestCorrection(errorLine, existingTokens, 0.3);
 

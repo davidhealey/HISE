@@ -256,6 +256,8 @@ String DebugSession::ProfileDataSource::ViewComponents::StatisticsComponent::get
 
 DebugSession::ProfileDataSource::ViewComponents::StatisticsComponent::RowData::RowData(ViewItem& i, int index_)
 {
+    currentRunIndex = -1;
+    
 	auto thisLength = currentRunIndex == -1 ? i.avg.length : i.runs[currentRunIndex].length;;
 	auto n = i.name.upToFirstOccurrenceOf("[", false, false);
 
@@ -269,7 +271,6 @@ DebugSession::ProfileDataSource::ViewComponents::StatisticsComponent::RowData::R
 
 	auto exclusiveLength = thisLength - childLength;
 
-	currentRunIndex = currentRunIndex;
 	exclusiveTime = exclusiveLength;
 	name = n;
 	firstItem = &i;
@@ -420,7 +421,7 @@ void DebugSession::ProfileDataSource::ViewComponents::StatisticsComponent::cellD
 int DebugSession::ProfileDataSource::ViewComponents::StatisticsComponent::compareElements(RowData* r1,
                                                                                           RowData* r2) const
 {
-	int result;
+    int result = 0;
 
 	switch(currentSortId)
 	{
@@ -658,13 +659,13 @@ DebugSession::ProfileDataSource::ViewComponents::ItemPopup::ItemPopup(Viewer* p,
 	{
 		if(auto pi = dynamic_cast<ProfileInfo*>(vi.infoItem.get()))
 		{
-			if(pi->data.trackSource != -1 && item != &vi)
+			if(pi->data.trackSource != -1 && item.get() != &vi)
 			{
 				bool found = false;
 
 				for(auto v: internalTracks)
 				{
-					if(v.first == &vi)
+					if(v.first.get() == &vi)
 					{
 						found = true;
 						break;
@@ -674,13 +675,13 @@ DebugSession::ProfileDataSource::ViewComponents::ItemPopup::ItemPopup(Viewer* p,
 				if(!found)
 					sources.add(&vi);
 			}
-			if(pi->data.trackTarget != -1 && item != &vi)
+			if(pi->data.trackTarget != -1 && item.get() != &vi)
 			{
 				bool found = false;
 
 				for(auto v: internalTracks)
 				{
-					if(v.second == &vi)
+					if(v.second.get() == &vi)
 					{
 						found = true;
 						break;

@@ -187,8 +187,6 @@ struct DebugSession::ProfileDataSource::ViewComponents::Viewer::TimelineComponen
 		for(int i = 1; i < dataPoints.getNumRectangles(); i++)
 			graph.lineTo(dataPoints.getRectangle(i).getCentre());
 
-		auto b = getLocalBounds().toFloat().reduced(6.0f);
-
 		Path ns;
 
 		selection.clear();
@@ -436,7 +434,9 @@ void DebugSession::ProfileDataSource::ViewComponents::Viewer::setTimeDomain(Time
 
 	switch (newDomain)
 	{
-	case TimeDomain::Absolute:
+    case TimeDomain::Undefined:
+        break;
+    case TimeDomain::Absolute:
 		newDomainContext = 0.0;
 		break;
 	case TimeDomain::Relative:
@@ -474,7 +474,7 @@ void DebugSession::ProfileDataSource::ViewComponents::Viewer::mouseDown(const Mo
 {
 	if(e.mods.isLeftButtonDown())
 	{
-		if(currentlyHoveredItem != nullptr && currentlyHoveredItem != rootItem && e.mods.isCommandDown())
+		if(currentlyHoveredItem != nullptr && currentlyHoveredItem != rootItem.get() && e.mods.isCommandDown())
 		{
 			navigate(currentlyHoveredItem, true);
 			return;

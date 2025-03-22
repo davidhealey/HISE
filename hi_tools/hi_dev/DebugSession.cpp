@@ -1303,7 +1303,7 @@ void DebugSession::timerCallback()
 
 		for(auto& q: multithreadedEventQueue)
 		{
-			for(int i = q->stack.size() - 1; i >= 0; i--)
+			for(auto i = q->stack.size() - 1; i >= 0; i--)
 				q->queue.push({q->stack[i]->data.source.get(), recordingStart, false});
 		}
 
@@ -1425,8 +1425,6 @@ void DebugSession::processEventQueue()
 				}
 				else
 				{
-					auto isScript = t->thread.type == ThreadIdentifier::Type::ScriptingThread;
-
 					if(!t->stack.empty())
 					{
 						auto ni = t->stack.back();

@@ -415,7 +415,7 @@ private:
 				std::unique_ptr<Component> v;
 				v.reset(n);
 
-				return std::move(v);
+                return v;
 			}
 
 			ScopedPointer<Component> child;

@@ -523,6 +523,7 @@ struct ComplexGroupManager::XFadeLayer final : public ComplexGroupManager::Layer
 		if(values == nullptr)
 		{
 			auto input = jlimit(0.0f, 1.0f, value);
+            ignoreUnused(input);
 			BACKEND_ONLY(valueUpdater.sendMessage(sendNotificationAsync, voiceIndex, input));
 			value = getFadeValue(m, value);
 			FloatVectorOperations::multiply(data + startSample, value, numSamples);
@@ -530,6 +531,7 @@ struct ComplexGroupManager::XFadeLayer final : public ComplexGroupManager::Layer
 		else
 		{
 			auto input = jlimit(0.0f, 1.0f, values[0]);
+            ignoreUnused(input);
 			BACKEND_ONLY(valueUpdater.sendMessage(sendNotificationAsync, voiceIndex, input));
 
 			for(int i = 0; i < numSamples; i++)

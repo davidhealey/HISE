@@ -78,6 +78,9 @@ String LanguageManager::beautify(const String& input)
 
     auto ok = tempFile.replaceWithText(input);
     
+    if(!ok)
+        return input;
+    
 #if JUCE_WINDOWS
     
     auto astyle = astylePath.getChildFile("astyle.exe").getFullPathName();
