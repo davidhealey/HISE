@@ -330,7 +330,9 @@ public:
 		{
 			controlSender.cancelMessage();
             localLookAndFeel = var();
-		};
+		}
+
+		PROFILE_ONLY(int getProfilePropertyTrackId(const Identifier& id) const { return (int)propertyTrackIds[id]; })
 
 		virtual ValueTree exportAsValueTree() const override;;
 		virtual void restoreFromValueTree(const ValueTree &v) override;;
@@ -702,20 +704,19 @@ public:
 
 		int getStyleSheetPseudoState() const { return pseudoState; }
 
+		ProfileCollection::ID pSetValue, pChanged, pControlCallback, pSetAttribute, pSetProperty, pOnProperty;
+
+		int tSetAttribute;
+
+		ProfileCollection::PS::ScopedProfiler profile(ProfileCollection::ID id);
+		void openTrack(ProfileCollection::ID id);
+		void closeTrack(ProfileCollection::ID id);
+
 	protected:
 
-		String getCSSFromLocalLookAndFeel()
-		{
-			if (auto l = dynamic_cast<ScriptingObjects::ScriptedLookAndFeel*>(localLookAndFeel.getObject()))
-			{
-				if(l->isUsingCSS())
-				{
-					return l->currentStyleSheet;
-				}
-			}
+		
 
-			return {};
-		}
+		String getCSSFromLocalLookAndFeel();
 
 		bool isCorrectlyInitialised(int p) const
 		{
@@ -756,6 +757,8 @@ public:
 		bool removePropertyIfDefault = true;
 
 		CustomAutomationPtr currentAutomationData;
+
+		PROFILE_ONLY(NamedValueSet propertyTrackIds);
 
 #if USE_BACKEND
 		juce::SharedResourcePointer<hise::ScriptComponentPropertyTypeSelector> selectorTypes;
@@ -1673,6 +1676,8 @@ public:
 			NumDebugWatchIndexes
 		};
 
+		ProfileCollection::ID pRepaint, pPaintRoutine;
+
 		ScriptPanel(ProcessorWithScriptingContent *base, Content *parentContent, Identifier panelName, int x, int y, int width, int height);;
 		
 		ScriptPanel(ScriptPanel* parent);
@@ -2049,6 +2054,8 @@ public:
 
 		hise::WebViewData::Ptr getData() const { return data; }
 
+		void preRecompileCallback() override;
+
 		// ========================================================================================================= API Methods
 
 		/** Binds a HiseScript function to a Javascript callback id. */
@@ -2060,7 +2067,25 @@ public:
 		/** Evaluates the code in the web view. You need to pass in an unique identifier so that it will initialise new web views correctly. */
 		void evaluate(const String& identifier, const String& jsCode);
 
-        /** Sets the file to be displayed by the WebView. */
+		/** Sets the HTML content to be used by the webview. */
+		void setHtmlContent(const String& htmlCode);
+
+		/** Enables Websocket communication between HISE and the webview. */
+		void setEnableWebSocket(int port);
+
+		/** Sends the data to the websocket. */
+		void sendToWebSocket(String id, var data);
+
+		/** Adds a buffer to be synchronised through the websocket. */
+		void addBufferToWebSocket(int bufferIndex, var buffer);
+
+		/** Registers a callable object to be notified for incoming messages from the websocket. */
+		void setWebSocketCallback(var callbackFunction);
+
+		/** Sends the buffer to the webview through the websocket connection. */
+		void updateBuffer(int bufferIndex);
+
+		/** Sets the file to be displayed by the WebView. */
         void setIndexFile(var indexFile);
         
 		/** Resets the entire webview. */
@@ -2086,6 +2111,8 @@ public:
 			const String& callbackId;
 			WeakCallbackHolder f;
 		};
+
+		WeakCallbackHolder webSocketCallback;
 
 		OwnedArray<HiseScriptCallback> callbacks;
 
@@ -2993,6 +3020,8 @@ public:
 
 		return false;
 	}
+
+	ProfileCollection contentProfile;
 
 private:
 

@@ -292,7 +292,7 @@ struct TempoDisplay : public ModulationSourceBaseComponent
 		g.setFont(GLOBAL_BOLD_FONT());
 
 		Path p;
-		p.loadPathFromData(ColumnIcons::targetIcon, sizeof(ColumnIcons::targetIcon));
+		p.loadPathFromData(ColumnIcons::targetIcon, SIZE_OF_PATH(ColumnIcons::targetIcon));
 
 		PathFactory::scalePath(p, b.removeFromLeft(b.getHeight()).reduced(3));
 

@@ -2918,7 +2918,7 @@ void ScriptingObjects::ScriptingModulator::doubleClickCallback(const MouseEvent 
 
 Component* ScriptingObjects::ScriptingModulator::createPopupComponent(const MouseEvent& e, Component* t)
 {
-	return DebugableObject::Helpers::showProcessorEditorPopup(e, t, mod);
+	return DebugableObject::Helpers::showProcessorEditorPopup(t, mod);
 }
 
 void ScriptingObjects::ScriptingModulator::setIntensity(float newIntensity)
@@ -3212,7 +3212,7 @@ moduleHandler(fx, dynamic_cast<JavascriptProcessor*>(p))
 
 Component* ScriptingObjects::ScriptingEffect::createPopupComponent(const MouseEvent& e, Component* t)
 {
-	return DebugableObject::Helpers::showProcessorEditorPopup(e, t, effect.get());
+	return DebugableObject::Helpers::showProcessorEditorPopup(t, effect.get());
 }
 
 juce::String ScriptingObjects::ScriptingEffect::getId() const
@@ -3962,7 +3962,7 @@ ScriptingObjects::ScriptingSynth::ScriptingSynth(ProcessorWithScriptingContent *
 
 Component* ScriptingObjects::ScriptingSynth::createPopupComponent(const MouseEvent& e, Component* t)
 {
-	return DebugableObject::Helpers::showProcessorEditorPopup(e, t, synth);
+	return DebugableObject::Helpers::showProcessorEditorPopup(t, synth);
 }
 
 String ScriptingObjects::ScriptingSynth::getId() const
@@ -4265,7 +4265,7 @@ mp(mp_)
 
 Component* ScriptingObjects::ScriptingMidiProcessor::createPopupComponent(const MouseEvent& e, Component* t)
 {
-	return DebugableObject::Helpers::showProcessorEditorPopup(e, t, mp);
+	return DebugableObject::Helpers::showProcessorEditorPopup(t, mp);
 }
 
 int ScriptingObjects::ScriptingMidiProcessor::getCachedIndex(const var &indexExpression) const
@@ -4860,7 +4860,7 @@ void ScriptingObjects::TimerObject::setTimerCallback(var callbackFunction)
 	tc = WeakCallbackHolder(getScriptProcessor(), this, callbackFunction, 0);
 	tc.incRefCount();
 	tc.setThisObject(this);
-	tc.addAsSource(this, "onTimerCallback");
+	tc.addAsSource(this, "timerCallback");
 }
 
 
@@ -6970,8 +6970,11 @@ ScriptingObjects::ScriptBackgroundTask::ScriptBackgroundTask(ProcessorWithScript
 	ConstScriptingObject(p, 0),
 	Thread(name),
 	currentTask(p, this, var(), 1),
-	finishCallback(p, this, var(), 2)
+	finishCallback(p, this, var(), 2),
+	recordingSession(new ProfiledRecordingSession(p->getMainController_()->getDebugSession(), DebugSession::ThreadIdentifier::Type::WorkerThread)) 
 {
+	PROFILE_ONLY(recordingSession->getDataSource()->name = name);
+
 	String s;
 	s << getThreadName() << "abort checks";
 	abortId = Identifier(s);
@@ -7120,6 +7123,8 @@ bool ScriptingObjects::ScriptBackgroundTask::killVoicesAndCall(var loadingFuncti
 			if (safeThis != nullptr)
 			{
 				auto r = safeThis->currentTask.callSync(nullptr, 0, nullptr);
+
+				safeThis->currentTask.clear();
 
 				if (!r.wasOk())
 					debugError(p, r.getErrorMessage());
@@ -7286,6 +7291,11 @@ void ScriptingObjects::ScriptBackgroundTask::run()
 	TRACE_COUNTER("scripting", ct, numAbortChecks);
 #endif
 
+
+	recordingSession->initIfEmpty(DebugSession::ThreadIdentifier::getCurrent());
+	recordingSession->checkRecording();
+	DebugSession::ProfileDataSource::ScopedProfiler sp(recordingSession->getDataSource(), dynamic_cast<JavascriptProcessor*>(getScriptProcessor()));
+	
 	if (currentTask || childProcessData)
 	{
 		if (forwardToLoadingThread)
@@ -7297,7 +7307,6 @@ void ScriptingObjects::ScriptBackgroundTask::run()
 		{
 			childProcessData->run();
 			childProcessData = nullptr;
-
 		}
 		else
 		{
@@ -7310,6 +7319,8 @@ void ScriptingObjects::ScriptBackgroundTask::run()
 				getScriptProcessor()->getMainController_()->writeToConsole(r.getErrorMessage(), 1, dynamic_cast<Processor*>(getScriptProcessor()));
 #endif
 		}
+
+		currentTask.clear();
 
 		if (forwardToLoadingThread)
 		{

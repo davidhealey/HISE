@@ -124,6 +124,8 @@ public:
 
 	bool skipCompilation = false;
 
+	Result getCompilationResult() const { return getErrorCode() == ErrorCodes::OK ? Result::ok() : Result::fail(errorMessage); }
+
 private:
 
 	enum CppFileLocationType

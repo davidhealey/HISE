@@ -288,6 +288,7 @@ private:
 class HiComboBox: public SubmenuComboBox,
 				  public ComboBox::Listener,
 				  public MacroControlledObject,
+				  public ProfiledComponent,
                   public TouchAndHoldComponent
 {
 public:
@@ -310,6 +311,8 @@ public:
 	
     void mouseDown(const MouseEvent &e) override;
 	void mouseDrag(const MouseEvent& e) override;
+
+	paintAndProfileChildren(g);
 
 	ValueToTextConverter getValueToTextConverter() const override
 	{
@@ -355,7 +358,8 @@ private:
 class HiToggleButton: public MomentaryToggleButton,
 					  public Button::Listener,
 				      public MacroControlledObject,
-                      public TouchAndHoldComponent
+                      public TouchAndHoldComponent,
+					  public ProfiledComponent
 {
 public:
 
@@ -389,7 +393,8 @@ public:
 	void mouseUp(const MouseEvent& e) override;
 
 	void mouseDrag(const MouseEvent& event) override;
-	
+
+	paintAndProfileChildren(g);
 
 	void touchAndHold(Point<int> downPosition) override;
     
@@ -401,11 +406,7 @@ private:
 
 	var popupData;
 	Rectangle<int> popupPosition;
-
 	Component::SafePointer<Component> currentPopup;
-
-	
-
 	NotificationType notifyEditor;
 	ScopedPointer<LookAndFeel> laf;
 };
@@ -619,6 +620,7 @@ class HiSlider: public juce::Slider,
 			    public SliderWithShiftTextBox,
 				public MacroControlledObject,
 				public SliderListener,
+				public ProfiledComponent,
 				public TouchAndHoldComponent
 {
 public:
@@ -727,6 +729,8 @@ public:
 
 	static String getSuffixForMode(HiSlider::Mode mode, float panValue);
 
+	paintAndProfileChildren(g);
+	
 private:
 
 	bool sendValueOnDrag = true;

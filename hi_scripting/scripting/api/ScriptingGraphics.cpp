@@ -428,7 +428,7 @@ struct ScriptingObjects::ScriptShader::PreviewComponent: public Component,
 #if USE_BACKEND
 		LOAD_EPATH_IF_URL("stats", BackendBinaryData::ToolbarIcons::debugPanel);
 		LOAD_EPATH_IF_URL("view", BackendBinaryData::ToolbarIcons::viewPanel);
-		LOAD_PATH_IF_URL("time", ColumnIcons::moveIcon);
+		LOAD_EPATH_IF_URL("time", ColumnIcons::moveIcon);
 #endif
 		return p;
 	}
@@ -2591,6 +2591,25 @@ Array<Identifier> ScriptingObjects::ScriptedLookAndFeel::getAllFunctionNames()
 	return sa;
 }
 
+void ScriptingObjects::ScriptedLookAndFeel::setEnableProfiling(DebugSession::ProfileDataSource::Ptr ptr,
+	ApiProviderBase::Holder* h)
+{
+#if HISE_INCLUDE_PROFILING_TOOLKIT
+	holder = h;
+
+	if(holder != nullptr)
+	{
+		profileData = new DebugSession::ProfileDataSource();
+		profileData->sourceType = DebugSession::ProfileDataSource::SourceType::Script;
+		profileData->name = "paintRoutine()";
+	}
+	else
+	{
+		profileData = nullptr;
+	}
+#endif
+}
+
 bool ScriptingObjects::ScriptedLookAndFeel::callWithGraphics(Graphics& g_, const Identifier& functionname, var argsObject, Component* c)
 {
 #if PERFETTO
@@ -2651,6 +2670,7 @@ bool ScriptingObjects::ScriptedLookAndFeel::callWithGraphics(Graphics& g_, const
 			if (auto sl = SimpleReadWriteLock::ScopedTryReadLock(getScriptProcessor()->getMainController_()->getJavascriptThreadPool().getLookAndFeelRenderLock()))
 			{
 				TRACE_SCRIPTING("executing script function");
+				DebugSession::ProfileDataSource::ScopedProfiler sp(profileData, holder);
 
 				if (c != nullptr && c->getParentComponent() != nullptr)
 				{
@@ -2690,13 +2710,15 @@ bool ScriptingObjects::ScriptedLookAndFeel::callWithGraphics(Graphics& g_, const
 				engine->callExternalFunction(f, arg, &lastResult, true);
 
 				if (lastResult.wasOk())
-					g->getDrawHandler().flush(0);
+					g->getDrawHandler().flush(0, 0);
 				else
 					debugToConsole(dynamic_cast<Processor*>(getScriptProcessor()), lastResult.getErrorMessage());
 			}
 		}
 
 		TRACE_SCRIPTING("rendering draw actions");
+
+		PROFILE_ONLY(g->getDrawHandler().setEnableProfiling(holder));
 
 		DrawActions::Handler::Iterator it(&g->getDrawHandler());
 

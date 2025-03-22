@@ -159,6 +159,11 @@ void ValueTreeApiHelpers::getColourAndCharForType(int type, char &c, Colour &col
 	}
 }
 
+void DebugableObjectBase::writeAsJSON(OutputStream& outputStream, int indentLevel, bool allOnOneLine, int maximumDecimalPlaces)
+{
+	outputStream.writeString(getDebugName() + " - " + getDebugValue());
+}
+
 void ApiProviderBase::getColourAndLetterForType(int type, Colour& colour, char& letter)
 {
 	colour = Colours::white;
@@ -566,6 +571,21 @@ String DebugInformationBase::getVarType(const var& v)
 	return "undefined";
 }
 
+bool DebugInformationBase::callRecursive(const std::function<bool(DebugInformationBase&)>& f)
+{
+	if(f(*this))
+		return true;
+
+	for(int i = 0; i < getNumChildElements(); i++)
+	{
+		auto c = getChildElement(i);
+		if(c->callRecursive(f))
+			return true;
+	}
+
+	return false;
+}
+
 StringArray DebugInformationBase::createTextArray() const
 {
 	StringArray sa;
@@ -576,6 +596,22 @@ StringArray DebugInformationBase::createTextArray() const
 	sa.add(getTextForValue());
 
 	return sa;
+}
+
+ObjectDebugInformation::ObjectDebugInformation(DebugableObjectBase* b, int type_):
+	obj(b),
+	type(type_)
+{
+
+}
+
+String ObjectDebugInformation::getCodeToInsert() const
+{ 
+	if(obj != nullptr)
+		return obj->getInstanceName().toString(); 
+
+	return {};
+
 }
 
 Component* DebugInformationBase::createPopupComponent(const MouseEvent& e, Component* componentToNotify)
@@ -654,5 +690,6 @@ String ComponentForDebugInformation::getTitle() const
 	s << expression;
 	return s;
 }
+
 
 } // namespace hise

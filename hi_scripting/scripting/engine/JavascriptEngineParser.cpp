@@ -270,7 +270,8 @@ struct HiseJavascriptEngine::RootObject::ExpressionTreeBuilder : private TokenIt
 {
 	ExpressionTreeBuilder(const String code, const String externalFile, HiseJavascriptPreprocessor::Ptr preprocessor_) :
 		TokenIterator(code, externalFile),
-		preprocessor(preprocessor_)
+		preprocessor(preprocessor_),
+	    currentErrorLocation(nullptr)
 	{
 #if ENABLE_SCRIPTING_BREAKPOINTS
 		if (externalFile.isNotEmpty())
@@ -391,6 +392,8 @@ struct HiseJavascriptEngine::RootObject::ExpressionTreeBuilder : private TokenIt
 				allowScopedBlockStatements = false;
 			}
 		}
+
+		b->closeLocation = location.location;
 
 		return b.release();
 	}
@@ -543,7 +546,20 @@ private:
 		return currentNamespace;
 	}
 
-	void throwError(const String& err) const  { location.throwError(err); }
+	void throwError(const String& err) const
+	{
+		if(currentErrorLocation.getAddress() != nullptr)
+		{
+			auto copy = location;
+			copy.location = currentErrorLocation;
+			copy.throwError(err);
+		}
+		else
+		{
+			location.throwError(err);
+		}
+		
+	}
 
 	template <typename OpType>
 	Expression* parseInPlaceOpExpression(ExpPtr& lhs)
@@ -650,10 +666,12 @@ private:
 		else if(typeId == ScopedBypasser::getStaticId())
 		{
 			match(TokenTypes::openParen);
-			auto b = parseExpression();
+			ExpPtr b = parseExpression();
+            match(TokenTypes::comma);
+            ExpPtr send = parseExpression();
 			match(TokenTypes::closeParen);
 
-			return new ScopedBypasser(location, condition, b);
+			return new ScopedBypasser(location, condition, b.release(), send.release());
 		}
 		else if(typeId == ScopedTracer::getStaticId())
 		{
@@ -673,6 +691,41 @@ private:
 
 			return new ScopedProfiler(location, condition, name);
 		}
+        else if(typeId == ScopedCall::getStaticId())
+        {
+            match(TokenTypes::openParen);
+            
+            ExpPtr f = parseExpression();
+
+            ScopedPointer<ScopedCall> c = new ScopedCall(location, condition, f.release());
+
+            OwnedArray<Expression> args;
+            
+            if(matchIf(TokenTypes::comma))
+            {
+                while(true)
+                {
+                    if(matchIf(TokenTypes::closeParen))
+                        break;
+                    if(matchIf(TokenTypes::eof))
+                        break;
+
+                    args.add(parseExpression());
+                    
+                    matchIf(TokenTypes::comma);
+                }
+            }
+            else
+                match(TokenTypes::closeParen);
+            
+            for(int i = 0; i < args.size(); i++)
+                c->argValues.add(var());
+            
+            c->args.swapWith(args);
+            
+            return c.release();
+        }
+        
 		else if(typeId == ScopedCounter::getStaticId())
 		{
 			match(TokenTypes::openParen);
@@ -725,6 +778,16 @@ private:
 
 			return new ScopedNoop(location, condition);
 		}
+		else if(typeId == ScopedSampling::getStaticId())
+		{
+			ScopedPointer<ScopedSampling> ss = new ScopedSampling(location, condition);
+			
+			match(TokenTypes::openParen);
+			ss->name = parseExpression();
+			match(TokenTypes::closeParen);
+
+			return ss.release();
+		}
 		else if(typeId == ScopedPrinter::getStaticId())
 		{
 			match(TokenTypes::openParen);
@@ -737,7 +800,10 @@ private:
 		else if(typeId == ScopedLocker::getStaticId())
 		{
 			match(TokenTypes::openParen);
-			auto l = (int)parseExpression()->getResult(Scope(nullptr, nullptr, nullptr));
+            
+            ExpPtr lt = parseExpression();
+            
+			auto l = (int)lt->getResult(Scope(nullptr, nullptr, nullptr));
 			match(TokenTypes::closeParen);
 
 			return new ScopedLocker(location, condition, (LockHelpers::Type)l);
@@ -1868,8 +1934,28 @@ private:
 		return matchCloseParen(s.release());
 	}
 
+	struct ScopedErrorLocation
+	{
+		ScopedErrorLocation(ExpressionTreeBuilder& tb):
+		  parent(tb)
+		{
+			parent.currentErrorLocation = parent.location.location;
+		}
+
+		~ScopedErrorLocation()
+		{
+			parent.currentErrorLocation = {};
+		}
+
+		ExpressionTreeBuilder& parent;
+	};
+
+	String::CharPointerType currentErrorLocation;
+
 	Expression* parseApiExpression()
 	{
+		ScopedErrorLocation loc(*this);
+
 		const Identifier apiId = parseIdentifier();
 		const int apiIndex = hiseSpecialData->apiIds.indexOf(apiId);
 		ApiClass *apiClass = hiseSpecialData->apiClasses.getUnchecked(apiIndex).get();
@@ -1915,6 +2001,10 @@ private:
         auto pt = apiClass->getForcedParameterTypes(functionName);
         
 		ScopedPointer<ApiCall> s = new ApiCall(location, apiClass, numArgs, functionIndex, pt);
+
+#if ENABLE_SCRIPTING_BREAKPOINTS
+		s->functionName = functionName.toString();
+#endif
 
 		match(TokenTypes::openParen);
 
@@ -2193,7 +2283,9 @@ private:
 						}
 					}
 
-					return parseSuffixes(new UnqualifiedName(location, parseIdentifier(), false));
+					auto loc = location;
+
+					return parseSuffixes(new UnqualifiedName(loc, parseIdentifier(), false));
 				}
 			}
 		}
@@ -2733,6 +2825,8 @@ void HiseJavascriptEngine::RootObject::execute(const String& code, bool allowCon
 
 	{
 		TRACE_SCRIPTING("parse script");
+
+		PROFILE_ONLY(DebugSession::ProfileDataSource::ScopedProfiler sp(parseProfileSource, hiseSpecialData.processor));
 		sl = tb.parseStatementList();
 	}
 	
@@ -2742,6 +2836,10 @@ void HiseJavascriptEngine::RootObject::execute(const String& code, bool allowCon
 
 	{
 		TRACE_SCRIPTING("run onInit callback");
+
+		PROFILE_ONLY(DebugSession::ProfileDataSource::ScopedProfiler sp(onInitProfileSource, hiseSpecialData.processor));
+		PROFILE_ONLY(sl->currentProfileRoot = onInitProfileSource);
+
 		sl->perform(Scope(nullptr, this, this), nullptr);
 	}
 

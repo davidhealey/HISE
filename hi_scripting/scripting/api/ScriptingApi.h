@@ -646,9 +646,6 @@ public:
 		/** Imports a JSON file as object. */
 		var loadFromJSON(String fileName);
 
-		/** Displays the progress (0.0 to 1.0) in the progress bar of the editor. */
-		void setCompileProgress(var progress);
-
 		/** Matches the string against the regex token. */
 		bool matchesRegex(String stringToMatch, String regex);
 
@@ -1408,6 +1405,12 @@ public:
 		/** Throws an assertion in the attached debugger. */
 		void breakInDebugger();
 
+		/** Starts a sampling session with the given ID. */
+		void startSampling(const String& sessionId);
+
+		/** Stores the current state of the given data into the current sampling session. */
+		void sample(const String& label, var dataToSample);
+
 		struct Wrapper;
 
 		void setDebugLocation(const Identifier& id_, int lineNumber_)
@@ -1417,6 +1420,11 @@ public:
 		}
 
 private:
+	
+		bool warnIfNoSession = true;
+
+		ProfileCollection consoleProfile;
+		ProfileCollection::ID pLog;
 
 		Identifier id;
 		int lineNumber;
@@ -1654,7 +1662,7 @@ private:
 		void setServerCallback(var callback);
 
 		/** Checks if given email address is valid - not fool proof. */
-    bool isEmailAddress(String email);
+		bool isEmailAddress(String email);
 		
 		void queueChanged(int numItems) override
 		{
@@ -1805,7 +1813,10 @@ private:
 		/** Returns true if the given thread is currently locked. */
         bool isLocked(int thread) const;
 
-		/** Returns the name of the given string (for debugging purposes only!). */
+		/** Starts a profiling session and calls the finishCallback when ready. */
+        void startProfiling(double millisecondsToProfile, var finishCallback);
+
+        /** Returns the name of the given string (for debugging purposes only!). */
 		String toString(int thread) const;
 
 		/** Returns the name of the current thread (for debugging purposes only!). */
@@ -1819,6 +1830,8 @@ private:
 
     private:
 
+		WeakCallbackHolder threadProfileCallback;
+
 		using TargetThreadId = MainController::KillStateHandler::TargetThread;
 		using LockId = LockHelpers::Type;
 
@@ -1831,6 +1844,7 @@ private:
         struct Wrapper;
 
         JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(Threads);
+		JUCE_DECLARE_WEAK_REFERENCEABLE(Threads);
     };
 
 	class Colours: public ApiClass

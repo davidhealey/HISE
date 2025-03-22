@@ -58,7 +58,7 @@ public:
 		/** This will try to resolve the location from the provider if the obj has not a valid location. */
 		static Location getLocationFromProvider(Processor* p, DebugableObjectBase* obj);
 
-		static Component* showProcessorEditorPopup(const MouseEvent& e, Component* table, Processor* p);
+		static Component* showProcessorEditorPopup(Component* table, Processor* p);
 
 		static Component* createJSONEditorForObject(const MouseEvent& e, Component* table, var object, const String& id);
 
@@ -122,8 +122,6 @@ public:
 
 	String getTextForDataType() const override;
 
-	virtual const var getVariantCopy() const;;
-
 	virtual AttributedString getDescription() const;;
 
 	String getCodeToInsert() const override;
@@ -172,7 +170,7 @@ public:
 
 	String getTextForValue() const override;
 
-	const var getVariantCopy() const override;;
+	var getVariantCopy() const override;;
 
 	AttributedString getDescription() const override;;
 
@@ -212,7 +210,7 @@ public:
 
 	void setAutocompleteable(bool shouldBe);
 
-	const var getVariantCopy() const override;;
+	var getVariantCopy() const override;;
 
 	String getTextForValue() const;
 	DebugableObjectBase *getObject();

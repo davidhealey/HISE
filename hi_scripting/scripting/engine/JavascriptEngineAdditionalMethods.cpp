@@ -414,7 +414,7 @@ var HiseJavascriptEngine::RootObject::FunctionCall::getResult(const Scope& s) co
 				}
 			}
 
-			return invokeFunction(s, s.findFunctionCall(location, thisObject, dot->child), thisObject);
+			return invokeFunction(s, s.findFunctionCall(dot->parent->location, thisObject, dot->child), thisObject);
 		}
 
 		var r = object->getResult(s);
@@ -1567,7 +1567,7 @@ void LambdaValueInformation::setAutocompleteable(bool shouldBe)
 	autocompleteable = shouldBe;
 }
 
-const var LambdaValueInformation::getVariantCopy() const
+var LambdaValueInformation::getVariantCopy() const
 { return var(getCachedValueFunction(false)); }
 
 String LambdaValueInformation::getTextForValue() const

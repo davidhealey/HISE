@@ -518,6 +518,7 @@ namespace ScriptingObjects
 
 		~ScriptBackgroundTask()
 		{
+			recordingSession = nullptr;
 			stopThread(timeOut);
 		}
 
@@ -610,6 +611,8 @@ namespace ScriptingObjects
 
 	private:
 
+		ScopedPointer<ProfiledRecordingSession> recordingSession;
+
 		bool forwardToLoadingThread = false;
 
 		void callFinishCallback(bool isFinished, bool wasCancelled)
@@ -658,6 +661,7 @@ namespace ScriptingObjects
         bool realtimeSafe = true;
         
 		JUCE_DECLARE_WEAK_REFERENCEABLE(ScriptBackgroundTask);
+		JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(ScriptBackgroundTask);
 	};
 
 	class ScriptThreadSafeStorage: public ConstScriptingObject

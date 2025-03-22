@@ -87,8 +87,9 @@ bool MainController::unitTestMode = false;
 	}
 
 	MainController::MainController() :
-
+	debugSessionHandler(getGlobalUIUpdater()),
 	sampleManager(new SampleManager(this)),
+	
 	javascriptThreadPool(new JavascriptThreadPool(this)),
 	rootDispatcher(getGlobalUIUpdater()),
 	processorHandler(rootDispatcher),
@@ -135,6 +136,44 @@ bool MainController::unitTestMode = false;
 	xyzPool(new MultiChannelAudioBuffer::XYZPool()),
 	defaultFont(GLOBAL_FONT().getTypefacePtr(), "Oxygen")
 {
+#if HISE_INCLUDE_PROFILING_TOOLKIT
+
+	loadProfile.setHolder(&getDebugSession(), true);
+	loadProfile.setSourceType(DebugSession::ProfileDataSource::SourceType::BackgroundTask);
+	loadProfile.add("loadProject()");
+	loadProfile.add("buildModuleTree()");
+	loadProfile.add("compileScripts()");
+	loadProfile.add("prepareToPlay()");
+	loadProfile.add("initUserPresets()");
+
+	lockProfile.setDurationThreshold(3.0);	
+	lockProfile.setHolder(&getDebugSession(), true);
+	lockProfile.setSourceType(DebugSession::ProfileDataSource::SourceType::Lock);
+	lockProfile.setColour(Colour(HISE_WARNING_COLOUR));
+
+	for(int i = 0; i < (int)LockHelpers::Type::numLockTypes; i++)
+	{
+		lockProfile.add("Lock " + LockHelpers::getLockName((LockHelpers::Type)i).toString());
+	}
+
+	for(int i = 0; i < (int)LockHelpers::Type::numLockTypes; i++)
+	{
+		lockProfile.add("Wait for " + LockHelpers::getLockName((LockHelpers::Type)i).toString() + " Lock");
+		lockProfile.getSource(i + (int)LockHelpers::Type::numLockTypes)->colour = Colour(HISE_ERROR_COLOUR);
+	}
+
+	lockProfile.clearSource((int)LockHelpers::Type::MessageLock); // 0
+	lockProfile.clearSource((int)LockHelpers::Type::MessageLock + (int)LockHelpers::Type::numLockTypes); // 0
+	lockProfile.clearSource((int)LockHelpers::Type::IteratorLock);
+	lockProfile.clearSource((int)LockHelpers::Type::IteratorLock + (int)LockHelpers::Type::numLockTypes);
+
+	getDebugSession().getBufferDuration = [this]()
+	{
+		return 1000.0 * (double)getOriginalBufferSize() / (double)getOriginalSamplerate();
+	};
+
+#endif
+
 	PresetHandler::setCurrentMainController(this);
 
 	getUserPresetHandler().addStateManager(getMacroManager().getMidiControlAutomationHandler());
@@ -373,6 +412,8 @@ void MainController::loadPresetInternal(const ValueTree& valueTreeToLoad)
 	{
 		LockHelpers::freeToGo(this);
 
+		auto sp = loadProfile.profile(0); // loadProject();
+
 		try
 		{
 			getSampleManager().setPreloadFlag();
@@ -414,27 +455,32 @@ void MainController::loadPresetInternal(const ValueTree& valueTreeToLoad)
 			// synthChain->setCurrentPlaybackSampleRate(-1.0);
 			synthChain->setId(v.getProperty("ID", "MainSynthChain"));
 
-			skipCompilingAtPresetLoad = true;
-			getSampleManager().setCurrentPreloadMessage("Building modules...");
-			synthChain->restoreFromValueTree(v);
-            
-            Processor::Iterator<GlobalModulator> gi(synthChain, false);
-            
-            while(auto m = gi.getNextProcessor())
-                m->connectIfPending();
-            
-            
-			skipCompilingAtPresetLoad = false;
+			{
+				auto sp1 = loadProfile.profile(1); // buildModules()
 
-			getSampleManager().setCurrentPreloadMessage("Compiling scripts...");
+				skipCompilingAtPresetLoad = true;
+				getSampleManager().setCurrentPreloadMessage("Building modules...");
+				synthChain->restoreFromValueTree(v);
+	            
+	            Processor::Iterator<GlobalModulator> gi(synthChain, false);
+	            
+	            while(auto m = gi.getNextProcessor())
+	                m->connectIfPending();
+	            
+				skipCompilingAtPresetLoad = false;
+			}
 
-			getMacroManager().getMidiControlAutomationHandler()->setUnloadedData(v.getChildWithName("MidiAutomation"));
-
-			synthChain->compileAllScripts();
+			{
+				auto sp2 = loadProfile.profile(2); // compileScripts();
+				getSampleManager().setCurrentPreloadMessage("Compiling scripts...");
+				getMacroManager().getMidiControlAutomationHandler()->setUnloadedData(v.getChildWithName("MidiAutomation"));
+				synthChain->compileAllScripts();
+			}
 
 			if (processingSampleRate > 0.0)
 			{
 				LOG_START("Initialising audio callback");
+				auto sp3 = loadProfile.profile(3); // prepareToPlay();
 
 				getSampleManager().setCurrentPreloadMessage("Initialising audio...");
 				prepareToPlay(processingSampleRate, processingBufferSize.get());
@@ -463,10 +509,10 @@ void MainController::loadPresetInternal(const ValueTree& valueTreeToLoad)
                 getSampleManager().clearPreloadFlag();
             
 			allNotesOff(true);
-            
+
+			auto sp4 = loadProfile.profile(4); // initUserPreset();
 			getUserPresetHandler().initDefaultPresetManager({});
-            
-            
+
 		}
 		catch (String& errorMessage)
 		{

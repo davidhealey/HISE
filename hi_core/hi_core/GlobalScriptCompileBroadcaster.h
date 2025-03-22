@@ -226,9 +226,6 @@ public:
 
 	void removeScriptListener(GlobalScriptCompileListener *listener);;
 
-	void setShouldUseBackgroundThreadForCompiling(bool shouldBeEnabled) noexcept;
-	bool isUsingBackgroundThreadForCompiling() const noexcept;
-
 	double getCompileTimeOut() const noexcept;
 
 	void setEnableCompileAllScriptsOnPresetLoad(bool shouldBeEnabled) noexcept;;

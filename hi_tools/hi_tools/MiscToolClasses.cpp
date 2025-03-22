@@ -469,6 +469,96 @@ Array<int> FuzzySearcher::searchForIndexes(const String &word, const StringArray
 	return foundIndexes;
 }
 
+String FuzzySearcher::suggestCorrection(const juce::String& wrongToken, const juce::StringArray& availableTokens,
+	double fuzzyness)
+{
+	if(wrongToken.containsChar('.'))
+	{
+		auto wrongTokens = StringArray::fromTokens(wrongToken, ".", "");
+
+		std::vector<std::pair<double, String>> matches;
+
+		for(auto& t: availableTokens)
+		{
+			auto tokens = StringArray::fromTokens(t, ".", "");
+
+			int numMatches = 0;
+
+			for(const auto& wt: wrongTokens)
+			{
+				for(const auto& at: tokens)
+				{
+					auto dist = getLevenshteinDistance(wt, at);
+					int length = jmax<int>(at.length(), wt.length());
+					auto score = 1.0 - (double)dist / (double)length;
+
+					if(score > 0.8)
+					{
+						numMatches++;
+						break;
+					}
+				}
+			}
+
+			if(numMatches != 0)
+				matches.push_back({ numMatches, t });
+		}
+
+		for(auto& m: matches)
+		{
+			DBG(m.second + ": " + String(m.first));
+		}
+
+		int x = 5;
+	}
+
+	juce::Array<int> matchingIndexes = FuzzySearcher::searchForIndexes(wrongToken, availableTokens, fuzzyness);
+
+	if (matchingIndexes.isEmpty())
+		return {}; // No suitable match found
+
+	// Find the best match with the lowest Levenshtein distance
+	juce::String bestMatch;
+	double bestScore = 0.0;
+
+	auto wt = wrongToken;
+
+	if(wt.containsChar('.'))
+		wt = wt.fromLastOccurrenceOf(".", false, false);
+
+	for (int index : matchingIndexes)
+	{
+		auto ft = availableTokens[index];
+		auto t = ft;
+
+		auto preferLastToken = t.containsChar('.');
+
+		if(preferLastToken)
+			t = t.fromLastOccurrenceOf(".", false, false);
+
+		int distance = FuzzySearcher::getLevenshteinDistance(wt, t);
+		auto l = jmax(t.length(), wt.length());
+		auto score = 1.0 - (double)distance / (double)l;
+
+		if(preferLastToken)
+		{
+			int fullDistance = FuzzySearcher::getLevenshteinDistance(wrongToken, ft);
+			auto fullL = jmax(ft.length(), wrongToken.length());
+			auto fullScore = 1.0 - (double)fullDistance / (double)fullL;
+
+			score = 0.5 * score + 0.5 * fullScore;
+		}
+
+		if (score > bestScore)
+		{
+			bestScore = score;
+			bestMatch = availableTokens[index];
+		}
+	}
+
+	return bestMatch;
+}
+
 #define NUM_MAX_CHARS 128
 
 int FuzzySearcher::getLevenshteinDistance(const String &src, const String &dest)
@@ -3099,6 +3189,384 @@ double MasterClock::getBpmToUse(double hostBpm, double internalBpm) const
 		return shouldPreferInternal() ? internalBpm : hostBpm;
 
 	return internalBpm;
+}
+
+
+struct TextEditorWithAutocompleteComponent::Autocomplete: public Component,
+                                public ScrollBar::Listener,
+                                public ComponentMovementWatcher
+{
+    struct Item
+    {
+        String displayString;
+    };
+    
+    ScrollBar sb;
+    ScrollbarFader fader;
+       
+    void mouseWheelMove(const MouseEvent& e, const MouseWheelDetails& details)
+    {
+        sb.mouseWheelMove(e, details);
+    }
+    
+    void scrollBarMoved (ScrollBar* scrollBarThatHasMoved,
+                                 double newRangeStart) override
+    {
+        repaint();
+    }
+    
+    Font f;
+    
+    void componentMovedOrResized (bool wasMoved, bool wasResized) override
+    {
+        dismiss();
+    }
+
+    /** This callback happens when the component's top-level peer is changed. */
+    void componentPeerChanged() {};
+
+    /** This callback happens when the component's visibility state changes, possibly due to
+        one of its parents being made visible or invisible.
+    */
+    void componentVisibilityChanged() override
+    {
+        if(getComponent()->isShowing())
+            dismiss();
+    }
+    
+    Autocomplete(TextEditorWithAutocompleteComponent& p, int maxItemsToShow=4):
+      ComponentMovementWatcher(dynamic_cast<Component*>(&p)),
+      parent(&p),
+	  itemsToShow(maxItemsToShow),
+      sb(true)
+    {
+        f = parent->getTextEditor()->getFont();
+        
+        sb.addListener(this);
+        addAndMakeVisible(sb);
+        fader.addScrollBarToAnimate(sb);
+
+        for(auto& i: p.autocompleteItems)
+            allItems.add({i});
+
+        sb.setSingleStepSize(0.2);
+        
+        auto& ed = *parent->getTextEditor();
+        
+        update(ed.getText());
+        
+        setSize(jmax(300, ed.getWidth() + 20), TextEditorWithAutocompleteComponent::ItemHeight * itemsToShow + 5 + 20);
+        
+        setWantsKeyboardFocus(true);
+
+		auto pp = getParentAsComponent()->findParentComponentOfClass<Parent>();
+
+		Component* top = nullptr;
+
+		if(pp != nullptr)
+		{
+			if(pp->isTopLevel())
+				top = dynamic_cast<Component*>(pp);
+		}
+		
+#if !HISE_NO_GUI_TOOLS
+        if(top == nullptr)
+			top = TopLevelWindowWithOptionalOpenGL::findRoot(getParentAsComponent());
+#endif
+
+        if(top == nullptr)
+            top = getParentAsComponent()->getTopLevelComponent();
+
+        top->addChildComponent(this);
+        auto topLeft = top->getLocalArea(&ed, ed.getLocalBounds()).getTopLeft();
+        
+        setTopLeftPosition(topLeft.getX() - 10, topLeft.getY() + ed.getHeight());
+
+#if JUCE_DEBUG
+        setVisible(true);
+#else
+        Desktop::getInstance().getAnimator().fadeIn(this, 150);
+#endif
+        
+    }
+    
+    ~Autocomplete()
+    {
+        setComponentEffect(nullptr);
+    }
+
+	const int itemsToShow;
+    int selectedIndex = 0;
+    
+    void mouseDown(const MouseEvent& e) override
+    {
+        auto newIndex = sb.getCurrentRangeStart() + (e.getPosition().getY() - 15) / ItemHeight;
+        
+        if(isPositiveAndBelow(newIndex, items.size()))
+            setSelectedIndex(newIndex);
+    }
+    
+    void mouseDoubleClick(const MouseEvent& e) override
+    {
+        setAndDismiss();
+    }
+    
+    bool inc(bool next)
+    {
+        auto newIndex = selectedIndex + (next ? 1 : -1);
+        
+        if(isPositiveAndBelow(newIndex, items.size()))
+        {
+            setSelectedIndex(newIndex);
+            return true;
+        }
+        
+        return false;
+    }
+    
+    bool keyPressed(const KeyPress& k)
+    {
+        if(k == KeyPress::upKey)
+            return inc(false);
+        if(k == KeyPress::downKey)
+            return inc(true);
+        if(k == KeyPress::escapeKey)
+            return dismiss();
+        if(k == KeyPress::returnKey ||
+           k == KeyPress::tabKey)
+            return setAndDismiss();
+        
+        return false;
+    }
+    
+    void setSelectedIndex(int index)
+    {
+        selectedIndex = index;
+        
+        if(!sb.getCurrentRange().contains(selectedIndex))
+        {
+            if(sb.getCurrentRange().getStart() > selectedIndex)
+                sb.setCurrentRangeStart(selectedIndex);
+            else
+                sb.setCurrentRangeStart(selectedIndex - 3);
+        }
+        
+        repaint();
+    }
+    
+    void resized() override
+    {
+        sb.setBounds(getLocalBounds().reduced(10).removeFromRight(16).reduced(1));
+    }
+
+	LookAndFeelMethods laf;
+
+    void paint(Graphics& g) override
+    {
+        auto r = sb.getCurrentRange();
+		auto offset = roundToInt(r.getStart());
+		auto thisIndex = selectedIndex - offset;
+
+		StringArray thisItems;
+
+		if(!items.isEmpty())
+		{
+			for(int i = 0; i < itemsToShow; i++)
+			{
+				thisItems.add(items[i + offset].displayString);
+			}
+		}
+
+		laf.drawAutocompleteBackground(g, *parent->getTextEditor(), getLocalBounds().toFloat(), thisItems, thisIndex);
+    }
+    
+    bool setAndDismiss()
+    {
+        auto newTextAfterComma = items[selectedIndex].displayString;
+        auto ed = parent->getTextEditor();
+        
+        String nt = ed->getText();
+            
+        if(nt.containsChar(','))
+        {
+            nt = nt.upToLastOccurrenceOf(",", false, false);
+            nt << ", " << newTextAfterComma;
+        }
+        else
+            nt = newTextAfterComma;
+        
+        ed->setText(nt, true);
+        
+        return dismiss();
+    }
+    
+    bool dismiss()
+    {
+        SafeAsyncCall::call<TextEditorWithAutocompleteComponent>(*parent, [](TextEditorWithAutocompleteComponent& ti)
+        {
+            ti.dismissAutocomplete();
+            ti.getTextEditor()->grabKeyboardFocusAsync();
+        });
+        
+        return true;
+    }
+
+    Component* getParentAsComponent()
+    {
+	    return dynamic_cast<Component*>(parent.get());
+    }
+
+    void update(const String& currentText)
+    {
+        auto search = currentText.fromLastOccurrenceOf(",", false, false).toLowerCase().trim();
+        
+        items.clear();
+        
+        for(const auto& i: allItems)
+        {
+            if(search.isEmpty() || i.displayString.toLowerCase().contains(search))
+            {
+                items.add(i);
+            }
+        }
+        
+        sb.setRangeLimits(0.0, (double)items.size());
+        sb.setCurrentRange(0.0, (double)itemsToShow);
+        setSelectedIndex(0);
+        
+        if(items.isEmpty())
+            dismiss();
+    }
+    
+    Array<Item> allItems;
+    Array<Item> items;
+    
+    WeakReference<TextEditorWithAutocompleteComponent> parent;
+};
+
+void TextEditorWithAutocompleteComponent::LookAndFeelMethods::drawAutocompleteBackground(Graphics& g, TextEditor& te,
+	Rectangle<float> b, const StringArray& itemToShow, int selectedIndex)
+{
+	b = b.reduced(10.0f);
+	        
+	DropShadow sh;
+	sh.colour = Colours::black.withAlpha(0.7f);
+	sh.radius = 10;
+	sh.drawForRectangle(g, b.toNearestInt());
+	            
+	b.reduced(2.0f);
+	g.setColour(Colour(0xFF222222));
+	g.fillRoundedRectangle(b, 5.0f);
+	g.setColour(Colours::white.withAlpha(0.3f));
+	g.drawRoundedRectangle(b, 5.0f, 2.0f);
+	        
+	b.reduced(5.0f);
+	b.removeFromLeft(10.0f);
+	b.removeFromTop(2.5f);
+	        
+	g.setFont(te.getFont());
+	        
+	if(itemToShow.isEmpty())
+	{
+		g.setColour(Colours::white.withAlpha(0.1f));
+		g.drawText("No items found", b, Justification::centred);
+	}
+	else
+	{
+		for(int i = 0; i < itemToShow.size(); i++)
+		{
+			g.setColour(Colours::white.withAlpha(0.6f));
+			auto tb = b.removeFromTop(ItemHeight);
+
+			if(i == selectedIndex)
+			{
+				g.fillRoundedRectangle(tb.withX(10.0f).reduced(3.0f, 1.0f), 3.0f);
+				g.setColour(Colours::black.withAlpha(0.8f));
+			}
+	                    
+			g.drawText(itemToShow[i], tb, Justification::left);
+		}
+	}
+}
+
+void TextEditorWithAutocompleteComponent::textEditorReturnKeyPressed(TextEditor& e)
+{
+	if(auto ac = getCurrentAutocomplete())
+		ac->setAndDismiss();
+}
+
+void TextEditorWithAutocompleteComponent::textEditorEscapeKeyPressed(TextEditor& e)
+{
+	if(currentAutocomplete != nullptr)
+		dismissAutocomplete();
+	else
+		currentAutocomplete = new Autocomplete(*this, itemsToShow);
+}
+
+bool TextEditorWithAutocompleteComponent::AutocompleteNavigator::keyPressed(const KeyPress& k, Component* originatingComponent)
+{
+    if(k == KeyPress::tabKey)
+    {
+        if(parent.currentAutocomplete != nullptr)
+			parent.dismissAutocomplete();
+
+	    parent.getTextEditor()->moveKeyboardFocusToSibling(true);
+        return true;
+    }
+
+    if(parent.currentAutocomplete == nullptr)
+		return false;
+
+	if(auto ac = parent.getCurrentAutocomplete())
+	{
+		if(k == KeyPress::upKey)
+			return ac->inc(false);
+		if(k == KeyPress::downKey)
+			return ac->inc(true);
+	}
+        
+	return false;
+}
+
+TextEditorWithAutocompleteComponent::Autocomplete* TextEditorWithAutocompleteComponent::getCurrentAutocomplete()
+{
+	return dynamic_cast<Autocomplete*>(currentAutocomplete.get());
+}
+
+void TextEditorWithAutocompleteComponent::showAutocomplete(const String& currentText)
+{
+    if(useDynamicAutocomplete)
+    {
+        if(auto hd = dynamic_cast<Component*>(this)->findParentComponentOfClass<Parent>())
+            autocompleteItems = hd->getAutocompleteItems(getIdForAutocomplete());
+        else
+            autocompleteItems = {};
+    }
+    
+	if(!autocompleteItems.isEmpty() && currentAutocomplete == nullptr)
+	{
+		currentAutocomplete = new Autocomplete(*this, itemsToShow);
+	}
+	else
+	{
+		if(currentText.isEmpty())
+			currentAutocomplete = nullptr;
+		else if (auto ac = getCurrentAutocomplete())
+			ac->update(currentText);
+	}
+}
+
+void TextEditorWithAutocompleteComponent::dismissAutocomplete()
+{
+	stopTimer();
+#if JUCE_DEBUG
+    if(currentAutocomplete != nullptr)
+		currentAutocomplete->setVisible(false);
+#else
+    if(currentAutocomplete != nullptr)
+		Desktop::getInstance().getAnimator().fadeOut(currentAutocomplete, 150);
+#endif
+	currentAutocomplete = nullptr;
 }
 
 }

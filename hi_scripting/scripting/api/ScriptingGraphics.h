@@ -611,16 +611,25 @@ namespace ScriptingObjects
 								public ControlledObject
 	{
 	public:
+		
 
-		struct LafBase
+		struct LafBase: public ProfiledLookAndFeel
 		{
 			virtual ~LafBase() {};
 
 			virtual ScriptedLookAndFeel* get() = 0;
-			
-		};
 
-		
+#if HISE_INCLUDE_PROFILING_TOOLKIT
+			void onProfileEnableChange() override
+			{
+				if(auto laf = get())
+				{
+					laf->setEnableProfiling(p, holder.get());
+				}
+			}
+#endif
+
+		};
 
 		struct Laf : public GlobalHiseLookAndFeel,
 			public LafBase,
@@ -1165,6 +1174,9 @@ namespace ScriptingObjects
 
 		bool isUsingScriptFunctions() const { return hasScriptFunctions; }
 
+
+		void setEnableProfiling(DebugSession::ProfileDataSource::Ptr ptr, ApiProviderBase::Holder* h);
+
 		bool callWithGraphics(Graphics& g_, const Identifier& functionname, var argsObject, Component* c);
 
 		var callDefinedFunction(const Identifier& name, var* args, int numArgs);
@@ -1198,6 +1210,10 @@ namespace ScriptingObjects
 		String currentStyleSheet;
 		String currentStyleSheetFile;
 		simple_css::StyleSheet::Collection css;
+
+		DebugSession::ProfileDataSource::Ptr scriptProfileData;
+		DebugSession::ProfileDataSource::Ptr profileData;
+		WeakReference<ApiProviderBase::Holder> holder;
 
 		var functions;
 

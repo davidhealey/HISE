@@ -106,13 +106,25 @@ private:
 */
 class ModulatorSynth: public Synthesiser,
 					  public Processor,
-					  public RoutableProcessor
+					  public RoutableProcessor,
+					  public ProfiledProcessor
 {
 public:
 
 	ADD_DOCUMENTATION();
 
 	// ===================================================================================================================
+
+	enum class ProfileEnumIds
+	{
+		ProcessBlock,
+		ProcessMidi,
+		RenderVoices,
+		RenderVoice,
+		RenderFX,
+		RenderChildSynths,
+		numProfileIds
+	};
 
 	enum Parameters
 	{
@@ -343,8 +355,9 @@ public:
 
 	struct SoundCollectorBase
 	{
-
 		virtual ~SoundCollectorBase();;
+
+		virtual void preHiseEventCallback(const HiseEvent& e) {};
 
 		virtual void collectSounds(const HiseEvent& m, UnorderedStack<ModulatorSynthSound*>& soundsToBeStarted) = 0;
 	};
