@@ -162,8 +162,6 @@ bool MainController::unitTestMode = false;
 		lockProfile.getSource(i + (int)LockHelpers::Type::numLockTypes)->colour = Colour(HISE_ERROR_COLOUR);
 	}
 
-	lockProfile.clearSource((int)LockHelpers::Type::MessageLock); // 0
-	lockProfile.clearSource((int)LockHelpers::Type::MessageLock + (int)LockHelpers::Type::numLockTypes); // 0
 	lockProfile.clearSource((int)LockHelpers::Type::IteratorLock);
 	lockProfile.clearSource((int)LockHelpers::Type::IteratorLock + (int)LockHelpers::Type::numLockTypes);
 

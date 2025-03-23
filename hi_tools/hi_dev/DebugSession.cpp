@@ -1303,7 +1303,7 @@ void DebugSession::timerCallback()
 
 		for(auto& q: multithreadedEventQueue)
 		{
-			for(auto i = q->stack.size() - 1; i >= 0; i--)
+			for(int i = (int)q->stack.size() - 1; i >= 0; i--)
 				q->queue.push({q->stack[i]->data.source.get(), recordingStart, false});
 		}
 
