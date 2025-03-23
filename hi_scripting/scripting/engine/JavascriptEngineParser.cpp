@@ -2006,25 +2006,32 @@ private:
 		s->functionName = functionName.toString();
 #endif
 
-		match(TokenTypes::openParen);
-
-		int numActualArguments = 0;
-
-		while (currentType != TokenTypes::closeParen)
+		if(matchIf(TokenTypes::openParen))
 		{
-			if (numActualArguments < numArgs)
+			int numActualArguments = 0;
+
+			while (currentType != TokenTypes::closeParen)
 			{
-				s->argumentList[numActualArguments++] = parseExpression();
+				if (numActualArguments < numArgs)
+				{
+					s->argumentList[numActualArguments++] = parseExpression();
 
-				if (currentType != TokenTypes::closeParen)
-					match(TokenTypes::comma);
+					if (currentType != TokenTypes::closeParen)
+						match(TokenTypes::comma);
+				}
+				else throwError("Too many arguments in API call " + prettyName + "(). Expected: " + String(numArgs));
 			}
-			else throwError("Too many arguments in API call " + prettyName + "(). Expected: " + String(numArgs));
+
+			if (numArgs != numActualArguments) throwError("Call to " + prettyName + "(): argument number mismatch : " + String(numActualArguments) + " (Expected : " + String(numArgs) + ")");
+
+			return matchCloseParen(s.release());
 		}
-
-		if (numArgs != numActualArguments) throwError("Call to " + prettyName + "(): argument number mismatch : " + String(numActualArguments) + " (Expected : " + String(numArgs) + ")");
-
-		return matchCloseParen(s.release());
+		else
+		{
+			ApiCall::DynamicCall call(location, apiClass, numArgs, functionIndex);
+			
+			return new LiteralValue(location, var(call));
+		}
 	}
 
 	Expression* parseConstExpression(JavascriptNamespace* ns=nullptr)
