@@ -39,6 +39,15 @@ fi
 
 echo "OK"
 
+echo "Exporting scriptnode dll"
+
+$hise_path set_project_folder -p:"$project_folder"
+$hise_path compile_networks -c:Debug
+
+"$project_folder/DspNetworks/Binaries/batchCompileOSX"
+
+echo "OK"
+
 echo "Exporting demo project..."
 
 project_folder="$PWD"/extras/demo_project
@@ -46,7 +55,6 @@ project_folder="$PWD"/extras/demo_project
 echo $project_folder
 
 $hise_path set_project_folder -p:"$project_folder"
-
 $hise_path export_ci "XmlPresetBackups/Demo.xml" -t:standalone -a:x64 -nolto
 
 "$project_folder/Binaries/batchCompileOSX"
