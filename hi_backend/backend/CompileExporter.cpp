@@ -968,14 +968,14 @@ bool CompileExporter::checkSanity(TargetTypes type, BuildOption option)
         printErrorMessage("Illegal Company code", "The Company Code must have this structure: 'Abcd'");
         return false;
     }
-    
-	const File hiseDirectory = GET_SETTING(HiseSettings::Compiler::HisePath);
 
-    if(!hiseDirectory.isDirectory() || !hiseDirectory.getChildFile("hi_core/").isDirectory())
-    {
-        printErrorMessage("HISE path is not valid", "You need to set the correct path to the HISE SDK at File -> Settings -> Compiler Settings");
-        return false;
-    };
+	auto ok = setupHisePath();
+
+	if(ok != ErrorCodes::OK)
+	{
+		printErrorMessage("HISE path is not valid", "You need to set the correct path to the HISE SDK at File -> Settings -> Compiler Settings");
+		return false;
+	}
 
 	File splashScreenFile = handler->getSubDirectory(ProjectHandler::SubDirectories::Images).getChildFile("SplashScreen.png");
 	File splashScreeniPhoneFile = handler->getSubDirectory(ProjectHandler::SubDirectories::Images).getChildFile("SplashScreeniPhone.png");
@@ -998,7 +998,7 @@ bool CompileExporter::checkSanity(TargetTypes type, BuildOption option)
 
     if(BuildOptionHelpers::isVST(option))
     {
-        const File vstSDKDirectory = hiseDirectory.getChildFile("tools/SDK/VST3 SDK/public.sdk/");
+        const File vstSDKDirectory = hisePath.getChildFile("tools/SDK/VST3 SDK/public.sdk/");
         
         if(!vstSDKDirectory.isDirectory())
         {
@@ -1010,7 +1010,7 @@ bool CompileExporter::checkSanity(TargetTypes type, BuildOption option)
 #if JUCE_WINDOWS
     if(BuildOptionHelpers::isStandalone(option))
     {
-        const File asioSDK = hiseDirectory.getChildFile("tools/SDK/ASIOSDK2.3/common");
+        const File asioSDK = hisePath.getChildFile("tools/SDK/ASIOSDK2.3/common");
         
         if(!asioSDK.isDirectory())
         {
@@ -1023,7 +1023,7 @@ bool CompileExporter::checkSanity(TargetTypes type, BuildOption option)
 #if !JUCE_LINUX
     if(BuildOptionHelpers::isAAX(option))
     {
-        const File aaxSDK = hiseDirectory.getChildFile("tools/SDK/AAX/Libs");
+        const File aaxSDK = hisePath.getChildFile("tools/SDK/AAX/Libs");
         
         if(!aaxSDK.isDirectory())
         {
