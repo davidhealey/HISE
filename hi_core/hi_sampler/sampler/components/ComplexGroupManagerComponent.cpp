@@ -1569,8 +1569,6 @@ ComplexGroupManagerComponent::LogicTypeComponent* ComplexGroupManagerComponent::
 
 void ComplexGroupManagerComponent::AddComponent::addNewLayer()
 {
-	auto c = findParentComponentOfClass<Content>();
-
 	auto tokens = StringArray::fromTokens(getEditorValue(groupIds::tokens).toString(), ",", "");
 	tokens.trim();
 	tokens.removeDuplicates(false);
@@ -1590,9 +1588,6 @@ void ComplexGroupManagerComponent::AddComponent::addNewLayer()
 	};
 
 	ids.addArray(getSpecialIds());
-
-	
-		
 
 	for(auto id: ids)
 	{

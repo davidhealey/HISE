@@ -115,6 +115,8 @@ RectangleDynamicObject::FunctionMap::FunctionMap()
 			return create(a, getRectangle(a).reduced(getDoubleArgs(a, 0)));
 		if(a.numArguments == 2)
 			return create(a, getRectangle(a).reduced(getDoubleArgs(a, 0), getDoubleArgs(a, 1)));
+
+		return create(a, getRectangle(a));
 	});
 
 	ADD_FUNCTION(expanded, "(double x, double optionalY)", [](const Args& a)
@@ -123,6 +125,8 @@ RectangleDynamicObject::FunctionMap::FunctionMap()
 			return create(a, getRectangle(a).expanded(getDoubleArgs(a, 0)));
 		if(a.numArguments == 2)
 			return create(a, getRectangle(a).expanded(getDoubleArgs(a, 0), getDoubleArgs(a, 1)));
+
+		return create(a, getRectangle(a));
 	});
 
 	ADD_FUNCTION(withAspectRatioLike, "(var otherRect)", [](const Args& a)
@@ -254,12 +258,14 @@ const var& RectangleDynamicObject::getProperty(const Identifier& propertyName) c
 {
 	static const std::array<Identifier, 4> ids = { "x", "y", "width", "height" };
 
-	if(propertyName == ids[0]) return rectangle.getX();
-	if(propertyName == ids[1]) return rectangle.getY();
-	if(propertyName == ids[2]) return rectangle.getWidth();
-	if(propertyName == ids[3]) return rectangle.getHeight();
+	static var v;
 
-	return {};
+	if(propertyName == ids[0]) v = rectangle.getX();
+	if(propertyName == ids[1]) v = rectangle.getY();
+	if(propertyName == ids[2]) v = rectangle.getWidth();
+	if(propertyName == ids[3]) v = rectangle.getHeight();
+
+	return v;
 }
 
 void RectangleDynamicObject::setProperty(const Identifier& propertyName, const var& newValue)

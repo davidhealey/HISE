@@ -632,7 +632,6 @@ void DebugSession::ProfileDataSource::ViewComponents::ViewItem::paintItem(Graphi
 		return;
 	}
 
-	auto numRuns = runs.size();
 	auto tc = c.withMultipliedBrightness(ctx.currentlyHoveredItem.get() == this ? 1.3f : 1.0f);
 
 	g.setColour(tc.withMultipliedAlpha(searchAlpha).withMultipliedBrightness(0.5f));

@@ -252,7 +252,6 @@ public:
 
         // Extract the first byte (FIN, RSV, Opcode)
         uint8_t firstByte = frame[offset++];
-        bool fin = firstByte & 0x80;  // FIN bit
         uint8_t opcode = firstByte & 0x0F;  // Opcode (e.g., 0x1 for text, 0x2 for binary)
 
         // Extract the second byte (Mask bit, Payload length)
@@ -295,7 +294,7 @@ public:
             
         } else if (opcode == 0x2) {
 
-			int numValues = payload.size() / 4;
+			int numValues = (int)payload.size() / 4;
 
 			buffer = new VariantBuffer(numValues);
 
@@ -477,7 +476,8 @@ void WebViewData::TCPServer::Data::append(bool isString, const void* data, size_
 	size_t headerLength = 0;
 
 	// always send as binary stream
-	mos.writeByte(0x82);
+	uint8 binaryHeader = 0x82;
+	mos.write(&binaryHeader, 1);
 	headerLength++;
 
 	auto idLength = (uint16)id.toString().length() + 1;
@@ -493,13 +493,13 @@ void WebViewData::TCPServer::Data::append(bool isString, const void* data, size_
 	if (totalLength <= 125)
 	{
 		uint8_t payloadLen = static_cast<uint8_t>(totalLength);
-		mos.writeByte(payloadLen);
+		mos.write(&payloadLen, 1);
 		headerLength++;
 	}
 	else if (totalLength <= 65535)
 	{
 		uint8_t payloadLen = 126; // Extended length 16-bit
-		mos.writeByte(payloadLen);
+		mos.write(&payloadLen, 1);
 		headerLength++;
 		uint16_t len = static_cast<uint16_t>(totalLength);
 		mos.write(&len, sizeof(uint16_t));
@@ -508,7 +508,7 @@ void WebViewData::TCPServer::Data::append(bool isString, const void* data, size_
 	else
 	{
 		uint8_t payloadLen = 127; // Extended length 64-bit
-		mos.writeByte(payloadLen);
+		mos.write(&payloadLen, 1);
 		headerLength++;
 		uint64_t len = static_cast<uint64>(totalLength);
 		mos.write(&len, sizeof(uint64_t));

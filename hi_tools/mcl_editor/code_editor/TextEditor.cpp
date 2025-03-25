@@ -830,8 +830,8 @@ TextEditor::AutofixComponent::AutofixComponent(mcl::TextEditor& editor_, const E
 void TextEditor::AutofixComponent::paint(juce::Graphics& g)
 {
 	juce::Colour baseColour(Colour(HISE_ERROR_COLOUR));
-	juce::Colour hoverColour(baseColour.brighter(0.1));
-	juce::Colour clickedColour(hoverColour.darker(0.1));
+	juce::Colour hoverColour(baseColour.brighter(0.1f));
+	juce::Colour clickedColour(hoverColour.darker(0.1f));
 
 	if (isMouseButtonDown()) {
 		g.setGradientFill(juce::ColourGradient(clickedColour, 0.0f, 0.0f,
@@ -841,7 +841,7 @@ void TextEditor::AutofixComponent::paint(juce::Graphics& g)
 		                                       baseColour, 0.0f, getHeight(), false));
 	} else {
 		g.setGradientFill(juce::ColourGradient(baseColour, 0.0f, 0.0f,
-		                                       baseColour.darker(0.1), 0.0f, getHeight(), false));
+		                                       baseColour.darker(0.1f), 0.0f, getHeight(), false));
 	}
 
 	g.fillRoundedRectangle(getLocalBounds().toFloat(), (float)getHeight() * 0.5f);

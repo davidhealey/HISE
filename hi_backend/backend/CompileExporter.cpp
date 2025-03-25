@@ -454,6 +454,11 @@ int CompileExporter::getBuildOptionPart(const String& argument)
 	return 0;
 }
 
+void CompileExporter::setExportUsingCI(bool shouldUseCIMode)
+{
+	useCIMode = shouldUseCIMode;
+}
+
 CompileExporter::BuildOption CompileExporter::getBuildOptionFromCommandLine(StringArray &args)
 {
 	Array<int> buildParts;
@@ -504,31 +509,11 @@ CompileExporter::ErrorCodes CompileExporter::exportInternal(TargetTypes type, Bu
 	if (!useIpp) useIpp = data.getSetting(HiseSettings::Compiler::UseIPP);
 	
 	if (!legacyCpuSupport) legacyCpuSupport = data.getSetting(HiseSettings::Compiler::LegacyCPUSupport);
-	    
-	if (!hisePath.isDirectory())
-	{
-		if (isUsingCIMode())
-		{
-			auto appPath = File::getSpecialLocation(File::currentApplicationFile).getParentDirectory();
 
-			while (!appPath.isRoot() && !appPath.getChildFile("hi_core").isDirectory())
-			{
-				appPath = appPath.getParentDirectory();
-			}
+	auto ok = setupHisePath();
 
-			if (!appPath.isRoot())
-				hisePath = appPath;
-		}
-		else
-		{
-			hisePath = data.getSetting(HiseSettings::Compiler::HisePath);
-		}
-	}
-	
-	if (!hisePath.isDirectory()) 
-		return ErrorCodes::HISEPathNotSpecified;
-
-
+	if(ok != ErrorCodes::OK)
+		return ok;
 
 	String buildCommit(PREVIOUS_HISE_COMMIT);
 
@@ -822,6 +807,36 @@ CompileExporter::ErrorCodes CompileExporter::exportInternal(TargetTypes type, Bu
 	}
 
 	return ErrorCodes::UserAbort;
+}
+
+CompileExporter::ErrorCodes CompileExporter::setupHisePath()
+{
+	const auto& data = dynamic_cast<GlobalSettingManager*>(chainToExport->getMainController())->getSettingsObject();
+
+	if (!hisePath.isDirectory())
+	{
+		if (isUsingCIMode())
+		{
+			auto appPath = File::getSpecialLocation(File::currentApplicationFile).getParentDirectory();
+
+			while (!appPath.isRoot() && !appPath.getChildFile("hi_core").isDirectory())
+			{
+				appPath = appPath.getParentDirectory();
+			}
+
+			if (!appPath.isRoot())
+				hisePath = appPath;
+		}
+		else
+		{
+			hisePath = data.getSetting(HiseSettings::Compiler::HisePath);
+		}
+	}
+		
+	if (!hisePath.isDirectory()) 
+		return ErrorCodes::HISEPathNotSpecified;
+
+	return ErrorCodes::OK;
 }
 
 String checkSampleReferences(ModulatorSynthChain* chainToExport)

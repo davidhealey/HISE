@@ -285,6 +285,14 @@ scriptnode::DspNetwork* DspNetworkCompileExporter::getNetwork()
 
 void DspNetworkCompileExporter::run()
 {
+	ok = setupHisePath();
+
+	if(ok != CompileExporter::ErrorCodes::OK)
+	{
+		errorMessage << "Can't find HISE path";
+		return;
+	}
+
 	auto n = getNetwork();
 
 	if(managerToUse != nullptr && !skipCompilation)

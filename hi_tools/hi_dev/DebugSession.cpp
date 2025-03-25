@@ -354,9 +354,9 @@ String DebugSession::ProfileDataSource::ViewComponents::Helpers::getDuration(flo
 	}
 	if(domain == TimeDomain::FPS60)
 	{
-		w *= 0.001;
+		w *= 0.001f;
 		w = jmax(0.0001f, w);
-		auto frameTime = 1.0 / w;
+		auto frameTime = 1.0f / w;
 		m << String(frameTime, 1) << "FPS";
 	}
 	if(domain == TimeDomain::CpuUsage)
