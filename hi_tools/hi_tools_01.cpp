@@ -111,7 +111,7 @@
 #include "hi_tools/LorisManager.cpp"
 #endif
 
-
+#include "hi_tools/RectangleDynamicObject.cpp"
 
 #include "hi_standalone_components/SampleDisplayComponent.cpp"
 

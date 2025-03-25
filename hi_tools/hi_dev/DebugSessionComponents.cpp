@@ -64,7 +64,7 @@ struct DebugSession::ProfileDataSource::ViewComponents::Manager::SearchBar: publ
 		addAndMakeVisible(editor);
 		addAndMakeVisible(clearButton);
 		clearButton.setVisible(false);
-		clearButton.onClick = [this](){ editor.setText({}, sendNotificationSync); };
+		clearButton.onClick = [this](){ editor.setText({}, true); };
 		clearButton.setColours(Colours::black.withAlpha(0.3f), Colours::black.withAlpha(0.5f), Colours::black.withAlpha(0.7f));
 		editor.setTextToShowWhenEmpty("Search timeline...", Colours::black.withAlpha(0.4f));
 		editor.setEscapeAndReturnKeysConsumed(true);

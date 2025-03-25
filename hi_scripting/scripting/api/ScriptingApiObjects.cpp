@@ -6299,6 +6299,21 @@ bool ApiHelpers::isSynchronous(const var& syncValue)
 	return getDispatchType(syncValue, false) == dispatch::DispatchType::sendNotificationSync;
 }
 
+var ApiHelpers::createRectangle(const var::NativeFunctionArgs& a)
+{
+	if(a.numArguments == 1 && a.arguments[0].isArray() && a.arguments[0].size() == 4)
+		return var(new ScriptingObjects::ScriptRectangle(a.arguments[0]));
+	else if(a.numArguments == 2)
+		return var(new ScriptingObjects::ScriptRectangle(Rectangle<double>((double)a.arguments[0], (double)a.arguments[1])));
+	else if(a.numArguments == 4)
+		return var(new ScriptingObjects::ScriptRectangle(Rectangle<double>((double)a.arguments[0], 
+																		   (double)a.arguments[1],
+																		   (double)a.arguments[2],
+																		   (double)a.arguments[3])));
+	else
+		return var(new ScriptingObjects::ScriptRectangle(Rectangle<double>()));
+}
+
 var ApiHelpers::getVarFromPoint(Point<float> pos)
 {
 	Array<var> p;

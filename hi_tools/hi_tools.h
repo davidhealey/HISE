@@ -309,6 +309,7 @@ using ComponentWithMiddleMouseDrag = juce::Component;
 #endif
 
 
+#include "hi_tools/RectangleDynamicObject.h"
 
 #include "hi_standalone_components/RingBuffer.h"
 #include "hi_standalone_components/Plotter.h"

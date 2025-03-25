@@ -244,10 +244,7 @@ public:
 		globalCommandLineExport = true;
 	};
 
-	static void setExportUsingCI(bool shouldUseCIMode)
-	{
-		useCIMode = shouldUseCIMode;
-	}
+	static void setExportUsingCI(bool shouldUseCIMode);
 
 	static bool isUsingCIMode() { return useCIMode; }
 
@@ -301,6 +298,8 @@ protected:
 	};
 
 	ErrorCodes exportInternal(TargetTypes type, BuildOption option);
+
+	ErrorCodes setupHisePath();
 
 	bool checkSanity(TargetTypes type, BuildOption option);
 

@@ -1240,14 +1240,7 @@ var ScriptingObjects::PathObject::getBounds(var scaleFactor)
 {
 	auto r = p.getBoundsTransformed(AffineTransform::scale(scaleFactor));
 
-	Array<var> area;
-
-	area.add(r.getX());
-	area.add(r.getY());
-	area.add(r.getWidth());
-	area.add(r.getHeight());
-
-	return var(area);
+	return ApiHelpers::getVarRectangle(r);
 }
 
 juce::var ScriptingObjects::PathObject::createStrokedPath(var strokeData, var dotData)
@@ -2028,10 +2021,12 @@ void ScriptingObjects::GraphicsObject::drawFittedText(String text, var area, Str
 	Result re = Result::ok();
 	auto just = ApiHelpers::getJustification(alignment, &re);
 
+	auto a = getRectangleFromVar(area).toNearestInt();
+
 	if (re.failed())
 		reportScriptError(re.getErrorMessage());
 
-	drawActionHandler.addDrawAction(new ScriptedDrawActions::drawFittedText(text, area, just, maxLines, scale));
+	drawActionHandler.addDrawAction(new ScriptedDrawActions::drawFittedText(text, a, just, maxLines, scale));
 }
 
 void ScriptingObjects::GraphicsObject::drawMultiLineText(String text, var xy, int maxWidth, String alignment, float leading)
@@ -2280,7 +2275,7 @@ void ScriptingObjects::GraphicsObject::fillPath(var path, var area)
 		if (p.getBounds().isEmpty())
 			return;
 
-		if (area.isArray())
+		if (area.isArray() || dynamic_cast<ScriptingObjects::ScriptRectangle*>(area.getDynamicObject()) != nullptr)
 		{
 			Rectangle<float> r = getRectangleFromVar(area);
 			p.scaleToFit(r.getX(), r.getY(), r.getWidth(), r.getHeight(), false);
@@ -2298,7 +2293,7 @@ void ScriptingObjects::GraphicsObject::drawPath(var path, var area, var strokeTy
 
 		
 
-		if (area.isArray())
+		if (area.isArray() || dynamic_cast<ScriptingObjects::ScriptRectangle*>(area.getDynamicObject()) != nullptr)
 		{
 			Rectangle<float> r = getRectangleFromVar(area);
 

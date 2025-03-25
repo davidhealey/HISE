@@ -79,6 +79,8 @@ public:
 
 	static bool isSynchronous(const var& syncValue);
 
+	static var createRectangle(const var::NativeFunctionArgs& a);
+
 	static var getVarFromPoint(Point<float> pos);
 
 	static Point<float> getPointFromVar(const var& data, Result* r = nullptr);

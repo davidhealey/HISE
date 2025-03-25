@@ -1774,9 +1774,13 @@ public:
 	DebugSession::ProfileDataSource::Ptr getProfileDataSourceForLock(LockHelpers::Type t, bool useRealLock, bool getWaitSource) const
 	{
 #if HISE_INCLUDE_PROFILING_TOOLKIT
+
+		useRealLock &= getDebugSession().isRecordingMultithread();
+
+		if(!useRealLock)
+			return nullptr;
+
 		auto idx = (int)t;
-		idx *= (int)getDebugSession().isRecordingMultithread();
-		idx *= (int)useRealLock;
 		idx += ((int)getWaitSource * (int)LockHelpers::Type::numLockTypes);
 		return lockProfile.getSource(idx);
 #else

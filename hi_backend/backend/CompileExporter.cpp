@@ -454,6 +454,11 @@ int CompileExporter::getBuildOptionPart(const String& argument)
 	return 0;
 }
 
+void CompileExporter::setExportUsingCI(bool shouldUseCIMode)
+{
+	useCIMode = shouldUseCIMode;
+}
+
 CompileExporter::BuildOption CompileExporter::getBuildOptionFromCommandLine(StringArray &args)
 {
 	Array<int> buildParts;
@@ -504,31 +509,11 @@ CompileExporter::ErrorCodes CompileExporter::exportInternal(TargetTypes type, Bu
 	if (!useIpp) useIpp = data.getSetting(HiseSettings::Compiler::UseIPP);
 	
 	if (!legacyCpuSupport) legacyCpuSupport = data.getSetting(HiseSettings::Compiler::LegacyCPUSupport);
-	    
-	if (!hisePath.isDirectory())
-	{
-		if (isUsingCIMode())
-		{
-			auto appPath = File::getSpecialLocation(File::currentApplicationFile).getParentDirectory();
 
-			while (!appPath.isRoot() && !appPath.getChildFile("hi_core").isDirectory())
-			{
-				appPath = appPath.getParentDirectory();
-			}
+	auto ok = setupHisePath();
 
-			if (!appPath.isRoot())
-				hisePath = appPath;
-		}
-		else
-		{
-			hisePath = data.getSetting(HiseSettings::Compiler::HisePath);
-		}
-	}
-	
-	if (!hisePath.isDirectory()) 
-		return ErrorCodes::HISEPathNotSpecified;
-
-
+	if(ok != ErrorCodes::OK)
+		return ok;
 
 	String buildCommit(PREVIOUS_HISE_COMMIT);
 
@@ -824,6 +809,36 @@ CompileExporter::ErrorCodes CompileExporter::exportInternal(TargetTypes type, Bu
 	return ErrorCodes::UserAbort;
 }
 
+CompileExporter::ErrorCodes CompileExporter::setupHisePath()
+{
+	const auto& data = dynamic_cast<GlobalSettingManager*>(chainToExport->getMainController())->getSettingsObject();
+
+	if (!hisePath.isDirectory())
+	{
+		if (isUsingCIMode())
+		{
+			auto appPath = File::getSpecialLocation(File::currentApplicationFile).getParentDirectory();
+
+			while (!appPath.isRoot() && !appPath.getChildFile("hi_core").isDirectory())
+			{
+				appPath = appPath.getParentDirectory();
+			}
+
+			if (!appPath.isRoot())
+				hisePath = appPath;
+		}
+		else
+		{
+			hisePath = data.getSetting(HiseSettings::Compiler::HisePath);
+		}
+	}
+		
+	if (!hisePath.isDirectory()) 
+		return ErrorCodes::HISEPathNotSpecified;
+
+	return ErrorCodes::OK;
+}
+
 String checkSampleReferences(ModulatorSynthChain* chainToExport)
 {
 	{
@@ -953,14 +968,14 @@ bool CompileExporter::checkSanity(TargetTypes type, BuildOption option)
         printErrorMessage("Illegal Company code", "The Company Code must have this structure: 'Abcd'");
         return false;
     }
-    
-	const File hiseDirectory = GET_SETTING(HiseSettings::Compiler::HisePath);
 
-    if(!hiseDirectory.isDirectory() || !hiseDirectory.getChildFile("hi_core/").isDirectory())
-    {
-        printErrorMessage("HISE path is not valid", "You need to set the correct path to the HISE SDK at File -> Settings -> Compiler Settings");
-        return false;
-    };
+	auto ok = setupHisePath();
+
+	if(ok != ErrorCodes::OK)
+	{
+		printErrorMessage("HISE path is not valid", "You need to set the correct path to the HISE SDK at File -> Settings -> Compiler Settings");
+		return false;
+	}
 
 	File splashScreenFile = handler->getSubDirectory(ProjectHandler::SubDirectories::Images).getChildFile("SplashScreen.png");
 	File splashScreeniPhoneFile = handler->getSubDirectory(ProjectHandler::SubDirectories::Images).getChildFile("SplashScreeniPhone.png");
@@ -983,7 +998,7 @@ bool CompileExporter::checkSanity(TargetTypes type, BuildOption option)
 
     if(BuildOptionHelpers::isVST(option))
     {
-        const File vstSDKDirectory = hiseDirectory.getChildFile("tools/SDK/VST3 SDK/public.sdk/");
+        const File vstSDKDirectory = hisePath.getChildFile("tools/SDK/VST3 SDK/public.sdk/");
         
         if(!vstSDKDirectory.isDirectory())
         {
@@ -995,7 +1010,7 @@ bool CompileExporter::checkSanity(TargetTypes type, BuildOption option)
 #if JUCE_WINDOWS
     if(BuildOptionHelpers::isStandalone(option))
     {
-        const File asioSDK = hiseDirectory.getChildFile("tools/SDK/ASIOSDK2.3/common");
+        const File asioSDK = hisePath.getChildFile("tools/SDK/ASIOSDK2.3/common");
         
         if(!asioSDK.isDirectory())
         {
@@ -1008,7 +1023,7 @@ bool CompileExporter::checkSanity(TargetTypes type, BuildOption option)
 #if !JUCE_LINUX
     if(BuildOptionHelpers::isAAX(option))
     {
-        const File aaxSDK = hiseDirectory.getChildFile("tools/SDK/AAX/Libs");
+        const File aaxSDK = hisePath.getChildFile("tools/SDK/AAX/Libs");
         
         if(!aaxSDK.isDirectory())
         {
@@ -2577,7 +2592,7 @@ void CompileExporter::BatchFileCreator::createBatchFile(CompileExporter* exporte
 	
 	if (!exporter->rawMode && BuildOptionHelpers::is64Bit(buildOption))
 	{
-		ADD_LINE("echo > Compiling 64bit " << projectType << " %project% ...");
+		ADD_LINE("echo Compiling 64bit " << projectType << " %project% ...");
 		ADD_LINE("set Platform=X64");
 		ADD_LINE("%msbuild% \"%build_path%\\Builds\\" << vsFolder << "\\%project%.sln\" %vs_args%");
 		

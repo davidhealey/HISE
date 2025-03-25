@@ -647,6 +647,8 @@ protected:
 
 	ScrollbarFader& getFader() { return sf; }
 
+	bool useIntegerGrid = false;
+
 private:
 
 	Component* asComponent = nullptr;
