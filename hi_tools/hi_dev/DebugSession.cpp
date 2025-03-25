@@ -287,6 +287,9 @@ Component* DebugSession::ItemBase::createComponent(bool forceJSON)
 {
 	auto data = getVariantCopy();
 
+	if(!forceJSON && RectViewer::wantsRectangleViewer(data))
+		return new RectViewer(getTextForName(), data);
+
 	if(!forceJSON && BufferViewer::isArrayOrBuffer(getVariantCopy()))
 		return new BufferViewer(this, p);
 
@@ -1512,12 +1515,15 @@ bool DebugSession::isEventQueueEmpty()
 
 var DebugSession::Session::getVariantCopy() const
 {
-	Array<var> d;
+	DynamicObject::Ptr no = new DynamicObject();
 
 	for(auto g: valueGroup)
-		d.add(g->getVariantCopy());
-
-	return var(d);
+	{
+		no->setProperty(g->label, g->getVariantCopy());
+	}
+		
+	
+	return var(no.get());
 }
 
 int DebugSession::Session::ValueGroup::getNumChildElements() const
@@ -1541,11 +1547,31 @@ DebugInformationBase::Ptr DebugSession::Session::ValueGroup::getChildElement(int
 
 var DebugSession::Session::ValueGroup::getVariantCopy() const
 {
-	Array<var> data;
+	if(dataItems.size() == 1)
+		return dataItems.getFirst()->data;
 
-	for(auto d: dataItems)
-		data.add(d->data);
+	auto sameLabels = true;
 
-	return var(data);
+	for(int i = 1; i < dataItems.size(); i++)
+		sameLabels &= dataItems[i]->label == dataItems[0]->label;
+
+	if(sameLabels)
+	{
+		Array<var> data;
+
+		for(auto d: dataItems)
+			data.add(d->data);
+
+		return var(data);
+	}
+	else
+	{
+		auto no = new DynamicObject();
+
+		for(auto d: dataItems)
+			no->setProperty(d->label, d->data);
+
+		return var(no);
+	}
 }
 } // namespace hise

@@ -133,6 +133,7 @@ protected:
 
 class ObjectReference : public LayoutBase,
 						public ReferenceCountedObject,
+						public ObjectWithJSONConverter,
 						public DebugableObjectBase
 {
 public:
@@ -319,6 +320,7 @@ public:
 
 struct Array : public LayoutBase,
 	public AssignableObject,
+	public ObjectWithJSONConverter,
 	public ConstScriptingObject
 {
 	ObjectReference::CompareFunction compareFunction;

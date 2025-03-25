@@ -122,7 +122,7 @@ struct JavascriptTokeniserFunctions
           };
         
         static const char* const keywordsOther[] =
-		{ "FileSystem", "namespace", "protected", "undefined", "isDefined", nullptr };
+		{ "FileSystem", "namespace", "protected", "undefined", "isDefined", "Rectangle", nullptr };
 
         const char* const* k;
 

@@ -63,8 +63,174 @@ private:
 	JUCE_DECLARE_WEAK_REFERENCEABLE(ScreenshotListener);
 };
 
+
+
 namespace ScriptingObjects
 {
+	
+
+	class ScriptRectangle: public RectangleDynamicObject,
+						   public AssignableObject,
+						   public AssignableDotObject
+	{
+	public:
+
+		ScriptRectangle(Rectangle<double> d={}):
+		  RectangleDynamicObject(d)
+		{}
+
+		ScriptRectangle(const var& rectArray):
+		  RectangleDynamicObject(ApiHelpers::getRectangleFromVar(rectArray, nullptr).toDouble())
+		{}
+
+		/** Override this method and assign the new value to the given id. */
+		bool assign(const Identifier& id, const var& newValue) override
+		{
+			setProperty(id, newValue);
+			return hasProperty(id);
+		}
+
+		void assign(const int index, var newValue) override
+		{
+			static const std::array<Identifier, 4> ids = { "x", "y", "width", "height" };
+
+			if(isPositiveAndBelow(index, 4))
+				assign(ids[index], newValue);
+		}
+
+		var getAssignedValue(int index) const override
+		{
+			double values[4] = { rectangle.getX(), rectangle.getY(), rectangle.getWidth(), rectangle.getHeight() };
+
+			if(isPositiveAndBelow(index, 4))
+				return values[index];
+
+			return var();
+		}
+
+		int getCachedIndex(const var &indexExpression) const override { return (int)indexExpression; }
+
+		var getDotProperty(const Identifier& id) const override
+		{
+			return getProperty(id);
+		}
+
+		Ptr clone() override
+		{
+			return new ScriptRectangle(this->rectangle);
+		}
+
+		Identifier getObjectName() const override { RETURN_STATIC_IDENTIFIER("Rectangle"); }
+		String getDebugValue() const override { return toString(); };
+		bool isAutocompleteable() const override { return true; }
+
+		
+
+		// API Methods =====
+
+		/** Removes a strip from the top of this rectangle, reducing this rectangle by the specified amount and returning the section that was removed. */
+		void removeFromTop(double numToRemove) { jassertfalse; }
+
+		/** Removes a strip from the left of this rectangle, reducing this rectangle by the specified amount and returning the section that was removed. */
+		void removeFromLeft(double numToRemove) { jassertfalse; }
+
+		/** Removes a strip from the right of this rectangle, reducing this rectangle by the specified amount and returning the section that was removed.*/
+		void removeFromRight(double numToRemove) { jassertfalse; }
+
+		/** Removes a strip from the bottom of this rectangle, reducing this rectangle by the specified amount and returning the section that was removed. */
+		void removeFromBottom(double numToRemove) { jassertfalse; }
+
+		/** Returns a rectangle which has the same size and y-position as this one, but with a different x-position. */
+		void withX(double newX) { jassertfalse; }
+
+		/** Returns a rectangle which has the same size and x-position as this one, but with a different y-position. */
+		void withY(double newY) { jassertfalse; }
+
+		/** Returns a new rectangle with a different x position, but the same right-hand edge as this one. */
+		void withLeft(double newLeft) { jassertfalse; }
+
+		/** Returns a new rectangle with a different right-hand edge position, but the same left-hand edge as this one. */
+		void withRight(double newRight) { jassertfalse; }
+
+		/** Returns a new rectangle with a different bottom edge position, but the same top edge as this one. */
+		void withBottom(double newBottom) { jassertfalse; }
+
+		/** Returns a rectangle which has the same size and x-position as this one, but whose bottom edge has the given position. */
+		void withBottomY(double newBottomY) { jassertfalse; }
+
+		/** Returns a rectangle which has the same position and height as this one, but with a different width. */
+		void withWidth(double newWidth) { jassertfalse; }
+
+		/** Returns a rectangle which has the same position and width as this one, but with a different height. */
+		void withHeight(double newHeight) { jassertfalse; }
+
+		/** Returns a rectangle with the same size as this one, but a new centre position. */
+		void withCentre(double newWidth, double newHeight) { jassertfalse; }
+
+		/** Returns a rectangle with the same top-left position as this one, but a new size. */
+		void withSize(double newWidth, double newHeight) { jassertfalse; }
+
+		/** Returns a rectangle with the same centre position as this one, but a new size. */
+		void withSizeKeepingCentre(double newWidth, double newHeight) { jassertfalse; }
+
+		/** Returns a rectangle with the position and size being scaled by the given factors. */
+		void scaled(double factorX, double optionalFactorY) { jassertfalse; }
+
+		/** Returns a rectangle which is the same as this one moved by a given amount. */
+		void translated(double deltaX, double deltaY) { jassertfalse; }
+
+		/** Changes the position of the rectangle's top-left corner (leaving its size unchanged). */
+		void setPosition(double x, double y) { jassertfalse; }
+
+		/** Changes the rectangle's size, leaving the position of its top-left corner unchanged. */
+		void setSize(double width, double height) { jassertfalse; }
+
+		/** Changes the position of the rectangle's centre (leaving its size unchanged). */
+		void setCentre(double centerX, double centerY) { jassertfalse; }
+
+		/** Tries to fit this rectangle within a target area, returning the result. */
+		void constrainedWithin(var targetArea) { jassertfalse; }
+
+		/** Returns true if this other rectangle is completely inside this one. */
+		void contains(var otherRectOrPoint) { jassertfalse; }
+
+		/** Returns the smallest rectangle that contains both this one and the one passed-in. */
+		void getUnion(var otherRect) { jassertfalse; }
+
+		/** Returns the intersection of both rectangles (the largest rectangle that fits into both rectangles. */
+		void getIntersection(var otherRect) { jassertfalse ; }
+
+	    /** Returns a version of this rectangle with the given amount removed from its left-hand edge. */
+	    void withTrimmedLeft (double amountToRemove) const noexcept { jassertfalse; }
+
+	    /** Returns a version of this rectangle with the given amount removed from its right-hand edge. */
+	    void withTrimmedRight (double amountToRemove) const noexcept { jassertfalse; }
+
+	    /** Returns a version of this rectangle with the given amount removed from its top edge. */
+	    void withTrimmedTop (double amountToRemove) const noexcept { jassertfalse; }
+
+	    /** Returns a version of this rectangle with the given amount removed from its bottom edge. */
+	    void withTrimmedBottom (double amountToRemove) const noexcept { jassertfalse; }
+
+		/** Returns true if any part of another rectangle overlaps this one. */
+		void intersects(var otherRect) { jassertfalse; }
+
+		/** Returns true if the rectangle's width or height are zero or less. */
+		void isEmpty() { jassertfalse; }
+
+		/** Returns a rectangle that is smaller than this one by a given amount. */
+		void reduced(double x, double optionalY) { jassertfalse; }
+
+		/** Returns a rectangle that is larger than this one by a given amount. */
+		void expanded(double x, double optionalY) { jassertfalse;  }
+
+		/** Returns the biggest rectangle that fits in this rectangle using the aspect ratio of the other rectangle. */
+		void withAspectRatioLike(var otherRect) { jassertfalse; }
+
+		/** Returns a standard JS array with the position [x, y, w, h]. */
+		void toArray() const { jassertfalse; }
+	};
+
 	class ScriptShader : public ConstScriptingObject,
 						 public ScreenshotListener
 	{

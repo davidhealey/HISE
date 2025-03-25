@@ -1604,10 +1604,7 @@ var ScriptingApi::Content::ScriptComponent::getLocalBounds(float reduceAmount)
 {
 	Rectangle<float> ar(0.0f, 0.0f, (float)getScriptObjectProperty(Properties::width), (float)getScriptObjectProperty(Properties::height));
 	ar = ar.reduced(reduceAmount);
-
-	Array<var> b;
-	b.add(ar.getX()); b.add(ar.getY()); b.add(ar.getWidth()); b.add(ar.getHeight());
-	return var(b);
+	return ApiHelpers::getVarRectangle(ar);
 }
 
 void ScriptingApi::Content::ScriptComponent::setKeyPressCallback(var keyboardFunction)

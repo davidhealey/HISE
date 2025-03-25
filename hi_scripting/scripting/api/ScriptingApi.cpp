@@ -303,6 +303,10 @@ var ApiHelpers::getVarRectangle(Rectangle<float> floatRectangle, Result* r /*= n
 {
 	ignoreUnused(r);
 
+#if HISE_USE_SCRIPT_RECTANGLE_OBJECT
+	return var(new ScriptingObjects::ScriptRectangle(floatRectangle.toDouble()));
+#else
+
 	Array<var> newRect;
 
 	newRect.add(floatRectangle.getX());
@@ -311,6 +315,7 @@ var ApiHelpers::getVarRectangle(Rectangle<float> floatRectangle, Result* r /*= n
 	newRect.add(floatRectangle.getHeight());
 
 	return var(newRect);
+#endif
 }
 
 
@@ -340,6 +345,10 @@ Rectangle<float> ApiHelpers::getRectangleFromVar(const var &data, Result *r/*=nu
 			return Rectangle<float>();
 		}
 	}
+	else if(auto ro = dynamic_cast<RectangleDynamicObject*>(data.getDynamicObject()))
+	{
+		return ro->getRectangle().toFloat();
+	}
 	else
 	{
 		if (r != nullptr) *r = Result::fail("Rectangle data is not an array");
@@ -366,6 +375,10 @@ Rectangle<int> ApiHelpers::getIntRectangleFromVar(const var &data, Result* r/*=n
 			if (r != nullptr) *r = Result::fail("Rectangle array needs 4 elements");
 			return Rectangle<int>();
 		}
+	}
+	else if (auto ro = dynamic_cast<RectangleDynamicObject*>(data.getDynamicObject()))
+	{
+		return ro->getRectangle().toNearestInt();
 	}
 	else
 	{

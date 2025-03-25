@@ -266,6 +266,7 @@ hiseSpecialData(this)
 	setMethod("parseInt", IntegerClass::parseInt);
 	setMethod("parseFloat", IntegerClass::parseFloat);
 	setMethod("typeof", typeof_internal);
+	setMethod("Rectangle", ApiHelpers::createRectangle);
 
     // These are not constants so if you're evil you can change them...
     setProperty("AsyncNotification", ApiHelpers::AsyncMagicNumber);
@@ -562,6 +563,7 @@ root(root_)
 		hiddenProperties.addIfNotAlreadyThere(Identifier("trace"));
 		hiddenProperties.addIfNotAlreadyThere(Identifier("charToInt"));
 		hiddenProperties.addIfNotAlreadyThere(Identifier("parseInt"));
+		hiddenProperties.addIfNotAlreadyThere(Identifier("Rectangle"));
 		hiddenProperties.addIfNotAlreadyThere(Identifier("parseFloat"));
 		hiddenProperties.addIfNotAlreadyThere(Identifier("typeof"));
 		hiddenProperties.addIfNotAlreadyThere(Identifier("Object"));

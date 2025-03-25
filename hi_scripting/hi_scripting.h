@@ -98,6 +98,16 @@ compile / debug cycle and don't need all nodes in scriptnode you might want to t
 #define HISE_INCLUDE_BX_LICENSER 0
 #endif
 
+/** Config: HISE_USE_SCRIPT_RECTANGLE_OBJECT
+ *
+ *  Enable this to use the custom rectangle object type instead of a JS
+ *  array in LAF methods and other scripting callbacks.
+ *
+ */
+#ifndef HISE_USE_SCRIPT_RECTANGLE_OBJECT
+#define HISE_USE_SCRIPT_RECTANGLE_OBJECT 0
+#endif
+
 #define MAX_SCRIPT_HEIGHT 700
 
 #include "AppConfig.h"

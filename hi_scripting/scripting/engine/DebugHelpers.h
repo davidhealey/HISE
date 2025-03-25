@@ -39,12 +39,18 @@ class DebugInformation;
 class HiseJavascriptEngine;
 
 /** Overwrite this method if you want to add debugging functionality to a object. */
-class DebugableObject: public DebugableObjectBase
+class DebugableObject: public DebugableObjectBase,
+					   public ObjectWithJSONConverter	
 {
 public:
 
     virtual ~DebugableObject() {};
-    
+
+	void writeAsJSON (OutputStream& outputStream, int indentLevel, bool allOnOneLine, int maximumDecimalPlaces) override
+	{
+		outputStream.writeString(getDebugName() + " - " + getDebugValue());
+	}
+
 	struct Helpers
 	{
 		static AttributedString getFunctionDoc(const String &docBody, const Array<Identifier> &parameters);
