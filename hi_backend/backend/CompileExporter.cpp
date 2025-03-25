@@ -2577,7 +2577,7 @@ void CompileExporter::BatchFileCreator::createBatchFile(CompileExporter* exporte
 	
 	if (!exporter->rawMode && BuildOptionHelpers::is64Bit(buildOption))
 	{
-		ADD_LINE("echo > Compiling 64bit " << projectType << " %project% ...");
+		ADD_LINE("echo Compiling 64bit " << projectType << " %project% ...");
 		ADD_LINE("set Platform=X64");
 		ADD_LINE("%msbuild% \"%build_path%\\Builds\\" << vsFolder << "\\%project%.sln\" %vs_args%");
 		
