@@ -58,15 +58,13 @@ It supports x86 and x64 on Windows, altough the 64bit version is highly recommen
 
 2. Extract the contents of `tools/SDK/sdk.zip` to `tools/SDK`. Your `tools` folder should now contain folders named `ASIOSDK2.3` and `VST3 SDK`.
 
-3. Install [xcpretty](https://github.com/xcpretty/xcpretty), a formatter for xcode. You can install it from the terminal using the command `sudo gem install xcpretty`.
-
-4. Open the Projucer (there are compiled versions for every supported OS in the `tools/projucer` subdirectory) and load the HISE project (either `projects/standalone/HISE Standalone.jucer` or `project/plugin/HISE.jucer`).
+3. Open the Projucer (there are compiled versions for every supported OS in the `tools/projucer` subdirectory) and load the HISE project (either `projects/standalone/HISE Standalone.jucer` or `project/plugin/HISE.jucer`).
 
 > If you hit a permission issue when launching Projucer (or an error stating that Projucer is damaged) you need to open Security & Privacy and whitelist Projucer.
 
-5. Click on "Save Project and open in IDE" to load the project in XCode.
+4. Click on "Save Project and open in IDE" to load the project in XCode.
 
-6. Hit compile and wait...
+5. Hit compile and wait...
 
 ### Linux
 
