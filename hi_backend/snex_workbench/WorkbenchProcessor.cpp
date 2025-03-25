@@ -644,8 +644,6 @@ void DspNetworkCompileExporter::run()
 		}
 	}
 	
-	hisePath = File(GET_HISE_SETTING(getMainController()->getMainSynthChain(), HiseSettings::Compiler::HisePath));
-
 	createProjucerFile();
 
 	for (auto l : getSourceDirectory(true).findChildFiles(File::findFiles, true, "*.h"))
