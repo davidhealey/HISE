@@ -71,7 +71,7 @@ if %errorlevel% NEQ 0 (
 	pause
 	exit 1)
 
-"%cd%/extras/demo_project/DspNetworks/Binaries/batchCompile.bat"
+call "%cd%/extras/demo_project/DspNetworks/Binaries/batchCompile.bat"
 
 echo Exporting Demo Project...
 
@@ -86,7 +86,7 @@ if %errorlevel% NEQ 0 (
 	exit 1)
 
 
-"%cd%/extras/demo_project/Binaries/batchCompile.bat"
+call "%cd%/extras/demo_project/Binaries/batchCompile.bat"
 
 if %errorlevel% NEQ 0 (
 	echo ========================================================================
