@@ -1221,6 +1221,7 @@ var CompileProjectDialog::compileTask(const var::NativeFunctionArgs& args)
 
 	CompileExporter ep(bpe->getBackendProcessor()->getMainSynthChain());
 
+#if NOPE
 	auto modulesToReplace = ScriptReplaceHelpers::getListOfAllConvertableScriptModules(bpe->getBackendProcessor());
 
 	if(!modulesToReplace.isEmpty())
@@ -1232,6 +1233,7 @@ var CompileProjectDialog::compileTask(const var::NativeFunctionArgs& args)
 
 		ScriptReplaceHelpers::replace(bpe->getBackendProcessor(), modulesToReplace, sendNotificationAsync);
 	}
+#endif
 
 	ep.manager = this;
 
