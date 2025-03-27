@@ -367,7 +367,41 @@ struct VoiceData
 		lastValues.clear();
 	}
 
-	void process(ProcessDataDyn& data, float* scratchBuffer);
+	void process(ProcessDataDyn& data, float* scratchBuffer)
+	{
+		auto numInput = (int)std::ceil(data.getNumSamples() / uptimeDelta - uptime);
+
+		float* ptrs[2] = { scratchBuffer, scratchBuffer + numInput };
+
+		auto src = data.getRawDataPointers();
+
+		auto thisUptime = uptime;
+
+		for(int i = 0; i < numInput; i++)
+		{
+			auto loIndex = (int)thisUptime;
+			auto hiIndex = loIndex + 1;
+			auto alpha = (float)thisUptime - (float)loIndex;
+
+			auto ls1 = loIndex == 0 ? lastValues[0] : src[0][loIndex-1];
+			auto ls2 = loIndex == 0 ? lastValues[1] : src[1][loIndex-1];
+			auto us1 = src[0][hiIndex-1];
+			auto us2 = src[1][hiIndex-1];
+
+			ptrs[0][i] = Interpolator::interpolateLinear(ls1, us1, alpha);
+			ptrs[1][i] = Interpolator::interpolateLinear(ls2, us2, alpha);
+
+			thisUptime += uptimeDelta;
+				
+		}
+
+		lastValues[0] = src[0][data.getNumSamples()-1];
+		lastValues[1] = src[1][data.getNumSamples()-1];
+
+		stretcher.process(ptrs, numInput, src, data.getNumSamples());
+
+		uptime = std::fmod(thisUptime, 1.0);
+	}
 
 	void prepare(PrepareSpecs ps)
 	{
@@ -457,7 +491,7 @@ public:
 	{
 		auto& s = stretchers.get();
 
-		s.process(d.as<ProcessDataDyn>(), resampleBuffer.begin());
+		s.process(d.template as<ProcessDataDyn>(), resampleBuffer.begin());
 	}
 
 	void setFreqRatio(double newValue)
