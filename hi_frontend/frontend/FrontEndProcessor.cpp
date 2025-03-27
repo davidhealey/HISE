@@ -501,53 +501,8 @@ void FrontendProcessor::getStateInformation(MemoryBlock &destData)
 
 	compressor.compress(v, destData);
 #else
-	MemoryOutputStream output(destData, false);
-
-
-	ValueTree v("ControlData");
-
-	if (auto e = getExpansionHandler().getCurrentExpansion())
-		v.setProperty("CurrentExpansion", e->getProperty(ExpansionIds::Name), nullptr);
-
-	//synthChain->saveMacroValuesToValueTree(v);
-
-    getUserPresetHandler().saveStateManager(v, UserPresetIds::Modules);
-    
-    getUserPresetHandler().saveStateManager(v, UserPresetIds::MidiAutomation);
-    
 	
-
-	if (getUserPresetHandler().isUsingCustomDataModel())
-    {
-        getUserPresetHandler().saveStateManager(v, UserPresetIds::CustomJSON);
-        
-    }
-	else
-		synthChain->saveInterfaceValues(v);
-
-	v.setProperty("MidiChannelFilterData", getMainSynthChain()->getActiveChannelData()->exportData(), nullptr);
-
-	v.setProperty("Program", currentlyLoadedProgram, nullptr);
-
-	v.setProperty("HostTempo", globalBPM, nullptr);
-
-	v.setProperty("UserPreset", getUserPresetHandler().getCurrentlyLoadedFile().getFullPathName(), nullptr);
-
-	// Make sure to save the version string into the plugin state
-	v.setProperty("Version", FrontendHandler::getVersionString(), nullptr);
-
-    getUserPresetHandler().saveStateManager(v, UserPresetIds::MPEData);
-    
-	
-	// Reload the macro connections before restoring the preset values
-		// so that it will update the correct connections with `setMacroControl()` in a control callback
-	if (getMacroManager().isMacroEnabledOnFrontend())
-		getMacroManager().getMacroChain()->saveMacrosToValueTree(v);
-
-	v.writeToStream(output);
-
-	
-
+	MainController::savePluginState(destData, currentlyLoadedProgram);
 #endif
 }
 

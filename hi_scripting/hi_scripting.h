@@ -98,6 +98,14 @@ compile / debug cycle and don't need all nodes in scriptnode you might want to t
 #define HISE_INCLUDE_BX_LICENSER 0
 #endif
 
+/** Config: HISE_INCLUDE_NKS_SDK
+ *
+ *  Enable this to use the NKS tools for HISE.
+ */
+#ifndef HISE_INCLUDE_NKS_SDK
+#define HISE_INCLUDE_NKS_SDK 0
+#endif
+
 /** Config: HISE_USE_SCRIPT_RECTANGLE_OBJECT
  *
  *  Enable this to use the custom rectangle object type instead of a JS
@@ -180,3 +188,7 @@ compile / debug cycle and don't need all nodes in scriptnode you might want to t
 #include "scripting/scriptnode/api/NodeProperty.h"
 #include "scripting/scriptnode/api/ModulationSourceNode.h"
 #include "scripting/scriptnode/dynamic_elements/DynamicParameterList.h"
+
+#if HISE_INCLUDE_NKS_SDK
+#include "scripting/api/nks/nks_wrapper.h"
+#endif

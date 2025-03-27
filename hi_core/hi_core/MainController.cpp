@@ -2223,6 +2223,57 @@ void MainController::timerCallback()
 #endif
 }
 
+void MainController::savePluginState(MemoryBlock& destData, int currentlyLoadedProgram)
+{
+	MemoryOutputStream output(destData, false);
+
+	ValueTree v("ControlData");
+
+	if (auto e = getExpansionHandler().getCurrentExpansion())
+		v.setProperty("CurrentExpansion", e->getProperty(ExpansionIds::Name), nullptr);
+
+	//synthChain->saveMacroValuesToValueTree(v);
+
+    getUserPresetHandler().saveStateManager(v, UserPresetIds::Modules);
+    
+    getUserPresetHandler().saveStateManager(v, UserPresetIds::MidiAutomation);
+
+	if (getUserPresetHandler().isUsingCustomDataModel())
+    {
+        getUserPresetHandler().saveStateManager(v, UserPresetIds::CustomJSON);
+        
+    }
+	else
+		getMainSynthChain()->saveInterfaceValues(v);
+
+	v.setProperty("MidiChannelFilterData", getMainSynthChain()->getActiveChannelData()->exportData(), nullptr);
+
+	v.setProperty("Program", currentlyLoadedProgram, nullptr);
+
+	auto globalBPM = dynamic_cast<GlobalSettingManager*>(this)->globalBPM;
+	v.setProperty("HostTempo", globalBPM, nullptr);
+
+	v.setProperty("UserPreset", getUserPresetHandler().getCurrentlyLoadedFile().getFullPathName(), nullptr);
+
+#if USE_BACKEND
+	auto version = GET_HISE_SETTING(getMainSynthChain(), HiseSettings::Project::Version).toString();
+#else
+	auto version = FrontendHandler::getVersionString();
+#endif
+
+	// Make sure to save the version string into the plugin state
+	v.setProperty("Version", version, nullptr);
+
+    getUserPresetHandler().saveStateManager(v, UserPresetIds::MPEData);
+	
+	// Reload the macro connections before restoring the preset values
+		// so that it will update the correct connections with `setMacroControl()` in a control callback
+	if (getMacroManager().isMacroEnabledOnFrontend())
+		getMacroManager().getMacroChain()->saveMacrosToValueTree(v);
+
+	v.writeToStream(output);
+}
+
 void MainController::handleSuspendedNoteOffs()
 {
 	if (!suspendedNoteOns.isEmpty())

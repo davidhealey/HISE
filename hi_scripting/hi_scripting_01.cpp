@@ -88,6 +88,10 @@
 #include "scripting/api/bx/bx_wrapper.cpp"
 #endif
 
+#if HISE_INCLUDE_NKS_SDK
+#include "scripting/api/nks/nks_wrapper.cpp"
+#endif
+
 #include "scripting/api/ScriptingApiObjects.cpp"
 #include "scripting/api/ScriptModulationMatrix.cpp"
 #include "scripting/api/ScriptBroadcaster.cpp"
