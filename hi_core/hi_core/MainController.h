@@ -1477,7 +1477,8 @@ public:
 
 	void notifyShutdownToRegisteredObjects();
 
-	SampleManager &getSampleManager() noexcept {return *sampleManager; };
+	SampleManager &getSampleManager() noexcept {return *sampleManager; }
+	
 	const SampleManager &getSampleManager() const noexcept { return *sampleManager; };
 
 	MacroManager &getMacroManager() noexcept {return macroManager;};
@@ -1720,6 +1721,10 @@ public:
 	void rebuildVoiceLimits();
 
 	void timerCallback() override;
+
+	bool forceSaveAsPluginState = false;
+
+	void savePluginState(MemoryBlock& destData, int currentlyLoadedProgram);
 
 #if USE_BACKEND
 

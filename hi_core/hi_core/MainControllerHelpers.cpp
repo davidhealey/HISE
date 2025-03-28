@@ -670,7 +670,7 @@ bool MidiControllerAutomationHandler::MPEData::contains(MPEModulator* mod) const
 ValueTree MidiControllerAutomationHandler::exportAsValueTree() const
 {
 	if (unloadedData.isValid())
-		return unloadedData;
+		return unloadedData.createCopy();
 
 	ValueTree v("MidiAutomation");
 

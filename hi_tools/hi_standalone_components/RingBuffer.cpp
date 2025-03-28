@@ -585,19 +585,27 @@ void ModPlotter::refresh()
 				auto range = buffer.findMinMax(0, sampleIndex, numThisTime);
 
 				auto maxValue = hmath::abs(range.getStart()) > hmath::abs(range.getEnd()) ? range.getStart() : range.getEnd();
+				auto srs = startRange.getStart();
+				auto sre = startRange.getEnd();
 
 				FloatSanitizers::sanitizeFloatNumber(maxValue);
+				FloatSanitizers::sanitizeFloatNumber(srs);
+				FloatSanitizers::sanitizeFloatNumber(sre);
 
-				maxValue = NormalisableRange<float>(startRange).convertTo0to1(maxValue);
 				
-				float height = maxValue * maxHeight;
-				float y = offset + maxHeight - height;
+				if(srs != sre)
+				{
+					maxValue = NormalisableRange<float>(srs, sre).convertTo0to1(maxValue);
+					
+					float height = maxValue * maxHeight;
+					float y = offset + maxHeight - height;
 
-				sampleIndex += samplesPerPixel;
+					sampleIndex += samplesPerPixel;
 
-				p.lineTo(i + offset, maxHeight - height + offset);
+					p.lineTo(i + offset, maxHeight - height + offset);
 
-				rectangles.addWithoutMerging({ i + offset, y, rectangleWidth, height});
+					rectangles.addWithoutMerging({ i + offset, y, rectangleWidth, height});
+				}
 			}
 		}
 		else

@@ -372,7 +372,10 @@ public:
 
         /** Creates a BX Licenser object (requires the proprietary SDK). */
         var createBXLicenser();
-        
+
+		/** Creates a NKS manager object (requires the proprietary SDK). */
+		var createNKSManager(); 
+
 		/** Creates a reference to the DSP network of another script processor. */
 		var getDspNetworkReference(String processorId, String id);
 

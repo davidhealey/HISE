@@ -1240,6 +1240,7 @@ struct ScriptingApi::Engine::Wrapper
 	API_METHOD_WRAPPER_0(Engine, createGlobalScriptLookAndFeel);
 	API_METHOD_WRAPPER_1(Engine, createBackgroundTask);
 	API_METHOD_WRAPPER_0(Engine, createBXLicenser);
+	API_METHOD_WRAPPER_0(Engine, createNKSManager);
     API_METHOD_WRAPPER_1(Engine, createFixObjectFactory);
 	API_METHOD_WRAPPER_0(Engine, createErrorHandler);
 	API_METHOD_WRAPPER_1(Engine, createModulationMatrix);
@@ -1339,6 +1340,7 @@ parentMidiProcessor(dynamic_cast<ScriptBaseMidiProcessor*>(p))
 	ADD_API_METHOD_0(createMidiAutomationHandler);
 	ADD_API_METHOD_0(createMacroHandler);
 	ADD_API_METHOD_0(createBXLicenser);
+	ADD_API_METHOD_0(createNKSManager);
   ADD_API_METHOD_1(loadNextUserPreset);
 	ADD_API_METHOD_1(loadPreviousUserPreset);
 	ADD_API_METHOD_1(isUserPresetReadOnly);
@@ -2472,6 +2474,16 @@ var ScriptingApi::Engine::createBXLicenser ()
     RETURN_IF_NO_THROW({});
 #endif
 
+}
+
+var ScriptingApi::Engine::createNKSManager()
+{
+#if HISE_INCLUDE_NKS_SDK
+	return var(new ScriptingObjects::ScriptNKSManager(getScriptProcessor()));
+#else
+	reportScriptError ("NKS support is not enabled");
+    RETURN_IF_NO_THROW({});
+#endif
 }
 
 var ScriptingApi::Engine::getDspNetworkReference(String processorId, String id)
