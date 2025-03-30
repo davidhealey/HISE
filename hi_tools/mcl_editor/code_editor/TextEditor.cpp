@@ -337,7 +337,8 @@ void TextEditor::tokenListWasRebuild()
 {
     if(tokenCollection->getTokens().isEmpty())
         return;
-    
+
+#if 0
 	SafeAsyncCall::call<TextEditor>(*this, [](TextEditor& te)
 	{
 		if(te.currentError != nullptr)
@@ -350,6 +351,7 @@ void TextEditor::tokenListWasRebuild()
 				te.addAndMakeVisible(te.autofixButton);
 		}
 	});
+#endif
 }
 
 TextEditor::Action::Action(TextEditor* te, List nl, Ptr ncp):
