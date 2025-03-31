@@ -109,7 +109,7 @@ template <typename MessageType> struct target_base
 {
     virtual ~target_base() {};
     virtual void onValue(MessageType value) = 0;
-    virtual void onData(const void* data, size_t numBytes) = 0;
+    virtual void onData(const void* data, size_t numBytes) { ignoreUnused(data); ignoreUnused(numBytes); };
 };
 
 /** A simple POD with a type index and a hash as well
