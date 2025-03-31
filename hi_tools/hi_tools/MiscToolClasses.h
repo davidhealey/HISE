@@ -2506,6 +2506,55 @@ private:
 	std::array<std::array<std::pair<uint16, double>, NumDataSlots>, NumEventSlots> data;
 };
 
+/** A small helper class that simplifies the syntax when programatically creating JSON objects.
+ 
+    This is just a wrapper around a juce::DynamicObject but can be used as stack created variable
+ 	with overloaded []-operator access for neat syntax like:
+ 
+ 	```
+ 	JSONObject obj;
+ 	obj["someProperty"] = "Hello";
+ 	obj["noice"] = 1234;
+
+	// convert to juce::var for usage within JUCE / HISE
+ 	var v(obj);
+ */	
+struct JSONObject
+{
+	JSONObject(): obj(new DynamicObject()) {};
+
+	JSONObject(std::initializer_list<NamedValueSet::NamedValue>&& v):
+	  obj(new DynamicObject())
+	{
+		obj->getProperties() = v;
+	}
+
+	var& operator[](const String& c)
+	{
+		auto id = Identifier(c);
+
+		if(!obj->hasProperty(id))
+			obj->setProperty(id, {});
+
+		return *obj->getProperties().getVarPointer(id);
+	}
+
+	const var& operator[](const String& c) const
+	{
+		auto id = Identifier(c);
+		return obj->getProperty(id);
+	}
+
+	operator var() const { return var(obj.get()); }
+
+	const NamedValueSet::NamedValue* begin() const { return obj->getProperties().begin(); }
+	const NamedValueSet::NamedValue* end() const { return obj->getProperties().end(); }
+
+private:
+
+	DynamicObject::Ptr obj;
+};
+
 /** A interface class for a component that has a text editor that should show a autocomplete popup. */
 struct TextEditorWithAutocompleteComponent: public Timer,
 											public TextEditor::Listener

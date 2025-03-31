@@ -36,6 +36,8 @@ namespace juce { using namespace hise;
 VariantBuffer::VariantBuffer(float *externalData, int size_) :
 size((externalData != nullptr) ? size_ : 0)
 {
+	registerStreamCreator(this);
+
 	if (externalData != nullptr)
 	{
 		float *data[1] = { externalData };
@@ -47,6 +49,8 @@ size((externalData != nullptr) ? size_ : 0)
 
 VariantBuffer::VariantBuffer(VariantBuffer *otherBuffer, int offset /*= 0*/, int numSamples /*= -1*/)
 {
+	registerStreamCreator(this);
+
 	referToOtherBuffer(otherBuffer, offset, numSamples);
 	addMethods();
 }
@@ -55,6 +59,8 @@ VariantBuffer::VariantBuffer(int samples) :
 size(samples),
 buffer()
 {
+	registerStreamCreator(this);
+
 	if (samples > 0)
 	{
 		buffer.setSize(1, jmax<int>(0, samples));
