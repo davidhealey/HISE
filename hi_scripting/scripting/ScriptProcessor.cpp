@@ -196,9 +196,7 @@ void ProcessorWithScriptingContent::controlCallback(ScriptingApi::Content::Scrip
 	
 #if USE_FRONTEND
     
-    if (component->isAutomatable() &&
-        component->getScriptObjectProperty(ScriptingApi::Content::ScriptComponent::Properties::isPluginParameter) &&
-        getMainController_()->getPluginParameterUpdateState())
+    if (component->isScriptPluginParameter() && getMainController_()->getPluginParameterUpdateState())
     {
         float newValue = (float)controllerValue;
         FloatSanitizers::sanitizeFloatNumber(newValue);

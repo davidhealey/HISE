@@ -712,17 +712,29 @@ void HiSlider::sliderDragEnded(Slider* s)
 	setAttributeWithUndo((float)s->getValue(), true, (float)dragStartValue);
 }
 
-bool HiSlider::changePluginParameter(AudioProcessor* p, int parameterIndex)
+bool HiSlider::changePluginParameter(AudioProcessor* p, int macroIndex)
 {
-	auto value = getValue();
-	auto pd = dynamic_cast<MainController*>(p)->getMainSynthChain()->getMacroControlData(parameterIndex)->getParameter(0);
+	jassert(HISE_MACROS_ARE_PLUGIN_PARAMETERS);
 
-	jassert(pd != nullptr);
+	auto parameters = p->getParameters();
 
-	value = pd->getParameterRange().convertTo0to1(value);
+	for(auto pr: parameters)
+	{
+		if(auto typed = dynamic_cast<HisePluginParameterBase*>(pr))
+		{
+			auto isMacro = typed->getType() == HisePluginParameterBase::Type::Macro;
 
-	p->setParameterNotifyingHost(parameterIndex, (float)value);
-	return true;
+			if(typed->matchesIndex(getMacroIndex()))
+			{
+				auto value = getValue();
+				value = typed->getNormalisableRange().convertTo0to1(value);
+				pr->setValueNotifyingHost(value);
+				return true;
+			}
+		}
+	}
+
+	return false;
 }
 
 bool HiSlider::callWhenSingleMacro(const std::function<bool(AudioProcessor* p, int parameterIndex)>& f)

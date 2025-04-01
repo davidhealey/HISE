@@ -34,36 +34,38 @@
 namespace hise { using namespace juce;
 
 
-struct CustomAutomationParameter : NEW_AUTOMATION_WITH_COMMA(public dispatch::ListenerOwner)
-								   public juce::AudioProcessorParameterWithID
+
+
+
+struct CustomAutomationParameter : public juce::AudioProcessorParameterWithID,
+								   public HisePluginParameterBase
 {
 	using Data = MainController::UserPresetHandler::CustomAutomationData;
 
-	CustomAutomationParameter(Data::Ptr data_) :
+	CustomAutomationParameter(Data::Ptr data_, int index) :
 		AudioProcessorParameterWithID(data_->id, data_->id),
-		NEW_AUTOMATION_WITH_COMMA(autoListener(data_->getMainController()->getRootDispatcher(), *this, BIND_MEMBER_FUNCTION_2(CustomAutomationParameter::onUpdate)))
+		HisePluginParameterBase(data_->getMainController(), index),
+	    
 		data(data_)
 	{
 
-		IF_OLD_AUTOMATION_DISPATCH(data->syncListeners.addListener(*this, update, false));
-		IF_NEW_AUTOMATION_DISPATCH(data->dispatcher.addValueListener(&autoListener, false, dispatch::DispatchType::sendNotificationSync));
+		parameterValueToSend = data->range.convertTo0to1(data->lastValue);
+
+		data->dispatcher.addValueListener(&autoListener, false, dispatch::DispatchType::sendNotificationSync);
 	};
 
 	~CustomAutomationParameter()
 	{
 		if(data != nullptr)
 		{
-			IF_NEW_AUTOMATION_DISPATCH(data->dispatcher.removeValueListener(&autoListener, dispatch::DispatchType::sendNotificationSync));
+			data->dispatcher.removeValueListener(&autoListener, dispatch::DispatchType::sendNotificationSync);
 		}
 	}
 
-	void onUpdate(int index, float v)
-	{
-		FloatSanitizers::sanitizeFloatNumber(v);
-		v = data->range.convertTo0to1(v);
-		ScopedValueSetter<bool> svs(recursive, true);
-		setValueNotifyingHost(v);
-	}
+	HisePluginParameterBase::Type getType() const override { return Type::CustomAutomation; }
+	NormalisableRange<float> getNormalisableRange() const override { return data->range; }
+	bool matchesIndex(int slotIndex) const override { return data->index == slotIndex; }
+
 
 	static void update(CustomAutomationParameter& d, var* args)
 	{
@@ -71,9 +73,7 @@ struct CustomAutomationParameter : NEW_AUTOMATION_WITH_COMMA(public dispatch::Li
 
 		FloatSanitizers::sanitizeFloatNumber(v);
 		v = d.data->range.convertTo0to1(v);
-
 		ScopedValueSetter<bool> svs(d.recursive, true);
-
 		d.setValueNotifyingHost(v);
 	}
 
@@ -82,32 +82,41 @@ struct CustomAutomationParameter : NEW_AUTOMATION_WITH_COMMA(public dispatch::Li
 		return data->lastValue;
 	}
 
+	float getDefaultValue() const override
+	{
+		return data->range.convertTo0to1(data->defaultParameterValue);
+	}
+
 	void setValue(float newValue)
 	{
 		if (recursive)
 			return;
 
 		newValue = data->range.convertFrom0to1(newValue);
-
 		data->call(newValue, dispatch::DispatchType::sendNotificationSync);
+	}
+
+	String getText(float normalisedValue, int) const override
+	{
+		auto normValue = data->range.convertFrom0to1(normalisedValue);
+
+		return data->vtc.getTextForValue((double)normValue);
 	}
 
 	float getValueForText(const String& text) const override
 	{
-		return text.getFloatValue();
-	}
-
-	float getDefaultValue() const
-	{
-		return 0.0f;
+		return data->vtc.getValueForText(text);
 	}
 
 	bool isMetaParameter() const
 	{
 		for (auto c : data->connectionList)
 		{
-			if (dynamic_cast<Data::MetaConnection*>(c) != nullptr)
-				return true;
+			if (auto mc = dynamic_cast<Data::MetaConnection*>(c))
+			{
+				if(mc->target->allowHost)
+					return true;
+			}
 		}
 
 		return false;
@@ -115,30 +124,141 @@ struct CustomAutomationParameter : NEW_AUTOMATION_WITH_COMMA(public dispatch::Li
 
 	Data::Ptr data;
 
-	bool recursive = false;
-
-	IF_NEW_AUTOMATION_DISPATCH(dispatch::library::CustomAutomationSource::Listener autoListener);
-
 	JUCE_DECLARE_WEAK_REFERENCEABLE(CustomAutomationParameter);
 };
 
 
 struct MacroPluginParameter: public juce::HostedAudioProcessorParameter,
-							 public ControlledObject
+							 public HisePluginParameterBase
 {
-	MacroPluginParameter(MainController* mc, int macroIndex_):
-	   ControlledObject(mc),
+	using Data = MainController::UserPresetHandler::CustomAutomationData;
+
+	MacroPluginParameter(MainController* mc, int macroIndex_, int parameterIndex_):
+	   HisePluginParameterBase(mc, parameterIndex_),
+	   parameterListener(mc->getRootDispatcher(), *this, BIND_MEMBER_FUNCTION_2(MacroPluginParameter::onParameterUpdate)),
 	   macroIndex(macroIndex_)
 	{
 		checkMacro();
 	}
 
+	~MacroPluginParameter()
+	{
+		if(data != nullptr)
+		{
+			data->dispatcher.removeValueListener(&autoListener, dispatch::DispatchType::sendNotificationSync);
+		}
+
+		if(connectedProcessor.get() != nullptr)
+		{
+			connectedProcessor->removeAttributeListener(&parameterListener);
+		}
+	}
+
+	void onParameterUpdate(dispatch::library::Processor* funky, uint16 x)
+	{
+		if(connectedProcessor != nullptr && connectedAttribute != -1)
+		{
+			auto v = connectedProcessor->getAttribute(connectedAttribute);
+			onUpdate(-1, v);
+		}
+	}
+
 	void checkMacro() const
 	{
 		if(md.get() == nullptr)
+		{
 			md = const_cast<MacroControlBroadcaster::MacroControlData*>(getMainController()->getMainSynthChain()->getMacroControlData(macroIndex));
+		}
+
+		if(md != nullptr)
+		{
+			auto setDataListener = [&](Data::Ptr thisData)
+			{
+				auto l = const_cast<dispatch::library::CustomAutomationSource::Listener*>(&autoListener);
+
+				if(thisData != data)
+				{
+					if(data != nullptr)
+						data->dispatcher.removeValueListener(l, dispatch::DispatchType::sendNotificationSync);
+
+					data = thisData;
+
+					if(data != nullptr)
+						data->dispatcher.addValueListener(l, false, dispatch::DispatchType::sendNotificationSync);
+				}
+			};
+
+			auto setParameterListener = [&](Processor* p, uint16 processorIndex)
+			{
+				auto l = const_cast<dispatch::library::Processor::AttributeListener*>(&this->parameterListener);
+
+				if(connectedProcessor != p || connectedAttribute != processorIndex)
+				{
+					if(connectedProcessor != nullptr)
+						connectedProcessor->removeAttributeListener(l);
+
+					connectedProcessor = p;
+					connectedAttribute = processorIndex;
+
+					if(connectedProcessor != nullptr)
+						connectedProcessor->addAttributeListener(l, &processorIndex, 1, dispatch::sendNotificationSync);
+				}
+			};
+
+			if(md->getNumParameters() > 0)
+			{
+				if(md->getParameter(0)->isCustomAutomation())
+				{
+					setParameterListener(nullptr, -1);
+					auto idx = md->getParameter(0)->getParameter();
+					setDataListener(getMainController()->getUserPresetHandler().getCustomAutomationData(idx));
+				}
+				else
+				{
+					auto mp = md->getParameter(0);
+					setParameterListener(mp->getProcessor(), mp->getParameter());
+					setDataListener(nullptr);
+				}
+			}
+			else
+			{
+				setParameterListener(nullptr, -1);
+				setDataListener(nullptr);
+			}
+		}
 	}
 
+	NormalisableRange<float> getNormalisableRange() const override
+	{
+		if(data != nullptr)
+			return data->range;
+
+		if(md != nullptr && md->getNumParameters() == 1)
+		{
+			auto nrd = md->getParameter(0)->getParameterRange();
+			NormalisableRange<float> nr;
+
+			nr.start = (float)nrd.start;
+			nr.end = (float)nrd.end;
+			nr.interval = (float)nrd.interval;
+			nr.skew = (float)nrd.skew;
+			nr.symmetricSkew = (float)nrd.symmetricSkew;
+
+			return nr;
+		}
+			
+
+		return { 0.0f, 1.0f };
+	}
+
+		
+	HisePluginParameterBase::Type getType() const override { return Type::Macro; }
+	bool matchesIndex(int slotIndex) const override { return macroIndex == slotIndex; }
+
+	mutable Data::Ptr data;
+	mutable WeakReference<Processor> connectedProcessor;
+	mutable int connectedAttribute = -1;
+	
 	String getParameterID() const override { return "P" + String(macroIndex + 1); }
 
 	String getName(int maximumStringLength) const override
@@ -147,7 +267,7 @@ struct MacroPluginParameter: public juce::HostedAudioProcessorParameter,
 
 		auto n = md->getMacroName();
 
-		if (isPositiveAndBelow(n, maximumStringLength))
+		if (isPositiveAndBelow(n.length(), maximumStringLength))
 			return n;
 
 		return n.substring(0, maximumStringLength);
@@ -161,7 +281,14 @@ struct MacroPluginParameter: public juce::HostedAudioProcessorParameter,
 
 		if(md->getNumParameters() == 1)
 		{
+			auto mp = md->getParameter(0);
+
+			auto vtc = mp->getValueToTextConverter();
+
 			normalisedValue = md->getParameter(0)->getParameterRange().convertFrom0to1(normalisedValue);
+
+			if(vtc.active)
+				return vtc.getTextForValue(normalisedValue);
 		}
 
 		return String(normalisedValue, 2);
@@ -212,9 +339,12 @@ struct MacroPluginParameter: public juce::HostedAudioProcessorParameter,
 		md->setValue(newValue * 127.0);
 	}
 
+	
+
 	bool isMetaParameter() const { return false; }
 
-	bool recursive = false;
+	dispatch::library::Processor::AttributeListener parameterListener;
+
 	const int macroIndex;
 	mutable WeakReference<MacroControlBroadcaster::MacroControlData> md;
 };
@@ -223,13 +353,39 @@ void PluginParameterAudioProcessor::addScriptedParameters()
 {
 #if HISE_MACROS_ARE_PLUGIN_PARAMETERS
 
+	auto& uph = dynamic_cast<MainController*>(this)->getUserPresetHandler();
+
+	int pIndex = 0;
+
 	for(int i = 0; i < HISE_NUM_MACROS; i++)
 	{
-		addParameter(new MacroPluginParameter(dynamic_cast<MainController*>(this), i));
+		addParameter(new MacroPluginParameter(dynamic_cast<MainController*>(this), i, pIndex++));
+	}
+
+	for(auto c: uph.getAdditionalPluginParameters())
+	{
+		c->isAdditionalPluginParameter = true;
+		addParameter(new CustomAutomationParameter(c, pIndex++));
+	}
+
+	if(uph.getAdditionalPluginParameterComponentList().isArray())
+	{
+		for(auto sc_var: *uph.getAdditionalPluginParameterComponentList().getArray())
+		{
+			auto sc = dynamic_cast<ScriptingApi::Content::ScriptComponent*>(sc_var.getObject());
+			sc->isAdditionalPluginParameter = true;
+			auto index = sc->getScriptProcessor()->getScriptingContent()->getComponentIndex(sc->getName());
+
+			ScriptedControlAudioParameter *newParameter = new ScriptedControlAudioParameter(sc, this, dynamic_cast<ScriptBaseMidiProcessor*>(sc->getScriptProcessor()), index);
+			addParameter(newParameter);
+			pIndex++;
+		}
 	}
 
 #else
 	auto& uph = dynamic_cast<MainController*>(this)->getUserPresetHandler();
+
+	int pIndex = 0;
 
 	if (uph.isUsingCustomDataModel())
 	{
@@ -239,7 +395,7 @@ void PluginParameterAudioProcessor::addScriptedParameters()
 			{
 				if (data->allowHost)
 				{
-					addParameter(new CustomAutomationParameter(data));
+					addParameter(new CustomAutomationParameter(data, pIndex++));
 				}
 			}
 		}
@@ -392,7 +548,9 @@ bool PluginParameterAudioProcessor::isBusesLayoutSupported(const BusesLayout& la
 }
 
 PluginParameterAudioProcessor::~PluginParameterAudioProcessor()
-{}
+{
+	setParameterTree({});
+}
 
 const String PluginParameterAudioProcessor::getName() const
 {return name;}
@@ -462,7 +620,14 @@ void PluginParameterAudioProcessor::setScriptedPluginParameter(Identifier id, fl
 {
 	for (int i = 0; i < getNumParameters(); i++)
 	{
-		if (ScriptedControlAudioParameter * sp = static_cast<ScriptedControlAudioParameter*>(getParameters().getUnchecked(i)))
+
+#if HISE_MACROS_ARE_PLUGIN_PARAMETERS
+#define CAST dynamic_cast
+#else
+#define CAST static_cast
+#endif
+
+		if (ScriptedControlAudioParameter * sp = CAST<ScriptedControlAudioParameter*>(getParameters().getUnchecked(i)))
 		{
 			if (sp->getId() == id)
 			{
@@ -471,6 +636,8 @@ void PluginParameterAudioProcessor::setScriptedPluginParameter(Identifier id, fl
 			}
 		}
 	}
+
+#undef CAST
 }
 
 } // namespace hise

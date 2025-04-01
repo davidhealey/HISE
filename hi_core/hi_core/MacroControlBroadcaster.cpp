@@ -155,8 +155,18 @@ namespace hise { using namespace juce;
 			}
 
 			newValue = pd->getParameterRange().convertTo0to1(newValue);
-			
-			ap->setParameterNotifyingHost(macroIndex, newValue);
+
+			for(auto p: ap->getParameters())
+			{
+				if(auto typed = dynamic_cast<HisePluginParameterBase*>(p))
+				{
+					if(typed->getType() == HisePluginParameterBase::Type::Macro && typed->matchesIndex(macroIndex))
+					{
+						p->setValueNotifyingHost(newValue);
+						break;
+					}
+				}
+			}
 		}
 
 #endif
@@ -391,11 +401,12 @@ void MacroControlBroadcaster::MacroControlledParameterData::setAttribute(double 
 				d->call(value, dispatch::DispatchType::sendNotificationSync);
 		}
 		else
-			controlledProcessor.get()->setAttribute(parameter, value, readOnly ? sendNotificationSync : dontSendNotification);
+		{
+			controlledProcessor.get()->setAttribute(parameter, value, sendNotificationSync);
+			//controlledProcessor.get()->setAttribute(parameter, value, readOnly ? sendNotificationSync : dontSendNotification);
+		}
 	}
-	
 };
-
 		
 
 bool MacroControlBroadcaster::MacroControlledParameterData::matchesCustomAutomation(const Identifier& id) const

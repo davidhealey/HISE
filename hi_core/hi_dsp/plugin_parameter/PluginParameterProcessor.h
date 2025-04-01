@@ -112,6 +112,78 @@ public:
 
 #pragma warning (pop)
 
+struct HisePluginParameterBase: public AsyncUpdater,
+								public ControlledObject,
+								public dispatch::ListenerOwner
+{
+	enum class Type
+	{
+		CustomAutomation,
+		Macro,
+		numTypes
+	};
+
+	HisePluginParameterBase(MainController* mc, int index):
+	  ControlledObject(mc),
+	  autoListener(getMainController()->getRootDispatcher(), *this, BIND_MEMBER_FUNCTION_2(HisePluginParameterBase::onUpdate)),
+	  parameterIndex(index)
+	{}
+
+	virtual ~HisePluginParameterBase() = default;
+
+	int getHiseParameterIndex() { return parameterIndex; }
+	virtual Type getType() const = 0;
+	virtual NormalisableRange<float> getNormalisableRange() const = 0;
+	virtual bool matchesIndex(int slotIndex) const = 0;
+
+	void onUpdate(int index, float v)
+	{
+		FloatSanitizers::sanitizeFloatNumber(v);
+		v = getNormalisableRange().convertTo0to1(v);
+
+		if(v != parameterValueToSend)
+		{
+			parameterValueToSend = v;
+			refreshParameterValue();
+		}
+	}
+
+	void refreshParameterValue()
+	{
+		auto mc = getMainController();
+		auto t = mc->getKillStateHandler().getCurrentThread();
+		auto defer = mc->getDeferNotifyHostFlag() || t != MainController::KillStateHandler::TargetThread::MessageThread;
+
+		if(defer)
+			triggerAsyncUpdate();
+		else
+			handleAsyncUpdate();
+	}
+
+	void handleAsyncUpdate() override
+	{
+		auto mc = getMainController();
+		
+		ScopedValueSetter<bool> svs(recursive, true);
+		ScopedValueSetter<bool> setter(mc->getPluginParameterUpdateState(), false, true);
+
+		auto parentProcessor = dynamic_cast<AudioProcessor*>(mc);
+		auto pindex = parameterIndex;
+
+		parentProcessor->beginParameterChangeGesture(pindex);
+		parentProcessor->setParameterNotifyingHost(pindex, parameterValueToSend);
+		parentProcessor->endParameterChangeGesture(pindex);
+	}
+
+	const int parameterIndex;
+	float parameterValueToSend = 0.0f;
+	bool recursive = false;
+
+	dispatch::library::CustomAutomationSource::Listener autoListener;
+
+	JUCE_DECLARE_WEAK_REFERENCEABLE(HisePluginParameterBase);
+};
+
 } // namespace hise
 
 #endif  // __PLUGINPROCESSOR_H_BF259E1F__

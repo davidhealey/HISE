@@ -117,6 +117,11 @@ struct ValueToTextConverter
 			return TempoSyncer::getTempoName(roundToInt(v));
 		}
 
+		static String Decibel(double v)
+		{
+			return Decibels::toString(v, std::abs(v < 18 ? 1 : 0));
+		}
+
 		static String Pan(double v)
 		{		
 			if (v == 0)
@@ -158,6 +163,14 @@ struct ValueToTextConverter
 				return input.getDoubleValue() * 1000.0;
 			else
 				return input.getDoubleValue();
+		}
+
+		static double Decibel(const String& v)
+		{
+			if(v == "-INF")
+				return -100.0;
+
+			return v.getDoubleValue();
 		}
 
 		static double TempoSync(const String& input)
@@ -240,6 +253,7 @@ struct ValueToTextConverter
 		FUNC(TempoSync);
 		FUNC(Pan);
 		FUNC(NormalizedPercentage);
+		FUNC(Decibel);
 
 #undef FUNC
 
