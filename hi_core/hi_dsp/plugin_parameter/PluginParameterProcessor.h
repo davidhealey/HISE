@@ -175,6 +175,8 @@ struct HisePluginParameterBase: public AsyncUpdater,
 		parentProcessor->endParameterChangeGesture(pindex);
 	}
 
+    virtual void cleanup() = 0;
+    
 	const int parameterIndex;
 	float parameterValueToSend = 0.0f;
 	bool recursive = false;

@@ -54,13 +54,17 @@ struct CustomAutomationParameter : public juce::AudioProcessorParameterWithID,
 		data->dispatcher.addValueListener(&autoListener, false, dispatch::DispatchType::sendNotificationSync);
 	};
 
-	~CustomAutomationParameter()
-	{
-		if(data != nullptr)
-		{
-			data->dispatcher.removeValueListener(&autoListener, dispatch::DispatchType::sendNotificationSync);
-		}
-	}
+    ~CustomAutomationParameter() = default;
+    
+    void cleanup() override
+    {
+        if(data != nullptr)
+        {
+            data->dispatcher.removeValueListener(&autoListener, dispatch::DispatchType::sendNotificationSync);
+            
+            data = nullptr;
+        }
+    }
 
 	HisePluginParameterBase::Type getType() const override { return Type::CustomAutomation; }
 	NormalisableRange<float> getNormalisableRange() const override { return data->range; }
@@ -143,16 +147,23 @@ struct MacroPluginParameter: public juce::HostedAudioProcessorParameter,
 
 	~MacroPluginParameter()
 	{
-		if(data != nullptr)
-		{
-			data->dispatcher.removeValueListener(&autoListener, dispatch::DispatchType::sendNotificationSync);
-		}
-
-		if(connectedProcessor.get() != nullptr)
-		{
-			connectedProcessor->removeAttributeListener(&parameterListener);
-		}
+		
 	}
+    
+    void cleanup() override
+    {
+        if(data != nullptr)
+        {
+            data->dispatcher.removeValueListener(&autoListener, dispatch::DispatchType::sendNotificationSync);
+            
+            data = nullptr;
+        }
+
+        if(connectedProcessor.get() != nullptr)
+        {
+            connectedProcessor->removeAttributeListener(&parameterListener);
+        }
+    }
 
 	void onParameterUpdate(dispatch::library::Processor* funky, uint16 x)
 	{
