@@ -44,12 +44,26 @@ class DebugableObject: public DebugableObjectBase,
 {
 public:
 
+	DebugableObject()
+	{
+		registerStreamCreator(this);
+	}
+
     virtual ~DebugableObject() {};
 
 	void writeAsJSON (OutputStream& outputStream, int indentLevel, bool allOnOneLine, int maximumDecimalPlaces) override
 	{
 		outputStream.writeString(getDebugName() + " - " + getDebugValue());
 	}
+
+	void writeToStream(OutputStream& os) override
+	{
+		jassertfalse;
+	}
+
+	static ObjectWithJSONConverter* createFromStream(InputStream& os) { return nullptr; }
+
+	JUCE_MAKE_STREAMABLE_OBJECT(2);
 
 	struct Helpers
 	{

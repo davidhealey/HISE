@@ -334,7 +334,19 @@ public:
 
 		PROFILE_ONLY(int getProfilePropertyTrackId(const Identifier& id) const { return (int)propertyTrackIds[id]; })
 
-		virtual ValueTree exportAsValueTree() const override;;
+		virtual ValueTree exportAsValueTree() const override;
+		bool isScriptPluginParameter()
+		{
+			bool ok = isAutomatable();
+			ok &= (bool)getScriptObjectProperty(ScriptingApi::Content::ScriptComponent::Properties::isPluginParameter);
+
+#if HISE_MACROS_ARE_PLUGIN_PARAMETERS
+			ok |= isAdditionalPluginParameter;
+#endif
+
+			return ok;
+		}
+
 		virtual void restoreFromValueTree(const ValueTree &v) override;;
 
 		String getDebugValue() const override { return getValue().toString(); };
@@ -711,6 +723,10 @@ public:
 		ProfileCollection::PS::ScopedProfiler profile(ProfileCollection::ID id);
 		void openTrack(ProfileCollection::ID id);
 		void closeTrack(ProfileCollection::ID id);
+
+#if HISE_MACROS_ARE_PLUGIN_PARAMETERS
+		bool isAdditionalPluginParameter = false;
+#endif
 
 	protected:
 

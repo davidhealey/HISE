@@ -503,7 +503,7 @@ void MainTopBar::paint(Graphics& g)
 #if JUCE_DEBUG
 	infoText << " with ";
 #endif
-
+    
 	infoText << "Faust enabled";
 #endif
 
@@ -511,6 +511,10 @@ void MainTopBar::paint(Graphics& g)
     infoText << " + Perfetto";
 #endif
 
+#if HISE_INCLUDE_NKS_SDK
+    infoText << " + NKS";
+#endif
+    
 	if(getRootWindow()->getBackendProcessor()->isSnippetBrowser())
 		infoText = "HISE Snippet Playground";
 

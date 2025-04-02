@@ -189,6 +189,6 @@ compile / debug cycle and don't need all nodes in scriptnode you might want to t
 #include "scripting/scriptnode/api/ModulationSourceNode.h"
 #include "scripting/scriptnode/dynamic_elements/DynamicParameterList.h"
 
-#if HISE_INCLUDE_NKS_SDK
-#include "scripting/api/nks/nks_wrapper.h"
+#if HISE_INCLUDE_NKS_SDK && !USE_BACKEND
+#include "scripting/api/nks/nks_interface.h"
 #endif

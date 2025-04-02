@@ -2658,7 +2658,10 @@ namespace ScriptingObjects
 
 		/** Sends the value to all targets (after converting it from the input range. */
 		void setValue(double inputWithinRange);
-		
+
+		/** Sends any type of data (JSON, string, buffers) to the target. */
+		void sendData(var dataToSend);
+
 		/** Set the input range using a min and max value (no steps / no skew factor). */
 		void setRange(double min, double max);
 
@@ -2667,6 +2670,9 @@ namespace ScriptingObjects
 
 		/** Set the input range using a min and max value as well as a step size. */
 		void setRangeWithStep(double min, double max, double stepSize);
+
+		/** Registers a function that will be executed asynchronously when the data receives a JSON data chunk. */
+		void registerDataCallback(var dataCallbackFunction);
 
 		/** Registers a function that will be executed whenever a value is sent through the cable. */
 		void registerCallback(var callbackFunction, var synchronous);
@@ -2690,12 +2696,16 @@ namespace ScriptingObjects
 		struct DummyTarget;
 		struct Wrapper;
 		struct Callback;
+		struct DataCallback;
 
 		var cable;
 
 		ScopedPointer<DummyTarget> dummyTarget;
 		OwnedArray<Callback> callbacks;
+		OwnedArray<DataCallback> dataCallbacks;
 		scriptnode::InvertableParameterRange inputRange;
+
+		bool dataRecursion = false;
 	};
 
 	class TimerObject : public ConstScriptingObject,
@@ -2809,10 +2819,7 @@ namespace ScriptingObjects
 		
 	private:
 
-		void handleAsyncUpdate() override
-		{
-			sendUpdateMessage(sendNotificationAsync);
-		}
+		void handleAsyncUpdate() override;
 
 		struct ScopedUpdateDelayer
 		{
