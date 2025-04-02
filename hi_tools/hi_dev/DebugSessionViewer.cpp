@@ -108,7 +108,7 @@ struct DebugSession::ProfileDataSource::ViewComponents::Viewer::BreadcrumbCompon
 	void paint(Graphics& g) override
 	{
 		if(findParentComponentOfClass<MultiViewer>() != nullptr)
-			g.fillAll(Colours::white.withAlpha(0.2f));
+			g.fillAll(Colours::white.withAlpha(JUCE_LIVE_CONSTANT_OFF(0.1f)));
 
 		g.setColour(Colours::white.withAlpha(0.2f));
 
@@ -229,12 +229,18 @@ struct DebugSession::ProfileDataSource::ViewComponents::Viewer::TimelineComponen
 			}
 		}
 
-		if(parent.currentIndex == idx)
-			parent.currentIndex = -1;
-		else
-			parent.currentIndex = idx;
+		auto m = parent.getManager();
 
-		parent.updateIndexToShow();
+		auto currentRunIndex = m->runIndex;
+
+		if(currentRunIndex == idx)
+			currentRunIndex = -1;
+		else
+			currentRunIndex = idx;
+
+		m->setCurrentRunIndex(currentRunIndex);
+
+		
 		rebuild();
 	}
 	void resized() override
@@ -261,11 +267,12 @@ struct DebugSession::ProfileDataSource::ViewComponents::Viewer::TimelineComponen
 	RectangleList<float> dataPoints;
 };
 
-DebugSession::ProfileDataSource::ViewComponents::Viewer::Viewer(ProfileInfoBase* info, DebugSession& dh):
+DebugSession::ProfileDataSource::ViewComponents::Viewer::Viewer(ProfileInfoBase* info, DebugSession& dh, bool multiMode_):
 	timeline(new TimelineComponent(*this)),
 	breadcrumbs(new BreadcrumbComponent(*this)),
 	peakButton("peak", nullptr, factory),
 	session(dh),
+	multiMode(multiMode_),
 	rowScrollBar(true) 
 {
 	setOpaque(true);
@@ -283,6 +290,7 @@ DebugSession::ProfileDataSource::ViewComponents::Viewer::Viewer(ProfileInfoBase*
 
 	peakButton.onClick = BIND_MEMBER_FUNCTION_0(Viewer::refreshPeakButton);
 	peakButton.setToggleModeWithColourChange(true);
+	peakButton.setTooltip("Toggle between the run with the longest duration and the averaged runtime");
 
 	auto r = ViewItem::createFromProfileInfo(info);
 
@@ -344,6 +352,8 @@ void DebugSession::ProfileDataSource::ViewComponents::Viewer::refreshPeakButton(
 		return;
 	}
 
+	auto thisIndex = currentIndex;
+
 	if(peakButton.getToggleState())
 	{
 		double maxLength = 0.0;
@@ -354,7 +364,7 @@ void DebugSession::ProfileDataSource::ViewComponents::Viewer::refreshPeakButton(
 			if(r.length > maxLength)
 			{
 				maxLength = r.length;
-				currentIndex = idx;
+				thisIndex = idx;
 			}
 
 			idx++;
@@ -362,12 +372,16 @@ void DebugSession::ProfileDataSource::ViewComponents::Viewer::refreshPeakButton(
 	}
 	else
 	{
-		currentIndex = -1;
+		thisIndex = -1;
 	}
 
-		
-	updateIndexToShow();
-	dynamic_cast<TimelineComponent*>(timeline.get())->rebuild();
+	if(auto m = getManager())
+		getManager()->setCurrentRunIndex(thisIndex);
+	else
+	{
+		currentIndex = thisIndex;
+		dynamic_cast<TimelineComponent*>(timeline.get())->rebuild();
+	}
 }
 
 void DebugSession::ProfileDataSource::ViewComponents::Viewer::updateAdjacentItems(const MouseEvent& e)
@@ -470,8 +484,29 @@ void DebugSession::ProfileDataSource::ViewComponents::Viewer::toggleTypeFilter(S
 	//statistics->updateSearchTerm();
 }
 
+void DebugSession::ProfileDataSource::ViewComponents::Viewer::onRunIndexUpdate(int currentRunIndex)
+{
+	currentIndex = currentRunIndex;
+	updateIndexToShow();
+	dynamic_cast<TimelineComponent*>(timeline.get())->rebuild();
+
+	if(currentDomain == TimeDomain::Relative)
+	{
+		if(auto m = getManager())
+		{
+			// force the update
+			m->currentDomain = TimeDomain::Undefined;
+
+			// Refresh the relative timeline
+			setTimeDomain(currentDomain);
+		}
+	}
+}
+
 void DebugSession::ProfileDataSource::ViewComponents::Viewer::mouseDown(const MouseEvent& e)
 {
+	mouseMove(e);
+
 	if(e.mods.isLeftButtonDown())
 	{
 		if(currentlyHoveredItem != nullptr && currentlyHoveredItem != rootItem.get() && e.mods.isCommandDown())
@@ -500,6 +535,8 @@ void DebugSession::ProfileDataSource::ViewComponents::Viewer::mouseDown(const Mo
 			std::unique_ptr<Component> c;
 			c.reset(new ItemPopup(this, currentlyHoveredItem));
 
+			currentlyHoveredItem = nullptr;
+			
 			if(auto t = TopLevelWindowWithOptionalOpenGL::findRoot(this))
 			{
 				auto b = t->getLocalArea(this, getLocalBounds().getIntersection(tBounds.toNearestInt()));
@@ -525,15 +562,6 @@ void DebugSession::ProfileDataSource::ViewComponents::Viewer::mouseDown(const Mo
 			m.addItem(TimeDomainOffset + (int)TimeDomain::Relative, "Relative", true, currentDomain == TimeDomain::Relative);
 			m.addItem(TimeDomainOffset + (int)TimeDomain::CpuUsage, "Audio Buffer CPU %", true, currentDomain == TimeDomain::CpuUsage);
 			m.addItem(TimeDomainOffset + (int)TimeDomain::FPS60, "Frametime @ 60FPS", true, currentDomain == TimeDomain::FPS60);
-
-			m.addSectionHeader("Filter by type");
-
-			auto mg = getManager();
-
-			for(int i = 1; i < (int)SourceType::numSourceTypes; i++)
-			{
-				m.addItem(FilterOffset + i, getSourceTypeName((SourceType)i), true, !mg->typeFilters[i]);
-			}
 
 			auto r = m.show();
 
@@ -568,17 +596,12 @@ void DebugSession::ProfileDataSource::ViewComponents::Viewer::mouseDown(const Mo
                 
 				repaint();
 			}
-
-			if(r >= FilterOffset)
-			{
-				auto thisFilter = r - FilterOffset;
-				toggleTypeFilter((SourceType)thisFilter);
-					
-			}
-			else if(r >= TimeDomainOffset)
+			if(r >= TimeDomainOffset)
 			{
 				setTimeDomain((TimeDomain)(r - TimeDomainOffset));
 			}
+
+			return;
 		}
 	}
 
@@ -677,6 +700,9 @@ void DebugSession::ProfileDataSource::ViewComponents::Viewer::mouseMove(const Mo
 	currentNavigationItem = nullptr;
 	currentlyHoveredItem = getHoverItem(e);
 
+	if(currentlyHoveredItem != nullptr && currentlyHoveredItem->name == "Profile root")
+		currentlyHoveredItem = nullptr;
+
 	if(currentlyHoveredItem == nullptr)
 	{
 		auto posFloat = e.getPosition().toFloat();
@@ -708,6 +734,9 @@ VoiceBitMap<32> DebugSession::ProfileDataSource::ViewComponents::Viewer::getType
 
 void DebugSession::ProfileDataSource::ViewComponents::Viewer::mouseDoubleClick(const MouseEvent& e)
 {
+	if(e.mods.isRightButtonDown())
+		return;
+
 	if(currentlyHoveredItem != nullptr)
 	{
 		if(auto nd = rootItem->toggleFold(currentlyHoveredItem, getTypeFilter()))
@@ -744,8 +773,11 @@ void DebugSession::ProfileDataSource::ViewComponents::Viewer::navigateInternal(V
 		currentlyHoveredItem = nullptr;
 		rootItem = newDisplayRoot;
 		rootItem->setAsRoot();
-        
-        breadcrumbs->setVisible(rootItem != originalRoot);
+
+		if(!multiMode)
+			breadcrumbs->setVisible(rootItem != originalRoot);
+		else
+			breadcrumbs->setVisible(true);
 
 		rootItem->callAllRecursive([](ViewItem& vi)
 		{
@@ -879,7 +911,7 @@ void DebugSession::ProfileDataSource::ViewComponents::Viewer::resized()
 
 		if(showTimeline)
 		{
-			labels.push_back({b.removeFromTop(LabelMargin).toFloat(), "Performance graph of runs"});
+			labels.push_back({b.removeFromTop(LabelMargin).toFloat(), "Run performance"});
 			auto timelineBounds = b.removeFromTop(TopBarHeight);
 			peakButton.setBounds(timelineBounds.removeFromRight(timelineBounds.getHeight()).reduced(ButtonMargin * 2));
 			timeline->setBounds(timelineBounds);
@@ -887,6 +919,19 @@ void DebugSession::ProfileDataSource::ViewComponents::Viewer::resized()
 		}
 
 		String t = "Timeline";
+
+		switch(currentDomain)
+		{
+		case TimeDomain::Absolute: t << " (Absolute)";
+			break;
+		case TimeDomain::Relative: t << " (Relative)";
+			break;
+		case TimeDomain::CpuUsage: t << " (Audio Buffer CPU %)";
+			break;
+		case TimeDomain::FPS60: t << " (Frametime @ 60FPS)";
+			break;
+		default: ;
+		}
 
 		breadcrumbs->setBounds(b.removeFromTop(BreadcrumbHeight));
 
@@ -1019,204 +1064,4 @@ bool DebugSession::ProfileDataSource::ViewComponents::Viewer::navigate(ViewItem:
 
 
 
-void DebugSession::ProfileDataSource::ViewComponents::MultiViewer::onFlush(MultiViewer& m,
-	ProfileDataSource::ProfileInfoBase::Ptr p)
-{
-	if(p != nullptr)
-	{
-		m.tabButtons.add(new TabButton("funky"));
-		m.addAndMakeVisible(m.tabButtons.getLast());
-
-		auto v = dynamic_cast<Viewer*>(p->createComponent());
-
-		m.currentViewers.add(v);
-		m.addAndMakeVisible(v);
-
-		if(auto mm = m.getManager())
-		{
-			mm->setActiveViewer(v);
-		}
-	}
-}
-
-void DebugSession::ProfileDataSource::ViewComponents::MultiViewer::resized()
-{
-	auto b = getLocalBounds();
-
-	if(b.isEmpty())
-		return;
-
-	if(currentViewers.size() == 1)
-	{
-		for(auto tb: tabButtons)
-			tb->setVisible(false);
-		currentViewers[0]->setVisible(true);
-		currentViewers[0]->setBounds(b);
-		return;
-	}
-
-	auto tabRow = b.removeFromTop(20);
-
-	for(auto tb: tabButtons)
-	{
-		tb->setVisible(true);
-		tb->setBounds(tabRow.removeFromLeft(tb->getWidth()));
-	}
-		
-
-	int idx = 0;
-
-	for(auto v: currentViewers)
-	{
-		auto visible = idx++ == currentTabIndex;
-		v->setVisible(visible);
-
-		if(visible)
-			v->setBounds(b);
-	}
-}
-
-DebugSession::ProfileDataSource::ViewComponents::MultiViewer::TabButton::TabButton(const String& name_):
-	name(name_),
-	closeButton("delete", nullptr, factory),
-	f(GLOBAL_BOLD_FONT())
-{
-	auto w = f.getStringWidthFloat(name) + 30.0f;
-	setSize(w, 20);
-	addAndMakeVisible(closeButton);
-
-			
-	closeButton.onClick = [this](){ findParentComponentOfClass<MultiViewer>()->removeTab(this); };
-}
-
-void DebugSession::ProfileDataSource::ViewComponents::MultiViewer::TabButton::paint(Graphics& g)
-{
-	auto b = getLocalBounds().toFloat();
-
-	b.removeFromRight(2.0f);
-
-	g.setColour(Colours::white.withAlpha(active ? 0.2f : 0.05f));
-
-	Path p;
-	p.addRoundedRectangle(b.getX(), b.getY(), b.getWidth(), b.getHeight(), 3.0, 3.0, true, true, false, false);
-
-	g.fillPath(p);
-
-	g.setFont(f);
-	b.removeFromLeft(5.0f);
-	g.setColour(Colours::white.withAlpha(active ? 0.8f : 0.4f));
-	g.drawText(name, b, Justification::left);
-}
-
-void DebugSession::ProfileDataSource::ViewComponents::MultiViewer::onNavigation(BaseWithManagerConnection* source,
-                                                                                ViewItem::Ptr r, ViewItem::Ptr cr)
-{
-	if(auto d = dynamic_cast<Viewer*>(source))
-	{
-		currentTabIndex = currentViewers.indexOf(d);
-
-		int idx = 0;
-		for(auto b : tabButtons)
-			b->setActive(idx++ == currentTabIndex);
-
-		resized();
-	}
-}
-
-void DebugSession::ProfileDataSource::ViewComponents::MultiViewer::setCurrentTab(TabButton* b)
-{
-	auto idx = tabButtons.indexOf(b);
-
-	if(idx != currentTabIndex)
-	{
-		if(auto m = getManager())
-			m->setActiveViewer(currentViewers[idx]);
-	}
-}
-
-void DebugSession::ProfileDataSource::ViewComponents::MultiViewer::mouseDown(const MouseEvent& e)
-{
-    if(e.mods.isRightButtonDown())
-    {
-        PopupLookAndFeel plaf;
-        PopupMenu m;
-        m.setLookAndFeel(&plaf);
-        
-        m.addItem(1, "Close all tabs");
-        m.addItem(2, "Close all but this");
-
-        auto r = m.show();
-        
-        if(r == 1)
-        {
-            while(!tabButtons.isEmpty())
-                removeTab(tabButtons.getFirst(), sendNotificationSync);
-        }
-        if(r == 2)
-        {
-            for(int i = 0; i < tabButtons.size(); i++)
-            {
-                if(!tabButtons[i]->active)
-                {
-                    removeTab(tabButtons[i--], sendNotificationSync);
-                }
-            }
-        }
-        
-    }
-}
-
-void DebugSession::ProfileDataSource::ViewComponents::MultiViewer::removeTab(TabButton* b, NotificationType s)
-{
-	auto indexToRemove = tabButtons.indexOf(b);
-
-	auto f = [indexToRemove, this]()
-	{
-		auto m = getManager();
-		
-
-		tabButtons.remove(indexToRemove);
-		currentViewers.remove(indexToRemove);
-
-		currentTabIndex = currentViewers.indexOf(m->currentViewer.get());
-
-		if(currentTabIndex == -1)
-		{
-			currentTabIndex = currentViewers.size()-1;
-			m->setActiveViewer(currentViewers.getLast());
-		}
-
-		resized();
-	};
-
-    if(s == sendNotificationAsync)
-        MessageManager::callAsync(f);
-    else
-        f();
-}
-
-DebugSession::ProfileDataSource::ViewComponents::SingleThreadPopup::SingleThreadPopup(DebugSession& s,
-	DebugInformationBase::Ptr root)
-{
-	setName("Profiler");
-
-	addAndMakeVisible(manager = new Manager(s));
-	manager->setPopupMode(true);
-	addAndMakeVisible(viewer = new Viewer(dynamic_cast<ProfileInfoBase*>(root.get()), s));
-	addAndMakeVisible(statistics = new StatisticsComponent(s));
-	statistics->initManager();
-	manager->setActiveViewer(viewer.get());
-		
-	viewer->setTimeDomain(viewer->originalRoot->getPreferredDomain());
-
-	setSize(DefaultWidth, viewer->getHeight() + MultiViewerMenuBarHeight + 200);
-}
-
-void DebugSession::ProfileDataSource::ViewComponents::SingleThreadPopup::resized()
-{
-	auto b = getLocalBounds();
-	statistics->setBounds(b.removeFromBottom(200));
-	manager->setBounds(b.removeFromTop(MultiViewerMenuBarHeight));
-	viewer->setBounds(b);
-}
 }

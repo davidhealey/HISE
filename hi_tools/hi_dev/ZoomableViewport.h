@@ -518,12 +518,12 @@ struct AbstractZoomableView: public ScrollBar::Listener,
 	{
 		enum class Direction: uint8
 		{
-			Up = 'w',
-			Down = 's',
+			Up = 'q',
+			Down = 'e',
 			Left = 'a',
 			Right = 'd',
-			In = 'e',
-			Out = 'q'
+			In = 'w',
+			Out = 's'
 		};
 
 		enum class MovementType

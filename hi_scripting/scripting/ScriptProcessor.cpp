@@ -1420,7 +1420,7 @@ JavascriptProcessor::SnippetResult JavascriptProcessor::compileInternal()
 	const static Identifier onInit("onInit");
 
 #if HISE_INCLUDE_PROFILING_TOOLKIT
-	auto enableProfiling = dynamic_cast<Processor*>(this)->getMainController()->getDebugSession().shouldProfileInitialisation();
+	auto enableProfiling = dynamic_cast<Processor*>(this)->getMainController()->getDebugSession().getTriggerType() == DebugSession::TriggerType::Compilation;
 	scriptEngine->setEnableOnInitProfiling(enableProfiling);
 #endif
 
@@ -1553,7 +1553,7 @@ void JavascriptProcessor::compileScript(const ResultFunction& rf /*= ResultFunct
 
 #if HISE_INCLUDE_PROFILING_TOOLKIT
     auto& ds = dynamic_cast<Processor*>(this)->getMainController()->getDebugSession();
-	if(ds.shouldProfileInitialisation() && !ds.isRecordingMultithread())
+	if(ds.getTriggerType() == DebugSession::TriggerType::Compilation && !ds.isRecordingMultithread())
 	{
 		ds.startRecording(10000.0, this);
 		stopAfterCompilation = true;

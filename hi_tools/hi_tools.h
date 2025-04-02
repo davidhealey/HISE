@@ -264,8 +264,10 @@ will break compatibility with older projects / presets because the tempo indexes
 
 #if HISE_INCLUDE_PROFILING_TOOLKIT
 #include "hi_dev/DebugSessionViewItem.h"
+#include "hi_dev/DebugSessionManager.h"
 #include "hi_dev/DebugSessionComponents.h"
 #include "hi_dev/DebugSessionViewer.h"
+#include "hi_dev/DebugSessionMultiViewer.h"
 
 #else
 #include "hi_dev/DummyDebugSession.h"

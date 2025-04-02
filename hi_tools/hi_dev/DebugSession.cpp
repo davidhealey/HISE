@@ -345,7 +345,15 @@ String DebugSession::ProfileDataSource::ViewComponents::Helpers::getDuration(flo
 
 	if(domain == TimeDomain::Absolute)
 	{
-		m << String(w) << "ms";
+		if(w < 0.005)
+		{
+			
+			m << String(w * 1000.0, 3) << " " << String::charToString(181) << "s";
+		}
+		else
+		{
+			m << String(w, 3) << " ms";
+		}
 	}
 	if(domain == TimeDomain::Relative)
 	{
@@ -357,7 +365,7 @@ String DebugSession::ProfileDataSource::ViewComponents::Helpers::getDuration(flo
 		w *= 0.001f;
 		w = jmax(0.0001f, w);
 		auto frameTime = 1.0f / w;
-		m << String(frameTime, 1) << "FPS";
+		m << String(frameTime, 1) << " FPS";
 	}
 	if(domain == TimeDomain::CpuUsage)
 	{
@@ -972,7 +980,7 @@ Component* DebugSession::ProfileDataSource::ProfileInfoBase::createPopupComponen
 
 Component* DebugSession::ProfileDataSource::ProfileInfoBase::createComponent()
 {
-	return new ViewComponents::Viewer(this, d);
+	return new ViewComponents::Viewer(this, d, true);
 }
 
 void DebugSession::ProfileDataSource::ProfileInfoBase::addChild(ProfileInfoBase::Ptr p)
@@ -1068,7 +1076,11 @@ void DebugSession::startRecording(double milliSeconds, ApiProviderBase::Holder* 
 	if(nextState.load() == RecordingState::Idle)
 	{
 		nextState.store(RecordingState::Armed);
-		recordingDelta = milliSeconds;
+		recordingDelta = currentOptions.millisecondsToRecord;// milliSeconds;
+
+		if(currentOptions.trigger == TriggerType::Compilation)
+			recordingDelta = 20000.0;
+
 		recordHolder = h;
 
 		if(MessageManager::getInstanceWithoutCreating()->currentThreadHasLockedMessageManager())
@@ -1315,6 +1327,11 @@ void DebugSession::timerCallback()
 			for(auto& r: flushedRoots)
 			{
 				auto tr = r.second->data.source->threadRoot;
+
+				auto addThread = std::find(currentOptions.threadFilter.begin(), currentOptions.threadFilter.end(), tr) != currentOptions.threadFilter.end();
+
+				if(!addThread)
+					continue;
 
 				if(tr != ThreadIdentifier::Type::Undefined && !r.second->children.isEmpty())
 				{

@@ -536,6 +536,20 @@ struct ScriptModuleReplacer: public EncodedDialogBase
 	BackendRootWindow* bpe;
 };
 
+
+
+struct DebugSessionOptions: public EncodedDialogBase
+{
+	DebugSessionOptions(BackendRootWindow* bpe_);
+
+	void bindCallbacks() override
+	{
+		MULTIPAGE_BIND_CPP(DebugSessionOptions, refresh);
+	}
+
+	var refresh(const var::NativeFunctionArgs& args);
+};
+
 struct SnippetBrowser: public EncodedDialogBase
 {
 	SnippetBrowser(BackendRootWindow* bpe_):
