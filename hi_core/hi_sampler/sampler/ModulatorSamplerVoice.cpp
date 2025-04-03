@@ -400,7 +400,8 @@ const float * ModulatorSamplerVoice::getCrossfadeModulationValues(int startSampl
 	if (!sampler->isUsingCrossfadeGroups())
 		return nullptr;
 
-	return sampler->calculateCrossfadeModulationValuesForVoice(voiceIndex, startSample, numSamples, currentlyPlayingSamplerSound->getBitmask() - 1);
+	auto bm = currentlyPlayingSamplerSound->getBitmask();
+	return sampler->calculateCrossfadeModulationValuesForVoice(voiceIndex, startSample, numSamples, bm - 1);
 }
 
 float ModulatorSamplerVoice::getConstantGroupModulationValue() const noexcept

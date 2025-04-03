@@ -48,7 +48,9 @@ struct DebugSession::ProfileDataSource::ViewComponents::Viewer: public Component
 		return (showTimeline ? (LabelMargin + TopBarHeight) : 0) + BreadcrumbHeight + LabelMargin + FirstItemOffset;
 	}
 
-	Viewer(ProfileInfoBase* info, DebugSession& dh);
+	Viewer(ProfileInfoBase* info, DebugSession& dh, bool multiMode);
+
+	const bool multiMode;
 
 	double getTotalLength() const override
 	{
@@ -80,8 +82,11 @@ struct DebugSession::ProfileDataSource::ViewComponents::Viewer: public Component
 	{
 		domainContext = context;
 		currentDomain = newDomain;
+		resized();
 		repaint();
 	}
+
+	void onRunIndexUpdate(int currentRunIndex) override;
 
 	void mouseDown(const MouseEvent& e) override;
 
@@ -212,84 +217,6 @@ private:
     bool drawTracks = false;
 
 	JUCE_DECLARE_WEAK_REFERENCEABLE(Viewer);
-};
-
-struct DebugSession::ProfileDataSource::ViewComponents::MultiViewer: public Component,
-																	 public BaseWithManagerConnection
-{
-	SET_GENERIC_PANEL_ID("ProfilerViewer");
-
-	MultiViewer(DebugSession& s):
-	  session(s)
-	{
-		session.recordingFlushBroadcaster.addListener(*this, onFlush, false);
-	}
-
-	void paint(Graphics& g) override
-	{
-		g.fillAll(Colour(0xFF1D1D1D));
-	}
-
-	static void onFlush(MultiViewer& m, ProfileDataSource::ProfileInfoBase::Ptr p);
-
-	void resized() override;
-
-	struct TabButton: public Component
-	{
-		TabButton(const String& name_);
-
-		void paint(Graphics& g) override;
-
-		void mouseDown(const MouseEvent& e) override
-		{
-			findParentComponentOfClass<MultiViewer>()->setCurrentTab(this);
-		}
-
-		void resized() override
-		{
-			auto b = getLocalBounds();
-			closeButton.setBounds(b.removeFromRight(getHeight()).reduced(2));
-		}
-
-		void setActive(bool shouldBeActive)
-		{
-			active = shouldBeActive;
-			repaint();
-		}
-
-		bool active = false;
-		Manager::Factory factory;
-		Font f;
-
-		HiseShapeButton closeButton;
-		String name;
-	};
-
-    void mouseDown(const MouseEvent& e) override;
-    
-	void onNavigation(BaseWithManagerConnection* source, ViewItem::Ptr r, ViewItem::Ptr cr);
-
-	void setCurrentTab(TabButton* b);
-
-	void removeTab(TabButton* b, NotificationType s=sendNotificationAsync);
-
-	int currentTabIndex = 0;
-	DebugSession& session;
-	OwnedArray<TabButton> tabButtons;
-	OwnedArray<Viewer> currentViewers;
-
-	JUCE_DECLARE_WEAK_REFERENCEABLE(MultiViewer);
-};
-
-struct DebugSession::ProfileDataSource::ViewComponents::SingleThreadPopup: public Component
-{
-	SingleThreadPopup(DebugSession& s, DebugInformationBase::Ptr root);
-
-	void resized() override;
-
-	ScopedPointer<Manager> manager;
-	ScopedPointer<Viewer> viewer;
-	ScopedPointer<StatisticsComponent> statistics;
 };
 
 }

@@ -41,7 +41,7 @@ DebugSession::ProfileDataSource::ViewComponents::ViewItem::ViewItem(ProfileInfoB
 {
 	if(mode == ProfileIds::multithread)
 	{
-		name = "Multithread recording session";
+		name = "Profile root";
 
 		double start = std::numeric_limits<double>::max();
 		double end = 0.0;

@@ -288,7 +288,7 @@ void BackendProcessorEditor::loadNewContainer(const File &f)
 	}
 
 #if HISE_INCLUDE_PROFILING_TOOLKIT
-	if(owner->getDebugSession().shouldProfileInitialisation())
+	if(owner->getDebugSession().getTriggerType() == DebugSession::TriggerType::Compilation)
 		owner->getDebugSession().startRecording(30000, &owner->getDebugSession());
 #endif
 
@@ -318,7 +318,7 @@ void BackendProcessorEditor::loadNewContainer(const ValueTree &v)
 	else
 	{
 #if HISE_INCLUDE_PROFILING_TOOLKIT
-		if(owner->getDebugSession().shouldProfileInitialisation())
+		if(owner->getDebugSession().getTriggerType() == DebugSession::TriggerType::Compilation)
 			owner->getDebugSession().startRecording(30000, &owner->getDebugSession());
 #endif
 		

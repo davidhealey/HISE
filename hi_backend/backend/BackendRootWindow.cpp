@@ -788,7 +788,7 @@ void BackendRootWindow::paint(Graphics& g)
 	g.fillAll(HiseColourScheme::getColour(HiseColourScheme::ColourIds::EditorBackgroundColourIdBright));
 
 	// call this here so that the UI thread is correctly initialised
-	getBackendProcessor()->getDebugSession().initUIThread();
+	PROFILE_ONLY(getBackendProcessor()->getDebugSession().initUIThread());
 
 }
 

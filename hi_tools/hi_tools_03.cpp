@@ -40,8 +40,10 @@
 #if HISE_INCLUDE_PROFILING_TOOLKIT
 #include "hi_dev/DebugProfileTools.cpp"
 #include "hi_dev/DebugSessionViewer.cpp"
+#include "hi_dev/DebugSessionMultiViewer.cpp"
 #include "hi_dev/DebugSessionViewItem.cpp"
 #include "hi_dev/DebugSessionComponents.cpp"
+#include "hi_dev/DebugSessionManager.cpp"
 #include "hi_dev/DebugSession.cpp"
 #endif
 

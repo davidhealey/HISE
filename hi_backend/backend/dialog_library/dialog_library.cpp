@@ -1631,6 +1631,52 @@ var ScriptModuleReplacer::selectAll(const var::NativeFunctionArgs& args)
 
 	return var();
 }
-}	
-}	
+
+DebugSessionOptions::DebugSessionOptions(BackendRootWindow* bpe_):
+	EncodedDialogBase(bpe_, false)
+{
+	setName("Profiler Options");
+
+	loadFrom("1575.sNB..D...............35H...oi...6W.........J09R+fUhDM9B.pBDoKrBzPpHCrWBhH+MJ4RAgTKekvWPguONsMhkRTLqo7Lr.hj4FNIaGjqF2f3IB4Bvp.vJ.UWdLOKovQ55RAblw4F3fYtrWnGnmGsuOmNgrNur7IxpvJevKoXfJsrv+9Yvt7Ze+KHfNk2oHmmtuSubmENaPebNw4JoWWzmDd.YBDJPLQ6kaoVo8RADDITj.4zVpNP4LojIThL4AJQHgBjHTdLzeBDTlDghldYIQHIBDQHg1boGfHQRDIOh.RDGly9DTYfdh3AF4nZXuzXWhB33RFiRi.5eRgCF47sy.GDQL.YfQN4mUTN6u3fX.xH.EnbN2JI3Bea0iRn+324FDyyPux6oUnOmmvxsSsyu1n6DTlhx+GLBjKVqbjws+b4uidoboiLSmytjCm1b9AnPghCXTqwzHkYZpFIsRJp8+wx.M4g+srCp7+IkwnlZ4zwF2Q4.CkczVXrK8.AiTMrOGe6SNfwETjGXT021MN50h0LI6z28IGZLanwb.s8FixR95ssGSiIiFy6oNJ2c4fy2eGJfyE1kaAmM+UM.AFvyqkpq5hKfNe.XSeKhsVsAiZznQCzw6x+ge9zdsb5qMMRKKg5Cyerq1BZohkJZLszo.QCfJuMFNw5rBLzFjSonV2ENOuu0LnHy6lKTqdjpcF23Unymv12OcXMroXrSXhuWeWr5.IPfdzXd3YoeEJl6eVHDDzCLNmvu8FpdpaRcQQUdfEIxPa9DtJVhpdpVo.o5s4bIMBpz5uUuxtnBs5Z7VMgyWQspCfffH.XCAvBpS.SK9zWu46TITaa0ThYqU1YZd4EnJktdSKdoTKcmDZyaMRNEKvBODPk5zx4SN8Bs3RkGJc.n9x3ryW.s2dL26TBQPSe3ay5D8GVfkutxoGsWdwdiW8vVmXSyfLmrdoYQhL3Tmpw4T3hEIzXPeaXJ3oxKdujedY.p7k0dQkxIm9NGazXBIKbZB02aLQ0Ze7wP618WB3CAZ5esNo2E9ooLmWHPfdgZzcHCCMzfA.XK.AAAPbnTHj1iv.xjxiBhTLCzD..HQC.ABETBIjPXPvLRmbv3SYkydGC+cIQ8.GzO7hs9kg4uKUYU+IarIe8cIp.A9QVOeffWFIcd1LI.2FX4mglqGA.n9aTk0vLDIeP+anizzXnWaGLYKmQ1i5lH2FVKIf54ZeF1t4eg4s5Fn+ZizTWFw+vVqTEPNEugqFC1V6LKv4MXuOyV5C1XPI2yFpWr8z1szBjFKLADxenVV3Sg+EBjr23GpnnEBEdwT.u2TMz11bs3W4TyfYc+uVz8fZ6rvH4CrYZfk7RKy5F2dgNHrdU84PiHiHITmMHwfJHBqj5Zbif+kgRcR5.cHj5PHIOA8GCTIm8pViYDN58a81NNdf+2qRZGWeBf3BvGVXxoGczlXR82Q1I41bYNpAvkSF+cV.hIlUHkNhBqKpOGqnJpKyTHvYTKUedyuq4k4wK.ED7FPACV4hpOzzep7E1XlqFudkPldcNZ7TVvBF65f.sdKRRLDzCENQ+jWDIme7HH.NQvJ.i2tbNeWYq699x80zVOfvbWjfP5ZCfxSzjdO.YDNcSVPfFHTjg24.VImqyAnlJhTud8Smh4ItmPlhQ1Z+XOnUpKRLPJIc1I9c2MIQxAffP8fbqSGWqJrjzwWVBn1eCAGDI8AW2KVbly3EJJQKYVJRKMnKO0L4H9PYcQSBqtzGx.7a580sU6Td47yeG6rLrSytnJ8Dn1R8zjV4tHAZAWGHju5dP8E1IgptKqGarNXjLtlZTcKXDrYPKYeEbJmIDDu5mwHGjgQUDL1nRKKJSSsJLbqodzToSbLDOuKbD9S21LJM5ufFlZWvcwEk+kaqLcAeh+x8JjyxyvmStHITTbgT5cNOgQp+7q3x49LjQg4jUSSET+.gTO94CYzb.qE+SNG.hMPGveNfvafUDQzRYC69OLeARuRtNwCZ7qPVHW5nx1GC+a.BYTCJYAPCkniTHFPqpd8Cv4bgqRbH7tXmGL3XyEgQuQ7wiErVgmlnb2MVP52oad.kNB..X5H...qi...");
+
+	dialog->setFinishCallback([this]()
+	{
+		findParentComponentOfClass<ModalBaseWindow>()->clearModalComponent();
+	});
+
+#if HISE_INCLUDE_PROFILING_TOOLKIT
+	auto options = bpe_->getBackendProcessor()->getDebugSession().getOptions();
+	options.writeToObject(dialog->getState().globalState.getDynamicObject());
+#endif
+
+	if(auto b = dialog->findPageBaseForID("threadFilter"))
+		b->postInit();
+
+	if(auto b = dialog->findPageBaseForID("eventFilter"))
+		b->postInit();
+
+	if(auto b = dialog->findPageBaseForID("recordingLength"))
+		b->postInit();
+
+	if(auto b = dialog->findPageBaseForID("recordingTrigger"))
+		b->postInit();
+}
+
+var DebugSessionOptions::refresh(const var::NativeFunctionArgs& args)
+{
+	PROFILE_ONLY(getMainController()->getDebugSession().setOptions(dialog->getState().globalState));
+	return var();
+}
+} // namespace library
+} // namespace multipage
+
+#if HISE_INCLUDE_PROFILING_TOOLKIT
+void hise::DebugSession::ProfileDataSource::ViewComponents::Manager::showOptions()
+{
+		auto bpe = GET_BACKEND_ROOT_WINDOW(this);
+		auto b = new multipage::library::DebugSessionOptions(bpe);
+
+		findParentComponentOfClass<FloatingTile>()->getRootFloatingTile()->showComponentAsDetachedPopup(b, &moreButton, {8, 16});
+};
+#endif
 }
