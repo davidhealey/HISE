@@ -1071,6 +1071,11 @@ void PresetBrowser::setShowFavorites(bool shouldShowFavorites)
 	showFavoritesButton = shouldShowFavorites;
 }
 
+void PresetBrowser::setFavoriteIconOffset(int xOffset)
+{
+	presetColumn->setFavoriteIconOffset(xOffset);
+}
+
 void PresetBrowser::setShowSearchBar(bool shouldBeShown)
 {
 	if (shouldBeShown != searchBar->isVisible())
@@ -1310,6 +1315,7 @@ void PresetBrowser::setOptions(const Options& newOptions)
 	setColumnRowPadding(newOptions.columnRowPadding);
 	setShowNotesLabel(newOptions.showNotesLabel);
 	setShowFavorites(newOptions.showFavoriteIcons);
+	setFavoriteIconOffset(newOptions.favoriteIconOffset);
 	setShowFullPathFavorites(newOptions.fullPathFavorites);
 	
 	if (expansionColumn != nullptr)
