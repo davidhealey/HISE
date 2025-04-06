@@ -197,10 +197,6 @@ will break compatibility with older projects / presets because the tempo indexes
 #define USE_LATO_AS_DEFAULT 1
 #endif
 
-#ifndef USE_LINUX_FONT_HANDLER
-#define USE_LINUX_FONT_HANDLER 1
-#endif
-
 #include "hi_binary_data/hi_binary_data.h"
 
 
