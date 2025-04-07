@@ -1445,7 +1445,7 @@ bool PooledUIUpdater::SimpleTimer::isTimerRunning() const
 
 void PooledUIUpdater::SimpleTimer::startOrStop(bool shouldStart)
 {
-	if(updater == nullptr)
+	if(updater == nullptr || isTimerRunning() == shouldStart)
 		return;
 
 	WeakReference<SimpleTimer> safeThis(this);

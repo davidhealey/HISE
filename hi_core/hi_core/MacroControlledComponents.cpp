@@ -228,25 +228,22 @@ void MacroControlledObject::enableMidiLearnWithPopup()
 
 		if (mm.isMacroEnabledOnFrontend())
 		{
-			
+			auto useMacrosAsParameter = HISE_GET_PREPROCESSOR(mc, HISE_MACROS_ARE_PLUGIN_PARAMETERS);
+			auto numMacros = HISE_GET_PREPROCESSOR(mc, HISE_NUM_MACROS);
 
-#if HISE_MACROS_ARE_PLUGIN_PARAMETERS
-			auto title = "Assign Automation";
-#else
-			auto title = "Assign Macro";
-#endif
+			auto title = useMacrosAsParameter ? "Assign Automation" : "Assign Macro";
 
 			PopupMenu sub;
 			auto mToUse = &m;
 
-			static constexpr bool useSubMenu = HISE_NUM_MACROS > 8;
+			static bool useSubMenu = numMacros > 8;
 
-			if constexpr (useSubMenu)
+			if (useSubMenu)
 				mToUse = &sub;
 			else
 				m.addSectionHeader(title);
 				
-			for (int i = 0; i < HISE_NUM_MACROS; i++)
+			for (int i = 0; i < numMacros; i++)
 			{
 				auto name = macroChain->getMacroControlData(i)->getMacroName();
 
@@ -256,7 +253,7 @@ void MacroControlledObject::enableMidiLearnWithPopup()
 				}
 			}
 
-			if constexpr (useSubMenu)
+			if (useSubMenu)
 			{
 				m.addSeparator();
 				m.addSubMenu(title, sub);
@@ -656,16 +653,19 @@ void HiSlider::sliderValueChanged(Slider *s)
 	if (callWhenSingleMacro(BIND_MEMBER_FUNCTION_2(HiSlider::changePluginParameter)))
 		return;
 
-#if !HISE_MACROS_ARE_PLUGIN_PARAMETERS
-	const int index = GET_MACROCHAIN()->getMacroControlIndexForProcessorParameter(getProcessor(), parameter);
-    
-	if (index != -1 && !isReadOnly())
+	auto mc = getProcessor()->getMainController();
+	auto useMacrosAsParameter = (bool)HISE_GET_PREPROCESSOR(mc, HISE_MACROS_ARE_PLUGIN_PARAMETERS);
+	
+	if(!useMacrosAsParameter)
 	{
-		const float v = (float)normRange.convertTo0to1(s->getValue());
-
-		GET_MACROCHAIN()->setMacroControl(index,v * 127.0f, sendNotification);
+		const int index = GET_MACROCHAIN()->getMacroControlIndexForProcessorParameter(getProcessor(), parameter);
+    
+		if (index != -1 && !isReadOnly())
+		{
+			const float v = (float)normRange.convertTo0to1(s->getValue());
+			GET_MACROCHAIN()->setMacroControl(index,v * 127.0f, sendNotification);
+		}
 	}
-#endif
 	
 	if(!checkLearnMode())
 	{
@@ -714,8 +714,20 @@ void HiSlider::sliderDragEnded(Slider* s)
 
 bool HiSlider::changePluginParameter(AudioProcessor* p, int macroIndex)
 {
-	jassert(HISE_MACROS_ARE_PLUGIN_PARAMETERS);
+	auto mc = getProcessor()->getMainController();
+	auto ok = HISE_GET_PREPROCESSOR(mc, HISE_MACROS_ARE_PLUGIN_PARAMETERS);
+	jassert(ok);
 
+	if(auto pp = getConnectedPluginParameter())
+	{
+		auto hp = dynamic_cast<HisePluginParameterBase*>(pp);
+		auto value = getValue();
+		value = hp->getNormalisableRange().convertTo0to1(value);
+		pp->setValueNotifyingHost(value);
+		return true;
+	}
+
+#if 0
 	auto parameters = p->getParameters();
 
 	for(auto pr: parameters)
@@ -724,8 +736,9 @@ bool HiSlider::changePluginParameter(AudioProcessor* p, int macroIndex)
 		{
 			auto isMacro = typed->getType() == HisePluginParameterBase::Type::Macro;
 
-			if(typed->matchesIndex(getMacroIndex()))
+			if(isMacro && typed->matchesIndex(getMacroIndex()))
 			{
+				jassert(typed == getConnectedPluginParameter());
 				auto value = getValue();
 				value = typed->getNormalisableRange().convertTo0to1(value);
 				pr->setValueNotifyingHost(value);
@@ -733,14 +746,18 @@ bool HiSlider::changePluginParameter(AudioProcessor* p, int macroIndex)
 			}
 		}
 	}
+#endif
 
 	return false;
 }
 
 bool HiSlider::callWhenSingleMacro(const std::function<bool(AudioProcessor* p, int parameterIndex)>& f)
 {
-#if HISE_MACROS_ARE_PLUGIN_PARAMETERS
-	if (getMacroIndex() != -1)
+	return false;
+	auto mc = getProcessor()->getMainController();
+	auto useMacrosAsParameter = (bool)HISE_GET_PREPROCESSOR(mc, HISE_MACROS_ARE_PLUGIN_PARAMETERS);
+
+	if (useMacrosAsParameter && getMacroIndex() != -1)
 	{
 		auto mc = getProcessor()->getMainController();
 		auto md = mc->getMainSynthChain()->getMacroControlData(getMacroIndex());
@@ -750,7 +767,6 @@ bool HiSlider::callWhenSingleMacro(const std::function<bool(AudioProcessor* p, i
 			return f(dynamic_cast<AudioProcessor*>(mc), getMacroIndex());
 		}
 	}
-#endif
 
 	return false;
 }

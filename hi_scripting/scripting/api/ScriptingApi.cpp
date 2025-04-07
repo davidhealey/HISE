@@ -1714,13 +1714,16 @@ String ScriptingApi::Engine::getMacroName(int index)
 
 void ScriptingApi::Engine::setFrontendMacros(var nameList)
 {
-	auto& mm = getProcessor()->getMainController()->getMacroManager();
+	auto mc = getProcessor()->getMainController();
+	auto& mm = mc->getMacroManager();
 
 	if (auto ar = nameList.getArray())
 	{
 		mm.setEnableMacroOnFrontend(!ar->isEmpty());
-		
-		for (int i = 0; i < HISE_NUM_MACROS; i++)
+
+		auto numMacros = HISE_GET_PREPROCESSOR(mc, HISE_NUM_MACROS);
+
+		for (int i = 0; i < numMacros; i++)
 		{
 			auto macroName = (*ar)[i].toString();
 			mm.getMacroChain()->getMacroControlData(i)->setMacroName(macroName);

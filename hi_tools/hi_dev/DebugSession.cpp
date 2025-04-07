@@ -1078,7 +1078,7 @@ void DebugSession::startRecording(double milliSeconds, ApiProviderBase::Holder* 
 		nextState.store(RecordingState::Armed);
 		recordingDelta = currentOptions.millisecondsToRecord;// milliSeconds;
 
-		if(currentOptions.trigger == TriggerType::Compilation)
+		if(currentOptions.trigger == TriggerType::Compilation || currentOptions.trigger == TriggerType::MouseClick)
 			recordingDelta = 20000.0;
 
 		recordHolder = h;

@@ -252,6 +252,79 @@ void MainController::initProjectDocsWithURL(const String& projectDocURL)
 	getProjectDocHolder()->setProjectURL(URL(projectDocURL));
 }
 
+#if USE_BACKEND
+int MainController::getExtraDefinitionsValue(const String& extraDefinition, int defaultValue) const
+{
+	if(cachedPreprocessors.contains(extraDefinition))
+		return cachedPreprocessors[extraDefinition];
+
+#if JUCE_WINDOWS
+	auto ed = HiseSettings::Project::ExtraDefinitionsWindows;
+#elif JUCE_MAC
+		auto ed = HiseSettings::Project::ExtraDefinitionsOSX;
+#else
+		auto ed = HiseSettings::Project::ExtraDefinitionsLinux;
+#endif
+
+	auto gm = dynamic_cast<const GlobalSettingManager*>(this);
+
+	String s;
+
+	if(gm == nullptr)
+	{
+		// commencing uggo sequence, we don't have the filehandler initialised
+		// as well as the settings are not available so we must do EVERYTHING by hand
+		auto hiseAppRoot = ProjectHandler::getAppDataDirectory(nullptr);
+
+		if(auto projectsXml = XmlDocument::parse(hiseAppRoot.getChildFile("projects.xml")))
+		{
+			auto currentProject = projectsXml->getStringAttribute("current");
+
+			if(File::isAbsolutePath(currentProject))
+			{
+				auto projectSettings = File(currentProject).getChildFile("project_info.xml");
+
+				if(auto projectXml = XmlDocument::parse(projectSettings))
+				{
+					if(auto c = projectXml->getChildByName(ed))
+					{
+						s = c->getStringAttribute("value");
+					}
+				}
+			}
+		}
+	}
+	else
+		s = gm->getSettingsObject().getSetting(ed).toString();
+
+	if(s.isEmpty())
+	{
+		cachedPreprocessors.set(extraDefinition, defaultValue);
+		return defaultValue;
+	}
+
+	StringArray entries;
+
+	if(s.contains("\n"))
+		entries = StringArray::fromTokens(s, "\n", "");
+	if(s.contains(";"))
+		entries = StringArray::fromTokens(s, ";", "");
+
+	for(const auto& e: entries)
+	{
+		auto key = e.upToFirstOccurrenceOf("=", false, false).trim();
+		if(key == extraDefinition)
+		{
+			auto v = e.fromFirstOccurrenceOf("=", false, false).trim().getIntValue();
+			cachedPreprocessors.set(extraDefinition, v);
+			return v;
+		}
+	}
+
+	cachedPreprocessors.set(extraDefinition, defaultValue);
+	return defaultValue;
+}
+#endif
 
 hise::SampleMapPool* MainController::getCurrentSampleMapPool()
 {

@@ -332,7 +332,9 @@ DebugSession::ProfileDataSource::ViewComponents::Manager::Manager(DebugSession& 
 	undoButton.onClick = [this](){ um.undo(); };
 	redoButton.onClick = [this](){ um.redo(); };
 
+#if USE_BACKEND
 	moreButton.onClick = BIND_MEMBER_FUNCTION_0(Manager::showOptions);
+#endif
 
 	trimButton.onClick = [this]()
 	{

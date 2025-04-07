@@ -2529,20 +2529,28 @@ struct JSONObject
 		obj->getProperties() = v;
 	}
 
-	var& operator[](const String& c)
+	var& operator[](const Identifier& id)
 	{
-		auto id = Identifier(c);
-
 		if(!obj->hasProperty(id))
 			obj->setProperty(id, {});
 
 		return *obj->getProperties().getVarPointer(id);
 	}
 
+	const var& operator[](const Identifier& id) const
+	{
+		return obj->getProperty(id);
+	}
+
+
+	var& operator[](const String& c)
+	{
+		return operator[](Identifier(c));
+	}
+
 	const var& operator[](const String& c) const
 	{
-		auto id = Identifier(c);
-		return obj->getProperty(id);
+		return operator[](Identifier(c));
 	}
 
 	operator var() const { return var(obj.get()); }

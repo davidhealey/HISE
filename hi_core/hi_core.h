@@ -300,6 +300,14 @@ Set this to the number of macros you want in your project. */
 #define HISE_NUM_MACROS 8
 #endif
 
+#ifndef HISE_NUM_MAX_MACROS
+#define HISE_NUM_MAX_MACROS 64
+#endif
+
+#if HISE_NUM_MACROS > HISE_NUM_MAX_MACROS
+#error "HISE_NUM_MACROS must not be bigger than HISE_NUM_MAX_MACROS"
+#endif
+
 /** Config: ENABLE_SCRIPTING_SAFE_CHECKS
 
 Set this to 0 to deactivate the safe checks for scripting

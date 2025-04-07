@@ -1385,6 +1385,10 @@ void HiseSettings::Data::settingWasChanged(const Identifier& id, const var& newV
 		dynamic_cast<AudioProcessorDriver*>(mc)->setCurrentSampleRate(newValue.toString().getDoubleValue());
 	else if (id == Audio::BufferSize)
 		dynamic_cast<AudioProcessorDriver*>(mc)->setCurrentBlockSize(newValue.toString().getIntValue());
+#if USE_BACKEND
+	else if (id == Project::ExtraDefinitionsOSX || id == Project::ExtraDefinitionsWindows || id == Project::ExtraDefinitionsLinux)
+		mc->clearExtraDefinitionCache();
+#endif
 	else if (id == Audio::Driver)
 	{
 		if (newValue.toString().isNotEmpty())
