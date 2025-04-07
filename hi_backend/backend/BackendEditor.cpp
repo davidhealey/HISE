@@ -519,11 +519,13 @@ void PluginParameterSimulator::PluginParameterComponent::sliderDragStarted(Slide
 	{
 		auto parent = findParentComponentOfClass<PluginParameterSimulator>();
 
+#if HISE_INCLUDE_PROFILING_TOOLKIT
 		auto& dh = parent->getMainController()->getDebugSession();
 		auto profileOptions = dh.getOptions();
 
 		if(profileOptions.trigger == DebugSession::TriggerType::MouseClick)
 			dh.startRecording(100000.0, &dh);
+#endif
 
 		auto si = parent->createSimulatorInfo();
 
@@ -545,11 +547,14 @@ void PluginParameterSimulator::PluginParameterComponent::sliderDragEnded(Slider*
 	if(parameter != nullptr)
 	{
 		auto parent = findParentComponentOfClass<PluginParameterSimulator>();
+
+#if HISE_INCLUDE_PROFILING_TOOLKIT
 		auto& dh = parent->getMainController()->getDebugSession();
 		auto profileOptions = dh.getOptions();
 
 		if(profileOptions.trigger == DebugSession::TriggerType::MouseClick)
 			dh.stopRecording();
+#endif
 		
 		auto si = parent->createSimulatorInfo();
 
