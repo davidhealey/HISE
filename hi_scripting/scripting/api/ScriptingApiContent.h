@@ -261,6 +261,8 @@ public:
 			saveInPreset,
 			isPluginParameter,
 			pluginParameterName,
+			pluginParameterGroup,
+			deferControlCallback,
             isMetaParameter,
 			linkedTo,
 			automationId,
@@ -712,6 +714,8 @@ public:
 			modulationData = newMod;
 		}
 
+		bool shouldDeferControlCallback() const { return defersControlCallback; }
+
 		MacroControlledObject::ModulationPopupData::Ptr getModulationData() const { return modulationData; }
 
 		int getStyleSheetPseudoState() const { return pseudoState; }
@@ -724,13 +728,9 @@ public:
 		void openTrack(ProfileCollection::ID id);
 		void closeTrack(ProfileCollection::ID id);
 
-#if HISE_MACROS_ARE_PLUGIN_PARAMETERS
 		bool isAdditionalPluginParameter = false;
-#endif
 
 	protected:
-
-		
 
 		String getCSSFromLocalLookAndFeel();
 
@@ -874,6 +874,8 @@ public:
 		ZLevelListener::ZLevel currentZLevel = ZLevelListener::ZLevel::Default;
 
 		mutable hise::SimpleReadWriteLock valueLock;
+
+		bool defersControlCallback = false;
 
 		bool countJsonSetProperties = true;
 		Identifier searchedProperty;

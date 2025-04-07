@@ -93,6 +93,150 @@ struct ExampleAssetManager: public ReferenceCountedObject,
 	using Ptr = ReferenceCountedObjectPtr<ExampleAssetManager>;
 };
 
+struct PluginParameterSimulatorInfo
+{
+	enum class SourceThread
+	{
+		UI,
+		Custom,
+		Audio,
+		numSourceThreads
+	};
+
+	enum class EventType
+	{
+		Undefined,
+		BeginGesture,
+		ValueChange,
+		EndGesture
+	};
+
+	operator bool() const { return currentParameter != nullptr && eventType != EventType::Undefined; }
+
+	void performChange()
+	{
+		jassert(currentValue >= 0.0f && currentValue <= 1.0f);
+
+		if(eventType == EventType::ValueChange)
+			currentParameter->asJuceParameter()->setValueNotifyingHost(currentValue);
+	}
+
+	void performGesture()
+	{
+		if(eventType == EventType::BeginGesture)
+			currentParameter->asJuceParameter()->beginChangeGesture();
+		else if (eventType == EventType::EndGesture)
+			currentParameter->asJuceParameter()->endChangeGesture();
+	}
+
+	bool isActiveGesture() const
+	{
+		return eventType == EventType::BeginGesture || eventType == EventType::ValueChange;
+	}
+
+	bool isGestureEvent() const
+	{
+		return eventType == EventType::BeginGesture || eventType == EventType::EndGesture;
+	}
+
+	SourceThread sourceThread = SourceThread::UI;
+	bool useRamp = false;
+	int bufferSize = -1;
+	WeakReference<HisePluginParameterBase> currentParameter;
+	float currentValue = 0.0f;
+	EventType eventType = EventType::Undefined;
+};
+
+struct PluginParameterRamp: public PooledUIUpdater::SimpleTimer,
+						    public ControlledObject,
+							public Thread
+{
+	PluginParameterRamp(MainController* mc):
+	  SimpleTimer(mc->getGlobalUIUpdater(), false),
+	  ControlledObject(mc),
+	  Thread("Custom Automation Thread")
+	{}
+
+	~PluginParameterRamp()
+	{
+		stopThread(1000);
+	}
+
+	void run() override
+	{
+		while(!threadShouldExit())
+		{
+			PluginParameterSimulatorInfo thisInfo;
+
+			{
+				SimpleReadWriteLock::ScopedReadLock sl(lock);
+				thisInfo = currentInfo;
+			}
+
+			if(gestureAtNextCallback)
+			{
+				gestureInfo.performGesture();
+				gestureAtNextCallback = false;
+
+				if(gestureInfo.eventType == PluginParameterSimulatorInfo::EventType::EndGesture)
+				{
+					currentInfo = {};
+					thisInfo = {};
+					gestureInfo = {};
+				}
+			}
+
+			if(thisInfo && thisInfo.sourceThread == PluginParameterSimulatorInfo::SourceThread::Custom)
+			{
+				if(currentInfo.useRamp)
+					performTimer(thisInfo);
+				else
+				{
+					thisInfo.performChange();
+					currentInfo = {};
+				}
+			}
+				
+			sleep(5);
+		}
+	}
+
+	void performTimer(PluginParameterSimulatorInfo& infoToUse)
+	{
+		auto thisTime = Time::getMillisecondCounterHiRes();
+		auto delta = jlimit(3.0, 60.0, thisTime - lastTimer);
+		lastTimer = thisTime;
+		hise::SimpleReadWriteLock::ScopedReadLock sl(lock);
+		bump(infoToUse, delta);
+		currentInfo.currentValue = infoToUse.currentValue;
+	}
+
+	void timerCallback() override
+	{
+		performTimer(currentInfo);
+	}
+
+	using ProcessCallback = std::function<void(float**, AudioSampleBuffer&, MidiBuffer&, int, int)>;
+
+	bool processBlock(AudioSampleBuffer& buffer, MidiBuffer& midiMessages, const ProcessCallback& f);
+
+	void setCurrentInfo(const PluginParameterSimulatorInfo& newInfo);
+
+	void bump(PluginParameterSimulatorInfo& info, double milliSeconds);
+
+private:
+
+	double lastTimer = 0.0f;
+
+	bool gestureAtNextCallback = false;
+	bool sign = true;
+
+	hise::SimpleReadWriteLock lock;
+
+	PluginParameterSimulatorInfo gestureInfo;
+	PluginParameterSimulatorInfo currentInfo;
+};
+
 /** This is the main audio processor for the backend application. 
 *
 *	It connects to a BackendProcessorEditor and has extensive development features.
@@ -100,8 +244,8 @@ struct ExampleAssetManager: public ReferenceCountedObject,
 *	It is a wrapper for all plugin types and provides 8 parameters for the macro controls.
 *	It also acts as global MainController to allow every child object to get / set certain global information
 */
-class BackendProcessor: public PluginParameterAudioProcessor,
-					    public AudioProcessorDriver,
+class BackendProcessor: public AudioProcessorDriver,
+					    public PluginParameterAudioProcessor,
 						public MainController,
 						public ProjectHandler::Listener,
 						public MarkdownDatabaseHolder,
@@ -223,6 +367,34 @@ public:
 		return String(synthChain->getMacroControlData(index)->getDisplayValue(), 1);
 	}
 
+	void rebuildPluginParameters() override
+	{
+		if(deletePendingFlag)
+			return;
+
+#if IS_STANDALONE_APP
+		auto& oldParameters = getParameterTree();
+		auto fl = oldParameters.getParameters(true);
+
+		for(auto p: fl)
+		{
+			if(auto t = dynamic_cast<HisePluginParameterBase*>(p))
+				t->cleanup();
+		}
+
+		setParameterTree({});
+
+		juce::AudioProcessorParameterGroup list;
+		createScriptedParameters(list);
+
+		//processParameterList(list);
+
+		setParameterTree(std::move(list));
+
+		pluginParameterRefreshBroadcaster.sendMessage(sendNotificationAsync, true);
+#endif
+	}
+
 	JavascriptProcessor* createInterface(int width, int height);;
 
 	void setEditorData(var editorState);
@@ -231,6 +403,8 @@ public:
 	{
 		return &scriptUnlocker;
 	}
+
+	LambdaBroadcaster<bool> pluginParameterRefreshBroadcaster;
 
 	ScriptUnlocker scriptUnlocker;
 
@@ -280,6 +454,8 @@ public:
 	ExampleAssetManager::Ptr assetManager;
 
 	File customDocCacheFolder;
+
+	PluginParameterRamp pluginParameterRamp;
 
 private:
 

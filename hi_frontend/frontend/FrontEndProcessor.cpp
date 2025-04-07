@@ -380,10 +380,14 @@ updater(*this)
 
     updater.suspendState = true;
     updater.updateDelayed();
+
+	AudioProcessor::addListener(&getUserPresetHandler());
 }
 
 FrontendProcessor::~FrontendProcessor()
 {
+	AudioProcessor::removeListener(&getUserPresetHandler());
+
     for(auto p: getParameters())
     {
         if(auto typed = dynamic_cast<HisePluginParameterBase*>(p))

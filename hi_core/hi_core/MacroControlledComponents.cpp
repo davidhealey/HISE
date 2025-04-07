@@ -492,6 +492,9 @@ void MacroControlledObject::setup(Processor *p, int parameter_, const String &na
 void MacroControlledObject::connectToCustomAutomation(const Identifier& newCustomId)
 {
 	customId = newCustomId;
+
+	rebuildPluginParameterConnection();
+
 	updateValue(sendNotificationSync);
 
 	auto mIndex = getMacroIndex();
@@ -512,7 +515,7 @@ int MacroControlledObject::getAutomationIndex() const
 
 void MacroControlledObject::initMacroControl(NotificationType notify)
 {
-
+	rebuildPluginParameterConnection();
 }
 
 bool  MacroControlledObject::isLocked()
@@ -687,12 +690,9 @@ void HiSlider::sliderValueChanged(Slider *s)
 
 void HiSlider::sliderDragStarted(Slider* s)
 {
-	callWhenSingleMacro([](AudioProcessor* p, int parameterIndex)
-	{
-		p->beginParameterChangeGesture(parameterIndex);
-		return false;
-	});
-	
+	if(auto pp = getConnectedPluginParameter())
+		pp->beginChangeGesture();
+
 	dragStartValue = s->getValue();
 
 	Point<int> o;
@@ -702,11 +702,8 @@ void HiSlider::sliderDragStarted(Slider* s)
 
 void HiSlider::sliderDragEnded(Slider* s)
 {
-	callWhenSingleMacro([](AudioProcessor* p, int parameterIndex)
-	{
-		p->endParameterChangeGesture(parameterIndex);
-		return false;
-	});
+	if(auto pp = getConnectedPluginParameter())
+		pp->endChangeGesture();
 
 	abortTouch();
 	setAttributeWithUndo((float)s->getValue(), true, (float)dragStartValue);
@@ -1175,6 +1172,9 @@ void HiToggleButton::mouseDrag(const MouseEvent& e)
 
 void HiToggleButton::mouseDown(const MouseEvent &e)
 {
+	if(auto pp = getConnectedPluginParameter())
+		pp->beginChangeGesture();
+
 	CHECK_MIDDLE_MOUSE_DOWN(e);
 
     if(e.mods.isLeftButtonDown())
@@ -1228,6 +1228,9 @@ void HiToggleButton::mouseUp(const MouseEvent& e)
 
     abortTouch();
     MomentaryToggleButton::mouseUp(e);
+
+	if(auto pp = getConnectedPluginParameter())
+		pp->endChangeGesture();
 }
 
 HiComboBox::HiComboBox(const String& name):
@@ -1359,6 +1362,9 @@ void HiComboBox::setup(Processor *p, int parameterIndex, const String &parameter
 
 void HiComboBox::mouseDown(const MouseEvent &e)
 {
+	if(auto pp = getConnectedPluginParameter())
+		pp->endChangeGesture();
+
 	CHECK_MIDDLE_MOUSE_DOWN(e);
 
     if(e.mods.isLeftButtonDown())
@@ -1375,6 +1381,9 @@ void HiComboBox::mouseDown(const MouseEvent &e)
 
 void HiComboBox::mouseUp(const MouseEvent& e)
 {
+	if(auto pp = getConnectedPluginParameter())
+		pp->endChangeGesture();
+
 	CHECK_MIDDLE_MOUSE_UP(e);
 	abortTouch();
 	ComboBox::mouseUp(e);
@@ -1385,6 +1394,21 @@ void HiComboBox::mouseDrag(const MouseEvent& e)
 {
 	CHECK_MIDDLE_MOUSE_DRAG(e);
 	ComboBox::mouseDrag(e);
+}
+
+ValueToTextConverter HiComboBox::getValueToTextConverter() const
+{
+	StringArray itemList;
+	itemList.add("Nothing");
+
+	for(int i = 0; i < getNumItems(); i++)
+		itemList.add(getItemText(i));
+
+	ValueToTextConverter c;
+	c.active = true;
+	c.itemList = itemList;
+
+	return c;
 }
 
 void HiComboBox::touchAndHold(Point<int> /*downPosition*/)
@@ -1559,6 +1583,77 @@ void HiToggleButton::buttonClicked(Button *b)
 			}
 		}
 #endif
+	}
+
+	void MacroControlledObject::rebuildPluginParameterConnection()
+	{
+		auto p = getProcessor();
+
+		if(p == nullptr)
+			return;
+
+		auto isCustomAutomation = customId.isValid();
+		auto useMacrosAsParameter = HISE_GET_PREPROCESSOR(p->getMainController(), HISE_MACROS_ARE_PLUGIN_PARAMETERS);
+		auto isMacro = useMacrosAsParameter && getMacroIndex() != -1;
+
+		auto wasMacro = connectedPluginParameter != nullptr && connectedPluginParameter->getType() == HisePluginParameterBase::Type::Macro;
+		bool sendPluginParameterUpdate = false;
+
+		HisePluginParameterBase::Type t;
+		int slotIndex = -1;
+
+		if (isMacro)
+		{
+			slotIndex = getMacroIndex();
+
+			t = HisePluginParameterBase::Type::Macro;
+		}
+		else if(isCustomAutomation)
+		{
+			t = HisePluginParameterBase::Type::CustomAutomation;
+
+			if(auto d = p->getMainController()->getUserPresetHandler().getCustomAutomationData(customId))
+				slotIndex = d->index;
+		}
+		else
+		{
+			t = HisePluginParameterBase::Type::ScriptControl;
+			slotIndex = parameter;
+		}
+
+		connectedPluginParameter = nullptr;
+
+		if(auto jmp = dynamic_cast<JavascriptMidiProcessor*>(getProcessor()))
+		{
+			if(jmp->isFront())
+			{
+				auto ap = dynamic_cast<AudioProcessor*>(p->getMainController());
+				
+				for(auto pp: ap->getParameters())
+				{
+					if(auto typed = dynamic_cast<HisePluginParameterBase*>(pp))
+					{
+						auto wrapped = typed->getWrappedParameter();
+						auto matchesType = wrapped->getType() == t;
+
+						if(matchesType && wrapped->matchesIndex(slotIndex))
+						{
+							sendPluginParameterUpdate = connectedPluginParameter != typed;
+							connectedPluginParameter = typed;
+							break;
+						}
+					}
+				}
+			}
+		}
+
+		sendPluginParameterUpdate |= connectedPluginParameter == nullptr & wasMacro;
+		
+		if(sendPluginParameterUpdate && !skipHostDisplayUpdate)
+		{
+			auto details = AudioProcessorListener::ChangeDetails().withParameterInfoChanged(true);
+			dynamic_cast<AudioProcessor*>(getProcessor()->getMainController())->updateHostDisplay(details);
+		}
 	}
 
 	Processor* MacroControlledObject::getProcessor()

@@ -193,18 +193,6 @@ void ProcessorWithScriptingContent::controlCallback(ScriptingApi::Content::Scrip
 	Processor* thisAsProcessor = dynamic_cast<Processor*>(this);
 
 	auto sp = getScriptingContent()->contentProfile.profile(component->pSetAttribute);
-	
-#if USE_FRONTEND
-    
-    if (component->isScriptPluginParameter() && getMainController_()->getPluginParameterUpdateState())
-    {
-        float newValue = (float)controllerValue;
-        FloatSanitizers::sanitizeFloatNumber(newValue);
-        
-        dynamic_cast<PluginParameterAudioProcessor*>(getMainController_())->setScriptedPluginParameter(component->getName(), newValue);
-    }
-    
-#endif
 
     if (component->isConnectedToMacroControll())
     {
@@ -259,7 +247,7 @@ void ProcessorWithScriptingContent::controlCallback(ScriptingApi::Content::Scrip
 	}
 	else if (auto callback = component->getCustomControlCallback())
 	{
-		if (MessageManager::getInstance()->isThisTheMessageThread())
+		if (MessageManager::getInstance()->isThisTheMessageThread() || component->shouldDeferControlCallback())
 		{
 			auto f = [component, controllerValue](JavascriptProcessor* p)
 			{
@@ -2623,8 +2611,7 @@ void JavascriptThreadPool::addJob(Task::Type t, JavascriptProcessor* p, const Ta
 	}
 	case MainController::KillStateHandler::TargetThread::AudioThread:
 	{
-		// Nope...
-		jassertfalse;
+		pushToQueue(t, p, f);
 		break;
 	}
     default:

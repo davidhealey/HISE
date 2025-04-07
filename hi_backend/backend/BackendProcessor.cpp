@@ -123,10 +123,155 @@ namespace hise { using namespace juce;
 		};
 	}
 
+bool PluginParameterRamp::processBlock(AudioSampleBuffer& buffer, MidiBuffer& midiMessages,
+	const ProcessCallback& f)
+{
+	PluginParameterSimulatorInfo thisInfo, thisGesture;
+
+	{
+		SimpleReadWriteLock::ScopedReadLock sl(lock);
+		thisInfo = currentInfo;
+		thisGesture = gestureInfo;
+	}
+
+	auto threadMatches = thisInfo.sourceThread == PluginParameterSimulatorInfo::SourceThread::Audio;
+
+	if(gestureInfo && gestureAtNextCallback && gestureInfo.sourceThread == PluginParameterSimulatorInfo::SourceThread::Audio)
+	{
+		thisGesture.performGesture();
+		gestureAtNextCallback = false;
+
+		if(thisGesture.eventType == PluginParameterSimulatorInfo::EventType::EndGesture)
+		{
+			currentInfo = {};
+			return false;
+		}
+	}
+
+	if(!thisInfo || !threadMatches)
+		return false;
+
+	
+
+	if(!thisInfo.useRamp)
+	{
+		thisInfo.performChange();
+
+		SimpleReadWriteLock::ScopedWriteLock sl(lock);
+		currentInfo = {};
+		return false;
+	}
+
+	auto numSamples = thisInfo.bufferSize != -1 ? thisInfo.bufferSize : buffer.getNumSamples();
+	auto rampTime =  (double)numSamples / getMainController()->getMainSynthChain()->getSampleRate() * 1000.0;
+
+	if(thisInfo.bufferSize == -1)
+	{
+		bump(thisInfo, rampTime);
+		currentInfo.currentValue = thisInfo.currentValue;
+		return false;
+	}
+	else
+	{
+		int numTodo = buffer.getNumSamples();
+		int pos = 0;
+
+		while (numTodo > 0)
+		{
+			bump(thisInfo, rampTime);
+			float* channels[HISE_NUM_PLUGIN_CHANNELS];
+			f(channels, buffer, midiMessages, pos, thisInfo.bufferSize);
+
+			numTodo -= thisInfo.bufferSize;
+			pos += thisInfo.bufferSize;
+		}
+	}
+
+	currentInfo.currentValue = thisInfo.currentValue;
+	return true;
+}
+
+void PluginParameterRamp::setCurrentInfo(const PluginParameterSimulatorInfo& newInfo)
+{
+	auto rampWasActive = gestureInfo.useRamp;
+	auto prevValue = currentInfo.currentValue;
+
+	auto gestureWasActive = gestureInfo.isActiveGesture();
+
+	{
+		SimpleReadWriteLock::ScopedWriteLock sl(lock);
+
+		if(newInfo.isGestureEvent())
+			gestureInfo = newInfo;
+		else
+			currentInfo = newInfo;
+	}
+
+	if(!newInfo)
+		return;
+
+	if(rampWasActive)
+		currentInfo.currentValue = prevValue;
+
+	auto gestureShouldBeActive = gestureInfo.isActiveGesture();
+
+	if(gestureWasActive != gestureShouldBeActive)
+	{
+		if(gestureInfo.sourceThread != PluginParameterSimulatorInfo::SourceThread::UI)
+		{
+			gestureAtNextCallback = true;
+		}
+		else
+		{
+			gestureInfo.performGesture();
+		}
+	}
+
+	auto useTimer = gestureInfo.useRamp && newInfo.sourceThread == PluginParameterSimulatorInfo::SourceThread::UI;
+	auto useThread = (gestureInfo.useRamp || gestureShouldBeActive || gestureWasActive) && newInfo.sourceThread == PluginParameterSimulatorInfo::SourceThread::Custom;
+
+	if(useTimer)
+		start();
+	else
+		stop();
+
+	if(useThread)
+		startThread(8);
+	else
+		stopThread(1000);
+
+	if(currentInfo.sourceThread == PluginParameterSimulatorInfo::SourceThread::UI && !currentInfo.useRamp)
+	{
+		currentInfo.performChange();
+		currentInfo = {};
+	}
+}
+
+void PluginParameterRamp::bump(PluginParameterSimulatorInfo& info, double milliSeconds)
+{
+	auto delta = (float)milliSeconds * 0.001f;
+
+	if(!sign)
+		delta *= -1.0f;
+
+	auto nv = info.currentValue + delta;
+
+	if(nv >= 1.0f)
+		sign = false;
+	if(nv <= 0.0f)
+		sign = true;
+
+	
+
+	info.currentValue = jlimit(0.0f, 1.0f, nv);
+	info.performChange();
+}
+
 	BackendProcessor::BackendProcessor(AudioDeviceManager *deviceManager_/*=nullptr*/, AudioProcessorPlayer *callback_/*=nullptr*/) :
-MainController(),
-AudioProcessorDriver(deviceManager_, callback_),
-scriptUnlocker(this)
+  MainController(),
+  AudioProcessorDriver(deviceManager_, callback_),
+  scriptUnlocker(this),
+  pluginParameterRamp(this)
 {
 	//printData();
     
@@ -237,12 +382,28 @@ scriptUnlocker(this)
     }
 
 #endif
-    
+
+	AudioProcessor::addListener(&getUserPresetHandler());
+
 }
 
 
 BackendProcessor::~BackendProcessor()
 {
+#if IS_STANDALONE_APP
+	for(auto p: getParameters())
+    {
+        if(auto typed = dynamic_cast<HisePluginParameterBase*>(p))
+            typed->cleanup();
+    }
+
+	setParameterTree({});
+#endif
+
+	AudioProcessor::removeListener(&getUserPresetHandler());
+
+	getRootDispatcher().setState(dispatch::HashedPath(dispatch::CharPtr::Type::Wildcard), dispatch::State::Shutdown);
+
 	docWindow = nullptr;
 	docProcessor = nullptr;
 	getDatabase().clear();
@@ -459,7 +620,13 @@ void BackendProcessor::processBlock(AudioSampleBuffer& buffer, MidiBuffer& midiM
 
 		ScopedAnalyser sa(this, nullptr, buffer, buffer.getNumSamples());
 
+#if IS_STANDALONE_APP
+		if(!pluginParameterRamp.processBlock(buffer, midiMessages, processChunk))
+			getDelayedRenderer().processWrapped(buffer, midiMessages);
+#else
 		getDelayedRenderer().processWrapped(buffer, midiMessages);
+#endif
+			
 		
 #if IS_STANDALONE_APP
 		externalClockSim.addPostTimelineData(buffer, midiMessages);
