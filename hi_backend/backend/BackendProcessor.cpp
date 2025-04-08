@@ -435,7 +435,9 @@ BackendProcessor::~BackendProcessor()
 void BackendProcessor::projectChanged(const File& /*newRootDirectory*/)
 {
 	getExpansionHandler().setCurrentExpansion("");
-	
+
+	clearExtraDefinitionCache();
+
 	auto tmp = getCurrentSampleMapPool();
 	auto tmp2 = getCurrentMidiFilePool();
 

@@ -3406,17 +3406,18 @@ void ScriptingApi::Engine::rebuildCachedPools()
 
 DynamicObject * ScriptingApi::Engine::getPlayHead() { return getProcessor()->getMainController()->getHostInfoObject(); }
 
-int ScriptingApi::Engine::isControllerUsedByAutomation(int controllerNumber)
+int ScriptingApi::Engine::isControllerUsedByAutomation(var controllerNumber)
 {
 	auto handler = getProcessor()->getMainController()->getMacroManager().getMidiControlAutomationHandler();
 
-	for (int i = 0; i < handler->getNumActiveConnections(); i++)
-	{
-		if (handler->getDataFromIndex(i).ccNumber == controllerNumber)
-			return i;
-	}
+	MidiControllerAutomationHandler::Key k;
 
-	return -1;
+	if(controllerNumber.isArray())
+		k = { (int)controllerNumber[0], (int)controllerNumber[1] };
+	else
+		k = { -1, (int)controllerNumber };
+
+	return handler->getIndexForKey(k);
 }
 
 ScriptingObjects::MidiList *ScriptingApi::Engine::createMidiList() { return new ScriptingObjects::MidiList(getScriptProcessor()); };

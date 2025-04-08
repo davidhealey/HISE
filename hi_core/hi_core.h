@@ -494,12 +494,24 @@ Set this to false to not give the user the ability to set the sample location on
 
 /** Config: HISE_MACROS_ARE_PLUGIN_PARAMETERS
 
-If enabled, the plugin will ignore any plugin parameter definitions from the script components (or custom automation data) and will only propagate the macros as plugin parameters
-(Note: You might want to define HISE_NUM_MACROS along with the plugin parameters to ensure that it will only use as much parameters as you want).
+If enabled, the plugin will add all macro controls as plugin parameter before the custom automation slots and script control plugin parameters.
+You might want to define HISE_NUM_MACROS along with the plugin parameters to ensure that it will only use as much parameters as you want).
 
+Note that this is a dynamic preprocessor so you don't need to recompile HISE to use this functionality, but just add HISE_MACROS_ARE_PLUGIN_PARAMETERS=1 to your ExtraDefinitions.
  */
 #ifndef HISE_MACROS_ARE_PLUGIN_PARAMETERS
 #define HISE_MACROS_ARE_PLUGIN_PARAMETERS 0
+#endif
+
+/** Config: HISE_USE_MIDI_CHANNELS_FOR_AUTOMATION
+
+If enabled, the plugin will use the MIDI channel information from CC messages when assigning a CC to a control. The default is disabled for backwards compatibility
+but you can enable this to assign the same CC number on different channels to different controls.
+
+Note that this is a dynamic preprocessor so you don't need to recompile HISE to use this functionality, but just add HISE_USE_MIDI_CHANNELS_FOR_AUTOMATION=1 to your ExtraDefinitions.
+*/
+#ifndef HISE_USE_MIDI_CHANNELS_FOR_AUTOMATION
+#define HISE_USE_MIDI_CHANNELS_FOR_AUTOMATION 0
 #endif
 
 #ifndef HISE_INCLUDE_BEATPORT

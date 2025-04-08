@@ -1497,7 +1497,9 @@ MidiLearnPanel::MidiLearnPanel(FloatingTile* parent) :
 {
 	handler.addChangeListener(this);
 	setName("MIDI Control List");
-	initTable();
+
+	auto addChannel = HISE_GET_PREPROCESSOR(parent->getMainController(), HISE_USE_MIDI_CHANNELS_FOR_AUTOMATION);
+	initTable(addChannel);
 }
 
 MidiLearnPanel::~MidiLearnPanel()
@@ -1586,7 +1588,9 @@ juce::String MidiLearnPanel::getCellText(int rowNumber, int columnId) const
 	if (columnId == ColumnId::ParameterName)
 		return ProcessorHelpers::getPrettyNameForAutomatedParameter(data.processor, data.attribute);
 	else if (columnId == ColumnId::CCNumber)
-		return String(data.ccNumber);
+		return String(data.k.ccNumber);
+	else if (columnId == ColumnId::Channel)
+		return data.k.channel == -1 ? String("Omni") : String("Channel ") + String(data.k.channel + 1);
 	else
 		return "";
 }
@@ -1682,7 +1686,7 @@ TableFloatingTileBase::TableFloatingTileBase(FloatingTile* parent) :
 
 }
 
-void TableFloatingTileBase::initTable()
+void TableFloatingTileBase::initTable(bool addChannelColumn)
 {
 	// Create our table component and add it to this component..
 	addAndMakeVisible(table);
@@ -1716,6 +1720,10 @@ void TableFloatingTileBase::initTable()
 	auto fWidth = (int)font.getStringWidthFloat(first) + 20;
 
 	table.getHeader().addColumn(getIndexName(), CCNumber, fWidth, 30, -1, TableHeaderComponent::visible);
+
+	if(addChannelColumn)
+		table.getHeader().addColumn("Channel", Channel, fWidth, 30, -1, TableHeaderComponent::visible);
+
 	table.getHeader().addColumn("Parameter", ParameterName, 70, 30, -1);
 	table.getHeader().addColumn("Inverted", Inverted, 70, 70, 70);
 	table.getHeader().addColumn("Min", Minimum, 70, 70, 70);

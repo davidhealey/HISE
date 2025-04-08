@@ -117,7 +117,7 @@ void MacroControlledObject::enableMidiLearnWithPopup()
 
 	auto parameterToUse = getAutomationIndex();
 
-	const int midiController = handler->getMidiControllerNumber(processor, parameterToUse);
+	auto midiController = handler->getMidiControllerNumber(processor, parameterToUse);
 	const bool learningActive = handler->isLearningActive(processor, parameterToUse);
 
 	enum Commands
@@ -157,7 +157,7 @@ void MacroControlledObject::enableMidiLearnWithPopup()
 			for (int i = 0; i < 128; i++)
 			{
 				if (handler->shouldAddControllerToPopup(i))
-					mToUse.addItem(i + MidiOffset, handler->getControllerName(i), handler->isMappable(i), i == value);
+					mToUse.addItem(i + MidiOffset, handler->getControllerName(i), handler->isMappable(i), value.isValid() && i == value.ccNumber);
 			}
 		};
 
@@ -200,9 +200,9 @@ void MacroControlledObject::enableMidiLearnWithPopup()
 			m.addItem(AddMPE, "Add MPE Gesture");
 	}
 
-	if (midiController != -1)
+	if (midiController.isValid())
 	{
-		m.addItem(Remove, "Remove " + handler->getControllerName(midiController));
+		m.addItem(Remove, "Remove " + handler->getControllerName(midiController.ccNumber));
 	}
 
 	if (macroIndex != -1)
@@ -340,7 +340,7 @@ void MacroControlledObject::enableMidiLearnWithPopup()
 		mHandler->deactivateMidiLearning();
 		mHandler->removeMidiControlledParameter(processor, parameterToUse, sendNotificationAsync);
 		mHandler->addMidiControlledParameter(processor, parameterToUse, rangeWithSkew, getValueToTextConverter(), -1);
-		mHandler->setUnlearndedMidiControlNumber(number, sendNotificationAsync);
+		mHandler->setUnlearndedMidiControlNumber(MidiControllerAutomationHandler::Key(-1, number), sendNotificationAsync);
 	}
 	else if (result >= ModulationOffset)
 	{
