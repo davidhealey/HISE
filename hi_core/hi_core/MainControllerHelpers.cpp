@@ -795,7 +795,7 @@ MidiControllerAutomationHandler::MPEData& MidiControllerAutomationHandler::getMP
 const MidiControllerAutomationHandler::MPEData& MidiControllerAutomationHandler::getMPEData() const
 { return mpeData; }
 
-MidiControllerAutomationHandler::Key::Container<MidiControllerAutomationHandler::AutomationData>::Iterator
+MidiControllerAutomationHandler::Container<MidiControllerAutomationHandler::AutomationData>::Iterator
 MidiControllerAutomationHandler::createIterator() const
 {
 	auto useChannels = HISE_GET_PREPROCESSOR(mc, HISE_USE_MIDI_CHANNELS_FOR_AUTOMATION);
@@ -1927,7 +1927,7 @@ struct AutomationContainerTest: public UnitTest
 	  UnitTest("Testing MIDI automation container")
 	{}
 
-	using TestContainer = MidiControllerAutomationHandler::Key::Container<int>;
+    using TestContainer = MidiControllerAutomationHandler::Container<int>;
 	using Key = MidiControllerAutomationHandler::Key;
 
 	void runTest() override
@@ -2012,10 +2012,10 @@ struct AutomationContainerTest: public UnitTest
             expect(!a.matchesOtherKey(Key(1, 11)));
         }
 
-        beginTest("Key::Container insert and access");
+        beginTest("Container insert and access");
 
         {
-            Key::Container<int> container;
+            MidiControllerAutomationHandler::Container<int> container;
 
             Key k1(2, 30);
             container[k1].push_back(42);
@@ -2026,10 +2026,10 @@ struct AutomationContainerTest: public UnitTest
             expectEquals(container[k1][1], 7);
         }
 
-        beginTest("Key::Container::Iterator - justOmni = false");
+        beginTest("Container::Iterator - justOmni = false");
 
         {
-            Key::Container<int> container;
+            MidiControllerAutomationHandler::Container<int> container;
 
             container[Key(0, 1)].push_back(100);
             container[Key(0, 2)].push_back(200);
@@ -2046,10 +2046,10 @@ struct AutomationContainerTest: public UnitTest
             expectEquals(it.getNumItems(), 3);
         }
 
-        beginTest("Key::Container::Iterator - justOmni = true");
+        beginTest("Container::Iterator - justOmni = true");
 
         {
-            Key::Container<int> container;
+            MidiControllerAutomationHandler::Container<int> container;
 
             container[Key(-1, 0)].push_back(999);
             container[Key(-1, 1)].push_back(888);
@@ -2064,10 +2064,10 @@ struct AutomationContainerTest: public UnitTest
             expectEquals(count, 2);
         }
 
-        beginTest("Key::Container::Iterator - erase and getDataFromIndex");
+        beginTest("Container::Iterator - erase and getDataFromIndex");
 
         {
-            Key::Container<int> container;
+            MidiControllerAutomationHandler::Container<int> container;
             Key k(0, 10);
             container[k].push_back(1);
             container[k].push_back(2);
@@ -2089,10 +2089,10 @@ struct AutomationContainerTest: public UnitTest
             expectEquals(it2.getDataFromIndex(1), 3);
         }
 
-        beginTest("Key::Container::Iterator - perform()");
+        beginTest("Container::Iterator - perform()");
 
         {
-            Key::Container<juce::String> container;
+            MidiControllerAutomationHandler::Container<juce::String> container;
             container[Key(0, 1)].push_back("One");
             container[Key(0, 1)].push_back("Two");
 
@@ -2106,10 +2106,10 @@ struct AutomationContainerTest: public UnitTest
             expect(called);
         }
 
-        beginTest("Key::Container::clear()");
+        beginTest("Container::clear()");
 
         {
-            Key::Container<float> container;
+            MidiControllerAutomationHandler::Container<float> container;
             container[Key(1, 10)].push_back(3.14f);
             container[Key(-1, 5)].push_back(2.71f);
 
@@ -2127,7 +2127,7 @@ struct AutomationContainerTest: public UnitTest
 		beginTest("Iterator::next()");
 
         {
-            Key::Container<int> container;
+            MidiControllerAutomationHandler::Container<int> container;
             Key k(0, 0);
             container[k].push_back(10);
             container[k].push_back(20);
@@ -2144,7 +2144,7 @@ struct AutomationContainerTest: public UnitTest
         beginTest("Iterator::getCurrentKey() and getPositionInVector()");
 
         {
-            Key::Container<int> container;
+            MidiControllerAutomationHandler::Container<int> container;
             Key k(1, 2);
             container[k].push_back(42);
 
@@ -2160,7 +2160,7 @@ struct AutomationContainerTest: public UnitTest
         beginTest("Iterator::eraseCurrentElement()");
 
         {
-            Key::Container<int> container;
+            MidiControllerAutomationHandler::Container<int> container;
             Key k(0, 1);
             container[k] = { 1, 2, 3 };
 
@@ -2179,7 +2179,7 @@ struct AutomationContainerTest: public UnitTest
         beginTest("Iterator::getNumItems()");
 
         {
-            Key::Container<int> container;
+            MidiControllerAutomationHandler::Container<int> container;
             container[Key(0, 0)].push_back(1);
             container[Key(0, 1)].push_back(2);
             container[Key(1, 0)].push_back(3);
@@ -2194,7 +2194,7 @@ struct AutomationContainerTest: public UnitTest
         beginTest("Iterator::getIndexForKey()");
 
         {
-            Key::Container<int> container;
+            MidiControllerAutomationHandler::Container<int> container;
             Key k1(1, 1);
             Key k2(2, 2);
             Key k3(3, 3);
@@ -2214,7 +2214,7 @@ struct AutomationContainerTest: public UnitTest
         beginTest("Iterator::perform()");
 
         {
-            Key::Container<juce::String> container;
+            MidiControllerAutomationHandler::Container<juce::String> container;
             container[Key(0, 0)].push_back("Hello");
             container[Key(1, 1)].push_back("World");
 
@@ -2234,7 +2234,7 @@ struct AutomationContainerTest: public UnitTest
         beginTest("Iterator::getDataFromIndex()");
 
         {
-            Key::Container<juce::String> container;
+            MidiControllerAutomationHandler::Container<juce::String> container;
             container[Key(0, 0)] = { "A", "B" };
             container[Key(1, 0)] = { "C" };
 

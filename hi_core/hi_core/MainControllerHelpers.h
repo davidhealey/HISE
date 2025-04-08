@@ -406,230 +406,232 @@ public:
 		int8 channel = -2;
 		int16 ccNumber = 0;
 
-		template <typename T> struct Container
-		{
-			struct Iterator
-			{
-				Iterator(const Container& c_, bool justOmni_):
-				  c(c_),
-				  justOmni(justOmni_),
-				  k(-1, 0)
-				{}
-
-				bool next(T* t=nullptr)
-				{
-					auto& l = c[k];
-
-					if(isPositiveAndBelow(indexInVector, l.size()))
-					{
-						if(t != nullptr)
-							*t = l[indexInVector];
-
-						indexInVector++;
-						return true;
-					}
-
-					indexInVector = 0;
-
-					if(!bumpKey())
-						return false;
-
-					while(c[k].empty())
-					{
-						if(!bumpKey())
-							return false;
-					}
-
-					jassert(!c[k].empty());
-
-					if(t != nullptr)
-						*t = c[k][indexInVector];
-
-					indexInVector++;
-
-					return true;
-				}
-						
-
-				Key getCurrentKey() const { return k; }
-				int getPositionInVector() const { return indexInVector-1; }
-
-				void eraseCurrentElement()
-				{
-					jassert(indexInVector != 0);
-
-					auto& l = const_cast<Container*>(&c)->operator[](k);
-					indexInVector--;
-					l.erase(l.begin() + indexInVector);
-				}
-
-				int getNumItems() const
-				{
-					Iterator copy(*this);
-					copy.reset();
-
-					int numActive = 0;
-
-					while(copy.next())
-						numActive++;
-
-					return numActive;
-				}
-
-				int getIndexForKey(const Key& k) const
-				{
-					Iterator copy(*this);
-					copy.reset();
-
-					int currentIndex = 0;
-
-					while(copy.next())
-					{
-						if(copy.getCurrentKey().matchesOtherKey(k))
-							return currentIndex;
-
-						currentIndex++;
-					}
-
-					return -1;
-				}
-
-				bool perform(int indexInFlatList, const std::function<bool(T&)>& f) const
-				{
-					auto copy = Iterator(*this);
-					copy.reset();
-
-					int currentIndex = 0;
-
-					while(copy.next())
-					{
-						if(currentIndex++ == indexInFlatList)
-						{
-							auto k = copy.getCurrentKey();
-							auto pos = copy.getPositionInVector();
-							auto& l = const_cast<Container*>(&c)->operator[](k);
-							return f(l[pos]);
-						}
-					}
-
-					return false;
-				}
-
-				T getDataFromIndex(int index) const
-				{
-					auto copy = Iterator(*this);
-					copy.reset();
-
-					int currentIndex = 0;
-
-					while(copy.next())
-					{
-						if (index == currentIndex++)
-						{
-							return c[copy.getCurrentKey()][copy.getPositionInVector()];
-						}
-					}
-
-					return {};
-				}
-
-				int removeMatches(const Key& key) const
-				{
-					int numRemoved = 0;
-					auto copy = Iterator(*this);
-					copy.reset();
-
-					while(copy.next())
-					{
-						if(copy.getCurrentKey().matchesOtherKey(key))
-						{
-							copy.eraseCurrentElement();
-							numRemoved++;
-						}
-					}
-
-					return numRemoved;
-				}
-
-			private:
-
-				void reset()
-				{
-					k = { -1, 0 };
-					indexInVector = 0;
-				}
-
-				bool bumpKey()
-				{
-					if (justOmni)
-					{
-						return ++k.ccNumber < MaxCCNumber;
-					}
-					else
-					{
-						if(++k.ccNumber == MaxCCNumber)
-						{
-							k.ccNumber = 0;
-							k.channel++;
-							return k.channel < (MaxChannel);
-						}
-
-						return true;
-					}
-				}
-
-				const bool justOmni;
-				const Container& c;
-				Key k;
-				int indexInVector = 0;
-			};
-
-			
-
-			std::vector<T>& operator[](const Key& k)
-			{
-				if(!k.isValid())
-				{
-					jassertfalse;
-					static std::vector<T> empty;
-					return empty;
-				}
-
-				if(k.isOmni()) 
-					return data[MaxChannel][k.ccNumber];
-
-				return data[k.channel][k.ccNumber];
-			}
-
-			Iterator createIterator(bool justOmni) const { return Iterator(*this, justOmni); }
-
-			void clear()
-			{
-				for(auto& ch: data)
-				{
-					for(auto& cc: ch)
-						cc.clear();
-				}
-			}
-
-			const std::vector<T>& operator[](const Key& k) const
-			{
-				return const_cast<Container*>(this)->operator[](k);
-			}
-
-			const std::array<std::vector<T>, MaxCCNumber>& getChannelData(int8 channelIndex) const
-			{
-				if(isPositiveAndBelow(channelIndex, MaxChannel))
-					return data[channelIndex];
-				else
-					return data[MaxChannel];
-			}
-
-		private:
-
-			std::array<std::array<std::vector<T>, MaxCCNumber>, MaxChannel + 1> data;
-		};
+		
 	};
+    
+    template <typename T> struct Container
+    {
+        struct Iterator
+        {
+            Iterator(const Container& c_, bool justOmni_):
+              c(c_),
+              justOmni(justOmni_),
+              k(-1, 0)
+            {}
+
+            bool next(T* t=nullptr)
+            {
+                auto& l = c[k];
+
+                if(isPositiveAndBelow(indexInVector, l.size()))
+                {
+                    if(t != nullptr)
+                        *t = l[indexInVector];
+
+                    indexInVector++;
+                    return true;
+                }
+
+                indexInVector = 0;
+
+                if(!bumpKey())
+                    return false;
+
+                while(c[k].empty())
+                {
+                    if(!bumpKey())
+                        return false;
+                }
+
+                jassert(!c[k].empty());
+
+                if(t != nullptr)
+                    *t = c[k][indexInVector];
+
+                indexInVector++;
+
+                return true;
+            }
+                    
+
+            Key getCurrentKey() const { return k; }
+            int getPositionInVector() const { return indexInVector-1; }
+
+            void eraseCurrentElement()
+            {
+                jassert(indexInVector != 0);
+
+                auto& l = const_cast<Container*>(&c)->operator[](k);
+                indexInVector--;
+                l.erase(l.begin() + indexInVector);
+            }
+
+            int getNumItems() const
+            {
+                Iterator copy(*this);
+                copy.reset();
+
+                int numActive = 0;
+
+                while(copy.next())
+                    numActive++;
+
+                return numActive;
+            }
+
+            int getIndexForKey(const Key& k) const
+            {
+                Iterator copy(*this);
+                copy.reset();
+
+                int currentIndex = 0;
+
+                while(copy.next())
+                {
+                    if(copy.getCurrentKey().matchesOtherKey(k))
+                        return currentIndex;
+
+                    currentIndex++;
+                }
+
+                return -1;
+            }
+
+            bool perform(int indexInFlatList, const std::function<bool(T&)>& f) const
+            {
+                auto copy = Iterator(*this);
+                copy.reset();
+
+                int currentIndex = 0;
+
+                while(copy.next())
+                {
+                    if(currentIndex++ == indexInFlatList)
+                    {
+                        auto k = copy.getCurrentKey();
+                        auto pos = copy.getPositionInVector();
+                        auto& l = const_cast<Container*>(&c)->operator[](k);
+                        return f(l[pos]);
+                    }
+                }
+
+                return false;
+            }
+
+            T getDataFromIndex(int index) const
+            {
+                auto copy = Iterator(*this);
+                copy.reset();
+
+                int currentIndex = 0;
+
+                while(copy.next())
+                {
+                    if (index == currentIndex++)
+                    {
+                        return c[copy.getCurrentKey()][copy.getPositionInVector()];
+                    }
+                }
+
+                return {};
+            }
+
+            int removeMatches(const Key& key) const
+            {
+                int numRemoved = 0;
+                auto copy = Iterator(*this);
+                copy.reset();
+
+                while(copy.next())
+                {
+                    if(copy.getCurrentKey().matchesOtherKey(key))
+                    {
+                        copy.eraseCurrentElement();
+                        numRemoved++;
+                    }
+                }
+
+                return numRemoved;
+            }
+
+        private:
+
+            void reset()
+            {
+                k = { -1, 0 };
+                indexInVector = 0;
+            }
+
+            bool bumpKey()
+            {
+                if (justOmni)
+                {
+                    return ++k.ccNumber < Key::MaxCCNumber;
+                }
+                else
+                {
+                    if(++k.ccNumber == Key::MaxCCNumber)
+                    {
+                        k.ccNumber = 0;
+                        k.channel++;
+                        return k.channel < (Key::MaxChannel);
+                    }
+
+                    return true;
+                }
+            }
+
+            const bool justOmni;
+            const Container& c;
+            Key k;
+            int indexInVector = 0;
+        };
+
+        
+
+        std::vector<T>& operator[](const Key& k)
+        {
+            if(!k.isValid())
+            {
+                jassertfalse;
+                static std::vector<T> empty;
+                return empty;
+            }
+
+            if(k.isOmni())
+                return data[Key::MaxChannel][k.ccNumber];
+
+            return data[k.channel][k.ccNumber];
+        }
+
+        Iterator createIterator(bool justOmni) const { return Iterator(*this, justOmni); }
+
+        void clear()
+        {
+            for(auto& ch: data)
+            {
+                for(auto& cc: ch)
+                    cc.clear();
+            }
+        }
+
+        const std::vector<T>& operator[](const Key& k) const
+        {
+            return const_cast<Container*>(this)->operator[](k);
+        }
+
+        const std::array<std::vector<T>, Key::MaxCCNumber>& getChannelData(int8 channelIndex) const
+        {
+            if(isPositiveAndBelow(channelIndex, Key::MaxChannel))
+                return data[channelIndex];
+            else
+                return data[Key::MaxChannel];
+        }
+
+    private:
+
+        std::array<std::array<std::vector<T>, Key::MaxCCNumber>, Key::MaxChannel + 1> data;
+    };
 
 	MidiControllerAutomationHandler(MainController *mc_);
 
@@ -811,7 +813,7 @@ public:
 
 	const MPEData& getMPEData() const;
 
-	Key::Container<AutomationData>::Iterator createIterator() const;
+	Container<AutomationData>::Iterator createIterator() const;
 
 	int getIndexForKey(Key key) const;
 
@@ -868,7 +870,7 @@ private:
 	bool anyUsed;
 	MidiBuffer tempBuffer;
 
-	Key::Container<AutomationData> automationData;
+	Container<AutomationData> automationData;
 
 	AutomationData unlearnedData;
 
