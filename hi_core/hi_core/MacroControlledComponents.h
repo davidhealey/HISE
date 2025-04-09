@@ -346,14 +346,13 @@ public:
 
 	void onAttributeChange(dispatch::library::Processor* p, uint8 index);
 
-	juce::AudioProcessorParameter* getConnectedPluginParameter() const
-	{
-		return dynamic_cast<juce::AudioProcessorParameter*>(connectedPluginParameter.get());
-	}
+	juce::AudioProcessorParameter* getConnectedPluginParameter() const;
 
 	void rebuildPluginParameterConnection();
 
 	bool skipHostDisplayUpdate = false;
+
+	void checkMouseClickProfiler(bool isDown);
 
 protected:
 

@@ -808,10 +808,8 @@ void DebugSession::ProfileDataSource::ViewComponents::ViewItem::updateEquiDistan
 	if(!useEquiDistance)
     {
         callAllRecursive([](ViewItem& v) { v.cachedVisibility = true; return false; });
-        
         return;
     }
-
 
 	auto thisStart = currentIndex;
 	auto thisEnd = 0;
@@ -917,11 +915,8 @@ void DebugSession::ProfileDataSource::ViewComponents::ViewItem::setUseEquiDistan
 
 		callAllRecursive([shouldUseEquiDistance](ViewItem& vi){ vi.useEquiDistance = shouldUseEquiDistance; return false; });
 
-		if(useEquiDistance)
-		{
-			int currentEquiDistanceIndex = 0;
-			updateEquiDistanceRange(currentEquiDistanceIndex, typeFilter);
-		}
+		int currentEquiDistanceIndex = 0;
+		updateEquiDistanceRange(currentEquiDistanceIndex, typeFilter);
 	}
 }
 

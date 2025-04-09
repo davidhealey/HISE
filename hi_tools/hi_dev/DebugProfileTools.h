@@ -91,39 +91,6 @@ struct ProfiledComponent
 		Profiler(ProfiledComponent& parent);;
 	};
 
-	struct RecordListener: public MouseListener
-	{
-		RecordListener(DebugSession& session_, Component* anyComponent)
-		{
-			root = TopLevelWindowWithOptionalOpenGL::findRoot(anyComponent);
-
-			ApiProviderBase::Holder* h = &session_;
-
-			Component::callRecursive<ProfiledComponent>(root, [&](ProfiledComponent* pc)
-			{
-				pc->holder = h;
-				pc->recordTrigger = [](const MouseEvent& e)
-				{
-					return e.mods.isLeftButtonDown();
-				};
-				
-				return false;
-			});
-		}
-
-		~RecordListener()
-		{
-			Component::callRecursive<ProfiledComponent>(root, [&](ProfiledComponent* pc)
-			{
-				pc->recordTrigger = {};
-				
-				return false;
-			});
-		}
-
-		Component::SafePointer<Component> root;
-	};
-
 	struct ComponentHeatmapGenerator: public DebugSession::ProfileDataSource::HeatmapGenerator<ProfiledComponent>
 	{
 		ComponentHeatmapGenerator(ProfiledComponent* rootNode);;
@@ -156,15 +123,31 @@ struct ProfiledComponent
 	}
 
 	/** Call this from every mouse callback that is supposed to trigger a recording session. */
-	void checkTriggerRecord(const MouseEvent& e)
+	void checkTriggerRecord(bool isDown)
 	{
-		if(recordTrigger && recordTrigger(e))
+		if(getDebugSession)
+			getDebugSession()->checkMouseClickProfiler(isDown);
+	}
+
+	/** Call this to set the debug session to all components that are in the same window as the given one. */
+	static void setDebugSessionToAllComponents(Component* any, DebugSession& s)
+	{
+		// yeah that's a good idea...
+		jassert(any->getParentComponent() != nullptr);
+
+		WeakReference<ApiProviderBase::Holder> session(&s);
+		auto tc = any->getTopLevelComponent();
+		auto f = [session]()
 		{
-			if(auto h = holder.get())
-			{
-				h->getDebugSession()->startRecording(100.0, h);
-			}
-		}
+			jassert(session != nullptr);
+			return dynamic_cast<DebugSession*>(session.get());
+		};
+
+		Component::callRecursive<ProfiledComponent>(tc, [f](ProfiledComponent* pc)
+		{
+			pc->getDebugSession = f;
+			return false;
+		});
 	}
 
 protected:
@@ -173,8 +156,7 @@ protected:
 
 private:
 
-	std::function<bool(const MouseEvent&)> recordTrigger;
-
+	std::function<DebugSession*()> getDebugSession;
 	uint32 profileTrackId = 0;
 
 	DebugSession::ProfileDataSource::Ptr profileData;

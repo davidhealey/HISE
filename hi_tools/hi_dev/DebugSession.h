@@ -623,12 +623,15 @@ public:
 	void stopRecording();
 	void initUIThread();
 	Component* createPopupViewer(const DebugInformationBase::Ptr ptr);
+	
 
 	LambdaBroadcaster<bool> syncRecordingBroadcaster;
 	LambdaBroadcaster<ProfileDataSource::ProfileInfoBase::Ptr> recordingFlushBroadcaster;
 
 	void addAudioThread(ThreadIdentifier t);
 	void checkAudioThreadRecorders();
+
+	void checkMouseClickProfiler(bool isDown);
 
 	DebugSession* getDebugSession() override { return this; }
 	Component* createMultiViewer();
@@ -760,6 +763,8 @@ public:
 		currentOptions = Options::fromDynamicObject(jsonObject.getDynamicObject());
 		optionBroadcaster.sendMessage(sendNotificationSync, &currentOptions);
 	}
+
+	bool isMidiTriggerEnabled() const { return currentOptions.trigger == TriggerType::MidiInput; }
 
 	LambdaBroadcaster<Options*> optionBroadcaster;
 

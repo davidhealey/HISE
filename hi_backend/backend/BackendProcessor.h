@@ -459,6 +459,10 @@ public:
 
 private:
 
+#if HISE_INCLUDE_PROFILING_TOOLKIT
+	int numPressedKeys = 0;
+#endif
+
 	bool isSnippet = false;
 
 	int currentNoteNumber = -1;

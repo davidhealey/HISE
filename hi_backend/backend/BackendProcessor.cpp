@@ -522,15 +522,55 @@ void BackendProcessor::handleEditorData(bool save)
 
 void BackendProcessor::processBlock(AudioSampleBuffer& buffer, MidiBuffer& midiMessages)
 {
-    TRACE_DSP();
+    
+
+#if HISE_INCLUDE_PROFILING_TOOLKIT
+	if(getDebugSession().isMidiTriggerEnabled())
+	{
+		if(!midiMessages.isEmpty())
+		{
+			MidiBuffer::Iterator iter(midiMessages);
+
+			MidiMessage m;
+			int pos;
+
+			auto before = numPressedKeys;
+
+			while(iter.getNextEvent(m, pos))
+			{
+				if(m.isNoteOn())
+					++numPressedKeys;
+
+				if(m.isNoteOff())
+					numPressedKeys = jmax(0, numPressedKeys - 1);
+			}
+
+			if(before == 0 && numPressedKeys > 0)
+			{
+				// I know what I'm doing here...
+				MainController::ScopedBadBabysitter sbs(this);
+
+				// Cause the recording to start synchronously, let's live with the CPU peak
+				MessageManagerLock mm;
+				
+
+				getDebugSession().startRecording(-1.0, &getDebugSession());
+			}
+			else if (before != 0 && numPressedKeys == 0)
+			{
+				getDebugSession().stopRecording();
+			}
+		}
+	}
+#endif
+
+	TRACE_DSP();
 
 	if(externalClockSim.bypassed)
 	{
 		processBlockBypassed(buffer, midiMessages);
 		return;
 	}
-
-	
 	
 #if !HISE_BACKEND_AS_FX
 	buffer.clear();

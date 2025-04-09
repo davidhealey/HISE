@@ -214,8 +214,6 @@ private:
 
 	std::map<ViewItem*, Rectangle<float>> arrowNavigations;
 
-    bool drawTracks = false;
-
 	JUCE_DECLARE_WEAK_REFERENCEABLE(Viewer);
 };
 

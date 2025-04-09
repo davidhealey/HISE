@@ -1078,7 +1078,7 @@ void DebugSession::startRecording(double milliSeconds, ApiProviderBase::Holder* 
 		nextState.store(RecordingState::Armed);
 		recordingDelta = currentOptions.millisecondsToRecord;// milliSeconds;
 
-		if(currentOptions.trigger == TriggerType::Compilation || currentOptions.trigger == TriggerType::MouseClick)
+		if(currentOptions.trigger != TriggerType::Manual)
 			recordingDelta = 20000.0;
 
 		recordHolder = h;
@@ -1124,6 +1124,19 @@ void DebugSession::checkAudioThreadRecorders()
 {
 	for(auto r: audioThreadRecorders)
 		r->checkRecording();
+}
+
+void DebugSession::checkMouseClickProfiler(bool isDown)
+{
+	if(currentOptions.trigger == TriggerType::MouseClick)
+	{
+		if(isDown)
+			startRecording(-1.0, this);
+		else
+		{
+			recordingDelta = 100.0;
+		}
+	}
 }
 
 int DebugSession::openTrackEvent()

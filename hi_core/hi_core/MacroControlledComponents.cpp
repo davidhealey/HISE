@@ -690,6 +690,8 @@ void HiSlider::sliderValueChanged(Slider *s)
 
 void HiSlider::sliderDragStarted(Slider* s)
 {
+	checkMouseClickProfiler(true);
+
 	if(auto pp = getConnectedPluginParameter())
 		pp->beginChangeGesture();
 
@@ -702,6 +704,8 @@ void HiSlider::sliderDragStarted(Slider* s)
 
 void HiSlider::sliderDragEnded(Slider* s)
 {
+	checkMouseClickProfiler(false);
+
 	if(auto pp = getConnectedPluginParameter())
 		pp->endChangeGesture();
 
@@ -1172,6 +1176,8 @@ void HiToggleButton::mouseDrag(const MouseEvent& e)
 
 void HiToggleButton::mouseDown(const MouseEvent &e)
 {
+	checkMouseClickProfiler(true);
+
 	if(auto pp = getConnectedPluginParameter())
 		pp->beginChangeGesture();
 
@@ -1224,6 +1230,8 @@ void HiToggleButton::mouseDown(const MouseEvent &e)
 
 void HiToggleButton::mouseUp(const MouseEvent& e)
 {
+	checkMouseClickProfiler(false);
+
 	CHECK_MIDDLE_MOUSE_UP(e);
 
     abortTouch();
@@ -1362,6 +1370,8 @@ void HiComboBox::setup(Processor *p, int parameterIndex, const String &parameter
 
 void HiComboBox::mouseDown(const MouseEvent &e)
 {
+	checkMouseClickProfiler(true);
+
 	if(auto pp = getConnectedPluginParameter())
 		pp->endChangeGesture();
 
@@ -1381,6 +1391,8 @@ void HiComboBox::mouseDown(const MouseEvent &e)
 
 void HiComboBox::mouseUp(const MouseEvent& e)
 {
+	checkMouseClickProfiler(false);
+
 	if(auto pp = getConnectedPluginParameter())
 		pp->endChangeGesture();
 
@@ -1585,6 +1597,11 @@ void HiToggleButton::buttonClicked(Button *b)
 #endif
 	}
 
+	juce::AudioProcessorParameter* MacroControlledObject::getConnectedPluginParameter() const
+	{
+		return dynamic_cast<juce::AudioProcessorParameter*>(connectedPluginParameter.get());
+	}
+
 	void MacroControlledObject::rebuildPluginParameterConnection()
 	{
 		auto p = getProcessor();
@@ -1654,6 +1671,19 @@ void HiToggleButton::buttonClicked(Button *b)
 			auto details = AudioProcessorListener::ChangeDetails().withParameterInfoChanged(true);
 			dynamic_cast<AudioProcessor*>(getProcessor()->getMainController())->updateHostDisplay(details);
 		}
+	}
+
+	void MacroControlledObject::checkMouseClickProfiler(bool isDown)
+	{
+		return;
+#if HISE_INCLUDE_PROFILING_TOOLKIT
+		if(getProcessor() != nullptr)
+		{
+			getProcessor()->getMainController()->getDebugSession().checkMouseClickProfiler(isDown);
+		}
+#else
+		ignoreUnused(isDown);
+#endif
 	}
 
 	Processor* MacroControlledObject::getProcessor()

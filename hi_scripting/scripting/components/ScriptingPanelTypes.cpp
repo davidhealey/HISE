@@ -923,10 +923,22 @@ void ScriptContentPanel::Editor::addButton(const String& name)
 
 			auto isProfiling = content->isProfiling();
 
+			
 			content->setEnableProfiling(!isProfiling, jp, true);
+
+			
 
 			if(content->isProfiling())
 			{
+				Component::SafePointer<ActionButton> sb(b);
+				Component::SafePointer<ScriptContentComponent> sc(content);
+				auto delay = (int)dynamic_cast<const Processor*>(content->getScriptProcessor())->getMainController()->getDebugSession().getOptions().millisecondsToRecord;
+				Timer::callAfterDelay(delay, [sb, sc]()
+				{
+					if(sb.getComponent() != nullptr && sc != nullptr && sc->isProfiling())
+						sb->triggerClick(sendNotificationSync);
+				});
+
 				ProfiledComponent::ComponentHeatmapGenerator hg(content);
 				hg.generateHeatmapIndexes();
 				mc->getDebugSession().clearData(jp);

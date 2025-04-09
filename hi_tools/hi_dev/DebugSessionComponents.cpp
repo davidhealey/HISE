@@ -332,6 +332,13 @@ void DebugSession::ProfileDataSource::ViewComponents::StatisticsComponent::setRo
 		rows.clear();
 		int idx = 0;
 
+		if(currentRoot == nullptr)
+		{
+			updateSearchTerm();
+			return;
+		}
+			
+
 		newRoot->callAllRecursive([&](ViewItem& i)
 		{
 			auto skip = i.threadType == ThreadIdentifier::Type::Undefined;
