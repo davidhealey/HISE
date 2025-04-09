@@ -546,6 +546,7 @@ var AboutWindow::initValues(const var::NativeFunctionArgs& args)
     set_dynamic(NUM_HARDCODED_POLY_FX_MODS);
 	set_dynamic(HISE_NUM_MACROS);
 	set_dynamic(HISE_MACROS_ARE_PLUGIN_PARAMETERS);
+	set_dynamic(HISE_SUSPENSION_TAIL_MS);
 
     set(HISE_MAX_DELAY_TIME_SAMPLES);
     set(HISE_USE_SVF_FOR_CURVE_EQ);
