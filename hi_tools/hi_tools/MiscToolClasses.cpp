@@ -786,47 +786,8 @@ bool FloatSanitizers::isNotSilence(const float value)
 
 void FloatSanitizers::sanitizeArray(float* data, int size)
 {
-    int i = 0;
-
-#if JUCE_WINDOWS
-    for (; i + 3 < size; i += 4)
-    {
-        __m128 input = _mm_loadu_ps(data + i);
-
-        __m128i bits     = _mm_castps_si128(input);
-        __m128i exponent = _mm_and_si128(bits, _mm_set1_epi32(0x7F800000));
-
-        __m128i mask_gt0   = _mm_cmpgt_epi32(exponent, _mm_setzero_si128());
-        __m128i mask_ltInf = _mm_cmplt_epi32(exponent, _mm_set1_epi32(0x7F800000));
-        __m128i mask       = _mm_and_si128(mask_gt0, mask_ltInf);
-
-        __m128i sanitizedBits = _mm_and_si128(bits, mask);
-        __m128 result = _mm_castsi128_ps(sanitizedBits);
-
-        _mm_storeu_ps(data + i, result);
-    }
-
-#elif JUCE_MAC
-    for (; i + 3 < size; i += 4)
-    {
-        float32x4_t input = vld1q_f32(data + i);
-
-        uint32x4_t bits     = vreinterpretq_u32_f32(input);
-        uint32x4_t exponent = vandq_u32(bits, vdupq_n_u32(0x7F800000));
-
-        uint32x4_t mask_gt0   = vcgtq_u32(exponent, vdupq_n_u32(0));
-        uint32x4_t mask_ltInf = vcltq_u32(exponent, vdupq_n_u32(0x7F800000));
-        uint32x4_t mask       = vandq_u32(mask_gt0, mask_ltInf);
-
-        uint32x4_t sanitizedBits = vandq_u32(bits, mask);
-        float32x4_t result = vreinterpretq_f32_u32(sanitizedBits);
-
-        vst1q_f32(data + i, result);
-    }
-#endif
-
     // Fallback for remaining elements (or non-SIMD platforms)
-    for (; i < size; ++i)
+    for (int i = 0; i < size; i++)
     {
         uint32_t valueAsInt;
         std::memcpy(&valueAsInt, &data[i], sizeof(float));
