@@ -802,6 +802,20 @@ void FloatSanitizers::sanitizeArray(float* data, int size)
 
 float FloatSanitizers::sanitizeFloatNumber(float& input)
 {
+    uint32_t valueAsInt;
+    std::memcpy(&valueAsInt, &input, sizeof(float));
+
+    const uint32_t exponent = valueAsInt & 0x7F800000;
+
+    const int aNaN = exponent < 0x7F800000;
+    const int aDen = exponent > 0;
+
+    const uint32_t sanitized = valueAsInt * (aNaN & aDen);
+
+    std::memcpy(&input, &sanitized, sizeof(float));
+    return input;
+
+#if 0 // old version, Xcode 16.3 doesn't like that
 	uint32* valueAsInt = reinterpret_cast<uint32*>(&input);
 	const uint32 exponent = *valueAsInt & 0x7F800000;
 
@@ -813,10 +827,25 @@ float FloatSanitizers::sanitizeFloatNumber(float& input)
 	input = *reinterpret_cast<const float*>(&sanitized);
 
 	return input;
+#endif
 }
 
 double FloatSanitizers::sanitizeDoubleNumber(double& input)
 {
+	uint64_t valueAsInt;
+    std::memcpy(&valueAsInt, &input, sizeof(double));
+
+    const uint64_t exponent = valueAsInt & 0x7FF0000000000000ULL;
+
+    const int aNaN = exponent < 0x7FF0000000000000ULL;
+    const int aDen = exponent > 0;
+
+    const uint64_t sanitized = valueAsInt * (aNaN & aDen);
+
+    std::memcpy(&input, &sanitized, sizeof(double));
+    return input;
+
+#if 0 // Xcode 16.3
 	uint64_t* valueAsInt = reinterpret_cast<uint64_t*>(&input);
 	const uint64_t exponent = *valueAsInt & 0x7FF0000000000000;
 
@@ -828,6 +857,7 @@ double FloatSanitizers::sanitizeDoubleNumber(double& input)
 	input = *reinterpret_cast<const double*>(&sanitized);
 
 	return input;
+#endif
 }
 
 FloatSanitizers::Test::Test():
