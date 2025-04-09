@@ -1650,7 +1650,7 @@ void HardcodedPolyphonicFX::applyEffect(int voiceIndex, AudioSampleBuffer &b, in
 #if USE_BACKEND
 	const auto useMods = !paramModulation.empty();
 #else
-	constexpr auto numMods = NUM_HARDCODED_POLY_FX_MODS > 0;
+	constexpr auto useMods = NUM_HARDCODED_POLY_FX_MODS > 0;
 #endif
 
 	if(!useMods)
@@ -1724,7 +1724,7 @@ void HardcodedPolyphonicFX::handleHiseEvent(const HiseEvent& m)
 #if USE_BACKEND
 	const auto useMods = !paramModulation.empty();
 #else
-	constexpr auto numMods = NUM_HARDCODED_POLY_FX_MODS > 0;
+	constexpr auto useMods = NUM_HARDCODED_POLY_FX_MODS > 0;
 #endif
 
 	if(useMods)
@@ -1743,7 +1743,7 @@ void HardcodedPolyphonicFX::renderVoice(int voiceIndex, AudioSampleBuffer& b, in
 #if USE_BACKEND
 	const auto useMods = !paramModulation.empty();
 #else
-	constexpr auto numMods = NUM_HARDCODED_POLY_FX_MODS > 0;
+	constexpr auto useMods = NUM_HARDCODED_POLY_FX_MODS > 0;
 #endif
 
 	if(useMods)
