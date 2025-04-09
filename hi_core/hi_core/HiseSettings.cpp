@@ -1387,7 +1387,12 @@ void HiseSettings::Data::settingWasChanged(const Identifier& id, const var& newV
 		dynamic_cast<AudioProcessorDriver*>(mc)->setCurrentBlockSize(newValue.toString().getIntValue());
 #if USE_BACKEND
 	else if (id == Project::ExtraDefinitionsOSX || id == Project::ExtraDefinitionsWindows || id == Project::ExtraDefinitionsLinux)
+	{
 		mc->clearExtraDefinitionCache();
+		mc->rebuildPluginParameters();
+		auto chain = mc->getMainSynthChain();
+		chain->prepareToPlay(chain->getSampleRate(), chain->getLargestBlockSize());
+	}
 #endif
 	else if (id == Audio::Driver)
 	{
