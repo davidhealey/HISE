@@ -756,12 +756,12 @@ public:
 		std::vector<ProfileDataSource::SourceType> eventFilter;
 	};
 
-	Options getOptions() const { return currentOptions; }
+	const Options& getOptions() const { return currentOptions; }
 
 	void setOptions(const var& jsonObject)
 	{
 		currentOptions = Options::fromDynamicObject(jsonObject.getDynamicObject());
-		optionBroadcaster.sendMessage(sendNotificationSync, &currentOptions);
+		optionBroadcaster.sendMessage(sendNotificationAsync, &currentOptions);
 	}
 
 	bool isMidiTriggerEnabled() const { return currentOptions.trigger == TriggerType::MidiInput; }

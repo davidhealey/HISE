@@ -307,8 +307,10 @@ int MainController::getExtraDefinitionsValue(const String& extraDefinition, int 
 
 	if(s.contains("\n"))
 		entries = StringArray::fromTokens(s, "\n", "");
-	if(s.contains(";"))
+	else if(s.contains(";"))
 		entries = StringArray::fromTokens(s, ";", "");
+	else
+		entries.add(s.trim());
 
 	for(const auto& e: entries)
 	{

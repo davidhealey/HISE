@@ -6315,6 +6315,7 @@ juce::Array<juce::Identifier> ApiHelpers::getGlobalApiClasses()
 		"Server",
 		"FileSystem",
 		"Message",
+		"Threads",
 		"Date"
 	};
 	

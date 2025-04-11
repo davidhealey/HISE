@@ -680,8 +680,12 @@ bool MidiControllerAutomationHandler::MPEData::contains(MPEModulator* mod) const
 
 ValueTree MidiControllerAutomationHandler::exportAsValueTree() const
 {
-	if (unloadedData.isValid())
-		return unloadedData.createCopy();
+	{
+		SimpleReadWriteLock::ScopedReadLock sl(unloadLock);
+
+		if (unloadedData.isValid())
+			return unloadedData.createCopy();
+	}
 
 	ValueTree v("MidiAutomation");
 
@@ -809,9 +813,14 @@ void MidiControllerAutomationHandler::setUnloadedData(const ValueTree& v)
 
 void MidiControllerAutomationHandler::loadUnloadedData()
 {
-	if(unloadedData.isValid())
-		restoreFromValueTree(unloadedData);
+	{
+		SimpleReadWriteLock::ScopedReadLock sl(unloadLock);
 
+		if(unloadedData.isValid())
+			restoreFromValueTree(unloadedData);
+	}
+
+	SimpleReadWriteLock::ScopedWriteLock sl(unloadLock);
 	unloadedData = {};
 }
 

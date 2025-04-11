@@ -857,6 +857,8 @@ private:
 
 	BigInteger controllerNumbersInPopup;
 
+	mutable SimpleReadWriteLock unloadLock;
+
 	ValueTree unloadedData;
 
 	// ========================================================================================================

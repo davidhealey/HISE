@@ -7629,6 +7629,18 @@ ScriptingApi::Threads::Threads(ProcessorWithScriptingContent* p):
 	ADD_API_METHOD_1(toString);
 	ADD_API_METHOD_0(getCurrentThreadName);
 	ADD_API_METHOD_2(startProfiling);
+
+#if HISE_INCLUDE_PROFILING_TOOLKIT
+	auto& dh = getScriptProcessor()->getMainController_()->getDebugSession();
+	dh.recordingFlushBroadcaster.addListener(*this, [](Threads& t, DebugSession::ProfileDataSource::ProfileInfoBase::Ptr p)
+	{
+		if(p != nullptr && t.threadProfileCallback)
+		{
+			auto b64 = p->toBase64();
+			t.threadProfileCallback.call1(b64);
+		}
+	}, false);
+#endif
 }
 
 int ScriptingApi::Threads::getCurrentThread() const
@@ -7676,35 +7688,47 @@ bool ScriptingApi::Threads::isLocked(int thread) const
 	return t != LockId::unused;
 }
 
-void ScriptingApi::Threads::startProfiling(double millisecondsToProfile, var finishCallback)
+void ScriptingApi::Threads::startProfiling(var options, var finishCallback)
 {
 #if HISE_INCLUDE_PROFILING_TOOLKIT
+
+	auto& dh = getScriptProcessor()->getMainController_()->getDebugSession();
+
 	if(HiseJavascriptEngine::isJavascriptFunction(finishCallback))
 	{
 		bool add = !threadProfileCallback;
 
 		threadProfileCallback = WeakCallbackHolder(getScriptProcessor(), this, finishCallback, 1);
+		threadProfileCallback.incRefCount();
 
-		if(add)
+#if USE_BACKEND
+		if(!getScriptProcessor()->getMainController_()->getExtraDefinitionsValue("HISE_INCLUDE_PROFILING_TOOLKIT", 0))
 		{
-			getScriptProcessor()->getMainController_()->getDebugSession().recordingFlushBroadcaster.addListener(*this, [](Threads& t, DebugSession::ProfileDataSource::ProfileInfoBase::Ptr p)
-			{
-				if(p != nullptr)
-				{
-
-					auto b64 = p->toBase64();
-					t.threadProfileCallback.call1(b64);
-				}
-
-			}, false);
+			debugError(dynamic_cast<Processor*>(getScriptProcessor()), " WARNING: HISE_INCLUDE_PROFILING_TOOLKIT=1 is not added to your project settings. Calling this function will not work in your plugin");
 		}
+#endif
+	}
+	else
+	{
+		threadProfileCallback = WeakCallbackHolder(getScriptProcessor(), this, var(), 1);
 	}
 
-	millisecondsToProfile = jlimit(10.0, 10000.0, millisecondsToProfile);
-
 	auto h = dynamic_cast<ApiProviderBase::Holder*>(getScriptProcessor());
-	getScriptProcessor()->getMainController_()->getDebugSession().startRecording(millisecondsToProfile, h);
-	
+
+	if(auto obj = options.getDynamicObject())
+	{
+		dh.setOptions(obj);
+
+		if(dh.getOptions().trigger == DebugSession::TriggerType::Manual)
+			dh.startRecording(dh.getOptions().millisecondsToRecord, h);
+			
+	}
+	else
+	{
+		auto millisecondsToProfile = jlimit(10.0, 10000.0, (double)options);
+		dh.startRecording(millisecondsToProfile, h);
+	}
+
 #else
 	reportScriptError("Profiling is not enabled");
 #endif

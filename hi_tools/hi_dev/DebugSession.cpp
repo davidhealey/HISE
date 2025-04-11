@@ -1244,6 +1244,11 @@ void DebugSession::timerCallback()
 	
 	if(nextState == RecordingState::Armed)
 	{
+		for(auto& tv: multithreadedEventQueue)
+		{
+			tv->stack.clear();
+		}
+
 		if(isEventQueueEmpty())
 		{
 			ScopedLock sl(recordingLock);
