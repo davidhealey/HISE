@@ -1221,7 +1221,12 @@ var HiseSettings::Data::getDefaultSetting(const Identifier& id) const
 #else
 	else if (id == Compiler::VisualStudioVersion)	return "Visual Studio 2017";
 #endif
+
+#if JUCE_MAC
+	else if (id == Compiler::UseIPP)				return "No";
+#else
 	else if (id == Compiler::UseIPP)				return "Yes";
+#endif
 	else if (id == Compiler::LegacyCPUSupport) 		return "No";
 	else if (id == Compiler::RebuildPoolFiles)		return "Yes";
 	else if (id == Compiler::DefaultProjectFolder)  return File::getSpecialLocation(File::SpecialLocationType::userDocumentsDirectory).getChildFile("HISE Projects").getFullPathName();

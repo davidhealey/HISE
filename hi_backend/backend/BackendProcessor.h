@@ -264,22 +264,16 @@ public:
 	void handleEditorData(bool save);
 
 	void prepareToPlay (double sampleRate, int samplesPerBlock);
-	void releaseResources() 
-	{
-		
-	};
+	void releaseResources();
+
+	void checkLatency();;
 
 	void getStateInformation	(MemoryBlock &destData) override;;
 
-	void logMessage(const String& message, bool isCritical) override
-	{
-		if (isCritical)
-		{
-			debugError(getMainSynthChain(), message);
-		}
-		else
-			debugToConsole(getMainSynthChain(), message);
-	}
+	void handleLatencyCheck(AudioSampleBuffer& buffer);
+	void handlePostLatencyCheck(AudioSampleBuffer& buffer);
+
+	void logMessage(const String& message, bool isCritical) override;
 
 	void setStateInformation(const void *data,int sizeInBytes) override;
 
@@ -464,6 +458,20 @@ private:
 #endif
 
 	bool isSnippet = false;
+
+	enum class LatencyCheckState
+	{
+		Idle,
+		WaitingForKillCounter,
+		WaitingForProcessBlock,
+		WaitingForImpulse,
+		Done,
+		numLatencyCheckStates,
+	};
+
+	LatencyCheckState latencyCheckState = LatencyCheckState::Idle;
+	double reportedLatency = 0.0;
+	int killCounter = 0;
 
 	int currentNoteNumber = -1;
 

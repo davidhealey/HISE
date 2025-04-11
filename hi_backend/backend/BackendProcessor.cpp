@@ -576,6 +576,9 @@ void BackendProcessor::processBlock(AudioSampleBuffer& buffer, MidiBuffer& midiM
 	buffer.clear();
 #endif
 
+
+	handleLatencyCheck(buffer);
+
     auto processChunk = [this](float** channels, AudioSampleBuffer& original, MidiBuffer& mb, int offset, int numThisTime)
     {
         for (int i = 0; i < original.getNumChannels(); i++)
@@ -678,6 +681,8 @@ void BackendProcessor::processBlock(AudioSampleBuffer& buffer, MidiBuffer& midiM
 #if IS_STANDALONE_APP
     externalClockSim.process(buffer.getNumSamples());
 #endif
+
+	handlePostLatencyCheck(buffer);
 };
 
 void BackendProcessor::processBlockBypassed(AudioSampleBuffer& buffer, MidiBuffer& midiMessages)
@@ -701,7 +706,25 @@ void BackendProcessor::prepareToPlay(double newSampleRate, int samplesPerBlock)
 	handleLatencyInPrepareToPlay(newSampleRate);
 
 	getDelayedRenderer().prepareToPlayWrapped(newSampleRate, samplesPerBlock);
+}
+
+void BackendProcessor::releaseResources()
+{
+		
 };
+
+void BackendProcessor::checkLatency()
+{
+	getKillStateHandler().killVoicesAndCall(getMainSynthChain(), [](Processor* p)
+	{
+		auto bp = dynamic_cast<BackendProcessor*>(p->getMainController());
+
+		bp->latencyCheckState = LatencyCheckState::WaitingForKillCounter;
+		bp->killCounter = (int)bp->getMainSynthChain()->getSampleRate() * 0.5;
+
+		return SafeFunctionCall::OK;
+	}, KillStateHandler::TargetThread::SampleLoadingThread);
+}
 
 void BackendProcessor::getStateInformation(MemoryBlock &destData)
 {
@@ -723,6 +746,82 @@ void BackendProcessor::getStateInformation(MemoryBlock &destData)
 		v.setProperty("InterfaceData", JSON::toString(editorInformation, true, DOUBLE_TO_STRING_DIGITS), nullptr);
 		v.writeToStream(output);
 	}
+}
+
+void BackendProcessor::handleLatencyCheck(AudioSampleBuffer& buffer)
+{
+	if(latencyCheckState == LatencyCheckState::WaitingForKillCounter)
+	{
+		killCounter -= buffer.getNumSamples();
+
+		if(killCounter < 0)
+		{
+			killCounter = 0;
+			latencyCheckState = LatencyCheckState::WaitingForProcessBlock;
+		}
+	}
+
+	if(latencyCheckState == LatencyCheckState::WaitingForProcessBlock)
+	{
+		reportedLatency = 0.0;
+		buffer.setSample(0, 0, 1.0f);
+		buffer.setSample(0, 1, 1.0f);
+	}
+}
+
+void BackendProcessor::handlePostLatencyCheck(AudioSampleBuffer& buffer)
+{
+	if(latencyCheckState == LatencyCheckState::WaitingForProcessBlock)
+	{
+		latencyCheckState = LatencyCheckState::WaitingForImpulse;
+		reportedLatency = 0.0;
+	}
+
+	if(latencyCheckState == LatencyCheckState::WaitingForImpulse)
+	{
+		if(buffer.getMagnitude(0, 0, buffer.getNumSamples()) > 0.01f)
+		{
+			float maxPeak = 0.0f;
+			float indexOfPeak = 0.0f;
+
+			for(int i = 0; i < buffer.getNumSamples(); i++)
+			{
+				auto value = buffer.getSample(0, i);
+				if(value > maxPeak)
+				{
+					maxPeak = value;
+					indexOfPeak = i;
+				}
+			}
+
+			reportedLatency += (double)indexOfPeak;
+
+			latencyCheckState = LatencyCheckState::Done;
+
+			MessageManager::callAsync([this]()
+			{
+				PresetHandler::showMessageWindow("Latency detected", "The latency of the processing chain is:  \n>`" + String((int)reportedLatency) + "` samples.", PresetHandler::IconType::Info);
+				latencyCheckState = LatencyCheckState::Idle;
+				reportedLatency = 0;
+			});
+		}
+		else
+		{
+			reportedLatency += buffer.getNumSamples();
+		}
+
+		buffer.clear();
+	}
+}
+
+void BackendProcessor::logMessage(const String& message, bool isCritical)
+{
+	if (isCritical)
+	{
+		debugError(getMainSynthChain(), message);
+	}
+	else
+		debugToConsole(getMainSynthChain(), message);
 }
 
 void BackendProcessor::setStateInformation(const void *data, int sizeInBytes)
