@@ -185,10 +185,10 @@
       <CONFIGURATIONS>
         <CONFIGURATION name="Debug" isDebug="1" optimisation="1" targetName="HISE Standalone"
                        headerPath="/usr/include/freetype2&#10;/usr/include/gtk-3.0/gtk"
-                       libraryPath="../../../../tools/faust/fakelib"/>
+                       libraryPath="../../../../tools/faust/fakelib/linux"/>
         <CONFIGURATION name="Release" isDebug="0" optimisation="3" targetName="HISE Standalone"
                        linkTimeOptimisation="1" headerPath="/usr/include/freetype2&#10;/usr/include/gtk-3.0/gtk"
-                       libraryPath="../../../../tools/faust/fakelib"/>
+                       libraryPath="../../../../tools/faust/fakelib/linux"/>
         <CONFIGURATION isDebug="1" name="DebugWithFaust" headerPath="/usr/include/freetype2&#10;/usr/include/gtk-3.0/gtk"
                        defines="HISE_INCLUDE_FAUST=1&#10;HISE_FAUST_USE_LLVM_JIT=1&#10;HISE_INCLUDE_FAUST_JIT=1"
                        targetName="HISE Standalone" optimisation="1"/>
