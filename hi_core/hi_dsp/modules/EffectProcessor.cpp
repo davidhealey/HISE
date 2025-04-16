@@ -335,6 +335,10 @@ void MasterEffectProcessor::renderWholeBuffer(AudioSampleBuffer& buffer)
 		{
 			auto suspendAtSilence = isSuspendedOnSilence();
 
+			// ignore the suspendAtSilence when rendering offline to avoid the effect not being processed in the throwaway-phase
+			if(getMainController()->getSampleManager().isNonRealtime())
+				suspendAtSilence = false;
+
 			if (suspendAtSilence && masterState.numSilentBuffers > numSilentCallbacksToWait)
 			{
 				if (isSilent(stereoBuffer, 0, samplesToUse))

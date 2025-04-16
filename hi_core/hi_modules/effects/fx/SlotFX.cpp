@@ -1355,6 +1355,9 @@ void HardcodedMasterFX::applyEffect(AudioSampleBuffer &b, int startSample, int n
 
 	auto canBeSuspended = isSuspendedOnSilence();
 
+	if(getMainController()->getSampleManager().isNonRealtime())
+		canBeSuspended = false;
+
 	if (canBeSuspended)
 	{
 		if (masterState.numSilentBuffers > numSilentCallbacksToWait && startSample == 0)

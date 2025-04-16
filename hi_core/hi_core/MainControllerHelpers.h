@@ -1128,7 +1128,7 @@ protected:
 
 private:
 
-	static constexpr int NumThrowAwayBuffers = 12;
+	static constexpr int NumThrowAwayBuffers = 128;
 
 	int thisNumThrowAway = 0;
 

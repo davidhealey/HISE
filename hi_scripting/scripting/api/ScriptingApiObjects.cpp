@@ -5767,7 +5767,7 @@ void ScriptingObjects::ScriptedMidiPlayer::setPlaybackPosition(var newPosition)
 	if (!sequenceValid())
 		return;
 
-	getPlayer()->setAttribute(MidiPlayer::CurrentPosition, jlimit<float>(0.0f, 1.0f, (float)newPosition), sendNotification);
+	getPlayer()->setAttribute(MidiPlayer::CurrentPosition, jlimit<float>(0.0f, 1.0f, (float)newPosition), sendNotificationAsync);
 
 }
 

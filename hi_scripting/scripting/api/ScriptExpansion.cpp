@@ -396,7 +396,6 @@ void ScriptUserPresetHandler::attachAutomationCallback(String automationId, var 
 			if (automationId == c->cData->id)
 			{
 				attachedCallbacks.removeObject(c);
-				debugToConsole(dynamic_cast<Processor*>(getScriptProcessor()), "removing old attached callback for " + automationId);
 				break;
 			}
 		}
