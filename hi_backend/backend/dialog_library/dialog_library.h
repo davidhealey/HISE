@@ -545,9 +545,12 @@ struct DebugSessionOptions: public EncodedDialogBase
 	void bindCallbacks() override
 	{
 		MULTIPAGE_BIND_CPP(DebugSessionOptions, refresh);
+		MULTIPAGE_BIND_CPP(DebugSessionOptions, onExport);
 	}
 
 	var refresh(const var::NativeFunctionArgs& args);
+
+	var onExport(const var::NativeFunctionArgs& args);
 };
 
 struct SnippetBrowser: public EncodedDialogBase

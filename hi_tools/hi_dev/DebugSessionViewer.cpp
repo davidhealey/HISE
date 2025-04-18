@@ -554,8 +554,8 @@ void DebugSession::ProfileDataSource::ViewComponents::Viewer::mouseDown(const Mo
 			constexpr int FilterOffset = 800;
 
 			m.addItem(1, "Fold all", true, foldAll);
-			m.addItem(2, "Use equidistance", true, rootItem->useEquiDistance);
-			m.addItem(3, "Draw tracks", true, drawTracks);
+			m.addItem(2, "Enable event flow mode", true, rootItem->useEquiDistance);
+			
 
 			m.addSectionHeader("Select Time domain");
 			m.addItem(TimeDomainOffset + (int)TimeDomain::Absolute, "Absolute", true, currentDomain == TimeDomain::Absolute);
@@ -584,17 +584,10 @@ void DebugSession::ProfileDataSource::ViewComponents::Viewer::mouseDown(const Mo
 			}
 			if(r == 2)
 			{
-				rootItem->setUseEquiDistance(!rootItem->useEquiDistance, getTypeFilter());
-				updateIndexToShow();
-			}
-			if(r == 3)
-			{
-				drawTracks = !drawTracks;
-                
-                rootItem->setUseEquiDistance(drawTracks, getTypeFilter());
-                updateIndexToShow();
-                
-				repaint();
+				auto nr = rootItem;
+				nr->setUseEquiDistance(!rootItem->useEquiDistance, getTypeFilter());
+				rootItem = nullptr;
+				navigateInternal(nr);
 			}
 			if(r >= TimeDomainOffset)
 			{
@@ -877,7 +870,7 @@ void DebugSession::ProfileDataSource::ViewComponents::Viewer::paint(Graphics& g)
 
 	ctx.depthRange = { (int)r.getStart(), (int)r.getEnd() + 1 };
 
-	if(drawTracks)
+	if(rootItem->useEquiDistance)
 	{
 		for(const auto& t: tracks)
 		{

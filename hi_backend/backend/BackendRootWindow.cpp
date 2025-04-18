@@ -519,6 +519,19 @@ BackendRootWindow::BackendRootWindow(AudioProcessor *ownerProcessor, var editorS
 			});
 		}
 	}, true);
+
+	getBackendProcessor()->pluginParameterRefreshBroadcaster.addListener(*this, [](BackendRootWindow& brw, bool)
+	{
+		Component::callRecursive<MacroControlledObject>(&brw, [](MacroControlledObject* c)
+		{
+			ScopedValueSetter<bool> svs(c->skipHostDisplayUpdate, true);
+			c->rebuildPluginParameterConnection();
+			return false;
+		});
+
+		auto details = AudioProcessorListener::ChangeDetails().withParameterInfoChanged(true);
+		brw.getBackendProcessor()->updateHostDisplay(details);
+	}, false);
 }
 
 

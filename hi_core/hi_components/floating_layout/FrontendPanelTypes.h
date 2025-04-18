@@ -684,6 +684,7 @@ public:
 	enum ColumnId
 	{
 		CCNumber = 1,
+		Channel,
 		ParameterName,
 		Inverted,
 		Minimum,
@@ -693,7 +694,7 @@ public:
 	};
 
 	TableFloatingTileBase(FloatingTile* parent);
-	void initTable();
+	void initTable(bool addChannelColumn=false);
 
 	virtual ~TableFloatingTileBase() {};
 

@@ -5803,7 +5803,7 @@ void ScriptingObjects::ScriptedMidiPlayer::setPlaybackPosition(var newPosition)
 	if (!sequenceValid())
 		return;
 
-	getPlayer()->setAttribute(MidiPlayer::CurrentPosition, jlimit<float>(0.0f, 1.0f, (float)newPosition), sendNotification);
+	getPlayer()->setAttribute(MidiPlayer::CurrentPosition, jlimit<float>(0.0f, 1.0f, (float)newPosition), sendNotificationAsync);
 
 }
 
@@ -6351,6 +6351,7 @@ juce::Array<juce::Identifier> ApiHelpers::getGlobalApiClasses()
 		"Server",
 		"FileSystem",
 		"Message",
+		"Threads",
 		"Date"
 	};
 	
@@ -8979,8 +8980,10 @@ void ScriptingObjects::ScriptedMacroHandler::macroConnectionChanged(int macroInd
 var ScriptingObjects::ScriptedMacroHandler::getMacroDataObject()
 {
 	Array<var> list;
-	
-	for (int i = 0; i < HISE_NUM_MACROS; i++)
+
+	auto numMacros = HISE_GET_PREPROCESSOR(getScriptProcessor()->getMainController_(), HISE_NUM_MACROS);
+
+	for (int i = 0; i < numMacros; i++)
 	{
 		auto md = getScriptProcessor()->getMainController_()->getMacroManager().getMacroChain()->getMacroControlData(i);
 
@@ -8998,11 +9001,13 @@ void ScriptingObjects::ScriptedMacroHandler::setMacroDataFromObject(var jsonData
 {
 	auto& mm = getScriptProcessor()->getMainController_()->getMacroManager();
 
+	auto numMacros = HISE_GET_PREPROCESSOR(getScriptProcessor()->getMainController_(), HISE_NUM_MACROS);
+
 	if(jsonData.isArray())
 	{
 		ScopedUpdateDelayer sud(*this, dontSendNotification);
 
-		for (int i = 0; i < HISE_NUM_MACROS; i++)
+		for (int i = 0; i < numMacros; i++)
 		{
 			auto md = mm.getMacroChain()->getMacroControlData(i);
 
@@ -9015,42 +9020,6 @@ void ScriptingObjects::ScriptedMacroHandler::setMacroDataFromObject(var jsonData
 
 		mm.getMacroChain()->sendMacroConnectionChangeMessageForAll(true);
 	}
-
-#if 0
-	if(jsonData.isArray() && jsonData.size() == HISE_NUM_MACROS)
-	{
-		for(auto& a: *jsonData.getArray())
-		{
-			if (auto obj = a.getDynamicObject())
-			{
-				if(!obj->hasProperty("name") || !obj->hasProperty("value"))
-				{
-					reportScriptError("macro data needs a `name` and `value` element");
-				}
-
-				obj->setProperty("ChildId", "controlled_parameter");
-				
-				obj->setProperty("Children", a["ControlledParameters"]);
-				obj->removeProperty("ControlledParameters");
-				obj->setProperty("midi_cc", -1);
-			}
-		}
-
-		auto vt = valuetree::Helpers::jsonToValueTree(jsonData, "macro_controls", false);
-
-		
-
-		ValueTree v("UserPreset");
-
-		v.addChild(vt, -1, nullptr);
-
-		mm.getMacroChain()->loadMacrosFromValueTree(v, false);
-	}
-	else
-	{
-		reportScriptError("You need to call this method with an array of " + String(HISE_NUM_MACROS) + " elements");
-	}
-#endif
 }
 
 void ScriptingObjects::ScriptedMacroHandler::setUpdateCallback(var callback)
@@ -9120,7 +9089,9 @@ void ScriptingObjects::ScriptedMacroHandler::setFromCallbackArg(const var& obj)
 
 	auto mIndex = (int)obj[MacroIds::MacroIndex];
 
-	if (isPositiveAndBelow(mIndex, HISE_NUM_MACROS))
+	auto numMacros = HISE_GET_PREPROCESSOR(getScriptProcessor()->getMainController_(), HISE_NUM_MACROS);
+
+	if (isPositiveAndBelow(mIndex, numMacros))
 	{
 		auto pId = obj[MacroIds::Processor].toString();
 
@@ -9201,7 +9172,7 @@ void ScriptingObjects::ScriptedMacroHandler::setFromCallbackArg(const var& obj)
 	}
 	else
 	{
-		reportScriptError("macroIndex must be between 0 and " + String(HISE_NUM_MACROS));
+		reportScriptError("macroIndex must be between 0 and " + String(numMacros));
 	}
 }
 

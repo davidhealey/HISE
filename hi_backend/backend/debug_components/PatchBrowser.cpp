@@ -746,6 +746,14 @@ void PatchBrowser::buttonClicked(Button *b)
 
 		if(shouldProfile)
 		{
+			Component::SafePointer<HiseShapeButton> b(profileButton.get());
+			auto delay = (int)session.getOptions().millisecondsToRecord;
+			Timer::callAfterDelay(delay, [b]()
+			{
+				if(b.getComponent() != nullptr && b->getToggleState())
+					b->setToggleState(false, sendNotificationSync);
+			});
+
 			session.clearData(&session);
 
 			session.heatmapManager.heatmapBroadcaster.addListener(*this, [](PatchBrowser& pb, DebugInformationBase::Ptr p, const std::map<int, double>* map)

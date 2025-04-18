@@ -176,6 +176,8 @@ void MouseCallbackComponent::setEnableFileDrop(const String& newCallbackLevel, c
 
 void MouseCallbackComponent::mouseDown(const MouseEvent& event)
 {
+	checkMouseClickProfiler(true);
+
 	CHECK_MIDDLE_MOUSE_DOWN(event);
 
 	ignoreMouseUp = false;
@@ -406,6 +408,8 @@ void MouseCallbackComponent::mouseExit(const MouseEvent &event)
 
 void MouseCallbackComponent::mouseUp(const MouseEvent &event)
 {
+	checkMouseClickProfiler(false);
+
 	CHECK_MIDDLE_MOUSE_UP(event);
 
 	abortTouch();

@@ -206,11 +206,20 @@ void DebugSession::ProfileDataSource::ViewComponents::Manager::sendRootChangeMes
 
 void DebugSession::ProfileDataSource::ViewComponents::Manager::setActiveViewer(Viewer* newViewer)
 {
-	if(newViewer != currentViewer)
+	if(newViewer != currentViewer || newViewer == nullptr)
 	{
 		currentViewer = newViewer;
-		totalRoot = currentViewer->originalRoot;
-		currentRoot = currentViewer->rootItem;
+
+		if(currentViewer != nullptr)
+		{
+			totalRoot = currentViewer->originalRoot;
+			currentRoot = currentViewer->rootItem;
+		}
+		else
+		{
+			totalRoot = nullptr;
+			currentRoot = nullptr;
+		}
 
 		sendRootChangeMessage(currentViewer.get());
 	}
@@ -249,8 +258,8 @@ Path DebugSession::ProfileDataSource::ViewComponents::Manager::Factory::createPa
 {
 	Path p;
 
-	LOAD_EPATH_IF_URL("open", SampleMapIcons::copySamples);
-	LOAD_EPATH_IF_URL("save", SampleMapIcons::pasteSamples);
+	LOAD_EPATH_IF_URL("open", SampleMapIcons::pasteSamples);
+	LOAD_EPATH_IF_URL("save", SampleMapIcons::copySamples);
 	LOAD_EPATH_IF_URL("delete", SampleMapIcons::deleteSamples);
 	LOAD_EPATH_IF_URL("init", HnodeIcons::jit);
 	LOAD_EPATH_IF_URL("trim", EditorIcons::cropIcon);
@@ -332,7 +341,9 @@ DebugSession::ProfileDataSource::ViewComponents::Manager::Manager(DebugSession& 
 	undoButton.onClick = [this](){ um.undo(); };
 	redoButton.onClick = [this](){ um.redo(); };
 
+#if USE_BACKEND
 	moreButton.onClick = BIND_MEMBER_FUNCTION_0(Manager::showOptions);
+#endif
 
 	trimButton.onClick = [this]()
 	{
@@ -345,8 +356,6 @@ DebugSession::ProfileDataSource::ViewComponents::Manager::Manager(DebugSession& 
 
 	recordButton.onClick = [this]()
 	{
-		//new ProfiledComponent::RecordListener(session, this);
-
 		if(recordButton.getToggleState())
 			this->session.startRecording(20000, &this->session);
 		else
@@ -391,8 +400,8 @@ void DebugSession::ProfileDataSource::ViewComponents::Manager::resized()
     recordButton.setBounds(menuBar.removeFromLeft(MultiViewerMenuBarHeight).reduced(ButtonMargin));
 	moreButton.setBounds(menuBar.removeFromLeft(MultiViewerMenuBarHeight).reduced(ButtonMargin));
 	menuBar.removeFromLeft(ButtonMargin);
-	openButton.setBounds(menuBar.removeFromLeft(MultiViewerMenuBarHeight).reduced(ButtonMargin));
 	saveButton.setBounds(menuBar.removeFromLeft(MultiViewerMenuBarHeight).reduced(ButtonMargin));
+	openButton.setBounds(menuBar.removeFromLeft(MultiViewerMenuBarHeight).reduced(ButtonMargin));
     trimButton.setBounds(menuBar.removeFromLeft(MultiViewerMenuBarHeight).reduced(ButtonMargin));
 }
 

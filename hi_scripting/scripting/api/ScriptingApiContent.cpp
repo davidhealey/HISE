@@ -368,6 +368,8 @@ ScriptingApi::Content::ScriptComponent::ScriptComponent(ProcessorWithScriptingCo
 	ADD_SCRIPT_PROPERTY(sId1, "saveInPreset");		ADD_TO_TYPE_SELECTOR(SelectorTypes::ToggleSelector);
 	ADD_SCRIPT_PROPERTY(iId4, "isPluginParameter"); ADD_TO_TYPE_SELECTOR(SelectorTypes::ToggleSelector);
 	ADD_SCRIPT_PROPERTY(pId, "pluginParameterName");
+	ADD_SCRIPT_PROPERTY(pId88, "pluginParameterGroup"); ADD_TO_TYPE_SELECTOR(SelectorTypes::ChoiceSelector);
+	ADD_SCRIPT_PROPERTY(pId828, "deferControlCallback"); ADD_TO_TYPE_SELECTOR(SelectorTypes::ToggleSelector);
     ADD_SCRIPT_PROPERTY(pId76, "isMetaParameter");  ADD_TO_TYPE_SELECTOR(SelectorTypes::ToggleSelector);
 	ADD_SCRIPT_PROPERTY(pId72, "linkedTo");			ADD_TO_TYPE_SELECTOR(SelectorTypes::ChoiceSelector);
 	ADD_SCRIPT_PROPERTY(pId73, "automationID");		ADD_TO_TYPE_SELECTOR(SelectorTypes::ChoiceSelector);
@@ -395,6 +397,8 @@ ScriptingApi::Content::ScriptComponent::ScriptComponent(ProcessorWithScriptingCo
 	setDefaultValue(Properties::defaultValue, 0);
 	setDefaultValue(Properties::isPluginParameter, false);
 	setDefaultValue(Properties::pluginParameterName, "");
+	setDefaultValue(Properties::pluginParameterGroup, "");
+	setDefaultValue(Properties::deferControlCallback, false);
     setDefaultValue(Properties::isMetaParameter, false);
 	setDefaultValue(automationId, "");
 	setDefaultValue(Properties::linkedTo, "");
@@ -466,6 +470,10 @@ StringArray ScriptingApi::Content::ScriptComponent::getOptionsFor(const Identifi
 		}
 
 		return sa;
+	}
+	if(id == getIdFor(pluginParameterGroup))
+	{
+		return getScriptProcessor()->getMainController_()->getUserPresetHandler().pluginParameterGroups;
 	}
 	else if (id == getIdFor(parentComponent))
 	{
@@ -674,6 +682,10 @@ void ScriptingApi::Content::ScriptComponent::setScriptObjectPropertyWithChangeMe
 		else
 			currentAutomationData = nullptr;
 	}
+	else if (id == getIdFor(deferControlCallback))
+	{
+		defersControlCallback = (bool)newValue;
+	}
 	else if (id == getIdFor(linkedTo))
 	{
 		if (newValue.toString().isEmpty())
@@ -699,6 +711,17 @@ void ScriptingApi::Content::ScriptComponent::setScriptObjectPropertyWithChangeMe
 
 		if (linkedComponent != nullptr)
 			setValue(linkedComponent->getValue());
+	}
+	else if (id == getIdFor(pluginParameterGroup))
+	{
+#if USE_BACKEND
+		auto groupName = newValue.toString();
+
+		auto ok = getScriptProcessor()->getMainController_()->getUserPresetHandler().checkPluginParameterGroupName(groupName);
+
+		if(!ok.wasOk())
+			logErrorAndContinue(ok.getErrorMessage());
+#endif
 	}
 	else if (id == getIdFor(parentComponent))
 	{

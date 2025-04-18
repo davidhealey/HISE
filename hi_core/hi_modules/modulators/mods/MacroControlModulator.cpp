@@ -96,7 +96,10 @@ void MacroModulator::addToMacroController(int index)
 
 		ModulatorSynthChain *macroChain = getMainController()->getMacroManager().getMacroChain();
 
-		for (int i = 0; i < HISE_NUM_MACROS; i++)
+		auto mc = getMainController();
+		auto numMacros = HISE_GET_PREPROCESSOR(mc, HISE_NUM_MACROS);
+
+		for (int i = 0; i < numMacros; i++)
 		{
 			macroChain->getMacroControlData(i)->removeAllParametersWithProcessor(this);
 

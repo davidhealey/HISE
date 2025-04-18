@@ -1716,13 +1716,16 @@ String ScriptingApi::Engine::getMacroName(int index)
 
 void ScriptingApi::Engine::setFrontendMacros(var nameList)
 {
-	auto& mm = getProcessor()->getMainController()->getMacroManager();
+	auto mc = getProcessor()->getMainController();
+	auto& mm = mc->getMacroManager();
 
 	if (auto ar = nameList.getArray())
 	{
 		mm.setEnableMacroOnFrontend(!ar->isEmpty());
-		
-		for (int i = 0; i < HISE_NUM_MACROS; i++)
+
+		auto numMacros = HISE_GET_PREPROCESSOR(mc, HISE_NUM_MACROS);
+
+		for (int i = 0; i < numMacros; i++)
 		{
 			auto macroName = (*ar)[i].toString();
 			mm.getMacroChain()->getMacroControlData(i)->setMacroName(macroName);
@@ -3430,17 +3433,18 @@ void ScriptingApi::Engine::rebuildCachedPools()
 
 DynamicObject * ScriptingApi::Engine::getPlayHead() { return getProcessor()->getMainController()->getHostInfoObject(); }
 
-int ScriptingApi::Engine::isControllerUsedByAutomation(int controllerNumber)
+int ScriptingApi::Engine::isControllerUsedByAutomation(var controllerNumber)
 {
 	auto handler = getProcessor()->getMainController()->getMacroManager().getMidiControlAutomationHandler();
 
-	for (int i = 0; i < handler->getNumActiveConnections(); i++)
-	{
-		if (handler->getDataFromIndex(i).ccNumber == controllerNumber)
-			return i;
-	}
+	MidiControllerAutomationHandler::Key k;
 
-	return -1;
+	if(controllerNumber.isArray())
+		k = { (int)controllerNumber[0], (int)controllerNumber[1] };
+	else
+		k = { -1, (int)controllerNumber };
+
+	return handler->getIndexForKey(k);
 }
 
 ScriptingObjects::MidiList *ScriptingApi::Engine::createMidiList() { return new ScriptingObjects::MidiList(getScriptProcessor()); };
@@ -7666,6 +7670,18 @@ ScriptingApi::Threads::Threads(ProcessorWithScriptingContent* p):
 	ADD_API_METHOD_1(toString);
 	ADD_API_METHOD_0(getCurrentThreadName);
 	ADD_API_METHOD_2(startProfiling);
+
+#if HISE_INCLUDE_PROFILING_TOOLKIT
+	auto& dh = getScriptProcessor()->getMainController_()->getDebugSession();
+	dh.recordingFlushBroadcaster.addListener(*this, [](Threads& t, DebugSession::ProfileDataSource::ProfileInfoBase::Ptr p)
+	{
+		if(p != nullptr && t.threadProfileCallback)
+		{
+			auto b64 = p->toBase64();
+			t.threadProfileCallback.call1(b64);
+		}
+	}, false);
+#endif
 }
 
 int ScriptingApi::Threads::getCurrentThread() const
@@ -7713,35 +7729,47 @@ bool ScriptingApi::Threads::isLocked(int thread) const
 	return t != LockId::unused;
 }
 
-void ScriptingApi::Threads::startProfiling(double millisecondsToProfile, var finishCallback)
+void ScriptingApi::Threads::startProfiling(var options, var finishCallback)
 {
 #if HISE_INCLUDE_PROFILING_TOOLKIT
+
+	auto& dh = getScriptProcessor()->getMainController_()->getDebugSession();
+
 	if(HiseJavascriptEngine::isJavascriptFunction(finishCallback))
 	{
 		bool add = !threadProfileCallback;
 
 		threadProfileCallback = WeakCallbackHolder(getScriptProcessor(), this, finishCallback, 1);
+		threadProfileCallback.incRefCount();
 
-		if(add)
+#if USE_BACKEND
+		if(!getScriptProcessor()->getMainController_()->getExtraDefinitionsValue("HISE_INCLUDE_PROFILING_TOOLKIT", 0))
 		{
-			getScriptProcessor()->getMainController_()->getDebugSession().recordingFlushBroadcaster.addListener(*this, [](Threads& t, DebugSession::ProfileDataSource::ProfileInfoBase::Ptr p)
-			{
-				if(p != nullptr)
-				{
-
-					auto b64 = p->toBase64();
-					t.threadProfileCallback.call1(b64);
-				}
-
-			}, false);
+			debugError(dynamic_cast<Processor*>(getScriptProcessor()), " WARNING: HISE_INCLUDE_PROFILING_TOOLKIT=1 is not added to your project settings. Calling this function will not work in your plugin");
 		}
+#endif
+	}
+	else
+	{
+		threadProfileCallback = WeakCallbackHolder(getScriptProcessor(), this, var(), 1);
 	}
 
-	millisecondsToProfile = jlimit(10.0, 10000.0, millisecondsToProfile);
-
 	auto h = dynamic_cast<ApiProviderBase::Holder*>(getScriptProcessor());
-	getScriptProcessor()->getMainController_()->getDebugSession().startRecording(millisecondsToProfile, h);
-	
+
+	if(auto obj = options.getDynamicObject())
+	{
+		dh.setOptions(obj);
+
+		if(dh.getOptions().trigger == DebugSession::TriggerType::Manual)
+			dh.startRecording(dh.getOptions().millisecondsToRecord, h);
+			
+	}
+	else
+	{
+		auto millisecondsToProfile = jlimit(10.0, 10000.0, (double)options);
+		dh.startRecording(millisecondsToProfile, h);
+	}
+
 #else
 	reportScriptError("Profiling is not enabled");
 #endif

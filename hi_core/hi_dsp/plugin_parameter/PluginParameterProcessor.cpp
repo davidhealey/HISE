@@ -64,12 +64,16 @@ struct CustomAutomationParameter : public juce::AudioProcessorParameterWithID,
             
             data = nullptr;
         }
+
+		HisePluginParameterBase::cleanup();
     }
 
 	HisePluginParameterBase::Type getType() const override { return Type::CustomAutomation; }
 	NormalisableRange<float> getNormalisableRange() const override { return data->range; }
-	bool matchesIndex(int slotIndex) const override { return data->index == slotIndex; }
-
+	int getSlotIndex() const override { return data->index; }
+	String getHisePluginParameterName() const override { return getName(10000); }
+	float getHisePluginParameterNormalisedValue() const override { return getValue(); }
+	String getHisePluginParameterGroupName() const override { return data->groupName; }
 
 	static void update(CustomAutomationParameter& d, var* args)
 	{
@@ -83,7 +87,7 @@ struct CustomAutomationParameter : public juce::AudioProcessorParameterWithID,
 
 	float getValue() const override
 	{
-		return data->lastValue;
+		return data->range.convertTo0to1(data->lastValue);
 	}
 
 	float getDefaultValue() const override
@@ -99,6 +103,8 @@ struct CustomAutomationParameter : public juce::AudioProcessorParameterWithID,
 		newValue = data->range.convertFrom0to1(newValue);
 		data->call(newValue, dispatch::DispatchType::sendNotificationSync);
 	}
+
+	ValueToTextConverter getValueToTextConverter() const override { return data->vtc; }
 
 	String getText(float normalisedValue, int) const override
 	{
@@ -143,6 +149,7 @@ struct MacroPluginParameter: public juce::HostedAudioProcessorParameter,
 	   macroIndex(macroIndex_)
 	{
 		checkMacro();
+		parameterValueToSend = getValue();
 	}
 
 	~MacroPluginParameter()
@@ -163,7 +170,24 @@ struct MacroPluginParameter: public juce::HostedAudioProcessorParameter,
         {
             connectedProcessor->removeAttributeListener(&parameterListener);
         }
+
+		HisePluginParameterBase::cleanup();
     }
+
+	String getHisePluginParameterGroupName() const override { return ""; }
+
+	ValueToTextConverter getValueToTextConverter() const override
+	{
+		checkMacro();
+
+		if(md->getNumParameters() == 1)
+		{
+			auto mp = md->getParameter(0);
+			return mp->getValueToTextConverter();
+		}
+
+		return {};
+	}
 
 	void onParameterUpdate(dispatch::library::Processor* funky, uint16 x)
 	{
@@ -264,7 +288,7 @@ struct MacroPluginParameter: public juce::HostedAudioProcessorParameter,
 
 		
 	HisePluginParameterBase::Type getType() const override { return Type::Macro; }
-	bool matchesIndex(int slotIndex) const override { return macroIndex == slotIndex; }
+	int getSlotIndex() const override { return macroIndex; }
 
 	mutable Data::Ptr data;
 	mutable WeakReference<Processor> connectedProcessor;
@@ -272,11 +296,19 @@ struct MacroPluginParameter: public juce::HostedAudioProcessorParameter,
 	
 	String getParameterID() const override { return "P" + String(macroIndex + 1); }
 
+	String getHisePluginParameterName() const override { return getName(10000); }
+	float getHisePluginParameterNormalisedValue() const override { return getValue(); }
+
 	String getName(int maximumStringLength) const override
 	{
 		checkMacro();
 
 		auto n = md->getMacroName();
+
+		if(md->getNumParameters() == 1)
+		{
+			return md->getParameter(0)->getParameterName();
+		}
 
 		if (isPositiveAndBelow(n.length(), maximumStringLength))
 			return n;
@@ -285,6 +317,8 @@ struct MacroPluginParameter: public juce::HostedAudioProcessorParameter,
 	}
 
 	String getLabel() const override { return {}; }
+
+	
 
 	String getText(float normalisedValue, int /*maximumStringLength*/) const override
 	{
@@ -362,41 +396,61 @@ struct MacroPluginParameter: public juce::HostedAudioProcessorParameter,
 
 void PluginParameterAudioProcessor::addScriptedParameters()
 {
-#if HISE_MACROS_ARE_PLUGIN_PARAMETERS
+	juce::AudioProcessorParameterGroup parameters;
+	createScriptedParameters(parameters);
+	setParameterTree(std::move(parameters));
+}
 
-	auto& uph = dynamic_cast<MainController*>(this)->getUserPresetHandler();
+template <typename T> static void addPluginParameterToGroup(juce::AudioProcessorParameterGroup& parameters, std::unique_ptr<T>&& np)
+{
+	auto hp = dynamic_cast<HisePluginParameterBase*>(np.get());
 
-	int pIndex = 0;
+	auto groupName = hp->getHisePluginParameterGroupName();
 
-	for(int i = 0; i < HISE_NUM_MACROS; i++)
+	juce::AudioProcessorParameterGroup* groupToAddTo = &parameters;
+
+	if(!groupName.isEmpty())
 	{
-		addParameter(new MacroPluginParameter(dynamic_cast<MainController*>(this), i, pIndex++));
-	}
+		auto list = parameters.getSubgroups(false);
+		bool found = false;
 
-	for(auto c: uph.getAdditionalPluginParameters())
-	{
-		c->isAdditionalPluginParameter = true;
-		addParameter(new CustomAutomationParameter(c, pIndex++));
-	}
-
-	if(uph.getAdditionalPluginParameterComponentList().isArray())
-	{
-		for(auto sc_var: *uph.getAdditionalPluginParameterComponentList().getArray())
+		for(auto& l: list)
 		{
-			auto sc = dynamic_cast<ScriptingApi::Content::ScriptComponent*>(sc_var.getObject());
-			sc->isAdditionalPluginParameter = true;
-			auto index = sc->getScriptProcessor()->getScriptingContent()->getComponentIndex(sc->getName());
+			if(l->getName() == groupName)
+			{
+				groupToAddTo = const_cast<juce::AudioProcessorParameterGroup*>(l);
+				found = true;
+				break;
+			}
+		}
 
-			ScriptedControlAudioParameter *newParameter = new ScriptedControlAudioParameter(sc, this, dynamic_cast<ScriptBaseMidiProcessor*>(sc->getScriptProcessor()), index);
-			addParameter(newParameter);
-			pIndex++;
+		if(!found)
+		{
+			parameters.addChild(std::make_unique<juce::AudioProcessorParameterGroup>(groupName, groupName, ""));
+			groupToAddTo = const_cast<juce::AudioProcessorParameterGroup*>(parameters.getSubgroups(false).getLast());
 		}
 	}
 
-#else
-	auto& uph = dynamic_cast<MainController*>(this)->getUserPresetHandler();
+	groupToAddTo->addChild(std::move(np));
+}
 
+void PluginParameterAudioProcessor::createScriptedParameters(juce::AudioProcessorParameterGroup& parameters)
+{
+	OwnedArray<HisePluginParameterBase> flatList;
+
+	auto mc = dynamic_cast<MainController*>(this);
+
+	auto useMacrosAsParameter = HISE_GET_PREPROCESSOR(mc, HISE_MACROS_ARE_PLUGIN_PARAMETERS);
+	auto numMacros = HISE_GET_PREPROCESSOR(mc, HISE_NUM_MACROS);
+
+	auto& uph = dynamic_cast<MainController*>(this)->getUserPresetHandler();
 	int pIndex = 0;
+
+	if(useMacrosAsParameter)
+	{
+		for(int i = 0; i < numMacros; i++)
+			flatList.add(new MacroPluginParameter(dynamic_cast<MainController*>(this), i, pIndex++));
+	}
 
 	if (uph.isUsingCustomDataModel())
 	{
@@ -405,9 +459,7 @@ void PluginParameterAudioProcessor::addScriptedParameters()
 			if (auto data = uph.getCustomAutomationData(i))
 			{
 				if (data->allowHost)
-				{
-					addParameter(new CustomAutomationParameter(data, pIndex++));
-				}
+					flatList.add(new CustomAutomationParameter(data, pIndex++));
 			}
 		}
 	}
@@ -438,14 +490,71 @@ void PluginParameterAudioProcessor::addScriptedParameters()
 				}
 
 				if (wantsAutomation && isAutomatable)
-				{
-					ScriptedControlAudioParameter *newParameter = new ScriptedControlAudioParameter(content->getComponent(i), this, sp, i);
-					addParameter(newParameter);
-				}
+					flatList.add(new ScriptedControlAudioParameter(content->getComponent(i), this, sp, pIndex++, i));
 			}
+
+			break;
 		}
 	}
+
+#if 0
+	else
+	{
+		auto& uph = dynamic_cast<MainController*>(this)->getUserPresetHandler();
+		int pIndex = 0;
+
+		
+
+		
+	}
 #endif
+
+	if(pluginParameterSortFunction)
+	{
+		struct Sorter
+		{
+			Sorter(PluginParameterAudioProcessor& p):
+			  parent(p)
+			{}
+
+			PluginParameterAudioProcessor& parent;
+			
+			int compareElements(HisePluginParameterBase* p1, HisePluginParameterBase* p2) const
+			{
+				return parent.pluginParameterSortFunction(p1, p2);
+			}
+		};
+
+		Sorter s(*this);
+		flatList.sort(s);
+
+		
+
+		for(int i = 0; i < flatList.size(); i++)
+			flatList[i]->parameterIndex = i;
+	}
+
+	while(!flatList.isEmpty())
+	{
+		std::unique_ptr<juce::AudioProcessorParameter> ptr;
+		ptr.reset(dynamic_cast<AudioProcessorParameter*>(flatList.removeAndReturn(0)));
+		addPluginParameterToGroup(parameters, std::move(ptr));
+	}
+
+
+
+	for(auto pp: parameterPostProcessors)
+	{
+		
+
+		if(pp.get() != nullptr)
+			pp->processPluginParameterTree(parameters);
+
+		auto fl = parameters.getParameters(true);
+
+		for(int i = 0; i < fl.size(); i++)
+			dynamic_cast<HisePluginParameterBase*>(fl[i])->parameterIndex = i;
+	}
 }
 
 
@@ -460,7 +569,7 @@ PluginParameterAudioProcessor::PluginParameterAudioProcessor(const String& name_
 	AudioProcessor(getHiseBusProperties()),
 	name(name_)
 {
-		
+	pluginParameterSortFunction = HisePluginParameterBase::defaultSort;
 }
 
 AudioProcessor::BusesProperties PluginParameterAudioProcessor::getHiseBusProperties() const
@@ -560,7 +669,7 @@ bool PluginParameterAudioProcessor::isBusesLayoutSupported(const BusesLayout& la
 
 PluginParameterAudioProcessor::~PluginParameterAudioProcessor()
 {
-	setParameterTree({});
+	
 }
 
 const String PluginParameterAudioProcessor::getName() const
@@ -627,6 +736,7 @@ void PluginParameterAudioProcessor::handleLatencyWhenBypassed(AudioSampleBuffer&
 	}
 }
 
+#if 0
 void PluginParameterAudioProcessor::setScriptedPluginParameter(Identifier id, float newValue)
 {
 	for (int i = 0; i < getNumParameters(); i++)
@@ -650,5 +760,6 @@ void PluginParameterAudioProcessor::setScriptedPluginParameter(Identifier id, fl
 
 #undef CAST
 }
+#endif
 
 } // namespace hise

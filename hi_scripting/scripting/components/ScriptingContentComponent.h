@@ -178,7 +178,9 @@ public:
 #endif
 
 #if HISE_INCLUDE_PROFILING_TOOLKIT
-		const_cast<Processor*>(dynamic_cast<const Processor*>(getScriptProcessor()))->getMainController()->getDebugSession().initUIThread();
+		if(auto sp = const_cast<Processor*>(dynamic_cast<const Processor*>(getScriptProcessor())))
+			sp->getMainController()->getDebugSession().initUIThread();
+
 		Profiler sp(*this);
 #endif
 		Component::paintComponentAndChildren(g);

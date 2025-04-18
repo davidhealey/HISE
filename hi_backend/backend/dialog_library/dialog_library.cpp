@@ -483,6 +483,9 @@ var ExportSetupWizard::onPost(const var::NativeFunctionArgs& args)
 
 var AboutWindow::initValues(const var::NativeFunctionArgs& args)
 {
+	
+
+#define set_dynamic(X) state->globalState.getDynamicObject()->setProperty(Identifier(#X), getMainController()->getExtraDefinitionsValue(#X, X));
 #define set(X) state->globalState.getDynamicObject()->setProperty(Identifier(#X), X);
 #define setXY(X, Y) state->globalState.getDynamicObject()->setProperty(Identifier(#X), Y);
     
@@ -532,7 +535,6 @@ var AboutWindow::initValues(const var::NativeFunctionArgs& args)
 #else
     setXY(HISE_INCLUDE_FAUST, 0);
 #endif
-    
 
     set(Version);
     set(USE_IPP);
@@ -540,8 +542,12 @@ var AboutWindow::initValues(const var::NativeFunctionArgs& args)
     set(HISE_INCLUDE_RT_NEURAL);
     set(NUM_POLYPHONIC_VOICES);
     set(NUM_MAX_CHANNELS);
-    set(NUM_HARDCODED_FX_MODS);
-    set(NUM_HARDCODED_POLY_FX_MODS);
+    set_dynamic(NUM_HARDCODED_FX_MODS);
+    set_dynamic(NUM_HARDCODED_POLY_FX_MODS);
+	set_dynamic(HISE_NUM_MACROS);
+	set_dynamic(HISE_MACROS_ARE_PLUGIN_PARAMETERS);
+	set_dynamic(HISE_SUSPENSION_TAIL_MS);
+
     set(HISE_MAX_DELAY_TIME_SAMPLES);
     set(HISE_USE_SVF_FOR_CURVE_EQ);
     set(USE_MOD2_WAVETABLESIZE);
@@ -1637,7 +1643,7 @@ DebugSessionOptions::DebugSessionOptions(BackendRootWindow* bpe_):
 {
 	setName("Profiler Options");
 
-	loadFrom("1575.sNB..D...............35H...oi...6W.........J09R+fUhDM9B.pBDoKrBzPpHCrWBhH+MJ4RAgTKekvWPguONsMhkRTLqo7Lr.hj4FNIaGjqF2f3IB4Bvp.vJ.UWdLOKovQ55RAblw4F3fYtrWnGnmGsuOmNgrNur7IxpvJevKoXfJsrv+9Yvt7Ze+KHfNk2oHmmtuSubmENaPebNw4JoWWzmDd.YBDJPLQ6kaoVo8RADDITj.4zVpNP4LojIThL4AJQHgBjHTdLzeBDTlDghldYIQHIBDQHg1boGfHQRDIOh.RDGly9DTYfdh3AF4nZXuzXWhB33RFiRi.5eRgCF47sy.GDQL.YfQN4mUTN6u3fX.xH.EnbN2JI3Bea0iRn+324FDyyPux6oUnOmmvxsSsyu1n6DTlhx+GLBjKVqbjws+b4uidoboiLSmytjCm1b9AnPghCXTqwzHkYZpFIsRJp8+wx.M4g+srCp7+IkwnlZ4zwF2Q4.CkczVXrK8.AiTMrOGe6SNfwETjGXT021MN50h0LI6z28IGZLanwb.s8FixR95ssGSiIiFy6oNJ2c4fy2eGJfyE1kaAmM+UM.AFvyqkpq5hKfNe.XSeKhsVsAiZznQCzw6x+ge9zdsb5qMMRKKg5Cyerq1BZohkJZLszo.QCfJuMFNw5rBLzFjSonV2ENOuu0LnHy6lKTqdjpcF23Unymv12OcXMroXrSXhuWeWr5.IPfdzXd3YoeEJl6eVHDDzCLNmvu8FpdpaRcQQUdfEIxPa9DtJVhpdpVo.o5s4bIMBpz5uUuxtnBs5Z7VMgyWQspCfffH.XCAvBpS.SK9zWu46TITaa0ThYqU1YZd4EnJktdSKdoTKcmDZyaMRNEKvBODPk5zx4SN8Bs3RkGJc.n9x3ryW.s2dL26TBQPSe3ay5D8GVfkutxoGsWdwdiW8vVmXSyfLmrdoYQhL3Tmpw4T3hEIzXPeaXJ3oxKdujedY.p7k0dQkxIm9NGazXBIKbZB02aLQ0Ze7wP618WB3CAZ5esNo2E9ooLmWHPfdgZzcHCCMzfA.XK.AAAPbnTHj1iv.xjxiBhTLCzD..HQC.ABETBIjPXPvLRmbv3SYkydGC+cIQ8.GzO7hs9kg4uKUYU+IarIe8cIp.A9QVOeffWFIcd1LI.2FX4mglqGA.n9aTk0vLDIeP+anizzXnWaGLYKmQ1i5lH2FVKIf54ZeF1t4eg4s5Fn+ZizTWFw+vVqTEPNEugqFC1V6LKv4MXuOyV5C1XPI2yFpWr8z1szBjFKLADxenVV3Sg+EBjr23GpnnEBEdwT.u2TMz11bs3W4TyfYc+uVz8fZ6rvH4CrYZfk7RKy5F2dgNHrdU84PiHiHITmMHwfJHBqj5Zbif+kgRcR5.cHj5PHIOA8GCTIm8pViYDN58a81NNdf+2qRZGWeBf3BvGVXxoGczlXR82Q1I41bYNpAvkSF+cV.hIlUHkNhBqKpOGqnJpKyTHvYTKUedyuq4k4wK.ED7FPACV4hpOzzep7E1XlqFudkPldcNZ7TVvBF65f.sdKRRLDzCENQ+jWDIme7HH.NQvJ.i2tbNeWYq699x80zVOfvbWjfP5ZCfxSzjdO.YDNcSVPfFHTjg24.VImqyAnlJhTud8Smh4ItmPlhQ1Z+XOnUpKRLPJIc1I9c2MIQxAffP8fbqSGWqJrjzwWVBn1eCAGDI8AW2KVbly3EJJQKYVJRKMnKO0L4H9PYcQSBqtzGx.7a580sU6Td47yeG6rLrSytnJ8Dn1R8zjV4tHAZAWGHju5dP8E1IgptKqGarNXjLtlZTcKXDrYPKYeEbJmIDDu5mwHGjgQUDL1nRKKJSSsJLbqodzToSbLDOuKbD9S21LJM5ufFlZWvcwEk+kaqLcAeh+x8JjyxyvmStHITTbgT5cNOgQp+7q3x49LjQg4jUSSET+.gTO94CYzb.qE+SNG.hMPGveNfvafUDQzRYC69OLeARuRtNwCZ7qPVHW5nx1GC+a.BYTCJYAPCkniTHFPqpd8Cv4bgqRbH7tXmGL3XyEgQuQ7wiErVgmlnb2MVP52oad.kNB..X5H...qi...");
+	loadFrom("1637.sNB..D...............35H...oi...4X.........J09R+fg2D8EC.ZHD5KrBzPpHCrCBfH+MJ4RAgTKekvWPA7Nbxbs3FwnrlxyvBHRp+QrscPtZbChmH7B.r..K.upVW9LuSRwyDFlB3LiyM3A63xdifhfbz99b5D5zI1kSoSEWID9IECU4kE92OS1kW66iEAzo7RI87z8cJl6r3YC5iSJN2IE6h9vvwCIOlDgDsWtkpk1KEQOhLIRjSao5.kyjQjLAhDHlHQjIOfL44nujHlHAxDM8xQjHBjHjXBs4SP7HRDHQbHwCHnziKyYmRUlHHIbfROpF1KM1mn.OtjypTIf9mT7fROe6L3AQDCPFnzS9YEk67WdPL.YTTTDTnx4bqj.L7sVONg9iemavLuC5UdOsB84LkK2R0NkM5NAHdmiwQUtpxeHDxCLVsZzgaGBy+F8V4xFYlNm8oFNs47CLYxDGPoVmoYJyzTMSp0jT6+mkIRBD+a4FU4+TJiRc0xYiMtqpAGkazWYrOA8.kTMruFe6TNvAKBhCTx5a6lF8dwZljc56NkCMlMzXNf1diRcRF6ssGSiIiFy6otJ2g0fy2eGJvCVFlaAmMO7tvPMk47BDX.PuVpNqKt.57AfM8sXqVaPoGd3gGvFuK+G94S68xou1zLs7DpuL+yvZKnkJVpnwzRmBDM.p71X3LqyJ3nsHmVUstKdfdeqYPQl2MXnZ8XU6LtwsPmSgsue5xZXS4rTXhuWeXr5fHOhbzXf3coeEZl6eWXTTjiLNmvu8FrdpiRcRRUffkIxPaNEWEKRVeUqTfU81b9jJAcZ8+sJVmKpf5Z7ZQI5spV0AA.XCAvBsCgHb4A3KQ0I.pEe5q27c5Dps0hJwN6U1cz7xKPcJc8lV7xoV5tInzXzl2ZlbJVfEfHfN04kyobJFZwkJVv.pRG.puNb14Kf1ael6cNgHnoO7sc5D8GVfkwvxGR6kWr23VOr0I1zLHyIqWZVlHCN0oZbNEtXAiFC5aKSAeUdw6k7yKCPkwt1K5TR4z243COPY5BonP88FSTu1GeNZ2t+XfPDnoO15lBDXbnFdGxTzPCDD.CZPPP.DFLJDRuIJjDkDobHkiHMAB.RzD..PXIjPBAAACCZcX6UPuf8Lc+1bsZy8Z5cQ+gMMIVzSSn0r2K43yhoI2npRhFdhNGVWW6KDnNnX9WJwhENn3vqw5WFxeaZwW+L1XyR8c.TaAtHYw7.oSwx6bjhj.VMPXNCpSdD.L6Ly1KohgfKGL3MDlVbtqq9fAtknqo8sArkDaw45nMrwy+Pl2ZPf9qcoIYMh+isYUKPtqeCib.AZs4rP7Wu81y1rav+oxFkWbjznZofZC2lNBYGrkK7+vqEAx2afChT3FhdXANi2RWMSq1TsHZ4FQBli9PtEIqyQlkVCevalYWIOKyrrwMLR2fSukdNlhheSgDsA2CmoHtPpwkajgBkngmjNnCdTGvHdqQcb5KYKUnZjovo7LKFuiuDXPx.iIGbt.jbPv2vcRxQMu4pJoPvXJk+1xrVCjFmb9XVzKIKU7nNxG.ftH6TQ8cWroPzyHcolOX9.IZL6dAWfv7f6fY+cQIcMKnJsnFxb03USI.LxsihIkwXgg6BFP8cmJISY5wVmruiEKxQLeXBzdDZT.z2FZRemv.z8eu6WrALnxs.xGD7TMjeUwn8lCxzMwtWH2KrkHCqSreEFqN6hxzmk50p7K5n0t6IjqYph3GoVsR3HYBojzvNQo61MIb1KBRZkvBI63wnpWrtJf0TJ7GQvyhTaPv3sa9F3XHDIQ8nEDTaOokJ2QvamoQdz96JJsLXA92beaC0l+WNcRQIEjZLIM7CaBX3l4q2fqpjkYVbGq2ymHwMqab5jPqntz2LX8x4glvtHTjAW4K7QHf4X7MTN95zRyClOUsDRiqeL18gxFPIxgM5ixBmoM9BSZTm9HVhhGMZ.+UXd3O+1XeZjffBCMOwth9KqPZC1tfOAHxYgLf7LWbvJx.EEmKkdyCIXv7mUE2+1mUIJ.trluoU5gNHU8OeyGEHvR9+DXvJfEZT9.LHiuc0ODRnjKu9aYt.QiRtN2C87ioDj2NBt6.f9yA4.0HkWz8u.QRjMAIN5XzEWGCODWl16L5bI.5XJB4oEAXd9IF5IB2VFdc7+pMOPoi...lNB..v5H...");
 
 	dialog->setFinishCallback([this]()
 	{
@@ -1667,10 +1673,31 @@ var DebugSessionOptions::refresh(const var::NativeFunctionArgs& args)
 	PROFILE_ONLY(getMainController()->getDebugSession().setOptions(dialog->getState().globalState));
 	return var();
 }
+
+var DebugSessionOptions::onExport(const var::NativeFunctionArgs& args)
+{
+#if HISE_INCLUDE_PROFILING_TOOLKIT
+
+	auto options = getMainController()->getDebugSession().getOptions();
+
+	DynamicObject::Ptr obj = new DynamicObject();
+
+	options.writeToObject(obj);
+
+	auto jsonText = JSON::toString(var(obj.get()), false);
+
+	SystemClipboard::copyTextToClipboard(jsonText);
+	PresetHandler::showMessageWindow("Export successfull", "The current options have been copied to the clipboard", PresetHandler::IconType::Info);
+
+#endif
+
+	return var();
+}
+
 } // namespace library
 } // namespace multipage
 
-#if HISE_INCLUDE_PROFILING_TOOLKIT
+#if USE_BACKEND && HISE_INCLUDE_PROFILING_TOOLKIT
 void hise::DebugSession::ProfileDataSource::ViewComponents::Manager::showOptions()
 {
 		auto bpe = GET_BACKEND_ROOT_WINDOW(this);

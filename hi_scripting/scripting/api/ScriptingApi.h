@@ -598,8 +598,8 @@ public:
 		/** Allows access to the data of the host (playing status, timeline, etc...). */
 		DynamicObject *getPlayHead();
 
-		/** Checks if the given CC number is used for parameter automation and returns the index of the control. */
-		int isControllerUsedByAutomation(int controllerNumber);
+		/** Checks if the given CC number (single number) or channel / CC number (JS Array: [channel, CC]) is used for parameter automation and returns the index of the control. */
+		int isControllerUsedByAutomation(var controllerNumber);
 
 		/** Creates a MIDI List object. */
     ScriptingObjects::MidiList *createMidiList();
@@ -1817,7 +1817,7 @@ private:
         bool isLocked(int thread) const;
 
 		/** Starts a profiling session and calls the finishCallback when ready. */
-        void startProfiling(double millisecondsToProfile, var finishCallback);
+        void startProfiling(var options, var finishCallback);
 
         /** Returns the name of the given string (for debugging purposes only!). */
 		String toString(int thread) const;

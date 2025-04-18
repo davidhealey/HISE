@@ -2855,7 +2855,6 @@ bool ScriptingObjects::ScriptedLookAndFeel::Laf::writeId(DynamicObject* obj, Com
 						
 	}
 
-	jassertfalse;
 	return false;
 }
 

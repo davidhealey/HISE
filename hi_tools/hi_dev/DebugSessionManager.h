@@ -82,7 +82,9 @@ struct DebugSession::ProfileDataSource::ViewComponents::Manager: public Componen
 
 	static void onRec(Manager& m, bool isEnabled);
 
+#if USE_BACKEND
 	void showOptions();
+#endif
 
 	static void onOptionUpdate(Manager& m, DebugSession::Options* o)
 	{

@@ -505,6 +505,7 @@ void FloatingTileContent::Factory::registerBackendPanelTypes()
 	registerType<scriptnode::NodePropertyPanel>(PopupMenuOptions::DspNodeParameterEditor);
     registerType<scriptnode::FaustEditorPanel>(PopupMenuOptions::DspFaustEditorPanel);
 
+	registerType<PluginParameterSimulator>(PopupMenuOptions::PluginParameterSimulator);
 	registerType<ScriptingObjects::ScriptBroadcasterPanel>(PopupMenuOptions::ScriptBroadcasterMap);
 
 	registerType<ProfilerViewer>(PopupMenuOptions::ProfilerViewer);

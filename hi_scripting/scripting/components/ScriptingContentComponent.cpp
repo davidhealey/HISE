@@ -666,6 +666,12 @@ void ScriptContentComponent::addMouseListenersForComponentWrappers()
         {
             componentWrappers[i]->getComponent()->addMouseListener(getParentComponent(), true);
         }
+
+		if(contentData != nullptr)
+		{
+			PROFILE_ONLY(ProfiledComponent::setDebugSessionToAllComponents(this, contentData->getScriptProcessor()->getMainController_()->getDebugSession()));
+		}
+		
     }
 }
 

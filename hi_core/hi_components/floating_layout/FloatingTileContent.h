@@ -350,6 +350,7 @@ public:
 			DspNetworkGraph,
 			DspNodeList,
 			DspNodeParameterEditor,
+			PluginParameterSimulator,
             DspFaustEditorPanel,
 			ScriptBroadcasterMap,
 			PerfettoViewer,

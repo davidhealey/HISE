@@ -467,9 +467,9 @@ private:
 #endif
 
 
-#define CHECK_MIDDLE_MOUSE_DOWN(e) CHECK_TRIGGER(e); if(ZoomableViewport::checkMiddleMouseDrag(e, MouseEventFlags::Down)) return;
-#define CHECK_MIDDLE_MOUSE_UP(e) CHECK_TRIGGER(e); if(ZoomableViewport::checkMiddleMouseDrag(e, MouseEventFlags::Up)) return;
-#define CHECK_MIDDLE_MOUSE_DRAG(e) CHECK_TRIGGER(e); if(ZoomableViewport::checkMiddleMouseDrag(e, MouseEventFlags::Drag)) return;
+#define CHECK_MIDDLE_MOUSE_DOWN(e) CHECK_TRIGGER(true); if(ZoomableViewport::checkMiddleMouseDrag(e, MouseEventFlags::Down)) return;
+#define CHECK_MIDDLE_MOUSE_UP(e) CHECK_TRIGGER(false); if(ZoomableViewport::checkMiddleMouseDrag(e, MouseEventFlags::Up)) return;
+#define CHECK_MIDDLE_MOUSE_DRAG(e) if(ZoomableViewport::checkMiddleMouseDrag(e, MouseEventFlags::Drag)) return;
 #define CHECK_VIEWPORT_SCROLL(e, details) if(ZoomableViewport::checkViewportScroll(e, details)) return;
 
 struct ComponentWithMiddleMouseDrag: public Component

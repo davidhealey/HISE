@@ -113,8 +113,9 @@ void EffectProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
 
 	if (sampleRate >= 0.0)
 	{
+		auto suspensionTime = HISE_GET_PREPROCESSOR(getMainController(), HISE_SUSPENSION_TAIL_MS);
 		auto callbackDurationMs = jmax(1.0, (double)samplesPerBlock / sampleRate * 1000.0);
-		numSilentCallbacksToWait = roundToInt((double)HISE_SUSPENSION_TAIL_MS / callbackDurationMs);
+		numSilentCallbacksToWait = roundToInt((double)suspensionTime / callbackDurationMs);
 	}
 
 	isInSend = dynamic_cast<SendContainer*>(getParentProcessor(true, false)) != nullptr;
@@ -333,6 +334,10 @@ void MasterEffectProcessor::renderWholeBuffer(AudioSampleBuffer& buffer)
 		else
 		{
 			auto suspendAtSilence = isSuspendedOnSilence();
+
+			// ignore the suspendAtSilence when rendering offline to avoid the effect not being processed in the throwaway-phase
+			if(getMainController()->getSampleManager().isNonRealtime())
+				suspendAtSilence = false;
 
 			if (suspendAtSilence && masterState.numSilentBuffers > numSilentCallbacksToWait)
 			{

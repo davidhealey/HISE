@@ -593,6 +593,7 @@ void FloatingTileContent::Factory::handlePopupMenu(PopupMenu& m, FloatingTile* p
 			addToPopupMenu(m, PopupMenuOptions::ImageTable, "Image Pool Table");
 			addToPopupMenu(m, PopupMenuOptions::SampleMapPoolTable, "SampleMap Pool Table");
 			addToPopupMenu(m, PopupMenuOptions::MidiFilePoolTable, "MidiFile Pool Table");
+			addToPopupMenu(m, PopupMenuOptions::PluginParameterSimulator, "Plugin Parameter Simulator");
 
 			PopupMenu fm;
 
@@ -706,6 +707,7 @@ void FloatingTileContent::Factory::handlePopupMenu(PopupMenu& m, FloatingTile* p
 	case PopupMenuOptions::ScriptEditor:		parent->setNewContent(GET_PANEL_NAME(CodeEditorPanel)); break;
 	case PopupMenuOptions::ScriptContent:		parent->setNewContent(GET_PANEL_NAME(ScriptContentPanel)); break;
 	case PopupMenuOptions::OSCLogger:			parent->setNewContent(GET_PANEL_NAME(OSCLogger)); break;
+	case PopupMenuOptions::PluginParameterSimulator: parent->setNewContent(GET_PANEL_NAME(PluginParameterSimulator)); break;
 
 	
 

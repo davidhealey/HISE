@@ -28,16 +28,16 @@
   },
   "LayoutData": {
     "StyleSheet": "ModalPopup",
-    "Style": "#total-progress\n{\n\tdisplay: none;\n}\n\n\n\n#footer\n{\n\tdisplay: none;\n}\n\nlabel\n{\n\tmin-width: 140px;\n}\n\n#title\n{\n\tfont-size: 20px;\n}\n\n#header\n{\n\tdisplay: none;\n}\n\n.column-label\n{\n\twidth: 140px;\n\tflex-grow: 1;\n\ttext-align: left;\n}\n\n.tag-list\n{\n\twidth: 370px;\n\tflex-grow: 0;\n}\n\n\n\n.tag-button:checked\n{\n\tbackground: #999;\n\tborder-color: #aaa;\n}\n\n.label-column\n{\n\tmargin-top: 20px;\n}\n\n.only-help\n{\n\twidth: 24px;\n\t\n}\n\n.only-help label\n{\n\tdisplay: none;\n}\n\n.only-help .toggle-button\n{\n\tdisplay: none;\n}",
+    "Style": "#total-progress\n{\n\tdisplay: none;\n}\n\n\n\n#footer\n{\n\tdisplay: none;\n}\n\nlabel\n{\n\tmin-width: 140px;\n}\n\n#title\n{\n\tfont-size: 20px;\n}\n\n#header\n{\n\tdisplay: none;\n}\n\n.column-label\n{\n\twidth: 140px;\n\tflex-grow: 1;\n\ttext-align: left;\n}\n\n.tag-list\n{\n\twidth: 370px;\n\tflex-grow: 0;\n}\n\n\n\n.tag-button:checked\n{\n\tbackground: #999;\n\tborder-color: #aaa;\n}\n\n.label-column\n{\n\tmargin-top: 20px;\n}\n\n.only-help\n{\n\twidth: 24px;\n\t\n}\n\n.only-help label\n{\n\tdisplay: none;\n}\n\n.only-help .toggle-button\n{\n\tdisplay: none;\n}\n\n.export-button\n{\n\tmargin-top: 30px;\n}\n\n.export-button label\n{\n\tdisplay: none;\n}",
     "UseViewport": false,
     "ConfirmClose": false,
     "CloseMessage": "Do you want to close this popup?",
     "DialogWidth": 600,
-    "DialogHeight": 370
+    "DialogHeight": 420
   },
   "GlobalState": {
-    "recordingLength": "300 ms",
-    "recordingTrigger": 0
+    "recordingLength": "1000 ms",
+    "recordingTrigger": "0"
   },
   "Children": [
     {
@@ -112,6 +112,15 @@
             }
           ],
           "Class": ".label-column"
+        },
+        {
+          "Type": "Button",
+          "Text": "Export as JSON",
+          "ID": "ButtonId",
+          "Code": "{BIND::onExport}",
+          "Class": ".export-button",
+          "ButtonType": "Text",
+          "Trigger": true
         }
       ],
       "Text": ""

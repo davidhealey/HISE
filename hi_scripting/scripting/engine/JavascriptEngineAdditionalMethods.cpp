@@ -570,6 +570,7 @@ root(root_)
 		//hiddenProperties.addIfNotAlreadyThere(Identifier("Array"));
 		//hiddenProperties.addIfNotAlreadyThere(Identifier("String"));
 		hiddenProperties.addIfNotAlreadyThere(Identifier("Math"));
+		hiddenProperties.addIfNotAlreadyThere(Identifier("Threads"));
 		hiddenProperties.addIfNotAlreadyThere(Identifier("JSON"));
 		hiddenProperties.addIfNotAlreadyThere(Identifier("Integer"));
 		hiddenProperties.addIfNotAlreadyThere(Identifier("Content"));

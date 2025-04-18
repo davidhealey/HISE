@@ -175,6 +175,7 @@ MainController::UserPresetHandler::CustomAutomationData::CustomAutomationData(Cu
 	static const Identifier defaultValue("defaultValue");
 	static const Identifier isMidi("allowMidiAutomation");
 	static const Identifier isHost("allowHostAutomation");
+	static const Identifier pluginParameterGroup("pluginParameterGroup");
 	static const Identifier connections("connections");
 	static const Identifier mode("mode");
 	static const Identifier suffix("suffix");
@@ -192,6 +193,8 @@ MainController::UserPresetHandler::CustomAutomationData::CustomAutomationData(Cu
 		range.setSkewForCentre((float)d[midPos]);
 
 	range.interval = (float)d.getProperty(step, 0.0f);
+
+	groupName = d.getProperty(pluginParameterGroup, "").toString();
 
 	if(d.hasProperty(mode))
 	{

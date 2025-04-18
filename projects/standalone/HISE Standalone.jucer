@@ -30,7 +30,7 @@
     <XCODE_MAC targetFolder="Builds/MacOSX" smallIcon="ho3qQy" bigIcon="ho3qQy"
                customPList="&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;&#10;&lt;!DOCTYPE plist PUBLIC &quot;-//Apple//DTD PLIST 1.0//EN&quot; &quot;http://www.apple.com/DTDs/PropertyList-1.0.dtd&quot;&gt;&#10;&lt;plist version=&quot;1.0&quot;&gt;&#10;&lt;dict&gt;&#10;&lt;key&gt;NSAppTransportSecurity&lt;/key&gt; &#10;&lt;dict&gt; &#10;&lt;key&gt;NSAllowsArbitraryLoads&lt;/key&gt;&lt;true/&gt;&#10;&lt;/dict&gt;&#10;&lt;/dict&gt;&#10;&lt;/plist&gt;"
                extraDefs="USE_IPP=0&#10;HISE_USE_EXTENDED_TEMPO_VALUES=1&#10;HI_ENABLE_EXPANSION_EDITING=1&#10;HISE_ENABLE_EXPANSIONS=1&#10;AUDIOFFT_FFTW3=1&#10;HISE_ENABLE_FULL_CONTROL_RATE_PITCH_MOD=1&#10;HISE_SCRIPT_SERVER_TIMEOUT=20000&#10;HISE_USE_OPENGL_FOR_PLUGIN=1&#10;HISE_INCLUDE_PROFILING_TOOLKIT=0"
-               extraCompilerFlags="-Wno-reorder -Wno-inconsistent-missing-override -faligned-allocation -Wno-switch"
+               extraCompilerFlags="-Wno-reorder -Wno-inconsistent-missing-override -faligned-allocation -Wno-switch -ffp-contract=off"
                xcodeValidArchs="arm64,arm64e,x86_64" extraLinkerFlags="-rpath $(SRCROOT)/../../../../tools/faust/lib "
                externalLibraries="faust" iosDevelopmentTeamID="">
       <CONFIGURATIONS>
@@ -185,10 +185,10 @@
       <CONFIGURATIONS>
         <CONFIGURATION name="Debug" isDebug="1" optimisation="1" targetName="HISE Standalone"
                        headerPath="/usr/include/freetype2&#10;/usr/include/gtk-3.0/gtk"
-                       libraryPath="../../../../tools/faust/fakelib/linux"/>
+                       libraryPath="../../../../tools/faust/fakelib_linux"/>
         <CONFIGURATION name="Release" isDebug="0" optimisation="3" targetName="HISE Standalone"
                        linkTimeOptimisation="1" headerPath="/usr/include/freetype2&#10;/usr/include/gtk-3.0/gtk"
-                       libraryPath="../../../../tools/faust/fakelib/linux"/>
+                       libraryPath="../../../../tools/faust/fakelib_linux"/>
         <CONFIGURATION isDebug="1" name="DebugWithFaust" headerPath="/usr/include/freetype2&#10;/usr/include/gtk-3.0/gtk"
                        defines="HISE_INCLUDE_FAUST=1&#10;HISE_FAUST_USE_LLVM_JIT=1&#10;HISE_INCLUDE_FAUST_JIT=1"
                        targetName="HISE Standalone" optimisation="1"/>
