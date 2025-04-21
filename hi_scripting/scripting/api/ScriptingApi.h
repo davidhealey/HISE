@@ -1712,6 +1712,7 @@ private:
 			Downloads,
 			Applications,
 			Temp,
+			Music,
 			numSpecialLocations
 		};
 
