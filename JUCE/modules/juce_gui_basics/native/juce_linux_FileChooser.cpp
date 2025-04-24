@@ -243,10 +243,10 @@ private:
         else
             File::getSpecialLocation (File::userHomeDirectory).setAsCurrentWorkingDirectory();
 
-        auto filename = owner.startingFile.getFileName();
+        auto path = owner.startingFile.getFullPathName();
 
-        if (! filename.isEmpty())
-            args.add ("--filename=" + filename);
+        if (! path.isEmpty())
+            args.add ("--filename=" + path + "/");
 
         // supplying the window ID of the topmost window makes sure that Zenity pops up..
         if (uint64 topWindowID = getTopWindowID())
