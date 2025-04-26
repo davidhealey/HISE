@@ -2326,8 +2326,13 @@ void MainController::savePluginState(MemoryBlock& destData, int currentlyLoadedP
 
 	v.setProperty("Program", currentlyLoadedProgram, nullptr);
 
-	auto globalBPM = dynamic_cast<GlobalSettingManager*>(this)->globalBPM;
-	v.setProperty("HostTempo", globalBPM, nullptr);
+	auto storeTempo = HISE_GET_PREPROCESSOR(this, HISE_INCLUDE_TEMPO_IN_PLUGIN_STATE);
+
+	if(storeTempo)
+	{
+		auto globalBPM = dynamic_cast<GlobalSettingManager*>(this)->globalBPM;
+		v.setProperty("HostTempo", globalBPM, nullptr);
+	}
 
 	v.setProperty("UserPreset", getUserPresetHandler().getCurrentlyLoadedFile().getFullPathName(), nullptr);
 

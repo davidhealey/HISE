@@ -21,6 +21,7 @@ struct HiseJavascriptEngine::RootObject::ScopedBlockStatement: public Statement
 	{
 		auto id = location.externalFile;
 
+#if USE_BACKEND
 		if(id.isEmpty())
 		{
 			id = location.program.upToFirstOccurrenceOf("\n", false, false);
@@ -34,6 +35,7 @@ struct HiseJavascriptEngine::RootObject::ScopedBlockStatement: public Statement
 		{
 			id = File(id).getFileName();
 		}
+#endif
 
 		return Identifier(id);
 	}

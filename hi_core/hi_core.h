@@ -348,6 +348,14 @@ If true then the plugin will complain about the buffer size not being a multiple
 #define HISE_COMPLAIN_ABOUT_ILLEGAL_BUFFER_SIZE 1
 #endif
 
+
+/** If this is true, then HISE will store / restore the current tempo in the DAW project. This allows persistence of a custom tempo value but lead
+ *  to subtle glitches in some use cases, so if you always follow the host's tempo in your plugin you can deactivate this.
+ */  
+#ifndef HISE_INCLUDE_TEMPO_IN_PLUGIN_STATE
+#define HISE_INCLUDE_TEMPO_IN_PLUGIN_STATE 1
+#endif
+
 /** Config: ENABLE_ALL_PEAK_METERS
 
 Set this to 0 to deactivate peak collection for any other processor than the main synth chain

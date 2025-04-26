@@ -7292,6 +7292,7 @@ ScriptingApi::FileSystem::FileSystem(ProcessorWithScriptingContent* pwsc):
 	addConstant("Downloads", (int)Downloads);
 	addConstant("Applications", (int)Applications);
 	addConstant("Temp", (int)Temp);
+	addConstant("Music", (int)Music);
 
 	ADD_API_METHOD_1(getFolder);
 	ADD_API_METHOD_3(findFiles);
@@ -7590,6 +7591,7 @@ juce::File ScriptingApi::FileSystem::getFile(SpecialLocations l)
 	case UserHome: f = File::getSpecialLocation(File::userHomeDirectory); break;
 	case Documents: f = File::getSpecialLocation(File::userDocumentsDirectory); break;
 	case Desktop:	f = File::getSpecialLocation(File::userDesktopDirectory); break;
+	case Music:		f = File::getSpecialLocation(File::userMusicDirectory); break;
 	case Downloads: f = File::getSpecialLocation(File::userHomeDirectory).getChildFile("Downloads"); break;
 	case Applications: f = File::getSpecialLocation(File::globalApplicationsDirectory); break;
 	case Temp: f = File::getSpecialLocation(File::tempDirectory); break;
