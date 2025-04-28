@@ -504,6 +504,13 @@ private:
 	int lastTimerInterval = -1;
 };
 
+class DebugSession;
+
+// Set this to 1 to find out the timer children that take the most time so you can add profile infos to it.
+#ifndef MEASURE_TIMER_CHILDREN
+#define MEASURE_TIMER_CHILDREN 0
+#endif
+
 /** Coallescates timer updates.
 	@ingroup event_handling
 	
@@ -544,7 +551,13 @@ public:
 
 		virtual void timerCallback() = 0;
 
+		template <typename T> T* getProfileDataSource() { return dynamic_cast<T*>(profileData.get()); }
+
+		void setEnableProfiling(const String& profileName);
+
 	private:
+
+		ReferenceCountedObjectPtr<ReferenceCountedObject> profileData;
 
 		void startOrStop(bool shouldStart);
 
@@ -585,7 +598,19 @@ public:
 
 	void timerCallback() override;
 
+	void setDebugSession(hise::DebugSession* s) { debugSession = s;	 }
+
+	DebugSession* getDebugSession() { return debugSession; }
+
 private:
+
+
+#if MEASURE_TIMER_CHILDREN
+	double lastDuration = 0.0;
+#endif
+
+	hise::DebugSession* debugSession = nullptr;
+	ReferenceCountedObjectPtr<ReferenceCountedObject> timerSession;
 
 	Array<WeakReference<SimpleTimer>, CriticalSection> simpleTimers;
 	LockfreeQueue<WeakReference<Broadcaster>> pendingHandlers;
@@ -646,9 +671,18 @@ public:
 
 	float getLastDisplayValue() const;
 
-private:
+	void setEnableProfiling(const String& profileName_)
+	{
+		if(profileName_ != profileName)
+		{
+			profileName = profileName_;
 
-	
+			if(currentUpdater != nullptr)
+				currentUpdater->setEnableProfiling(profileName);
+		}
+	}
+
+private:
 
 	void updateUpdater();
 
@@ -671,6 +705,8 @@ private:
 	mutable float lastDisplayValue = 1.0f;
 	mutable EventType lastChange = EventType::Idle;
 	mutable var lastValue;
+
+	String profileName;
 
 	static constexpr int NumListenerSlots = 128;
 	hise::UnorderedStack<WeakReference<EventListener>, NumListenerSlots> listeners;
@@ -729,10 +765,7 @@ public:
 		name(name_)
 	{};
 
-	virtual ~SafeChangeBroadcaster()
-	{
-		dispatcher.cancelPendingUpdate();
-	};
+	virtual ~SafeChangeBroadcaster();;
 
 	/** Sends a synchronous change message to all the registered listeners.
 	*
@@ -1666,7 +1699,7 @@ struct ComplexDataUIBase : public ReferenceCountedObject
 
 	virtual ~ComplexDataUIBase();;
 
-	void setGlobalUIUpdater(PooledUIUpdater* updater);
+	virtual void setGlobalUIUpdater(PooledUIUpdater* updater);
 
     void sendDisplayIndexMessage(float n);
 
@@ -1681,6 +1714,11 @@ struct ComplexDataUIBase : public ReferenceCountedObject
     UndoManager* getUndoManager(bool useUndoManager = true);;
 
 	hise::SimpleReadWriteLock& getDataLock() const;
+
+	void setEnableProfiling(const String& profileName)
+	{
+		getUpdater().setEnableProfiling(profileName);
+	}
 
 protected:
 

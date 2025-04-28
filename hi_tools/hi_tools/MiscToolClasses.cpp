@@ -42,6 +42,10 @@ namespace hise {
 using namespace juce;
 
 
+SafeChangeBroadcaster::~SafeChangeBroadcaster()
+{
+	dispatcher.cancelPendingUpdate();
+}
 
 void SafeChangeBroadcaster::sendSynchronousChangeMessage()
 {
@@ -1458,6 +1462,16 @@ void SuspendableTimer::Internal::timerCallback()
 PooledUIUpdater::PooledUIUpdater():
 	pendingHandlers(8192)
 {
+#if HISE_INCLUDE_PROFILING_TOOLKIT
+
+	auto p = new DebugSession::ProfileDataSource();
+	p->name = "UI Timer callback";
+	p->threadRoot = DebugSession::ThreadIdentifier::Type::UIThread;
+	p->sourceType = DebugSession::ProfileDataSource::SourceType::TimerCallback;
+	timerSession = p;
+
+#endif
+
 	suspendTimer(false);
 	startTimer(30);
 }
@@ -1489,6 +1503,19 @@ void PooledUIUpdater::SimpleTimer::stop()
 
 bool PooledUIUpdater::SimpleTimer::isTimerRunning() const
 { return isRunning; }
+
+void PooledUIUpdater::SimpleTimer::setEnableProfiling(const String& profileName)
+{
+#if HISE_INCLUDE_PROFILING_TOOLKIT
+	using PD = DebugSession::ProfileDataSource;
+
+	PD* p = new PD();
+	p->name = profileName;
+	p->sourceType = PD::SourceType::TimerCallback;
+	p->threadRoot = DebugSession::ThreadIdentifier::Type::UIThread;
+	profileData = p;
+#endif
+}
 
 void PooledUIUpdater::SimpleTimer::startOrStop(bool shouldStart)
 {
@@ -1536,6 +1563,8 @@ void PooledUIUpdater::Broadcaster::removePooledChangeListener(Listener* l)
 bool PooledUIUpdater::Broadcaster::isHandlerInitialised() const
 { return handler != nullptr; }
 
+
+
 void PooledUIUpdater::timerCallback()
 {
 	PerfettoHelpers::setCurrentThreadName("UI Timer Thread");
@@ -1543,20 +1572,58 @@ void PooledUIUpdater::timerCallback()
 	TRACE_DISPATCH("UI Timer callback");
 
 	{
+		PROFILE_ONLY(DebugSession::ProfileDataSource::ScopedProfiler sp((debugSession != nullptr && debugSession->isRecordingMultithread()) ? dynamic_cast<DebugSession::ProfileDataSource*>(timerSession.get()) : nullptr, debugSession));
+
 		ScopedLock sl(simpleTimers.getLock());
 
-		int x = 0;
+#if MEASURE_TIMER_CHILDREN
+		auto now = Time::getMillisecondCounterHiRes();
+#endif
 
 		for (int i = 0; i < simpleTimers.size(); i++)
 		{
 			auto st = simpleTimers[i];
 
-			x++;
 			if (st.get() != nullptr)
+			{
+#if HISE_INCLUDE_PROFILING_TOOLKIT
+				if(debugSession != nullptr && debugSession->isRecordingMultithread())
+				{
+					if(auto pd = st->getProfileDataSource<DebugSession::ProfileDataSource>())
+					{
+						DebugSession::ProfileDataSource::ScopedProfiler sp(pd, debugSession);
+						st->timerCallback();
+						continue;
+					}
+				}
+#endif
+
+				auto before = Time::getMillisecondCounterHiRes();
+
 				st->timerCallback();
+
+#if MEASURE_TIMER_CHILDREN
+				auto timerDuration = Time::getMillisecondCounterHiRes() - before;
+
+				if(lastDuration != 0.0 && st->getProfileDataSource<DebugSession::ProfileDataSource>() == nullptr)
+				{
+					auto relative = timerDuration / lastDuration;
+					auto threshold = JUCE_LIVE_CONSTANT(0.05);
+
+					if(relative > threshold)
+					{
+						int x = 5;
+					}
+				}
+#endif
+			}
 			else
 				simpleTimers.remove(i--);
 		}
+
+#if MEASURE_TIMER_CHILDREN
+		lastDuration = Time::getMillisecondCounterHiRes() - now;
+#endif
 	}
 
 	WeakReference<Broadcaster> b;
@@ -1649,7 +1716,12 @@ float ComplexDataUIUpdaterBase::getLastDisplayValue() const
 void ComplexDataUIUpdaterBase::updateUpdater()
 {
 	if (globalUpdater != nullptr && currentUpdater == nullptr && listeners.size() > 0)
+	{
 		currentUpdater = new Updater(*this);
+
+		if(profileName.isNotEmpty())
+			currentUpdater->setEnableProfiling(profileName);
+	}
 
 	if (listeners.size() == 0 || globalUpdater == nullptr)
 		currentUpdater = nullptr;

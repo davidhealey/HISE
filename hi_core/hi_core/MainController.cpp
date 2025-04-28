@@ -196,6 +196,8 @@ bool MainController::unitTestMode = false;
     
 	startTimer(HISE_UNDO_INTERVAL);
 
+	getGlobalUIUpdater()->setDebugSession(&getDebugSession());
+
 	javascriptThreadPool->startThread(8);
 	getKillStateHandler().setScriptingThreadId(javascriptThreadPool->getThreadId());
 };

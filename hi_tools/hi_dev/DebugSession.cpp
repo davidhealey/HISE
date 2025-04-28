@@ -35,7 +35,7 @@ namespace hise { using namespace juce;
 DebugSession::DebugSession(PooledUIUpdater* updater):
 	PooledUIUpdater::SimpleTimer(updater, true)
 {
-	
+	setEnableProfiling("Processing profile data");
 }
 
 DebugSession::~DebugSession()
