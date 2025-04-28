@@ -1573,7 +1573,11 @@ public:
 	void initProjectDocsWithURL(const String& projectDocURL);
 
 #if USE_BACKEND
-	void clearExtraDefinitionCache() { cachedPreprocessors.clear(); }
+	void clearExtraDefinitionCache()
+	{
+		cachedPreprocessors.clear();
+		preprocessor = nullptr;
+	}
 	int getExtraDefinitionsValue(const String& extraDefinition, int defaultValue) const;
 #endif
 
