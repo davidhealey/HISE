@@ -109,8 +109,7 @@ static const unsigned char projectTemplate_jucer_lines[] = R"(
       </MODULEPATHS>
     </%VS_VERSION%>
     <XCODE_MAC targetFolder="Builds/MacOSX"  vstLegacyFolder="%VSTSDK_FOLDER%" vst3Folder="%VSTSDK3_FOLDER%"  aaxFolder="%AAX_PATH%" extraCompilerFlags="-Wno-reorder -Wno-inconsistent-missing-override  -fno-aligned-allocation -ffp-contract=off"
-               extraLinkerFlags="%IPP_COMPILER_FLAGS% %OSX_STATIC_LIBS%" extraDefs="%PLUGIN_CHANNEL_AMOUNT%&#10;%EXTRA_DEFINES_OSX%&#10;%PERFETTO_INCLUDE_MACOS%" hardenedRuntime="0" hardenedRuntimeOptions="com.apple.security.cs.allow-jit,com.apple.security.cs.allow-unsigned-executable-memory,com.apple.security.device.audio-input" xcodeValidArchs="%ARM_ARCH%"  externalLibraries="%BEATPORT_LIB_MACOS%">
-                
+               extraLinkerFlags="%IPP_COMPILER_FLAGS% %OSX_STATIC_LIBS%" customPList="<plist><dict><key>NSAppTransportSecurity</key><dict><key>NSAllowsArbitraryLoads</key><true/></dict></dict></plist>" extraDefs="%PLUGIN_CHANNEL_AMOUNT%&#10;%EXTRA_DEFINES_OSX%&#10;%PERFETTO_INCLUDE_MACOS%" hardenedRuntime="0" hardenedRuntimeOptions="com.apple.security.cs.allow-jit,com.apple.security.cs.allow-unsigned-executable-memory,com.apple.security.device.audio-input" xcodeValidArchs="%ARM_ARCH%"  externalLibraries="%BEATPORT_LIB_MACOS%">
       <CONFIGURATIONS>
         <CONFIGURATION name="Debug" osxSDK="default" osxCompatibility="10.9 SDK" osxArchitecture="%MACOS_ARCHITECTURE%"
                        isDebug="1" optimisation="1" enablePluginBinaryCopyStep="%COPY_PLUGIN%" targetName="%NAME% Debug" headerPath="%IPP_HEADER%;%FAUST_HEADER_PATH%"

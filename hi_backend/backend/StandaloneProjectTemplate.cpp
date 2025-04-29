@@ -99,7 +99,7 @@ static const unsigned char projectStandaloneTemplate_jucer_lines[] = R"(
       </MODULEPATHS>
     </%VS_VERSION%>
     <XCODE_MAC targetFolder="Builds/MacOSX" vstFolder="%VSTSDK_FOLDER%" extraCompilerFlags="-Wno-reorder -Wno-inconsistent-missing-override -fno-aligned-allocation -ffp-contract=off" %ICON_FILE% 
-               extraLinkerFlags="%IPP_COMPILER_FLAGS% %OSX_STATIC_LIBS%" extraDefs="%EXTRA_DEFINES_OSX%&#10;%PERFETTO_INCLUDE_MACOS%" hardenedRuntime="0" hardenedRuntimeOptions="com.apple.security.cs.allow-jit,com.apple.security.cs.allow-unsigned-executable-memory,com.apple.security.device.audio-input" xcodeValidArchs="arm64,arm64e,x86_64" externalLibraries="%BEATPORT_LIB_MACOS%">
+               extraLinkerFlags="%IPP_COMPILER_FLAGS% %OSX_STATIC_LIBS%" customPList="<plist><dict><key>NSAppTransportSecurity</key><dict><key>NSAllowsArbitraryLoads</key><true/></dict></dict></plist>" extraDefs="%EXTRA_DEFINES_OSX%&#10;%PERFETTO_INCLUDE_MACOS%" hardenedRuntime="0" hardenedRuntimeOptions="com.apple.security.cs.allow-jit,com.apple.security.cs.allow-unsigned-executable-memory,com.apple.security.device.audio-input" xcodeValidArchs="arm64,arm64e,x86_64" externalLibraries="%BEATPORT_LIB_MACOS%">
       <CONFIGURATIONS>
         <CONFIGURATION name="Debug" osxSDK="default" osxCompatibility="10.9 SDK" osxArchitecture="%MACOS_ARCHITECTURE%"
                        isDebug="1" optimisation="1" targetName="%NAME% Debug"
