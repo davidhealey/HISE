@@ -1196,7 +1196,7 @@ MapWithKeyboard::MapWithKeyboard(ModulatorSampler *ownerSampler):
 
 			for(auto layer: data)
 			{
-				auto map = ComplexGroupManager::Helpers::getKeyRange(layer);
+				auto map = ComplexGroupManager::Helpers::getKeyRange(layer, mk.sampler);
 
 				if(!map.isEmpty())
 					mk.complexGroupZones.add({ map, ComplexGroupManagerComponent::Helpers::getLayerColour(layer)});
@@ -1336,6 +1336,20 @@ SamplerSoundTable::SamplerSoundTable(ModulatorSampler *ownerSampler_, SampleEdit
 	handler->complexGroupEventBroadcaster.addListener(*this, [](SamplerSoundTable& t, SampleEditHandler::ComplexGroupEvent e)
 	{
 		t.rebuildColumns();
+	});
+
+	handler->complexGroupBroadcaster.addListener(*this, [](SamplerSoundTable& st, SynthSoundWithBitmask::ValueWithFilter filter)
+    {
+		st.currentDisplayFilter = filter;
+		st.repaint();
+    });
+
+	//LambdaBroadcaster<int, int> 
+
+	handler->noteBroadcaster.addListener(*this, [](SamplerSoundTable& st, int note, int velocity)
+	{
+		st.activeNotes.setBit(note, velocity > 0);
+		st.repaint();
 	});
 }
 
@@ -1517,20 +1531,32 @@ void SamplerSoundTable::paintCell (Graphics& g, int rowNumber, int columnId,
 
 	if (rowNumber < sortedSoundList.size())
 	{
-        if(rowIsSelected)
-        {
-            g.setFont(GLOBAL_BOLD_FONT());
-            g.setColour(Colours::black.withAlpha(.8f));
-        }
-        else
-        {
-            g.setFont(font);
-            g.setColour(Colours::white.withAlpha(.8f));
-        }
+        
 		
 		
 		if (sortedSoundList[rowNumber].get() == nullptr)
 			return;
+
+		auto bitmask = sortedSoundList[rowNumber].get()->getBitmask();
+		auto active = currentDisplayFilter.matches(bitmask);
+
+		//auto s = sortedSoundList[rowNumber]
+		
+
+		auto alpha = active ? 0.8f : 0.4f;
+
+		if(rowIsSelected)
+        {
+            g.setFont(GLOBAL_BOLD_FONT());
+            g.setColour(Colours::black.withAlpha(alpha));
+        }
+        else
+        {
+            g.setFont(font);
+            g.setColour(Colours::white.withAlpha(alpha));
+        }
+
+		
 
 		String text;
 

@@ -165,6 +165,9 @@ Path ComplexGroupManagerComponent::Factory::createPath(const String& url) const
 	LOAD_PATH_IF_URL("release", ComplexGroupIcons::release);
 	LOAD_PATH_IF_URL("legato", ComplexGroupIcons::legato);
 
+	LOAD_EPATH_IF_URL("edit", EditorIcons::penShape);
+	
+
 	LOAD_PATH_IF_URL("count", ComplexGroupIcons::countIcon);
 
 	LOAD_EPATH_IF_URL("lock", ColumnIcons::lockIcon);

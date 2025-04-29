@@ -41,10 +41,21 @@ struct ComplexGroupManagerComponent::LayerComponent::KeyboardComponent: public C
 {
 	static constexpr int KeyboardHeight = 48;
 
+	struct PopupMenuHandler
+	{
+		virtual ~PopupMenuHandler() {};
+
+		virtual void fillPopupMenu(PopupMenu& m, int noteNumber) = 0;
+
+		virtual void onPopupResult(int result, int noteNumber) = 0;
+
+		JUCE_DECLARE_WEAK_REFERENCEABLE(PopupMenuHandler);
+	};
+
 	KeyboardComponent(LogicTypeComponent& parent):
 	  ComponentWithGroupManagerConnection(parent.getSampler()),
 	  layerIndex(ComplexGroupManager::Helpers::getLayerIndex(parent.data)),
-	  mappedKeys(ComplexGroupManager::Helpers::getKeyRange(parent.data)),
+	  mappedKeys(ComplexGroupManager::Helpers::getKeyRange(parent.data, parent.getSampler())),
 	  mapColour(ComplexGroupManagerComponent::Helpers::getLayerColour(parent.data))
 	{
 		parent.getSampleEditHandler()->noteBroadcaster.addListener(*this, onNote);
@@ -89,6 +100,28 @@ struct ComplexGroupManagerComponent::LayerComponent::KeyboardComponent: public C
 	{
 		k.selected = k.groupNoteMap[s];
 		k.repaint();
+	}
+
+	void mouseDown(const MouseEvent& e) override
+	{
+		if(e.mods.isRightButtonDown() && popupMenuHandler != nullptr)
+		{
+			PopupLookAndFeel plaf;
+			PopupMenu m;
+
+			auto numOctavesToShow = octaveRange.getLength();
+			auto b = getLocalBounds().toFloat();
+			auto keyWidth = b.getWidth() / (float)(numOctavesToShow * 12) + 1;
+
+			auto noteNumber = roundToInt((float)e.getPosition().x / (float)keyWidth) + octaveRange.getStart() * 12;
+
+			popupMenuHandler->fillPopupMenu(m, noteNumber);
+
+			if(auto r = m.show())
+			{
+				popupMenuHandler->onPopupResult(r, noteNumber);
+			}
+		}
 	}
 
 	void paint(Graphics& g) override
@@ -171,6 +204,8 @@ struct ComplexGroupManagerComponent::LayerComponent::KeyboardComponent: public C
 	int selected = -1;
 	const uint8 layerIndex;
 
+	WeakReference<PopupMenuHandler> popupMenuHandler;
+
 	JUCE_DECLARE_WEAK_REFERENCEABLE(KeyboardComponent);
 };
 
@@ -250,13 +285,15 @@ struct ComplexGroupManagerComponent::RRBody: public LogicTypeComponent::BodyBase
 	}
 };
 
-struct ComplexGroupManagerComponent::KeyswitchBody: public LogicTypeComponent::BodyBase
+struct ComplexGroupManagerComponent::KeyswitchBody: public LogicTypeComponent::BodyBase,
+													public LayerComponent::KeyboardComponent::PopupMenuHandler
 {
 	KeyswitchBody(LogicTypeComponent& parent):
 	  BodyBase(parent),
 	  keyboard(parent)
 	{
 		keyboard.mapColour = ComplexGroupManagerComponent::Helpers::getLayerColour(parent.data);
+		keyboard.popupMenuHandler = this;
 
 		addAndMakeVisible(keyboard);
 
@@ -283,6 +320,29 @@ struct ComplexGroupManagerComponent::KeyswitchBody: public LogicTypeComponent::B
 	}
 
 	int height = LayerComponent::TopBarHeight;
+
+	void fillPopupMenu(PopupMenu& m, int noteNumber) override
+	{
+		PopupMenu sub;
+
+		for(int i = 0; i < 128; i++)
+		{
+			sub.addItem(i+1000, MidiMessage::getMidiNoteName(i, true, true, 3), true, i == 64);
+		}
+
+		m.addSubMenu("Set keyswitch start note", sub);
+
+		m.addItem(1, "Use white keys", true, !(bool)data[groupIds::isChromatic]);
+	}
+
+	void onPopupResult(int result, int noteNumber) override
+	{
+		if(result == 1)
+		{
+			data.setProperty(groupIds::isChromatic, !(bool)data[groupIds::isChromatic], getUndoManager());
+			
+		}
+	}
 
 	void resized() override
 	{
@@ -737,7 +797,11 @@ struct ComplexGroupManagerComponent::LegatoBody: public LogicTypeComponent::Body
 	  transition(parent)
 	{
 		for(auto t: tokens)
-			addAndMakeVisible(buttons.add(new KeyswitchButton(t, false)));
+		{
+			auto n = MidiMessage::getMidiNoteName(t.getIntValue(), true, true, 3);
+			addAndMakeVisible(buttons.add(new KeyswitchButton(n, false)));
+		}
+			
 
 		addAndMakeVisible(keyboard);
 		addAndMakeVisible(transition);

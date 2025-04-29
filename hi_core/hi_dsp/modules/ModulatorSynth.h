@@ -359,12 +359,22 @@ public:
 
 		virtual void preHiseEventCallback(const HiseEvent& e) {};
 
+		/** Override this method and return the amount of samples that the given sampler sound started by the given event should be predelayed. */
+		virtual int getPredelayForVoice(const ModulatorSynthVoice* voice) const { return 0; }
+
 		virtual void collectSounds(const HiseEvent& m, UnorderedStack<ModulatorSynthSound*>& soundsToBeStarted) = 0;
 	};
 
 	/** This method should go through all sounds that are playable and fill the soundsToBeStarted array. */
 	virtual int collectSoundsToBeStarted(const HiseEvent &m);
 
+	int getPredelayForVoice(const ModulatorSynthVoice* voice) const
+	{
+		if(soundCollector != nullptr)
+			return soundCollector->getPredelayForVoice(voice);
+
+		return 0;
+	}
 
 	virtual void noteOff(const HiseEvent &m);
 
