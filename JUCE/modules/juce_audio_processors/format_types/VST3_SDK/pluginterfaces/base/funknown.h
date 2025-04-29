@@ -361,7 +361,7 @@ class FUnknown
 {
 public:
 
-    virtual ~FUnknown() = default;
+    
     
 //------------------------------------------------------------------------
 	/** Query for a pointer to the specified interface.
