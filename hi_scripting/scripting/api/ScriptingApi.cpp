@@ -6851,9 +6851,9 @@ void ScriptingApi::Console::breakInDebugger()
 
 void ScriptingApi::Console::startSampling(const String& sessionId)
 {
-	auto& dh = getScriptProcessor()->getMainController_()->getDebugSession();
-
 #if HISE_INCLUDE_PROFILING_TOOLKIT
+    auto& dh = getScriptProcessor()->getMainController_()->getDebugSession();
+    
 	if(auto s = dh.startSession(dynamic_cast<JavascriptProcessor*>(getScriptProcessor()), sessionId))
 	{
 		dynamic_cast<JavascriptProcessor*>(getScriptProcessor())->addInplaceDebugValue(id, lineNumber, s->getTextForName(), s);

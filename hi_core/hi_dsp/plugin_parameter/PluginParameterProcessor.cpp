@@ -442,6 +442,7 @@ void PluginParameterAudioProcessor::createScriptedParameters(juce::AudioProcesso
 
 	auto useMacrosAsParameter = HISE_GET_PREPROCESSOR(mc, HISE_MACROS_ARE_PLUGIN_PARAMETERS);
 	auto numMacros = HISE_GET_PREPROCESSOR(mc, HISE_NUM_MACROS);
+    ignoreUnused(mc);
 
 	auto& uph = dynamic_cast<MainController*>(this)->getUserPresetHandler();
 	int pIndex = 0;

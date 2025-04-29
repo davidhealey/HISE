@@ -361,6 +361,8 @@ class FUnknown
 {
 public:
 
+    virtual ~FUnknown() = default;
+    
 //------------------------------------------------------------------------
 	/** Query for a pointer to the specified interface.
 	Returns kResultOk on success or kNoInterface if the object does not implement the interface.

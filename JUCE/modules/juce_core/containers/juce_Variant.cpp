@@ -350,7 +350,7 @@ namespace juce
 			dynamic_cast<ObjectWithJSONConverter*>(obj.objectValue)->writeToStream(mos);
 			mos.flush();
 
-			output.writeCompressedInt(mos.getDataSize());
+			output.writeCompressedInt((int)mos.getDataSize());
 			output.writeByte(varMarker_Object);
 			output << mos;
 		}
@@ -395,7 +395,7 @@ namespace juce
 			dynamic_cast<ObjectWithJSONConverter*>(v.objectValue)->writeToStream(mos);
 			mos.flush();
 
-			output.writeCompressedInt(mos.getDataSize());
+			output.writeCompressedInt((int)mos.getDataSize());
 			output.writeByte(varMarker_Object);
 			output << mos;
 		}

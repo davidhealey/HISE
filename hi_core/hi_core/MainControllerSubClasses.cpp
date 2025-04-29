@@ -74,8 +74,7 @@ void MainController::MacroManager::removeMacroControlsFor(Processor *p)
 
 	if (macroChain == nullptr) return;
 
-	auto mc = macroChain->getMainController();
-	auto numMacros = HISE_GET_PREPROCESSOR(mc, HISE_NUM_MACROS);
+	auto numMacros = HISE_GET_PREPROCESSOR(macroChain->getMainController(), HISE_NUM_MACROS);
 
 	for (int i = 0; i < numMacros; i++)
 	{
@@ -91,8 +90,7 @@ void MainController::MacroManager::removeMacroControlsFor(Processor *p, Identifi
 
 	if (macroChain == nullptr) return;
 
-	auto mc = macroChain->getMainController();
-	auto numMacros = HISE_GET_PREPROCESSOR(mc, HISE_NUM_MACROS);
+	auto numMacros = HISE_GET_PREPROCESSOR(macroChain->getMainController(), HISE_NUM_MACROS);
 
 	for (int i = 0; i < numMacros; i++)
 	{
@@ -138,7 +136,7 @@ void MainController::MacroManager::setMidiControllerForMacro(int macroIndex, int
 {
 	auto numMacros = HISE_GET_PREPROCESSOR(mc, HISE_NUM_MACROS);
 
-	if (isPositiveAndBelow(macroIndex, HISE_NUM_MACROS))
+	if (isPositiveAndBelow(macroIndex, numMacros))
 	{
 		macroControllerNumbers[macroIndex] = midiControllerNumber;
 	}

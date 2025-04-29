@@ -260,8 +260,10 @@ public:
         size_t payloadLength = secondByte & 0x7F;  // Payload length
 
         // If the payload length is 126 or 127, read the extended length
-        if (payloadLength == 126) {
-            payloadLength = (frame[offset++] << 8) | frame[offset++];
+        if (payloadLength == 126)
+        {
+            payloadLength = (frame[offset++] << 8);
+            payloadLength |= frame[offset++];
         } else if (payloadLength == 127) {
             payloadLength = 0; // 64-bit length (optional for normal use)
         }
@@ -269,10 +271,10 @@ public:
         // Extract the masking key if Mask bit is set
         uint32_t maskingKey = 0;
         if (mask) {
-            maskingKey = (frame[offset++] << 24) |
-                         (frame[offset++] << 16) |
-                         (frame[offset++] << 8) |
-                         frame[offset++];
+            maskingKey = (frame[offset++] << 24);
+            maskingKey |= (frame[offset++] << 16);
+            maskingKey |= (frame[offset++] << 8);
+            maskingKey |= frame[offset++];
         }
 
 		numParsed = offset + payloadLength;

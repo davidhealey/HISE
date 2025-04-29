@@ -1598,11 +1598,11 @@ void PooledUIUpdater::timerCallback()
 				}
 #endif
 
-				auto before = Time::getMillisecondCounterHiRes();
-
-				st->timerCallback();
-
 #if MEASURE_TIMER_CHILDREN
+                auto before = Time::getMillisecondCounterHiRes();
+                
+                st->timerCallback();
+                
 				auto timerDuration = Time::getMillisecondCounterHiRes() - before;
 
 				if(lastDuration != 0.0 && st->getProfileDataSource<DebugSession::ProfileDataSource>() == nullptr)
@@ -1615,6 +1615,8 @@ void PooledUIUpdater::timerCallback()
 						int x = 5;
 					}
 				}
+#else
+                st->timerCallback();
 #endif
 			}
 			else

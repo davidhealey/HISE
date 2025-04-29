@@ -2620,11 +2620,6 @@ void BufferViewer::setFromDebugInformation(DebugInformationBase* info)
 
 std::string BufferViewer::btoa(const void* data, size_t numBytes)
 {
-    auto isBase64 = [](uint8 c)
-    {
-        return (std::isalnum(c) || (c == '+') || (c == '/'));
-    };
-
     static const std::string b64Characters =
         "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
         "abcdefghijklmnopqrstuvwxyz"

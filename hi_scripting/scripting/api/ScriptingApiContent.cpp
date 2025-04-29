@@ -6858,7 +6858,7 @@ int ScriptingApi::Content::getComponentIndex(ScriptComponent* sc) const
 {
 	for (int i = 0; i < getNumComponents(); i++)
 	{
-		if (components[i] == sc)
+		if (components[i].get() == sc)
 			return i;
 	}
 
