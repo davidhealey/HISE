@@ -1700,7 +1700,17 @@ void MainController::prepareToPlay(double sampleRate_, int samplesPerBlock)
 {
     if(sampleRate_ <= 0.0 || samplesPerBlock <= 0)
         return;
-    
+
+	if(auto ap = dynamic_cast<AudioProcessor*>(this))
+	{
+		juce::PluginHostType hostType;
+
+		if(hostType.isLogic())
+			getMasterClock().setClockTolerance(0.2);
+		else
+			getMasterClock().setClockTolerance(0.0);
+	}
+
 	auto oldSampleRate = processingSampleRate;
 	auto oldBlockSize = processingBufferSize.get();
 
