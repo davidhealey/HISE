@@ -2348,7 +2348,18 @@ void MainController::savePluginState(MemoryBlock& destData, int currentlyLoadedP
 		v.setProperty("HostTempo", globalBPM, nullptr);
 	}
 
-	v.setProperty("UserPreset", getUserPresetHandler().getCurrentlyLoadedFile().getFullPathName(), nullptr);
+	auto up = getActiveFileHandler()->getSubDirectory(FileHandlerBase::UserPresets);
+
+	auto currentUserPreset = getUserPresetHandler().getCurrentlyLoadedFile();
+
+	if(currentUserPreset.isAChildOf(up))
+	{
+		v.setProperty("UserPreset", currentUserPreset.getRelativePathFrom(up).replaceCharacter('\\', '/'), nullptr);
+	}
+	else
+	{
+		v.setProperty("UserPreset", currentUserPreset.getFullPathName(), nullptr);
+	}
 
 #if USE_BACKEND
 	auto version = GET_HISE_SETTING(getMainSynthChain(), HiseSettings::Project::Version).toString();
