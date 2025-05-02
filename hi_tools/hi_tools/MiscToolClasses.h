@@ -2112,7 +2112,7 @@ struct MasterClock
 
 private:
 
-	double clockTolerance = 0.2;
+	double clockTolerance = 0.0;
 
 	void updateGridDelta();
 
