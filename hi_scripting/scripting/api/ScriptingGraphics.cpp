@@ -3246,8 +3246,122 @@ bool ScriptingObjects::ScriptedLookAndFeel::CSSLaf::drawValueLabel(Graphics& g, 
 	return false;
 }
 
+void ScriptingObjects::ScriptedLookAndFeel::CSSLaf::drawKeyboardBackground(Graphics& g, Component* c, int width,
+	int height)
+{
+	using namespace simple_css;
+
+	Selector s(SelectorType::Class, ".keyboard");
+
+	if(auto ss = root.css.getWithAllStates(c, s))
+	{
+		Renderer r(c, root.stateWatcher);
+
+		r.drawBackground(g, {0.0f, 0.0f, (float)width, (float)height}, ss);
+	}
+	else
+	{
+		LookAndFeelBase::drawKeyboardBackground(g, c, width, height);
+	}
+}
+
+void ScriptingObjects::ScriptedLookAndFeel::CSSLaf::drawWhiteNote(CustomKeyboardState* state, Component* c,
+	int midiNoteNumber, Graphics& g, int x, int y, int w, int h, bool isDown, bool isOver, const Colour& lineColour,
+	const Colour& textColour)
+{
+	using namespace simple_css;
+
+	Selector s(SelectorType::Class, ".whitekey");
+
+	if(auto ss = root.css.getWithAllStates(c, s))
+	{
+		Renderer r(c, root.stateWatcher, midiNoteNumber);
+		int ps = 0;
+
+		if(isOver)
+			ps |= (int)PseudoClassType::Hover;
+
+		if(isDown)
+			ps |= (int)PseudoClassType::Active;
+
+		auto first = midiNoteNumber == state->getLowestKeyToDisplay();
+
+		if(first)
+			ps |= (int)PseudoClassType::First;
+
+		simple_css::Animator::ScopedComponentSetter st({c, midiNoteNumber});
+
+		auto kc = state->getColourForSingleKey(midiNoteNumber);
+		auto cString = kc.isTransparent() ? String("#00000000") : (String("#") + kc.toDisplayString(true));
+		static const Identifier keyColour("keyColour");
+		ss->setPropertyVariable(keyColour, cString);
+
+		r.setPseudoClassState(ps, true);
+		root.stateWatcher.checkChanges({c, midiNoteNumber}, ss, ps);
+		Rectangle<float> area(x, y, w, h);
+
+		g.saveState();
+		r.drawBackground(g, area, ss);
+
+		if(midiNoteNumber % 12 == 0)
+		{
+			auto n = MidiMessage::getMidiNoteName(midiNoteNumber, false, true, 3);
+			r.renderText(g, area, n, ss);
+		}
+		g.restoreState();
+	}
+	else
+	{
+		LookAndFeelBase::drawWhiteNote(state, c, midiNoteNumber, g, x, y, w, h, isDown, isOver, lineColour, textColour);
+	}
+}
+
+void ScriptingObjects::ScriptedLookAndFeel::CSSLaf::drawBlackNote(CustomKeyboardState* state, Component* c,
+	int midiNoteNumber, Graphics& g, int x, int y, int w, int h, bool isDown, bool isOver, const Colour& noteFillColour)
+{
+	using namespace simple_css;
+
+	Selector s(SelectorType::Class, ".blackkey");
+
+	if(auto ss = root.css.getWithAllStates(c, s))
+	{
+		Renderer r(c, root.stateWatcher, midiNoteNumber);
+		int ps = 0;
+
+		if(isOver)
+			ps |= (int)PseudoClassType::Hover;
+
+		if(isDown)
+			ps |= (int)PseudoClassType::Active;
+
+		auto first = midiNoteNumber == state->getLowestKeyToDisplay();
+
+		if(first)
+			ps |= (int)PseudoClassType::First;
+
+		simple_css::Animator::ScopedComponentSetter st({c, midiNoteNumber});
+
+		auto kc = state->getColourForSingleKey(midiNoteNumber);
+		auto cString = kc.isTransparent() ? String("transparent") : (String("#") + kc.toDisplayString(true));
+		static const Identifier keyColour("keyColour");
+		ss->setPropertyVariable(keyColour, cString);
+
+		r.setPseudoClassState(ps, true);
+		root.stateWatcher.checkChanges({c, midiNoteNumber}, ss, ps);
+		Rectangle<float> area(x, y, w, h);
+
+		g.saveState();
+		r.drawBackground(g, area.expanded(10.0f), ss);
+		g.restoreState();
+	}
+	else
+	{
+		LookAndFeelBase::drawBlackNote(state, c, midiNoteNumber, g, x, y, w, h, isDown, isOver, noteFillColour);
+	}
+}
+
 void ScriptingObjects::ScriptedLookAndFeel::CSSLaf::drawTableValueLabel(Graphics& g, TableEditor& te, Font f,
-	const String& text, Rectangle<int> textBox)
+                                                                        const String& text, Rectangle<int> textBox)
 {
 	if(!te.shouldDrawTableValueLabel())
 		return;
