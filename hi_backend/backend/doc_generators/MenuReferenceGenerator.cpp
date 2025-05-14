@@ -325,6 +325,14 @@ hise::MarkdownDataBase::Item MenuReferenceDocGenerator::ItemGenerator::createRoo
 	if (data->bp->shouldAbort())
 		return item;
 
+	{
+		auto hi = rootDirectory.getChildFile("working-with-hise/hise-interface");
+
+		MarkdownDataBase::DirectoryItemGenerator fGenerator(hi, Colours::burlywood);
+		auto pItem = fGenerator.createRootItem(parent);
+		item.addChild(std::move(pItem));
+	}
+
 	createMenuReference(item);
 
 	if (data->bp->shouldAbort())
