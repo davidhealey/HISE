@@ -85,7 +85,7 @@ public:
 
 	static Point<float> getPointFromVar(const var& data, Result* r = nullptr);
 
-	static var getVarRectangle(Rectangle<float> floatRectangle, Result* r = nullptr);
+	static var getVarRectangle(bool useRectangleClass, Rectangle<float> floatRectangle, Result* r = nullptr);
 
 	static Rectangle<float> getRectangleFromVar(const var& data, Result* r = nullptr);
 

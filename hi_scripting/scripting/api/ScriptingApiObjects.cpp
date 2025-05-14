@@ -5771,8 +5771,10 @@ var ScriptingObjects::ScriptedMidiPlayer::getNoteRectangleList(var targetBounds)
 		auto rect = ApiHelpers::getRectangleFromVar(targetBounds, &r);
 		auto list = getSequence()->getRectangleList(rect);
 
+		auto useRectangleClass = HISE_GET_PREPROCESSOR(getScriptProcessor()->getMainController_(), HISE_USE_SCRIPT_RECTANGLE_OBJECT);
+
 		for (auto re : list)
-			returnArray.add(ApiHelpers::getVarRectangle(re, &r));
+			returnArray.add(ApiHelpers::getVarRectangle(useRectangleClass, re, &r));
 	}
 
 	return var(returnArray);
@@ -5808,8 +5810,10 @@ juce::var ScriptingObjects::ScriptedMidiPlayer::convertEventListToNoteRectangles
 
 		Array<var> returnArray;
 
+		auto useRectangleClass = HISE_GET_PREPROCESSOR(getScriptProcessor()->getMainController_(), HISE_USE_SCRIPT_RECTANGLE_OBJECT);
+
 		for (auto re : list)
-			returnArray.add(ApiHelpers::getVarRectangle(re, &r));
+			returnArray.add(ApiHelpers::getVarRectangle(useRectangleClass, re, &r));
 
 		dummySequence = nullptr;
 

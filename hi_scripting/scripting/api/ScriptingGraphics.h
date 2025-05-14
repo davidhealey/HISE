@@ -531,6 +531,8 @@ namespace ScriptingObjects
 
 	private:
 
+		bool useRectangleClass = false;
+
 		Path p;
 
 		JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(PathObject);
@@ -945,6 +947,8 @@ namespace ScriptingObjects
 			static void setColourOrBlack(DynamicObject* obj, const Identifier& id, Component& c, int colourId);
 
 			static bool writeId(DynamicObject* obj, Component* c);
+
+			bool useRectangleClass = false;
 
 			JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(Laf);
 			JUCE_DECLARE_WEAK_REFERENCEABLE(Laf);
