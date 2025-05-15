@@ -3291,7 +3291,9 @@ void ScriptingObjects::ScriptedLookAndFeel::CSSLaf::drawWhiteNote(CustomKeyboard
 		if(first)
 			ps |= (int)PseudoClassType::First;
 
-		simple_css::Animator::ScopedComponentSetter st({c, midiNoteNumber});
+		Rectangle<float> area(x, y, w, h);
+
+		simple_css::Animator::ScopedComponentSetter st({c, midiNoteNumber, area.toNearestInt()});
 
 		auto kc = state->getColourForSingleKey(midiNoteNumber);
 		auto cString = kc.isTransparent() ? String("#00000000") : (String("#") + kc.toDisplayString(true));
@@ -3299,8 +3301,8 @@ void ScriptingObjects::ScriptedLookAndFeel::CSSLaf::drawWhiteNote(CustomKeyboard
 		ss->setPropertyVariable(keyColour, cString);
 
 		r.setPseudoClassState(ps, true);
-		root.stateWatcher.checkChanges({c, midiNoteNumber}, ss, ps);
-		Rectangle<float> area(x, y, w, h);
+		
+		root.stateWatcher.checkChanges({c, midiNoteNumber, area.toNearestInt()}, ss, ps);
 
 		g.saveState();
 		r.drawBackground(g, area, ss);
@@ -3341,7 +3343,10 @@ void ScriptingObjects::ScriptedLookAndFeel::CSSLaf::drawBlackNote(CustomKeyboard
 		if(first)
 			ps |= (int)PseudoClassType::First;
 
-		simple_css::Animator::ScopedComponentSetter st({c, midiNoteNumber});
+		Rectangle<float> area(x, y, w, h);
+
+		simple_css::Animator::RenderTarget rt(c, midiNoteNumber, area.toNearestInt());
+		simple_css::Animator::ScopedComponentSetter st(rt);
 
 		auto kc = state->getColourForSingleKey(midiNoteNumber);
 		auto cString = kc.isTransparent() ? String("transparent") : (String("#") + kc.toDisplayString(true));
@@ -3349,8 +3354,7 @@ void ScriptingObjects::ScriptedLookAndFeel::CSSLaf::drawBlackNote(CustomKeyboard
 		ss->setPropertyVariable(keyColour, cString);
 
 		r.setPseudoClassState(ps, true);
-		root.stateWatcher.checkChanges({c, midiNoteNumber}, ss, ps);
-		Rectangle<float> area(x, y, w, h);
+		root.stateWatcher.checkChanges(rt, ss, ps);
 
 		g.saveState();
 		r.drawBackground(g, area.expanded(10.0f), ss);
@@ -3628,7 +3632,7 @@ void ScriptingObjects::ScriptedLookAndFeel::CSSLaf::drawListItem(Graphics& g, Co
 
 		r.setPseudoClassState(state, true);
 
-		root.stateWatcher.checkChanges({ &column, i }, ss, state);
+		root.stateWatcher.checkChanges({ &column, i, position }, ss, state);
 
 		auto b = position.toFloat();
 
