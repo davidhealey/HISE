@@ -160,7 +160,7 @@ if (ss != nullptr)
             c.first = c.first.withMultipliedAlpha(op);
     }
 
-	if(c.second.getNumColours() > 0)
+	if(c.isGradient())
 		g.setGradientFill(c.second);
 	else
 		g.setColour(c.first);
@@ -199,8 +199,8 @@ CodeGenerator::CodeGenerator(StyleSheet::Ptr ss_):
 }
 
 Renderer::Renderer(Component* c, StateWatcher& state_, int subComponentIndex):
-	ScopedComponentSetter({c, subComponentIndex})  ,
-	currentComponent({c, subComponentIndex}),
+	ScopedComponentSetter({c, subComponentIndex, {}})  ,
+	currentComponent({c, subComponentIndex, {}}),
 	state(state_)
 {}
 
@@ -306,7 +306,7 @@ void Renderer::drawBackground(Graphics& g, Rectangle<float> area, StyleSheet::Pt
 	else
 	{
 		state.renderShadow(g, pathToFill, currentComponent, ss->getShadow(ma, { "box-shadow", defaultState}, false), false);
-		setCurrentBrush(g, ss, ma, {"background", defaultState});
+		setCurrentBrush(g, ss, ma, {"background-color", defaultState});
 		g.fillPath(pathToFill);
 		state.renderShadow(g, bp.isEmpty() ? p : bp, currentComponent, ss->getShadow(ma, { "box-shadow", defaultState}, true), true);
 
@@ -318,7 +318,7 @@ void Renderer::drawBackground(Graphics& g, Rectangle<float> area, StyleSheet::Pt
 		{
 			if(borderSize > 0.0f)
 			{
-				setCurrentBrush(g, ss, ma, {"border", defaultState});
+				setCurrentBrush(g, ss, ma, {"border-color", defaultState});
 				g.strokePath(pathToStroke, PathStrokeType(borderSize));
 			} 
 		}
@@ -339,7 +339,32 @@ void Renderer::drawBackground(Graphics& g, Rectangle<float> area, StyleSheet::Pt
 
 			if(v.isNotEmpty())
 				renderText(g, beforeArea, v, ss, PseudoElementType::Before);
+            
+            if(!beforeAbsolute)
+            {
+                if(beforeArea.getX() == ma.getX())
+                    ma.removeFromLeft(beforeArea.getWidth());
+                else if (beforeArea.getRight() == ma.getRight())
+                    ma.removeFromRight(beforeArea.getWidth());
+            }
+                
 		}
+        
+        auto beforeAbsolute2 = ss->getPropertyValue({"position", PseudoState(0).withElement(PseudoElementType::Before2)}).toString() == "absolute";
+        auto beforeArea2 = ss->getPseudoArea(beforeAbsolute2 ? area : ma, stateFlag, PseudoElementType::Before2);
+        
+        if(!beforeArea2.isEmpty())
+        {
+            ScopedValueSetter<PseudoElementType> svs(currentlyRenderedPseudoElement, PseudoElementType::Before2);
+            Graphics::ScopedSaveState sss(g);
+            drawBackground(g, beforeArea2, ss, PseudoElementType::Before2);
+
+            auto v = ss->getPropertyValueString({"content", PseudoState().withElement(PseudoElementType::Before2)});
+
+            if(v.isNotEmpty())
+                renderText(g, beforeArea2, v, ss, PseudoElementType::Before2);
+        }
+
 
 		auto afterAbsolute = ss->getPropertyValue({"position", PseudoState(0).withElement(PseudoElementType::After)}).toString() == "absolute";
 		
@@ -355,7 +380,31 @@ void Renderer::drawBackground(Graphics& g, Rectangle<float> area, StyleSheet::Pt
 
 			if(v.isNotEmpty())
 				renderText(g, afterArea, v, ss, PseudoElementType::After);
+            
+            if(!afterAbsolute)
+            {
+                if(afterArea.getX() == ma.getX())
+                    ma.removeFromLeft(afterArea.getWidth());
+                else if (afterArea.getRight() == ma.getRight())
+                    ma.removeFromRight(afterArea.getWidth());
+            }
 		}
+        
+        auto afterAbsolute2 = ss->getPropertyValue({"position", PseudoState(0).withElement(PseudoElementType::After2)}).toString() == "absolute";
+        
+        auto afterArea2 = ss->getPseudoArea(afterAbsolute ? area : ma, stateFlag, PseudoElementType::After2);
+        
+        if(!afterArea2.isEmpty())
+        {
+            ScopedValueSetter<PseudoElementType> svs(currentlyRenderedPseudoElement, PseudoElementType::After2);
+            Graphics::ScopedSaveState sss(g);
+            drawBackground(g, afterArea2, ss, PseudoElementType::After2);
+
+            auto v = ss->getPropertyValueString({"content", PseudoState().withElement(PseudoElementType::After2)});
+
+            if(v.isNotEmpty())
+                renderText(g, afterArea2, v, ss, PseudoElementType::After2);
+        }
 	}
 }
 
@@ -474,7 +523,9 @@ void Renderer::drawImage(Graphics& g, const juce::Image& img, Rectangle<float> a
 		ScopedValueSetter<bool> svs(applyMargin, false);
 
 		drawBackground(g, clipBounds, ss, PseudoElementType::Before);
-		drawBackground(g, clipBounds, ss, PseudoElementType::After);
+        drawBackground(g, clipBounds, ss, PseudoElementType::Before2);
+        drawBackground(g, clipBounds, ss, PseudoElementType::After);
+		drawBackground(g, clipBounds, ss, PseudoElementType::After2);
 	}
 }
 

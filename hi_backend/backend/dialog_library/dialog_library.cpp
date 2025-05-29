@@ -1249,6 +1249,11 @@ var CompileProjectDialog::compileTask(const var::NativeFunctionArgs& args)
 
 	ChildProcessManager::ScopedLogger sl(*this);
 
+    ep.errorFunction = [this](const String& message)
+    {
+        this->logMessage(message);
+    };
+    
 	if(IS_FLAG(isStandalone))
 		ok = ep.exportMainSynthChainAsStandaloneApp((CompileExporter::BuildOption)flags);
 	if(IS_FLAG(isInstrument))

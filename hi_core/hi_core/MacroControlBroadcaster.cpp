@@ -357,7 +357,7 @@ MacroControlBroadcaster::MacroControlBroadcaster(ModulatorSynthChain *chain):
 
 	for(int i = 0; i < numMacros; i++)
 	{
-		macroControls.add(new MacroControlData(i, *this, chain->getMainController()));
+		macroControls.add(new MacroControlData(i, *this, mc));
 	}
 }
 
@@ -561,8 +561,7 @@ void MacroControlBroadcaster::loadMacrosFromValueTree(const ValueTree &v, bool l
 	{
 		sendMacroConnectionChangeMessageForAll(false);
 
-		auto mc = thisAsSynth->getMainController();
-		auto numMacros = HISE_GET_PREPROCESSOR(mc, HISE_NUM_MACROS);
+		auto numMacros = HISE_GET_PREPROCESSOR(thisAsSynth->getMainController(), HISE_NUM_MACROS);
 
         int numToRestore = jmin(numMacros, macroControls.size(), macroData.getNumChildren());
         
@@ -593,8 +592,7 @@ void MacroControlBroadcaster::loadMacroValuesFromValueTree(const ValueTree &v)
         return;
     }
 
-	auto mc = thisAsSynth->getMainController();
-	auto numMacros = HISE_GET_PREPROCESSOR(mc, HISE_NUM_MACROS);
+	auto numMacros = HISE_GET_PREPROCESSOR(thisAsSynth->getMainController(), HISE_NUM_MACROS);
 
 	int numToRestore = jmin(numMacros, macroControls.size(), data.getNumChildren());
     

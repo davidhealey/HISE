@@ -1598,6 +1598,7 @@ struct ScriptingObjects::ScriptAudioFile::Wrapper
 	API_METHOD_WRAPPER_0(ScriptAudioFile, getContent);
 	API_VOID_METHOD_WRAPPER_0(ScriptAudioFile, update);
 	API_VOID_METHOD_WRAPPER_2(ScriptAudioFile, setRange);
+	API_VOID_METHOD_WRAPPER_3(ScriptAudioFile, loadBuffer);
 	API_METHOD_WRAPPER_0(ScriptAudioFile, getNumSamples);
 	API_METHOD_WRAPPER_0(ScriptAudioFile, getSampleRate);
 	API_METHOD_WRAPPER_0(ScriptAudioFile, getCurrentlyLoadedFile);
@@ -1620,7 +1621,8 @@ ScriptingObjects::ScriptAudioFile::ScriptAudioFile(ProcessorWithScriptingContent
 	ADD_API_METHOD_0(getCurrentlyDisplayedIndex);
 	ADD_API_METHOD_1(setDisplayCallback);
 	ADD_API_METHOD_1(setContentCallback);
-  ADD_API_METHOD_1(linkTo);
+	ADD_API_METHOD_1(linkTo);
+	ADD_API_METHOD_3(loadBuffer);
 }
 
 void ScriptingObjects::ScriptAudioFile::clear()
@@ -1654,6 +1656,43 @@ void ScriptingObjects::ScriptAudioFile::setRange(int min, int max)
 
 		buffer->setRange({ min, max });
 	}
+}
+
+void ScriptingObjects::ScriptAudioFile::loadBuffer(var bufferData, double sampleRate, var loopRange)
+{
+	Range<int> lr;
+
+	if(loopRange.isArray() && loopRange.size() == 2)
+	{
+		lr = { (int)loopRange[0], (int)loopRange[1] };
+	}
+
+	if(auto buffer = getBuffer())
+	{
+		if(bufferData.isArray())
+		{
+			float* ptrs[NUM_MAX_CHANNELS];
+			int numChannels = bufferData.size();
+			int numSamples = 0;
+
+			for(int i = 0; i < bufferData.size(); i++)
+			{
+				if (auto b = bufferData[i].getBuffer())
+				{
+					numSamples = b->buffer.getNumSamples();
+					ptrs[i] = b->buffer.getWritePointer(0);
+				}
+			}
+
+			AudioSampleBuffer ab(ptrs, numChannels, numSamples);
+			buffer->loadBuffer(ab, sampleRate, lr);
+		}
+		else if (auto b = bufferData.getBuffer())
+		{
+			buffer->loadBuffer(b->buffer, sampleRate, lr);
+		}
+	}
+	
 }
 
 void ScriptingObjects::ScriptAudioFile::loadFile(const String& filePath)
@@ -2119,7 +2158,7 @@ int ScriptingObjects::ScriptSliderPackData::getNumSliders() const
 void ScriptingObjects::ScriptSliderPackData::setUsePreallocatedLength(int numUsed)
 {
     if(auto data = getSliderPackData())
-        data->setUsePreallocatedLength(32);
+        data->setUsePreallocatedLength(numUsed);
 }
 
 void ScriptingObjects::ScriptSliderPackData::setAssignIsUndoable(bool shouldBeUndoable)
@@ -2179,8 +2218,18 @@ void ScriptingObjects::ScriptSliderPackData::setAllValues(var value)
 		Array<float> newData;
 		newData.ensureStorageAllocated(maxIndex);
 
-		for(int i = 0; i < maxIndex; i++)
-			newData.add(isMultiValue ? (float)value[i] : (float)value);
+		if(value.isBuffer())
+		{
+			for(int i = 0; i < maxIndex; i++)
+				newData.add(value.getBuffer()->getSample(i));
+		}
+		else
+		{
+			for(int i = 0; i < maxIndex; i++)
+				newData.add(isMultiValue ? (float)value[i] : (float)value);
+		}
+
+		
 		
 		d->setFromFloatArray(newData, sendNotificationAsync, false);
 	}
@@ -2196,8 +2245,16 @@ void ScriptingObjects::ScriptSliderPackData::setAllValuesWithUndo(var value)
 		Array<float> newData;
 		newData.ensureStorageAllocated(maxIndex);
 
-		for(int i = 0; i < maxIndex; i++)
-			newData.add(isMultiValue ? (float)value[i] : (float)value);
+		if(value.isBuffer())
+		{
+			for(int i = 0; i < maxIndex; i++)
+				newData.add(value.getBuffer()->getSample(i));
+		}
+		else
+		{
+			for(int i = 0; i < maxIndex; i++)
+				newData.add(isMultiValue ? (float)value[i] : (float)value);
+		}
 		
 		d->setFromFloatArray(newData, sendNotificationAsync, true);
 	}
@@ -5750,8 +5807,10 @@ var ScriptingObjects::ScriptedMidiPlayer::getNoteRectangleList(var targetBounds)
 		auto rect = ApiHelpers::getRectangleFromVar(targetBounds, &r);
 		auto list = getSequence()->getRectangleList(rect);
 
+		auto useRectangleClass = HISE_GET_PREPROCESSOR(getScriptProcessor()->getMainController_(), HISE_USE_SCRIPT_RECTANGLE_OBJECT);
+
 		for (auto re : list)
-			returnArray.add(ApiHelpers::getVarRectangle(re, &r));
+			returnArray.add(ApiHelpers::getVarRectangle(useRectangleClass, re, &r));
 	}
 
 	return var(returnArray);
@@ -5787,8 +5846,10 @@ juce::var ScriptingObjects::ScriptedMidiPlayer::convertEventListToNoteRectangles
 
 		Array<var> returnArray;
 
+		auto useRectangleClass = HISE_GET_PREPROCESSOR(getScriptProcessor()->getMainController_(), HISE_USE_SCRIPT_RECTANGLE_OBJECT);
+
 		for (auto re : list)
-			returnArray.add(ApiHelpers::getVarRectangle(re, &r));
+			returnArray.add(ApiHelpers::getVarRectangle(useRectangleClass, re, &r));
 
 		dummySequence = nullptr;
 

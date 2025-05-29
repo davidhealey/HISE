@@ -1042,6 +1042,42 @@ void StyleSheet::Collection::addCollectionForComponent(Component* c, const Colle
 
 Result StyleSheet::Collection::performAtRules(DataProvider* d)
 {
+    if(useIsolatedCollections)
+    {
+        for(auto& c: childCollections)
+        {
+            for(auto l: c.second)
+            {
+                auto ar = l->getAtRuleName();
+
+                auto url = l->getURLFromProperty({ "src", {} });
+                
+                if(ar == "font-face")
+                {
+                    auto fontName = l->getPropertyValueString({"font-family", {}});
+                    auto fToUse = d->loadFont(fontName, url);
+
+                    customFonts.addIfNotAlreadyThere({ fontName, fToUse });
+                }
+            }
+        }
+        
+        if(!customFonts.isEmpty())
+        {
+            for(auto& c: childCollections)
+            {
+                for(auto ss: c.second)
+                {
+                    ss->setCustomFonts(customFonts);
+                }
+            }
+        }
+        
+        return Result::ok();
+    }
+    
+    
+    
 	for(int i = 0; i < list.size(); i++)
 	{
 		auto l = list[i];
@@ -1311,9 +1347,15 @@ Rectangle<float> StyleSheet::getBounds(Rectangle<float> sourceArea, PseudoState 
 	case PseudoElementType::After:
 		a = a.removeFromRight(w);
 		break;
+    case PseudoElementType::After2:
+        a = a.removeFromRight(w);
+        break;
 	case PseudoElementType::Before:
 		a = a.removeFromLeft(w);
 		break;
+    case PseudoElementType::Before2:
+        a = a.removeFromLeft(w);
+        break;
 	case PseudoElementType::All:
 	default:
 		break;
@@ -1407,7 +1449,8 @@ Rectangle<float> StyleSheet::getPseudoArea(Rectangle<float> sourceArea, int curr
 	if(!found)
 		return {};
 
-	jassert(area == PseudoElementType::Before || area == PseudoElementType::After );
+	jassert(area == PseudoElementType::Before || area == PseudoElementType::After ||
+            area == PseudoElementType::Before2 || area == PseudoElementType::After2);
 
 	PseudoState ps(currentState);
 	ps.element = area;
@@ -1439,6 +1482,27 @@ Rectangle<float> StyleSheet::truncateBeforeAndAfter(Rectangle<float> sourceArea,
 			jassertfalse;
 		}
 	}
+    
+    auto wb2 = getPseudoArea(sourceArea, currentState, PseudoElementType::Before2);
+    auto truncateBefore2 = !wb2.isEmpty();
+
+    if(truncateBefore2)
+    {
+        auto t = getPositionType(PseudoState(currentState).withElement(PseudoElementType::Before2));
+        truncateBefore2 &= (t != PositionType::absolute);
+    }
+    
+    if(truncateBefore2)
+    {
+        if(wb2.getX() == sourceArea.getX())
+            sourceArea.removeFromLeft(wb2.getWidth());
+        else if (wb2.getRight() == sourceArea.getRight())
+            sourceArea.removeFromRight(wb2.getWidth());
+        else
+        {
+            jassertfalse;
+        }
+    }
 
 
 	auto wa = getPseudoArea(sourceArea, currentState, PseudoElementType::After);
@@ -1461,6 +1525,27 @@ Rectangle<float> StyleSheet::truncateBeforeAndAfter(Rectangle<float> sourceArea,
 			jassertfalse;
 		}
 	}
+    
+    auto wa2 = getPseudoArea(sourceArea, currentState, PseudoElementType::After2);
+    auto truncateAfter2 = !wa.isEmpty();
+
+    if(truncateAfter2)
+    {
+        auto t = getPositionType(PseudoState(currentState).withElement(PseudoElementType::After2));
+        truncateAfter2 &= (t != PositionType::absolute);
+    }
+
+    if(truncateAfter2)
+    {
+        if(wa2.getX() == sourceArea.getX())
+            sourceArea.removeFromLeft(wa2.getWidth());
+        else if (wa2.getRight() == sourceArea.getRight())
+            sourceArea.removeFromRight(wa2.getWidth());
+        else
+        {
+            jassertfalse;
+        }
+    }
 
 	return sourceArea;
 }
@@ -1854,7 +1939,7 @@ AffineTransform StyleSheet::getTransform(Rectangle<float> totalArea, PseudoState
 	return {};
 }
 
-std::pair<Colour, ColourGradient> StyleSheet::getColourOrGradient(Rectangle<float> area, PropertyKey key,
+ColourInfo StyleSheet::getColourOrGradient(Rectangle<float> area, PropertyKey key,
                                                                   Colour defaultColour) const
 {
 	key.appendSuffixIfNot("color");
@@ -1866,9 +1951,24 @@ std::pair<Colour, ColourGradient> StyleSheet::getColourOrGradient(Rectangle<floa
 
 	auto getValueFromString = [&](const String& v)
 	{
+		auto hash = v.hashCode();
+
+		auto hashed = hashedColours.find(hash);
+
+		auto isVar = v.indexOf("var(--");
+
+		if(isVar == -1)
+		{
+			if(hashed != hashedColours.end())
+				return hashed->second;
+		}
+
+		ColourInfo rv;
+
+		
+
 		if(v.startsWith("color-mix"))
 		{
-			
 			auto args = v.fromFirstOccurrenceOf("(", false, false).upToLastOccurrenceOf(")", false, false);
 			auto tokens = StringArray::fromTokens(args, ",", "()");
 			tokens.trim();
@@ -1880,31 +1980,34 @@ std::pair<Colour, ColourGradient> StyleSheet::getColourOrGradient(Rectangle<floa
 			auto c1Colour = c1.upToFirstOccurrenceOf(" ", false, false);
 			ExpressionParser::Context<> context;
 			auto c1Mix = ExpressionParser::evaluate(c1.fromFirstOccurrenceOf(" ", false, false), context);
-
 			auto c2Colour = c2.upToFirstOccurrenceOf(" ", false, false);
-			
 
 			auto colour1 = ColourParser(c1Colour).getColour();
 			auto colour2 = ColourParser(c2Colour).getColour();
 
-			return std::pair(colour1.interpolatedWith(colour2, 1.0 - c1Mix), ColourGradient());
+			rv.first = colour1.interpolatedWith(colour2, 1.0 - c1Mix);
 		}
-		if(v.startsWith("linear-gradient"))
+		else if(v.startsWith("linear-gradient"))
 		{
 			ColourGradient grad;
 			ColourGradientParser p(area, v.fromFirstOccurrenceOf("(", false, false).upToLastOccurrenceOf(")", false, false));
-			return std::pair(defaultColour, p.getGradient());
+			rv.first = defaultColour;
+			rv.second = p.getGradient();
 		}
 		else if (v.startsWith("rgb"))
 		{
-			auto c = ColourParser(v).getColour();
-			return std::pair(c, ColourGradient());
+			rv.first = ColourParser(v).getColour();
+			
 		}
 		else
 		{
-			auto c = Colour((uint32)v.getHexValue64());
-			return std::pair(c, ColourGradient());
+			rv.first = Colour((uint32)v.getHexValue64());
 		}
+
+		if(isVar == -1)
+			hashedColours[hash] = rv;
+
+		return rv;
 	};
 
     if(auto tv = getTransitionValue({ "background-size", key.state }))
@@ -1939,7 +2042,7 @@ std::pair<Colour, ColourGradient> StyleSheet::getColourOrGradient(Rectangle<floa
     
 	if(auto tv = getTransitionValue(key))
 	{
-		using Type = std::pair<Colour, ColourGradient>;
+		using Type = ColourInfo;
 
 		TransitionCalculator<Type> im(this, animator, key.name, tv);
 
@@ -2431,6 +2534,19 @@ Rectangle<float> StyleSheet::getLocalBoundsFromText(const String& text) const
 	if(!ba.isEmpty())
 		area = area.withLeft(area.getX() - ba.getWidth());
 	
+    auto ba2 = getPseudoArea(area, 0, PseudoElementType::Before2);
+
+    if(!ba2.isEmpty())
+    {
+        auto pos = getPositionType(PseudoState().withElement(PseudoElementType::Before2));
+        auto dontExtend = pos == PositionType::absolute || pos == PositionType::fixed;
+        if(dontExtend)
+            ba2 = {};
+    }
+
+    if(!ba2.isEmpty())
+        area = area.withLeft(area.getX() - ba2.getWidth());
+    
 	return area.withZeroOrigin();
 }
 }

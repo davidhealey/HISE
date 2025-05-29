@@ -260,6 +260,8 @@ public:
 
 	void setSilent(bool shouldBeSilent) { silentMode = shouldBeSilent; }
 
+    std::function<void(String)> errorFunction;
+    
 protected:
 
 	void setProgress(double d)

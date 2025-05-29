@@ -105,8 +105,7 @@ RectangleDynamicObject::FunctionMap::FunctionMap()
 	ADD_FUNCTION(intersects, "(var otherRect)", [](const Args& a)
 	{
 		Rectangle<double> r;
-		Point<double> p;
-
+		
 		if(getRectangleArgs(a, r))
 			return getRectangle(a).intersects(r);
 

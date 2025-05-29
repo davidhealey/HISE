@@ -258,6 +258,7 @@ public:
 			Script,
 			ScriptCallback,
 			Broadcaster,
+			TimerCallback,
 			Server,
 			Paint,
 			DSP,
@@ -310,6 +311,7 @@ public:
 			case SourceType::Script: return "Script";
 			case SourceType::Scriptnode: return "Scriptnode";
 			case SourceType::ScriptCallback: return "Callback";
+			case SourceType::TimerCallback: return "TimerCallback";
 			case SourceType::Broadcaster: return "Broadcaster";
 			case SourceType::Paint: return "Paint";
 			case SourceType::DSP: return "DSP";

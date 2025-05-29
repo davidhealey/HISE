@@ -52,7 +52,7 @@ DECLARE_ID(slotIndex);
 DECLARE_ID(sourceType);
 
 DECLARE_ID(isChromatic);
-DECLARE_ID(useNumbers);
+
 
 }
 
@@ -244,6 +244,8 @@ struct ComplexGroupManager: public ModulatorSynth::SoundCollectorBase,
 		static bool shouldBeCached(int flag);
 		static bool isXFade(int flag);
 
+		static int getDefaultValue(LogicType lt, Flags flag);
+
 		static bool isProcessingHiseEvent(int flag);
 		static bool isPostProcessingSounds(int flag);
 
@@ -259,10 +261,14 @@ struct ComplexGroupManager: public ModulatorSynth::SoundCollectorBase,
 
 		/** Returns the token array from the groupIds::tokens property. If it's a legato layer, it will calculate the
 		 *  note numbers / names depending on the LoKey/HiKey and groupIds::useNumbers property. */
-		static StringArray getTokens(const ValueTree& layerData);
+		static StringArray getTokens(const ValueTree& layerData, const ModulatorSampler* sampler=nullptr);
 		static Identifier getId(const ValueTree& layerData);
 		static Identifier getNextFreeId(LogicType lt, const ValueTree& data);
-		static VoiceBitMap<128> getKeyRange(const ValueTree& data);
+		static VoiceBitMap<128> getKeyRange(const ValueTree& data, const ModulatorSampler* sampler=nullptr);
+
+		static String getSampleFilename(const SynthSoundWithBitmask* fs);
+		static StringArray getFileTokens(const SynthSoundWithBitmask* fs, String separator="_");
+		static StringArray getFileTokens(const String& fileName, String separator="_");
 	};
 
 	ComplexGroupManager(ReferenceCountedArray<SynthesiserSound>* allSounds, PooledUIUpdater* updater=nullptr);;
@@ -310,6 +316,8 @@ struct ComplexGroupManager: public ModulatorSynth::SoundCollectorBase,
 
 	/** Called by HISE in the noteOn callback to figure out what sounds to play. */
 	void collectSounds(const HiseEvent& m, UnorderedStack<ModulatorSynthSound*>& soundsToBeStarted) override;
+
+	int getPredelayForVoice(const ModulatorSynthVoice* voice) const override;
 
 	/** This function will create a bitmask from the given string and can be used as a quick and dirty filename parser.
 	 *
@@ -455,8 +463,10 @@ private:
 		virtual void handleHiseEvent(ComplexGroupManager& parent, const HiseEvent& e) {};
 		virtual void postVoiceStart(ComplexGroupManager& parent, const UnorderedStack<ModulatorSynthSound*>& soundsThatWereStarted) {};
 		virtual void resetPlayState(ComplexGroupManager& parent) {};
-		virtual void prepare(PrepareSpecs ps) {};
 
+		virtual int getPredelay(const ComplexGroupManager& parent, const HiseEvent& e, uint8 layerValue, int sampleSampleRate) const { return 0; }
+
+		virtual void prepare(PrepareSpecs ps) {};
 
 		uint8 getUnmaskedValue(Bitmask m) const;
 		float getXFadeValue(SampleType* t) const;
@@ -491,6 +501,8 @@ private:
 
 	void onDataChange(const ValueTree& c, bool wasAdded);
 
+	void onRebuildPropertyChange(const ValueTree& t, const Identifier& id);
+
 	/** Finalises the bit layout and initialises the state. Call this after you defined the layout before adding samples. */
 	void finalize();
 
@@ -517,6 +529,8 @@ private:
 
 	ValueTree data;
 	valuetree::ChildListener dataListener;
+
+	valuetree::RecursivePropertyListener groupRebuildListener;
 
 	int8 tableFadeLayer = -1;
 

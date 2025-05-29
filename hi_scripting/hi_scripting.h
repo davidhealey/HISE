@@ -89,6 +89,16 @@ compile / debug cycle and don't need all nodes in scriptnode you might want to t
 #define HISE_CREATE_DSP_NETWORKS_FOR_HARDCODED_NODES 0
 #endif
 
+/** Config: HISE_SEND_PANEL_CHANGED_TO_PLUGIN_PARAMETER
+ *
+ *  If this is enabled, then a ScriptPanel will send it's changed() message through the plugin parameter system if it was
+ *  assigned to a plugin parameter slot using the isPluginParameter property.
+ *
+ *  Enable this if you want to use a ScriptPanel as plugin parameter (for backwards compatibility this is disabled by default).
+ */
+#ifndef HISE_SEND_PANEL_CHANGED_TO_PLUGIN_PARAMETER
+#define HISE_SEND_PANEL_CHANGED_TO_PLUGIN_PARAMETER 0
+#endif
 
 /** Config: HISE_INCLUDE_BX_LICENSER
   

@@ -98,6 +98,7 @@ void MacroModulator::addToMacroController(int index)
 
 		auto mc = getMainController();
 		auto numMacros = HISE_GET_PREPROCESSOR(mc, HISE_NUM_MACROS);
+        ignoreUnused(mc);
 
 		for (int i = 0; i < numMacros; i++)
 		{

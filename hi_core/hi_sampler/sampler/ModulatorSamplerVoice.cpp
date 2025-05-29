@@ -44,6 +44,9 @@ void ModulatorSamplerVoice::startVoiceInternal(int midiNoteNumber, float velocit
 
 	voiceUptime = wrappedVoice.voiceUptime;
 	uptimeDelta = wrappedVoice.uptimeDelta;
+
+	voiceUptime -= getOwnerSynth()->getPredelayForVoice(this);
+
 	isActive = true;
 
 	jassert(uptimeDelta > 0.0);

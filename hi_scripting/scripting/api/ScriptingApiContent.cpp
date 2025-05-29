@@ -451,6 +451,8 @@ ScriptingApi::Content::ScriptComponent::ScriptComponent(ProcessorWithScriptingCo
 	pSetProperty =     cp.add(getId() + ".set()");
 	pOnProperty =     cp.add(getId() + ".propertyChange()");
 
+	useRectangleClass = HISE_GET_PREPROCESSOR(getScriptProcessor()->getMainController_(), HISE_USE_SCRIPT_RECTANGLE_OBJECT);
+
 	//setName(name_.toString());
 
 
@@ -1629,7 +1631,8 @@ var ScriptingApi::Content::ScriptComponent::getLocalBounds(float reduceAmount)
 {
 	Rectangle<float> ar(0.0f, 0.0f, (float)getScriptObjectProperty(Properties::width), (float)getScriptObjectProperty(Properties::height));
 	ar = ar.reduced(reduceAmount);
-	return ApiHelpers::getVarRectangle(ar);
+	
+	return ApiHelpers::getVarRectangle(useRectangleClass, ar);
 }
 
 void ScriptingApi::Content::ScriptComponent::setKeyPressCallback(var keyboardFunction)
@@ -4118,6 +4121,22 @@ ScriptingApi::Content::ScriptPanel* ScriptingApi::Content::ScriptPanel::getSubPa
 	return childPanels[index].get();
 }
 
+void ScriptingApi::Content::ScriptPanel::changed()
+{
+	if(pluginParameterInfo.p != nullptr)
+	{
+		auto v = (float)getValue();
+		FloatSanitizers::sanitizeFloatNumber(v);
+		auto idx = getScriptProcessor()->getScriptingContent()->getComponentIndex(getName());
+		pluginParameterInfo.p->setAttribute(idx, v, dispatch::DispatchType::sendNotificationAsyncHiPriority);
+	}
+	else
+	{
+		ScriptComponent::changed();
+	}
+
+}
+
 #if HISE_INCLUDE_RLOTTIE
 bool ScriptingApi::Content::ScriptPanel::isAnimationActive() const
 { return animation != nullptr && animation->isValid(); }
@@ -4142,9 +4161,12 @@ getCursorUpdater()
 void ScriptingApi::Content::ScriptPanel::setScriptObjectPropertyWithChangeMessage(const Identifier& id, var newValue,
 	NotificationType notifyEditor)
 {
-			
-
 	ScriptComponent::setScriptObjectPropertyWithChangeMessage(id, newValue, notifyEditor);
+
+	if(id == getIdFor((int)ScriptComponent::isPluginParameter))
+	{
+		pluginParameterInfo.update(this);
+	}
 
 #if HISE_INCLUDE_RLOTTIE
 	if (id == getIdFor((int)ScriptComponent::height) ||
@@ -4375,6 +4397,8 @@ void ScriptingApi::Content::ScriptPanel::init()
 	auto& cp = getScriptProcessor()->getScriptingContent()->contentProfile;
 	pRepaint =      cp.add(getId() + ".repaint()");
 	pPaintRoutine = cp.add(getId() + ".paintRoutine");
+
+	pluginParameterInfo.update(this);
 }
 
 
@@ -5141,6 +5165,22 @@ void ScriptingApi::Content::ScriptPanel::removeAnimationListener(AnimationListen
 #if HISE_INCLUDE_RLOTTIE
 	animationListeners.removeAllInstancesOf(l);
 #endif
+}
+
+void ScriptingApi::Content::ScriptPanel::PluginParameterInfo::update(ScriptPanel* sp)
+{
+	auto sendToPluginParameter = HISE_GET_PREPROCESSOR(sp->getScriptProcessor()->getMainController_(), HISE_SEND_PANEL_CHANGED_TO_PLUGIN_PARAMETER);
+
+	if(sendToPluginParameter && sp->getScriptObjectProperty(isPluginParameter))
+	{
+		pluginParameterIndex = sp->getScriptProcessor()->getScriptingContent()->getComponentIndex(sp);
+		p = dynamic_cast<Processor*>(sp->getScriptProcessor());
+	}
+	else
+	{
+		pluginParameterIndex = -1;
+		p = nullptr;
+	}
 }
 
 hise::DebugInformationBase::Ptr ScriptingApi::Content::ScriptPanel::createChildElement(DebugWatchIndex i) const
@@ -6833,6 +6873,18 @@ int ScriptingApi::Content::getComponentIndex(const Identifier &componentName) co
 
 	return -1;
 }
+
+int ScriptingApi::Content::getComponentIndex(ScriptComponent* sc) const
+{
+	for (int i = 0; i < getNumComponents(); i++)
+	{
+		if (components[i].get() == sc)
+			return i;
+	}
+
+	return -1;
+}
+
 
 ScriptingApi::Content::ScriptComboBox *ScriptingApi::Content::addComboBox(Identifier boxName, int x, int y)
 {

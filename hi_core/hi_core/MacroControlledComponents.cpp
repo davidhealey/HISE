@@ -656,8 +656,7 @@ void HiSlider::sliderValueChanged(Slider *s)
 	if (callWhenSingleMacro(BIND_MEMBER_FUNCTION_2(HiSlider::changePluginParameter)))
 		return;
 
-	auto mc = getProcessor()->getMainController();
-	auto useMacrosAsParameter = (bool)HISE_GET_PREPROCESSOR(mc, HISE_MACROS_ARE_PLUGIN_PARAMETERS);
+	auto useMacrosAsParameter = (bool)HISE_GET_PREPROCESSOR(getProcessor()->getMainController(), HISE_MACROS_ARE_PLUGIN_PARAMETERS);
 	
 	if(!useMacrosAsParameter)
 	{
@@ -715,9 +714,9 @@ void HiSlider::sliderDragEnded(Slider* s)
 
 bool HiSlider::changePluginParameter(AudioProcessor* p, int macroIndex)
 {
-	auto mc = getProcessor()->getMainController();
-	auto ok = HISE_GET_PREPROCESSOR(mc, HISE_MACROS_ARE_PLUGIN_PARAMETERS);
+	auto ok = HISE_GET_PREPROCESSOR(getProcessor()->getMainController(), HISE_MACROS_ARE_PLUGIN_PARAMETERS);
 	jassert(ok);
+    ignoreUnused(ok);
 
 	if(auto pp = getConnectedPluginParameter())
 	{
@@ -760,7 +759,6 @@ bool HiSlider::callWhenSingleMacro(const std::function<bool(AudioProcessor* p, i
 
 	if (useMacrosAsParameter && getMacroIndex() != -1)
 	{
-		auto mc = getProcessor()->getMainController();
 		auto md = mc->getMainSynthChain()->getMacroControlData(getMacroIndex());
 
 		if (md->getNumParameters() == 1)
@@ -1179,7 +1177,15 @@ void HiToggleButton::mouseDown(const MouseEvent &e)
 	checkMouseClickProfiler(true);
 
 	if(auto pp = getConnectedPluginParameter())
+	{
+		if(getTriggeredOnMouseDown())
+		{
+			dynamic_cast<HisePluginParameterBase*>(pp)->setIgnoreNextHostUpdate(true);
+		}
+
 		pp->beginChangeGesture();
+	}
+		
 
 	CHECK_MIDDLE_MOUSE_DOWN(e);
 
@@ -1238,7 +1244,15 @@ void HiToggleButton::mouseUp(const MouseEvent& e)
     MomentaryToggleButton::mouseUp(e);
 
 	if(auto pp = getConnectedPluginParameter())
+	{
+		if(!getTriggeredOnMouseDown())
+		{
+			dynamic_cast<HisePluginParameterBase*>(pp)->setIgnoreNextHostUpdate(true);
+		}
+
 		pp->endChangeGesture();
+	}
+		
 }
 
 HiComboBox::HiComboBox(const String& name):

@@ -1339,8 +1339,7 @@ void FrontendMacroPanel::macroConnectionChanged(int macroIndex, Processor* p, in
 
 hise::MacroControlBroadcaster::MacroControlData* FrontendMacroPanel::getData(MacroControlBroadcaster::MacroControlledParameterData* pd)
 {
-	auto mc = getMainController();
-	auto numMacros = HISE_GET_PREPROCESSOR(mc, HISE_NUM_MACROS);
+	auto numMacros = HISE_GET_PREPROCESSOR(getMainController(), HISE_NUM_MACROS);
 
 	for (int i = 0; i < numMacros; i++)
 	{
@@ -1355,8 +1354,7 @@ hise::MacroControlBroadcaster::MacroControlData* FrontendMacroPanel::getData(Mac
 
 const hise::MacroControlBroadcaster::MacroControlData* FrontendMacroPanel::getData(MacroControlBroadcaster::MacroControlledParameterData* pd) const
 {
-	auto mc = getMainController();
-	auto numMacros = HISE_GET_PREPROCESSOR(mc, HISE_NUM_MACROS);
+	auto numMacros = HISE_GET_PREPROCESSOR(getMainController(), HISE_NUM_MACROS);
 
 	for (int i = 0; i < numMacros; i++)
 	{

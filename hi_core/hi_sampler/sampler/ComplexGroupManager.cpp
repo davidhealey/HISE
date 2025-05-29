@@ -189,6 +189,12 @@ ComplexGroupManager::ComplexGroupManager(ReferenceCountedArray<SynthesiserSound>
 	data(groupIds::Layers)
 {
 	dataListener.setCallback(data, valuetree::AsyncMode::Synchronously, BIND_MEMBER_FUNCTION_2(ComplexGroupManager::onDataChange));
+
+	groupRebuildListener.setCallback(data, 
+								     { groupIds::tokens, groupIds::purgable, groupIds::cached, groupIds::ignorable }, 
+									 valuetree::AsyncMode::Synchronously,
+									 BIND_MEMBER_FUNCTION_2(ComplexGroupManager::onRebuildPropertyChange));
+
 }
 
 ComplexGroupManager::~ComplexGroupManager()
@@ -321,9 +327,9 @@ int ComplexGroupManager::getLayerIndex(const Identifier& groupId) const
 
 struct ComplexGroupManager::LegatoLayer final : public ComplexGroupManager::Layer
 {
-	LegatoLayer(const ValueTree& v, int flags):
-	  Layer(Helpers::getId(v), LogicType::LegatoInterval, {}, flags | Flags::FlagProcessHiseEvent),
-	  range(Helpers::getKeyRange(v))
+	LegatoLayer(const ValueTree& v, int flags, ModulatorSampler* sampler):
+	  Layer(Helpers::getId(v), LogicType::LegatoInterval, {}, flags | Flags::FlagProcessHiseEvent | Flags::FlagProcessPostSounds),
+	  range(Helpers::getKeyRange(v, sampler))
 	{
 		uint8 layerValue = 1;
 
@@ -337,6 +343,18 @@ struct ComplexGroupManager::LegatoLayer final : public ComplexGroupManager::Laye
 			else
 				layerValues[i] = 0;
 		}
+
+		numItems = tokens.size();
+	}
+
+	int getPredelay(const ComplexGroupManager& parent, const HiseEvent& e, uint8 layerValue, int sampleSampleRate) const override
+	{
+		if(layerValue == IgnoreFlag)
+		{
+			return 44100;
+		}
+
+		return 0;
 	}
 
 	void handleHiseEvent(ComplexGroupManager& parent, const HiseEvent& e) override
@@ -351,6 +369,10 @@ struct ComplexGroupManager::LegatoLayer final : public ComplexGroupManager::Laye
 			if(isPositiveAndBelow(lastNoteNumber, 128) && layerValues[lastNoteNumber])
 			{
 				parent.applyFilter(layerIndex, layerValues[lastNoteNumber], sendNotificationAsync);
+			}
+			else
+			{
+				parent.applyFilter(layerIndex, IgnoreFlag, sendNotificationAsync);
 			}
 			
 			lastNoteNumber = n;
@@ -724,6 +746,79 @@ bool ComplexGroupManager::Helpers::canBeIgnored(int flag)	{ return flag & (int)F
 bool ComplexGroupManager::Helpers::shouldBeCached(int flag) { return flag & (int)FlagCached; }
 bool ComplexGroupManager::Helpers::isXFade(int flag)		{ return flag & (int)FlagXFade; }
 
+int ComplexGroupManager::Helpers::getDefaultValue(LogicType lt, Flags flag)
+{
+	static constexpr int UNSPECIFIED = -1;
+	static constexpr int NO = 0;
+	static constexpr int YES = 1;
+
+	switch(lt)
+	{
+	case LogicType::Undefined:
+		return -1;
+	case LogicType::Custom:
+		return -1;
+	case LogicType::RoundRobin:
+		switch(flag)
+		{
+		case FlagIgnorable: return NO;
+		case FlagCached:	return UNSPECIFIED;
+		case FlagPurgable:	return NO;
+		default: ;			return UNSPECIFIED;
+		}
+	case LogicType::Keyswitch:
+		switch(flag)
+		{
+		case FlagIgnorable: return NO;
+		case FlagCached:	return YES;
+		case FlagPurgable:	return YES;
+		default: ;			return UNSPECIFIED;
+		}
+	case LogicType::TableFade:
+		switch(flag)
+		{
+		case FlagIgnorable: return NO;
+		case FlagCached:	return NO;
+		case FlagPurgable:	return NO;
+		default: ;			return UNSPECIFIED;
+		}
+	case LogicType::XFade:
+		switch(flag)
+		{
+		case FlagIgnorable: return NO;
+		case FlagCached:	return NO;
+		case FlagPurgable:	return NO;
+		default: ;			return UNSPECIFIED;
+		}
+	case LogicType::LegatoInterval:
+		switch(flag)
+		{
+		case FlagIgnorable: return YES;
+		case FlagCached:	return NO;
+		case FlagPurgable:	return NO;
+		default: ;			return UNSPECIFIED;
+		}
+	case LogicType::ReleaseTrigger:
+		switch(flag)
+		{
+		case FlagIgnorable: return NO;
+		case FlagCached:	return YES;
+		case FlagPurgable:	return YES;
+		default: ;			return UNSPECIFIED;
+		}
+	case LogicType::Choke:
+		switch(flag)
+		{
+		case FlagIgnorable: return YES;
+		case FlagCached:	return NO;
+		case FlagPurgable:	return NO;
+		default: ;			return UNSPECIFIED;
+		}
+	case LogicType::numLogicTypes:
+	default: return -1;;
+	}
+}
+
 bool ComplexGroupManager::Helpers::isProcessingHiseEvent(int flag)  { return flag & (int)FlagProcessHiseEvent; }
 bool ComplexGroupManager::Helpers::isPostProcessingSounds(int flag) { return flag & (int)FlagProcessPostSounds; }
 bool ComplexGroupManager::Helpers::isProcessingModulation(int flag) { return flag & (int)FlagProcessModulation; }
@@ -785,7 +880,7 @@ ComplexGroupManager::LogicType ComplexGroupManager::Helpers::getLogicType(const 
 	return (LogicType)idx;
 }
 
-StringArray ComplexGroupManager::Helpers::getTokens(const ValueTree& layerData)
+StringArray ComplexGroupManager::Helpers::getTokens(const ValueTree& layerData, const ModulatorSampler* sampler)
 {
 	jassert(layerData.getType() == groupIds::Layer);
 
@@ -793,6 +888,41 @@ StringArray ComplexGroupManager::Helpers::getTokens(const ValueTree& layerData)
 
 	if(lt == LogicType::LegatoInterval)
 	{
+		if(sampler != nullptr)
+		{
+			StringArray tokens;
+
+			BigInteger bi;
+
+			ModulatorSampler::SoundIterator iter(sampler);
+
+			while(auto s = iter.getNextSound())
+			{
+				auto nr = s->getNoteRange();
+				bi.setRange(nr.getStart(), nr.getLength(), true);
+			}
+
+			if(bi.isZero())
+				throw Result::fail("You need to add samples before creating a legato layer");
+
+			for(int i = 0; i < 127; i++)
+			{
+				if(bi[i])
+					tokens.add(String(i));
+			}
+
+			return tokens;
+		}
+		else
+		{
+			// The tokens must be calculated otherwise...
+			return {};
+
+			jassertfalse;
+		}
+
+		
+#if 0
 		auto range = getKeyRange(layerData);
 
 		StringArray sa;
@@ -807,11 +937,22 @@ StringArray ComplexGroupManager::Helpers::getTokens(const ValueTree& layerData)
 			}
 		}
 
+		sa.removeDuplicates(false);
+		sa.removeEmptyStrings(true);
+		sa.trim();
+
 		return sa;
+#endif
 	}
 	else
 	{
-		return StringArray::fromTokens(layerData[groupIds::tokens].toString(), ",", "");
+		auto sa = StringArray::fromTokens(layerData[groupIds::tokens].toString(), ",", "");
+
+		sa.removeDuplicates(false);
+		sa.removeEmptyStrings(true);
+		sa.trim();
+
+		return sa;
 	}
 }
 
@@ -825,19 +966,20 @@ Identifier ComplexGroupManager::Helpers::getId(const ValueTree& layerData)
 	return Identifier(id);
 }
 
-VoiceBitMap<128> ComplexGroupManager::Helpers::getKeyRange(const ValueTree& data)
+VoiceBitMap<128> ComplexGroupManager::Helpers::getKeyRange(const ValueTree& data, const ModulatorSampler* sampler)
 {
 	auto lt = getLogicType(data);
 
 	VoiceBitMap<128> range;
 
-	if(!data.hasProperty(SampleIds::LoKey))
-		return range;
-
+	
 	auto lowIndex = (int)data[SampleIds::LoKey];
 
 	if(lt == LogicType::Keyswitch)
 	{
+		if(!data.hasProperty(SampleIds::LoKey))
+			return range;
+
 		auto numElements = Helpers::getTokens(data).size();
 
 		const auto isChromatic = (bool)data[groupIds::isChromatic];
@@ -860,13 +1002,50 @@ VoiceBitMap<128> ComplexGroupManager::Helpers::getKeyRange(const ValueTree& data
 	}
 	if(lt == LogicType::LegatoInterval)
 	{
-		auto highIndex = (int)data[SampleIds::HiKey];
+		jassert(sampler != nullptr);
 
-		for(int i = lowIndex; i < highIndex; i++)
-			range.setBit(i, true);
+		auto tokens = getTokens(data, sampler);
+
+		if(!tokens.isEmpty())
+		{
+			lowIndex = tokens[0].getIntValue();
+			auto end = tokens[tokens.size()-1].getIntValue();
+
+			for(int i = lowIndex; i <= end; i++)
+				range.setBit(i, true);
+		}
 	}
 
 	return range;
+}
+
+String ComplexGroupManager::Helpers::getSampleFilename(const SynthSoundWithBitmask* fs)
+{
+	if(auto s = dynamic_cast<const ModulatorSamplerSound*>(fs))
+	{
+		auto ref = s->getSampleProperty(SampleIds::FileName).toString();
+
+		PoolReference r(s->getMainController(), ref, FileHandlerBase::SubDirectories::Samples);
+
+		return r.getFile().getFileNameWithoutExtension();
+	}
+
+	return {};
+}
+
+StringArray ComplexGroupManager::Helpers::getFileTokens(const SynthSoundWithBitmask* fs, String separator)
+{
+	auto f = getSampleFilename(fs);
+	return getFileTokens(f, separator);
+	
+}
+
+StringArray ComplexGroupManager::Helpers::getFileTokens(const String& fileName, String separator)
+{
+	auto t = StringArray::fromTokens(fileName, separator, "");
+	t.trim();
+	t.removeEmptyStrings(true);
+	return t;
 }
 
 Identifier ComplexGroupManager::getLayerId(uint8 layerIndex) const
@@ -976,6 +1155,33 @@ void ComplexGroupManager::finalize()
 			
 		// layers must not be ignoreable and cached at once!
 		jassert(!(Helpers::canBeIgnored(l.propertyFlags) && Helpers::shouldBeCached(l.propertyFlags)));
+
+		if(Helpers::canBeIgnored(l.propertyFlags))
+		{
+			for(auto s: *soundList)
+			{
+				auto bm = static_cast<SynthSoundWithBitmask*>(s)->getBitmask();
+
+				auto isAssigned = (bm & l.filter) != 0;
+				auto isIgnored = (bm & l.ignoreFlag) != 0;
+
+				if(isAssigned && isIgnored)
+				{
+					// if that happens, then the bit mask for this sample was all over the place
+					// (it should never be assigned & ignored at the same time, which is usually a result
+					// of an old bit value hanging around messing up the logic.
+					debugToConsole(sampler.get(), "Clear layer values for " + l.groupId.toString());
+
+					// clear out the values for the entire layer
+					auto mask = ~(l.filter | l.ignoreFlag);
+					bm &= mask;
+
+					static_cast<SynthSoundWithBitmask*>(s)->storeBitmask(bm, true);
+				}
+			}
+		}
+
+		
 
 		idx++;
 	}
@@ -1190,8 +1396,29 @@ void ComplexGroupManager::collectSounds(const HiseEvent& m, UnorderedStack<Modul
 	}
 }
 
+int ComplexGroupManager::getPredelayForVoice(const ModulatorSynthVoice* voice) const
+{
+	int delay = 0;
+
+	if(!deactivatePostProcessing)
+	{
+		auto m = voice->getCurrentHiseEvent();
+		auto s = static_cast<const ModulatorSamplerSound*>(voice->getCurrentlyPlayingSound().get());
+		auto sr = (int)s->getSampleRate();
+		auto bm = s->getBitmask();
+
+		for(auto l: postProcessors)
+		{
+			auto v = l->getUnmaskedValue(bm);
+			delay += l->getPredelay(*this, m, v, sr);
+		}
+	}
+
+	return delay;
+}
+
 ComplexGroupManager::Bitmask ComplexGroupManager::parseBitmask(const String& filenameWithoutExtension,
-	uint8 layerOffset) const
+                                                               uint8 layerOffset) const
 {
 	auto tokens = StringArray::fromTokens(filenameWithoutExtension, "_", "");
 
@@ -1401,7 +1628,8 @@ void ComplexGroupManager::onDataChange(const ValueTree& c, bool wasAdded)
 	{
 		auto id = Helpers::getId(c);
 		auto lt = Helpers::getLogicType(c);
-		auto tokens = Helpers::getTokens(c);
+
+		auto tokens = Helpers::getTokens(c, sampler.get());
 
 		int flags = 0;
 
@@ -1428,7 +1656,7 @@ void ComplexGroupManager::onDataChange(const ValueTree& c, bool wasAdded)
 			if(Helpers::canBePurged(flags))
 				throw Result::fail("Legato intervals should not be purgable");
 			
-			layers.add(new LegatoLayer(c, FlagIgnorable));
+			layers.add(new LegatoLayer(c, flags, sampler.get()));
 		}
 		else if (lt == LogicType::RoundRobin)
 		{
@@ -1469,6 +1697,18 @@ void ComplexGroupManager::onDataChange(const ValueTree& c, bool wasAdded)
 	}
 
 	finalize();
+}
+
+void ComplexGroupManager::onRebuildPropertyChange(const ValueTree& t, const Identifier& id)
+{
+	layers.clear();
+
+	ScopedUpdateDelayer sd(*this);
+
+	for(auto c: data)
+	{
+		onDataChange(c, true);
+	}
 }
 
 std::pair<int, int> ComplexGroupManager::getNumUnassignedAndIgnored(uint8 layerIndex) const
@@ -1530,6 +1770,9 @@ ComplexGroupManager::Layer::Layer(const Identifier& g, LogicType lt_, const Stri
 
 uint8 ComplexGroupManager::Layer::getUnmaskedValue(Bitmask m) const
 {
+	if(Helpers::canBeIgnored(propertyFlags) && ((m & ignoreFlag) != 0))
+		return IgnoreFlag;
+
 	m &= filter;
 	auto v = m >> bitShift;
 	return (uint8)v;
@@ -1561,17 +1804,19 @@ void ComplexGroupManager::Layer::setValueFilter(ValueWithFilter& v, uint8 value)
 
 void ComplexGroupManager::Layer::mask(Bitmask& m, uint8 value) const
 {
+	const Bitmask inverted = ~filter;
+
+	m &= inverted;
+
 	if(value == 0xFF)
 	{
+		jassert(Helpers::canBeIgnored(propertyFlags));
 		m |= ignoreFlag;
 	}
 	else
 	{
 		jassert(value != 0);
 		Bitmask shifted = (Bitmask)value << bitShift;
-		const Bitmask inverted = ~filter;
-
-		m &= inverted;
 		m |= shifted;
 	}
 }
