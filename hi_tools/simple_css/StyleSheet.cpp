@@ -1042,6 +1042,42 @@ void StyleSheet::Collection::addCollectionForComponent(Component* c, const Colle
 
 Result StyleSheet::Collection::performAtRules(DataProvider* d)
 {
+    if(useIsolatedCollections)
+    {
+        for(auto& c: childCollections)
+        {
+            for(auto l: c.second)
+            {
+                auto ar = l->getAtRuleName();
+
+                auto url = l->getURLFromProperty({ "src", {} });
+                
+                if(ar == "font-face")
+                {
+                    auto fontName = l->getPropertyValueString({"font-family", {}});
+                    auto fToUse = d->loadFont(fontName, url);
+
+                    customFonts.addIfNotAlreadyThere({ fontName, fToUse });
+                }
+            }
+        }
+        
+        if(!customFonts.isEmpty())
+        {
+            for(auto& c: childCollections)
+            {
+                for(auto ss: c.second)
+                {
+                    ss->setCustomFonts(customFonts);
+                }
+            }
+        }
+        
+        return Result::ok();
+    }
+    
+    
+    
 	for(int i = 0; i < list.size(); i++)
 	{
 		auto l = list[i];
