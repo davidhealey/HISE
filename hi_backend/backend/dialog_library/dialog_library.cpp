@@ -1735,7 +1735,7 @@ bool NetworkCompiler::checkPropertyMismatch() const
 		return numThirdPartyFiles == o->getProperties().size();
 	}
 
-	return false;
+	return numThirdPartyFiles == 0;
 }
 
 ScriptModuleReplacer::ScriptModuleReplacer(BackendRootWindow* bpe_):
