@@ -617,7 +617,7 @@ void ScriptCreatedComponentWrappers::SliderWrapper::updateSliderRange(ScriptingA
         min = jmax(min, 0.0);
         max = jmin(max, (double)((int)TempoSyncer::Tempo::numTempos-1));
         
-		s->setMode(HiSlider::Mode::TempoSync, min, max, min + (max-min)/2, 1);
+		s->setMode(HiSlider::Mode::TempoSync, NormalisableRange<double>((double)min, (double)max, 2.0));
 		return;
 	}
 
@@ -632,17 +632,20 @@ void ScriptCreatedComponentWrappers::SliderWrapper::updateSliderRange(ScriptingA
 
 	if (min >= max || stepsize <= 0.0 || min < -MaxValue || max > MaxValue)
 	{
-		s->setMode(HiSlider::Mode::Linear, 0.0, 1.0);
-		s->setSkewFactor(1.0);
+		s->setMode(HiSlider::Mode::Linear, {0.0, 1.0});
 		s->setEnabled(false);
 	}
 	else
 	{
-		s->setSkewFactor(1.0);
-		s->setMode(sc->m, min, max);
-		s->setRange(min, max, stepsize);
-		if (middlePos != min && r.contains(middlePos)) s->setSkewFactorFromMidPoint(middlePos);
-		if (sc->m == HiSlider::Mode::Linear) s->setTextValueSuffix(suffix);
+		NormalisableRange<double> nr(min, max, stepsize);
+
+		if(nr.getRange().contains(middlePos))
+			nr.setSkewForCentre(middlePos);
+
+		s->setMode(sc->m, nr);
+		
+		if (sc->m == HiSlider::Mode::Linear) 
+			s->setTextValueSuffix(suffix);
 	}
 
 	const double defaultValue = sc->getScriptObjectProperty(ScriptingApi::Content::ScriptSlider::defaultValue);
@@ -2988,7 +2991,8 @@ void ScriptCreatedComponentWrappers::FloatingTileWrapper::updateComponent(int pr
 	switch (propertyIndex)
 	{
 	PROPERTY_CASE::ScriptComponent::itemColour: 
-	PROPERTY_CASE::ScriptComponent::itemColour2: 
+	PROPERTY_CASE::ScriptComponent::itemColour2:
+	PROPERTY_CASE::ScriptFloatingTile::itemColour3:
 	PROPERTY_CASE::ScriptComponent::bgColour: 
 	PROPERTY_CASE::ScriptComponent::textColour: 
 	PROPERTY_CASE::ScriptFloatingTile::Properties::Font:

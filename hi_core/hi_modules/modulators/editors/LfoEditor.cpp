@@ -147,15 +147,14 @@ LfoEditorBody::LfoEditorBody (ProcessorEditor *p)
 	tableUsed = getProcessor()->getAttribute(LfoModulator::WaveFormType) == LfoModulator::Custom;
 
 	frequencySlider->setup(getProcessor(), LfoModulator::Frequency, "Frequency");
-	frequencySlider->setMode(HiSlider::Frequency, 0.1, 40.0, 10.0);
-
-	frequencySlider->setIsUsingModulatedRing(true);
+	frequencySlider->setMode(HiSlider::Frequency, NormalisableRange(0.1, 40.0).withCentreSkew(10.0));
+	
 
 	smoothTimeSlider->setup(getProcessor(), LfoModulator::SmoothingTime, "Smoothing");
-	smoothTimeSlider->setMode(HiSlider::Time, 0.0, 1000.0, 100.0);
+	smoothTimeSlider->setMode(HiSlider::Time, NormalisableRange(0.0, 1000.0).withCentreSkew(100.0));
 
 	fadeInSlider->setup(getProcessor(), LfoModulator::FadeIn, "Fadein Time");
-	fadeInSlider->setMode(HiSlider::Time, 0.0, 3000.0, 500.0);
+	fadeInSlider->setMode(HiSlider::Time, NormalisableRange(0.0, 3000.0).withCentreSkew(500.0));
 
 	retriggerButton->setup(getProcessor(), LfoModulator::Legato, "Legato Mode");
 

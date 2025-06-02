@@ -664,7 +664,7 @@ void HiSlider::sliderValueChanged(Slider *s)
     
 		if (index != -1 && !isReadOnly())
 		{
-			const float v = (float)normRange.convertTo0to1(s->getValue());
+			const float v = (float)getRange().convertTo0to1(s->getValue());
 			GET_MACROCHAIN()->setMacroControl(index,v * 127.0f, sendNotification);
 		}
 	}
@@ -863,39 +863,6 @@ String HiSlider::getSuffixForMode(HiSlider::Mode mode, float panValue)
 	}
 }
 
-void HiSlider::setModeRange(double min, double max, double mid, double stepSize)
-{
-	jassert(mode != numModes);
-
-	normRange = NormalisableRange<double>();
-
-	normRange.start = min;
-	normRange.end = max;
-		
-	normRange.interval = stepSize != DBL_MAX ? stepSize : 0.01;
-
-	if(mid != DBL_MAX)
-		setRangeSkewFactorFromMidPoint(normRange, mid);
-
-	setRange(normRange.start, normRange.end, normRange.interval);
-	setSkewFactor(normRange.skew);
-}
-
-void HiSlider::setRangeSkewFactorFromMidPoint(NormalisableRange<double>& range, const double midPoint)
-{
-	const double length = range.end - range.start;
-
-	if (range.end > range.start && range.getRange().contains(midPoint))
-		range.skew = std::log(0.5) / std::log((midPoint - range.start)
-			/ (length));
-}
-
-double HiSlider::getMidPointFromRangeSkewFactor(const NormalisableRange<double>& range)
-{
-	const double length = range.end - range.start;
-
-	return std::pow(2.0, -1.0 / range.skew) * length + range.start;
-}
 
 NormalisableRange<double> HiSlider::getRangeForMode(HiSlider::Mode m)
 {
@@ -903,24 +870,32 @@ NormalisableRange<double> HiSlider::getRangeForMode(HiSlider::Mode m)
 
 	switch(m)
 	{
-	case Frequency:				r = NormalisableRange<double>(20.0, 20000.0, 1);
-		setRangeSkewFactorFromMidPoint(r, 1500.0);
+	case Frequency:				
+		r = NormalisableRange<double>(20.0, 20000.0, 1);
+		r.setSkewForCentre(1500.0);
 		break;
-	case Decibel:				r = NormalisableRange<double>(-100.0, 0.0, 0.1);
-		setRangeSkewFactorFromMidPoint(r, -18.0);
+	case Decibel:				
+		r = NormalisableRange<double>(-100.0, 0.0, 0.1);
+		r.setSkewForCentre(-18.0);
 		break;
-	case Time:					r = NormalisableRange<double>(0.0, 20000.0, 1);
-		setRangeSkewFactorFromMidPoint(r, 1000.0);
+	case Time:					
+		r = NormalisableRange<double>(0.0, 20000.0, 1);
+		r.setSkewForCentre(1000.0);
 		break;
-	case TempoSync:				r = NormalisableRange<double>(0, TempoSyncer::numTempos-1, 1);
+	case TempoSync:				
+		r = NormalisableRange<double>(0, TempoSyncer::numTempos-1, 1);
 		break;
-	case Pan:					r = NormalisableRange<double>(-100.0, 100.0, 1);
+	case Pan:					
+		r = NormalisableRange<double>(-100.0, 100.0, 1);
 		break;
-	case NormalizedPercentage:	r = NormalisableRange<double>(0.0, 1.0, 0.01);									
+	case NormalizedPercentage:	
+		r = NormalisableRange<double>(0.0, 1.0, 0.01);									
 		break;
-	case Linear:				r = NormalisableRange<double>(0.0, 1.0, 0.01); 
+	case Linear:				
+		r = NormalisableRange<double>(0.0, 1.0, 0.01); 
 		break;
-	case Discrete:				r = NormalisableRange<double>();
+	case Discrete:				
+		r = NormalisableRange<double>();
 		r.interval = 1;
 		break;
 	case numModes: 
@@ -1090,27 +1065,21 @@ void HiSlider::setMode(Mode m)
 	{
 		mode = m;
 
-		normRange = getRangeForMode(m);
-
+		auto normRange = getRangeForMode(m);
 		setTextValueSuffix(getModeSuffix());
-
-		setRange(normRange.start, normRange.end, normRange.interval);
-		setSkewFactor(normRange.skew);
-
+		setNormalisableRange(normRange);
 		setValue(modeValues[m], dontSendNotification);
 
 		repaint();
 	}
 }
 
-void HiSlider::setMode(Mode m, double min, double max, double mid, double stepSize)
+void HiSlider::setMode(Mode m, NormalisableRange<double> nr)
 { 
-		
-
 	if(mode != m)
 	{
-		mode = m; 
-		setModeRange(min, max, mid, stepSize);
+		mode = m;
+		setNormalisableRange(nr);
 		setTextValueSuffix(getModeSuffix());
 
 		setValue(modeValues[m], dontSendNotification);
@@ -1119,7 +1088,7 @@ void HiSlider::setMode(Mode m, double min, double max, double mid, double stepSi
 	}
 	else
 	{
-		setModeRange(min, max, mid, stepSize);
+		setNormalisableRange(nr);
 	}
     
     updateValue(sendNotificationSync);

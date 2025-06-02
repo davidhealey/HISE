@@ -2471,10 +2471,15 @@ void ScriptingApi::Content::ScriptSlider::setMode(String mode)
 	
 	const bool sameStep = currentModeDefaultRange.interval == (double)getScriptObjectProperty(ScriptSlider::Properties::stepSize);
 	
-	auto skew1 = HiSlider::getMidPointFromRangeSkewFactor(currentModeDefaultRange);
-	auto skew2 = (double)getScriptObjectProperty(ScriptSlider::Properties::middlePosition);
+	
 
-	const bool sameSkew = (skew2 == -1.0) || skew1 == skew2;
+	auto cp = currentModeDefaultRange;
+	auto mp = (double)getScriptObjectProperty(ScriptSlider::Properties::middlePosition);
+
+	if(cp.getRange().contains(mp))
+		cp.setSkewForCentre(mp);
+
+	const bool sameSkew = cp.skew == 1.0;
 
 	bool isUsingDefaultRange = sameStart && sameEnd && sameStep && sameSkew;
 
@@ -2489,10 +2494,8 @@ void ScriptingApi::Content::ScriptSlider::setMode(String mode)
 		setScriptObjectProperty(stepSize, nr.interval);
 		setScriptObjectProperty(ScriptSlider::Properties::suffix, HiSlider::getSuffixForMode(m, getValue()));
 
-		setMidPoint(HiSlider::getMidPointFromRangeSkewFactor(nr));
-
-
-		//setMidPoint(getScriptObjectProperty(ScriptSlider::Properties::middlePosition));
+		auto midPoint = HiSlider::getRangeForMode(m).convertFrom0to1(0.5);
+		setScriptObjectProperty(middlePosition, midPoint);
 	}
 }
 

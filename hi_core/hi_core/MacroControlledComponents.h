@@ -35,7 +35,7 @@
 
 namespace hise { using namespace juce;
 
-#include <limits>
+
 
 class Processor;
 
@@ -759,10 +759,6 @@ public:
 		numModes
 	};
 
-	static void setRangeSkewFactorFromMidPoint(NormalisableRange<double>& range, const double midPoint);
-
-	static double getMidPointFromRangeSkewFactor(const NormalisableRange<double>& range);
-
 	static NormalisableRange<double> getRangeForMode(HiSlider::Mode m);;
 
 	/** Creates a Slider. The name will be displayed. 
@@ -803,7 +799,7 @@ public:
 
 
 	/** sets the mode. */
-	void setMode(Mode m, double min, double max, double mid=DBL_MAX, double stepSize=DBL_MAX);;
+	void setMode(Mode m, NormalisableRange<double> nr);
 
 	Mode getMode() const;
 
@@ -833,6 +829,15 @@ public:
 
 	float getDisplayValue() const;
 
+	NormalisableRange<double> getRange() const override
+	{
+		auto r = Slider::getRange();
+		NormalisableRange<double> nr(r.getStart(), r.getEnd());
+		nr.interval = Slider::getInterval();
+		nr.skew = Slider::getSkewFactor();
+		return nr;
+	}
+
 	void updateValue(NotificationType sendAttributeChange=sendNotification) override;
 
 	/** Overrides the slider method to display the tempo names for the TempoSync mode. */
@@ -842,8 +847,6 @@ public:
 	double getValueFromText(const String &text) override;;
 
 	void setLookAndFeelOwned(LookAndFeel *fslaf);
-
-	NormalisableRange<double> getRange() const override;;
 
 	static double getSkewFactorFromMidPoint(double minimum, double maximum, double midPoint);
 
@@ -857,19 +860,12 @@ private:
 
 	String getModeSuffix() const;;
 
-	void setModeRange(double min, double max, double mid, double stepSize);;
-	
 	Mode mode;
-
-	bool useModulatedRing;
 
 	double modeValues[numModes];
 
 	double dragStartValue = 0.0f;
 
-	float displayValue;
-
-	NormalisableRange<double> normRange;
 	ScopedPointer<LookAndFeel> laf;
 	//ScopedPointer<Component> stupidComponent;
 

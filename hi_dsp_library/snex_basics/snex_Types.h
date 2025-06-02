@@ -803,6 +803,8 @@ struct VoiceDataStack
 		}
 	}
 
+	int getNumActiveVoices() const { return voiceNoteOns.size(); }
+
 	template <typename T> void startVoice(T& n, PolyHandler& ph, int voiceIndex, const HiseEvent& e)
 	{
 		voiceNoteOns.insertWithoutSearch({ voiceIndex, e });

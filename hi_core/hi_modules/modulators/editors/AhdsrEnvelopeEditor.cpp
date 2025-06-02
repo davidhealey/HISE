@@ -139,10 +139,10 @@ AhdsrEnvelopeEditor::AhdsrEnvelopeEditor (ProcessorEditor *p)
 	attackSlider->setMode(HiSlider::Time);
 
 	attackLevelSlider->setup(getProcessor(), AhdsrEnvelope::AttackLevel, "Attack Level");
-	attackLevelSlider->setMode(HiSlider::Decibel, -100.0, 0.0, -12.0);
+	attackLevelSlider->setMode(HiSlider::Decibel, NormalisableRange(-100.0, 0.0).withCentreSkew(-12.0));
 
 	sustainSlider->setup(getProcessor(), AhdsrEnvelope::Sustain, "Sustain Level");
-	sustainSlider->setMode(HiSlider::Decibel, -100.0, 0.0, -12.0);
+	sustainSlider->setMode(HiSlider::Decibel, NormalisableRange(-100.0, 0.0).withCentreSkew(-12.0));
 
 	holdSlider->setup(getProcessor(), AhdsrEnvelope::Hold, "Hold Time");
 	holdSlider->setMode(HiSlider::Time);
