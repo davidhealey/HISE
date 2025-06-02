@@ -7401,6 +7401,28 @@ int64 ScriptingApi::FileSystem::getBytesFreeOnVolume(var folder)
 	return numBytes;
 }
 
+File ScriptingApi::FileSystem::getFileFromVar(const var& fileObjectDirectoryConstantOrAbsolutePath, MainController* mc)
+{
+	if(fileObjectDirectoryConstantOrAbsolutePath.isVoid() || fileObjectDirectoryConstantOrAbsolutePath.isUndefined())
+		return File();
+
+	if(fileObjectDirectoryConstantOrAbsolutePath.isInt())
+	{
+		auto constant = (SpecialLocations)(int)fileObjectDirectoryConstantOrAbsolutePath;
+		return getFileStatic(constant, mc);
+	}
+	if(auto sf = dynamic_cast<ScriptingObjects::ScriptFile*>(fileObjectDirectoryConstantOrAbsolutePath.getObject()))
+	{
+		return sf->f;
+	}
+	if(File::isAbsolutePath(fileObjectDirectoryConstantOrAbsolutePath.toString()))
+	{
+		return File(fileObjectDirectoryConstantOrAbsolutePath.toString());
+	}
+
+	return File();
+}
+
 void ScriptingApi::FileSystem::browseInternally(File f, bool forSaving, bool isDirectory, String wildcard, var callback)
 {
 	static bool fileChooserIsOpen = false;
@@ -7499,7 +7521,7 @@ void ScriptingApi::FileSystem::loadExampleAssets()
 }
 
 
-juce::File ScriptingApi::FileSystem::getFile(SpecialLocations l)
+juce::File ScriptingApi::FileSystem::getFileStatic(SpecialLocations l, MainController* mc)
 {
 	File f;
 
@@ -7507,25 +7529,25 @@ juce::File ScriptingApi::FileSystem::getFile(SpecialLocations l)
 	{
 	case Samples:
 	
-		if(FullInstrumentExpansion::isEnabled(getMainController()))
+		if(FullInstrumentExpansion::isEnabled(mc))
 		{
-		  if (auto e = getMainController()->getExpansionHandler().getCurrentExpansion())
+		  if (auto e = mc->getExpansionHandler().getCurrentExpansion())
 		    f = e->getSubDirectory(FileHandlerBase::Samples);
 		}
 		else 
 		{
-			f = getMainController()->getCurrentFileHandler().getSubDirectory(FileHandlerBase::Samples);	
+			f = mc->getCurrentFileHandler().getSubDirectory(FileHandlerBase::Samples);	
 		}
 		
 		break;
-	case Expansions: return getMainController()->getExpansionHandler().getExpansionFolder();
+	case Expansions: return mc->getExpansionHandler().getExpansionFolder();
 #if USE_BACKEND
 	case AppData:
 	{
-		f = ProjectHandler::getAppDataRoot(getMainController());
+		f = ProjectHandler::getAppDataRoot(mc);
 
-		auto company = GET_HISE_SETTING(getMainController()->getMainSynthChain(), HiseSettings::User::Company);
-		auto project = GET_HISE_SETTING(getMainController()->getMainSynthChain(), HiseSettings::Project::Name);
+		auto company = GET_HISE_SETTING(mc->getMainSynthChain(), HiseSettings::User::Company);
+		auto project = GET_HISE_SETTING(mc->getMainSynthChain(), HiseSettings::Project::Name);
 
 		f = f.getChildFile(company.toString()).getChildFile(project.toString());
 
@@ -7540,7 +7562,7 @@ juce::File ScriptingApi::FileSystem::getFile(SpecialLocations l)
 #endif
 	case UserPresets:
 #if USE_BACKEND
-		f = getMainController()->getCurrentFileHandler().getSubDirectory(FileHandlerBase::UserPresets);
+		f = mc->getCurrentFileHandler().getSubDirectory(FileHandlerBase::UserPresets);
 #else
 		f = FrontendHandler::getUserPresetDirectory();
 #endif
@@ -7554,7 +7576,7 @@ juce::File ScriptingApi::FileSystem::getFile(SpecialLocations l)
 	case Temp: f = File::getSpecialLocation(File::tempDirectory); break;
 	case AudioFiles: 
 #if USE_BACKEND
-		f = getMainController()->getCurrentFileHandler().getSubDirectory(FileHandlerBase::AudioFiles);
+		f = mc->getCurrentFileHandler().getSubDirectory(FileHandlerBase::AudioFiles);
 #else
 #if !USE_RELATIVE_PATH_FOR_AUDIO_FILES
 		// You need to set this flag if you want to load audio files from the folder
@@ -7567,6 +7589,11 @@ juce::File ScriptingApi::FileSystem::getFile(SpecialLocations l)
 	}
 
 	return f;
+}
+
+juce::File ScriptingApi::FileSystem::getFile(SpecialLocations l)
+{
+	return getFileStatic(l, getMainController());
 }
 
 hise::FileHandlerBase::SubDirectories ScriptingApi::FileSystem::getSubdirectory(var locationType)

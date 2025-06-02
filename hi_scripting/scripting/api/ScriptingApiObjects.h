@@ -170,6 +170,18 @@ namespace ScriptingObjects
 			return 0.0;
 		}
 
+		/** Applies a median filter with zero padding to the buffer and returns the filtered median values. */
+		var applyMedianFilter(int windowSize)
+		{
+			return var();
+		}
+
+		/** Analyses the sample and splits it into sinusoidal, transient & residual noise components. */
+		var decompose(double sampleRate, var configData)
+		{
+			return 0.0;
+		}
+
 		/** Converts a buffer with up to 44100 samples to a Base64 string. */
 		String toBase64()
 		{

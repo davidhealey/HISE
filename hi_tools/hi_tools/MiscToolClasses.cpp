@@ -2452,12 +2452,12 @@ String FFTHelpers::getWindowType(WindowType w)
 }
 
 void FFTHelpers::toComplexArray(const AudioSampleBuffer& phaseBuffer, const AudioSampleBuffer& magBuffer,
-	AudioSampleBuffer& out)
+	AudioSampleBuffer& out, int channelIndex)
 {
-	auto phase = phaseBuffer.getReadPointer(0);
-	auto mag = magBuffer.getReadPointer(0);
+	auto phase = phaseBuffer.getReadPointer(channelIndex);
+	auto mag = magBuffer.getReadPointer(channelIndex);
 
-	auto output = out.getWritePointer(0);
+	auto output = out.getWritePointer(channelIndex);
 		
 	jassert(phaseBuffer.getNumSamples() == magBuffer.getNumSamples());
 	jassert(phaseBuffer.getNumSamples() * 2 == out.getNumSamples());
@@ -2474,10 +2474,10 @@ void FFTHelpers::toComplexArray(const AudioSampleBuffer& phaseBuffer, const Audi
 	}
 }
 
-void FFTHelpers::toPhaseSpectrum(const AudioSampleBuffer& inp, AudioSampleBuffer& out)
+void FFTHelpers::toPhaseSpectrum(const AudioSampleBuffer& inp, AudioSampleBuffer& out, int channelIndex)
 {
-	auto input = inp.getReadPointer(0);
-	auto output = out.getWritePointer(0);
+	auto input = inp.getReadPointer(channelIndex);
+	auto output = out.getWritePointer(channelIndex);
 
 	jassert(inp.getNumSamples() == out.getNumSamples() * 2);
 
@@ -2491,10 +2491,10 @@ void FFTHelpers::toPhaseSpectrum(const AudioSampleBuffer& inp, AudioSampleBuffer
 	}
 }
 
-void FFTHelpers::toFreqSpectrum(const AudioSampleBuffer& inp, AudioSampleBuffer& out)
+void FFTHelpers::toFreqSpectrum(const AudioSampleBuffer& inp, AudioSampleBuffer& out, int channelIndex)
 {
-	auto input = inp.getReadPointer(0);
-	auto output = out.getWritePointer(0);
+	auto input = inp.getReadPointer(channelIndex);
+	auto output = out.getWritePointer(channelIndex);
         
 	jassert(inp.getNumSamples() == out.getNumSamples() * 2);
 
@@ -2508,9 +2508,9 @@ void FFTHelpers::toFreqSpectrum(const AudioSampleBuffer& inp, AudioSampleBuffer&
 	}
 }
 
-void FFTHelpers::scaleFrequencyOutput(AudioSampleBuffer& b, bool convertToDb, bool invert)
+void FFTHelpers::scaleFrequencyOutput(AudioSampleBuffer& b, bool convertToDb, bool invert, int channelIndex)
 {
-	auto data = b.getWritePointer(0);
+	auto data = b.getWritePointer(channelIndex);
 	auto numOriginalSamples = b.getNumSamples();
 
 	if (numOriginalSamples == 0)
@@ -2595,10 +2595,10 @@ void Spectrum2D::draw(Graphics& g, const Image& img, Rectangle<int> area, Graphi
 	g.restoreState();
 }
 
-void FFTHelpers::applyWindow(WindowType t, AudioSampleBuffer& b, bool normalise)
+void FFTHelpers::applyWindow(WindowType t, AudioSampleBuffer& b, bool normalise, int channelIndex)
 {
     auto s = b.getNumSamples() / 2;
-    auto data = b.getWritePointer(0);
+    auto data = b.getWritePointer(channelIndex);
 
     applyWindow(t, data, s, normalise);
 }

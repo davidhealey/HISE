@@ -1769,9 +1769,13 @@ private:
 
 		ProcessorWithScriptingContent* p;
 
+		static File getFileFromVar(const var& fileObjectDirectoryConstantOrAbsolutePath, MainController* mc);
+
 	private:
 
 		void browseInternally(File startFolder, bool forSaving, bool isDirectory, String wildcard, var callback);
+
+		static File getFileStatic(SpecialLocations l, MainController* mc);
 
 		File getFile(SpecialLocations l);
 

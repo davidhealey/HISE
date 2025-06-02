@@ -2246,7 +2246,7 @@ struct FFTHelpers
 
     static String getWindowType(WindowType w);
 
-    static void applyWindow(WindowType t, AudioSampleBuffer& b, bool normalise=true);
+    static void applyWindow(WindowType t, AudioSampleBuffer& b, bool normalise=true, int channelIndex=0);
     
     static void applyWindow(WindowType t, float* d, int size, bool normalise=true);
     
@@ -2254,13 +2254,13 @@ struct FFTHelpers
 
 	static float getPixelValueForLogXAxis(float freq, float width);
 
-	static void toComplexArray(const AudioSampleBuffer& phaseBuffer, const AudioSampleBuffer& magBuffer, AudioSampleBuffer& out);
+	static void toComplexArray(const AudioSampleBuffer& phaseBuffer, const AudioSampleBuffer& magBuffer, AudioSampleBuffer& out, int channelIndex=0);
 
-    static void toPhaseSpectrum(const AudioSampleBuffer& inp, AudioSampleBuffer& out);
+    static void toPhaseSpectrum(const AudioSampleBuffer& inp, AudioSampleBuffer& out, int channelIndex=0);
 
-    static void toFreqSpectrum(const AudioSampleBuffer& inp, AudioSampleBuffer& out);
+    static void toFreqSpectrum(const AudioSampleBuffer& inp, AudioSampleBuffer& out, int channelIndex=0);
 
-    static void scaleFrequencyOutput(AudioSampleBuffer& b, bool convertToDb, bool invert=false);
+    static void scaleFrequencyOutput(AudioSampleBuffer& b, bool convertToDb, bool invert=false, int channelIndex=0);
 };
 
 struct Spectrum2D

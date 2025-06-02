@@ -208,6 +208,7 @@ will break compatibility with older projects / presets because the tempo indexes
 #include "hi_tools/UpdateMerger.h"
 
 #include "hi_tools/MiscToolClasses.h"
+#include "hi_tools/SiTraNoConverter.h"
 
 #include "hi_tools/PathFactory.h"
 #include "hi_tools/HI_LookAndFeels.h"
