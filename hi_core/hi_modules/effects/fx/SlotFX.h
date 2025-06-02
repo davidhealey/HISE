@@ -76,6 +76,8 @@ public:
 	bool swap(HotswappableProcessor* other) override;
 	bool isPolyphonic() const { return polyHandler.isEnabled(); }
 
+	virtual int getParameterOffset() const { return 0; }
+
     String getCurrentEffectId() const override { return currentEffect; }
     
 	Processor& asProcessor() { return *dynamic_cast<Processor*>(this); }
@@ -114,7 +116,10 @@ public:
 			numParameters = unloadedParameters.size();
 			lastParameters.setSize(numParameters, false);
 
-			asProcessor().parameterNames.clear();
+			if(getParameterOffset() == 0)
+				asProcessor().parameterNames.clear();
+			else
+				asProcessor().parameterNames.removeRange(getParameterOffset(), asProcessor().parameterNames.size() - getParameterOffset());
 
 			for(auto p: unloadedParameters)
 				asProcessor().parameterNames.add(p);
@@ -412,6 +417,8 @@ public:
 	VoiceDataStack voiceStack;
 
 	std::vector<ModulatorChain*> paramModulation;
+
+	int modulatedBlockSize = -1;
 };
 
 class HardcodedTimeVariantModulator: public TimeVariantModulator,
@@ -448,6 +455,214 @@ public:
     Result prepareOpaqueNode(OpaqueNode* n) override;
 };
 
+
+class HardcodedEnvelopeModulator: public EnvelopeModulator,
+								  public HardcodedSwappableEffect,
+								  public snex::Types::VoiceResetter
+{
+public:
+
+	SET_PROCESSOR_NAME("Hardcoded Envelope Modulator", "HardcodedEnvelopeModulator", "A envelope modulator wrapper around a compiled DLL node");
+
+	HardcodedEnvelopeModulator(MainController* mc, const String& id, int numVoices, Modulation::Mode m):
+	  EnvelopeModulator(mc, id, numVoices, m),
+	  HardcodedSwappableEffect(mc, true),
+	  Modulation(m)
+	{
+		numChannelsToRender = 1;
+		polyHandler.setVoiceResetter(this);
+	}
+
+	~HardcodedEnvelopeModulator()
+	{
+		
+	}
+
+	Processor *getChildProcessor(int processorIndex) override { return nullptr; };
+    const Processor *getChildProcessor(int processorIndex) const override { return nullptr; }
+
+	int getNumInternalChains() const override { return 0; };
+    int getNumChildProcessors() const override { return 0; };
+
+	
+
+    ValueTree exportAsValueTree() const override
+	{
+		ValueTree v = EnvelopeModulator::exportAsValueTree();
+		return writeHardcodedData(v);
+	}
+
+    void restoreFromValueTree(const ValueTree& v) override
+	{
+		LockHelpers::noMessageThreadBeyondInitialisation(getMainController());
+		EnvelopeModulator::restoreFromValueTree(v);
+		restoreHardcodedData(v);
+	}
+
+	int getParameterOffset() const override { return (int)hise::EnvelopeModulator::Parameters::numParameters; }
+
+	void setInternalAttribute(int index, float newValue) override
+	{
+		if (index < getParameterOffset())
+			EnvelopeModulator::setInternalAttribute(index, newValue);
+		else
+		{
+			index -= getParameterOffset();
+
+			setHardcodedAttribute(index, newValue);
+		}
+	}
+
+    float getAttribute(int index) const override
+	{
+		if (index < getParameterOffset())
+			return EnvelopeModulator::getAttribute(index);
+		else
+		{
+			index -= getParameterOffset();
+			return getHardcodedAttribute(index);
+		}
+	}
+
+	float getDefaultValue(int index) const override
+	{
+		if (index < getParameterOffset())
+			return EnvelopeModulator::getAttribute(index);
+		else
+		{
+			index -= getParameterOffset();
+			return getHardcodedAttribute(index);
+		}
+	}
+
+	bool checkHardcodedChannelCount() override
+	{
+		if (opaqueNode != nullptr)
+	        return opaqueNode->numChannels == 1;
+	    
+	    return false;
+	}
+
+	ProcessorEditorBody* createEditor(ProcessorEditor* parentEditor) override
+	{
+		return createHardcodedEditor(parentEditor);
+	}
+
+	void onVoiceReset(bool allVoices, int voiceIndex) override
+	{
+		if (allVoices)
+		{
+			for (int i = 0; i < polyManager.getVoiceAmount(); i++)
+				reset(i);
+		}
+		else
+			reset(voiceIndex);
+	}
+
+	bool isVoiceResetActive() const override { return true; }
+
+	int getNumActiveVoices() const override
+	{
+		return voiceStack.getNumActiveVoices();
+	}
+
+	void prepareToPlay(double sampleRate, int samplesPerBlock)
+	{
+		EnvelopeModulator::prepareToPlay(sampleRate, samplesPerBlock);
+
+		SimpleReadWriteLock::ScopedReadLock sl(lock);
+	    auto ok = prepareOpaqueNode(opaqueNode.get());
+
+		errorBroadcaster.sendMessage(sendNotificationAsync, ok.getErrorMessage());
+	}
+
+	Result prepareOpaqueNode(scriptnode::OpaqueNode *n) override
+	{
+	    if (n != nullptr && asProcessor().getSampleRate() > 0.0 && asProcessor().getLargestBlockSize() > 0)
+	    {
+	        PrepareSpecs ps;
+	        ps.numChannels = 1;
+	        ps.blockSize = asProcessor().getLargestBlockSize() / HISE_CONTROL_RATE_DOWNSAMPLING_FACTOR;
+	        ps.sampleRate = asProcessor().getSampleRate() / (double)HISE_CONTROL_RATE_DOWNSAMPLING_FACTOR;
+	        ps.voiceIndex = &polyHandler;
+	        n->prepare(ps);
+	        n->reset();
+
+	#if USE_BACKEND
+	        auto e = factory->getError();
+
+	        if (e.error != Error::OK)
+	        {
+	            //return Result::fail(ScriptnodeExceptionHandler::getErrorMessage(e));
+	        }
+	#endif
+	    }
+
+		return Result::ok();
+	}
+
+	float startVoice(int voiceIndex) override
+	{
+		voiceStack.startVoice(*opaqueNode, polyHandler, voiceIndex, nextEvent);
+
+		if(opaqueNode != nullptr && channelCountMatches)
+		{
+			PolyHandler::ScopedVoiceSetter svs(polyHandler, voiceIndex);
+			span<float, 1> d = {0.0f};
+			opaqueNode->processFrame(d);
+			return d[0];
+		}
+
+		return 0.0f;
+	}
+
+	void stopVoice(int voiceIndex) override
+	{
+		
+	}
+
+	
+
+	void reset(int voiceIndex) override
+	{
+		voiceStack.reset(voiceIndex);
+	}
+
+	bool isPlaying(int voiceIndex) const override
+	{
+		return voiceStack.containsVoiceIndex(voiceIndex);
+	}
+	
+	void calculateBlock(int startSample, int numSamples) override
+	{
+		SimpleReadWriteLock::ScopedReadLock sl(lock);
+
+		if(opaqueNode != nullptr && channelCountMatches)
+		{
+			PolyHandler::ScopedVoiceSetter svs(polyHandler, polyManager.getCurrentVoice());
+
+			auto* modData = internalBuffer.getWritePointer(0, startSample);
+			FloatVectorOperations::clear(modData, numSamples);
+        
+			ProcessDataDyn d(&modData, numSamples, 1);
+			opaqueNode->process(d);
+		}
+	}
+
+	void handleHiseEvent(const HiseEvent& m) override
+	{
+		nextEvent = m;
+		if(opaqueNode != nullptr)
+		{
+			voiceStack.handleHiseEvent(*opaqueNode, polyHandler, m);
+		}
+	}
+
+	ModulatorState *createSubclassedState(int voiceIndex) const override { jassertfalse; return nullptr; };
+
+	HiseEvent nextEvent;
+	VoiceDataStack voiceStack;
+};
 
 
 

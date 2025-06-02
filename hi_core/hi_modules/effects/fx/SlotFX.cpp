@@ -384,7 +384,7 @@ public:
 				auto pData = p.info;
 				auto s = new HiSlider(pData.getId());
 				addAndMakeVisible(s);
-				s->setup(getProcessor(), pData.index, pData.getId());
+				s->setup(getProcessor(), pData.index + getEffect()->getParameterOffset(), pData.getId());
 				auto nr = pData.toRange().rng;
 
 				s->setRange(pData.min, pData.max, jmax<double>(0.001, pData.interval));
@@ -400,7 +400,7 @@ public:
 		else if (getEffect()->hasLoadedButUncompiledEffect())
 		{
 			auto& p = getEffect()->asProcessor();
-			for(int i = 0; i < p.getNumAttributes(); i++)
+			for(int i = getEffect()->getParameterOffset(); i < p.getNumAttributes(); i++)
 			{
 				auto id = p.getIdentifierForParameterIndex(i);
 				auto s = new HiSlider(id.toString());
@@ -618,7 +618,15 @@ bool HardcodedSwappableEffect::setEffect(const String& factoryId, bool /*unused*
             channelCountMatches = checkHardcodedChannelCount();
 		}		
 
-		asProcessor().parameterNames.clear();
+		if(getParameterOffset() == 0)
+		{
+			asProcessor().parameterNames.clear();
+		}
+		else
+		{
+			asProcessor().parameterNames.removeRange(getParameterOffset(), INT_MAX);
+		}
+		
 
 		for (const auto& p : OpaqueNode::ParameterIterator(*opaqueNode))
 		{
@@ -1527,6 +1535,8 @@ HardcodedPolyphonicFX::HardcodedPolyphonicFX(MainController *mc, const String &u
 	VoiceEffectProcessor(mc, uid, numVoices),
 	HardcodedSwappableEffect(mc, true)
 {
+	modulatedBlockSize = HISE_GET_PREPROCESSOR(mc, HARDCODED_POLY_FX_BLOCKSIZE);
+
 	polyHandler.setVoiceResetter(this);
 
 	auto numMods = HISE_GET_PREPROCESSOR(mc, NUM_HARDCODED_POLY_FX_MODS);
@@ -1646,7 +1656,7 @@ void HardcodedPolyphonicFX::applyEffect(int voiceIndex, AudioSampleBuffer &b, in
 
 	PolyHandler::ScopedVoiceSetter svs(polyHandler, voiceIndex);
 
-	int blockSize = HARDCODED_POLY_FX_BLOCKSIZE;
+	int blockSize = modulatedBlockSize;
 
 	bool ok = true;
 
