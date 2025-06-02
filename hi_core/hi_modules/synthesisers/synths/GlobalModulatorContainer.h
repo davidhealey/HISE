@@ -74,7 +74,7 @@ public:
 		return mod == other.mod;
 	}
 
-	ModulatorType* getModulator()
+	ModulatorType* getModulator() const
 	{
 		if (mod.get() == nullptr)
 			return nullptr;
@@ -189,10 +189,21 @@ class EnvelopeData : public GlobalModulatorDataBase<EnvelopeModulator>
 {
 public:
 
+	enum class ClearState: uint8
+	{
+		Playing,
+		PendingReset1, // Leave one buffer through to avoid glitches at fast release times
+		PendingReset2, // Leave another buffer through to avoid glitches at fast release times
+		Reset
+	};
+
 	EnvelopeData(Modulator* mod, int samplesPerBlock) :
 		GlobalModulatorDataBase(mod),
 		savedValuesForBlock(NUM_POLYPHONIC_VOICES, 0)
 	{
+		for(int i = 0; i < NUM_POLYPHONIC_VOICES; i++)
+			isClear[i] = ClearState::Reset;
+
 		prepareToPlay(samplesPerBlock);
 	}
 
@@ -201,31 +212,100 @@ public:
 		ProcessorHelpers::increaseBufferIfNeeded(savedValuesForBlock, samplesPerBlock);
 	}
 
-	const float* getReadPointer(int voiceIndex, int startSample) const
+	bool isPlaying(const HiseEvent& voiceEvent) const
 	{
+		auto idx = getIndexForEvent(voiceEvent);
+
+		auto& flag = isClear[idx];
+
+		auto clear = idx == -1 || (flag == ClearState::Reset);
+		return !clear;
+	}
+
+	const float* getReadPointer(const HiseEvent& voiceEvent, int startSample) const
+	{
+		auto voiceIndex = getIndexForEvent(voiceEvent);
+
+		if(voiceIndex == -1 || (isClear[voiceIndex] == ClearState::Reset))
+			return nullptr;
+
 		return savedValuesForBlock.getReadPointer(voiceIndex, startSample);
 	}
 
-	void saveValues(int voiceIndex, const float* data, int startSample, int numSamples)
+	void saveValues(const HiseEvent& voiceEvent, const float* data, int startSample, int numSamples)
 	{
-		auto dest = savedValuesForBlock.getWritePointer(voiceIndex, startSample);
-		FloatVectorOperations::copy(dest, data + startSample, numSamples);
-		isClear = false;
+		auto voiceIndex = getIndexForEvent(voiceEvent);
+
+		if(voiceIndex == -1)
+			return;
+
+		auto& flag = isClear[voiceIndex];
+
+		if(flag != ClearState::Reset)
+		{
+			auto dest = savedValuesForBlock.getWritePointer(voiceIndex, startSample);
+			FloatVectorOperations::copy(dest, data + startSample, numSamples);
+		}
 	}
 
-	void clear(int voiceIndex)
+	void clear(const HiseEvent& voiceEvent)
 	{
-		if (!isClear)
+		auto voiceIndex = getIndexForEvent(voiceEvent);
+
+		if(voiceIndex != -1)
 		{
-			FloatVectorOperations::fill(savedValuesForBlock.getWritePointer(voiceIndex, 0), 1.0f, savedValuesForBlock.getNumSamples());
-			isClear = true;
+			if(isClear[voiceIndex] == ClearState::Playing)
+				isClear[voiceIndex] = ClearState::PendingReset1;
 		}
+	}
+
+	void startVoice(const HiseEvent& voiceEvent)
+	{
+		auto voiceIndex = getIndexForEvent(voiceEvent);
+
+		jassert(voiceIndex != -1);
+
+		isClear[voiceIndex] = ClearState::Playing;
+	}
+
+	/** Check if clear was called and return true if it's still playing.
+	 *
+	 *  This will leave two buffers through to avoid cutting off the release trail.
+	 */
+	bool clearIfPending(const HiseEvent& voiceEvent)
+	{
+		auto voiceIndex = getIndexForEvent(voiceEvent);
+
+		if(voiceIndex != -1)
+		{
+			if(isClear[voiceIndex] == ClearState::PendingReset1)
+			{
+				isClear[voiceIndex] = ClearState::PendingReset2;
+				return true;
+			}
+			else if (isClear[voiceIndex] == ClearState::PendingReset2)
+			{
+				isClear[voiceIndex] = ClearState::Reset;
+				return false;
+			}
+		}
+
+		return true;
 	}
 
 private:
 
+	int getIndexForEvent(const HiseEvent& voiceEvent) const
+	{
+		if(voiceEvent.isEmpty())
+			return -1;
+
+		return voiceEvent.getEventId() % NUM_POLYPHONIC_VOICES;
+	}
+
 	AudioSampleBuffer savedValuesForBlock;
-	bool isClear = false;
+
+	ClearState isClear[NUM_POLYPHONIC_VOICES];
 };
 
 class GlobalModulatorData
@@ -337,17 +417,7 @@ public:
 		return v;
 	}
 
-	void restoreParameterConnections(const ValueTree& v)
-	{
-		connectedParameters.clear();
-
-		for (const auto& c : v)
-		{
-			auto p = new ParameterConnection(nullptr, -1, {});
-			p->restoreFromValueTree(c);
-			connectedParameters.add(p);
-		}
-	}
+	void restoreParameterConnections(const ValueTree& v);
 
 	void handleTimeVariantControlledParameters(int startSample, int numThisTime) const;
 private:
@@ -382,27 +452,29 @@ public:
 	SET_PROCESSOR_NAME("GlobalModulatorContainer", "Global Modulator Container", "A container that processes Modulator instances that can be used at different locations.");
 
 	float getVoiceStartValueFor(const Processor *voiceStartModulator);
-
     int getNumActiveVoices() const override { return 0; };
     
 	GlobalModulatorContainer(MainController *mc, const String &id, int numVoices);;
-
 	~GlobalModulatorContainer();
 
 	void processorChanged(EventType /*t*/, Processor* /*p*/) override { refreshList(); }
-
 	void restoreFromValueTree(const ValueTree &v) override;
 
-	const float* getEnvelopeValuesForModulator(Processor* p, int startIndex, int voiceIndex);
+	int getEnvelopeIndex(Processor* p) const;
+
+	bool isEnvelopePlaying(int envelopeIndex, const HiseEvent& voiceEvent) const
+	{
+		jassert(isPositiveAndBelow(envelopeIndex, envelopeData.size()));
+
+		return envelopeData.getReference(envelopeIndex).isPlaying(voiceEvent);
+	}
+
+	const float* getEnvelopeValuesForModulator(int envelopeIndex, int startIndex, const HiseEvent& voiceEvent);
 
 	const float *getModulationValuesForModulator(Processor *p, int startIndex);
 	float getConstantVoiceValue(Processor *p, int noteNumber);
 
 	ProcessorEditorBody* createEditor(ProcessorEditor *parentEditor) override;
-
-	
-
-	//void changeListenerCallback(SafeChangeBroadcaster *) { refreshList(); }
 
 	void preStartVoice(int voiceIndex, const HiseEvent& e) final override;
 
@@ -418,22 +490,22 @@ public:
 	
 	const Processor* getModulatorForControlledParameter(const Processor* processor, int parameterIndex) const;
 
-
 	ValueTree exportModulatedParameters() const;
 
 	void restoreModulatedParameters(const ValueTree& v);
-
 	bool synthNeedsEnvelope() const override { return false; }
-
     void connectToGlobalCable(Modulator* childMod, var cable, bool addToMod);
-    
 	bool shouldReset(int voiceIndex);
-	
 	void renderEnvelopeData(int voiceIndex, int startSample, int numSamples);
-
     void sendVoiceStartCableValue(Modulator* m, const HiseEvent& e);
-    
-    
+
+	void handleRetriggeredNote(ModulatorSynthVoice *voice) override
+	{
+		voice->checkRelease();
+		// do nothing here, it should not kill the old voice...
+	}
+
+
 private:
 
     struct GlobalModulatorCable;

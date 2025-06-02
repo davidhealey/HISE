@@ -58,8 +58,15 @@ struct GlobalModulatorContainer::GlobalModulatorCable
 			{
 				auto gs = dynamic_cast<GlobalModulatorContainer*>(mod->getParentProcessor(true));
 
-				if (auto data = gs->getEnvelopeValuesForModulator(mod, startSample, voiceIndex))
-					modValue = *data;
+				auto ev = static_cast<ModulatorSynthVoice*>(gs->getVoice(voiceIndex))->getCurrentHiseEvent();
+
+				if(!mod->isBypassed())
+				{
+					auto idx = gs->getEnvelopeIndex(mod);
+
+					if (auto data = gs->getEnvelopeValuesForModulator(idx, startSample, ev))
+						modValue = *data;
+				}
 			}
 			else
             {
@@ -99,7 +106,8 @@ ModulatorSynth(mc, id, numVoices)
 		{
 			if (ev.getModulator() == m)
 			{
-				ev.saveValues(voiceIndex, data, offset, numSamples);
+				auto e = static_cast<ModulatorSynthVoice*>(this->getVoice(voiceIndex))->getCurrentHiseEvent();
+				ev.saveValues(e, data, offset, numSamples);
 			}
 		}
 	});
@@ -141,15 +149,29 @@ void GlobalModulatorContainer::restoreFromValueTree(const ValueTree &v)
 	refreshList();
 }
 
-const float* GlobalModulatorContainer::getEnvelopeValuesForModulator(Processor* p, int startIndex, int voiceIndex)
+int GlobalModulatorContainer::getEnvelopeIndex(Processor* p) const
 {
-	for (auto& tv : envelopeData)
+	int idx = 0;
+
+	for(const auto& tv: envelopeData)
 	{
-		if (tv.getModulator() == p)
-			return tv.getReadPointer(voiceIndex, startIndex);
+		if(tv.getModulator() == p)
+		{
+			return idx;
+		}
+
+		idx++;
 	}
 
-	return nullptr;
+	jassertfalse;
+	return -1;
+}
+
+const float* GlobalModulatorContainer::getEnvelopeValuesForModulator(int envelopeIndex, int startIndex, const HiseEvent& voiceEvent)
+{
+	jassert(isPositiveAndBelow(envelopeIndex, envelopeData.size()));
+
+	return envelopeData.getReference(envelopeIndex).getReadPointer(voiceEvent, startIndex);
 }
 
 float GlobalModulatorContainer::getVoiceStartValueFor(const Processor * /*voiceStartModulator*/)
@@ -443,6 +465,18 @@ void GlobalModulatorContainerVoice::startNote(int midiNoteNumber, float /*veloci
 	voiceUptime = 0.0;
 
 	uptimeDelta = 1.0;
+
+	auto gc = static_cast<GlobalModulatorContainer*>(getOwnerSynth());
+
+	ModulatorChain *g = static_cast<ModulatorChain*>(gc->getChildProcessor(ModulatorSynth::GainModulation));
+
+	if (g->hasActivePolyEnvelopes())
+	{
+		for (auto& e : gc->envelopeData)
+		{
+			e.startVoice(getCurrentHiseEvent());
+		}
+	}
 }
 
 void GlobalModulatorContainerVoice::calculateBlock(int startSample, int numSamples)
@@ -476,16 +510,28 @@ void GlobalModulatorContainerVoice::checkRelease()
 		return;
 	}
 
+	bool somePlaying = false;
+
 	if (g->hasActivePolyEnvelopes())
 	{
 		for (auto& e : gc->envelopeData)
 		{
-			if (e.getModulator()->isPlaying(getVoiceIndex()))
-				return;
+			auto thisPlaying = e.clearIfPending(getCurrentHiseEvent());
+
+			somePlaying |= thisPlaying;
+
+			if(thisPlaying)
+			{
+				thisPlaying = e.getModulator()->isPlaying(getVoiceIndex());
+
+				if(!thisPlaying)
+					e.clear(getCurrentHiseEvent());
+			}
 		}
 	}
 
-	resetVoice();
+	if(!somePlaying)
+		resetVoice();
 }
 
 GlobalModulatorData::GlobalModulatorData(Processor *modulator_):
@@ -585,6 +631,18 @@ void GlobalModulatorData::handleVoiceStartControlledParameters(int noteNumber)
 	
 
 
+}
+
+void GlobalModulatorData::restoreParameterConnections(const ValueTree& v)
+{
+	connectedParameters.clear();
+
+	for (const auto& c : v)
+	{
+		auto p = new ParameterConnection(nullptr, -1, {});
+		p->restoreFromValueTree(c);
+		connectedParameters.add(p);
+	}
 }
 
 void GlobalModulatorData::handleTimeVariantControlledParameters(int startSample, int numThisTime) const
