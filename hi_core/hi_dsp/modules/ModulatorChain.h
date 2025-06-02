@@ -260,6 +260,11 @@ public:
 		/** If you're doing the expansion manually, you can update the current ramp value with this method. */
 		void setCurrentRampValueForVoice(int voiceIndex, float value) noexcept;
 
+		void setClampTo0To1(bool shouldClamp)
+		{
+			options.clampTo0to1 = shouldClamp;
+		}
+
 		bool isAudioRateModulation() const noexcept;
 
 		struct Options
@@ -267,6 +272,7 @@ public:
 			bool expandToAudioRate = false;
 			bool includeMonophonicValues = true;
 			bool voiceValuesReadOnly = true;
+			bool clampTo0to1 = false;
 		};
 
 		void setDisplayValue(float v);
@@ -368,6 +374,182 @@ public:
 
 			return mv;
 		}
+	};
+
+	/** This class manages two modulation chains for scaling & bipolar adding modulation. */
+	struct ScaleAddCombo
+	{
+		ScaleAddCombo() = default;
+
+		/** Call this in the constructor of your processor before finalizing the mod chains. */
+		void addToConstructionData(Processor* p, ModulatorChain::Collection& cd, const String& name, bool voiceStartOnly=false)
+		{
+			auto sn = name;
+			auto bn = name + " Bipolar";
+			auto t = voiceStartOnly ? ModChainWithBuffer::Type::VoiceStartOnly : ModChainWithBuffer::Type::Normal;
+
+			cd += { p, sn, t, Mode::GainMode };
+			cd += { p, bn, t, Mode::OffsetMode };
+		}
+
+		/** Call this after finalising the mod chains and it will setup the connections. */
+		Result init(Processor* parent, ModulatorChain::Collection& cd, int scaleChainIndex, int bipolarChainIndex, const Colour& c = Colours::transparentBlack)
+		{
+			try
+			{
+				auto& sc = cd[scaleChainIndex];
+				auto& bp = cd[bipolarChainIndex];
+
+				sc.setIncludeMonophonicValuesInVoiceRendering(true);
+				bp.setIncludeMonophonicValuesInVoiceRendering(true);
+
+				if(sc.getChain() == nullptr)
+					throw Result::fail("scaleChainIndex is not a modulator chain");
+
+				if(bp.getChain() == nullptr)
+					throw Result::fail("bipolarChainIndex is not a modulator chain");
+
+				if(sc.getChain()->getMode() != Modulation::Mode::GainMode)
+					throw Result::fail("scale chain has not gain mode enabled");
+
+				if(bp.getChain()->getMode() != Modulation::Mode::OffsetMode)
+					throw Result::fail("bipolar chain has not offset mode enabled");
+
+				scaleChain = &sc;
+				bipolarChain = &bp;
+
+				if(!c.isTransparent())
+				{
+					scaleChain->getChain()->setColour(c);
+					bipolarChain->getChain()->setColour(c);
+				}
+
+				scaleChain->getChain()->sac = this;
+				bipolarChain->getChain()->sac = this;
+					
+			}
+			catch(Result& r)
+			{
+				scaleChain = nullptr;
+				bipolarChain = nullptr;
+				return r;
+			}
+
+			return Result::ok();
+		}
+
+		/** Update this whenever the parameter associated with the modulation chains change. */
+		void setParameterValue(float parameterValue)
+		{
+			jassert(rangeWasSet);
+			normValue = isIdentity ? parameterValue : parameterRange.convertTo0to1(parameterValue);
+			parameterWasSet = true;
+		}
+
+		/** Use this instead of ModulatorChain::getOneModulationValue. */
+		float getOneModulationValue(int startSample) const
+		{
+			jassert(scaleChain != nullptr);
+			jassert(bipolarChain != nullptr);
+			jassert(parameterWasSet);
+			jassert(rangeWasSet);
+
+			auto norm = normValue;
+			norm *= scaleChain->getOneModulationValue(startSample);
+			norm += bipolarChain->getOneModulationValue(startSample);
+			norm = jlimit(0.0f, 1.0f, norm);
+			return isIdentity ? norm : parameterRange.convertFrom0to1(norm);
+		}
+
+		ModulationDisplayValue getModulationOutput(Processor* , double pValue, NormalisableRange<double> nr) const
+		{
+			ModulationDisplayValue mv;
+
+			mv.normalisedValue = nr.convertTo0to1(pValue);
+			mv.modulationActive = scaleChain->getChain()->shouldBeProcessedAtAll() ||
+				                  bipolarChain->getChain()->shouldBeProcessedAtAll();
+
+			if(mv.modulationActive)
+			{
+				mv.addValue = bipolarChain->getOneModulationValue(0);
+				mv.scaleValue = scaleChain->getOneModulationValue(0);
+			}
+
+			return mv;
+		}
+
+		void setParameterRange(const NormalisableRange<float>& newRange)
+		{
+			parameterRange = newRange;
+			isIdentity = parameterRange.start == 0.0f && parameterRange.end == 1.0f && parameterRange.skew == 1.0f;
+			rangeWasSet = true;
+			parameterWasSet = false;
+		}
+
+		ModulatorChain* getChain(Modulation::Mode m) const
+		{
+			jassert(m == Modulation::GainMode || m == Modulation::OffsetMode);
+			jassert(scaleChain != nullptr);
+			jassert(bipolarChain != nullptr);
+
+			return m == Modulation::GainMode ? scaleChain->getChain() : bipolarChain->getChain();
+		}
+
+		void moveModulator(Processor* p, Mode mode)
+		{
+			auto m = dynamic_cast<Modulation*>(p);
+			auto mod = dynamic_cast<Modulator*>(p);
+
+			jassert(m != nullptr);
+			jassert(mod != nullptr);
+
+			auto currentParent = dynamic_cast<ModulatorChain*>(p->getParentProcessor(false));
+			jassert(currentParent != nullptr);
+
+			if(mode != currentParent->getMode())
+			{
+				if(mode == Modulation::GainMode)
+					m->setIsBipolar(false);
+
+				m->setMode(mode);
+
+				auto oldParent = currentParent;
+				auto newParent = getChain(mode);
+
+				oldParent->getHandler()->remove(p, false);
+				newParent->getHandler()->add(p, nullptr);
+
+				oldParent->sendRebuildMessage(true);
+				newParent->sendRebuildMessage(true);
+
+				auto ownerSynth = oldParent->getParentProcessor();
+
+				oldParent->getMainController()->getProcessorChangeHandler().sendProcessorChangeMessage(ownerSynth, MainController::ProcessorChangeHandler::EventType::RebuildModuleList);
+			}
+		}
+
+		void setTableValueConverter(const Table::ValueTextConverter& converter)
+		{
+			jassert(scaleChain != nullptr);
+			jassert(bipolarChain != nullptr);
+
+			getChain(Modulation::Mode::GainMode)->setTableValueConverter(converter);
+			getChain(Modulation::Mode::OffsetMode)->setTableValueConverter(converter);
+		}
+
+	private:
+
+		bool rangeWasSet = false;
+		bool parameterWasSet = false;
+		bool isIdentity = false;
+		NormalisableRange<float> parameterRange;
+		float normValue = 0.0f;
+
+		ModChainWithBuffer* scaleChain = nullptr;
+		ModChainWithBuffer* bipolarChain = nullptr;
+
+		JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(ScaleAddCombo);
+		JUCE_DECLARE_WEAK_REFERENCEABLE(ScaleAddCombo);
 	};
 	
 	SET_PROCESSOR_NAME("ModulatorChain", "Modulator Chain", "chain")
@@ -485,7 +667,43 @@ public:
 
 	void applyMonoOnOutputValue(float monoValue);
 
+	/** This can be used to change the initial value of the modulation signal. Connect this to a UI element that
+	 *  shows the modulation output.
+	 */
+	void setInitialValue(float newInitialValue);
+
+	void changeChildModulatorMode(Processor* childMod, Modulation::Mode newMode, bool isBipolar)
+	{
+		auto mod = dynamic_cast<Modulation*>(childMod);
+		
+		if(auto sac = getConnectedScaleAddCombo())
+			sac->moveModulator(childMod, newMode);
+		else if (getMode() == Modulation::Mode::CombinedMode)
+		{
+			mod->setMode(newMode);
+			sendRebuildMessage(true);
+		}
+		else
+		{
+			jassertfalse;
+			return;
+		}
+
+		if(newMode != Modulation::Mode::GainMode)
+			mod->setIsBipolar(isBipolar);
+	}
+
 public:
+
+	float getInitialValueInternal() const
+	{
+		if(initialValue.first)
+			return initialValue.second;
+
+		return getInitialValue();
+	}
+
+	std::pair<bool, float> initialValue;
 
 	void setTableValueConverter(const Table::ValueTextConverter& converter);;
 
@@ -545,7 +763,6 @@ public:
 
 		void clear() override;
 
-
         Table::ValueTextConverter tableValueConverter;
 
 		bool hasActiveEnvelopes() const noexcept;;
@@ -573,7 +790,41 @@ public:
 		ModulatorChain *chain;
 	};
 
+	ScaleAddCombo* getConnectedScaleAddCombo() const { return sac; }
+
 private:
+
+	struct AddBufferData
+	{
+		void prepare(double sampleRate, int blockSize);
+
+		void checkActiveState(ModulatorChain* parent);
+
+		float* getWritePointer(int startSample_cr, bool getEnvelope)
+		{
+			return (getEnvelope ? envelopeValues.begin() : timeVariantValues.begin()) + startSample_cr;
+		}
+
+		const float* getReadPointer(int startSample_cr, bool getEnvelope) const
+		{
+			return (getEnvelope ? envelopeValues.begin() : timeVariantValues.begin()) + startSample_cr;
+		}
+
+		bool useVoiceStartValue = false;
+		bool useTimeVariantBuffer = false;
+		bool useEnvelopeValues = false;
+
+		heap<float> timeVariantValues;
+		heap<float> envelopeValues;
+		float addStartValue = 0.0f;
+		float currentTimeVariantAddValue = 0.0f;
+	};
+
+	ScopedPointer<AddBufferData> addBufferData;
+
+	std::pair<float, float> getCombinedOutputValues() const;
+
+	ScaleAddCombo* sac = nullptr;
 
     std::function<void(Modulator* m, const HiseEvent& e)> postEventFunction;
     

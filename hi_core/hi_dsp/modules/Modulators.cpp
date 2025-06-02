@@ -139,6 +139,8 @@ float Modulation::calcIntensityValue(float calculatedModulationValue) const noex
 	case GainMode:		return calcGainIntensityValue(calculatedModulationValue);
 	case PanMode:		return calcPanIntensityValue(calculatedModulationValue);
 	case GlobalMode:	return calcGlobalIntensityValue(calculatedModulationValue);
+	case OffsetMode:	return calcOffsetIntensityValue(calculatedModulationValue);
+	case CombinedMode:  return calcGainIntensityValue(calculatedModulationValue);
 	default: jassertfalse; return 0.0f;
 	}
 }
@@ -160,6 +162,11 @@ float Modulation::calcPanIntensityValue(float calculatedModulationValue) const n
 }
 
 float Modulation::calcGlobalIntensityValue(float calculatedModulationValue) const noexcept
+{
+	return getIntensity() * calculatedModulationValue;
+}
+
+float Modulation::calcOffsetIntensityValue(float calculatedModulationValue) const
 {
 	return getIntensity() * calculatedModulationValue;
 }
@@ -186,6 +193,7 @@ void Modulation::setIntensityFromSlider(float sliderValue) noexcept
 	case PitchMode:	setIntensity(PitchConverters::octaveRangeToSignedNormalisedRange(sliderValue)); break;
 	case PanMode:	setIntensity(sliderValue / 100.0f); break;
 	case GlobalMode: setIntensity(sliderValue); break;
+	case OffsetMode: setIntensity(sliderValue); break;
     default: jassertfalse; break;
 	}
 }
@@ -199,13 +207,18 @@ void Modulation::setIsBipolar(bool shouldBeBiPolar) noexcept
 {
 	jassert(modulationMode == PitchMode || 
 			modulationMode == PanMode ||
-			modulationMode == GlobalMode);
+			modulationMode == GlobalMode ||
+			modulationMode == OffsetMode ||
+	        modulationMode == CombinedMode);
 
 	bipolar = shouldBeBiPolar;
 }
 
 float Modulation::getInitialValue() const noexcept
 {
+	if(getMode() == Mode::OffsetMode)
+		return 0.0f;
+
 	// Pitch mode is converted to 0.5...2.0 so it's still 1.0f;
 	return getMode() == PanMode ? 0.0f : 1.0f;
 }
@@ -224,6 +237,8 @@ float Modulation::getDisplayIntensity() const noexcept
 	case PitchMode:			return intensity * 12.0f; // return (log(intensity) / log(2.0f)) * 12.0f;
 	case PanMode:			return intensity * 100.0f;
 	case GlobalMode:		return intensity;
+	case OffsetMode:		return intensity;
+	case CombinedMode:		return intensity;
 	default:				jassertfalse; return 0.0f;
 	}
 }
@@ -396,10 +411,11 @@ void TimeModulation::applyTimeModulation(float* destinationBuffer, int startInde
 
 		switch (modulationMode)
 		{
-		case GainMode: applyGainModulation(mod, dest, 1.0f, smoothedIntensityValues, samplesToCopy); break;
-		case PitchMode: applyPitchModulation(mod, dest, 1.0f, smoothedIntensityValues, samplesToCopy); break;
-		case PanMode:	applyPanModulation(mod, dest, 1.0f, smoothedIntensityValues, samplesToCopy); break;
-		case GlobalMode: applyGlobalModulation(mod, dest, 1.0f, smoothedIntensityValues, samplesToCopy); break;
+		case GainMode:    applyGainModulation(mod, dest, 1.0f, smoothedIntensityValues, samplesToCopy); break;
+		case PitchMode:   applyPitchModulation(mod, dest, 1.0f, smoothedIntensityValues, samplesToCopy); break;
+		case PanMode:	  applyPanModulation(mod, dest, 1.0f, smoothedIntensityValues, samplesToCopy); break;
+		case GlobalMode:  applyGlobalModulation(mod, dest, 1.0f, smoothedIntensityValues, samplesToCopy); break;
+		case OffsetMode:  applyOffsetModulation(mod, dest, 1.0f, smoothedIntensityValues, samplesToCopy); break;
             default: break;
 		}
 	}
@@ -407,10 +423,11 @@ void TimeModulation::applyTimeModulation(float* destinationBuffer, int startInde
 	{
 		switch (modulationMode)
 		{
-		case GainMode:	applyGainModulation(mod, dest, getIntensity(), samplesToCopy); break;
-		case PitchMode: applyPitchModulation(mod, dest, getIntensity(), samplesToCopy); break;
-		case PanMode:	applyPanModulation(mod, dest, getIntensity(), samplesToCopy); break;
-		case GlobalMode:	applyGlobalModulation(mod, dest, getIntensity(), samplesToCopy);
+		case GainMode:	  applyGainModulation(mod, dest, getIntensity(), samplesToCopy); break;
+		case PitchMode:   applyPitchModulation(mod, dest, getIntensity(), samplesToCopy); break;
+		case PanMode:	  applyPanModulation(mod, dest, getIntensity(), samplesToCopy); break;
+		case GlobalMode:  applyGlobalModulation(mod, dest, getIntensity(), samplesToCopy); break;
+		case OffsetMode:  applyOffsetModulation(mod, dest, getIntensity(), samplesToCopy); break;
             break;
         default: break;
 		}
@@ -611,6 +628,55 @@ void TimeModulation::applyGlobalModulation(float * calculatedModValues, float * 
 	else
 		applyGainModulation(calculatedModValues, destinationValues, fixedIntensity, numValues);
 }
+
+void TimeModulation::applyOffsetModulation(float* calculatedModValues, float* destinationValues, float fixedIntensity,
+	float* intensityValues, int numValues) const noexcept
+{
+	// [0 ... 1]
+	auto src = calculatedModValues;
+	auto dst = destinationValues;
+
+	while(--numValues >= 0)
+	{
+		auto v = *src++;
+
+		if(isBipolar())
+		{
+			v *= 2.0f;
+			v -= 1.0f;
+		}
+
+		v *= fixedIntensity;
+		v *= *intensityValues++;
+
+		*dst++ += v;
+	}
+}
+
+void TimeModulation::applyOffsetModulation(float* calculatedModValues, float* destinationValues, float fixedIntensity,
+                                            int numValues) const noexcept
+{
+	// [0 ... 1]
+	auto src = calculatedModValues;
+	auto dst = destinationValues;
+
+	while(--numValues >= 0)
+	{
+		auto v = *src++;
+
+		if(isBipolar())
+		{
+			v *= 2.0f;
+			v -= 1.0f;
+		}
+
+		v *= fixedIntensity;
+
+		*dst++ += v;
+	}	
+}
+
+
 
 void TimeModulation::applyIntensityForGainValues(float* calculatedModulationValues, float fixedIntensity, int numValues) const
 {
@@ -816,6 +882,8 @@ ValueTree VoiceStartModulator::exportAsValueTree() const
 
 	v.setProperty("Intensity", getIntensity(), nullptr);
 
+	Modulation::storeMode(v, this);
+
 	if (getMode() != Modulation::GainMode)
 		v.setProperty("Bipolar", isBipolar(), nullptr);
 
@@ -826,6 +894,8 @@ ValueTree VoiceStartModulator::exportAsValueTree() const
 void VoiceStartModulator::restoreFromValueTree(const ValueTree& v)
 {
 	Processor::restoreFromValueTree(v);
+
+	Modulation::restoreMode(v, this);
 
 	if (getMode() != Modulation::GainMode)
 	{
@@ -933,6 +1003,7 @@ Processor *EnvelopeModulatorFactoryType::createProcessor(int typeIndex, const St
 	case voiceKillEnvelope: return new ScriptnodeVoiceKiller(m, id, numVoices);
 	case globalEnvelope:	return new GlobalEnvelopeModulator(m, id, mode, numVoices);
 	case eventDataEnvelope: return new EventDataEnvelope(m, id, numVoices, mode);
+	case hardcodedEnvelope: return new HardcodedEnvelopeModulator(m, id, numVoices, mode);
 	default: jassertfalse;	return nullptr;
 	}
 };
@@ -996,6 +1067,8 @@ ValueTree TimeVariantModulator::exportAsValueTree() const
 
 	v.setProperty("Intensity", getIntensity(), nullptr);
 
+	Modulation::storeMode(v, this);
+
 	if (getMode() != Modulation::GainMode)
 		v.setProperty("Bipolar", isBipolar(), nullptr);
 
@@ -1006,13 +1079,17 @@ void TimeVariantModulator::restoreFromValueTree(const ValueTree& v)
 {
 	Processor::restoreFromValueTree(v);
 
+
 	setIntensity(v.getProperty("Intensity", 1.0f));
+
+	Modulation::restoreMode(v, this);
 
 	if (getMode() != Modulation::GainMode)
 	{
 		auto defaultMode = true;
             
-		if(getMode() == Modulation::GlobalMode)
+		if(getMode() == Modulation::GlobalMode ||
+		   getMode() == Modulation::Mode::CombinedMode)
 			defaultMode = false;
             
 		setIsBipolar(v.getProperty("Bipolar", defaultMode));
@@ -1079,6 +1156,8 @@ ValueTree EnvelopeModulator::exportAsValueTree() const
 		saveAttribute(Monophonic, "Monophonic");
 		saveAttribute(Retrigger, "Retrigger");
 
+		Modulation::storeMode(v, this);
+
 		if (getMode() != Modulation::GainMode)
 			v.setProperty("Bipolar", isBipolar(), nullptr);
 	}
@@ -1096,6 +1175,8 @@ void EnvelopeModulator::restoreFromValueTree(const ValueTree& v)
 	{
 		loadAttribute(Monophonic, "Monophonic");
 		loadAttribute(Retrigger, "Retrigger");
+
+		Modulation::restoreMode(v, this);
 
 		if (getMode() != Modulation::GainMode)
 		{
