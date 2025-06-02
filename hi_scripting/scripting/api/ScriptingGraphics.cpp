@@ -4203,7 +4203,9 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawRotarySlider(Graphics &g_, 
 		obj->setProperty("value", s.getValue());
 
 		NormalisableRange<double> range = NormalisableRange<double>(s.getMinimum(), s.getMaximum(), s.getInterval(), s.getSkewFactor());
-		obj->setProperty("valueNormalized", range.convertTo0to1(s.getValue()));
+		auto normValue = range.convertTo0to1(s.getValue());
+		auto mv = ModulationDisplayValue::fromComponent(s, normValue);
+		mv.storeToJSON(obj);
 
 		obj->setProperty("valueSuffixString", s.getTextFromValue(s.getValue()));
 		obj->setProperty("suffix", s.getTextValueSuffix());
@@ -4233,7 +4235,7 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawLinearSlider(Graphics &g, i
 {
 	if (functionDefined("drawLinearSlider"))
 	{
-		auto obj = new DynamicObject();
+		DynamicObject* obj = new DynamicObject();
 
 		writeId(obj, &slider);
 		obj->setProperty("enabled", slider.isEnabled());
@@ -4241,12 +4243,13 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawLinearSlider(Graphics &g, i
 
 		auto parentPack = slider.findParentComponentOfClass<SliderPack>();
 
-		
+		NormalisableRange<double> range = NormalisableRange<double>(slider.getMinimum(), slider.getMaximum(), slider.getInterval(), slider.getSkewFactor());
+		auto normValue = range.convertTo0to1(slider.getValue());
+		auto mv = ModulationDisplayValue::fromComponent(slider, normValue);
+		mv.storeToJSON(obj);
 
 		obj->setProperty("area", ApiHelpers::getVarRectangle(useRectangleClass, slider.getLocalBounds().toFloat()));
-
 		obj->setProperty("valueAsText", slider.getTextFromValue(slider.getValue()));
-
 		obj->setProperty("valueSuffixString", slider.getTextFromValue(slider.getValue()));
 		obj->setProperty("suffix", slider.getTextValueSuffix());
 		obj->setProperty("skew", slider.getSkewFactor());
@@ -4257,9 +4260,6 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawLinearSlider(Graphics &g, i
 		obj->setProperty("min", slider.getMinimum());
 		obj->setProperty("max", slider.getMaximum());
 		obj->setProperty("value", slider.getValue());
-
-		NormalisableRange<double> range = NormalisableRange<double>(slider.getMinimum(), slider.getMaximum(), slider.getInterval(), slider.getSkewFactor());
-		obj->setProperty("valueNormalized", range.convertTo0to1(slider.getValue()));
 
 		// Range style slider
 		double minv = 0.0;

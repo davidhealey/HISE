@@ -173,12 +173,6 @@ AhdsrEnvelopeEditor::AhdsrEnvelopeEditor (ProcessorEditor *p)
 
 	startTimer(50);
 
-	attackSlider->setIsUsingModulatedRing(true);
-	attackLevelSlider->setIsUsingModulatedRing(true);
-	decaySlider->setIsUsingModulatedRing(true);
-	releaseSlider->setIsUsingModulatedRing(true);
-	sustainSlider->setIsUsingModulatedRing(true);
-
 	ProcessorEditorLookAndFeel::setupEditorNameLabel(label);
 
     //[/Constructor]

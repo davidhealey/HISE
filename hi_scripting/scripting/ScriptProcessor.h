@@ -55,7 +55,33 @@ public:
 		numEditorStates
 	};
 
-	virtual ~ProcessorWithScriptingContent();;
+	virtual ~ProcessorWithScriptingContent();
+
+	void setModulationDisplayQueryFunction(int idx, Processor* p, const ModulationDisplayValue::QueryFunction& mv)
+	{
+		if(mv)
+		{
+			assignedFunctions[idx] = [mv, p](Processor*, double v, NormalisableRange<double> nr)
+			{
+				return mv(p, v, nr);
+			};
+		}
+		else
+		{
+			assignedFunctions[idx] = {};
+		}
+		
+	}
+
+	ModulationDisplayValue::QueryFunction getAssignedModulationQueryFunction(int parameterIndex) const
+	{
+		auto f = assignedFunctions.find(parameterIndex);
+
+		if(f != assignedFunctions.end())
+			return f->second;
+
+		return {};
+	}
 
 	void setAllowObjectConstruction(bool shouldBeAllowed);
 
@@ -150,6 +176,8 @@ protected:
 	} contentParameterHandler;
 
 private:
+
+	std::map<int, ModulationDisplayValue::QueryFunction> assignedFunctions;
 
 	void defaultControlCallbackIdle(ScriptingApi::Content::ScriptComponent *component, const var& controllerValue, Result& r);
 

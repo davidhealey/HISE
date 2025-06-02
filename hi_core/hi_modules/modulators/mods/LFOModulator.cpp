@@ -369,6 +369,16 @@ void LfoModulator::setInternalAttribute (int parameter_index, float newValue)
 	default: 
 		jassertfalse;
 	}
+}
+
+ModulationDisplayValue::QueryFunction LfoModulator::getModulationQueryFunction(int parameterIndex) const
+{
+	if(parameterIndex == Parameters::Frequency)
+	{
+		return ModulatorChain::GetModulationOutput<(int)LfoModulator::InternalChains::FrequencyChain>();
+	}
+
+	return TimeVariantModulator::getModulationQueryFunction(parameterIndex);
 };
 
 

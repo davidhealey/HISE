@@ -805,6 +805,8 @@ String HiSlider::getTextFromValue(double value)
 
 void HiSlider::setup(Processor *p, int parameterIndex, const String &parameterName)
 {
+	modUpdater = new ModUpdater(*this, p->getMainController());
+
 	MacroControlledObject::setup(p, parameterIndex, parameterName);
 
 	p->getMainController()->skin(*this);
@@ -818,6 +820,8 @@ void HiSlider::setup(Processor *p, int parameterIndex, const String &parameterNa
 		setDoubleClickReturnValue(true, (double)p->getDefaultValue(parameterIndex), ModifierKeys());
 
 	setName(parameterName);
+
+	modUpdater->setUpdateFunction(p->getModulationQueryFunction(parameterIndex));
 }
 
 double HiSlider::getValueFromText(const String& text)
@@ -909,9 +913,7 @@ NormalisableRange<double> HiSlider::getRangeForMode(HiSlider::Mode m)
 HiSlider::HiSlider(const String &name) :
 	Slider(name),
 	MacroControlledObject(),
-	mode(numModes),
-	displayValue(1.0f),
-	useModulatedRing(false)
+	mode(numModes)
 {
 	addChildComponent(numberTag);
 
@@ -1097,28 +1099,15 @@ void HiSlider::setMode(Mode m, NormalisableRange<double> nr)
 HiSlider::Mode HiSlider::getMode() const
 { return mode; }
 
-void HiSlider::setDisplayValue(float newDisplayValue)
-{
-	if(newDisplayValue != displayValue)
-	{
-		displayValue = newDisplayValue;
-		repaint();
-	}
-}
-
 bool HiSlider::isUsingModulatedRing() const noexcept
-{ return useModulatedRing; }
-
-void HiSlider::setIsUsingModulatedRing(bool shouldUseModulatedRing)
-{ useModulatedRing = shouldUseModulatedRing; }
+{
+	return modUpdater != nullptr && (bool)modUpdater->modFunction;
+}
 
 float HiSlider::getDisplayValue() const
 {
-	return useModulatedRing ? displayValue : 1.0f;
+	return isUsingModulatedRing() ? (float)getProperties()["modValue"] : 1.0f;
 }
-
-NormalisableRange<double> HiSlider::getRange() const
-{ return normRange; }
 
 String HiSlider::getModeSuffix() const
 {

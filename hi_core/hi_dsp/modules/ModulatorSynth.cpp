@@ -1175,6 +1175,24 @@ bool ModulatorSynth::isChainDisabled(InternalChains chain) const
 	return disabledChains[chain];
 }
 
+void ModulatorSynth::syncAfterDelayStart(bool waitForDelay, int voiceIndex)
+{
+	LockHelpers::SafeLock sl(getMainController(), LockHelpers::Type::AudioLock, isOnAir());
+
+	for(auto& mb: modChains)
+	{
+		if(!waitForDelay)
+		{
+			mb.resetVoice(voiceIndex);
+			mb.getChain()->syncAfterDelayStart(waitForDelay, voiceIndex);
+		}
+	}
+
+	effectChain->syncAfterDelayStart(waitForDelay, voiceIndex);
+
+		
+}
+
 int ModulatorSynth::getNumFreeVoices() const
 {
 	auto numActive = activeVoices.size() - pendingRemoveVoices.size();

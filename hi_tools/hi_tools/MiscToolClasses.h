@@ -2696,6 +2696,90 @@ struct TextEditorWithAutocompleteComponent: public Timer,
     JUCE_DECLARE_WEAK_REFERENCEABLE(TextEditorWithAutocompleteComponent);
 };
 
+class Processor;
 
+struct ModulationDisplayValue
+{
+	using QueryFunction = std::function<ModulationDisplayValue(Processor*, double, NormalisableRange<double>)>;
+
+	double getNormalisedModulationValue() const
+	{
+		return modulationActive ? jlimit(0.0, 1.0, normalisedValue * scaleValue + addValue) : normalisedValue;
+	}
+	
+	void storeToJSON(DynamicObject* obj)
+	{
+		store(obj->getProperties());
+	}
+
+	void storeToComponent(Component& c)
+	{
+		store(c.getProperties());
+		c.repaint();
+	}
+
+	static ModulationDisplayValue fromJSON(const var& json, double defaultValue)
+	{
+		if(auto obj = json.getDynamicObject())
+		{
+			return fromNamedValueSet(obj->getProperties());
+		}
+
+		ModulationDisplayValue d;
+		d.modulationActive = false;
+		d.normalisedValue = jlimit(0.0, 1.0, defaultValue);
+		return d;
+	}
+
+	static ModulationDisplayValue fromComponent(Component& s, double defaultValue)
+	{
+		auto d = fromNamedValueSet(s.getProperties());
+
+		if(!d.modulationActive)
+			d.normalisedValue = defaultValue;
+
+		return d;
+	}
+
+	bool operator==(const ModulationDisplayValue& other) const
+	{
+		return normalisedValue == other.normalisedValue &&
+			   scaleValue == other.scaleValue &&
+			   addValue == other.addValue &&
+			   modulationActive == other.modulationActive;
+	}
+
+	bool operator!=(const ModulationDisplayValue& other) const
+	{
+		return !(*this == other);
+	}
+
+	
+	double normalisedValue = 0.0;
+	double scaleValue = 1.0;
+	double addValue = 0.0;
+	bool modulationActive = false;
+
+private:
+
+	static ModulationDisplayValue fromNamedValueSet(const NamedValueSet& set)
+	{
+		ModulationDisplayValue v;
+		v.scaleValue = set["scaleValue"];
+		v.normalisedValue = set["valueNormalized"];
+		v.addValue = set["addValue"];
+		v.modulationActive = set["modulationActive"];
+
+		return v;
+	}
+
+	void store(NamedValueSet& set) const
+	{
+		set.set("valueNormalized", normalisedValue);
+		set.set("scaleValue", scaleValue);
+		set.set("addValue", addValue);
+		set.set("modulationActive", modulationActive);
+	}
+};
 
 }

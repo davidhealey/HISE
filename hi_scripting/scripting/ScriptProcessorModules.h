@@ -99,6 +99,11 @@ public:
 		return getContentParameterAmount();
 	}
 
+	ModulationDisplayValue::QueryFunction getModulationQueryFunction(int parameterIndex) const override
+	{
+		return getAssignedModulationQueryFunction(parameterIndex);
+	}
+
 	void addToFront(bool addToFront_) noexcept;;
 	bool isFront() const;;
 

@@ -322,7 +322,10 @@ public:
     
     /** Overwrite this and return the default value. */
     virtual float getDefaultValue(int /*parameterIndex*/) const;
-    
+
+    /** Overwrite this method and return a function that calculates the modulation value for the given parameterIndex. */
+    virtual ModulationDisplayValue::QueryFunction getModulationQueryFunction(int parameterIndex) const { return {}; }
+
     /** This must be overriden by every Processor and return the Chain with the Chain index.
      *
      *	You can either:

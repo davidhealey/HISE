@@ -118,6 +118,14 @@ float StereoEffect::getDefaultValue(int parameterIndex) const
 	}
 }
 
+ModulationDisplayValue::QueryFunction StereoEffect::getModulationQueryFunction(int parameterIndex) const
+{
+	if(parameterIndex == Pan)
+		return ModulatorChain::GetModulationOutput<(int)InternalChains::BalanceChain>();
+
+	return VoiceEffectProcessor::getModulationQueryFunction(parameterIndex);
+}
+
 void StereoEffect::restoreFromValueTree(const ValueTree &v)
 {
 	EffectProcessor::restoreFromValueTree(v);

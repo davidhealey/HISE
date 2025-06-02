@@ -161,6 +161,8 @@ public:
 	float getAttribute (int parameter_index) const override;
 	void setInternalAttribute (int parameter_index, float newValue) override;
 
+	ModulationDisplayValue::QueryFunction getModulationQueryFunction(int parameterIndex) const override;
+
 	void getWaveformTableValues(int displayIndex, float const** tableValues, int& numValues, float& normalizeValue) override;
 
 	void setBypassed(bool shouldBeBypassed, NotificationType notifyChangeHandler=dontSendNotification) noexcept override;

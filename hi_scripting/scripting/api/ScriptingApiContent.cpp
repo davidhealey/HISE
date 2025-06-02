@@ -1998,6 +1998,7 @@ struct ScriptingApi::Content::ScriptSlider::Wrapper
 	API_METHOD_WRAPPER_1(ScriptSlider, contains);
     API_METHOD_WRAPPER_0(ScriptSlider, createModifiers);
     API_VOID_METHOD_WRAPPER_2(ScriptSlider, setModifiers);
+	API_VOID_METHOD_WRAPPER_2(ScriptSlider, connectToModulatedParameter);
 };
 
 ScriptingApi::Content::ScriptSlider::ScriptSlider(ProcessorWithScriptingContent *base, Content* /*parentContent*/, Identifier name_, int x, int y, int, int) :
@@ -2093,6 +2094,7 @@ maximum(1.0f)
 	ADD_API_METHOD_0(getMaxValue);
 	ADD_API_METHOD_1(contains);
     ADD_API_METHOD_0(createModifiers);
+	ADD_API_METHOD_2(connectToModulatedParameter);
     ADD_TYPED_API_METHOD_2(setModifiers, VarTypeChecker::String, VarTypeChecker::IndexOrArray);
 
 	//addConstant("Decibel", HiSlider::Mode::Decibel);
@@ -2318,6 +2320,46 @@ void ScriptingApi::Content::ScriptSlider::setMaxValue(double max) noexcept
 	else
 	{
 		logErrorAndContinue("setMaxValue() can only be called on sliders in 'Range' mode.");
+	}
+}
+
+void ScriptingApi::Content::ScriptSlider::connectToModulatedParameter(String moduleId, var parameterId)
+{
+	auto idx = getScriptProcessor()->getScriptingContent()->getComponentIndex(this);
+
+	if(auto p = ProcessorHelpers::getFirstProcessorWithName(getScriptProcessor()->getMainController_()->getMainSynthChain(), moduleId))
+	{
+		int parameterIndex;
+
+		if(parameterId.isInt())
+			parameterIndex = (int)parameterId;
+		else
+		{
+			Identifier pid(parameterId.toString());
+
+			ModulationDisplayValue::QueryFunction mv;
+
+			if(pid == Identifier("GainModulation"))
+			{
+				mv = ModulatorChain::SpecialQueryFunctions::GainModulation;
+			}
+			else if(pid == Identifier("PitchModulation"))
+			{
+				mv = ModulatorChain::SpecialQueryFunctions::PitchModulation;
+			}
+			else
+			{
+				parameterIndex = p->getParameterIndexForIdentifier(pid);
+				mv = p->getModulationQueryFunction(parameterIndex);
+			}
+			
+			getScriptProcessor()->setModulationDisplayQueryFunction(idx, p, mv);
+		}
+	}
+	else
+	{
+		getScriptProcessor()->setModulationDisplayQueryFunction(idx, nullptr, {});
+		reportScriptError("Can't find module with ID " + moduleId);
 	}
 }
 

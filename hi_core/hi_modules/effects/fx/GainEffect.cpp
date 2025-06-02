@@ -159,6 +159,19 @@ float GainEffect::getAttribute(int parameterIndex) const
 	}
 }
 
+ModulationDisplayValue::QueryFunction GainEffect::getModulationQueryFunction(int parameterIndex) const
+{
+	switch(parameterIndex)
+	{
+	case Gain:      return ModulatorChain::GetModulationOutput<(int)InternalChains::GainChain>();
+	case Delay:     return ModulatorChain::GetModulationOutput<(int)InternalChains::DelayChain>();
+	case Balance:   return ModulatorChain::GetModulationOutput<(int)InternalChains::BalanceChain>();
+	case Width:     return ModulatorChain::GetModulationOutput<(int)InternalChains::WidthChain>();
+	}
+
+	return MasterEffectProcessor::getModulationQueryFunction(parameterIndex);
+}
+
 void GainEffect::restoreFromValueTree(const ValueTree &v)
 {
 	MasterEffectProcessor::restoreFromValueTree(v);

@@ -313,6 +313,62 @@ public:
 
 	using ModulationType = ModChainWithBuffer::Type;
 	using Collection = PreallocatedHeapArray<ModChainWithBuffer, ModChainWithBuffer::ConstructionData>;
+
+
+	struct SpecialQueryFunctions
+	{
+		/** A special function that converts db to gain and calculates the proper scaleValue for the resulting mod value. */
+		static ModulationDisplayValue GainModulation(Processor* p, double v, NormalisableRange<double> nr);
+
+		static ModulationDisplayValue PitchModulation(Processor* p, double v, NormalisableRange<double> nr);
+	};
+
+	/* Use this with HiSlider::setIsUsingModulatedRing(). */
+    template <int P > struct GetModulationOutput
+	{
+		ModulationDisplayValue operator()(Processor* p, double pValue, NormalisableRange<double> nr) const
+		{
+			auto normValue = nr.convertTo0to1(pValue);
+			auto modChain = dynamic_cast<ModulatorChain*>(p->getChildProcessor(P));
+
+			ModulationDisplayValue mv;
+
+			mv.normalisedValue = normValue;
+			mv.modulationActive = modChain->shouldBeProcessedAtAll();
+
+			if(mv.modulationActive)
+			{
+				switch(modChain->getMode())
+				{
+				case Modulation::GainMode:
+				case Modulation::GlobalMode:
+					mv.scaleValue = modChain->getOutputValue();
+					break;
+				case Modulation::PitchMode:
+				{
+					// Use SpecialQueryFunction::PitchModulation instead...
+					jassertfalse;
+					break;
+				}
+				case Modulation::PanMode:
+				case Modulation::OffsetMode:
+					mv.addValue = modChain->getOutputValue();
+					break;
+				case Modulation::Mode::CombinedMode:
+				{
+					auto x = modChain->getCombinedOutputValues();
+					mv.scaleValue = jlimit(0.0, 1.0, (double)x.first);
+					mv.addValue = jlimit(0.0, 1.0, normValue * mv.scaleValue + x.second) - normValue * mv.scaleValue;
+					break;
+				}
+				default:
+					break;
+				}
+			}
+
+			return mv;
+		}
+	};
 	
 	SET_PROCESSOR_NAME("ModulatorChain", "Modulator Chain", "chain")
 

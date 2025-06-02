@@ -137,6 +137,60 @@ void ModulatorChain::ModChainWithBuffer::setConstantVoiceValueInternal(int voice
 	currentConstantValue = newValue;
 }
 
+ModulationDisplayValue ModulatorChain::SpecialQueryFunctions::GainModulation(Processor* p, double v,
+	NormalisableRange<double> nr)
+{
+	auto gainValue = Decibels::decibelsToGain(v);
+	auto modChain = dynamic_cast<ModulatorChain*>(p->getChildProcessor(ModulatorSynth::InternalChains::GainModulation)); 
+
+	ModulationDisplayValue mv;
+
+	mv.normalisedValue = nr.convertTo0to1(v);
+	mv.modulationActive = modChain->shouldBeProcessedAtAll();
+
+	if(mv.modulationActive && mv.normalisedValue > 0.0)
+	{
+		auto modValue = modChain->getOutputValue();
+		//auto scaledValue = modValue * gainValue;
+		auto scaledDb = Decibels::gainToDecibels(modValue);
+		scaledDb = nr.snapToLegalValue(scaledDb);
+		auto scaledRange = nr.convertTo0to1(scaledDb);
+		auto realScaledValue = scaledRange / mv.normalisedValue;
+		mv.scaleValue = realScaledValue;
+	}
+
+	return mv;
+}
+
+ModulationDisplayValue ModulatorChain::SpecialQueryFunctions::PitchModulation(Processor* p, double v,
+                                                                              NormalisableRange<double> nr)
+{
+	auto normValue = nr.convertTo0to1(v);
+	auto modChain = dynamic_cast<ModulatorChain*>(p->getChildProcessor(ModulatorSynth::InternalChains::PitchModulation));
+
+	auto anyPlaying = dynamic_cast<ModulatorSynth*>(p)->getNumActiveVoices() != 0;
+
+	ModulationDisplayValue mv;
+
+	mv.normalisedValue = normValue;
+	mv.modulationActive = modChain->shouldBeProcessedAtAll();
+
+	if(!anyPlaying)
+	{
+		mv.addValue = 0.0;
+	}
+	else
+	{
+		auto displayValue = modChain->getOutputValue();
+		auto displayValueSemitones = scriptnode::conversion_logic::pitch2st().getValue(displayValue);
+		displayValueSemitones = nr.snapToLegalValue(displayValueSemitones);
+		auto displayValueNormalised = nr.convertTo0to1(displayValueSemitones);
+		mv.addValue = displayValueNormalised - normValue;
+	}
+
+	return mv;
+}
+
 const Chain::Handler* ModulatorChain::getHandler() const
 {return &handler;}
 

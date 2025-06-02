@@ -709,6 +709,7 @@ SynthGroupConstrainer::SynthGroupConstrainer()
 	ADD_NAME_TO_TYPELIST(ModulatorSynthChain);
 	ADD_NAME_TO_TYPELIST(GlobalModulatorContainer);
 	ADD_NAME_TO_TYPELIST(ModulatorSynthGroup);
+	ADD_NAME_TO_TYPELIST(MacroModulationSource);
 
 	forbiddenModulators.addArray(typeNames);
 }

@@ -30,8 +30,7 @@
 *   ===========================================================================
 */
 
-#ifndef MACROCONTROLLEDCOMPONENTS_H_INCLUDED
-#define MACROCONTROLLEDCOMPONENTS_H_INCLUDED
+#pragma once
 
 namespace hise { using namespace juce;
 
@@ -817,15 +816,13 @@ public:
 
 	bool callWhenSingleMacro(const std::function<bool(AudioProcessor* p, int parameterIndex)>& f);
 
-	/** If the slider represents a modulated attribute (eg. LFO Frequency), this can be used to set the displayed value. 
-	*
-	*	In order to use this functionality, add a timer callback to your editor and update the value using the ModulatorChain's getOutputValue().
-	*/
-	void setDisplayValue(float newDisplayValue);
-
 	bool isUsingModulatedRing() const noexcept;;
 
-	void setIsUsingModulatedRing(bool shouldUseModulatedRing);;
+	void setDisplayValue(float)
+	{
+		// forgot to set this up
+		jassert(isUsingModulatedRing());
+	}
 
 	float getDisplayValue() const;
 
@@ -853,8 +850,53 @@ public:
 	static String getSuffixForMode(HiSlider::Mode mode, float panValue);
 
 	paintAndProfileChildren(g);
+
+	struct ModUpdater: public PooledUIUpdater::SimpleTimer
+	{
+		ModUpdater(HiSlider& s, MainController* mc):
+		 SimpleTimer(mc->getGlobalUIUpdater(), false),
+		 parent(s)
+		{};
+
+		void timerCallback() override
+		{
+			if(modFunction)
+			{
+				if(auto p = parent.getProcessor())
+				{
+					auto nr = parent.getRange();
+
+					auto mv = modFunction(p, parent.getValue(), nr);
+
+					if(lastValue != mv)
+					{
+						lastValue = mv;
+						lastValue.storeToComponent(parent);
+					}
+				}
+			}
+		}
+
+		void setUpdateFunction(const ModulationDisplayValue::QueryFunction& f)
+		{
+			modFunction = f;
+
+			if(modFunction)
+				start();
+			else
+				stop();
+		};
+
+		ModulationDisplayValue::QueryFunction modFunction;
+		HiSlider& parent;
+		ModulationDisplayValue lastValue;
+	} ;
+
 	
+
 private:
+
+	ScopedPointer<ModUpdater> modUpdater;
 
 	bool sendValueOnDrag = true;
 
@@ -874,4 +916,3 @@ private:
 
 } // namespace hise
 
-#endif  // MACROCONTROLLEDCOMPONENTS_H_INCLUDED

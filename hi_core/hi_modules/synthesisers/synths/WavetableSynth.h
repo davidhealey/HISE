@@ -468,6 +468,19 @@ public:
 		}
 	};
 
+	ModulationDisplayValue::QueryFunction getModulationQueryFunction(int parameterIndex) const override
+	{
+		if(parameterIndex == SpecialParameters::TableIndexValue)
+		{
+			return [](Processor* p, double v, NormalisableRange<double> nr)
+			{
+				auto typed = static_cast<WavetableSynth*>(p);
+				return typed->tableMod.getModulationOutput(p, v, nr);
+			};
+		}
+
+		return ModulatorSynth::getModulationQueryFunction(parameterIndex);
+	}
 	ProcessorEditorBody* createEditor(ProcessorEditor *parentEditor) override;
 
 	File getWavetableMonolith() const;

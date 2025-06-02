@@ -1025,6 +1025,9 @@ public:
 		/** Sets the upper range end to the given value. */
 		void setMaxValue(double max) noexcept;
 
+		/** Connects this slider to the modulation slot. */
+		void connectToModulatedParameter(String moduleId, var parameterId);
+
         /** Creates a object with constants for setModifiers(). */
         var createModifiers();
         

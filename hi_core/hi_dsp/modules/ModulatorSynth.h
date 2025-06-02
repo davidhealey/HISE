@@ -286,23 +286,7 @@ public:
 	void disableChain(InternalChains chainToDisable, bool shouldBeDisabled);
 	bool isChainDisabled(InternalChains chain) const;;
 
-	void syncAfterDelayStart(bool waitForDelay, int voiceIndex) override
-	{
-		LockHelpers::SafeLock sl(getMainController(), LockHelpers::Type::AudioLock, isOnAir());
-
-		for(auto& mb: modChains)
-		{
-			if(!waitForDelay)
-			{
-				mb.resetVoice(voiceIndex);
-				mb.getChain()->syncAfterDelayStart(waitForDelay, voiceIndex);
-			}
-		}
-
-		effectChain->syncAfterDelayStart(waitForDelay, voiceIndex);
-
-		
-	}
+	void syncAfterDelayStart(bool waitForDelay, int voiceIndex) override;
 
 	// ===================================================================================================================
 
@@ -670,7 +654,6 @@ public:
 
 	void setKillFadeFactor(float newKillFadeFactor);
 
-
 	void applyKillFadeout(int startSample, int numSamples);
 
 	void applyEventVolumeFade(int startSample, int numSamples);
@@ -679,9 +662,7 @@ public:
 
 	/** This checks the envelopes of the gain modulation if any envelopes are tailing off. */
 	virtual void checkRelease();
-
 	virtual void pitchWheelMoved (int /*newValue*/);;
-
     virtual void controllerMoved (int /*controllerNumber*/, int /*newValue*/);;
 
 	const float * getVoiceValues(int channelIndex, int startSample) const;

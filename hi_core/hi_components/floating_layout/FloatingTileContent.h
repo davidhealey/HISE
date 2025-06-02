@@ -85,7 +85,7 @@ public:
 	virtual Identifier getDefaultablePropertyId(int i) const;
 
 	/** Clears the given object and sets all defaultable properties to their initial values. */
-	void resetObject(DynamicObject* objectToClear);
+	void resetObject(DynamicObject* objectToClear) const;
 
 	void storePropertyInObject(var obj, int id, var value, var defaultValue = var()) const;
 	var getPropertyWithDefault(var obj, int id) const;
