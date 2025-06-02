@@ -103,6 +103,15 @@ Set this to 1 if you want to embed the libraries created with this module into y
 #define HISE_LOG_FILTER_FREQMOD 0
 #endif
 
+/** Config: If enabled, then the bipolar filter modulation will be added after the multiplication.
+ *
+ *	This might break existing projects with bipolar filter modulation but allows a true adding / subtracting
+ *	after the initial gain multiplication.
+ */
+#ifndef HISE_FILTER_MOD_MUL_ADD
+#define HISE_FILTER_MOD_MUL_ADD 1
+#endif
+
 /** Set the max delay time for the hise delay line class in samples. It must be a power of two. 
 
 	By default this means that the max delay time at 44kHz is ~1.5 seconds, so if you have long delay times
