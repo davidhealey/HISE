@@ -1527,7 +1527,7 @@ Rectangle<float> StyleSheet::truncateBeforeAndAfter(Rectangle<float> sourceArea,
 	}
     
     auto wa2 = getPseudoArea(sourceArea, currentState, PseudoElementType::After2);
-    auto truncateAfter2 = !wa.isEmpty();
+    auto truncateAfter2 = !wa2.isEmpty();
 
     if(truncateAfter2)
     {
