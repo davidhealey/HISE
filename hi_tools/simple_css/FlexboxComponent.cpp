@@ -39,7 +39,13 @@ void FlexboxComponent::Helpers::setFallbackStyleSheet(Component& c, const String
 	static const Identifier sid("style");
 
 	if(c.getProperties().contains(sid))
+	{
+		auto existing = c.getProperties()["style"].toString();
+		// use appendToElementStyle instead!
+		jassertfalse;
 		return;
+	}
+		
 
 	c.getProperties().set(sid, properties);
 	invalidateCache(c);
@@ -48,6 +54,10 @@ void FlexboxComponent::Helpers::setFallbackStyleSheet(Component& c, const String
 void FlexboxComponent::Helpers::appendToElementStyle(Component& c, const String& additionalStyle)
 {
 	auto elementStyle = c.getProperties()["style"].toString();
+
+	// You cannot append to a fallback style that uses selectors already!
+	jassert(!elementStyle.containsChar('{'));
+
 	elementStyle << additionalStyle;
 	c.getProperties().set("style", elementStyle);
 	invalidateCache(c);
@@ -80,6 +90,13 @@ void FlexboxComponent::Helpers::writeSelectorsToProperties(Component& c, const S
 
 Selector FlexboxComponent::Helpers::getTypeSelectorFromComponentClass(Component* c)
 {
+	static const Identifier ct("custom-type");
+
+	if(c->getProperties().contains(ct))
+	{
+		return Selector(c->getProperties()[ct].toString());
+	}
+
 	if(dynamic_cast<Button*>(c) != nullptr)
 		return Selector(ElementType::Button);
 	if(auto st = dynamic_cast<SimpleTextDisplay*>(c))
@@ -103,13 +120,10 @@ Selector FlexboxComponent::Helpers::getTypeSelectorFromComponentClass(Component*
 		return Selector(ElementType::TableHeader);
 	if(dynamic_cast<juce::ProgressBar*>(c) != nullptr)
 		return Selector(ElementType::Progress);
-
-	static const Identifier ct("custom-type");
-
-	if(c->getProperties().contains(ct))
-	{
-		return Selector(c->getProperties()[ct].toString());
-	}
+	if(dynamic_cast<juce::ScrollBar*>(c) != nullptr)
+		return Selector(ElementType::Scrollbar);
+	if(dynamic_cast<juce::Label*>(c) != nullptr)
+		return Selector(ElementType::Label);
 
 	return Selector(ElementType::Panel);;
 }
@@ -130,7 +144,12 @@ Array<Selector> FlexboxComponent::Helpers::getClassSelectorFromComponentClass(Co
 	else if(auto a = classes.getArray())
 	{
 		for(const auto& v: *a)
-			list.add(Selector(SelectorType::Class, v.toString()));
+		{
+			auto className = v.toString();
+
+			if(className.isNotEmpty())
+				list.add(Selector(SelectorType::Class, className));
+		}
 	}
 
 	return list;
@@ -144,12 +163,24 @@ String FlexboxComponent::Helpers::dump(Component& c)
     
     if(t)
         s << t.toString();
-    
-    s << " " << getIdSelectorFromComponentClass(&c).toString();
+
+	auto id = getIdSelectorFromComponentClass(&c).toString();
+
+	if(id.isNotEmpty())
+	{
+		if(s.isNotEmpty())
+			s << ", ";
+
+		s << id;
+	}
 
     for(auto c: getClassSelectorFromComponentClass(&c))
-        s << " " << c.toString();
-    
+    {
+		if(s.isNotEmpty())
+			s << ", ";
+	    s << c.toString();
+    }
+        
     return s;
 }
 
@@ -402,7 +433,7 @@ Component* FlexboxComponent::addTextElement(const StringArray& selectors, const 
 	auto nd = new SimpleTextDisplay(labelSelector);
 	addFlexItem(*nd);
 	textDisplays.add(nd);
-	Helpers::setFallbackStyleSheet(*nd, "background: rgba(0, 0, 0, 0)");
+	Helpers::setFallbackStyleSheet(*nd, "background:transparent;");
 
 	if(!selectors.isEmpty())
 		Helpers::writeSelectorsToProperties(*nd, selectors);
@@ -1086,75 +1117,6 @@ void HeaderContentFooter::setDefaultCSSProperties(DynamicObject::Ptr newDefaultP
 	{
 		for(const auto& p: defaultProperties->getProperties()) 
 			css.setPropertyVariable(p.name, p.value);
-	}
-}
-
-void hise::simple_css::HeaderContentFooter::paintOverChildren(Graphics& g)
-{
-	if(!inspectorData.first.isEmpty())
-	{
-		auto cb = inspectorData.first;
-		auto b = getLocalBounds().toFloat();
-		auto left = b.removeFromLeft(cb.getX());
-		auto right = b.removeFromRight(b.getRight() - cb.getRight());
-		auto top = b.removeFromTop(cb.getY());
-		auto bottom = b.removeFromBottom(b.getBottom() - cb.getBottom());
-            
-		g.setColour(Colours::black.withAlpha(0.5f));
-		g.fillRect(top);
-		g.fillRect(left);
-		g.fillRect(right);
-		g.fillRect(bottom);
-            
-		g.setColour(Colour(SIGNAL_COLOUR).withAlpha(0.3f));
-		g.drawRect(inspectorData.first, 1.0f);
-		g.setColour(Colour(SIGNAL_COLOUR));
-		auto f = GLOBAL_MONOSPACE_FONT();
-		g.setFont(f);
-            
-		auto tb = inspectorData.first.withSizeKeepingCentre(f.getStringWidthFloat(inspectorData.second), inspectorData.first.getHeight() + 40).constrainedWithin(getLocalBounds().toFloat());
-            
-		if(inspectorData.first.getY() > 20)
-			g.drawText(inspectorData.second, tb, Justification::centredTop);
-		else
-			g.drawText(inspectorData.second, tb, Justification::centredBottom);
-
-        if(inspectorData.c.getComponent() == nullptr)
-            return;
-
-        if(auto ss = css.getForComponent(inspectorData.c.getComponent()))
-        {
-	        auto b = inspectorData.first;
-
-            auto mb = ss->getArea(b, { "margin", {}});
-            auto pb = ss->getArea(mb, { "padding", {}});
-
-            Colour paddingColour(0xFFB8C37F);
-            Colour marginColour(0xFFB08354);
-
-	        {
-                Graphics::ScopedSaveState sss(g);
-                g.reduceClipRegion(b.toNearestInt());
-                g.excludeClipRegion(mb.toNearestInt());
-                g.fillAll(marginColour.withAlpha(0.33f));
-            }
-
-            
-            ;
-            {
-	        	Graphics::ScopedSaveState sss(g);
-                g.reduceClipRegion(mb.toNearestInt());
-		        g.excludeClipRegion(pb.toNearestInt());
-                g.fillAll(paddingColour.withAlpha(0.33f));
-	        }
-
-            g.setColour(paddingColour);
-            g.drawRect(mb, 1);
-            g.drawRect(pb, 1);
-            g.setColour(marginColour);
-            g.drawRect(b, 1);
-
-        }
 	}
 }
 

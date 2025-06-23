@@ -586,7 +586,6 @@ void ScriptingContentOverlay::mouseUp(const MouseEvent &e)
 				restoreToData,
 				copySnapshot,
 				toggleLearnMode,
-				showCSSLog,
 				editComponentOffset = 20000,
 
 			};
@@ -641,17 +640,6 @@ void ScriptingContentOverlay::mouseUp(const MouseEvent &e)
 				m.addItem(toggleLearnMode, "Enable Connection Learn", learnable, b->getCurrentlyLearnedComponent() == b->getFirstFromSelection());
 
 				m.addSeparator();
-
-				if(auto f = draggers.getFirst())
-				{
-					auto t = f->getCSSLogForCurrentComponent();
-
-					if(!t.isEmpty())
-					{
-						m.addItem(showCSSLog, "Show CSS debugger for " + first->getName().toString());
-					}
-				}
-
 				m.addItem(showDefinition, "Goto first definition of " + first->getName().toString(), true);
 				m.addItem(showLookAndFeel, "Goto LookAndFeel for " + first->getName().toString(), first->getLookAndFeelObject().isObject());
 				m.addItem(showCallback, "Goto callback for " + first->getName().toString(), first->getCustomControlCallback() != nullptr);
@@ -746,35 +734,6 @@ void ScriptingContentOverlay::mouseUp(const MouseEvent &e)
 					DebugInformation::Ptr d = new DebugableObjectInformation(obj, "unused", DebugInformation::Type::Constant);
 					d->doubleClickCallback(e, this);
 				}
-			}
-			else if (result == showCSSLog)
-			{
-				auto d = draggers.getFirst();
-
-				if(auto p = dynamic_cast<ScriptingApi::Content::ScriptMultipageDialog*>(b->getFirstFromSelection()))
-				{
-					callRecursive<simple_css::HeaderContentFooter>(d->getDraggedComponent(), [&](simple_css::HeaderContentFooter* r)
-					{
-						r->showInfo(true);
-						return true;
-					});
-				}
-				else
-				{
-					auto log = d->getCSSLogForCurrentComponent();
-
-					JSONEditor* editor = new JSONEditor(log, new simple_css::LanguageManager::Tokeniser());
-
-					editor->setEditable(false);
-					
-					editor->setName("CSS Debugger");
-					editor->setSize(500, 600);
-
-					d->findParentComponentOfClass<FloatingTile>()->showComponentInRootPopup(editor, d, d->getLocalBounds().getCentre());
-				}
-
-				
-
 			}
 			else if (result >= editComponentOffset) // EDIT IN PANEL
 			{

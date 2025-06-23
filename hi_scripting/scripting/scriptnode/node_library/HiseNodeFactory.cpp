@@ -1449,16 +1449,6 @@ namespace dynamic
 			display(b, updater)
 		{
 			addAndMakeVisible(display);
-
-#if 0
-			auto typed = dynamic_cast<pimpl::ahdsr_base*>(b);
-			if (auto rb = dynamic_cast<SimpleRingBuffer*>(typed->externalData.obj))
-			{
-				addAndMakeVisible(graph = new AhdsrGraph(rb));
-				graph->setSpecialLookAndFeel(new data::ui::pimpl::complex_ui_laf(), true);
-			}
-#endif
-
 			setSize(200, 100);
 		}
 

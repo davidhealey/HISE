@@ -634,7 +634,7 @@ public:
 
 		Processor* getConnectedProcessor() const { return connectedProcessor.get(); };
 
-		int getConnectedParameterIndex() { return connectedParameterIndex; };
+		int getConnectedParameterIndex() const { return connectedParameterIndex; };
 
         bool isConnectedToMacroControll() const noexcept
         {

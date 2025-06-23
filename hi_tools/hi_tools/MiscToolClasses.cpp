@@ -3617,6 +3617,172 @@ TextEditorWithAutocompleteComponent::Autocomplete* TextEditorWithAutocompleteCom
 	return dynamic_cast<Autocomplete*>(currentAutocomplete.get());
 }
 
+String ValueToTextConverter::getTextForValue(double v) const
+{
+	if(!active)
+		return String(v, 0);
+
+	if(customConverter != nullptr)
+		return customConverter->getText(v);
+
+	if(!itemList.isEmpty())
+	{
+		auto idx = jlimit<int>(0, itemList.size(), roundToInt(v));
+		return itemList[idx];
+	}
+
+	if(valueToTextFunction)
+		return valueToTextFunction(v);
+
+	auto numDecimalPlaces = jlimit(0, 4, roundToInt(log10(stepSize) * -1.0));
+	String valueString(v, numDecimalPlaces);
+	valueString << suffix;
+	return valueString;
+}
+
+double ValueToTextConverter::getValueForText(const String& v) const
+{
+	if(!active)
+		return v.getDoubleValue();
+
+	if(customConverter != nullptr)
+		return customConverter->getValue(v);
+
+	if(!itemList.isEmpty())
+		return (double)itemList.indexOf(v);
+
+	if(textToValueFunction)
+		return textToValueFunction(v);
+
+	return v.getDoubleValue();
+}
+
+ValueToTextConverter ValueToTextConverter::createForOptions(const StringArray& options)
+{
+	ValueToTextConverter vtc;
+	vtc.active = true;
+	vtc.itemList = options;
+	return vtc;
+}
+
+ValueToTextConverter ValueToTextConverter::createForMode(const String& modeString)
+{
+	ValueToTextConverter vtc;
+		
+#define FUNC(x) if(modeString == #x) { vtc.active = true; vtc.valueToTextFunction = ConverterFunctions::x; vtc.textToValueFunction = InverterFunctions::x; }
+
+	FUNC(Frequency);
+	FUNC(Time);
+	FUNC(TempoSync);
+	FUNC(Pan);
+	FUNC(NormalizedPercentage);
+	FUNC(Decibel);
+	FUNC(Semitones);
+
+#undef FUNC
+
+	return vtc;
+}
+
+ValueToTextConverter ValueToTextConverter::fromString(const String& converterString)
+{
+	ValueToTextConverter vtc;
+
+	if(converterString.isNotEmpty())
+	{
+#if HI_ZSTD_INCLUDED
+			zstd::ZDefaultCompressor comp;
+
+			MemoryBlock mb;
+			mb.fromBase64Encoding(converterString);
+			ValueTree v;
+
+			comp.expand(mb, v);
+
+			vtc.active = (bool)v["active"];
+
+			
+
+			vtc.itemList = StringArray::fromLines(v["items"].toString().trim());
+			vtc.itemList.removeEmptyStrings();
+
+#define FUNC(x) if(v.getProperty("function", "").toString() == #x) { vtc.valueToTextFunction = ConverterFunctions::x; vtc.textToValueFunction = InverterFunctions::x; }
+			FUNC(Frequency);
+			FUNC(Time);
+			FUNC(TempoSync);
+			FUNC(Pan);
+			FUNC(NormalizedPercentage);
+#undef FUNC
+#else
+		// You haven't included zstd here...
+		jassertfalse;
+#endif
+	}
+		
+	return vtc;
+}
+
+ValueToTextConverter ValueToTextConverter::createForCustomClass(CustomConverter* c)
+{
+	ValueToTextConverter vtc;
+	vtc.active = true;
+	vtc.customConverter = c;
+	return vtc;
+}
+
+StringArray ValueToTextConverter::getAvailableTextConverterModes()
+{
+	return {
+		"Frequency",
+		"Time",
+		"TempoSync",
+		"Pan",
+		"NormalizedPercentage",
+		"Decibel",
+		"Semitones"
+	};
+}
+
+String ValueToTextConverter::toString() const
+{
+#if HI_ZSTD_INCLUDED
+		ValueTree v("ValueConverter");
+
+		if(customConverter != nullptr)
+		{
+			// custom converters can't be serialized!
+			jassertfalse;
+		}
+
+		if(!itemList.isEmpty())
+			v.setProperty("items", itemList.joinIntoString("\n"), nullptr);
+
+		v.setProperty("active", active, nullptr);
+
+		if(suffix.isNotEmpty())
+			v.setProperty("suffix", suffix, nullptr);
+		
+#define FUNC(x) if(valueToTextFunction == ConverterFunctions::x) v.setProperty("function", #x, nullptr);
+
+		FUNC(Frequency);
+		FUNC(Time);
+		FUNC(TempoSync);
+		FUNC(Pan);
+		FUNC(NormalizedPercentage);
+
+#undef FUNC
+
+		MemoryBlock mb;
+		zstd::ZDefaultCompressor comp;
+		comp.compress(v, mb);
+		return mb.toBase64Encoding();
+#else
+	// you need to include zstd...
+	jassertfalse;
+	return {};
+#endif
+}
+
 void TextEditorWithAutocompleteComponent::showAutocomplete(const String& currentText)
 {
     if(useDynamicAutocomplete)

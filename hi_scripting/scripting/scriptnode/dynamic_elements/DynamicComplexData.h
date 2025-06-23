@@ -160,11 +160,7 @@ using filter = data::pimpl::dynamicT<hise::FilterDataObject>;
 */
 struct sliderpack : public data::pimpl::dynamicT<hise::SliderPackData>
 {
-	sliderpack(data::base& t, int index=0) :
-		dynamicT<hise::SliderPackData>(t, index)
-	{
-		this->internalData->setNumSliders(16);
-	}
+	sliderpack(data::base& t, int index=0);
 
 	virtual ~sliderpack() {};
 
@@ -355,7 +351,6 @@ struct complex_ui_laf : public ScriptnodeComboBoxLookAndFeel,
 	void drawTextOverlay(Graphics& g, HiseAudioThumbnail& th, const String& text, Rectangle<float> area) override;
 
 	void drawButtonBackground(Graphics&, Button&, const Colour& backgroundColour, bool shouldDrawButtonAsHighlighted, bool shouldDrawButtonAsDown) override;
-
 	void drawButtonText(Graphics&, TextButton&, bool shouldDrawButtonAsHighlighted, bool shouldDrawButtonAsDown) override;
 
 	Colour getNodeColour(Component* c);
@@ -392,12 +387,6 @@ template <class DynamicDataType, class DataType, class ComponentType, bool AddDr
 		addAndMakeVisible(externalButton);
 
 		rebuildSelectorItems();
-
-		
-
-		
-
-		//setSize(w, h + 41);
 
 		newSource = b->currentlyUsedData;
 		sourceChangedAsync();

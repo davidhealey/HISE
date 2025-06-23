@@ -347,6 +347,7 @@ public:
 			RLottieDevPanel,
 			ScriptWatchTable,
 			ScriptComponentEditPanel,
+			ScriptComponentCSSDebugger,
 			DspNetworkGraph,
 			DspNodeList,
 			DspNodeParameterEditor,

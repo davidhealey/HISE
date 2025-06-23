@@ -391,7 +391,7 @@ void PluginParameterSimulator::PluginParameterComponent::LAF::drawRotarySlider(G
 	}
 
 	ModulationDisplayValue mv;
-	mv.scaleValue = proportion;
+	mv.scaledValue = proportion;
 
 	drawVectorRotaryKnob(g, area, bipolar, s.isMouseOverOrDragging(true), s.isMouseButtonDown(), s.isEnabled(), mv);
 }

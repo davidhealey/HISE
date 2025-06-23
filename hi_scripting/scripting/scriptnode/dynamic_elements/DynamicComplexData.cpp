@@ -218,6 +218,12 @@ void dynamic_base::setIndex(int index, bool forceUpdate)
 
 }
 
+dynamic::sliderpack::sliderpack(data::base& t, int index):
+	dynamicT<hise::SliderPackData>(t, index)
+{
+	this->internalData->setNumSliders(16);
+}
+
 void dynamic::sliderpack::initialise(NodeBase* p)
 {
 	dynamicT<hise::SliderPackData>::initialise(p);

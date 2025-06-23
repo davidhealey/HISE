@@ -73,6 +73,56 @@ struct FlexboxComponent: public Component,
 	{
 		static void setFallbackStyleSheet(Component& c, const String& properties);
 
+		static String toCSSCode(Component& c, const Array<std::pair<PseudoState, String>>& stateProperties)
+		{
+			String cssCode;
+
+			for(const auto& st: stateProperties)
+			{
+				jassert(st.second.endsWithChar(';'));
+
+				cssCode << getElementSelector(c).toString();
+
+				if(st.first.element != PseudoElementType::None)
+				{
+					cssCode << "::";
+
+					switch(st.first.element)
+					{
+					case PseudoElementType::Before:
+						cssCode << "before";
+						break;
+					case PseudoElementType::After:
+						cssCode << "after";
+						break;
+					case PseudoElementType::Before2:
+						cssCode << "before2";
+						break;
+					case PseudoElementType::After2:
+						cssCode << "after2";
+						break;
+					case PseudoElementType::None:
+					case PseudoElementType::All:
+					default:
+						break;;
+					}
+				}
+
+				auto flag = st.first.stateFlag;
+
+				cssCode << PseudoState::getPseudoClassName(flag);
+				cssCode << " {" << st.second << "\n}\n\n";
+			}
+
+			return cssCode;
+		}
+
+		static void setFallbackStyleSheetWithStates(Component& c, const Array<std::pair<PseudoState, String>>& stateProperties)
+		{
+			auto cssCode = toCSSCode(c, stateProperties);
+			c.getProperties().set("style", cssCode);
+		}
+
 		static void appendToElementStyle(Component& c, const String& additionalStyle);
 
 		static String dump(Component& c);
@@ -97,6 +147,12 @@ struct FlexboxComponent: public Component,
 		static void invalidateCache(Component& c);
 
 		static Selector getIdSelectorFromComponentClass(Component* c);
+
+		static Selector getElementSelector(Component& c)
+		{
+			auto ptrValue = reinterpret_cast<uint64>(&c);
+			return Selector(SelectorType::Element, String::toHexString(ptrValue));
+		}
 
 		static String getInlineStyle(Component& c)
 		{
@@ -353,177 +409,7 @@ struct CSSImage: public Component
 struct HeaderContentFooter: public Component,
 						    public CSSRootComponent
 {
-	struct InspectorData
-	{
-		Component::SafePointer<Component> c;
-		Rectangle<float> first;
-		String second;
-	};
-
-	struct CSSDebugger: public Component,
-                    public Timer,
-                    public PathFactory
-	{
-	    CSSDebugger(HeaderContentFooter& componentToDebug):
-	      root(&componentToDebug),
-	      codeDoc(doc),
-	      editor(codeDoc),
-	      powerButton("bypass", nullptr, *this)
-	    {
-	        doc.setDisableUndo(true);
-	        setName("CSS Inspector");
-	        addAndMakeVisible(editor);
-	        
-	        editor.tokenCollection = new mcl::TokenCollection("CSS");
-	        editor.tokenCollection->setUseBackgroundThread(false);
-	        editor.setLanguageManager(new simple_css::LanguageManager(codeDoc));
-	        editor.setFont(GLOBAL_MONOSPACE_FONT().withHeight(12.0f));
-	        setSize(450, 800);
-	        setOpaque(true);
-	        startTimer(1000);
-
-			GlobalHiseLookAndFeel::setDefaultColours(hierarchy);
-	        hierarchy.setLookAndFeel(&laf);
-	        addAndMakeVisible(hierarchy);
-	        addAndMakeVisible(powerButton);
-	        powerButton.setToggleModeWithColourChange(true);
-	        powerButton.setToggleStateAndUpdateIcon(true);
-	        hierarchy.setTextWhenNothingSelected("Select parent component");
-	        addAndMakeVisible(powerButton);
-
-	        hierarchy.onChange = [&]()
-	        {
-		        auto pd = parentData[hierarchy.getSelectedItemIndex()];
-	            updateWithInspectorData(pd);
-	        };
-
-	        powerButton.onClick = [this]()
-	        {
-	            if(powerButton.getToggleState())
-	                this->startTimer(1000);
-	            else
-	                this->stopTimer();
-	            
-	            clear();
-	        };
-	    }
-	    
-	    void clear()
-	    {
-	        if(root.getComponent() != nullptr)
-	            root->setCurrentInspectorData({});
-	    }
-	    
-	    HiseShapeButton powerButton;
-	    
-	    Path createPath(const String& url) const override
-	    {
-	        Path p;
-	        LOAD_EPATH_IF_URL("bypass", HiBinaryData::ProcessorEditorHeaderIcons::bypassShape);
-	        return p;
-	    }
-	    
-	    ~CSSDebugger()
-	    {
-	        clear();
-	    }
-	    
-	    void paint(Graphics& g) override
-	    {
-	        g.fillAll(Colour(0xFF222222));
-	    }
-
-	    simple_css::HeaderContentFooter::InspectorData createInspectorData(Component* c)
-	    {
-		    auto b = root.getComponent()->getLocalArea(c, c->getLocalBounds()).toFloat();
-	        auto data = simple_css::FlexboxComponent::Helpers::dump(*c);
-
-	        simple_css::HeaderContentFooter::InspectorData id;
-	        id.first = b;
-	        id.second = data;
-	        id.c = c;
-
-	        return id;
-	    }
-
-	    void timerCallback() override
-	    {
-	        if(root.getComponent() == nullptr)
-	            return;
-	        
-	        auto* target = Desktop::getInstance().getMainMouseSource().getComponentUnderMouse();
-
-	        bool change = false;
-
-	        if(target != nullptr && target->findParentComponentOfClass<simple_css::CSSRootComponent>() == root.getComponent())
-	        {
-	            currentTarget = target;
-	            change = true;
-	        }
-	        
-	        if(currentTarget.getComponent() != nullptr && change)
-	        {
-	            auto id = createInspectorData(currentTarget.getComponent());
-	            auto tc = id.c.getComponent();
-
-	            StringArray items;
-
-	            parentData.clear();
-
-	            while(tc != nullptr)
-	            {
-	                if(dynamic_cast<CSSRootComponent*>(tc) != nullptr)
-	                    break;
-
-	                parentData.add(createInspectorData(tc));
-		            tc = tc->getParentComponent();
-	            }
-
-	            hierarchy.clear(dontSendNotification);
-
-	            int idx = 1;
-	            for(const auto& pd: parentData)
-	                hierarchy.addItem(pd.second, idx++);
-
-	            hierarchy.setText("", dontSendNotification);
-
-	            updateWithInspectorData(id);
-	        }
-	    }
-
-	    Array<simple_css::HeaderContentFooter::InspectorData> parentData;
-
-	    void updateWithInspectorData(const simple_css::HeaderContentFooter::InspectorData& id)
-	    {
-		    root->setCurrentInspectorData(id);
-	        auto s = root->css.getDebugLogForComponent(id.c.getComponent());
-	        
-	        if(doc.getAllContent() != s)
-	            doc.replaceAllContent(s);
-	    }
-	    
-	    Component::SafePointer<Component> currentTarget = nullptr;
-	    
-	    void resized() override
-	    {
-	        auto b = getLocalBounds();
-	        auto topArea = b.removeFromTop(24);
-
-	        powerButton.setBounds(topArea.removeFromLeft(topArea.getHeight()).reduced(2));
-	        hierarchy.setBounds(b.removeFromBottom(32));
-	        editor.setBounds(b);
-	    }
-
-	    juce::CodeDocument doc;
-	    mcl::TextDocument codeDoc;
-	    mcl::TextEditor editor;
-
-	    ComboBox hierarchy;
-
-	    hise::GlobalHiseLookAndFeel laf;
-
-	    Component::SafePointer<simple_css::HeaderContentFooter> root;
-	};
+	
 
 	HeaderContentFooter(bool useViewportContent);
 
@@ -542,17 +428,12 @@ struct HeaderContentFooter: public Component,
 
 	void setDefaultCSSProperties(DynamicObject::Ptr newDefaultProperties);
 
-	void paintOverChildren(Graphics& g) override;
-
-	
-
-    void setCurrentInspectorData(const InspectorData& newData)
-    {
-        inspectorData = newData;
-        repaint();
-    }
-    
-    InspectorData inspectorData;
+#if HISE_INCLUDE_CSS_DEBUG_TOOLS
+	void paintOverChildren(Graphics& g) override
+	{
+		inspectorData.draw(g, getLocalBounds().toFloat(), css);
+	}
+#endif
     
 	FlexboxComponent body;
 	FlexboxComponent header;

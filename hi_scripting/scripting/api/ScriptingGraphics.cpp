@@ -1015,6 +1015,7 @@ struct ScriptingObjects::PathObject::Wrapper
 	API_METHOD_WRAPPER_0(PathObject, getLength);
 	API_METHOD_WRAPPER_0(PathObject, toString);
 	API_METHOD_WRAPPER_0(PathObject, toBase64);
+	API_METHOD_WRAPPER_1(PathObject, getYAt);
 	API_VOID_METHOD_WRAPPER_1(PathObject, fromString);
 };
 
@@ -1049,6 +1050,7 @@ ScriptingObjects::PathObject::PathObject(ProcessorWithScriptingContent* p) :
 	ADD_API_METHOD_0(toString);
 	ADD_API_METHOD_0(toBase64);
 	ADD_API_METHOD_1(fromString);
+	ADD_API_METHOD_1(getYAt);
 
 	useRectangleClass = HISE_GET_PREPROCESSOR(getScriptProcessor()->getMainController_(), HISE_USE_SCRIPT_RECTANGLE_OBJECT);
 }
@@ -1182,6 +1184,12 @@ void ScriptingObjects::PathObject::scaleToFit(var x, var y, var width, var heigh
 void ScriptingObjects::PathObject::roundCorners(var radius)
 {
 	p = p.createPathWithRoundedCorners(radius);
+}
+
+var ScriptingObjects::PathObject::getYAt(float xPos)
+{
+	auto x = flex_ahdsr_base::Helpers::getYAt(this->p, xPos);
+	return x != -1.0 ? var(x) : var();
 }
 
 var ScriptingObjects::PathObject::getIntersection(var start, var end, bool keepSectionOutsidePath)
@@ -1586,6 +1594,7 @@ struct ScriptingObjects::GraphicsObject::Wrapper
 	API_VOID_METHOD_WRAPPER_1(GraphicsObject, drawRepaintMarker);
 	API_VOID_METHOD_WRAPPER_3(GraphicsObject, drawDropShadow);
 	API_VOID_METHOD_WRAPPER_5(GraphicsObject, drawDropShadowFromPath);
+	API_VOID_METHOD_WRAPPER_5(GraphicsObject, drawInnerShadowFromPath);
 	API_VOID_METHOD_WRAPPER_2(GraphicsObject, addDropShadowFromAlpha);
 	API_VOID_METHOD_WRAPPER_3(GraphicsObject, drawTriangle);
 	API_VOID_METHOD_WRAPPER_2(GraphicsObject, fillTriangle);
@@ -1643,6 +1652,7 @@ ScriptingObjects::GraphicsObject::GraphicsObject(ProcessorWithScriptingContent *
 	ADD_API_METHOD_4(drawImage);
 	ADD_API_METHOD_3(drawDropShadow);
 	ADD_API_METHOD_5(drawDropShadowFromPath);
+	ADD_API_METHOD_5(drawInnerShadowFromPath);
 	ADD_API_METHOD_2(addDropShadowFromAlpha);
 	ADD_API_METHOD_3(drawTriangle);
 	ADD_API_METHOD_2(fillTriangle);
@@ -2191,19 +2201,27 @@ void ScriptingObjects::GraphicsObject::drawDropShadow(var area, var colour, int 
 
 void ScriptingObjects::GraphicsObject::drawDropShadowFromPath(var path, var area, var colour, int radius, var offset)
 {
-	auto r = getIntRectangleFromVar(area);
-	auto o = getPointFromVar(offset);
+	auto r = getRectangleFromVar(area);
+	auto o = getPointFromVar(offset).toInt();
 	auto c = ScriptingApi::Content::Helpers::getCleanedObjectColour(colour);
-
-
 
 	if (auto p = dynamic_cast<ScriptingObjects::PathObject*>(path.getObject()))
 	{
 		Path sp = p->getPath();
-		
-		auto area = r.toFloat().translated(o.getX(), o.getY());
+		drawActionHandler.addDrawAction(new ScriptedDrawActions::drawDropShadowFromPath<melatonin::DropShadow>(sp, r, c, radius, o));
+	}
+}
 
-		drawActionHandler.addDrawAction(new ScriptedDrawActions::drawDropShadowFromPath(sp, area, c, radius));
+void ScriptingObjects::GraphicsObject::drawInnerShadowFromPath(var path, var area, var colour, int radius, var offset)
+{
+	auto r = getRectangleFromVar(area);
+	auto o = getPointFromVar(offset).toInt();
+	auto c = ScriptingApi::Content::Helpers::getCleanedObjectColour(colour);
+
+	if (auto p = dynamic_cast<ScriptingObjects::PathObject*>(path.getObject()))
+	{
+		Path sp = p->getPath();
+		drawActionHandler.addDrawAction(new ScriptedDrawActions::drawDropShadowFromPath<melatonin::InnerShadow>(sp, r, c, radius, o));
 	}
 }
 
@@ -2877,9 +2895,13 @@ ScriptingObjects::ScriptedLookAndFeel::CSSLaf::CSSLaf(ScriptedLookAndFeel* paren
 
 	initIds.addArray(StringArray::fromTokens(ad["class"].toString(), " ", ""));
 
+	initIds.sortNatural();
+	initIds.trim();
+	initIds.removeDuplicates(false);
+	initIds.removeEmptyStrings();
+
 	simple_css::FlexboxComponent::Helpers::writeSelectorsToProperties(*c, initIds);
-	
-	
+
 	if(auto ptr = root.css.getForComponent(c))
 	{
 		root.css.setAnimator(&root.animator);

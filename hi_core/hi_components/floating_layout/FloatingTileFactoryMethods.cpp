@@ -543,6 +543,7 @@ void FloatingTileContent::Factory::handlePopupMenu(PopupMenu& m, FloatingTile* p
             addToPopupMenu(m, PopupMenuOptions::MarkdownEditor, "Markdown Editor");
 			addToPopupMenu(m, PopupMenuOptions::ScriptContent, "Script Content");
 			addToPopupMenu(m, PopupMenuOptions::ScriptComponentEditPanel, "Script Interface Property Editor");
+			addToPopupMenu(m, PopupMenuOptions::ScriptComponentCSSDebugger, "CSS Debugger");
 			addToPopupMenu(m, PopupMenuOptions::ScriptComponentList, "Script Component List");
 			addToPopupMenu(m, PopupMenuOptions::ApiCollection, "API Browser");
 			addToPopupMenu(m, PopupMenuOptions::ScriptWatchTable, "Live Variable View");

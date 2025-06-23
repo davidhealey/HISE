@@ -2782,4 +2782,175 @@ private:
 	}
 };
 
+struct ValueToTextConverter
+{
+	struct CustomConverter
+	{
+		virtual ~CustomConverter() {};
+
+		virtual String getText(double value) const = 0;
+		virtual double getValue(const String& text) const = 0;
+
+		JUCE_DECLARE_WEAK_REFERENCEABLE(CustomConverter);
+	};
+
+	struct ConverterFunctions
+	{
+		static String Frequency(double input)
+		{
+			if (input < 30.0f)
+				return String(input, 1) + " Hz";
+			else if (input < 1000.0f)
+				return String(roundToInt(input)) + " Hz";
+			else
+				return String(input / 1000.0, 1) + " kHz";
+		}
+
+		static String Time(double v)
+		{
+			if(v > 1000.0)
+				return String(v * 0.001, 1) + "s";
+			else
+				return String(roundToInt(v)) + "ms";
+		}
+
+		static String TempoSync(double v)
+		{
+			return TempoSyncer::getTempoName(roundToInt(v));
+		}
+
+		static String Decibel(double v)
+		{
+			return Decibels::toString(v, std::abs(v < 18 ? 1 : 0), -120.0);
+		}
+
+		static String Pan(double v)
+		{		
+			if (v == 0)
+				return "C";
+			
+			String result = String(roundToInt(std::abs(v)));
+						
+			if (v > 0)
+				result += "R";
+			else if (v < 0)
+				result += "L";
+
+			return result;
+		}
+
+		static String NormalizedPercentage(double v)
+		{
+			return String(roundToInt(v * 100.0)) + "%";
+		}
+
+		static String Semitones(double v)
+		{
+			String s;
+
+			if(v > 0.0)
+				s << '+';
+
+			if(std::fmod(std::abs(v), 1.0) < 0.001)
+				s << String(roundToInt(v));
+			else
+				s << String(v, 2);
+
+			s << " st";
+			return s;
+		}
+	};
+
+	struct InverterFunctions
+	{
+		static double Frequency(const String& input)
+		{
+			if(input.containsChar('k'))
+			{
+				return input.getDoubleValue() * 1000.0;
+			}
+			else
+			{
+				return input.getDoubleValue();
+			}
+		}
+
+		static double Time(const String& input)
+		{
+			if(input.containsChar('s') && !input.containsChar('m'))
+				return input.getDoubleValue() * 1000.0;
+			else
+				return input.getDoubleValue();
+		}
+
+		static double Decibel(const String& v)
+		{
+			if(v == "-INF")
+				return -100.0;
+
+			return v.getDoubleValue();
+		}
+
+		static double TempoSync(const String& input)
+		{
+			return (double)TempoSyncer::getTempoIndex(input);
+		}
+
+		static double Pan(const String& input)
+		{
+			if(input == "C")
+				return 0.0;
+
+			auto v = input.getDoubleValue();
+			if(input.contains("L"))
+				v *= -1.0;
+			return v;
+		}
+
+		static double NormalizedPercentage(const String& input)
+		{
+			return input.getDoubleValue() * 0.01;
+		}
+
+		static double Semitones(const String& input)
+		{
+			return input.getDoubleValue();
+		}
+	};
+
+	String getTextForValue(double v) const;
+
+	String operator()(double v) const
+	{
+		return getTextForValue(v);
+		
+	}
+
+	double getValueForText(const String& v) const;
+
+	double operator()(const String& v) const
+	{
+		return getValueForText(v);
+	}
+
+	static ValueToTextConverter createForOptions(const StringArray& options);
+	static ValueToTextConverter createForMode(const String& modeString);
+	static ValueToTextConverter fromString(const String& converterString);
+	static ValueToTextConverter createForCustomClass(CustomConverter* c);
+	static StringArray getAvailableTextConverterModes();
+
+	String toString() const;;
+
+	typedef String(*CF)(double);
+	typedef double(*ICF)(const String&);
+
+	bool active = false;
+	CF valueToTextFunction = nullptr;
+	ICF textToValueFunction = nullptr;
+	StringArray itemList;
+	WeakReference<CustomConverter> customConverter = nullptr;
+	double stepSize = 0.01;
+	String suffix;
+};
+
 }

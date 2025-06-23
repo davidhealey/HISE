@@ -730,7 +730,11 @@ void ScriptContentComponent::paintOverChildren(Graphics& g)
 
 	if (p.get() == nullptr)
 		return;
-	
+
+#if HISE_INCLUDE_CSS_DEBUG_TOOLS
+	inspectorData.draw(g, getLocalBounds().toFloat(), css);
+#endif
+
 	const auto& guides = processor->getScriptingContent()->guides;
 
 	if (!guides.isEmpty() && !ScriptingObjects::ScriptShader::isRenderingScreenshot())
@@ -999,7 +1003,7 @@ ScriptContentComponent::ComponentDragInfo::ComponentDragInfo(ScriptContentCompon
 
 	if (!dragCallback)
 	{
-		debugError(dynamic_cast<Processor*>(sc->getScriptProcessor()), "dragData must have a paintRoutine property");
+		debugError(dynamic_cast<Processor*>(sc->getScriptProcessor()), "dragData must have a dragCallback property");
 		return;
 	}
 

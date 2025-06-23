@@ -1209,6 +1209,7 @@ struct ScriptingApi::Engine::Wrapper
 	API_METHOD_WRAPPER_1(Engine, intToHexString);
 	API_METHOD_WRAPPER_0(Engine, getOS);
 	API_METHOD_WRAPPER_0(Engine, getSystemStats);
+	API_METHOD_WRAPPER_2(Engine, getTextForValue);
 	API_METHOD_WRAPPER_0(Engine, isPlugin);
 	API_METHOD_WRAPPER_0(Engine, isHISE);
 	API_VOID_METHOD_WRAPPER_0(Engine, reloadAllSamples);
@@ -1385,6 +1386,7 @@ parentMidiProcessor(dynamic_cast<ScriptBaseMidiProcessor*>(p))
 	ADD_API_METHOD_1(setAllowDuplicateSamples);
 	ADD_API_METHOD_1(isControllerUsedByAutomation);
 	ADD_API_METHOD_0(getSettingsWindowObject);
+	ADD_API_METHOD_2(getTextForValue);
 	ADD_API_METHOD_0(createTimerObject);
 	ADD_API_METHOD_0(createMessageHolder);
 	ADD_API_METHOD_1(createAndRegisterSliderPackData);

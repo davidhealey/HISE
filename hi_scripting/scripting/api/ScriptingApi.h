@@ -319,6 +319,13 @@ public:
 		/** Returns the downsampling factor for the modulation signal (default is 8). */
 		double getControlRateDownsamplingFactor() const;
 
+		/** Uses one of the inbuilt text converters to prettify a numeric value. */
+		String getTextForValue(double value, String converterMode)
+		{
+			auto vtc = ValueToTextConverter::createForMode(converterMode);
+			return vtc.getTextForValue(value);
+		}
+
 		/** Iterates the given sub-directory of the Samples folder and returns a list with all references to audio files. */
 		var getSampleFilesFromDirectory(const String& relativePathFromSampleFolder, bool recursive);
 

@@ -494,6 +494,9 @@ namespace ScriptingObjects
 		/** Creates a version of this path where all sharp corners have been replaced by curves.*/
 		void roundCorners(var radius);
 
+		/** Returns the y coordinate of the first intersection at the given X position or undefined if no match. */
+		var getYAt(float xPos);
+		
 		/** Returns the point where a line ([x1, y1], [x2, y2]) intersects the path when appropriate. Returns false otherwise. */
 		var getIntersection(var start, var end, bool keepSectionOutsidePath);
 
@@ -713,8 +716,11 @@ namespace ScriptingObjects
 		/** Draws a drop shadow around a rectangle. */
 		void drawDropShadow(var area, var colour, int radius);
 
-		/** Draws a drop shadow from a path. */
+		/** Draws a drop shadow from a path using melatonin blur. */
 		void drawDropShadowFromPath(var path, var area, var colour, int radius, var offset);
+
+		/** Draws an inner shadow for the given path using melatonin blur. */
+		void drawInnerShadowFromPath(var path, var area, var colour, int radius, var offset);
 
 		/** Draws a triangle rotated by the angle in radians. */
 		void drawTriangle(var area, float angle, float lineThickness);
@@ -786,6 +792,8 @@ namespace ScriptingObjects
 			virtual ~LafBase() {};
 
 			virtual ScriptedLookAndFeel* get() = 0;
+
+			virtual simple_css::StyleSheetLookAndFeel* getStyleSheetLookAndFeel() { return nullptr; }
 
 #if HISE_INCLUDE_PROFILING_TOOLKIT
 			void onProfileEnableChange() override
@@ -980,7 +988,9 @@ namespace ScriptingObjects
                 jassertfalse;
                 return {};
             }
-            
+
+			simple_css::StyleSheetLookAndFeel* getStyleSheetLookAndFeel() override { return this; }
+
 			void updateMultipageDialog(multipage::Dialog& mp);
 
 			static void copyPropertiesToElementSelector(simple_css::CSSRootComponent& root, Component& parent, simple_css::Selector s);
@@ -1328,6 +1338,8 @@ namespace ScriptingObjects
 			{
 				return css.getMinimumScrollbarThumbSize(sb);
 			}
+
+			simple_css::StyleSheetLookAndFeel* getStyleSheetLookAndFeel() override { return &css; }
 
 		private:
 
