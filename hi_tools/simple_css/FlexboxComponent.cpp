@@ -67,9 +67,14 @@ void FlexboxComponent::Helpers::writeSelectorsToProperties(Component& c, const S
 {
 	Array<Selector> classSelectors;
 
+	auto trimmed = selectors;
+	trimmed.trim();
+	trimmed.removeDuplicates(false);
+	trimmed.removeEmptyStrings(true);
+	
 	String id;
 
-	for(const auto& s: selectors)
+	for(const auto& s: trimmed)
 	{
 		Selector sel(s);
 

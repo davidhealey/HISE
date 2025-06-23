@@ -301,9 +301,9 @@ void VariantBuffer::addMethods()
 				mf.apply(bf->buffer.getReadPointer(0), filteredValues->buffer.getWritePointer(0), bf->size);
 				return var(filteredValues.get());
 			}
-
-			return var();
 		}
+
+		return var();
 	});
 
 	setMethod("decompose", [](const var::NativeFunctionArgs& n)

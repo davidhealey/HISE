@@ -1485,6 +1485,8 @@ bool flex_ahdsr_base::Properties::validateInt(const Identifier& id, int& v) cons
 
 	if (id == RingBufferIds::NumChannels)
 		return SimpleRingBuffer::toFixSize<1>(v);
+
+	return false;
 }
 
 Path flex_ahdsr_base::Properties::createPath(Range<int> sampleRange, Range<float> valueRange,

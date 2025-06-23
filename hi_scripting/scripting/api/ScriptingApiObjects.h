@@ -1087,42 +1087,8 @@ namespace ScriptingObjects
 
 		void setCallbackInternal(bool isDisplay, var f);
 
-        void linkToInternal(var o)
-        {
-            auto other = dynamic_cast<ScriptComplexDataReferenceBase*>(o.getObject());
-            
-            if(other == nullptr)
-            {
-                reportScriptError("Not a data object");
-                return;
-            }
-            
-            if(other->type != type)
-            {
-                reportScriptError("Type mismatch");
-                return;
-            }
-            
-            using PED = hise::ProcessorWithExternalData;
-            
-            if(auto pdst = holder.get())
-            {
-                if(auto psrc = other->holder.get())
-                {
-                    if(auto ex = psrc->getComplexBaseType(type, other->index))
-                    {
-                        complexObject->getUpdater().removeEventListener(this);
+        void linkToInternal(var o);
 
-						pdst->linkTo(type, *psrc, other->index, index);
-                        complexObject = holder->getComplexBaseType(type, index);
-                        complexObject->getUpdater().addEventListener(this);
-                    }
-                }
-            }
-            
-            return;
-        }
-        
 		WeakReference<ComplexDataUIBase> complexObject;
 
 		WeakCallbackHolder displayCallback;
@@ -1224,7 +1190,13 @@ namespace ScriptingObjects
 
         /** Enables or disables the ring buffer. */
         void setActive(bool shouldBeActive);
-        
+
+		/** Exports the display buffer state as base64 encoded string. */
+		String toBase64() const;
+
+		/** Restores the display buffer state from the base64 encoded string. */
+		void fromBase64(const String& b64, bool useUndoManager);
+
 		// ============================================================================================================
 
 	private:
@@ -1726,11 +1698,7 @@ namespace ScriptingObjects
 
 		String getDebugValue() const override { return "Used: " + String(size()); }
 
-		DebugInformationBase* getChildElement(int index) override
-		{
-			IndexedValue i(this, index);
-			return new LambdaValueInformation(i, i.getId(), {}, DebugInformation::Type::Constant, getLocation());
-		}
+		DebugInformationBase* getChildElement(int index) override;
 
 		// ============================================================================================================
 
@@ -2566,6 +2534,74 @@ namespace ScriptingObjects
 		// ============================================================================================================
 	};
 
+
+	struct ScriptWavetableController: public ConstScriptingObject,
+									  public ControlledObject,
+									  public WeakErrorHandler
+	{
+		ScriptWavetableController(ProcessorWithScriptingContent* sp, Processor* wavetableSynth);
+
+		static Identifier getClassName() { RETURN_STATIC_IDENTIFIER("WavetableController"); }
+
+		Identifier getObjectName() const override { return getClassName(); };
+		bool objectDeleted() const override { return wt_.get() == nullptr; }
+		bool objectExists() const override { return wt_.get() != nullptr; }
+
+		void handleErrorMessage(const String& error) override
+		{
+			if(errorHandler)
+				errorHandler.call1(error);
+		}
+
+		// ============================================================================================================ API Methods
+
+		/** Returns a JSON object with the current resynthesis options. */
+		var getResynthesisOptions() const;
+
+		/** Sets the current resynthesis options. */
+		void setResynthesisOptions(const var& optionData);
+
+		/** Resynthesises the wavetables from the currently loaded audio file. */
+		void resynthesise();
+
+		/** Saves the currently loaded wavetable as HWT file somewhere. */
+		void saveAsHwt(const var& outputFile);
+
+		/** This will store all resynthesised wavetables to the given directory and reused if the same file is loaded again. */
+		void setEnableResynthesisCache(const var& cacheDirectory, bool clearCache);
+
+		/** Loads a file (or buffer) into the wavetable synth. */
+		void loadData(var bufferOrFile, var sampleRate, var loopRange);
+
+		/** Sets up a chain of post FX processors that will be applied to the loaded wavetable. */
+		void setPostFXProcessors(const var& postFXData);
+
+		/** Sets up a function that will be executed when a error occurs during resynthesis. */
+		void setErrorHandler(const var& errorCallback);
+
+		// ============================================================================================================
+
+	private:
+
+		struct Wrapper
+		{
+			API_METHOD_WRAPPER_0(ScriptWavetableController, getResynthesisOptions);
+			API_VOID_METHOD_WRAPPER_1(ScriptWavetableController, setResynthesisOptions);
+			API_VOID_METHOD_WRAPPER_0(ScriptWavetableController, resynthesise);
+			API_VOID_METHOD_WRAPPER_1(ScriptWavetableController, saveAsHwt);
+			API_VOID_METHOD_WRAPPER_2(ScriptWavetableController, setEnableResynthesisCache);
+			API_VOID_METHOD_WRAPPER_1(ScriptWavetableController, setErrorHandler);
+			API_VOID_METHOD_WRAPPER_3(ScriptWavetableController, loadData);
+			API_VOID_METHOD_WRAPPER_1(ScriptWavetableController, setPostFXProcessors);
+		};
+
+		WavetableSynth* getWavetableSynth() { return dynamic_cast<WavetableSynth*>(wt_.get()); }
+		const WavetableSynth* getWavetableSynth() const { return dynamic_cast<WavetableSynth*>(wt_.get()); }
+
+		WeakCallbackHolder errorHandler;
+
+		WeakReference<Processor> wt_;
+	};
 
 	struct GlobalRoutingManagerReference : public ConstScriptingObject,
 										   public ControlledObject,

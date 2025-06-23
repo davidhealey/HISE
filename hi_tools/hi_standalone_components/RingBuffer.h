@@ -642,6 +642,8 @@ struct flex_ahdsr_base: public SimpleRingBuffer::WriterBase
 				mos.flush();
 				return mos.getMemoryBlock().toBase64Encoding();
 			}
+
+			return {};
 		}
 
 		WeakReference<flex_ahdsr_base> base;

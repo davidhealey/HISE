@@ -126,6 +126,7 @@ void FloatingTileContent::Factory::registerFrontendPanelTypes()
 	registerType<MPEPanel>(PopupMenuOptions::MPEPanel);
 	
 	registerType<AhdsrEnvelope::Panel>(PopupMenuOptions::AHDSRGraph);
+	registerType<FlexAhdsrEnvelope::Panel>(PopupMenuOptions::FlexAHDSRGraph);
 	registerType<MarkdownPreviewPanel>(PopupMenuOptions::MarkdownPreviewPanel);
     registerType<MatrixPeakMeter>(PopupMenuOptions::MatrixPeakMeterPanel);
     

@@ -1285,6 +1285,9 @@ public:
 		/** Creates a reference to the routing matrix of the given processor. */
 		ScriptRoutingMatrix* getRoutingMatrix(const String& processorId);
 
+		/** Creates a object to control the wavetable synthesiser features. */
+		ScriptingObjects::ScriptWavetableController* getWavetableController(const String& processorId);
+
 		/** Returns the index of the Modulator in the chain with the supplied chainId */
 		int getModulatorIndex(int chainId, const String &id) const;
 

@@ -5267,6 +5267,7 @@ struct ScriptingApi::Synth::Wrapper
 	API_METHOD_WRAPPER_1(Synth, getTableProcessor);
 	API_METHOD_WRAPPER_1(Synth, getSliderPackProcessor);
 	API_METHOD_WRAPPER_1(Synth, getRoutingMatrix);
+	API_METHOD_WRAPPER_1(Synth, getWavetableController);
 	API_METHOD_WRAPPER_1(Synth, getSampler);
 	API_METHOD_WRAPPER_1(Synth, getSlotFX);
 	API_METHOD_WRAPPER_1(Synth, getEffect);
@@ -5348,6 +5349,7 @@ ScriptingApi::Synth::Synth(ProcessorWithScriptingContent *p, Message* messageObj
 	ADD_API_METHOD_1(getDisplayBufferSource);
 	ADD_API_METHOD_1(getTableProcessor);
 	ADD_API_METHOD_1(getSliderPackProcessor);
+	ADD_API_METHOD_1(getWavetableController);
 	ADD_API_METHOD_1(getSampler);
 	ADD_API_METHOD_1(getSlotFX);
 	ADD_API_METHOD_1(getEffect);
@@ -6185,6 +6187,17 @@ hise::ScriptingApi::Synth::ScriptRoutingMatrix* ScriptingApi::Synth::getRoutingM
 		reportScriptError(processorId + " does not have a routing matrix");
 
 	RETURN_IF_NO_THROW(new ScriptingObjects::ScriptRoutingMatrix(getScriptProcessor(), nullptr));
+}
+
+ScriptingObjects::ScriptWavetableController* ScriptingApi::Synth::getWavetableController(const String& processorId)
+{
+	auto p = ProcessorHelpers::getFirstProcessorWithName(getScriptProcessor()->getMainController_()->getMainSynthChain(), processorId);
+
+	if(auto wt = dynamic_cast<WavetableSynth*>(p))
+		return new ScriptingObjects::ScriptWavetableController(getScriptProcessor(), p);
+	
+	reportScriptError(processorId + " does not have a routing matrix");
+	RETURN_IF_NO_THROW(new ScriptingObjects::ScriptWavetableController(getScriptProcessor(), nullptr));
 }
 
 void ScriptingApi::Synth::setAttribute(int attributeIndex, float newAttribute)

@@ -24,6 +24,7 @@ xcopy "xml\classhise_1_1_scripting_api_1_1_date.xml" "xml\selection"
 xcopy "xml\structhise_1_1fixobj_1_1_array.xml" "xml\selection"
 xcopy "xml\structhise_1_1fixobj_1_1_factory.xml" "xml\selection"
 xcopy "xml\structhise_1_1fixobj_1_1_stack.xml" "xml\selection"
+xcopy "xml\structhise_1_1_scripting_objects_1_1_script_wavetable_controller.xml" "xml\selection"
 
 xcopy "xml\classhise_1_1_scripting_objects_1_1_script_file.xml" "xml\selection"
 xcopy "xml\classhise_1_1_scripting_api_1_1_server.xml" "xml\selection"
@@ -233,6 +234,7 @@ ren "xml\selection\classhise_1_1_beatport_manager.xml" "BeatportManager.xml"
 ren "xml\selection\classhise_1_1_scripting_api_1_1_date.xml" "Date.xml"
 ren "xml\selection\classhise_1_1_scripting_objects_1_1_script_neural_network.xml" "NeuralNetwork.xml"
 ren "xml\selection\classhise_1_1_scripting_objects_1_1_script_rectangle.xml" "Rectangle.xml"
+ren "xml\selection\structhise_1_1_scripting_objects_1_1_script_wavetable_controller.xml" "WavetableController.xml"
 
 ApiExtractor.exe xml\selection xml\selection
 

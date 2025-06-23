@@ -335,6 +335,8 @@ public:
 			case PropertyType::Variable:
 			return true;
 		}
+
+		return false;
 	}
 
 private:
