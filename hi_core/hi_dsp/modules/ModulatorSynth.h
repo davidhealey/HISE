@@ -339,7 +339,27 @@ public:
 
 	struct SoundCollectorBase
 	{
-		virtual ~SoundCollectorBase();;
+		struct SpecialStart
+		{
+			HiseEvent m;
+			ModulatorSynthSound* sound = nullptr;
+
+			double delayTimeSamples = 0.0;
+			double startOffset = 0.0;
+			double fadeInTimeSeconds = 0.0;
+			double fixedLengthSamples = 0.0;
+
+			operator bool() const noexcept { return !m.isEmpty() && sound != nullptr; }
+
+			bool operator==(const SpecialStart& other) const
+			{
+				return m == other.m && sound == other.sound;
+			}
+		};
+
+		virtual ~SoundCollectorBase();
+
+		virtual SpecialStart getSpecialSoundStart(const HiseEvent& m, ModulatorSynthSound* sound) const { return {}; }
 
 		virtual void preHiseEventCallback(const HiseEvent& e) {};
 
@@ -583,7 +603,12 @@ private:
 	std::atomic<bool> bypassState;
 
     bool anyTimerActive = false;
-    
+
+	hise::UnorderedStack<SoundCollectorBase::SpecialStart> delayedSounds;
+	hise::UnorderedStack<uint16> delayedSoundEventIds;
+
+	ModulatorSynthVoice* startSoundInternal(const HiseEvent& m, ModulatorSynthSound* sound);
+
 	// ===================================================================================================================
 
 	JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(ModulatorSynth)
@@ -620,9 +645,10 @@ public:
 
 
 	/** This only checks if the sound is valid, but you can override this with the desired behaviour. */
-	virtual bool canPlaySound(SynthesiserSound *s) override;;
+	virtual bool canPlaySound(SynthesiserSound *s) override;
 
-	
+	void setFadeOutAtUptime(double fixedLengthSamples, double fadeInTimeSeconds);
+
 	void setCurrentHiseEvent(const HiseEvent &m);
 
 	const HiseEvent &getCurrentHiseEvent() const;
@@ -673,6 +699,8 @@ public:
 
 	void setStartUptime(double newUptime) noexcept;
 
+	int getVoicePositionInSamples(bool wrapLoop) const;
+
 	void setScriptGainValue(float newGainValue);
 	void setScriptPitchValue(float newPitchValue);
 
@@ -683,7 +711,6 @@ public:
 
 	void setPitchFade(double fadeTimeSeconds, double targetPitch);
 
-
 	void saveStartUptimeDelta();
 
 	void setUptimeDeltaValueForBlock();
@@ -692,9 +719,28 @@ public:
 
 	void applyGainModulation(int startSample, int numSamples, bool copyLeftChannel);
 
-protected:
+	bool checkFixedLength()
+	{
+		if(fixedFadeOutUptime > 0.0 && voiceUptime > fixedFadeOutUptime)
+		{
+			setVolumeFade(fixedFadeTimeSeconds, 0.0);
+			fixedFadeOutUptime = 0.0;
+			fixedFadeTimeSeconds = 0.0;
+			return true;
+		}
 
-	
+		return false;
+	}
+
+	/** Use this to query whether this voice is the first one that was rendererd for this buffer segment. */
+	bool isFirstRenderedVoice() const { return firstRenderedVoice; }
+
+	void setIsFirstRenderedVoice(bool isFirstVoice)
+	{
+		firstRenderedVoice = isFirstVoice;
+	}
+
+protected:
 
 	/** Returns the ModulatorSynth instance that this voice belongs to.
 	*
@@ -734,6 +780,10 @@ protected:
 
 private:
 
+	bool firstRenderedVoice = false;
+
+	double fixedFadeOutUptime = -1.0;
+	double fixedFadeTimeSeconds = 0.0;
 	
 	HiseEvent currentHiseEvent;
 

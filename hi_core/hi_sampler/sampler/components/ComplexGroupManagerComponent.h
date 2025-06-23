@@ -175,13 +175,25 @@ public:
 		void paint(Graphics& g) override;
 		void resized() override;
 		void updateHeight(int newHeight);
+
 		
+
+		void mouseDoubleClick(const MouseEvent& event) override
+		{
+			if(data.getType() == groupIds::Layer)
+			{
+				auto isFolded = (bool)data[scriptnode::PropertyIds::Folded];
+				data.setProperty(PropertyIds::Folded, !isFolded, nullptr);
+			}
+		}
+
 		LogicType type = LogicType::numLogicTypes;
 		Factory f;
 		HiseShapeButton clearButton;
 		Path p;
 		String typeName;
 		ValueTree data;
+		valuetree::PropertyListener foldListener;
 
 		Colour c;
 
@@ -273,7 +285,7 @@ public:
 			auto id = Helpers::getId(data);
 
 			if(currentAction == Action::DoNothing)
-				return "Skip layer " + id;
+				return "Skip layer " + id + "\n";
 
 			if(currentAction == Action::Unassign)
 			{
@@ -284,6 +296,7 @@ public:
 
 					
 					msg << "Unassigned layer " << id << " from sample " << filename;
+					msg << "\n";
 				}
 			}
 			else
@@ -301,6 +314,8 @@ public:
 						msg << filename << ": " << id << " > IGNORE_FLAG (0xFF)";
 					else
 						msg << filename << ": " << id << " > " << layerTokens[v-1];
+
+					msg << "\n";
 
 					getComplexGroupManager()->setSampleId(s.get(), values, true);
 				}
@@ -345,12 +360,15 @@ public:
 							   public ButtonListener
 	{
 		struct BodyBase: public Component,
-						 public ComponentWithGroupManagerConnection 
+						 public ComponentWithGroupManagerConnection,
+						 public SampleMap::Listener
 		{
+			static constexpr int ButtonHeight = 24;
+
 			struct ButtonBase: public Component,
 							   public SettableTooltipClient
 			{
-				ButtonBase();
+				ButtonBase(const ValueTree& layerData, uint8 layerIndex_);
 
 				virtual ~ButtonBase() {};
 				virtual int getWidthToUse() const = 0;
@@ -363,11 +381,73 @@ public:
 
 				bool active = false;
 				bool empty = false;
+				const uint8 layerIndex;
+			};
+
+			struct UnassignedButton: public ButtonBase
+			{
+				UnassignedButton(const ValueTree& layerData):
+				  ButtonBase(layerData, 0),
+				  f(GLOBAL_BOLD_FONT())
+				{
+					p = fa.createPath("unassigned");
+					setSize(getWidthToUse(), ButtonHeight);
+					
+				}
+
+				int getWidthToUse() const override { return ButtonHeight + f.getStringWidth("Unassigned") + 10; }
+
+				void paint(Graphics& g) override
+				{
+					g.setColour(Colours::white.withAlpha(0.5f));
+
+					g.setFont(f);
+					auto tb = getLocalBounds().toFloat();
+					g.fillPath(p);
+					tb.removeFromLeft(tb.getHeight());
+					g.drawText("Unassigned", tb, Justification::centred);
+				}
+
+				void resized() override
+				{
+					fa.scalePath(p, getLocalBounds().removeFromLeft(getHeight()).toFloat().reduced(3.0f));
+				}
+
+				Factory fa;
+				Path p;
+				Font f;
+			};
+
+			struct IgnoreButton: public ButtonBase
+			{
+				IgnoreButton(const ValueTree& layerData):
+				  ButtonBase(layerData, ComplexGroupManager::IgnoreFlag)
+				{
+					icon = f.createPath("ignorable");
+
+					setSize(getWidthToUse(), ButtonHeight);
+				}
+
+				int getWidthToUse() const override { return ButtonHeight; }
+
+				void resized() override
+				{
+					PathFactory::scalePath(icon, this, 3);
+				}
+
+				void paint(Graphics& g) override
+				{
+					g.setColour(Colours::white.withAlpha(0.5f));
+					g.fillPath(icon);
+				}
+
+				Factory f;
+				Path icon;
 			};
 
 			struct KeyswitchButton: public ButtonBase
 			{
-				KeyswitchButton(const String& n, bool addPowerButton=true);
+				KeyswitchButton(const ValueTree& layerData, uint8 layerIndex, const String& n, bool addPowerButton=true);
 
 				int getWidthToUse() const override;
 
@@ -385,11 +465,14 @@ public:
 			{
 				static constexpr int SelectionSize = 17;
 
-				SelectionTag(LogicTypeComponent& parent, Component* other, uint8 specialValue);
-
 				SelectionTag(ButtonBase* attachedButton, uint8 layerIndex_, uint8 layerValue_);
 
 				void mouseDown(const MouseEvent& e) override;
+
+				void mouseUp(const MouseEvent& e) override
+				{
+					active = false;
+				}
 
 				void refreshNumSamples();
 
@@ -407,11 +490,19 @@ public:
 
 				int numSamples = 0;
 
+				bool active = false;
+
 				uint8 layerIndex;
 				uint8 layerValue;
 			};
 
 			BodyBase(LogicTypeComponent& parent);
+
+			virtual ~BodyBase() override
+			{
+				if(getSampler() != nullptr)
+					getSampler()->getSampleMap()->removeListener(this);
+			}
 
 			void showSelectors(bool shouldShow);
 
@@ -428,6 +519,32 @@ public:
 			void resized() override;
 
 			void paint(Graphics& g) override;
+
+			Array<ButtonBase*> getAllButtonsToShow()
+			{
+				Array<ButtonBase*> list;
+
+				auto idx = Helpers::getLayerIndex(data);
+
+				auto showUnassigned = getComplexGroupManager()->getNumUnassignedAndIgnored(idx).first > 0;
+
+				unassignedButton->setVisible(showUnassigned);
+
+				if(showUnassigned)
+					list.add(unassignedButton.get());
+
+				for(auto b: buttons)
+					list.add(b);
+
+				auto showIgnorable = (bool)data[groupIds::ignorable];
+
+				ignoreButton->setVisible(showIgnorable);
+
+				if(showIgnorable)
+					list.add(ignoreButton.get());
+
+				return list;
+			}
 
 			static void onLockUpdate(BodyBase& l, uint8 layerIndex, bool active)
 			{
@@ -451,12 +568,53 @@ public:
 				repaint();
 			}
 
+			struct Updater: public AsyncUpdater
+			{
+				Updater(BodyBase& parent_):
+				  parent(parent_)
+				{}
+
+				void handleAsyncUpdate() override
+				{
+					parent.refreshButtons(sendNotificationSync);
+				}
+
+				BodyBase& parent;
+			} updater;
+
+			void refreshButtons(NotificationType n=sendNotificationAsync)
+			{
+				if(n != sendNotificationSync)
+					updater.triggerAsyncUpdate();
+				else
+				{
+					resized();
+
+					auto shouldShow = !selectors.isEmpty();
+					selectors.clear();
+					showSelectors(shouldShow);
+				}
+			}
+
+			void sampleMapWasChanged(PoolReference) override { refreshButtons(); }
+
+			void samplePropertyWasChanged(ModulatorSamplerSound*, const Identifier& id, const var&) override
+			{
+				if(id == SampleIds::RRGroup) refreshButtons();
+			};
+
+			void sampleAmountChanged() override { refreshButtons(); }
+			void sampleMapCleared() override { refreshButtons(); };
+
 			uint8 currentLayerValue = 0;
 			bool lockEnabled = false;
 			Rectangle<int> currentLock;
 
 			LogicType lt;
 			StringArray tokens;
+
+			ScopedPointer<ButtonBase> ignoreButton;
+			ScopedPointer<ButtonBase> unassignedButton;
 
 			OwnedArray<ButtonBase> buttons;
 			ValueTree data;
@@ -545,7 +703,7 @@ public:
 
 		SelectorLookAndFeel laf;
 
-		Label unassignedLabel, ignoreLabel;
+		//Label unassignedLabel, ignoreLabel;
 		OwnedArray<BodyBase::SelectionTag> selectors;
 
 
