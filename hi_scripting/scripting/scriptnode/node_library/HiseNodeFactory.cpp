@@ -1485,6 +1485,76 @@ namespace dynamic
 		DisplayType display;
 	};
 
+	struct flex_ahdsr_display : public envelope_display_base
+	{
+		struct internal_display: public data::ui::pimpl::editorT<data::dynamic::displaybuffer, SimpleRingBuffer, flex_ahdsr_base::FlexAhdsrGraph, false>
+		{
+			static data::dynamic::displaybuffer* getDynamicRingBuffer(envelope_base* b)
+			{
+				if (auto mn = dynamic_cast<mothernode*>(b))
+				{
+					auto dataObject = mn->getDataProvider()->getDataObject();
+					auto typed = dynamic_cast<data::dynamic::displaybuffer*>(dataObject);
+					return typed;
+				}
+
+				return nullptr;
+			}
+
+			internal_display(envelope_base* o, PooledUIUpdater* u):
+			  editorT(u, getDynamicRingBuffer(o))
+			{
+				if(dragger != nullptr)
+					dragger->setVisible(false);
+
+				resized();
+			}
+
+			void resized() override
+			{
+				auto b = getLocalBounds();
+
+				externalButton.setBounds(b.removeFromRight(28).removeFromBottom(28).reduced(3));
+				editor->setBounds(b);
+				refreshDashPath();
+			}
+		};
+
+		flex_ahdsr_display(envelope_base* o, PooledUIUpdater* u):
+		  envelope_display_base(o, u),
+		  display(o, u)
+		{
+			addAndMakeVisible(display);
+			setSize(200, 180);
+		}
+
+		void timerCallback() override
+		{
+			
+		}
+
+		void resized() override
+		{
+			auto b = getLocalBounds();
+			b.removeFromBottom(UIValues::NodeMargin);
+
+			auto r = b.removeFromRight(100);
+			b.removeFromRight(UIValues::NodeMargin);
+			display.setBounds(b);
+			modValue.setBounds(r.removeFromTop(32));
+			activeValue.setBounds(r.removeFromBottom(32));
+		}
+
+		static Component* createExtraComponent(void* o, PooledUIUpdater* updater)
+		{
+			auto t = static_cast<mothernode*>(o);
+			auto typed = dynamic_cast<envelope_base*>(t);
+			return new flex_ahdsr_display(typed, updater);
+		}
+
+		internal_display display;
+	};
+
 	struct env_display : envelope_display_base
 	{
 		struct visualiser : public simple_visualiser
@@ -1696,6 +1766,27 @@ template <typename T> using dp = wrap::data<T, data::dynamic::displaybuffer>;
 Factory::Factory(DspNetwork* network) :
 	NodeFactory(network)
 {
+	struct parameter_handler: public flex_ahdsr_base::DragHandlerBase
+	{
+		void initialise(NodeBase* n)
+		{
+			parentNode = n;
+		}
+
+		bool handleAdditionalDrag(int parameterIndex, double value) override
+		{
+			if(auto p = parentNode->getParameterFromIndex(parameterIndex))
+			{
+				p->setValueSync(value);
+				return true;
+			}
+
+			return false;
+		}
+
+		WeakReference<NodeBase> parentNode;
+	};
+
 	registerPolyModNode<dp<simple_ar<1, parameter::dynamic_list>>, 
 						dp<simple_ar<NUM_POLYPHONIC_VOICES, parameter::dynamic_list>>, 
 						dynamic::env_display, 
@@ -1704,6 +1795,11 @@ Factory::Factory(DspNetwork* network) :
 	registerPolyModNode<dp<ahdsr<1, parameter::dynamic_list>>, 
 						dp<ahdsr<NUM_POLYPHONIC_VOICES, parameter::dynamic_list>>, 
 						dynamic::ahdsr_display, 
+						false>();
+
+	registerPolyModNode<dp<flex_ahdsr<1, parameter::dynamic_list, parameter_handler>>,
+						dp<flex_ahdsr<NUM_POLYPHONIC_VOICES, parameter::dynamic_list, parameter_handler>>,
+						dynamic::flex_ahdsr_display,
 						false>();
 
 	registerNode<voice_manager, voice_manager_base::editor>();

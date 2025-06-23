@@ -1917,6 +1917,7 @@ void EnvelopeModulatorFactoryType::fillTypeNameList()
 	ADD_NAME_TO_TYPELIST(GlobalEnvelopeModulator);
 	ADD_NAME_TO_TYPELIST(EventDataEnvelope);
 	ADD_NAME_TO_TYPELIST(HardcodedEnvelopeModulator);
+	ADD_NAME_TO_TYPELIST(FlexAhdsrEnvelope);
 }
 
 

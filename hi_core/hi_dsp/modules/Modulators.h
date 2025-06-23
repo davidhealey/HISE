@@ -203,8 +203,6 @@ protected:
 
 private:
 
-    
-    
 	Component::SafePointer<Plotter> attachedPlotter;
 
 	JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(Modulation)
@@ -765,6 +763,7 @@ class EnvelopeModulatorFactoryType: public FactoryType
 		globalEnvelope,
 		eventDataEnvelope,
 		hardcodedEnvelope
+		flexAhdsrModulator
 	};
 
 public:

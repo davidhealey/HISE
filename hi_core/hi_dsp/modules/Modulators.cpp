@@ -1004,6 +1004,7 @@ Processor *EnvelopeModulatorFactoryType::createProcessor(int typeIndex, const St
 	case globalEnvelope:	return new GlobalEnvelopeModulator(m, id, mode, numVoices);
 	case eventDataEnvelope: return new EventDataEnvelope(m, id, numVoices, mode);
 	case hardcodedEnvelope: return new HardcodedEnvelopeModulator(m, id, numVoices, mode);
+	case flexAhdsrModulator:return new FlexAhdsrEnvelope(m, id, numVoices, mode);
 	default: jassertfalse;	return nullptr;
 	}
 };

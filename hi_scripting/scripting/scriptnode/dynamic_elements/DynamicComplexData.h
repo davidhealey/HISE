@@ -325,7 +325,8 @@ struct complex_ui_laf : public ScriptnodeComboBoxLookAndFeel,
 						public HiseAudioThumbnail::LookAndFeelMethods,
 						public FilterGraph::LookAndFeelMethods,
 						public RingBufferComponentBase::LookAndFeelMethods,
-						public AhdsrGraph::LookAndFeelMethods
+						public AhdsrGraph::LookAndFeelMethods,
+					    public flex_ahdsr_base::FlexAhdsrGraph::LookAndFeelMethods
 {
 	complex_ui_laf() = default;
 
@@ -363,6 +364,13 @@ struct complex_ui_laf : public ScriptnodeComboBoxLookAndFeel,
 	void drawAhdsrBackground(Graphics& g, AhdsrGraph& graph) override;
 	void drawAhdsrPathSection(Graphics& g, AhdsrGraph& graph, const Path& s, bool isActive) override;
 	void drawAhdsrBallPosition(Graphics& g, AhdsrGraph& graph, Point<float> p) override;
+
+	void drawFlexAhdsrBackground(Graphics& g, flex_ahdsr_base::FlexAhdsrGraph& graph) override;
+	void drawFlexAhdsrFullPath(Graphics& g, flex_ahdsr_base::FlexAhdsrGraph& graph) override;
+	void drawFlexAhdsrPosition(Graphics& g, flex_ahdsr_base::FlexAhdsrGraph& graph, flex_ahdsr_base::State s, Point<float> pointOnPath) override;
+	void drawFlexAhdsrSegment(Graphics& g, flex_ahdsr_base::FlexAhdsrGraph& graph, flex_ahdsr_base::State s, const Path& segment, bool hover, bool active) override;
+	void drawFlexAhdsrText(Graphics& g, flex_ahdsr_base::FlexAhdsrGraph& graph, const String& text) override;
+	void drawFlexAhdsrCurvePoint(Graphics& g, flex_ahdsr_base::FlexAhdsrGraph& graph, flex_ahdsr_base::State s, Point<float> curvePoint, bool hover, bool down) override;
 
 	Colour nodeColour;
 

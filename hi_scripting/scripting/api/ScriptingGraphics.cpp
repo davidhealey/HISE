@@ -2601,6 +2601,12 @@ Array<Identifier> ScriptingObjects::ScriptedLookAndFeel::getAllFunctionNames()
 		"drawAnalyserGrid",
         "drawMatrixPeakMeter"
 
+		"drawFlexAhdsrBackground",
+		"drawFlexAhdsrCurvePoint",
+		"drawFlexAhdsrFullPath",
+		"drawFlexAhdsrPosition",
+		"drawFlexAhdsrSegment",
+		"drawFlexAhdsrText"
 	};
 
 	return sa;
@@ -5365,6 +5371,172 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawWavetablePath(Graphics& g_,
 	}
 
 	WaterfallComponent::LookAndFeelMethods::drawWavetablePath(g_, wc, p, tableIndex, isStereo, currentTableIndex, numTables);
+}
+
+void ScriptingObjects::ScriptedLookAndFeel::Laf::drawFlexAhdsrBackground(Graphics& g_,
+	flex_ahdsr_base::FlexAhdsrGraph& graph)
+{
+	if (functionDefined("drawFlexAhdsrBackground"))
+    {
+        auto obj = new DynamicObject();
+ 
+		writeId(obj, &graph);
+        obj->setProperty("area", ApiHelpers::getVarRectangle(useRectangleClass, graph.getLocalBounds().toFloat()));
+
+		setColourOrBlack(obj, "bgColour", graph, HiseColourScheme::ComponentOutlineColourId);
+		setColourOrBlack(obj, "itemColour1", graph, HiseColourScheme::ComponentFillTopColourId);
+		setColourOrBlack(obj, "itemColour2", graph, HiseColourScheme::ComponentFillBottomColourId);
+		setColourOrBlack(obj, "textColour", graph, HiseColourScheme::ComponentTextColourId);
+
+		
+        if (get()->callWithGraphics(g_, "drawFlexAhdsrBackground", var(obj), &graph))
+            return;
+    }
+
+	flex_ahdsr_base::FlexAhdsrGraph::LookAndFeelMethods::drawFlexAhdsrBackground(g_, graph);
+}
+
+void ScriptingObjects::ScriptedLookAndFeel::Laf::drawFlexAhdsrCurvePoint(Graphics& g_,
+	flex_ahdsr_base::FlexAhdsrGraph& graph, flex_ahdsr_base::State s, Point<float> curvePoint, bool hover, bool down)
+{
+	if (functionDefined("drawFlexAhdsrCurvePoint"))
+    {
+        auto obj = new DynamicObject();
+ 
+		writeId(obj, &graph);
+        obj->setProperty("area", ApiHelpers::getVarRectangle(useRectangleClass, graph.getLocalBounds().toFloat()));
+
+		setColourOrBlack(obj, "bgColour", graph, HiseColourScheme::ComponentOutlineColourId);
+		setColourOrBlack(obj, "itemColour1", graph, HiseColourScheme::ComponentFillTopColourId);
+		setColourOrBlack(obj, "itemColour2", graph, HiseColourScheme::ComponentFillBottomColourId);
+		setColourOrBlack(obj, "textColour", graph, HiseColourScheme::ComponentTextColourId);
+
+		obj->setProperty("state", (int)s);
+		obj->setProperty("curvePoint", ApiHelpers::getVarFromPoint(curvePoint));
+		obj->setProperty("hover", hover);
+		obj->setProperty("down", down);
+
+        if (get()->callWithGraphics(g_, "drawFlexAhdsrCurvePoint", var(obj), &graph))
+            return;
+    }
+
+	flex_ahdsr_base::FlexAhdsrGraph::LookAndFeelMethods::drawFlexAhdsrCurvePoint(g_, graph, s, curvePoint, hover, down);
+}
+
+void ScriptingObjects::ScriptedLookAndFeel::Laf::drawFlexAhdsrFullPath(Graphics& g_,
+	flex_ahdsr_base::FlexAhdsrGraph& graph)
+{
+	if (functionDefined("drawFlexAhdsrFullPath"))
+    {
+        auto obj = new DynamicObject();
+ 
+		writeId(obj, &graph);
+        obj->setProperty("area", ApiHelpers::getVarRectangle(useRectangleClass, graph.getLocalBounds().toFloat()));
+		obj->setProperty("pathArea", ApiHelpers::getVarRectangle(useRectangleClass, graph.getLocalBounds().toFloat().reduced(10)));
+
+		setColourOrBlack(obj, "bgColour", graph, HiseColourScheme::ComponentOutlineColourId);
+		setColourOrBlack(obj, "itemColour1", graph, HiseColourScheme::ComponentFillTopColourId);
+		setColourOrBlack(obj, "itemColour2", graph, HiseColourScheme::ComponentFillBottomColourId);
+		setColourOrBlack(obj, "textColour", graph, HiseColourScheme::ComponentTextColourId);
+
+		auto sp = new ScriptingObjects::PathObject(get()->getScriptProcessor());
+
+		var keeper(sp);
+		sp->getPath() = graph.fullPath;
+		obj->setProperty("path", keeper);
+
+        if (get()->callWithGraphics(g_, "drawFlexAhdsrFullPath", var(obj), &graph))
+            return;
+    }
+
+	flex_ahdsr_base::FlexAhdsrGraph::LookAndFeelMethods::drawFlexAhdsrFullPath(g_, graph);
+}
+
+void ScriptingObjects::ScriptedLookAndFeel::Laf::drawFlexAhdsrPosition(Graphics& g_,
+	flex_ahdsr_base::FlexAhdsrGraph& graph, flex_ahdsr_base::State s, Point<float> pointOnPath)
+{
+	if (functionDefined("drawFlexAhdsrPosition"))
+    {
+        auto obj = new DynamicObject();
+ 
+		writeId(obj, &graph);
+        obj->setProperty("area", ApiHelpers::getVarRectangle(useRectangleClass, graph.getLocalBounds().toFloat()));
+
+		setColourOrBlack(obj, "bgColour", graph, HiseColourScheme::ComponentOutlineColourId);
+		setColourOrBlack(obj, "itemColour1", graph, HiseColourScheme::ComponentFillTopColourId);
+		setColourOrBlack(obj, "itemColour2", graph, HiseColourScheme::ComponentFillBottomColourId);
+		setColourOrBlack(obj, "textColour", graph, HiseColourScheme::ComponentTextColourId);
+
+		obj->setProperty("state", (int)s);
+		obj->setProperty("pointOnPath", ApiHelpers::getVarFromPoint(pointOnPath));
+
+		auto sp = new ScriptingObjects::PathObject(get()->getScriptProcessor());
+
+		var keeper(sp);
+		sp->getPath() = graph.fullPath;
+		obj->setProperty("path", keeper);
+
+        if (get()->callWithGraphics(g_, "drawFlexAhdsrPosition", var(obj), &graph))
+            return;
+    }
+
+	flex_ahdsr_base::FlexAhdsrGraph::LookAndFeelMethods::drawFlexAhdsrPosition(g_, graph, s, pointOnPath);
+}
+
+void ScriptingObjects::ScriptedLookAndFeel::Laf::drawFlexAhdsrSegment(Graphics& g_,
+	flex_ahdsr_base::FlexAhdsrGraph& graph, flex_ahdsr_base::State s, const Path& segment, bool hover, bool active)
+{
+	if (functionDefined("drawFlexAhdsrSegment"))
+    {
+        auto obj = new DynamicObject();
+ 
+		writeId(obj, &graph);
+        obj->setProperty("area", ApiHelpers::getVarRectangle(useRectangleClass, graph.getLocalBounds().toFloat()));
+
+		setColourOrBlack(obj, "bgColour", graph, HiseColourScheme::ComponentOutlineColourId);
+		setColourOrBlack(obj, "itemColour1", graph, HiseColourScheme::ComponentFillTopColourId);
+		setColourOrBlack(obj, "itemColour2", graph, HiseColourScheme::ComponentFillBottomColourId);
+		setColourOrBlack(obj, "textColour", graph, HiseColourScheme::ComponentTextColourId);
+
+		obj->setProperty("state", (int)s);
+		obj->setProperty("hover", hover);
+		obj->setProperty("active", active);
+
+		auto sp = new ScriptingObjects::PathObject(get()->getScriptProcessor());
+
+		var keeper(sp);
+		sp->getPath() = segment;
+		obj->setProperty("path", keeper);
+
+        if (get()->callWithGraphics(g_, "drawFlexAhdsrSegment", var(obj), &graph))
+            return;
+    }
+
+	flex_ahdsr_base::FlexAhdsrGraph::LookAndFeelMethods::drawFlexAhdsrSegment(g_, graph, s, segment, hover, active);
+}
+
+void ScriptingObjects::ScriptedLookAndFeel::Laf::drawFlexAhdsrText(Graphics& g_, flex_ahdsr_base::FlexAhdsrGraph& graph,
+	const String& text)
+{
+	if (functionDefined("drawFlexAhdsrText"))
+    {
+        auto obj = new DynamicObject();
+ 
+		writeId(obj, &graph);
+        obj->setProperty("area", ApiHelpers::getVarRectangle(useRectangleClass, graph.getLocalBounds().toFloat()));
+
+		setColourOrBlack(obj, "bgColour", graph, HiseColourScheme::ComponentOutlineColourId);
+		setColourOrBlack(obj, "itemColour1", graph, HiseColourScheme::ComponentFillTopColourId);
+		setColourOrBlack(obj, "itemColour2", graph, HiseColourScheme::ComponentFillBottomColourId);
+		setColourOrBlack(obj, "textColour", graph, HiseColourScheme::ComponentTextColourId);
+
+		obj->setProperty("text", text);
+
+        if (get()->callWithGraphics(g_, "drawFlexAhdsrText", var(obj), &graph))
+            return;
+    }
+
+	flex_ahdsr_base::FlexAhdsrGraph::LookAndFeelMethods::drawFlexAhdsrText(g_, graph, text);
 }
 
 juce::Image ScriptingObjects::ScriptedLookAndFeel::Laf::createIcon(PresetHandler::IconType type)

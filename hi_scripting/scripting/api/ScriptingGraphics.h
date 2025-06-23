@@ -819,6 +819,7 @@ namespace ScriptingObjects
 			public FilterDragOverlay::LookAndFeelMethods,
 			public RingBufferComponentBase::LookAndFeelMethods,
 			public AhdsrGraph::LookAndFeelMethods,
+			public flex_ahdsr_base::FlexAhdsrGraph::LookAndFeelMethods,
 			public MidiFileDragAndDropper::LookAndFeelMethods,
 			public SliderPack::LookAndFeelMethods,
 			public CustomKeyboardLookAndFeelBase,
@@ -943,6 +944,13 @@ namespace ScriptingObjects
             
 			void drawWavetableBackground(Graphics& g, WaterfallComponent& wc, bool isEmpty) override;
 			void drawWavetablePath(Graphics& g, WaterfallComponent& wc, const Path& p, int tableIndex, bool isStereo, int currentTableIndex, int numTables) override;
+
+			void drawFlexAhdsrBackground(Graphics& g, flex_ahdsr_base::FlexAhdsrGraph& graph) override;
+			void drawFlexAhdsrCurvePoint(Graphics& g, flex_ahdsr_base::FlexAhdsrGraph& graph, flex_ahdsr_base::State s, Point<float> curvePoint, bool hover, bool down) override;
+			void drawFlexAhdsrFullPath(Graphics& g, flex_ahdsr_base::FlexAhdsrGraph& graph) override;
+			void drawFlexAhdsrPosition(Graphics& g, flex_ahdsr_base::FlexAhdsrGraph& graph, flex_ahdsr_base::State s, Point<float> pointOnPath) override;
+			void drawFlexAhdsrSegment(Graphics& g, flex_ahdsr_base::FlexAhdsrGraph& graph, flex_ahdsr_base::State s, const Path& segment, bool hover, bool active) override;
+			void drawFlexAhdsrText(Graphics& g, flex_ahdsr_base::FlexAhdsrGraph& graph, const String& text) override;
 
 			Image createIcon(PresetHandler::IconType type) override;
 
