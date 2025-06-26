@@ -200,6 +200,9 @@ void Processor::setAttribute(int parameterIndex, float newValue, dispatch::Dispa
 {
 	setInternalAttribute(parameterIndex, newValue);
 
+	if(forceDeactivateUpdates)
+		notifyEditor = dispatch::DispatchType::dontSendNotification;
+
 #if HISE_OLD_PROCESSOR_DISPATCH
 	if(notifyEditor == dispatch::DispatchType::sendNotification)
 	{

@@ -2026,21 +2026,7 @@ maximum(1.0f)
 	ADD_SCRIPT_PROPERTY(i15, "scrollWheel"); 	ADD_TO_TYPE_SELECTOR(SelectorTypes::ToggleSelector);
 	ADD_SCRIPT_PROPERTY(i16, "enableMidiLearn"); ADD_TO_TYPE_SELECTOR(SelectorTypes::ToggleSelector);
 	ADD_SCRIPT_PROPERTY(i17, "sendValueOnDrag"); ADD_TO_TYPE_SELECTOR(SelectorTypes::ToggleSelector);
-
-#if 0
-	componentProperties->setProperty(getIdFor(Mode), 0);
-	componentProperties->setProperty(getIdFor(Style), 0);
-	componentProperties->setProperty(getIdFor(stepSize), 0);
-	componentProperties->setProperty(getIdFor(middlePosition), 0);
-	componentProperties->setProperty(getIdFor(defaultValue), 0);
-	componentProperties->setProperty(getIdFor(suffix), 0);
-	componentProperties->setProperty(getIdFor(filmstripImage), String());
-	componentProperties->setProperty(getIdFor(numStrips), 0);
-	componentProperties->setProperty(getIdFor(isVertical), true);
-	componentProperties->setProperty(getIdFor(mouseSensitivity), 1.0);
-	componentProperties->setProperty(getIdFor(dragDirection), 0);
-	componentProperties->setProperty(getIdFor(showValuePopup), 0);
-#endif
+	ADD_SCRIPT_PROPERTY(i18, "matrixTargetId"); 
 
 	priorityProperties.add(getIdFor(Mode));
 
@@ -2067,6 +2053,7 @@ maximum(1.0f)
 	setDefaultValue(ScriptSlider::Properties::scrollWheel, true);
 	setDefaultValue(ScriptSlider::Properties::enableMidiLearn, true);
 	setDefaultValue(ScriptSlider::Properties::sendValueOnDrag, true);
+	setDefaultValue(ScriptSlider::Properties::matrixTargetId, "");
 	
 	ScopedValueSetter<bool> svs(removePropertyIfDefault, false);
 
@@ -2123,6 +2110,19 @@ void ScriptingApi::Content::ScriptSlider::setScriptObjectPropertyWithChangeMessa
 		setMode(newValue.toString());
 		return;
 	}
+	else if(id == getIdFor(parameterId))
+	{
+		ScriptComponent::setScriptObjectPropertyWithChangeMessage(id, newValue, notifyEditor);
+
+		if(auto mm = dynamic_cast<MatrixModulator*>(getConnectedProcessor()))
+		{
+			if(getConnectedParameterIndex() == MatrixModulator::SpecialParameters::Value)
+			{
+				auto id = mm->getIdentifierForParameterIndex(MatrixModulator::SpecialParameters::Value);
+				connectToModulatedParameter(mm->getId(), id.toString());
+			}
+		}
+	}
 	else if (id == propertyIds[Style])
 	{
 		jassert(isCorrectlyInitialised(id));
@@ -2144,15 +2144,34 @@ void ScriptingApi::Content::ScriptSlider::setScriptObjectPropertyWithChangeMessa
                                 (double)newValue);
         
         v = FloatSanitizers::sanitizeFloatNumber(v);
-        
         setScriptObjectProperty(defaultValue, var(v));
-        
         
         return;
     }
+	else if (id == getIdFor(matrixTargetId))
+	{
+		if(auto gc = ProcessorHelpers::getFirstProcessorWithType<GlobalModulatorContainer>(getScriptProcessor()->getMainController_()->getMainSynthChain()))
+		{
+			// change this to the property to allow multiple targets with the same text...
+			
+			auto targetId = newValue.toString();
 
-
-
+			if(targetId.isEmpty())
+			{
+				setModulationData(nullptr);
+				matrixConnection = nullptr;
+			}
+			else
+			{
+				if(matrixConnection == nullptr || dynamic_cast<MatrixCableConnection*>(matrixConnection.get())->targetId != targetId)
+				{
+					setModulationData(gc->createMatrixModulationPopupData(targetId));
+					matrixConnection = new MatrixCableConnection(*this, gc->getMatrixModulatorData(), targetId);
+				}
+			}
+		}
+		
+	}
 	else if (id == getIdFor(filmstripImage))
 	{
 		jassert(isCorrectlyInitialised(id));
@@ -2337,15 +2356,15 @@ void ScriptingApi::Content::ScriptSlider::connectToModulatedParameter(String mod
 		{
 			Identifier pid(parameterId.toString());
 
-			ModulationDisplayValue::QueryFunction mv;
+			ModulationDisplayValue::QueryFunction::Ptr mv;
 
 			if(pid == Identifier("GainModulation"))
 			{
-				mv = ModulatorChain::SpecialQueryFunctions::GainModulation;
+				mv = new ModulatorChain::SpecialQueryFunctions::GainModulation();
 			}
 			else if(pid == Identifier("PitchModulation"))
 			{
-				mv = ModulatorChain::SpecialQueryFunctions::PitchModulation;
+				mv = new ModulatorChain::SpecialQueryFunctions::PitchModulation();
 			}
 			else
 			{
@@ -2354,7 +2373,13 @@ void ScriptingApi::Content::ScriptSlider::connectToModulatedParameter(String mod
 			}
 			
 			getScriptProcessor()->setModulationDisplayQueryFunction(idx, p, mv);
+
+			if(auto gc = ProcessorHelpers::getFirstProcessorWithType<GlobalModulatorContainer>(p->getMainController()->getMainSynthChain()))
+			{
+				setModulationData(gc->createMatrixModulationPopupData(p, parameterIndex));
+			}
 		}
+		
 	}
 	else
 	{
@@ -2401,6 +2426,26 @@ bool ScriptingApi::Content::ScriptSlider::contains(double valueToCheck)
 		logErrorAndContinue("contains() can only be called on sliders in 'Range' mode.");
 		return false;
 	}
+}
+
+MatrixIds::Helpers::IntensityTextConverter::ConstructData ScriptingApi::Content::ScriptSlider::createIntensityConverter(int sourceIndex)
+{
+	if(matrixConnection != nullptr)
+	{
+		return dynamic_cast<MatrixCableConnection*>(matrixConnection.get())->createIntensityConverter(sourceIndex);
+	}
+
+	return {};
+}
+
+SimpleRingBuffer::Ptr ScriptingApi::Content::ScriptSlider::getMatrixPlotter(int sourceIndex)
+{
+	if(matrixConnection != nullptr)
+	{
+		return dynamic_cast<MatrixCableConnection*>(matrixConnection.get())->getDisplayBuffer(sourceIndex);
+	}
+
+	return nullptr;
 }
 
 

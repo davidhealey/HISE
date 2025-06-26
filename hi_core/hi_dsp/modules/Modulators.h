@@ -775,7 +775,8 @@ class EnvelopeModulatorFactoryType: public FactoryType
 		voiceKillEnvelope,
 		globalEnvelope,
 		eventDataEnvelope,
-		hardcodedEnvelope
+		hardcodedEnvelope,
+		matrixModulator,
 		flexAhdsrModulator
 	};
 

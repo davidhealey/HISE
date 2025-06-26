@@ -108,7 +108,8 @@ END_JUCE_MODULE_DECLARATION
 #include "modulators/mods/MPEModulators.h"
 #include "modulators/mods/MPEComponents.h"
 #include "modulators/mods/HardcodedNetworkModulators.h"
-
+#include "modulators/mods/MatrixModulator.h"
+#include "modulators/editors/MatrixModulatorComponents.h"
 
 #if USE_BACKEND
 
@@ -126,6 +127,7 @@ END_JUCE_MODULE_DECLARATION
 #include "modulators/editors/ArrayModulatorEditor.h"
 #include "modulators/editors/GlobalModulatorEditor.h"
 #include "modulators/editors/MPEModulatorEditors.h"
+#include "modulators/editors/MatrixModulatorEditor.h"
 
 #endif
 

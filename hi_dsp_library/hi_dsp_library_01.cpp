@@ -91,6 +91,7 @@
 #include "dsp_nodes/FilterNode.cpp"
 #include "dsp_nodes/CableNodeBaseClasses.cpp"
 #include "dsp_nodes/CableNodes.cpp"
+#include "dsp_nodes/ModulationNodes.cpp"
 #include "dsp_nodes/EnvelopeNodes.cpp"
 #include "dsp_nodes/AnalyserNodes.cpp"
 #include "dsp_nodes/ConvolutionNode.cpp"
@@ -122,6 +123,7 @@ namespace hise
 		CREATE_PROPERTY_OBJECT(ModPlotter::ModPlotterPropertyObject);
 		CREATE_PROPERTY_OBJECT(scriptnode::envelope::pimpl::simple_ar_base::PropertyObject);
 		CREATE_PROPERTY_OBJECT(scriptnode::envelope::pimpl::ahdsr_base::AhdsrRingBufferProperties);
+		CREATE_PROPERTY_OBJECT(flex_ahdsr_base::Properties);
 		CREATE_PROPERTY_OBJECT(scriptnode::analyse::Helpers::Oscilloscope);
 		CREATE_PROPERTY_OBJECT(scriptnode::analyse::Helpers::FFT);
 		CREATE_PROPERTY_OBJECT(scriptnode::analyse::Helpers::GonioMeter);

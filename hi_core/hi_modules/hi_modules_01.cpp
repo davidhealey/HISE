@@ -27,6 +27,8 @@
 #include "modulators/mods/MPEModulators.cpp"
 #include "modulators/mods/MPEComponents.cpp"
 #include "modulators/mods/HardcodedNetworkModulators.cpp"
+#include "modulators/mods/MatrixModulator.cpp"
+#include "modulators/editors/MatrixModulatorComponents.cpp"
 
 #if USE_BACKEND
 
@@ -44,6 +46,7 @@
 #include "modulators/editors/ArrayModulatorEditor.cpp"
 #include "modulators/editors/GlobalModulatorEditor.cpp"
 #include "modulators/editors/MPEModulatorEditors.cpp"
+#include "modulators/editors/MatrixModulatorEditor.cpp"
 
 #endif
 

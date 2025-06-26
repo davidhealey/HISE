@@ -931,6 +931,7 @@ public:
 			scrollWheel,
 			enableMidiLearn,
 			sendValueOnDrag,
+			matrixTargetId,
 			numProperties,
 		};
 
@@ -946,6 +947,7 @@ public:
                 addConstant("FineTune", "FineTune");
                 addConstant("ResetToDefault", "ResetToDefault");
                 addConstant("ContextMenu", "ContextMenu");
+				addConstant("ScaleModulation", "ScaleModulation");
                 
                 static const String doubleClick("doubleClick");
                 static const String rightClick("rightClick");
@@ -1043,7 +1045,13 @@ public:
 		/** Checks if the given value is within the range. */
 		bool contains(double value);
 
+		
+
 		// ========================================================================================================
+
+		SimpleRingBuffer::Ptr getMatrixPlotter(int sourceIndex);
+
+		MatrixIds::Helpers::IntensityTextConverter::ConstructData createIntensityConverter(int sourceIndex);
 
 		struct Wrapper;
 
@@ -1056,8 +1064,9 @@ public:
         
 	private:
 
-        
-        
+        struct MatrixCableConnection;
+		ScopedPointer<ControlledObject> matrixConnection;
+
 		double minimum, maximum;
 		PooledImage image;
 

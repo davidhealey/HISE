@@ -124,7 +124,8 @@ void FloatingTileContent::Factory::registerFrontendPanelTypes()
 	registerType<FilterDragOverlay::Panel>(PopupMenuOptions::DraggableFilterPanel);
 	registerType<WaterfallComponent::Panel>(PopupMenuOptions::WavetableWaterfall);
 	registerType<MPEPanel>(PopupMenuOptions::MPEPanel);
-	
+	registerType<ModulationMatrixPanel>(PopupMenuOptions::ModulationMatrix);
+	registerType<ModulationMatrixControlPanel>(PopupMenuOptions::ModulationMatrixController);
 	registerType<AhdsrEnvelope::Panel>(PopupMenuOptions::AHDSRGraph);
 	registerType<FlexAhdsrEnvelope::Panel>(PopupMenuOptions::FlexAHDSRGraph);
 	registerType<MarkdownPreviewPanel>(PopupMenuOptions::MarkdownPreviewPanel);
@@ -612,6 +613,8 @@ void FloatingTileContent::Factory::handlePopupMenu(PopupMenu& m, FloatingTile* p
 			addToPopupMenu(fm, PopupMenuOptions::SampleMapBrowser, "Sample Map Browser");
 			addToPopupMenu(fm, PopupMenuOptions::AudioAnalyser, "Audio Analyser");
             addToPopupMenu(fm, PopupMenuOptions::MatrixPeakMeterPanel, "MatrixPeakMeter");
+			addToPopupMenu(fm, PopupMenuOptions::ModulationMatrix, "Modulation Matrix");
+			addToPopupMenu(fm, PopupMenuOptions::ModulationMatrixController, "Modulation Matrix Controller");
 			addToPopupMenu(fm, PopupMenuOptions::MPEPanel, "MPE Panel");
 			addToPopupMenu(fm, PopupMenuOptions::MarkdownPreviewPanel, "Markdown Panel");
 
@@ -736,6 +739,8 @@ void FloatingTileContent::Factory::handlePopupMenu(PopupMenu& m, FloatingTile* p
 	case PopupMenuOptions::MidiPlayerOverlay:	parent->setNewContent(GET_PANEL_NAME(MidiOverlayPanel)); break;
 	case PopupMenuOptions::TooltipPanel:		parent->setNewContent(GET_PANEL_NAME(TooltipPanel)); break;
 	case PopupMenuOptions::WavetableWaterfall:	parent->setNewContent(GET_PANEL_NAME(WaterfallComponent::Panel)); break;
+	case PopupMenuOptions::ModulationMatrix:	parent->setNewContent(GET_PANEL_NAME(ModulationMatrixPanel)); break;
+	case PopupMenuOptions::ModulationMatrixController:	parent->setNewContent(GET_PANEL_NAME(ModulationMatrixControlPanel)); break;
 	
 	case PopupMenuOptions::DspNodeParameterEditor: parent->setNewContent(GET_PANEL_NAME(scriptnode::NodePropertyPanel)); break;
     case PopupMenuOptions::DspFaustEditorPanel: parent->setNewContent(GET_PANEL_NAME(scriptnode::FaustEditorPanel)); break;

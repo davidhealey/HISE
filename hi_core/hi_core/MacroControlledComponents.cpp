@@ -128,10 +128,6 @@ void MacroControlledObject::enableMidiLearnWithPopup()
 		RemoveMPE,
 		RemoveMacroControl,
 		AddMacroControlOffset = 50,
-		GlobalModAddOffset = 100,
-		GlobalModRemoveOffset = 200,
-		EditModulationConnection = 300,
-		ModulationOffset,
 		MidiOffset = 400,
 		numCommands
 	};
@@ -141,7 +137,17 @@ void MacroControlledObject::enableMidiLearnWithPopup()
 	auto mc = getProcessor()->getMainController();
 	LookAndFeel* plaf = &mc->getGlobalLookAndFeel();
 
-	if(auto css = dynamic_cast<simple_css::StyleSheetLookAndFeel*>(&asComponent()->getLookAndFeel()))
+
+	auto thisLaf = &asComponent()->getLookAndFeel();
+	auto css = dynamic_cast<simple_css::StyleSheetLookAndFeel*>(thisLaf);
+
+	if(css == nullptr)
+	{
+		if(auto pf = dynamic_cast<ScriptingObjects::ScriptedLookAndFeel::LafBase*>(thisLaf))
+			css = pf->getStyleSheetLookAndFeel();
+	}
+
+	if(css != nullptr)
 		plaf = css;
 
 	m.setLookAndFeel(plaf);
@@ -263,25 +269,7 @@ void MacroControlledObject::enableMidiLearnWithPopup()
 
 	if (modulationData != nullptr)
 	{
-		m.addSeparator();
-		m.addSectionHeader("Modulation for " + modulationData->modulationId);
-		auto c = ProcessorHelpers::getFirstProcessorWithType<GlobalModulatorContainer>(getProcessor()->getMainController()->getMainSynthChain());
-
-		for (int i = 0; i < modulationData->sources.size(); i++)
-		{
-			auto modId = c->getChildProcessor(1)->getChildProcessor(i)->getId();
-
-			auto isEnabled = modulationData->queryFunction(i, false);
-			auto isTicked = modulationData->queryFunction(i, true);
-
-			m.addItem((int)ModulationOffset + i, "Connect to " + modulationData->sources[i], isEnabled || isTicked, isTicked);
-		}
-
-		if (modulationData->editCallback)
-		{
-			m.addSeparator();
-			m.addItem((int)EditModulationConnection, "Edit connections");
-		}
+		modulationData->addToPopupMenu(m);
 	}
 
 	NormalisableRange<double> rangeWithSkew = getRange();
@@ -292,7 +280,12 @@ void MacroControlledObject::enableMidiLearnWithPopup()
 	}
 
     auto result = PopupLookAndFeel::showAtComponent(m, dynamic_cast<Component*>(this), false);
-    
+
+	if(modulationData != nullptr && modulationData->onPopupMenuResult(result))
+	{
+		return;
+	}
+
 	if (result == Learn)
 	{
 		if (!learningActive)
@@ -327,10 +320,6 @@ void MacroControlledObject::enableMidiLearnWithPopup()
 		
 		initMacroControl(sendNotification);
 	}
-	else if (result == EditModulationConnection)
-	{
-		modulationData->editCallback(modulationData->modulationId);
-	}
 	else if (result >= MidiOffset)
 	{
 		auto number = result - MidiOffset;
@@ -341,14 +330,6 @@ void MacroControlledObject::enableMidiLearnWithPopup()
 		mHandler->removeMidiControlledParameter(processor, parameterToUse, sendNotificationAsync);
 		mHandler->addMidiControlledParameter(processor, parameterToUse, rangeWithSkew, getValueToTextConverter(), -1);
 		mHandler->setUnlearndedMidiControlNumber(MidiControllerAutomationHandler::Key(-1, number), sendNotificationAsync);
-	}
-	else if (result >= ModulationOffset)
-	{
-		result -= ModulationOffset;
-
-		auto v = !modulationData->queryFunction(result, true);
-
-		modulationData->toggleFunction(result, v);
 	}
 	else if (result >= AddMacroControlOffset)
 	{
@@ -851,8 +832,6 @@ String HiSlider::getSuffixForMode(HiSlider::Mode mode, float panValue)
 {
 	jassert(mode != numModes);
 
-
-
 	switch (mode)
 	{
 	case Frequency:		return " Hz";
@@ -865,6 +844,274 @@ String HiSlider::getSuffixForMode(HiSlider::Mode mode, float panValue)
 	case NormalizedPercentage:	return "%";
 	default:			return String();
 	}
+}
+
+void HiSlider::HoverPopupLookandFeel::PositionData::fromVar(const var& data)
+{
+	if(auto obj = data.getDynamicObject())
+	{
+		margin = data.getProperty("margin", margin);
+		auto l = data["dragAreas"];
+		labelArea = ApiHelpers::getIntRectangleFromVar(data["labelArea"]);
+
+		sensitivity = data.getProperty("mouseSensitivity", sensitivity);
+
+		FloatSanitizers::sanitizeFloatNumber(sensitivity);
+		sensitivity = jlimit(0.01f, 100.0f, sensitivity);
+
+		auto dd = data.getProperty("dragDirection", "Diagonal");
+
+		if(dd == "Diagonal")
+			s = SliderStyle::RotaryHorizontalVerticalDrag;
+		if(dd == "Horizontal")
+			s = SliderStyle::LinearBar;
+		if(dd == "Vertical")
+			s = SliderStyle::LinearBarVertical;
+
+		if(auto ar = l.getArray())
+		{
+			draggers.clear();
+
+			auto r = Result::ok();
+
+			for(const auto& a: *ar)
+			{
+				auto newArea = ApiHelpers::getIntRectangleFromVar(a, &r);
+				draggers.addWithoutMerging(newArea);
+			}
+		}
+	}
+}
+
+var HiSlider::HoverPopupLookandFeel::PositionData::toVar() const
+{
+	DynamicObject::Ptr obj = new DynamicObject();
+
+	obj->setProperty("margin", margin);
+	obj->setProperty("labelArea", ApiHelpers::getVarRectangle(true, labelArea.toFloat()));
+	obj->setProperty("mouseSensitivity", sensitivity);
+
+	switch(s)
+	{
+	case SliderStyle::RotaryHorizontalVerticalDrag:
+		obj->setProperty("dragDirection", "Diagonal");
+		break;
+	case SliderStyle::LinearBarVertical:
+		obj->setProperty("dragDirection", "Vertical");
+		break;
+	case SliderStyle::LinearBar:
+		obj->setProperty("dragDirection", "Horizontal");
+		break;
+	}
+
+	Array<var> dragData;
+
+	for(const auto& d: draggers)
+		dragData.add(ApiHelpers::getVarRectangle(true, d.toFloat()));
+
+	obj->setProperty("dragAreas", var(dragData));
+
+	return var(obj.get());
+}
+
+HiSlider::HoverPopupLookandFeel::PositionData HiSlider::HoverPopupLookandFeel::getModulatorDragData(HiSlider& s,
+                                                                                                        const StringArray& sourceList) const
+{
+	PositionData pd;
+
+	static constexpr int DRAG_SIZE = 30;
+
+	auto totalWidth = sourceList.size() * DRAG_SIZE + 110;
+	auto sb = s.getBoundsInParent();
+	auto x = Rectangle(sb.getX(), sb.getBottom() + 5, totalWidth, DRAG_SIZE);
+	
+	for(auto s: sourceList)
+		pd.draggers.addWithoutMerging(x.removeFromLeft(DRAG_SIZE));
+
+	x.removeFromLeft(10);
+	pd.labelArea = x;
+
+	return pd;
+
+}
+
+void HiSlider::HoverPopupLookandFeel::drawModulationDragBackground(Graphics& g, HiSlider& s, const DrawData& obj,
+	Rectangle<int> labelBounds)
+{
+	if(obj.isHover)
+	{
+		auto cornerSize = 3.0f;
+
+		g.setColour(JUCE_LIVE_CONSTANT_OFF(Colour(0xffe0e0e0)));
+		g.fillRoundedRectangle(labelBounds.toFloat(), cornerSize);
+
+
+		g.setFont(GLOBAL_FONT());
+
+		String text;
+		text << obj.sourceName << ": " << obj.labelText;
+
+		g.setColour(JUCE_LIVE_CONSTANT_OFF(Colour(0xff313131)));
+		g.drawText(text, labelBounds.reduced(3, 0), Justification::left);
+			
+
+#if 0
+
+
+
+
+
+
+
+
+
+
+		auto lr = labelBounds.toFloat();
+
+		g.setColour(Colour(0x88161616));
+		g.fillRoundedRectangle(lr, 3.0f);
+		g.setColour(Colour(0x22FFFFFF));
+		g.drawRoundedRectangle(lr, 3.0f, 1.0);
+
+		g.setColour(Colour(0xAAFFFFFF));
+
+		g.setFont(GLOBAL_FONT());
+
+		String text;
+		text << obj.sourceName << ": " << obj.labelText;
+
+		g.drawText(text, lr.reduced(4.0f, 0.0f), Justification::left);
+#endif
+	}
+}
+
+void HiSlider::HoverPopupLookandFeel::drawModulationDragger(Graphics& g, HiSlider& s, const DrawData& obj)
+{
+	auto area = obj.bounds.toFloat();
+	Path track, dragPath;
+
+	double ARC = 2.5;
+
+	double start, end;
+	
+	switch(obj.targetMode)
+	{
+	case modulation::TargetMode::Gain:
+			start = -ARC;
+			end = -ARC + 2.0 * ARC * obj.intensityValue;
+			break;
+	case modulation::TargetMode::Unipolar:
+			start = 0;
+			end = ARC * obj.intensityValue;
+			break;
+	case modulation::TargetMode::Bipolar:
+			end = ARC * obj.intensityValue;
+			start = - 1.0 * end;
+			break;
+	}
+	
+	dragPath.startNewSubPath(area.getTopLeft());
+	dragPath.startNewSubPath(area.getBottomRight());
+
+	track.startNewSubPath(area.getTopLeft());
+	track.startNewSubPath(area.getBottomRight());
+
+	auto arcBounds = area.reduced(4);
+
+	dragPath.addArc(arcBounds.getX(), arcBounds.getY(), arcBounds.getWidth(), arcBounds.getHeight(), start, end, true);
+	track.addArc(arcBounds.getX(), arcBounds.getY(), arcBounds.getWidth(), arcBounds.getHeight(), -ARC, ARC, true);
+	
+	g.setColour(obj.isHover ? Colour(0x44000000) : Colour(0x22000000));
+
+	PathStrokeType stroke(3.0f, PathStrokeType::curved, PathStrokeType::rounded);
+
+	auto itemColour1 = s.findColour(HiseColourScheme::ColourIds::ComponentFillTopColourId);
+
+	if(itemColour1.isTransparent())
+		itemColour1 = Colours::white.withAlpha(0.8f);
+
+	g.setColour(Colour(0x44000000));
+	g.strokePath(track, stroke);
+	g.setColour(itemColour1.withMultipliedAlpha(obj.isDown ? 1.0f : 0.8f));
+	g.strokePath(dragPath, stroke);
+
+#if 0
+	g.setColour(Colours::black);
+	g.fillRect(dd.bounds);
+	g.setColour(Colours::white.withAlpha(0.2f));
+	g.fillRect(dd.bounds.withWidth(dd.bounds.getWidth() * dd.intensityValue));
+	g.setColour(Colours::white);
+	g.drawText(dd.sourceName, dd.bounds.toFloat(), Justification::centred);
+#endif
+}
+
+HiSlider::HoverPopupLookandFeel& HiSlider::getHoverPopupLookAndFeel()
+{
+	if(auto laf = dynamic_cast<HoverPopupLookandFeel*>(&getLookAndFeel()))
+	{
+		return *laf;
+	}
+
+	return fallback;
+}
+
+void HiSlider::ModUpdater::timerCallback()
+{
+	if(modFunction != nullptr)
+	{
+		if(auto p = parent.getProcessor())
+		{
+			auto nr = parent.getRange();
+
+			auto mv = modFunction->getDisplayValue(p, parent.getValue(), nr);
+
+			auto lastModValue = lastValue.lastModValue;
+			auto thisModValue = mv.getNormalisedModulationValue();
+
+			auto shouldSmooth = std::abs(lastModValue - thisModValue) > JUCE_LIVE_CONSTANT(0.01);
+
+			if(lastValue != mv || shouldSmooth)
+			{
+				mv.lastModValue = lastModValue * 0.9 + thisModValue * 0.1;
+				mv.storeToComponent(parent);
+				lastValue = mv;
+			}
+		}
+	}
+}
+
+void HiSlider::ModUpdater::setUpdateFunction(const ModulationDisplayValue::QueryFunction::Ptr f)
+{
+	modFunction = f;
+
+	if(modFunction)
+	{
+		parent.scaleFunction = [this](bool isDown, float delta)
+		{
+			return modFunction->onScaleDrag(parent.getProcessor(), isDown, delta);
+		};
+
+		start();
+	}
+	else
+	{
+		parent.scaleFunction = {};
+
+		stop();
+	}
+				
+}
+
+bool HiSlider::ModUpdater::canBeDropped(const var& info) const
+{
+	auto typeMatches = info["Type"] == "ModulationDrag";
+	return typeMatches;
+}
+
+void HiSlider::ModUpdater::onDrop(const var& info)
+{
+	auto sourceIndex = (int)info["SourceIndex"];
+	parent.getProcessor()->onModulationDrop(parent.getParameter(), sourceIndex);
 }
 
 
@@ -947,14 +1194,558 @@ double HiSlider::getFrequencyFromTextString(const String& t)
 		return t.getDoubleValue();
 }
 
+void HiSlider::mouseEnter(const MouseEvent& event)
+{
+	showModHoverPopup(true, true);
+	Slider::mouseEnter(event);
+}
+
+
+
 void HiSlider::mouseDoubleClick(const MouseEvent &e)
 {
     performModifierAction(e, true);
 }
 
+struct HiSlider::HoverPopup: public Component,
+							 public PooledUIUpdater::SimpleTimer
+	
+{
+	HoverPopup(HiSlider& slider, 
+	           const ValueTree& matrixData_, 
+		       const String& targetId_, 
+		       const Array<int>& sourceIndexes_, 
+		       const StringArray& sourceNames_, 
+		       const HoverPopupLookandFeel::PositionData& pd):
+	  SimpleTimer(slider.getProcessor()->getMainController()->getGlobalUIUpdater()),
+	  parent(&slider),
+	  targetId(targetId_),
+	  matrixData(matrixData_),
+	  sourceIndexes(sourceIndexes_),
+	  sourceNames(sourceNames_),
+	  dragAreas(pd.draggers),
+	  labelArea(pd.labelArea),
+	  sensitivity(pd.sensitivity),
+	  sliderStyle(pd.s)
+	{
+		auto pp = parent->getParentComponent();
+		pp->addAndMakeVisible(this);
+		auto pb = parent->getBoundsInParent();
+		auto b = dragAreas.getBounds();
+
+		if(!labelArea.isEmpty())
+			b = b.getUnion(labelArea);
+		
+		setBounds(b.expanded(pd.margin));
+		globalHitbox = getScreenBounds().getUnion(slider.getScreenBounds());
+
+		auto translationToOrigin = AffineTransform::translation(getBoundsInParent().getTopLeft().toFloat() * -1.0f);
+
+		dragAreas.transformAll(translationToOrigin);
+
+		if(!labelArea.isEmpty())
+			labelArea = labelArea.transformed(translationToOrigin);
+
+		start();
+
+		rebuild();
+	}
+
+	~HoverPopup()
+	{
+		jassert(!keepAlive);
+	}
+
+	bool hitTest(int x, int y) override
+	{
+		if(labelArea.contains(x, y))
+			return true;
+
+		for(auto r: dragAreas)
+		{
+			if(r.contains(x, y))
+				return true;
+		}
+
+		return false;
+	}
+
+	void rebuild()
+	{
+		intensityValues.clear();
+		labelConverters.clear();
+		intensityDownValues.clear();
+
+
+		auto tt = MatrixIds::Helpers::getTargetType(parent->getProcessor()->getMainController(), targetId);
+
+		if(tt == MatrixIds::Helpers::TargetType::Modulators)
+		{
+			auto mod = dynamic_cast<MatrixModulator*>(parent->getProcessor());
+
+			if(auto pwsc = dynamic_cast<ProcessorWithScriptingContent*>(parent->getProcessor()))
+			{
+				if(auto sc = pwsc->getScriptingContent()->getComponent(parent->getParameter()))
+					mod = dynamic_cast<MatrixModulator*>(sc->getConnectedProcessor());
+			}
+
+			if(mod != nullptr)
+			{
+				for(int i = 0; i < sourceIndexes.size(); i++)
+				{
+					MatrixIds::Helpers::IntensityTextConverter::ConstructData cd = mod->getIntensityTextConstructData();
+					cd.connectedSlider = parent.getComponent();
+					cd.tm = (scriptnode::modulation::TargetMode)(int)getConnectionData(sourceIndexes[i])[MatrixIds::Mode];
+					auto c = new MatrixIds::Helpers::IntensityTextConverter(cd);
+					labelConverters.add(c);
+				}
+			}
+		}
+		else
+		{
+			if(auto pwsc = dynamic_cast<ProcessorWithScriptingContent*>(parent->getProcessor()))
+			{
+				using S = ScriptingApi::Content::ScriptSlider;
+
+				if(auto sc = dynamic_cast<S*>(pwsc->getScriptingContent()->getComponent(parent->getParameter())))
+				{
+					for(int i = 0; i < sourceIndexes.size(); i++)
+					{
+						auto sourceIndex = sourceIndexes[i];
+						auto cd = sc->createIntensityConverter(sourceIndex);
+						cd.connectedSlider = parent.getComponent();
+						cd.tm = (scriptnode::modulation::TargetMode)(int)getConnectionData(sourceIndex)[MatrixIds::Mode];
+						labelConverters.add(new MatrixIds::Helpers::IntensityTextConverter(cd));
+					}
+				}
+			}
+		}
+
+		for(int i = 0; i < sourceIndexes.size(); i++)
+		{
+			auto intensity = getIntensity(sourceIndexes[i], targetId);
+			intensityDownValues.push_back(intensity);
+			intensityValues.push_back(intensity);
+		}
+
+		repaint();
+	}
+
+	Rectangle<int> globalHitbox;
+
+	void paint(Graphics& g) override
+	{
+		auto& laf = parent->getHoverPopupLookAndFeel();
+
+		HoverPopupLookandFeel::DrawData dd;
+
+		dd.isHover = currentHoverIndex != -1;
+
+		auto down = isMouseButtonDown();
+
+		dd.isDown = down;
+		dd.bounds = getLocalBounds().toFloat();
+		dd.targetName = targetId;
+
+		if(currentHoverIndex != -1)
+		{
+			dd.sourceIndex = sourceIndexes[currentHoverIndex];
+			dd.sourceName = sourceNames[currentHoverIndex];
+			dd.targetMode = (scriptnode::modulation::TargetMode)(int)getConnectionData(sourceIndexes[currentHoverIndex])[MatrixIds::Mode];
+			dd.intensityRange = Range<double>(dd.targetMode == scriptnode::modulation::TargetMode::Gain ? 0.0f : -1.0f, 1.0f);
+			dd.intensityValue = intensityValues[currentHoverIndex];
+
+			if(isPositiveAndBelow(currentHoverIndex, labelConverters.size()))
+				dd.labelText = labelConverters[currentHoverIndex]->getText(dd.intensityValue);
+		}
+
+		laf.drawModulationDragBackground(g, *parent, dd, labelArea);
+
+		for(int i = 0; i < sourceNames.size(); i++)
+		{
+			dd.isHover = currentHoverIndex == i;
+			dd.isDown = down && dd.isHover;
+			dd.bounds = dragAreas.getRectangle(i).toFloat();
+			dd.sourceIndex = sourceIndexes[i];
+			dd.sourceName = sourceNames[i];
+			dd.targetMode = (scriptnode::modulation::TargetMode)(int)getConnectionData(sourceIndexes[i])[MatrixIds::Mode];
+			dd.intensityRange = Range<double>(dd.targetMode == scriptnode::modulation::TargetMode::Gain ? 0.0f : -1.0f, 1.0f);
+			dd.intensityValue = intensityValues[i];
+			parent->getHoverPopupLookAndFeel().drawModulationDragger(g, *parent, dd);
+		}
+	}
+
+	void clear()
+	{
+		auto s = parent.getComponent();
+		MessageManager::callAsync([s]()
+		{
+			Desktop::getInstance().getAnimator().fadeOut(s->currentHoverPopup, 150);
+			s->currentHoverPopup = nullptr;
+		});
+	}
+
+	float getIntensity(int sourceIndex, const String& targetId) const
+	{
+		auto c = getConnectionData(sourceIndex);
+
+		if(c.isValid())
+			return (float)c[MatrixIds::Intensity];
+
+		return 0.0f;
+	}
+
+	void timerCallback() override
+	{
+		auto pos = Desktop::getInstance().getMainMouseSource().getScreenPosition().toInt();
+
+		if(!globalHitbox.contains(pos) && !keepAlive)
+		{
+			auto now = Time::getMillisecondCounter();
+
+			if(now - lastHoverTime > 300)
+			{
+				clear();
+			}
+		}
+		else
+		{
+			lastHoverTime = Time::getMillisecondCounter();
+		}
+	}
+
+	ValueTree getConnectionData(int sourceIndex) const
+	{
+		for(auto c: matrixData)
+		{
+			if(MatrixIds::Helpers::matchesTarget(c, targetId) && (int)c[MatrixIds::SourceIndex] == sourceIndex)
+				return c;
+		}
+
+		return {};
+	}
+
+	void mouseDoubleClick(const MouseEvent& event) override
+	{
+		auto um = parent->getProcessor()->getMainController()->getControlUndoManager();
+		auto c = getConnectionData(sourceIndexes[currentHoverIndex]);
+		c.getParent().removeChild(c, um);
+
+		removeSource(currentHoverIndex);
+	}
+
+	void mouseMove(const MouseEvent& e) override
+	{
+		currentHoverIndex = getSourceIndexForMouseEvent(e, false);
+		repaint();
+	}
+
+	void mouseEnter(const MouseEvent& event) override
+	{
+		keepAlive = false;
+		repaint();
+	}
+
+	void mouseExit(const MouseEvent& event) override
+	{
+		repaint();
+	}
+
+	void mouseDown(const MouseEvent& e) override
+	{
+		currentHoverIndex = getSourceIndexForMouseEvent(e, true);
+
+		if(e.mods.isRightButtonDown() && currentHoverIndex != -1)
+		{
+			PopupMenu m;
+			m.setLookAndFeel(&parent->getLookAndFeel());
+
+			auto c = getConnectionData(sourceIndexes[currentHoverIndex]);
+			auto tm = (int)c[MatrixIds::Mode];
+
+			static constexpr int ModeOffset = 4;
+
+			m.addItem(1, "Remove connection");
+			m.addItem(2, "Enter value");
+			m.addSeparator();
+			m.addItem(3, "Inverted", true, c[MatrixIds::Inverted]);
+			m.addItem(ModeOffset, "Scaled", true, tm == 0);
+			m.addItem(ModeOffset+1, "Unipolar", true, tm == 1);
+			m.addItem(ModeOffset+2, "Bipolar", true, tm == 2);
+
+
+			auto um = parent->getProcessor()->getMainController()->getControlUndoManager();
+
+			keepAlive = true;
+
+			auto result = PopupLookAndFeel::showAtComponent(m, dynamic_cast<Component*>(this), false);
+
+			if(result == 0)
+			{
+				keepAlive = false;
+				return;
+			}
+
+			switch(result)
+			{
+			case 1:
+				c.getParent().removeChild(c, um);
+				removeSource(currentHoverIndex);
+				break;
+			case 2:
+				showEditor();
+				break;
+			case 3:
+				c.setProperty(MatrixIds::Inverted, !(bool)c[MatrixIds::Inverted], um);
+				break;
+			default:
+				c.setProperty(MatrixIds::Mode, result - ModeOffset, um);
+				rebuild();
+				break;
+			}
+		}
+
+		if(isPositiveAndBelow(currentHoverIndex, intensityDownValues.size()))
+		{
+			auto sourceIndex = sourceIndexes[currentHoverIndex];
+			intensityDownValues[currentHoverIndex] = getIntensity(sourceIndex, targetId);
+		}
+
+		repaint();
+	}
+
+	void removeSource(int indexInList)
+	{
+		if(sourceNames.size() == 1)
+		{
+			clear();
+			return;
+		}
+
+		sourceNames.remove(indexInList);
+		sourceIndexes.remove(indexInList);
+
+		
+
+		RectangleList<int> newList;
+
+		for(int i = 0; i < dragAreas.getNumRectangles()-1; i++)
+		{
+			newList.addWithoutMerging(dragAreas.getRectangle(i));
+		}
+
+		currentHoverIndex = -1;
+		newList.swapWith(dragAreas);
+		rebuild();
+	}
+
+	void showEditor()
+	{
+		if(isPositiveAndBelow(currentHoverIndex, labelConverters.size()))
+		{
+			keepAlive = true;
+			addAndMakeVisible(editor = new TextEditor());
+			editor->setLookAndFeel(&parent->getLookAndFeel());
+
+			if(auto root = simple_css::CSSRootComponent::find(*parent))
+			{
+				if(auto ss = root->css.getForComponent(editor))
+				{
+					ss->setupComponent(root, editor, 0);
+				}
+			}
+
+			editor->setText(labelConverters[currentHoverIndex]->getText(intensityValues[currentHoverIndex]));
+			editor->setBounds(labelArea);
+			editor->setSelectAllWhenFocused(true);
+			editor->grabKeyboardFocusAsync();
+
+			auto f = [this]()
+			{
+				
+				if(isPositiveAndBelow(currentHoverIndex, labelConverters.size()))
+				{
+					auto newValue = labelConverters[currentHoverIndex]->getValue(editor->getText());
+
+					auto sourceIndex = sourceIndexes[currentHoverIndex];
+					auto cm = getConnectionData(sourceIndex);
+					newValue = jlimit((int)cm[MatrixIds::Mode] == 0 ? 0.0 : -1.0, 1.0, newValue);
+
+					intensityValues[currentHoverIndex] = newValue;
+					auto um = parent->getProcessor()->getMainController()->getControlUndoManager();
+					cm.setProperty(MatrixIds::Intensity, newValue, um);
+					repaint();
+				};
+
+				keepAlive = false;
+
+				MessageManager::callAsync([this]()
+				{
+					editor = nullptr;
+				});
+			};;
+
+			editor->onFocusLost = f;
+			editor->onReturnKey = f;
+		}
+	}
+
+	ScopedPointer<TextEditor> editor;
+
+	int getSourceIndexForMouseEvent(const MouseEvent& e, bool downPos) const
+	{
+		for(int i = 0; i < dragAreas.getNumRectangles(); i++)
+		{
+			if(dragAreas.getRectangle(i).contains(downPos ? e.getMouseDownPosition() : e.getPosition()))
+				return i;
+		}
+
+		return -1;
+	}
+
+	void mouseUp(const MouseEvent& e) override
+	{
+		if(e.mods.isRightButtonDown())
+		{
+			return;
+		}
+
+		keepAlive = false;
+		repaint();
+	}
+
+	void mouseDrag(const MouseEvent& e) override
+	{
+		keepAlive = !getLocalBounds().contains(e.getPosition());
+
+		if(isPositiveAndBelow(currentHoverIndex, intensityDownValues.size()))
+		{
+			auto downValue = intensityDownValues[currentHoverIndex];
+			auto deltaX = (float)e.getDistanceFromDragStartX() / parent->getWidth();
+			auto deltaY = (float)e.getDistanceFromDragStartY() / parent->getHeight();
+
+			if(sliderStyle == SliderStyle::LinearBarVertical)
+				deltaX = 0.0;
+
+			if(sliderStyle == SliderStyle::LinearBar)
+				deltaY = 0.0;
+
+			auto sourceIndex = sourceIndexes[currentHoverIndex];
+			auto cd = getConnectionData(sourceIndex);
+
+			auto isScale = (int)cd[MatrixIds::Mode] == 0;
+
+			auto newValue = jlimit(isScale ? 0.0f : -1.0f, 1.0f, downValue + (deltaX - deltaY) * sensitivity * 0.25f);
+
+			intensityValues[currentHoverIndex] = newValue;
+
+			auto um = parent->getProcessor()->getMainController()->getControlUndoManager();
+			cd.setProperty(MatrixIds::Intensity, newValue, um);
+			repaint();
+		}
+	}
+
+	std::vector<float> intensityDownValues;
+	std::vector<float> intensityValues;
+	uint32 lastHoverTime = 0;
+
+	bool keepAlive = false;
+	Component::SafePointer<HiSlider> parent;
+	String targetId;
+	ValueTree matrixData;
+	Array<int> sourceIndexes;
+	StringArray sourceNames;
+	RectangleList<int> dragAreas;
+	Rectangle<int> labelArea;
+
+	int currentHoverIndex = -1;
+
+	OwnedArray<MatrixIds::Helpers::IntensityTextConverter> labelConverters;
+
+	float sensitivity;
+	SliderStyle sliderStyle;
+};
+
+struct Dudel
+{
+	RectangleList<int> getIntensityDragAreas(Rectangle<int> parentBounds, Rectangle<int> sliderBounds, const StringArray& sourceList)
+	{
+		
+	}
+};
+
+void HiSlider::showModHoverPopup(bool shouldShow, bool closeOnExit)
+{
+	if(modUpdater != nullptr && modUpdater->modFunction)
+	{
+		auto hp = dynamic_cast<HoverPopup*>(currentHoverPopup.get());
+
+		if(hp != nullptr)
+		{
+			if(!shouldShow && hp->keepAlive)
+				return;
+		}
+
+		if(shouldShow)
+		{
+			if(hp != nullptr)
+			{
+				hp->keepAlive = true;
+				return;
+			}
+
+			Array<int> connectedSources;
+
+			auto targetId = getProcessor()->getModulationTargetId(getParameter());
+
+			if(auto gc = ProcessorHelpers::getFirstProcessorWithType<GlobalModulatorContainer>(getProcessor()->getMainController()->getMainSynthChain()))
+			{
+				auto md = gc->getMatrixModulatorData();
+
+				for(auto c: md)
+				{
+					if(MatrixIds::Helpers::matchesTarget(c, targetId))
+					{
+						connectedSources.add((int)c[MatrixIds::SourceIndex]);
+					}
+				}
+
+				if(!connectedSources.isEmpty())
+				{
+					StringArray allSources, sourceList;
+					MatrixIds::Helpers::fillModSourceList(getProcessor()->getMainController(), allSources);
+
+					for(auto idx: connectedSources)
+						sourceList.add(allSources[idx]);
+
+					Dudel d;
+
+					if(auto pd = getHoverPopupLookAndFeel().getModulatorDragData(*this, sourceList))
+					{
+						callRecursive<HoverPopup>(getTopLevelComponent(), [](HoverPopup* h)
+						{
+							h->clear();
+							return false;
+						});
+
+						currentHoverPopup = new HoverPopup(*this, md, targetId, connectedSources, sourceList, pd);
+					}
+				}
+			}
+		}
+		else
+		{
+			currentHoverPopup = nullptr;
+		}
+
+	}
+}
+
 void HiSlider::mouseDown(const MouseEvent &e)
 {
 	CHECK_MIDDLE_MOUSE_DOWN(e);
+
+	showModHoverPopup(false, false);
 
     if(performModifierAction(e, false))
     {
@@ -974,11 +1765,23 @@ void HiSlider::mouseDown(const MouseEvent &e)
     }
 }
 
+void HiSlider::mouseExit(const MouseEvent& e)
+{
+	if(auto hp = dynamic_cast<HoverPopup*>(currentHoverPopup.get()))
+	{
+		hp->keepAlive = false;
+	}
+}
+
 void HiSlider::mouseDrag(const MouseEvent& e)
 {
 	CHECK_MIDDLE_MOUSE_DRAG(e);
 
 	setDragDistance((float)e.getDistanceFromDragStart());
+
+	if(performModifierAction(e, false, false))
+		return;
+
 	Slider::mouseDrag(e);
 }
 
@@ -987,6 +1790,12 @@ void HiSlider::mouseUp(const MouseEvent& e)
 	CHECK_MIDDLE_MOUSE_UP(e);
 
 	abortTouch();
+
+	showModHoverPopup(true, false);
+
+	if(performModifierAction(e, false, false))
+		return;
+
 	Slider::mouseUp(e);
 }
 
@@ -1107,6 +1916,15 @@ bool HiSlider::isUsingModulatedRing() const noexcept
 float HiSlider::getDisplayValue() const
 {
 	return isUsingModulatedRing() ? (float)getProperties()["modValue"] : 1.0f;
+}
+
+NormalisableRange<double> HiSlider::getRange() const
+{
+	auto r = Slider::getRange();
+	NormalisableRange<double> nr(r.getStart(), r.getEnd());
+	nr.interval = Slider::getInterval();
+	nr.skew = Slider::getSkewFactor();
+	return nr;
 }
 
 String HiSlider::getModeSuffix() const
@@ -1489,7 +2307,7 @@ void HiToggleButton::buttonClicked(Button *b)
 
 	MacroControlledObject::ModulationPopupData::operator bool() const noexcept
 	{
-		return modulationId.isNotEmpty();
+		return targetId.isNotEmpty();
 	}
 
 	MacroControlledObject::MacroControlledObject():

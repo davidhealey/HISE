@@ -405,6 +405,16 @@ bool ScriptContentComponent::onDragAction(DragAction a, ScriptComponent* source,
 		{
 			currentDragInfo = new ComponentDragInfo(this, source, data);
 
+			auto matrixIndex = MatrixIds::Helpers::getModulationSourceDragIndex(data);
+
+			if(matrixIndex != -1)
+			{
+				SafeAsyncCall::callAsyncIfNotOnMessageThread<ScriptContentComponent>(*this, [data](ScriptContentComponent& c)
+				{
+					MatrixIds::Helpers::repaintMatrixSlidersOnDrag(&c, data, MatrixIds::Helpers::DragTargetType::Dragging);
+				});
+			}
+
 			for (auto cw : componentWrappers)
 			{
 				if (cw->getScriptComponent() == source)
@@ -460,6 +470,9 @@ void ScriptContentComponent::dragOperationEnded(const DragAndDropTarget::SourceD
 {
 	if (currentDragInfo != nullptr && !currentDragInfo->stopped)
 		currentDragInfo->stop();
+
+	if(MatrixIds::Helpers::getModulationSourceDragIndex(dragData.description) != -1)
+		MatrixIds::Helpers::repaintMatrixSlidersOnDrag(this, dragData.description, MatrixIds::Helpers::DragTargetType::Inactive);
 
 	currentDragInfo = nullptr;
 }
@@ -1068,6 +1081,17 @@ juce::ScaledImage ScriptContentComponent::ComponentDragInfo::getDragImage(bool r
 void ScriptContentComponent::ComponentDragInfo::stop()
 {
 	dummyComponent = nullptr;
+
+	auto matrixIndex = MatrixIds::Helpers::getModulationSourceDragIndex(dragData);
+
+	if(matrixIndex != -1)
+	{
+		stopped = true;
+		currentDragTarget = {};
+		currentTargetComponent = nullptr;
+
+		return;
+	}
 	
 	var args[2];
 	args[0] = isValid(false);
@@ -1190,6 +1214,25 @@ void ScriptContentComponent::ComponentDragInfo::callRepaint()
 {
 	if (paintRoutine)
 	{
+		if(MessageManager::getInstance()->isThisTheMessageThread())
+		{
+			auto t = JavascriptThreadPool::Task::Type::LowPriorityCallbackExecution;
+			auto jp = dynamic_cast<const JavascriptProcessor*>(parent.getScriptProcessor());
+
+			WeakReference<ComponentDragInfo> safeThis(this);
+
+			auto f = [safeThis](JavascriptProcessor* jp)
+			{
+				if(safeThis != nullptr)
+					safeThis->callRepaint();
+
+				return Result::ok();
+			};
+
+			getMainController()->getJavascriptThreadPool().addJob(t, const_cast<JavascriptProcessor*>(jp), f);
+			return;
+		}
+
 		jassert(source != nullptr);
 		jassert(!MessageManager::getInstance()->isThisTheMessageThread());
 		jassert(getMainController()->getKillStateHandler().getCurrentThread() == MainController::KillStateHandler::TargetThread::ScriptingThread);

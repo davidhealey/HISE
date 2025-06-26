@@ -388,6 +388,8 @@ public:
 			DraggableFilterPanel,
 			WavetableWaterfall,
 			MPEPanel,
+			ModulationMatrix,
+			ModulationMatrixController,
 			Matrix2x2,
 			ThreeColumns,
 			ThreeRows,

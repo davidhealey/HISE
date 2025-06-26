@@ -232,7 +232,48 @@ void JavascriptMidiProcessor::processHiseEvent(HiseEvent &m)
 
 }
 
-JavascriptMidiProcessor* JavascriptMidiProcessor::getFirstInterfaceScriptProcessor(MainController* mc)
+ModulationDisplayValue::QueryFunction::Ptr JavascriptMidiProcessor::getModulationQueryFunction(int parameterIndex) const
+{
+	return getAssignedModulationQueryFunction(parameterIndex);
+}
+
+void JavascriptMidiProcessor::onModulationDrop(int parameterIndex, int modulationSourceIndex)
+{
+	if(auto sc = getContent()->getComponent(parameterIndex))
+	{
+		auto targetId = sc->getScriptObjectProperty(ScriptingApi::Content::ScriptSlider::matrixTargetId).toString();
+
+		if(targetId.isNotEmpty())
+		{
+			auto md = MatrixIds::Helpers::getMatrixDataFromGlobalContainer(getMainController());
+			MatrixIds::Helpers::addConnection(md, getMainController(), targetId, modulationSourceIndex);
+			return;
+		}
+
+		if(auto p = sc->getConnectedProcessor())
+		{
+			p->onModulationDrop(sc->getConnectedParameterIndex(), modulationSourceIndex);
+		}
+	}
+}
+
+String JavascriptMidiProcessor::getModulationTargetId(int parameterIndex) const
+{
+	if(auto sc = getContent()->getComponent(parameterIndex))
+	{
+		auto targetId = sc->getScriptObjectProperty(ScriptingApi::Content::ScriptSlider::matrixTargetId).toString();
+
+		if(targetId.isNotEmpty())
+			return targetId;
+
+		if(auto p = sc->getConnectedProcessor())
+			return p->getModulationTargetId(sc->getConnectedParameterIndex());
+	}
+
+	return Processor::getModulationTargetId(parameterIndex);
+}
+
+JavascriptMidiProcessor* JavascriptMidiProcessor::getFirstInterfaceScriptProcessor(const MainController* mc)
 {
 	Processor::Iterator<JavascriptMidiProcessor> iter(mc->getMainSynthChain());
 
@@ -660,6 +701,14 @@ void JavascriptPolyphonicEffect::handleHiseEvent(const HiseEvent &m)
 	}
 }
 
+void JavascriptPolyphonicEffect::onVoiceReset(bool allVoices, int voiceIndex)
+{
+	if (allVoices)
+		voiceData.voiceNoteOns.clear();
+	else
+		voiceData.reset(voiceIndex);
+}
+
 void JavascriptPolyphonicEffect::connectToRuntimeTargets(scriptnode::OpaqueNode& opaqueNode, bool shouldAdd)
 {
 	Processor::connectToRuntimeTargets(opaqueNode, shouldAdd);
@@ -681,9 +730,39 @@ prepareToPlayCallback(new SnippetDocument("prepareToPlay", "sampleRate blockSize
 processBlockCallback(new SnippetDocument("processBlock", "channels")),
 onControlCallback(new SnippetDocument("onControl", "number value"))
 {
+	/** TODO:
+	 *
+	 * - add extra mod support. OK
+	 * - add connectToRuntimeTarget here. OK
+	 * - check that connection works. OK
+	 * - add a bitmask to ParameterProperties that checks if the parameter is connected to anything OK
+	 * - parse this from the ValueTree and write to MemoryOutputStream OK
+	 * - isUsed(modulationIndex) should check this OK
+	 *
+	 * - load it in the hardcoded FX module and skip the parameter calls if not required
+	 * - test with hardcoded FX mods
+	 */
+	jassertfalse;
+
 	initContent();
 
+	auto numModChains = HISE_GET_PREPROCESSOR(mc, HISE_NUM_SCRIPTNODE_FX_MODS);
+
+	for(int i = 0; i < numModChains; i++)
+	{
+		modChains += { this, String("Extra " + String(i+1)), ModulatorChain::ModulationType::Normal, Modulation::Mode::CombinedMode };
+	}
+
 	finaliseModChains();
+
+	for(int i = 0; i < numModChains; i++)
+	{
+		modChains[i].setAllowModificationOfVoiceValues(true);
+		modChains[i].setExpandToAudioRate(false);
+		modChains[i].setIncludeMonophonicValuesInVoiceRendering(true);
+		modChains[i].setClampTo0To1(true);
+		modChains[i].setForceProcessing(true);
+	}
 
 	editorStateIdentifiers.add("contentShown");
 	editorStateIdentifiers.add("onInitOpen");
@@ -808,17 +887,17 @@ const JavascriptProcessor::SnippetDocument * JavascriptMasterEffect::getSnippet(
 int JavascriptMasterEffect::getNumSnippets() const
 { return (int)Callback::numCallbacks; }
 
-Processor* JavascriptMasterEffect::getChildProcessor(int)
-{ return nullptr; }
+Processor* JavascriptMasterEffect::getChildProcessor(int idx)
+{ return modChains[idx].getChain(); }
 
-const Processor* JavascriptMasterEffect::getChildProcessor(int) const
-{ return nullptr; }
+const Processor* JavascriptMasterEffect::getChildProcessor(int idx) const
+{ return modChains[idx].getChain(); }
 
 int JavascriptMasterEffect::getNumInternalChains() const
-{ return 0; }
+{ return modChains.size(); }
 
 int JavascriptMasterEffect::getNumChildProcessors() const
-{ return 0; }
+{ return modChains.size(); }
 
 float JavascriptMasterEffect::getAttribute(int index) const
 { 
@@ -989,9 +1068,56 @@ void JavascriptMasterEffect::applyEffect(AudioSampleBuffer &b, int startSample, 
 {
 	ignoreUnused(startSample);
 
-	if (getActiveNetwork() != nullptr)
+	if (auto n = getActiveNetwork())
 	{
-		getActiveNetwork()->process(b, eventBuffer);
+		ProcessDataDyn d(b.getArrayOfWritePointers(), b.getNumSamples(), b.getNumChannels());
+
+		const auto& pp = n->getParameterProperties();
+
+		auto handleModulation = [&](int ss)
+		{
+			if(!pp.anyConnected)
+				return;
+
+			int numParametersToModulate = jmin(modChains.size(), (int)pp.numUsedModulationSlots);
+
+			for(int mi = 0; mi < numParametersToModulate; mi++)
+			{
+				if(pp.isConnected(mi))
+				{
+					auto mv = modChains[mi].getOneModulationValue(ss);
+					auto pIndex = pp.getParameterIndex(mi);
+					jassert(pIndex != -1);
+					auto p = n->getRootNode()->getParameterFromIndex(pIndex)->getDynamicParameter();
+					auto r = p->getRange();
+					auto value = r.convertFrom0to1(mv, false);
+					p->call(value);
+				}
+			}
+		};
+
+		auto thisBlockSize = pp.getBlockSize(numSamples);
+
+		if(thisBlockSize == numSamples)
+		{
+			handleModulation(startSample);
+			n->process(b, eventBuffer);
+		}
+		else
+		{
+			ChunkableProcessData<ProcessDataDyn, true> cd(d);
+			d.setEventBuffer(*eventBuffer);
+
+			while(auto numLeft = cd.getNumLeft())
+			{
+				auto numThisTime = jmin(numLeft, thisBlockSize);
+				auto chunk = cd.getChunk(numThisTime);
+				handleModulation(startSample);
+				n->process(chunk.toData());
+				startSample += numThisTime;
+			}
+		}
+		
 		return;
 	}
 
@@ -1014,6 +1140,24 @@ void JavascriptMasterEffect::applyEffect(AudioSampleBuffer &b, int startSample, 
 
 		BACKEND_ONLY(if (!lastResult.wasOk()) debugError(this, lastResult.getErrorMessage()));
 	}
+}
+
+
+
+ModulationDisplayValue::QueryFunction::Ptr JavascriptMasterEffect::getModulationQueryFunction(int parameterIndex) const
+{
+	if(auto an = getActiveNetwork())
+	{
+		auto mi = an->getParameterProperties().getModulationChainIndex(parameterIndex);
+
+		if(isPositiveAndBelow(mi, modChains.size()))
+		{
+			auto mc = modChains[mi].getChain();
+			return new ModulatorChain::SelfQueryFunction(mc);
+		}
+	}
+
+	return {};
 }
 
 void JavascriptMasterEffect::setBypassed(bool shouldBeBypassed, NotificationType notifyChangeHandler) noexcept
@@ -1760,16 +1904,18 @@ JavascriptSynthesiser::JavascriptSynthesiser(MainController *mc, const String &i
 	editorStateIdentifiers.add("onInitOpen");
 	editorStateIdentifiers.add("onControlOpen");
 
-	modChains += { this, "Extra1" };
-	modChains += { this, "Extra2" };
+	modChains += { this, "Extra1", ModulatorChain::ModulationType::Normal, Modulation::Mode::CombinedMode };
+	modChains += { this, "Extra2", ModulatorChain::ModulationType::Normal, Modulation::Mode::CombinedMode };
 
 	finaliseModChains();
 
 	modChains[Extra1].setIncludeMonophonicValuesInVoiceRendering(true);
 	modChains[Extra1].setExpandToAudioRate(false);
+	modChains[Extra1].setAllowModificationOfVoiceValues(true);
 
 	modChains[Extra2].setIncludeMonophonicValuesInVoiceRendering(true);
 	modChains[Extra2].setExpandToAudioRate(false);
+	modChains[Extra2].setAllowModificationOfVoiceValues(true);
 
 	modChains[Extra1].getChain()->setColour(Colour(0xFF888888));
 	modChains[Extra2].getChain()->setColour(Colour(0xFF888888));

@@ -2823,6 +2823,7 @@ struct ScriptingObjects::ScriptingModulator::Wrapper
 	API_METHOD_WRAPPER_0(ScriptingModulator, getType);
 	API_METHOD_WRAPPER_2(ScriptingModulator, connectToGlobalModulator);
 	API_METHOD_WRAPPER_0(ScriptingModulator, getGlobalModulatorId);
+	API_VOID_METHOD_WRAPPER_1(ScriptingModulator, setMatrixProperties);
 };
 
 ScriptingObjects::ScriptingModulator::ScriptingModulator(ProcessorWithScriptingContent *p, Modulator *m_) :
@@ -2874,6 +2875,7 @@ moduleHandler(m_, dynamic_cast<JavascriptProcessor*>(p))
 	ADD_API_METHOD_0(asTableProcessor);
 	ADD_API_METHOD_2(connectToGlobalModulator);
 	ADD_API_METHOD_0(getGlobalModulatorId);
+	ADD_API_METHOD_1(setMatrixProperties);
 }
 
 String ScriptingObjects::ScriptingModulator::getDebugName() const
@@ -2962,6 +2964,14 @@ String ScriptingObjects::ScriptingModulator::getGlobalModulatorId()
 		}
 	}
 	return String();
+}
+
+void ScriptingObjects::ScriptingModulator::setMatrixProperties(var matrixData)
+{
+	if(auto mm = dynamic_cast<MatrixModulator*>(mod.get()))
+	{
+		mm->setMatrixProperties(matrixData);
+	}
 }
 
 void ScriptingObjects::ScriptingModulator::setAttribute(int index, float value)
@@ -4046,6 +4056,7 @@ struct ScriptingObjects::ScriptingSynth::Wrapper
 	API_METHOD_WRAPPER_0(ScriptingSynth, asSampler);
 	API_METHOD_WRAPPER_0(ScriptingSynth, getRoutingMatrix);
 	API_METHOD_WRAPPER_0(ScriptingSynth, getId);
+	API_VOID_METHOD_WRAPPER_2(ScriptingSynth, setModulationInitialValue);
 };
 
 ScriptingObjects::ScriptingSynth::ScriptingSynth(ProcessorWithScriptingContent *p, ModulatorSynth *synth_) :
@@ -4087,6 +4098,7 @@ ScriptingObjects::ScriptingSynth::ScriptingSynth(ProcessorWithScriptingContent *
 	ADD_API_METHOD_3(addStaticGlobalModulator);
 	ADD_API_METHOD_0(asSampler);
 	ADD_API_METHOD_0(getRoutingMatrix);
+	ADD_API_METHOD_2(setModulationInitialValue);
 };
 
 
@@ -4110,6 +4122,21 @@ void ScriptingObjects::ScriptingSynth::setAttribute(int parameterIndex, float ne
         
         
 		synth->setAttribute(parameterIndex, newValue, ProcessorHelpers::getAttributeNotificationType());
+	}
+}
+
+void ScriptingObjects::ScriptingSynth::setModulationInitialValue(int chainIndex, float initialValue)
+{
+	if (checkValidObject())
+	{
+        if(auto mc = dynamic_cast<ModulatorChain*>(synth->getChildProcessor(chainIndex)))
+        {
+	        mc->setInitialValue(initialValue);
+        }
+		else
+		{
+			reportScriptError(String(chainIndex) + " is not a valid modulation chain");
+		}
 	}
 }
 
@@ -6955,7 +6982,11 @@ Component* ScriptingObjects::ScriptUnorderedStack::createPopupComponent(const Mo
 }
 
 
-
+DebugInformationBase* ScriptingObjects::ScriptUnorderedStack::getChildElement(int index)
+{
+	IndexedValue i(this, index);
+	return new LambdaValueInformation(i, i.getId(), {}, DebugInformation::Type::Constant, getLocation());
+}
 
 bool ScriptingObjects::ScriptUnorderedStack::copyTo(var target)
 {
@@ -9977,6 +10008,12 @@ void ScriptingObjects::ScriptBuilder::clear()
 
 	mc->getProcessorChangeHandler().sendProcessorChangeMessage(mc->getMainSynthChain(), MainController::ProcessorChangeHandler::EventType::ClearBeforeRebuild, false);
 
+	MessageManager::callAsync([this]()
+	{
+		getScriptProcessor()->getScriptingContent()->setIsRebuilding(true);
+	});
+	
+
 	Thread::getCurrentThread()->wait(500);
 	dynamic_cast<JavascriptProcessor*>(getScriptProcessor())->getScriptEngine()->extendTimeout(500);
 
@@ -10029,13 +10066,18 @@ void ScriptingObjects::ScriptBuilder::clear()
 
 void ScriptingObjects::ScriptBuilder::flush()
 {
-	flushed = true;
+	if(!flushed)
+	{
+		flushed = true;
 
-	auto synthChain = getScriptProcessor()->getMainController_()->getMainSynthChain();
-
-	synthChain->sendRebuildMessage(true);
-
-	getScriptProcessor()->getMainController_()->getProcessorChangeHandler().sendProcessorChangeMessage(synthChain, MainController::ProcessorChangeHandler::EventType::RebuildModuleList, false);
+		MessageManager::callAsync([this]()
+		{
+			auto synthChain = getScriptProcessor()->getMainController_()->getMainSynthChain();
+			getScriptProcessor()->getScriptingContent()->setIsRebuilding(false);
+			synthChain->sendRebuildMessage(true);
+			getScriptProcessor()->getMainController_()->getProcessorChangeHandler().sendProcessorChangeMessage(synthChain, MainController::ProcessorChangeHandler::EventType::RebuildModuleList, false);
+		});
+	}
 }
 
 struct ScriptingObjects::ScriptErrorHandler::Wrapper

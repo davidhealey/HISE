@@ -57,23 +57,46 @@ public:
 
 	virtual ~ProcessorWithScriptingContent();
 
-	void setModulationDisplayQueryFunction(int idx, Processor* p, const ModulationDisplayValue::QueryFunction& mv)
+	struct InterfaceQueryFunction: public ModulationDisplayValue::QueryFunction
 	{
-		if(mv)
+		InterfaceQueryFunction(Processor* p, ModulationDisplayValue::QueryFunction::Ptr targetFunction_):
+		  safeP(p),
+		  targetFunction(targetFunction_)
+		{};
+
+		bool onScaleDrag(Processor* p, bool isDown, float delta) override
 		{
-			assignedFunctions[idx] = [mv, p](Processor*, double v, NormalisableRange<double> nr)
-			{
-				return mv(p, v, nr);
-			};
+			jassert(targetFunction != nullptr);
+
+			if(safeP != nullptr)
+				return targetFunction->onScaleDrag(safeP.get(), isDown, delta);
+
+			return false;
 		}
+
+		ModulationDisplayValue getDisplayValue(Processor* p, double nv, NormalisableRange<double> nr) const override
+		{
+			jassert(targetFunction != nullptr);
+
+			if(safeP != nullptr)
+				return targetFunction->getDisplayValue(safeP, nv, nr);
+
+			return {};
+		}
+
+		WeakReference<Processor> safeP;
+		ModulationDisplayValue::QueryFunction::Ptr targetFunction;
+	};
+
+	void setModulationDisplayQueryFunction(int idx, Processor* p, ModulationDisplayValue::QueryFunction::Ptr mv)
+	{
+		if(mv != nullptr)
+			assignedFunctions[idx] = new InterfaceQueryFunction(p, mv);
 		else
-		{
-			assignedFunctions[idx] = {};
-		}
-		
+			assignedFunctions[idx] = nullptr;
 	}
 
-	ModulationDisplayValue::QueryFunction getAssignedModulationQueryFunction(int parameterIndex) const
+	ModulationDisplayValue::QueryFunction::Ptr getAssignedModulationQueryFunction(int parameterIndex) const
 	{
 		auto f = assignedFunctions.find(parameterIndex);
 
@@ -177,7 +200,7 @@ protected:
 
 private:
 
-	std::map<int, ModulationDisplayValue::QueryFunction> assignedFunctions;
+	std::map<int, ModulationDisplayValue::QueryFunction::Ptr> assignedFunctions;
 
 	void defaultControlCallbackIdle(ScriptingApi::Content::ScriptComponent *component, const var& controllerValue, Result& r);
 

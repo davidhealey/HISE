@@ -1839,7 +1839,10 @@ namespace ScriptingObjects
 		
 		/** Returns the id of the global modulation container and global modulator this modulator is connected to */
 		String getGlobalModulatorId();
-		
+
+		/** Sets the data for the input & output ranges if this modulator is a MatrixModulator. */
+		void setMatrixProperties(var matrixData);
+
 		/** Sets the attribute of the Modulator. You can look up the specific parameter indexes in the manual. */
 		void setAttribute(int index, float value);
 
@@ -2211,6 +2214,9 @@ namespace ScriptingObjects
 
 		/** Changes one of the Parameter. Look in the manual for the index numbers of each effect. */
 		void setAttribute(int parameterIndex, float newValue);;
+
+		/** Changes the initial modulation value for the given chain. */
+		void setModulationInitialValue(int chainIndex, float initialValue);
 
         /** Returns the attribute with the given index. */
         float getAttribute(int index);

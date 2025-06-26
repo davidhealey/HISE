@@ -99,10 +99,7 @@ public:
 		return getContentParameterAmount();
 	}
 
-	ModulationDisplayValue::QueryFunction getModulationQueryFunction(int parameterIndex) const override
-	{
-		return getAssignedModulationQueryFunction(parameterIndex);
-	}
+	
 
 	void addToFront(bool addToFront_) noexcept;;
 	bool isFront() const;;
@@ -120,7 +117,13 @@ public:
 
 	void processHiseEvent(HiseEvent &m) override;
 
-	static JavascriptMidiProcessor* getFirstInterfaceScriptProcessor(MainController* mc);
+	ModulationDisplayValue::QueryFunction::Ptr getModulationQueryFunction(int parameterIndex) const override;
+
+	void onModulationDrop(int parameterIndex, int modulationSourceIndex) override;
+
+	String getModulationTargetId(int parameterIndex) const override;
+
+	static JavascriptMidiProcessor* getFirstInterfaceScriptProcessor(const MainController* mc);
 
 	ScriptingApi::Server::WeakPtr getServerObject();
 
@@ -617,9 +620,10 @@ public:
 	void prepareToPlay(double sampleRate, int samplesPerBlock) override;
 	void applyEffect(AudioSampleBuffer &b, int startSample, int numSamples) override;
 
-    
-    
 	void connectToRuntimeTargets(scriptnode::OpaqueNode& opaqueNode, bool shouldAdd) override;
+
+
+	ModulationDisplayValue::QueryFunction::Ptr getModulationQueryFunction(int parameterIndex) const override;
 
 	float getAttribute(int index) const override;
 

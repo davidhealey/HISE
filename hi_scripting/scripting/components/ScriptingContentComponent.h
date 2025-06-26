@@ -370,6 +370,8 @@ private:
 		var dragData;
 		WeakCallbackHolder paintRoutine;
 		WeakCallbackHolder dragCallback;
+
+		JUCE_DECLARE_WEAK_REFERENCEABLE(ComponentDragInfo);
 	};
 
 	ScopedPointer<ComponentDragInfo> currentDragInfo;
