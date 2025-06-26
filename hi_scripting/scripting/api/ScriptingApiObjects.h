@@ -2567,6 +2567,9 @@ namespace ScriptingObjects
 		/** Saves the currently loaded wavetable as HWT file somewhere. */
 		void saveAsHwt(const var& outputFile);
 
+		/** Saves the currently loaded wavetable as audio file. */
+		void saveAsAudioFile(const var& outputFile);
+
 		/** This will store all resynthesised wavetables to the given directory and reused if the same file is loaded again. */
 		void setEnableResynthesisCache(const var& cacheDirectory, bool clearCache);
 
@@ -2589,6 +2592,7 @@ namespace ScriptingObjects
 			API_VOID_METHOD_WRAPPER_1(ScriptWavetableController, setResynthesisOptions);
 			API_VOID_METHOD_WRAPPER_0(ScriptWavetableController, resynthesise);
 			API_VOID_METHOD_WRAPPER_1(ScriptWavetableController, saveAsHwt);
+			API_VOID_METHOD_WRAPPER_1(ScriptWavetableController, saveAsAudioFile);
 			API_VOID_METHOD_WRAPPER_2(ScriptWavetableController, setEnableResynthesisCache);
 			API_VOID_METHOD_WRAPPER_1(ScriptWavetableController, setErrorHandler);
 			API_VOID_METHOD_WRAPPER_3(ScriptWavetableController, loadData);

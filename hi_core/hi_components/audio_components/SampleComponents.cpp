@@ -1411,6 +1411,21 @@ void SamplerDisplayWithTimeline::setEnvelope(Modulation::Mode m, ModulatorSample
 	}
 }
 
+float WaterfallComponent::AlphaPathData::getGlowAlpha(int tableIndex, int activeTableIndex, int numTables) const
+{
+	if(glowScale == 0.0f)
+		return 0.0f;
+
+	if(tableIndex == activeTableIndex)
+		return 1.0f;
+
+	float normalisedDiff = 1.0f - (float)hmath::abs(tableIndex - activeTableIndex) / (float)numTables;
+
+	normalisedDiff = hmath::smoothstep(normalisedDiff, smoothRange.getStart(), smoothRange.getEnd());
+	normalisedDiff *= glowScale;
+	return jlimit(0.0f, 1.0f, normalisedDiff);
+}
+
 var WaterfallComponent::AlphaPathData::toVar() const
 {
 	DynamicObject::Ptr obj = new DynamicObject();
@@ -1919,6 +1934,7 @@ void WaterfallComponent::rebuildPaths()
 	repaint();
 }
 
+
 void WaterfallComponent::paint(Graphics& g)
 {
 	auto lafToUse = dynamic_cast<LookAndFeelMethods*>(&getLookAndFeel());
@@ -2117,37 +2133,37 @@ Component* WaterfallComponent::Panel::createContentComponent(int index)
 {
 	if (auto wt = dynamic_cast<WavetableSynth*>(getProcessor()))
 	{
-		if (auto sound = dynamic_cast<WavetableSound*>(wt->getSound(index)))
+		index = jmax(0, index);
+
+		auto sound = dynamic_cast<WavetableSound*>(wt->getSound(index));
+		auto wc = new WaterfallComponent(wt, sound);
+
+		auto currentIndex = index;
+		WeakReference<ModulatorSynth> safeThis(wt);
+
+		auto bgColour = findPanelColour(FloatingTileContent::PanelColourId::bgColour);
+
+		wc->setOpaque(bgColour.isOpaque());
+		wc->setColour(HiseColourScheme::ComponentBackgroundColour, bgColour);
+		wc->setColour(HiseColourScheme::ComponentFillTopColourId, findPanelColour(FloatingTileContent::PanelColourId::itemColour1));
+		wc->setColour(HiseColourScheme::ComponentOutlineColourId, findPanelColour(FloatingTileContent::PanelColourId::itemColour2));
+		wc->setColour(HiseColourScheme::ComponentFillBottomColourId, findPanelColour(FloatingTileContent::PanelColourId::itemColour3));
+		wc->setColour(HiseColourScheme::ComponentTextColourId, findPanelColour(FloatingTileContent::PanelColourId::textColour));
+		
+		wc->displayDataFunction = [safeThis, currentIndex]()
 		{
-			auto wc = new WaterfallComponent(wt, sound);
+			WaterfallComponent::DisplayData data;
 
-			auto currentIndex = index;
-			WeakReference<ModulatorSynth> safeThis(wt);
-
-			auto bgColour = findPanelColour(FloatingTileContent::PanelColourId::bgColour);
-
-			wc->setOpaque(bgColour.isOpaque());
-			wc->setColour(HiseColourScheme::ComponentBackgroundColour, bgColour);
-			wc->setColour(HiseColourScheme::ComponentFillTopColourId, findPanelColour(FloatingTileContent::PanelColourId::itemColour1));
-			wc->setColour(HiseColourScheme::ComponentOutlineColourId, findPanelColour(FloatingTileContent::PanelColourId::itemColour2));
-			wc->setColour(HiseColourScheme::ComponentFillBottomColourId, findPanelColour(FloatingTileContent::PanelColourId::itemColour3));
-			wc->setColour(HiseColourScheme::ComponentTextColourId, findPanelColour(FloatingTileContent::PanelColourId::textColour));
-			
-			wc->displayDataFunction = [safeThis, currentIndex]()
+			if (safeThis != nullptr)
 			{
-				WaterfallComponent::DisplayData data;
+				data.sound = dynamic_cast<WavetableSound*>(safeThis->getSound(currentIndex));
+				data.modValue = static_cast<WavetableSynth*>(safeThis.get())->getDisplayTableValue();
+			}
 
-				if (safeThis != nullptr)
-				{
-					data.sound = dynamic_cast<WavetableSound*>(safeThis->getSound(currentIndex));
-					data.modValue = static_cast<WavetableSynth*>(safeThis.get())->getDisplayTableValue();
-				}
+			return data;
+		};
 
-				return data;
-			};
-
-			return wc;
-		}
+		return wc;
 	}
 
 	return nullptr;

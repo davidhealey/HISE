@@ -688,8 +688,8 @@ public:
 		{
 		case GainModulation:	return gainChain;
 		case PitchModulation:	return pitchChain;
-		case (int)WavetableInternalChains::TableIndexModulation:	return tableMod.getChain(Modulation::GainMode);
-		case (int)WavetableInternalChains::TableIndexBipolarChain:  return tableMod.getChain(Modulation::OffsetMode);;
+		case (int)WavetableInternalChains::TableIndexModulation:	return tableIndexChain;
+		case (int)WavetableInternalChains::TableIndexBipolarChain:  return tableIndexBipolarChain;
 		case MidiProcessor:		return midiProcessorChain;
 		case EffectChain:		return effectChain;
 		default:				jassertfalse; return nullptr;
@@ -704,8 +704,8 @@ public:
 		{
 		case GainModulation:	return gainChain;
 		case PitchModulation:	return pitchChain;
-		case (int)WavetableInternalChains::TableIndexModulation:	return tableMod.getChain(Modulation::GainMode);
-		case (int)WavetableInternalChains::TableIndexBipolarChain:  return tableMod.getChain(Modulation::OffsetMode);;
+		case (int)WavetableInternalChains::TableIndexModulation:	return tableIndexChain;
+		case (int)WavetableInternalChains::TableIndexBipolarChain:  return tableIndexBipolarChain;
 		case MidiProcessor:		return midiProcessorChain;
 		case EffectChain:		return effectChain;
 		default:				jassertfalse; return nullptr;
@@ -815,11 +815,6 @@ public:
 
 	ModulationDisplayValue::QueryFunction::Ptr getModulationQueryFunction(int parameterIndex) const override
 	{
-		if(parameterIndex == SpecialParameters::TableIndexValue)
-		{
-			return new ModulatorChain::ScaleAddCombo::QueryFunction(tableMod);
-		}
-
 		return ModulatorSynth::getModulationQueryFunction(parameterIndex);
 	}
 
@@ -913,7 +908,25 @@ public:
 			reloadWavetable();
 	}
 
+	AudioSampleBuffer createAudioSampleBufferFromWavetable(int sampleIndex) const
+	{
+		if(auto s = dynamic_cast<WavetableSound*>(getSound(sampleIndex)))
+		{
+			auto data = s->getWaveTableData(0, 0);
+			auto size = s->getWavetableAmount() * s->getTableSize();
 
+			AudioSampleBuffer b(s->isStereo() ? 2 : 1, size);
+
+			for(int i = 0; i < b.getNumChannels(); i++)
+			{
+				FloatVectorOperations::copy(b.getWritePointer(i), s->getWaveTableData(i, 0), size);
+			}
+
+			return b;
+		}
+
+		return {};
+	}
 
 private:
 
@@ -1063,12 +1076,8 @@ private:
 
 	friend class WavetableSynthVoice;
 
-	ModulatorChain::ScaleAddCombo tableMod;
-
-	/*
 	ModulatorChain* tableIndexChain;
 	ModulatorChain* tableIndexBipolarChain;
-	*/
 };
 
 

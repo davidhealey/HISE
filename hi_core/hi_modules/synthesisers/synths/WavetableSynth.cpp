@@ -41,18 +41,13 @@ WavetableSynth::WavetableSynth(MainController *mc, const String &id, int numVoic
 {
 	getBuffer().addListener(this);
 
-	tableMod.addToConstructionData(this, modChains, "Table Index");
-
-	//modChains += {this, "Table Index"};
-	//modChains += {this, "Table Index Bipolar", ModulatorChain::ModulationType::Normal, Modulation::PanMode};
+	modChains += {this, "Table Index"};
+	modChains += {this, "Table Index Bipolar", ModulatorChain::ModulationType::Normal, Modulation::PanMode};
 
 	finaliseModChains();
 
-	tableMod.init(this, modChains, ChainIndex::TableIndex, ChainIndex::TableIndexBipolar, Colour(0xff4D54B3));
-	tableMod.setParameterRange({0.0, 1.0});
-
-	//tableIndexChain = modChains[ChainIndex::TableIndex].getChain();
-	//tableIndexBipolarChain = modChains[ChainIndex::TableIndexBipolar].getChain();
+	tableIndexChain = modChains[ChainIndex::TableIndex].getChain();
+	tableIndexBipolarChain = modChains[ChainIndex::TableIndexBipolar].getChain();
 
 	parameterNames.add("HqMode");
 	parameterNames.add("LoadedBankIndex");
@@ -66,8 +61,8 @@ WavetableSynth::WavetableSynth(MainController *mc, const String &id, int numVoic
 	for (int i = 0; i < numVoices; i++) 
 		addVoice(new WavetableSynthVoice(this));
 
-	//tableIndexChain->setColour(JUCE_LIVE_CONSTANT_OFF(Colour(0xff4D54B3)));
-	//tableIndexBipolarChain->setColour(Colour(0xff4D54B3));
+	tableIndexChain->setColour(JUCE_LIVE_CONSTANT_OFF(Colour(0xff4D54B3)));
+	tableIndexBipolarChain->setColour(Colour(0xff4D54B3));
 }
 
 void WavetableSynth::getWaveformTableValues(int /*displayIndex*/, float const** tableValues, int& numValues, float& normalizeValue)
@@ -96,22 +91,14 @@ void WavetableSynth::getWaveformTableValues(int /*displayIndex*/, float const** 
 
 float WavetableSynth::getTotalTableModValue(int offset)
 {
-	tableMod.setParameterValue(tableIndexKnobValue.advance());
-	auto m = tableMod.getOneModulationValue(offset);
-	return m * (1.0f - reversed) + (1.0f - m) * reversed;
-
-#if 0
+	
 	offset /= HISE_EVENT_RASTER;
 
 	auto gainMod = modChains[ChainIndex::TableIndex].getModValueForVoiceWithOffset(offset);
 	auto bipolarMod = modChains[ChainIndex::TableIndexBipolar].getModValueForVoiceWithOffset(offset);
-
 	bipolarMod *= (float)modChains[ChainIndex::TableIndexBipolar].getChain()->shouldBeProcessedAtAll();
-
 	auto mv = jlimit<float>(0.0f, 1.0f, (tableIndexKnobValue.advance() * gainMod) + bipolarMod);
-
 	return mv * (1.0f - reversed) + (1.0f - mv) * reversed;
-#endif
 }
 
 ProcessorEditorBody* WavetableSynth::createEditor(ProcessorEditor *parentEditor)
@@ -1025,6 +1012,10 @@ void WavetableSynth::loadWavetableInternal()
 
 				for(int i = 0; i < info.getNumCycles(); i++)
 				{
+					if(!info.useLoris())
+					{
+						getMainController()->getSampleManager().getPreloadProgress() = (double)i / (double)info.getNumCycles();
+					}
 					//progress = (double)i / (double)info.getNumCycles();
 
 					auto offset = info.getSliceOffset(i);

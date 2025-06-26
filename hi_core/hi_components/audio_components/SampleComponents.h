@@ -418,20 +418,7 @@ struct WaterfallComponent : public Component,
 			return false;
 		}
 
-		float getGlowAlpha(int tableIndex, int activeTableIndex, int numTables) const
-		{
-			if(glowScale == 0.0f)
-				return 0.0f;
-
-			if(tableIndex == activeTableIndex)
-				return 1.0f;
-
-			float normalisedDiff = 1.0f - (float)hmath::abs(tableIndex - activeTableIndex) / (float)numTables;
-
-			normalisedDiff = hmath::smoothstep(normalisedDiff, smoothRange.getStart(), smoothRange.getEnd());
-			normalisedDiff *= glowScale;
-			return jlimit(0.0f, 1.0f, normalisedDiff);
-		}
+		float getGlowAlpha(int tableIndex, int activeTableIndex, int numTables) const;
 
 		var toVar() const;
 
@@ -466,6 +453,8 @@ struct WaterfallComponent : public Component,
 	Array<Point<float>> plane;
 
 	void rebuildPaths();
+
+	
 
 	void paint(Graphics& g) override;
 
@@ -564,7 +553,7 @@ struct WaterfallComponent : public Component,
 		void fillModuleList(StringArray& moduleList) override;;
 		void fillIndexList(StringArray& indexList) override;;
 
-		bool hasSubIndex() const override { return true; }
+		bool hasSubIndex() const override { return false; }
 	};
 
 private:

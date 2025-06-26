@@ -4886,6 +4886,7 @@ ScriptingObjects::ScriptWavetableController::ScriptWavetableController(Processor
 	ADD_API_METHOD_1(setResynthesisOptions);
 	ADD_API_METHOD_0(resynthesise);
 	ADD_API_METHOD_1(saveAsHwt);
+	ADD_API_METHOD_1(saveAsAudioFile);
 	ADD_API_METHOD_2(setEnableResynthesisCache);
 	ADD_API_METHOD_1(setErrorHandler);
 	ADD_API_METHOD_3(loadData);
@@ -4952,6 +4953,35 @@ void ScriptingObjects::ScriptWavetableController::saveAsHwt(const var& outputFil
 	else
 	{
 		reportScriptError("No wavetable synth");
+	}
+}
+
+void ScriptingObjects::ScriptWavetableController::saveAsAudioFile(const var& outputFile)
+{
+	if(auto wt = getWavetableSynth())
+	{
+		auto f = ScriptingApi::FileSystem::getFileFromVar(outputFile, getMainController());
+		f.deleteFile();
+
+		auto fos = new FileOutputStream(f);
+		auto b = wt->createAudioSampleBufferFromWavetable(0);
+
+		if(b.getNumSamples() > 0)
+		{
+			auto loopEnd = dynamic_cast<WavetableSound*>(wt->getSound(0))->getTableSize() - 1;
+
+			StringPairArray metadata;
+
+			metadata.set("Loop0Start", "0");
+			metadata.set("Loop0End", String(loopEnd));
+			metadata.set("NumSampleLoops", "1");
+
+			WavAudioFormat wav;
+			ScopedPointer<AudioFormatWriter> writer = wav.createWriterFor(fos, 48000.0, b.getNumChannels(), 24, metadata, 5);
+
+			writer->writeFromAudioSampleBuffer(b, 0, b.getNumSamples());
+			writer = nullptr;
+		}
 	}
 }
 
