@@ -160,6 +160,7 @@ END_JUCE_MODULE_DECLARATION
 #include "effects/fx/HarmonicFilter.h"
 #include "effects/fx/CurveEq.h"
 #include "effects/fx/StereoFX.h"
+#include "effects/fx/NoiseGrainPlayer.h"
 #include "effects/fx/SimpleReverb.h"
 #include "effects/fx/Delay.h"
 #include "effects/fx/GainEffect.h"

@@ -206,7 +206,8 @@ public:
 		polyshapeFx,
 		hardcodedMasterFx,
 		polyHardcodedFx,
-		midiMetronome
+		midiMetronome,
+		noiseGrainPlayer
 	};
 
 	EffectProcessorChainFactoryType(int numVoices_, Processor *ownerProcessor):

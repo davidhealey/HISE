@@ -73,6 +73,7 @@
 #include "effects/fx/HarmonicFilter.cpp"
 #include "effects/fx/CurveEq.cpp"
 #include "effects/fx/StereoFX.cpp"
+#include "effects/fx/NoiseGrainPlayer.cpp"
 #include "effects/fx/SimpleReverb.cpp"
 #include "effects/fx/Delay.cpp"
 #include "effects/fx/GainEffect.cpp"
