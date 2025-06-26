@@ -411,17 +411,17 @@ float AhdsrEnvelope::getAttribute(int parameterIndex) const
 	}
 }
 
-ModulationDisplayValue::QueryFunction AhdsrEnvelope::getModulationQueryFunction(int parameterIndex) const
+ModulationDisplayValue::QueryFunction::Ptr AhdsrEnvelope::getModulationQueryFunction(int parameterIndex) const
 {
 	using IC = scriptnode::envelope::pimpl::ahdsr_base::InternalChains;
 
 	switch(parameterIndex)
 	{
-	case Attack:         return ModulatorChain::GetModulationOutput<(int)IC::AttackTimeChain>();
-	case AttackLevel:    return ModulatorChain::GetModulationOutput<(int)IC::AttackLevelChain>();
-	case Decay:          return ModulatorChain::GetModulationOutput<(int)IC::DecayTimeChain>();
-	case Sustain:	     return ModulatorChain::GetModulationOutput<(int)IC::SustainLevelChain>();
-	case Release:		 return ModulatorChain::GetModulationOutput<(int)IC::ReleaseTimeChain>();
+	case Attack:         return new ModulatorChain::GetModulationOutput<(int)IC::AttackTimeChain>();
+	case AttackLevel:    return new ModulatorChain::GetModulationOutput<(int)IC::AttackLevelChain>();
+	case Decay:          return new ModulatorChain::GetModulationOutput<(int)IC::DecayTimeChain>();
+	case Sustain:	     return new ModulatorChain::GetModulationOutput<(int)IC::SustainLevelChain>();
+	case Release:		 return new ModulatorChain::GetModulationOutput<(int)IC::ReleaseTimeChain>();
 	}
 	
 	return EnvelopeModulator::getModulationQueryFunction(parameterIndex);

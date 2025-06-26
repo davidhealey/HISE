@@ -121,7 +121,7 @@ public:
 
 	float getAttribute(int parameter_index) const override;;
 
-	ModulationDisplayValue::QueryFunction getModulationQueryFunction(int parameterIndex) const override;
+	ModulationDisplayValue::QueryFunction::Ptr getModulationQueryFunction(int parameterIndex) const override;
 
 	void prepareToPlay(double sampleRate, int samplesPerBlock) override;
 

@@ -84,13 +84,16 @@ public:
 
 	Modulation(Mode m);;
 
-    virtual ~Modulation();;
+    virtual ~Modulation();
+
+	
 
 	virtual Processor *getProcessor() = 0;
 
 	/** returns the mode the Modulator is operating. */
 	Mode getMode() const noexcept;;
 
+	static Mode getModeFromModProperties(const scriptnode::modulation::ParameterProperties& modProperties, int parameterIndex);;
 	
 	/** This applies the intensity to the given value and returns the applied value. 
 	*
@@ -194,12 +197,19 @@ public:
 
 	LambdaBroadcaster<int> modeBroadcaster;
     LambdaBroadcaster<float> intensityBroadcaster;
-    
+
+	/** This value will be used as zero value when scaling the intensity. */
+	virtual void setZeroPosition(float newZeroPosition)
+	{
+		zeroPosition = newZeroPosition;
+	}
+
 protected:
 
 	Mode modulationMode;
 
 	LinearSmoothedValue<float> smoothedIntensity;
+	float zeroPosition = 0.0f;
 
 private:
 
@@ -685,6 +695,9 @@ private:
 		uint64 data[2];
 		int8 numBitsSet = 0;
 	} monophonicKeymap;
+
+	// Used by the monophonic mode to render the first voice, then copy the internal buffer in there
+	AudioSampleBuffer firstVoiceBuffer;
 
 	JUCE_DECLARE_WEAK_REFERENCEABLE(EnvelopeModulator);
 };

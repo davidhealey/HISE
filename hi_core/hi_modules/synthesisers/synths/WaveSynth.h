@@ -269,10 +269,10 @@ public:
 
 	void setInternalAttribute(int parameterIndex, float newValue) override;;
 
-	ModulationDisplayValue::QueryFunction getModulationQueryFunction(int parameterIndex) const override
+	ModulationDisplayValue::QueryFunction::Ptr getModulationQueryFunction(int parameterIndex) const override
 	{
 		if(parameterIndex == SpecialParameters::Mix)
-			return ModulatorChain::GetModulationOutput<(int)InternalChains::MixModulation>();
+			return new ModulatorChain::GetModulationOutput<(int)InternalChains::MixModulation>();
 
 		return ModulatorSynth::getModulationQueryFunction(parameterIndex);
 	}

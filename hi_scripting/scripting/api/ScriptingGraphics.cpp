@@ -2599,8 +2599,10 @@ Array<Identifier> ScriptingObjects::ScriptedLookAndFeel::getAllFunctionNames()
 		"drawAnalyserBackground",
 		"drawAnalyserPath",
 		"drawAnalyserGrid",
-        "drawMatrixPeakMeter"
-
+        "drawMatrixPeakMeter",
+		"getModulatorDragData",
+		"drawModulationDragBackground",
+		"drawModulationDragger",
 		"drawFlexAhdsrBackground",
 		"drawFlexAhdsrCurvePoint",
 		"drawFlexAhdsrFullPath",
@@ -5373,6 +5375,108 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawWavetablePath(Graphics& g_,
 	WaterfallComponent::LookAndFeelMethods::drawWavetablePath(g_, wc, p, tableIndex, isStereo, currentTableIndex, numTables);
 }
 
+HiSlider::HoverPopupLookandFeel::PositionData ScriptingObjects::ScriptedLookAndFeel::Laf::getModulatorDragData(
+	HiSlider& s, const StringArray& sourceList) const
+{
+	if (const_cast<Laf*>(this)->functionDefined("getModulatorDragData"))
+	{
+		if (auto l = const_cast<Laf*>(this)->get())
+		{
+			PositionData pd;
+			
+			var args = pd.toVar();
+
+			args.getDynamicObject()->setProperty("sliderBounds", ApiHelpers::getVarRectangle(useRectangleClass, s.getBoundsInParent().toFloat()));
+			args.getDynamicObject()->setProperty("parentBounds", ApiHelpers::getVarRectangle(useRectangleClass, s.getParentComponent()->getLocalBounds().toFloat()));
+
+			Array<var> sources;
+
+			for(const auto& s: sourceList)
+				sources.add(s);
+
+			args.getDynamicObject()->setProperty("connections", var(sources));
+
+			auto returnObj = l->callDefinedFunction("getModulatorDragData", &args, 1);
+			pd.fromVar(returnObj);
+			return pd;
+		}
+	}
+
+	return HoverPopupLookandFeel::getModulatorDragData(s, sourceList);
+}
+
+void ScriptingObjects::ScriptedLookAndFeel::Laf::drawModulationDragBackground(Graphics& g_, HiSlider& s, const DrawData& dd,
+	Rectangle<int> labelBounds)
+{
+	if (functionDefined("drawModulationDragBackground"))
+    {
+        auto obj = new DynamicObject();
+ 
+		writeId(obj, &s);
+        obj->setProperty("area", ApiHelpers::getVarRectangle(useRectangleClass, dd.bounds));
+		obj->setProperty("labelArea", ApiHelpers::getVarRectangle(useRectangleClass, labelBounds.toFloat()));
+
+		setColourOrBlack(obj, "bgColour", s, HiseColourScheme::ComponentOutlineColourId);
+		setColourOrBlack(obj, "itemColour", s, HiseColourScheme::ComponentFillTopColourId);
+		setColourOrBlack(obj, "itemColour2", s, HiseColourScheme::ComponentFillBottomColourId);
+		setColourOrBlack(obj, "textColour", s, HiseColourScheme::ComponentTextColourId);
+
+		obj->setProperty("min", dd.intensityRange.getStart());
+		obj->setProperty("max", dd.intensityRange.getEnd());
+		obj->setProperty("clicked", dd.isDown);
+		obj->setProperty("hover", dd.isHover);
+		obj->setProperty("targetName", dd.targetName);
+
+		if(dd.isHover)
+		{
+			jassert(dd.sourceIndex != -1);
+
+			obj->setProperty("hoverSourceName", dd.sourceName);
+			obj->setProperty("hoverSourceIndex", dd.sourceIndex);
+			obj->setProperty("hoverMode", (int)dd.targetMode);
+			obj->setProperty("hoverValugetIntere", dd.intensityValue);
+			obj->setProperty("hoverText", dd.labelText);
+		}
+
+        if (get()->callWithGraphics(g_, "drawModulationDragBackground", var(obj), s.currentHoverPopup.get()))
+            return;
+    }
+
+	HoverPopupLookandFeel::drawModulationDragBackground(g_, s, dd, labelBounds);
+}
+
+void ScriptingObjects::ScriptedLookAndFeel::Laf::drawModulationDragger(Graphics& g_, HiSlider& s, const DrawData& dd)
+{
+	if (functionDefined("drawModulationDragBackground"))
+    {
+        auto obj = new DynamicObject();
+ 
+		writeId(obj, &s);
+        obj->setProperty("area", ApiHelpers::getVarRectangle(useRectangleClass, dd.bounds));
+
+		setColourOrBlack(obj, "bgColour", s, HiseColourScheme::ComponentOutlineColourId);
+		setColourOrBlack(obj, "itemColour", s, HiseColourScheme::ComponentFillTopColourId);
+		setColourOrBlack(obj, "itemColour2", s, HiseColourScheme::ComponentFillBottomColourId);
+		setColourOrBlack(obj, "textColour", s, HiseColourScheme::ComponentTextColourId);
+
+		obj->setProperty("min", dd.intensityRange.getStart());
+		obj->setProperty("max", dd.intensityRange.getEnd());
+		obj->setProperty("value", dd.intensityValue);
+
+		obj->setProperty("clicked", dd.isDown);
+		obj->setProperty("hover", dd.isHover);
+		obj->setProperty("targetName", dd.targetName);
+		obj->setProperty("sourceName", dd.sourceName);
+		obj->setProperty("sourceIndex", dd.sourceIndex);
+		obj->setProperty("mode", (int)dd.targetMode);
+
+        if (get()->callWithGraphics(g_, "drawModulationDragger", var(obj), s.currentHoverPopup.get()))
+            return;
+    }
+
+	HoverPopupLookandFeel::drawModulationDragger(g_, s, dd);
+}
+
 void ScriptingObjects::ScriptedLookAndFeel::Laf::drawFlexAhdsrBackground(Graphics& g_,
 	flex_ahdsr_base::FlexAhdsrGraph& graph)
 {
@@ -5383,11 +5487,10 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawFlexAhdsrBackground(Graphic
 		writeId(obj, &graph);
         obj->setProperty("area", ApiHelpers::getVarRectangle(useRectangleClass, graph.getLocalBounds().toFloat()));
 
-		setColourOrBlack(obj, "bgColour", graph, HiseColourScheme::ComponentOutlineColourId);
-		setColourOrBlack(obj, "itemColour1", graph, HiseColourScheme::ComponentFillTopColourId);
-		setColourOrBlack(obj, "itemColour2", graph, HiseColourScheme::ComponentFillBottomColourId);
-		setColourOrBlack(obj, "textColour", graph, HiseColourScheme::ComponentTextColourId);
-
+		setColourOrBlack(obj, "bgColour", graph, RingBufferComponentBase::ColourId::bgColour);
+		setColourOrBlack(obj, "itemColour", graph, RingBufferComponentBase::ColourId::fillColour);
+		setColourOrBlack(obj, "itemColour2", graph, RingBufferComponentBase::ColourId::lineColour);
+		setColourOrBlack(obj, "textColour", graph, HiseColourScheme::ColourIds::ComponentTextColourId);
 		
         if (get()->callWithGraphics(g_, "drawFlexAhdsrBackground", var(obj), &graph))
             return;
@@ -5406,10 +5509,10 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawFlexAhdsrCurvePoint(Graphic
 		writeId(obj, &graph);
         obj->setProperty("area", ApiHelpers::getVarRectangle(useRectangleClass, graph.getLocalBounds().toFloat()));
 
-		setColourOrBlack(obj, "bgColour", graph, HiseColourScheme::ComponentOutlineColourId);
-		setColourOrBlack(obj, "itemColour1", graph, HiseColourScheme::ComponentFillTopColourId);
-		setColourOrBlack(obj, "itemColour2", graph, HiseColourScheme::ComponentFillBottomColourId);
-		setColourOrBlack(obj, "textColour", graph, HiseColourScheme::ComponentTextColourId);
+		setColourOrBlack(obj, "bgColour", graph, RingBufferComponentBase::ColourId::bgColour);
+		setColourOrBlack(obj, "itemColour", graph, RingBufferComponentBase::ColourId::fillColour);
+		setColourOrBlack(obj, "itemColour2", graph, RingBufferComponentBase::ColourId::lineColour);
+		setColourOrBlack(obj, "textColour", graph, HiseColourScheme::ColourIds::ComponentTextColourId);
 
 		obj->setProperty("state", (int)s);
 		obj->setProperty("curvePoint", ApiHelpers::getVarFromPoint(curvePoint));
@@ -5434,10 +5537,10 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawFlexAhdsrFullPath(Graphics&
         obj->setProperty("area", ApiHelpers::getVarRectangle(useRectangleClass, graph.getLocalBounds().toFloat()));
 		obj->setProperty("pathArea", ApiHelpers::getVarRectangle(useRectangleClass, graph.getLocalBounds().toFloat().reduced(10)));
 
-		setColourOrBlack(obj, "bgColour", graph, HiseColourScheme::ComponentOutlineColourId);
-		setColourOrBlack(obj, "itemColour1", graph, HiseColourScheme::ComponentFillTopColourId);
-		setColourOrBlack(obj, "itemColour2", graph, HiseColourScheme::ComponentFillBottomColourId);
-		setColourOrBlack(obj, "textColour", graph, HiseColourScheme::ComponentTextColourId);
+		setColourOrBlack(obj, "bgColour", graph, RingBufferComponentBase::ColourId::bgColour);
+		setColourOrBlack(obj, "itemColour", graph, RingBufferComponentBase::ColourId::fillColour);
+		setColourOrBlack(obj, "itemColour2", graph, RingBufferComponentBase::ColourId::lineColour);
+		setColourOrBlack(obj, "textColour", graph, HiseColourScheme::ColourIds::ComponentTextColourId);
 
 		auto sp = new ScriptingObjects::PathObject(get()->getScriptProcessor());
 
@@ -5462,10 +5565,10 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawFlexAhdsrPosition(Graphics&
 		writeId(obj, &graph);
         obj->setProperty("area", ApiHelpers::getVarRectangle(useRectangleClass, graph.getLocalBounds().toFloat()));
 
-		setColourOrBlack(obj, "bgColour", graph, HiseColourScheme::ComponentOutlineColourId);
-		setColourOrBlack(obj, "itemColour1", graph, HiseColourScheme::ComponentFillTopColourId);
-		setColourOrBlack(obj, "itemColour2", graph, HiseColourScheme::ComponentFillBottomColourId);
-		setColourOrBlack(obj, "textColour", graph, HiseColourScheme::ComponentTextColourId);
+		setColourOrBlack(obj, "bgColour", graph, RingBufferComponentBase::ColourId::bgColour);
+		setColourOrBlack(obj, "itemColour", graph, RingBufferComponentBase::ColourId::fillColour);
+		setColourOrBlack(obj, "itemColour2", graph, RingBufferComponentBase::ColourId::lineColour);
+		setColourOrBlack(obj, "textColour", graph, HiseColourScheme::ColourIds::ComponentTextColourId);
 
 		obj->setProperty("state", (int)s);
 		obj->setProperty("pointOnPath", ApiHelpers::getVarFromPoint(pointOnPath));
@@ -5493,10 +5596,10 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawFlexAhdsrSegment(Graphics& 
 		writeId(obj, &graph);
         obj->setProperty("area", ApiHelpers::getVarRectangle(useRectangleClass, graph.getLocalBounds().toFloat()));
 
-		setColourOrBlack(obj, "bgColour", graph, HiseColourScheme::ComponentOutlineColourId);
-		setColourOrBlack(obj, "itemColour1", graph, HiseColourScheme::ComponentFillTopColourId);
-		setColourOrBlack(obj, "itemColour2", graph, HiseColourScheme::ComponentFillBottomColourId);
-		setColourOrBlack(obj, "textColour", graph, HiseColourScheme::ComponentTextColourId);
+		setColourOrBlack(obj, "bgColour", graph, RingBufferComponentBase::ColourId::bgColour);
+		setColourOrBlack(obj, "itemColour", graph, RingBufferComponentBase::ColourId::fillColour);
+		setColourOrBlack(obj, "itemColour2", graph, RingBufferComponentBase::ColourId::lineColour);
+		setColourOrBlack(obj, "textColour", graph, HiseColourScheme::ColourIds::ComponentTextColourId);
 
 		obj->setProperty("state", (int)s);
 		obj->setProperty("hover", hover);
@@ -5525,10 +5628,10 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawFlexAhdsrText(Graphics& g_,
 		writeId(obj, &graph);
         obj->setProperty("area", ApiHelpers::getVarRectangle(useRectangleClass, graph.getLocalBounds().toFloat()));
 
-		setColourOrBlack(obj, "bgColour", graph, HiseColourScheme::ComponentOutlineColourId);
-		setColourOrBlack(obj, "itemColour1", graph, HiseColourScheme::ComponentFillTopColourId);
-		setColourOrBlack(obj, "itemColour2", graph, HiseColourScheme::ComponentFillBottomColourId);
-		setColourOrBlack(obj, "textColour", graph, HiseColourScheme::ComponentTextColourId);
+		setColourOrBlack(obj, "bgColour", graph, RingBufferComponentBase::ColourId::bgColour);
+		setColourOrBlack(obj, "itemColour", graph, RingBufferComponentBase::ColourId::fillColour);
+		setColourOrBlack(obj, "itemColour2", graph, RingBufferComponentBase::ColourId::lineColour);
+		setColourOrBlack(obj, "textColour", graph, HiseColourScheme::ColourIds::ComponentTextColourId);
 
 		obj->setProperty("text", text);
 

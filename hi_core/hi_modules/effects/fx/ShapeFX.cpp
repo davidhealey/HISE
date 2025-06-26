@@ -197,10 +197,10 @@ float ShapeFX::getDefaultValue(int parameterIndex) const
 	}
 }
 
-ModulationDisplayValue::QueryFunction ShapeFX::getModulationQueryFunction(int parameterIndex) const
+ModulationDisplayValue::QueryFunction::Ptr ShapeFX::getModulationQueryFunction(int parameterIndex) const
 {
 	if(parameterIndex == Drive)
-		return ModulatorChain::GetModulationOutput<(int)PolyshapeFX::InternalChains::DriveModulation>();
+		return new ModulatorChain::GetModulationOutput<(int)PolyshapeFX::InternalChains::DriveModulation>();
 
 	return MasterEffectProcessor::getModulationQueryFunction(parameterIndex);
 }

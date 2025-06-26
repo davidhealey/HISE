@@ -825,7 +825,8 @@ namespace ScriptingObjects
 			public CustomKeyboardLookAndFeelBase,
 			public ScriptTableListModel::LookAndFeelMethods,
             public MatrixPeakMeter::LookAndFeelMethods,
-			public WaterfallComponent::LookAndFeelMethods
+			public WaterfallComponent::LookAndFeelMethods,
+			public HiSlider::HoverPopupLookandFeel
 		{
 			Laf(MainController* mc);
 
@@ -944,6 +945,10 @@ namespace ScriptingObjects
             
 			void drawWavetableBackground(Graphics& g, WaterfallComponent& wc, bool isEmpty) override;
 			void drawWavetablePath(Graphics& g, WaterfallComponent& wc, const Path& p, int tableIndex, bool isStereo, int currentTableIndex, int numTables) override;
+
+			PositionData getModulatorDragData(HiSlider& s, const StringArray& sourceList) const override;
+			void drawModulationDragBackground(Graphics& g, HiSlider& s, const DrawData& dd, Rectangle<int> labelBounds) override;
+			void drawModulationDragger(Graphics& g, HiSlider& s, const DrawData& dd) override;
 
 			void drawFlexAhdsrBackground(Graphics& g, flex_ahdsr_base::FlexAhdsrGraph& graph) override;
 			void drawFlexAhdsrCurvePoint(Graphics& g, flex_ahdsr_base::FlexAhdsrGraph& graph, flex_ahdsr_base::State s, Point<float> curvePoint, bool hover, bool down) override;

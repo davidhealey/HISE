@@ -454,12 +454,12 @@ float TableEnvelope::getDefaultValue(int parameterIndex) const
 	}
 }
 
-ModulationDisplayValue::QueryFunction TableEnvelope::getModulationQueryFunction(int parameterIndex) const
+ModulationDisplayValue::QueryFunction::Ptr TableEnvelope::getModulationQueryFunction(int parameterIndex) const
 {
 	switch(parameterIndex)
 	{
-	case Attack: return ModulatorChain::GetModulationOutput<(int)TableEnvelope::InternalChains::AttackChain>();
-	case Release: return ModulatorChain::GetModulationOutput<(int)TableEnvelope::InternalChains::ReleaseChain>();
+	case Attack:  return new ModulatorChain::GetModulationOutput<(int)TableEnvelope::InternalChains::AttackChain>();
+	case Release: return new ModulatorChain::GetModulationOutput<(int)TableEnvelope::InternalChains::ReleaseChain>();
 	}
 
 	return EnvelopeModulator::getModulationQueryFunction(parameterIndex);

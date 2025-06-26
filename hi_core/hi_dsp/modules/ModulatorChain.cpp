@@ -185,12 +185,21 @@ void ModulatorChain::ModChainWithBuffer::setConstantVoiceValueInternal(int voice
 	currentConstantValue = newValue;
 }
 
-ModulationDisplayValue ModulatorChain::SpecialQueryFunctions::GainModulation(Processor* p, double v,
-	NormalisableRange<double> nr)
+
+bool ModulatorChain::SpecialQueryFunctions::GainModulation::onScaleDrag(Processor* p, bool isDown, float delta)
 {
-	auto gainValue = Decibels::decibelsToGain(v);
+	jassert(dynamic_cast<ModulatorSynth*>(p) != nullptr);
+	auto modChain = dynamic_cast<ModulatorChain*>(p->getChildProcessor(ModulatorSynth::InternalChains::GainModulation));
+	return modChain->onIntensityDrag(isDown, delta);
+}
+
+ModulationDisplayValue ModulatorChain::SpecialQueryFunctions::GainModulation::getDisplayValue(Processor* p, double v,
+	NormalisableRange<double> nr) const
+{
+	jassert(dynamic_cast<ModulatorSynth*>(p) != nullptr);
 	auto modChain = dynamic_cast<ModulatorChain*>(p->getChildProcessor(ModulatorSynth::InternalChains::GainModulation)); 
 
+	auto gainValue = Decibels::decibelsToGain(v);
 	ModulationDisplayValue mv;
 
 	mv.normalisedValue = nr.convertTo0to1(v);
@@ -203,29 +212,74 @@ ModulationDisplayValue ModulatorChain::SpecialQueryFunctions::GainModulation(Pro
 		auto scaledDb = Decibels::gainToDecibels(modValue);
 		scaledDb = nr.snapToLegalValue(scaledDb);
 		auto scaledRange = nr.convertTo0to1(scaledDb);
-		auto realScaledValue = scaledRange / mv.normalisedValue;
-		mv.scaleValue = realScaledValue;
+		auto realScaledValue = scaledRange * mv.normalisedValue;
+		mv.scaledValue = realScaledValue;
 	}
 
 	return mv;
 }
 
-ModulationDisplayValue ModulatorChain::SpecialQueryFunctions::PitchModulation(Processor* p, double v,
-                                                                              NormalisableRange<double> nr)
+bool ModulatorChain::SpecialQueryFunctions::PitchModulation::onScaleDrag(Processor* p, bool isDown, float delta)
 {
-	auto normValue = nr.convertTo0to1(v);
+	jassert(dynamic_cast<ModulatorSynth*>(p) != nullptr);
 	auto modChain = dynamic_cast<ModulatorChain*>(p->getChildProcessor(ModulatorSynth::InternalChains::PitchModulation));
+	return modChain->onIntensityDrag(isDown, delta);
+}
 
-	auto anyPlaying = dynamic_cast<ModulatorSynth*>(p)->getNumActiveVoices() != 0;
+ModulationDisplayValue ModulatorChain::SpecialQueryFunctions::PitchModulation::getDisplayValue(Processor* p, double v,
+	NormalisableRange<double> nr) const
+{
+	jassert(dynamic_cast<ModulatorSynth*>(p) != nullptr);
+	auto modChain = dynamic_cast<ModulatorChain*>(p->getChildProcessor(ModulatorSynth::InternalChains::PitchModulation));
 
 	ModulationDisplayValue mv;
 
+	auto normValue = nr.convertTo0to1(v);
+	auto anyPlaying = dynamic_cast<ModulatorSynth*>(p)->getNumActiveVoices() != 0;
+
 	mv.normalisedValue = normValue;
 	mv.modulationActive = modChain->shouldBeProcessedAtAll();
+	mv.scaledValue = normValue;
+
+	ModIterator<Modulator> iter(modChain);
+
+	double minValue = normValue;
+	double maxValue = normValue;
+
+	double intensityFactor = 12.0 / nr.getRange().getLength();
+				
+	while(auto m = iter.next())
+	{
+		if(!m->isBypassed())
+		{
+			auto bipolar = dynamic_cast<Modulation*>(m)->isBipolar();
+			auto intensity = dynamic_cast<Modulation*>(m)->getIntensity();
+
+			intensity *= intensityFactor;
+
+			if(bipolar)
+			{
+				maxValue += hmath::abs(intensity);
+				minValue -= hmath::abs(intensity);
+			}
+			else
+			{
+				if(intensity > 0.0)
+					maxValue += intensity;
+				else
+					minValue += intensity;
+			}
+							
+		}
+	}
+
+	mv.modulationRange.setStart(jlimit(0.0, 1.0, minValue));
+	mv.modulationRange.setEnd(jlimit(0.0, 1.0, maxValue));
 
 	if(!anyPlaying)
 	{
 		mv.addValue = 0.0;
+		mv.modulationActive = false;
 	}
 	else
 	{
@@ -316,6 +370,12 @@ void ModulatorChain::applyMonoOnOutputValue(float monoValue)
 
 void ModulatorChain::setInitialValue(float newInitialValue)
 {
+	if(getInitialValue() == newInitialValue)
+	{
+		initialValue = { false, newInitialValue };
+		return;
+	}
+
 	switch(getMode())
 	{
 	case GainMode:
@@ -325,7 +385,7 @@ void ModulatorChain::setInitialValue(float newInitialValue)
 		initialValue = { true, newInitialValue };
 		break;
 	case PanMode:
-		initialValue = { true, newInitialValue / 100.0f };
+		initialValue = { true, newInitialValue };
 		break;
 	case PitchMode:
 		initialValue = { true, PitchConverters::octaveRangeToPitchFactor(newInitialValue) };
@@ -588,7 +648,7 @@ void ModulatorChain::ModChainWithBuffer::startVoice(int voiceIndex)
 
 	currentRampValues[voiceIndex] = firstDynamicValue;
 
-	
+
 	//currentMonophonicRampValue = firstDynamicValue;
 }
 
@@ -671,7 +731,9 @@ void ModulatorChain::ModChainWithBuffer::calculateMonophonicModulationValues(int
 		else
 			iv = c->getInitialValue();
 
-		FloatVectorOperations::fill(modBuffer.monoValues + startSample_cr, iv, numSamples_cr);
+		smoothConstantInitialValue(modBuffer.monoValues + startSample_cr, numSamples_cr, iv, lastInitialMonoValue);
+
+		lastInitialMonoValue = iv;
 
 		if(c->getMode() == Modulation::Mode::CombinedMode)
 		{
@@ -735,6 +797,35 @@ void ModulatorChain::ModChainWithBuffer::calculateMonophonicModulationValues(int
 
 		monoExpandChecker = false;
 	}
+	else if(options.forceProcessing && options.includeMonophonicValues)
+	{
+		int startSample_cr = startSample / HISE_CONTROL_RATE_DOWNSAMPLING_FACTOR;
+		int numSamples_cr = numSamples / HISE_CONTROL_RATE_DOWNSAMPLING_FACTOR;
+
+		if(!c->hasActivePolyMods())
+		{
+			auto iv = c->getInitialValueInternal();
+			smoothConstantInitialValue(modBuffer.monoValues + startSample_cr, numSamples_cr, iv, lastInitialMonoValue);
+
+			lastInitialMonoValue = iv;
+		}
+		else
+		{
+			jassert(c->getMode() == Mode::CombinedMode);
+			FloatVectorOperations::fill(modBuffer.monoValues + startSample_cr, 1.0f, numSamples_cr);
+		}
+	}
+
+	if(c->runtimeTargetSource.isEnabled() && !c->polyManager.isAnyVoicePlaying())
+	{
+		int startSample_cr = startSample / HISE_CONTROL_RATE_DOWNSAMPLING_FACTOR;
+		int numSamples_cr = numSamples / HISE_CONTROL_RATE_DOWNSAMPLING_FACTOR;
+
+		auto useSignal = c->hasActiveTimeVariantMods() || c->hasActiveMonoEnvelopes();
+		auto staticSignal = lastInitialMonoValue;
+
+		c->runtimeTargetSource.copyModulationValues(useSignal ? modBuffer.monoValues : nullptr, staticSignal, startSample_cr, numSamples_cr);
+	}
 }
 
 
@@ -751,7 +842,7 @@ void ModulatorChain::ModChainWithBuffer::calculateModulationValuesForCurrentVoic
 
 	c->polyManager.setCurrentVoice(voiceIndex);
 
-	const bool useMonophonicData = options.includeMonophonicValues && c->hasMonophonicTimeModulationMods();
+	const bool useMonophonicData = options.includeMonophonicValues && (c->hasMonophonicTimeModulationMods() || options.forceProcessing);
 
 	auto voiceData = modBuffer.voiceValues;
 	const auto monoData = modBuffer.monoValues;
@@ -760,8 +851,6 @@ void ModulatorChain::ModChainWithBuffer::calculateModulationValuesForCurrentVoic
 
 	int startSample_cr = startSample / HISE_CONTROL_RATE_DOWNSAMPLING_FACTOR;
  	int numSamples_cr = numSamples / HISE_CONTROL_RATE_DOWNSAMPLING_FACTOR;
-
-	bool constantValuesAreSmoothed = false;
 
 	if (c->hasActivePolyMods())
 	{
@@ -772,28 +861,8 @@ void ModulatorChain::ModChainWithBuffer::calculateModulationValuesForCurrentVoic
 
 		const float previousConstantValue = currentConstantVoiceValues[voiceIndex];
 
-		const bool smoothConstantValue = (std::abs(previousConstantValue - thisConstantValue) > 0.01f);
+		smoothConstantInitialValue(voiceData + startSample_cr, numSamples_cr, thisConstantValue, previousConstantValue);
 
-		if (smoothConstantValue)
-		{
-			constantValuesAreSmoothed = true;
-
-			const float start = previousConstantValue;
-			const float delta = (thisConstantValue - start) / (float)numSamples_cr;
-			int numLoop = numSamples_cr;
-			float value = start;
-			float* loop_ptr = voiceData + startSample_cr;
-
-			while (--numLoop >= 0)
-			{
-				*loop_ptr++ = value;
-				value += delta;
-			}
-		}
-		else
-		{
-			FloatVectorOperations::fill(voiceData + startSample_cr, thisConstantValue, numSamples_cr);
-		}
 
 		setConstantVoiceValueInternal(voiceIndex, thisConstantValue);
 
@@ -925,6 +994,12 @@ void ModulatorChain::ModChainWithBuffer::calculateModulationValuesForCurrentVoic
 		FloatVectorOperations::clip(ptrToClip + startSample_cr, ptrToClip + startSample_cr, 0.0f, 1.0f, numSamples_cr);
 	}
 
+
+	if(c->runtimeTargetSource.isEnabled())
+	{
+		c->runtimeTargetSource.copyModulationValues(currentVoiceData, getConstantModulationValue(), startSample_cr, numSamples_cr);
+	}
+
 	setDisplayValueInternal(voiceIndex, startSample_cr, numSamples_cr);
 
 	c->polyManager.clearCurrentVoice();
@@ -1038,7 +1113,8 @@ ModulatorChain::ModulatorChain(MainController *mc, const String &uid, int numVoi
 	Modulation(m),
 	handler(this),
 	parentProcessor(p),
-	isVoiceStartChain(false)
+	isVoiceStartChain(false),
+	runtimeTargetSource(*this)
 {
 	activeVoices.setRange(0, numVoices, false);
 
@@ -1202,7 +1278,9 @@ float ModulatorChain::getConstantVoiceValue(int voiceIndex) const
 		{
 			const auto modValue = mod->getVoiceStartValue(voiceIndex);
 			const auto intensityModValue = mod->calcGainIntensityValue(modValue);
+			scaleValue -= zeroPosition;
 			scaleValue *= intensityModValue;
+			scaleValue += zeroPosition;
 		}
 
 		while (auto mod = iter.nextWithMode<Modulation::Mode::OffsetMode>())
@@ -1620,6 +1698,8 @@ void ModulatorChain::ModulatorChainHandler::addModulator(Modulator *newModulator
 
 	newModulator->setParentProcessor(chain);
 
+	dynamic_cast<Modulation*>(newModulator)->setZeroPosition(chain->zeroPosition);
+
 	{
 		LOCK_PROCESSING_CHAIN(chain);
 
@@ -1843,6 +1923,49 @@ void ModulatorChain::RuntimeTargetSource::copyModulationValues(const float* modV
 	else
 		FloatVectorOperations::fill(signalData.getWritePointer(0, startSample_cr), constantValue, numSamples_cr);
 }
+
+bool ModulatorChain::onIntensityDrag(bool isMouseDown, float delta)
+{
+	if(!shouldBeProcessedAtAll())
+		return false;
+
+	if(isMouseDown)
+	{
+		intensityValues.clear();
+
+		ModIterator<Modulator> iter(this);
+
+		while(auto m = iter.next())
+		{
+			auto mod = dynamic_cast<Modulation*>(m);
+			intensityValues.push_back(mod->getIntensity());
+		}
+	}
+	else
+	{
+		ModIterator<Modulator> iter(this);
+
+		int idx = 0;
+
+		while(auto m = iter.next())
+		{
+			auto mod = dynamic_cast<Modulation*>(m);
+
+			jassert(isPositiveAndBelow(idx, intensityValues.size()));
+
+			auto intensity = intensityValues[idx++];
+
+			intensity += delta * JUCE_LIVE_CONSTANT_OFF(0.333f);
+
+			auto mv = mod->getMode() == Modulation::GainMode? 0.0f : -1.0f;
+			intensity = jlimit(mv, 1.0f, intensity);
+			mod->setIntensity(intensity);
+		}
+	}
+
+	return true;
+}
+
 void ModulatorChain::AddBufferData::prepare(double sampleRate, int blockSize)
 {
 	auto numToAllocate = blockSize / HISE_EVENT_RASTER;
@@ -1865,17 +1988,22 @@ void ModulatorChain::AddBufferData::checkActiveState(ModulatorChain* parent)
 	useTimeVariantBuffer = tv.nextWithMode<Modulation::Mode::OffsetMode>() != nullptr;
 	useTimeVariantBuffer |= me.nextWithMode<Modulation::Mode::OffsetMode>() != nullptr;
 	useEnvelopeValues = ev.nextWithMode<Modulation::Mode::OffsetMode>() != nullptr;
+
+	clearModValues();
 }
 
 
-std::pair<float, float> ModulatorChain::getCombinedOutputValues() const
+std::pair<std::pair<float, float>, Range<double>> ModulatorChain::getCombinedOutputValues() const
 {
 	jassert(getMode() == Modulation::Mode::CombinedMode);
 
 	CombinedModIterator<Modulator> iter(this);
 
-	float scaleValue = 1.0f;
+	float scaleValue = getInitialValueInternal();
 	float addValue = 0.0f;
+
+	double maxValue = scaleValue;
+	double minValue = scaleValue;
 
 	if(hasActivePolyEnvelopes())
 		addValue += addBufferData->envelopeValues[0];
@@ -1892,10 +2020,43 @@ std::pair<float, float> ModulatorChain::getCombinedOutputValues() const
 	{
 		auto mv = m->getOutputValue();
 		auto iv = dynamic_cast<Modulation*>(m)->calcGainIntensityValue(mv);
+
+		scaleValue -= zeroPosition;
 		scaleValue *= iv;
+		scaleValue += zeroPosition;
+
+		auto low = dynamic_cast<Modulation*>(m)->calcGainIntensityValue(0.0f);
+
+		minValue -= zeroPosition;
+		minValue *= low;
+		minValue += zeroPosition;
 	}
 
-	return { scaleValue, addValue };
+	while(auto m = iter.nextWithMode<Modulation::Mode::OffsetMode>())
+	{
+		auto bipolar = dynamic_cast<Modulation*>(m)->isBipolar();
+		auto intensity = dynamic_cast<Modulation*>(m)->getIntensity();
+
+		if(bipolar)
+		{
+			minValue -= hmath::abs(intensity);
+			maxValue += hmath::abs(intensity);
+		}
+		else
+		{
+			if(intensity < 0.0f)
+				minValue += intensity;
+			else
+				maxValue += intensity;
+		}
+	}
+
+	minValue = jlimit(0.0, 1.0, minValue);
+	maxValue = jlimit(0.0, 1.0, maxValue);
+
+	Range<double> nr(minValue, maxValue);
+
+	return { { scaleValue, addValue }, nr };
 }
 
 bool ModulatorChain::checkModulatorStructure()
@@ -1952,6 +2113,7 @@ void EnvelopeModulatorFactoryType::fillTypeNameList()
 	ADD_NAME_TO_TYPELIST(GlobalEnvelopeModulator);
 	ADD_NAME_TO_TYPELIST(EventDataEnvelope);
 	ADD_NAME_TO_TYPELIST(HardcodedEnvelopeModulator);
+	ADD_NAME_TO_TYPELIST(MatrixModulator);
 	ADD_NAME_TO_TYPELIST(FlexAhdsrEnvelope);
 }
 

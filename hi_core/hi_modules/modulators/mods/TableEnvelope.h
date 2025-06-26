@@ -131,7 +131,7 @@ public:
 
 	float getDefaultValue(int parameterIndex) const;
 
-	ModulationDisplayValue::QueryFunction getModulationQueryFunction(int parameterIndex) const override;
+	ModulationDisplayValue::QueryFunction::Ptr getModulationQueryFunction(int parameterIndex) const override;
 
 	double calculateTableDelta(float ms)
 	{

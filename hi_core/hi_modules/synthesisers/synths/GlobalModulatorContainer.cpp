@@ -96,7 +96,8 @@ struct GlobalModulatorContainer::GlobalModulatorCable
 };
 
 GlobalModulatorContainer::GlobalModulatorContainer(MainController *mc, const String &id, int numVoices) :
-ModulatorSynth(mc, id, numVoices)
+  ModulatorSynth(mc, id, numVoices),
+  runtimeSource(*this)
 {
 	finaliseModChains();
 
@@ -254,6 +255,132 @@ void GlobalModulatorContainer::connectToRuntimeTargets(scriptnode::OpaqueNode& o
 	LockHelpers::SafeLock sl(getMainController(), LockHelpers::Type::AudioLock, useLock);
 	runtimeSource.connectToRuntimeTargets(on, shouldAdd);
 }
+
+struct GlobalContainerMatrixModulationPopupData: public MacroControlledObject::ModulationPopupData,
+												 public ControlledObject
+{
+	static constexpr int MenuOffset = 9000;
+	static constexpr int AssignOffset = 1000;
+	static constexpr int RemoveOffset = 2000;
+	static constexpr int SpecialCommandOffset = 3000;
+
+	GlobalContainerMatrixModulationPopupData(GlobalModulatorContainer* gc_, const String& targetId):
+	  ControlledObject(gc_->getMainController()),
+	  ModulationPopupData(targetId),
+	  gc(gc_),
+	  data(gc->getMatrixModulatorData())
+	{
+		MatrixIds::Helpers::fillModSourceList(gc->getMainController(), sources);
+	};
+
+	void addToPopupMenu(PopupMenu& m) override
+	{
+		m.addSeparator();
+		m.addSectionHeader("Modulation for " + targetId);
+
+		PopupMenu assignMenu;
+
+		int idx = 0;
+
+		bool anyEnabled = false;
+
+		for(auto s: sources)
+		{
+			if(!isAssigned(s))
+				assignMenu.addItem(MenuOffset + AssignOffset + idx, s, true, false);
+
+			idx++;
+		}
+
+		m.addSubMenu("Assign", assignMenu, !sources.isEmpty());
+
+		idx = 0;
+
+		for(auto s: sources)
+		{
+			if(isAssigned(s))
+			{
+				m.addItem(MenuOffset + RemoveOffset + idx++, "Remove " + s);
+				anyEnabled = true;
+			}
+		}
+
+		int cidx = 0;
+
+		if(gc->customEditCallbacks.size() > 1)
+			m.addSeparator();
+
+		for(auto item: gc->customEditCallbacks)
+		{
+			auto mi = MenuOffset + SpecialCommandOffset + cidx++;
+			m.addItem(mi, item, true, false);
+		}
+	}
+
+	/** Override this method and perform the result if matching and return true if consumed. */
+	bool onPopupMenuResult(int result) override
+	{
+		if(result >= MenuOffset)
+		{
+			result -= MenuOffset;
+
+			if(result >= SpecialCommandOffset)
+			{
+				result -= SpecialCommandOffset;
+				gc->editCallbackHandler.sendMessage(sendNotificationSync, result, targetId);
+			}
+			else if(result >= RemoveOffset)
+			{
+				result -= RemoveOffset;
+				MatrixIds::Helpers::removeConnection(data, getMainController()->getControlUndoManager(), targetId, result);
+			}
+			else if (result >= AssignOffset)
+			{
+				result -= AssignOffset;
+				MatrixIds::Helpers::addConnection(data, getMainController(), targetId, result);
+				
+			}
+			
+
+			return true;
+		}
+
+		return false;
+	}
+
+private:
+
+	bool isAssigned(String sourceIndex) const
+	{
+		auto idx = sources.indexOf(sourceIndex);
+
+		for(auto d: data)
+		{
+			if((int)d[MatrixIds::SourceIndex] == idx && d[MatrixIds::TargetId].toString() == targetId)
+				return true;
+		}
+
+		return false;
+	}
+
+	WeakReference<GlobalModulatorContainer> gc;
+	ValueTree data;
+	StringArray sources;
+};
+
+MacroControlledObject::ModulationPopupData::Ptr GlobalModulatorContainer::createMatrixModulationPopupData(Processor* p,
+	int parameterIndex)
+{
+	auto targetId = p->getModulationTargetId(parameterIndex);
+	return createMatrixModulationPopupData(targetId);
+}
+
+MacroControlledObject::ModulationPopupData::Ptr GlobalModulatorContainer::createMatrixModulationPopupData(const String& targetId)
+{
+	return new GlobalContainerMatrixModulationPopupData(this, targetId);
+}
+
+
 void GlobalModulatorContainer::RuntimeSource::restore(const ValueTree& v, UndoManager* um)
 {
 	jassert(v.getType() == MatrixIds::MatrixData);

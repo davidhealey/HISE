@@ -344,7 +344,9 @@ void LfoModulator::setInternalAttribute (int parameter_index, float newValue)
 		loopEnabled = newValue > 0.5f;
 		break;
 	case Parameters::PhaseOffset:
-		phaseOffset = (double)newValue; break;
+		phaseOffset = (double)newValue;
+		triggerWaveformUpdate();
+		break;
 	case Parameters::SyncToMasterClock:
 	{
 		auto shouldSync = newValue > 0.5f;
@@ -371,11 +373,11 @@ void LfoModulator::setInternalAttribute (int parameter_index, float newValue)
 	}
 }
 
-ModulationDisplayValue::QueryFunction LfoModulator::getModulationQueryFunction(int parameterIndex) const
+ModulationDisplayValue::QueryFunction::Ptr LfoModulator::getModulationQueryFunction(int parameterIndex) const
 {
 	if(parameterIndex == Parameters::Frequency)
 	{
-		return ModulatorChain::GetModulationOutput<(int)LfoModulator::InternalChains::FrequencyChain>();
+		return new ModulatorChain::GetModulationOutput<(int)LfoModulator::InternalChains::FrequencyChain>();
 	}
 
 	return TimeVariantModulator::getModulationQueryFunction(parameterIndex);
@@ -413,10 +415,22 @@ void LfoModulator::getWaveformTableValues(int /*displayIndex*/, float const** ta
 	}
 	else 
 	{
-		*tableValues = currentTable;
+		if(phaseOffset == 0.0)
+		{
+			*tableValues = currentTable;
+		}
+		else
+		{
+			FloatVectorOperations::copy(rotated.data(), currentTable, SAMPLE_LOOKUP_TABLE_SIZE);
+			auto amount = jlimit(0, SAMPLE_LOOKUP_TABLE_SIZE-1, roundToInt(phaseOffset * SAMPLE_LOOKUP_TABLE_SIZE));
+			std::rotate(rotated.begin(), rotated.begin() + amount, rotated.end());
+			*tableValues = rotated.data();
+		}
+
 		numValues = SAMPLE_LOOKUP_TABLE_SIZE;
 		normalizeValue = 1.0f;
 		interpolationMode = WaveformComponent::LinearInterpolation;
+		
 	}
 }
 
@@ -537,6 +551,7 @@ float LfoModulator::calculateNewValue ()
 			newValue = 1.0f - newValue * attackValue;
 		break;
 	case Modulation::PanMode:
+	case Modulation::OffsetMode:
 	case Modulation::PitchMode:
 		if (isBipolar())
 			newValue = (1.0f - attackValue) * 0.5f + attackValue * newValue;
@@ -654,7 +669,7 @@ void LfoModulator::calculateBlock(int startSample, int numSamples)
 
 	
 
-	if (m == Modulation::PitchMode || m == Modulation::PanMode || m == Modulation::GlobalMode)
+	if (m == Modulation::PitchMode || m == Modulation::PanMode || m == Modulation::GlobalMode || m == Modulation::OffsetMode)
 	{
 		if (auto intensityModValues = modChains[IntensityChain].getWritePointerForManualExpansion(pseudoOffset))
 		{

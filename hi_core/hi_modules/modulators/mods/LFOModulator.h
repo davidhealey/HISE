@@ -161,7 +161,7 @@ public:
 	float getAttribute (int parameter_index) const override;
 	void setInternalAttribute (int parameter_index, float newValue) override;
 
-	ModulationDisplayValue::QueryFunction getModulationQueryFunction(int parameterIndex) const override;
+	ModulationDisplayValue::QueryFunction::Ptr getModulationQueryFunction(int parameterIndex) const override;
 
 	void getWaveformTableValues(int displayIndex, float const** tableValues, int& numValues, float& normalizeValue) override;
 
@@ -280,6 +280,8 @@ private:
 
 	ModulatorChain::Collection modChains;
 
+
+	std::array<float, SAMPLE_LOOKUP_TABLE_SIZE> rotated;
 
 	//AudioSampleBuffer intensityBuffer;
 

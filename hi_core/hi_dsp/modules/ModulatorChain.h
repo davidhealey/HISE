@@ -260,6 +260,17 @@ public:
 		/** If you're doing the expansion manually, you can update the current ramp value with this method. */
 		void setCurrentRampValueForVoice(int voiceIndex, float value) noexcept;
 
+		bool isForceProcessEnabled() const noexcept { return options.forceProcessing; }
+
+		/** This will ensure that the modulation chain is always processed even if there are no modulators present.
+		 *
+		 *  This can be used to ensure that the value is smoothed when using the setInitialValue() function.
+		 */
+		void setForceProcessing(bool shouldBeProcessed)
+		{
+			options.forceProcessing = shouldBeProcessed;
+		}
+
 		void setClampTo0To1(bool shouldClamp)
 		{
 			options.clampTo0to1 = shouldClamp;
@@ -273,6 +284,7 @@ public:
 			bool includeMonophonicValues = true;
 			bool voiceValuesReadOnly = true;
 			bool clampTo0to1 = false;
+			bool forceProcessing = false;
 		};
 
 		void setDisplayValue(float v);
@@ -308,9 +320,11 @@ public:
 
 		float currentMonoValue = 1.0f;
 		float lastConstantVoiceValue = 1.0f;
+		float lastInitialMonoValue = 0.0f;
 		float currentConstantVoiceValues[NUM_POLYPHONIC_VOICES];
 		float currentRampValues[NUM_POLYPHONIC_VOICES];
-		
+
+
 		float currentMonophonicRampValue;
 		float const* currentVoiceData = nullptr;
 
@@ -324,234 +338,91 @@ public:
 	struct SpecialQueryFunctions
 	{
 		/** A special function that converts db to gain and calculates the proper scaleValue for the resulting mod value. */
-		static ModulationDisplayValue GainModulation(Processor* p, double v, NormalisableRange<double> nr);
+		struct GainModulation: public ModulationDisplayValue::QueryFunction
+		{
+			bool onScaleDrag(Processor* p, bool isDown, float delta) override;
+			ModulationDisplayValue getDisplayValue(Processor* p, double v, NormalisableRange<double> nr) const override;
+		};
 
-		static ModulationDisplayValue PitchModulation(Processor* p, double v, NormalisableRange<double> nr);
+		struct PitchModulation: public ModulationDisplayValue::QueryFunction
+		{
+			bool onScaleDrag(Processor* p, bool isDown, float delta) override;
+			ModulationDisplayValue getDisplayValue(Processor* p, double v, NormalisableRange<double> nr) const override;
+		};
 	};
+
+	ModulationDisplayValue getModulationDisplayValue(double pValue, NormalisableRange<double> nr) const
+	{
+		auto normValue = nr.convertTo0to1(pValue);
+
+		ModulationDisplayValue mv;
+
+		mv.normalisedValue = normValue;
+		mv.modulationActive = shouldBeProcessedAtAll();
+
+		if(mv.modulationActive)
+		{
+			switch(getMode())
+			{
+			case Modulation::GainMode:
+			case Modulation::GlobalMode:
+				mv.scaledValue = getOutputValue();
+				break;
+			case Modulation::PitchMode:
+			{
+				// Use SpecialQueryFunction::PitchModulation instead...
+				jassertfalse;
+				break;
+			}
+			case Modulation::PanMode:
+			case Modulation::OffsetMode:
+				mv.addValue = getOutputValue();
+				break;
+			case Modulation::Mode::CombinedMode:
+			{
+				auto rv = getCombinedOutputValues();
+				auto x = rv.first;
+
+				mv.scaledValue = jlimit(0.0, 1.0, (double)x.first);
+				mv.addValue = jlimit(0.0, 1.0, mv.scaledValue + x.second) - mv.scaledValue;
+
+				double l = mv.scaledValue;
+				double u = normValue;
+
+				u += mv.addValue;
+
+				if(isBipolar())
+					l -= mv.addValue;
+
+				mv.modulationRange = rv.second;
+				break;
+			}
+			default:
+				break;
+			}
+		}
+
+		return mv;
+	}
 
 	/* Use this with HiSlider::setIsUsingModulatedRing(). */
-    template <int P > struct GetModulationOutput
+    template <int P > struct GetModulationOutput: public ModulationDisplayValue::QueryFunction
 	{
-		ModulationDisplayValue operator()(Processor* p, double pValue, NormalisableRange<double> nr) const
+		bool onScaleDrag(Processor* p, bool isDown, float delta) override
 		{
-			auto normValue = nr.convertTo0to1(pValue);
 			auto modChain = dynamic_cast<ModulatorChain*>(p->getChildProcessor(P));
+			jassert(modChain != nullptr);
+			return modChain->onIntensityDrag(isDown, delta);
+		}
 
-			ModulationDisplayValue mv;
-
-			mv.normalisedValue = normValue;
-			mv.modulationActive = modChain->shouldBeProcessedAtAll();
-
-			if(mv.modulationActive)
-			{
-				switch(modChain->getMode())
-				{
-				case Modulation::GainMode:
-				case Modulation::GlobalMode:
-					mv.scaleValue = modChain->getOutputValue();
-					break;
-				case Modulation::PitchMode:
-				{
-					// Use SpecialQueryFunction::PitchModulation instead...
-					jassertfalse;
-					break;
-				}
-				case Modulation::PanMode:
-				case Modulation::OffsetMode:
-					mv.addValue = modChain->getOutputValue();
-					break;
-				case Modulation::Mode::CombinedMode:
-				{
-					auto x = modChain->getCombinedOutputValues();
-					mv.scaleValue = jlimit(0.0, 1.0, (double)x.first);
-					mv.addValue = jlimit(0.0, 1.0, normValue * mv.scaleValue + x.second) - normValue * mv.scaleValue;
-					break;
-				}
-				default:
-					break;
-				}
-			}
-
-			return mv;
+		ModulationDisplayValue getDisplayValue(Processor* p, double pValue, NormalisableRange<double> nr) const override
+		{
+			auto modChain = dynamic_cast<ModulatorChain*>(p->getChildProcessor(P));
+			jassert(modChain != nullptr);
+			return modChain->getModulationDisplayValue(pValue, nr);
 		}
 	};
 
-	/** This class manages two modulation chains for scaling & bipolar adding modulation. */
-	struct ScaleAddCombo
-	{
-		ScaleAddCombo() = default;
-
-		/** Call this in the constructor of your processor before finalizing the mod chains. */
-		void addToConstructionData(Processor* p, ModulatorChain::Collection& cd, const String& name, bool voiceStartOnly=false)
-		{
-			auto sn = name;
-			auto bn = name + " Bipolar";
-			auto t = voiceStartOnly ? ModChainWithBuffer::Type::VoiceStartOnly : ModChainWithBuffer::Type::Normal;
-
-			cd += { p, sn, t, Mode::GainMode };
-			cd += { p, bn, t, Mode::OffsetMode };
-		}
-
-		/** Call this after finalising the mod chains and it will setup the connections. */
-		Result init(Processor* parent, ModulatorChain::Collection& cd, int scaleChainIndex, int bipolarChainIndex, const Colour& c = Colours::transparentBlack)
-		{
-			try
-			{
-				auto& sc = cd[scaleChainIndex];
-				auto& bp = cd[bipolarChainIndex];
-
-				sc.setIncludeMonophonicValuesInVoiceRendering(true);
-				bp.setIncludeMonophonicValuesInVoiceRendering(true);
-
-				if(sc.getChain() == nullptr)
-					throw Result::fail("scaleChainIndex is not a modulator chain");
-
-				if(bp.getChain() == nullptr)
-					throw Result::fail("bipolarChainIndex is not a modulator chain");
-
-				if(sc.getChain()->getMode() != Modulation::Mode::GainMode)
-					throw Result::fail("scale chain has not gain mode enabled");
-
-				if(bp.getChain()->getMode() != Modulation::Mode::OffsetMode)
-					throw Result::fail("bipolar chain has not offset mode enabled");
-
-				scaleChain = &sc;
-				bipolarChain = &bp;
-
-				if(!c.isTransparent())
-				{
-					scaleChain->getChain()->setColour(c);
-					bipolarChain->getChain()->setColour(c);
-				}
-
-				scaleChain->getChain()->sac = this;
-				bipolarChain->getChain()->sac = this;
-					
-			}
-			catch(Result& r)
-			{
-				scaleChain = nullptr;
-				bipolarChain = nullptr;
-				return r;
-			}
-
-			return Result::ok();
-		}
-
-		/** Update this whenever the parameter associated with the modulation chains change. */
-		void setParameterValue(float parameterValue)
-		{
-			jassert(rangeWasSet);
-			normValue = isIdentity ? parameterValue : parameterRange.convertTo0to1(parameterValue);
-			parameterWasSet = true;
-		}
-
-		/** Use this instead of ModulatorChain::getOneModulationValue. */
-		float getOneModulationValue(int startSample) const
-		{
-			jassert(scaleChain != nullptr);
-			jassert(bipolarChain != nullptr);
-			jassert(parameterWasSet);
-			jassert(rangeWasSet);
-
-			auto norm = normValue;
-			norm *= scaleChain->getOneModulationValue(startSample);
-			norm += bipolarChain->getOneModulationValue(startSample);
-			norm = jlimit(0.0f, 1.0f, norm);
-			return isIdentity ? norm : parameterRange.convertFrom0to1(norm);
-		}
-
-		ModulationDisplayValue getModulationOutput(Processor* , double pValue, NormalisableRange<double> nr) const
-		{
-			ModulationDisplayValue mv;
-
-			mv.normalisedValue = nr.convertTo0to1(pValue);
-			mv.modulationActive = scaleChain->getChain()->shouldBeProcessedAtAll() ||
-				                  bipolarChain->getChain()->shouldBeProcessedAtAll();
-
-			if(mv.modulationActive)
-			{
-				mv.addValue = bipolarChain->getOneModulationValue(0);
-				mv.scaleValue = scaleChain->getOneModulationValue(0);
-			}
-
-			return mv;
-		}
-
-		void setParameterRange(const NormalisableRange<float>& newRange)
-		{
-			parameterRange = newRange;
-			isIdentity = parameterRange.start == 0.0f && parameterRange.end == 1.0f && parameterRange.skew == 1.0f;
-			rangeWasSet = true;
-			parameterWasSet = false;
-		}
-
-		ModulatorChain* getChain(Modulation::Mode m) const
-		{
-			jassert(m == Modulation::GainMode || m == Modulation::OffsetMode);
-			jassert(scaleChain != nullptr);
-			jassert(bipolarChain != nullptr);
-
-			return m == Modulation::GainMode ? scaleChain->getChain() : bipolarChain->getChain();
-		}
-
-		void moveModulator(Processor* p, Mode mode)
-		{
-			auto m = dynamic_cast<Modulation*>(p);
-			auto mod = dynamic_cast<Modulator*>(p);
-
-			jassert(m != nullptr);
-			jassert(mod != nullptr);
-
-			auto currentParent = dynamic_cast<ModulatorChain*>(p->getParentProcessor(false));
-			jassert(currentParent != nullptr);
-
-			if(mode != currentParent->getMode())
-			{
-				if(mode == Modulation::GainMode)
-					m->setIsBipolar(false);
-
-				m->setMode(mode);
-
-				auto oldParent = currentParent;
-				auto newParent = getChain(mode);
-
-				oldParent->getHandler()->remove(p, false);
-				newParent->getHandler()->add(p, nullptr);
-
-				oldParent->sendRebuildMessage(true);
-				newParent->sendRebuildMessage(true);
-
-				auto ownerSynth = oldParent->getParentProcessor();
-
-				oldParent->getMainController()->getProcessorChangeHandler().sendProcessorChangeMessage(ownerSynth, MainController::ProcessorChangeHandler::EventType::RebuildModuleList);
-			}
-		}
-
-		void setTableValueConverter(const Table::ValueTextConverter& converter)
-		{
-			jassert(scaleChain != nullptr);
-			jassert(bipolarChain != nullptr);
-
-			getChain(Modulation::Mode::GainMode)->setTableValueConverter(converter);
-			getChain(Modulation::Mode::OffsetMode)->setTableValueConverter(converter);
-		}
-
-	private:
-
-		bool rangeWasSet = false;
-		bool parameterWasSet = false;
-		bool isIdentity = false;
-		NormalisableRange<float> parameterRange;
-		float normValue = 0.0f;
-
-		ModChainWithBuffer* scaleChain = nullptr;
-		ModChainWithBuffer* bipolarChain = nullptr;
-
-		JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(ScaleAddCombo);
-		JUCE_DECLARE_WEAK_REFERENCEABLE(ScaleAddCombo);
-	};
-	
 	SET_PROCESSOR_NAME("ModulatorChain", "Modulator Chain", "chain")
 
 	class ModulatorChainHandler;
@@ -676,9 +547,7 @@ public:
 	{
 		auto mod = dynamic_cast<Modulation*>(childMod);
 		
-		if(auto sac = getConnectedScaleAddCombo())
-			sac->moveModulator(childMod, newMode);
-		else if (getMode() == Modulation::Mode::CombinedMode)
+		if (getMode() == Modulation::Mode::CombinedMode)
 		{
 			mod->setMode(newMode);
 			sendRebuildMessage(true);
@@ -692,6 +561,16 @@ public:
 		if(newMode != Modulation::Mode::GainMode)
 			mod->setIsBipolar(isBipolar);
 	}
+
+	void setZeroPosition(float newZeroPosition) override
+	{
+		Modulation::setZeroPosition(newZeroPosition);
+
+		for(auto m: allModulators)
+			dynamic_cast<Modulation*>(m)->setZeroPosition(newZeroPosition);
+	}
+
+
 
 public:
 
@@ -888,7 +767,30 @@ public:
 
     } runtimeTargetSource;
 
+	bool onIntensityDrag(bool isMouseDown, float delta);
+
+	struct SelfQueryFunction: public ModulationDisplayValue::QueryFunction
+	{
+		SelfQueryFunction(ModulatorChain* c):
+		  self(c)
+		{};
+
+		ModulationDisplayValue getDisplayValue(Processor* p, double nv, NormalisableRange<double> nr) const override
+		{
+			return self->getModulationDisplayValue(nv, nr);
+		}
+
+		bool onScaleDrag(Processor* p, bool isDown, float delta) override
+		{
+			return self->onIntensityDrag(isDown, delta);
+		}
+
+		ModulatorChain* self;
+	};
+
 private:
+
+	std::vector<float> intensityValues;
 
 	struct AddBufferData
 	{
@@ -904,6 +806,14 @@ private:
 		const float* getReadPointer(int startSample_cr, bool getEnvelope) const
 		{
 			return (getEnvelope ? envelopeValues.begin() : timeVariantValues.begin()) + startSample_cr;
+		}
+
+		void clearModValues()
+		{
+			FloatVectorOperations::clear(timeVariantValues.begin(), timeVariantValues.size());
+			FloatVectorOperations::clear(envelopeValues.begin(), envelopeValues.size());
+			addStartValue = 0.0f;
+			currentTimeVariantAddValue = 0.0f;
 		}
 
 		bool useVoiceStartValue = false;
@@ -926,6 +836,30 @@ private:
 
 	// Checks if the Modulators are initialized correctly and are set to the right voices */
 	bool checkModulatorStructure();
+
+	static void smoothConstantInitialValue(float* data, int numSamples, float thisValue, float lastValue)
+	{
+		const bool smoothConstantValue = (std::abs(thisValue - lastValue) > 0.01f);
+
+		if (smoothConstantValue)
+		{
+			const float start = lastValue;
+			const float delta = (thisValue - start) / (float)numSamples;
+			int numLoop = numSamples;
+			float value = start;
+			float* loop_ptr = data;
+
+			while (--numLoop >= 0)
+			{
+				*loop_ptr++ = value;
+				value += delta;
+			}
+		}
+		else
+		{
+			FloatVectorOperations::fill(data, thisValue, numSamples);
+		}
+	}
 
 	BigInteger activeVoices;
 

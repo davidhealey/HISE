@@ -356,7 +356,7 @@ public:
 		return 0.0f;
 	}
 
-	ModulationDisplayValue::QueryFunction getModulationQueryFunction(int parameterIndex) const override;
+	ModulationDisplayValue::QueryFunction::Ptr getModulationQueryFunction(int parameterIndex) const override;
 
 	void restoreFromValueTree(const ValueTree &v) override;;
 	ValueTree exportAsValueTree() const override;

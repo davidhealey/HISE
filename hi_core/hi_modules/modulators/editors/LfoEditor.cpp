@@ -38,7 +38,7 @@ LfoEditorBody::LfoEditorBody (ProcessorEditor *p)
     frequencySlider.reset (new HiSlider ("Frequency"));
     addAndMakeVisible (frequencySlider.get());
     frequencySlider->setTooltip (TRANS("Adjust the LFO Frequency"));
-    frequencySlider->setRange (0.5, 40, 0.01);
+    
     frequencySlider->setSliderStyle (Slider::RotaryHorizontalVerticalDrag);
     frequencySlider->setTextBoxStyle (Slider::TextBoxRight, true, 80, 20);
     frequencySlider->setColour (Slider::thumbColourId, Colour (0x80666666));
@@ -147,7 +147,7 @@ LfoEditorBody::LfoEditorBody (ProcessorEditor *p)
 	tableUsed = getProcessor()->getAttribute(LfoModulator::WaveFormType) == LfoModulator::Custom;
 
 	frequencySlider->setup(getProcessor(), LfoModulator::Frequency, "Frequency");
-	frequencySlider->setMode(HiSlider::Frequency, NormalisableRange(0.1, 40.0).withCentreSkew(10.0));
+	frequencySlider->setMode(HiSlider::Frequency, NormalisableRange(0.01, 40.0).withCentreSkew(10.0));
 	
 
 	smoothTimeSlider->setup(getProcessor(), LfoModulator::SmoothingTime, "Smoothing");
@@ -221,6 +221,30 @@ LfoEditorBody::~LfoEditorBody()
 
     //[Destructor]. You can add your own custom destruction code here..
     //[/Destructor]
+}
+
+void LfoEditorBody::updateGui()
+{
+	auto type = (int)getProcessor()->getAttribute(LfoModulator::WaveFormType);
+
+	loopButton->setEnabled(type == LfoModulator::Waveform::Custom || LfoModulator::Waveform::Steps);
+	loopButton->updateValue();
+
+	if (getProcessor()->getAttribute(LfoModulator::TempoSync) > 0.5f)
+		frequencySlider->setMode(HiSlider::Mode::TempoSync);
+	else
+		frequencySlider->setMode(HiSlider::Frequency, NormalisableRange(0.01, 40.0).withCentreSkew(10.0));
+
+	const bool newTableUsed = getProcessor()->getAttribute(LfoModulator::WaveFormType) == LfoModulator::Custom;
+	const bool newStepsUsed = getProcessor()->getAttribute(LfoModulator::WaveFormType) == LfoModulator::Steps;
+
+	if (newTableUsed != tableUsed || newStepsUsed != stepsUsed)
+	{
+		tableUsed = newTableUsed;
+		stepsUsed = newStepsUsed;
+		refreshBodySize();
+		resized();
+	}
 }
 
 //==============================================================================

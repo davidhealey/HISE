@@ -2700,11 +2700,23 @@ class Processor;
 
 struct ModulationDisplayValue
 {
-	using QueryFunction = std::function<ModulationDisplayValue(Processor*, double, NormalisableRange<double>)>;
+	struct QueryFunction: public ReferenceCountedObject
+	{
+		using Ptr = ReferenceCountedObjectPtr<QueryFunction>;
+
+		QueryFunction() = default;
+
+		virtual ~QueryFunction() {}
+
+		virtual bool onScaleDrag(Processor* p, bool isDown, float delta) = 0;
+		virtual ModulationDisplayValue getDisplayValue(Processor* p, double nv, NormalisableRange<double> nr) const = 0;
+		
+		JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(QueryFunction);
+	};
 
 	double getNormalisedModulationValue() const
 	{
-		return modulationActive ? jlimit(0.0, 1.0, normalisedValue * scaleValue + addValue) : normalisedValue;
+		return modulationActive ? jlimit(0.0, 1.0, scaledValue + addValue) : normalisedValue;
 	}
 	
 	void storeToJSON(DynamicObject* obj)
@@ -2718,6 +2730,16 @@ struct ModulationDisplayValue
 		c.repaint();
 	}
 
+	void clipTo0To1();
+
+	static float getDeltaForDragEvent(const Slider& slider, const MouseEvent& e)
+	{
+		auto thisDistanceX = e.getDistanceFromDragStartX();
+		auto thisDistanceY = -1 * e.getDistanceFromDragStartY();
+		auto thisDistance = thisDistanceX + thisDistanceY;
+		return (float)thisDistance / (float)slider.getWidth();
+	}
+
 	static ModulationDisplayValue fromJSON(const var& json, double defaultValue)
 	{
 		if(auto obj = json.getDynamicObject())
@@ -2728,6 +2750,7 @@ struct ModulationDisplayValue
 		ModulationDisplayValue d;
 		d.modulationActive = false;
 		d.normalisedValue = jlimit(0.0, 1.0, defaultValue);
+
 		return d;
 	}
 
@@ -2744,31 +2767,42 @@ struct ModulationDisplayValue
 	bool operator==(const ModulationDisplayValue& other) const
 	{
 		return normalisedValue == other.normalisedValue &&
-			   scaleValue == other.scaleValue &&
+			   scaledValue == other.scaledValue &&
 			   addValue == other.addValue &&
-			   modulationActive == other.modulationActive;
+			   modulationActive == other.modulationActive &&
+			   modulationRange == other.modulationRange;
 	}
 
 	bool operator!=(const ModulationDisplayValue& other) const
 	{
 		return !(*this == other);
 	}
-
 	
 	double normalisedValue = 0.0;
-	double scaleValue = 1.0;
+	
+	double scaledValue = 1.0;
 	double addValue = 0.0;
+	Range<double> modulationRange;
 	bool modulationActive = false;
+	double lastModValue = 0.0;
 
 private:
 
 	static ModulationDisplayValue fromNamedValueSet(const NamedValueSet& set)
 	{
 		ModulationDisplayValue v;
-		v.scaleValue = set["scaleValue"];
+		v.scaledValue = set["scaledValue"];
 		v.normalisedValue = set["valueNormalized"];
 		v.addValue = set["addValue"];
 		v.modulationActive = set["modulationActive"];
+		v.lastModValue = set["lastModValue"];
+
+		auto minv = (float)set["modMinValue"];
+		auto maxv = (float)set["modMaxValue"];
+
+		minv = jlimit(0.0f, 1.0f, FloatSanitizers::sanitizeFloatNumber(minv));
+		maxv = jlimit(0.0f, 1.0f, FloatSanitizers::sanitizeFloatNumber(maxv));
+		v.modulationRange = { minv, maxv };
 
 		return v;
 	}
@@ -2776,9 +2810,12 @@ private:
 	void store(NamedValueSet& set) const
 	{
 		set.set("valueNormalized", normalisedValue);
-		set.set("scaleValue", scaleValue);
+		set.set("scaledValue", scaledValue);
 		set.set("addValue", addValue);
 		set.set("modulationActive", modulationActive);
+		set.set("modMinValue", modulationRange.getStart());
+		set.set("modMaxValue", modulationRange.getEnd());
+		set.set("lastModValue", lastModValue);
 	}
 };
 

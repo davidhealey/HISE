@@ -546,6 +546,14 @@ public:
 	~GlobalModulatorContainer();
 
 	void processorChanged(EventType /*t*/, Processor* /*p*/) override { refreshList(); }
+
+	ValueTree exportAsValueTree() const override
+	{
+		auto v = ModulatorSynth::exportAsValueTree();
+		v.addChild(runtimeSource.matrixData.createCopy(), -1, nullptr);
+		return v;
+	}
+
 	void restoreFromValueTree(const ValueTree &v) override;
 
 	int getEnvelopeIndex(Processor* p) const;
@@ -587,6 +595,7 @@ public:
 	void renderEnvelopeData(int voiceIndex, int startSample, int numSamples);
     void sendVoiceStartCableValue(Modulator* m, const HiseEvent& e);
 
+	ValueTree getMatrixModulatorData() const { return runtimeSource.matrixData; }
 	runtime_target::connection getMatrixModulatorConnection() const { return runtimeSource.createConnection(); }
 
 	void handleRetriggeredNote(ModulatorSynthVoice *voice) override
@@ -597,6 +606,14 @@ public:
 
 	void connectToRuntimeTargets(scriptnode::OpaqueNode& on, bool shouldAdd);
 
+	MacroControlledObject::ModulationPopupData::Ptr createMatrixModulationPopupData(Processor* p, int parameterIndex);
+
+	MacroControlledObject::ModulationPopupData::Ptr createMatrixModulationPopupData(const String& targetId);
+
+	int getCurrentNumSamples() const { return lastBlockSize;}
+
+	StringArray customEditCallbacks;
+	LambdaBroadcaster<int, String> editCallbackHandler;
 
 private:
 

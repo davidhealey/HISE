@@ -80,6 +80,32 @@ namespace hise { using namespace juce;
 	Modulation::Mode Modulation::getMode() const noexcept
 	{ return modulationMode; }
 
+	Modulation::Mode Modulation::getModeFromModProperties(const scriptnode::modulation::ParameterProperties& modProperties,
+		int parameterIndex)
+	{
+		using namespace scriptnode::modulation;
+
+		auto m = modProperties.modulationModes[parameterIndex];
+
+		switch(m)
+		{
+		case ParameterMode::ScaleAdd:
+			return Modulation::Mode::CombinedMode;
+		case ParameterMode::ScaleOnly:
+			return Modulation::Mode::GainMode;
+		case ParameterMode::AddOnly:
+			return Modulation::Mode::OffsetMode;
+		case ParameterMode::Pan:
+			return Modulation::Mode::PanMode;
+		case ParameterMode::numModulationModes:
+		case ParameterMode::Disabled:
+		default: // should never happen...
+			jassertfalse;
+			return Modulation::Mode::numModes;
+			break;;
+		}
+	}
+
 	float Modulation::PitchConverters::octaveRangeToSignedNormalisedRange(float octaveValue)
 	{
 		return (octaveValue / 12.0f);
@@ -882,6 +908,7 @@ Processor *EnvelopeModulatorFactoryType::createProcessor(int typeIndex, const St
 	case globalEnvelope:	return new GlobalEnvelopeModulator(m, id, mode, numVoices);
 	case eventDataEnvelope: return new EventDataEnvelope(m, id, numVoices, mode);
 	case hardcodedEnvelope: return new HardcodedEnvelopeModulator(m, id, numVoices, mode);
+	case matrixModulator:	return new MatrixModulator(m, id, numVoices, mode);
 	case flexAhdsrModulator:return new FlexAhdsrEnvelope(m, id, numVoices, mode);
 	default: jassertfalse;	return nullptr;
 	}
@@ -1017,9 +1044,29 @@ void EnvelopeModulator::setInternalAttribute(int parameterIndex, float newValue)
 {
 	switch (parameterIndex)
 	{
-	case Parameters::Monophonic: isMonophonic = newValue > 0.5f; 
-		sendSynchronousBypassChangeMessage();
+	case Parameters::Monophonic:
+	{
+		auto m = newValue > 0.5f;
+
+		if(isMonophonic != m)
+		{
+			isMonophonic = m;
+
+			auto f = [](Processor* p)
+			{
+				if(auto mc = dynamic_cast<ModulatorChain*>(p->getParentProcessor(false, false)))
+				{
+					dynamic_cast<ModulatorChain::ModulatorChainHandler*>(mc->getHandler())->bypassStateChanged(p, p->isBypassed());
+				}
+
+				return SafeFunctionCall::OK;
+			};
+
+			getMainController()->getKillStateHandler().killVoicesAndCall(this, f, MainController::KillStateHandler::TargetThread::SampleLoadingThread);
+		}
+
 		break;
+	}
 	case Parameters::Retrigger:  shouldRetrigger = newValue > 0.5f; break;
 	default:
 		break;
@@ -1109,7 +1156,9 @@ void EnvelopeModulator::prepareToPlay(double sampleRate, int samplesPerBlock)
 {
 	Processor::prepareToPlay(sampleRate, samplesPerBlock);
 	TimeModulation::prepareToModulate(sampleRate, samplesPerBlock);
-		
+
+	firstVoiceBuffer.setSize(1, samplesPerBlock);
+
 	// Deactivate smoothing for envelopes
 	smoothedIntensity.reset(sampleRate, 0.0);
 }
@@ -1135,6 +1184,32 @@ bool EnvelopeModulator::shouldUpdatePlotter() const
 void EnvelopeModulator::render(int voiceIndex, float* voiceBuffer, float* scratchBuffer, int startSample,
 	int numSamples)
 {
+	bool saveFirst = false;
+
+	if(isMonophonic)
+	{
+		auto ownerSynth = static_cast<ModulatorSynth*>(getParentProcessor(true));
+		auto voice = static_cast<ModulatorSynthVoice*>(ownerSynth->getVoice(voiceIndex));
+
+		if(voice->isFirstRenderedVoice())
+		{
+			saveFirst = true;
+		}
+		else
+		{
+			setScratchBuffer(scratchBuffer, startSample + numSamples);
+			FloatVectorOperations::copy(internalBuffer.getWritePointer(0, startSample),
+										firstVoiceBuffer.getReadPointer(0, startSample),
+									    numSamples);
+
+			applyTimeModulation(voiceBuffer, startSample, numSamples);
+			return;
+		}
+			
+	}
+
+	
+
 	polyManager.setCurrentVoice(voiceIndex);
 
 	setScratchBuffer(scratchBuffer, startSample + numSamples);
@@ -1152,6 +1227,14 @@ void EnvelopeModulator::render(int voiceIndex, float* voiceBuffer, float* scratc
 #endif
 
 	polyManager.clearCurrentVoice();
+
+	if(saveFirst)
+	{
+		FloatVectorOperations::copy(firstVoiceBuffer.getWritePointer(0, startSample),
+									internalBuffer.getReadPointer(0, startSample),
+									    numSamples);
+	}
+	
 }
 
 int EnvelopeModulator::getNumPressedKeys() const

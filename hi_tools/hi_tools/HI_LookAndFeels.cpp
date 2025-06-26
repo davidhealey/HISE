@@ -252,6 +252,20 @@ void GlobalHiseLookAndFeel::drawRotarySlider(Graphics &g, int /*x*/, int /*y*/, 
 
 	drawVectorRotaryKnob(g, area.translated(0.0, 2.0f), bipolar, s.isMouseOverOrDragging(true), s.isMouseButtonDown(), s.isEnabled(), mv);
 
+	auto modDragState = (int)s.getProperties()["modulationDragState"];
+
+
+	if(modDragState == 1)
+	{
+		g.setColour(Colours::white.withAlpha(0.2f));
+		g.fillRoundedRectangle(area.translated(0.0, 2.0f), area.getWidth() * 0.5f);
+	}
+	if(modDragState == 2)
+	{
+		g.setColour(Colours::white.withAlpha(0.4f));
+		g.fillRoundedRectangle(area.translated(0.0, 2.0f), area.getWidth() * 0.5f);
+	}
+
 	g.setColour(Colours::white.withAlpha(0.7f));
 	g.setFont (GLOBAL_BOLD_FONT());
 	g.drawText (s.getName(),
@@ -618,10 +632,11 @@ void GlobalHiseLookAndFeel::drawVectorRotaryKnob(Graphics& g, Rectangle<float> a
 
 	auto start = -double_Pi * 0.75;
 
+	if(mv.modulationRange.isEmpty())
 	{
 		auto s = start;
 		auto e1 = start + double_Pi * 1.5 * value; // the knob position
-		auto e2 = start + double_Pi * 1.5 * value * mv.scaleValue; // the scaled modulation value
+		auto e2 = start + double_Pi * 1.5 * mv.scaledValue; // the scaled modulation value
 		auto e3 = start + double_Pi * 1.5 * jlimit(0.0, 1.0, mv.getNormalisedModulationValue());
 
 		if (bipolar)
@@ -639,6 +654,19 @@ void GlobalHiseLookAndFeel::drawVectorRotaryKnob(Graphics& g, Rectangle<float> a
 
 		if(mv.modulationActive && e2 != e3)
 			addModRing.addArc(0.0, 0.0, 1.0, 1.0, e2, e3, true);
+	}
+	else
+	{
+		auto s = start + double_Pi * 1.5 * value;
+
+		auto e = start + double_Pi * 1.5 * (mv.scaledValue + mv.addValue);
+
+		auto l = start + double_Pi * 1.5 * (mv.modulationRange.getStart());
+		auto u = start + double_Pi * 1.5 * (mv.modulationRange.getEnd());
+
+		positionRing.addArc(0.0f, 0.0f, 1.0f, 1.0f, l, u, true);
+		scaledModRing.addArc(0.0f, 0.0f, 1.0f, 1.0f, s, e, true);
+		addModRing.clear();
 	}
 
 	g.setColour(Colour(0xff111118));
