@@ -37,9 +37,7 @@ namespace hise { using namespace juce;
 
 #define USE_STATE_VARIABLE_FILTERS 1
 
-#ifndef HISE_NEW_FILTER_MOD
-#define HISE_NEW_FILTER_MOD 1
-#endif
+
 
 
 #if HISE_INCLUDE_OLD_MONO_FILTER
@@ -189,7 +187,7 @@ public:
 	void setInternalAttribute(int parameterIndex, float newValue) override;;
 	float getDefaultValue(int parameterIndex) const override;
 
-	ModulationDisplayValue::QueryFunction getModulationQueryFunction(int parameterIndex) const override;
+	ModulationDisplayValue::QueryFunction::Ptr getModulationQueryFunction(int parameterIndex) const override;
 
 	void restoreFromValueTree(const ValueTree &v) override;;
 	ValueTree exportAsValueTree() const override;
@@ -216,11 +214,8 @@ private:
 
 	friend class FilterEditor;
 
-	ModulatorChain::ScaleAddCombo filterMod;
-
 	bool blockIsActive = false;
 	int polyWatchdog = 0;
-
 
 	BlockDivider<64> monoDivider;
 
@@ -240,8 +235,6 @@ private:
 	FilterBank monoFilters;
 
 	mutable WeakReference<Processor> ownerSynthForCoefficients;
-
-	bool useNewFilterModStyle = false;
 
 	JUCE_DECLARE_WEAK_REFERENCEABLE(PolyFilterEffect)
 };

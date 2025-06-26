@@ -1623,14 +1623,8 @@ double FilterHelpers::RenderData::applyModValue(double f) const
 	f = hmath::pow(f, skew);
 #endif
 
-#if HISE_FILTER_MOD_MUL_ADD
-	f *= freqModValue;
-	f += bipolarDelta;
-	f = jlimit(0.0, 1.0, f);
-#else
 	f += bipolarDelta;
 	f *= freqModValue;
-#endif
 
 #if HISE_LOG_FILTER_FREQMOD
 	f = hmath::pow(jmax(0.0, f), 1.0 / skew);

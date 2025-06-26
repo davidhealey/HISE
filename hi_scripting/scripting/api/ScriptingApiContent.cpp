@@ -3259,6 +3259,7 @@ struct ScriptingApi::Content::ScriptTable::Wrapper
 	API_VOID_METHOD_WRAPPER_1(ScriptTable, setSnapValues);
 	API_METHOD_WRAPPER_1(ScriptTable, registerAtParent);
 	API_VOID_METHOD_WRAPPER_1(ScriptTable, referToData);
+	API_VOID_METHOD_WRAPPER_1(ScriptTable, setMouseHandlingProperties);
 };
 
 ScriptingApi::Content::ScriptTable::ScriptTable(ProcessorWithScriptingContent *base, Content* /*parentContent*/, Identifier name, int x, int y, int , int ) :
@@ -3291,6 +3292,7 @@ ComplexDataScriptComponent(base, name, snex::ExternalData::DataType::Table)
 	ADD_API_METHOD_1(referToData);
 	ADD_API_METHOD_1(setTablePopupFunction);
 	ADD_API_METHOD_1(registerAtParent);
+	ADD_API_METHOD_1(setMouseHandlingProperties);
 }
 
 ScriptingApi::Content::ScriptTable::~ScriptTable()
@@ -3377,6 +3379,11 @@ void ScriptingApi::Content::ScriptTable::referToData(var tableData)
 var ScriptingApi::Content::ScriptTable::registerAtParent(int index)
 {
 	return registerComplexDataObjectAtParent(index);
+}
+
+void ScriptingApi::Content::ScriptTable::setMouseHandlingProperties(var propertyObject)
+{
+	dragProperties.sendMessage(sendNotificationAsync, propertyObject);
 }
 
 struct ScriptingApi::Content::ScriptSliderPack::Wrapper

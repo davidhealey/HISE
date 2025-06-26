@@ -1559,7 +1559,12 @@ ScriptCreatedComponentWrapper(content, index)
 	t->setName(table->name.toString());
 	t->popupFunction = BIND_MEMBER_FUNCTION_2(TableWrapper::getTextForTablePopup);
     t->setDrawTableValueLabel(false);
-    
+
+	table->dragProperties.addListener(*t, [](TableEditor& te, const var& p)
+	{
+		te.setMouseDragProperties(p);
+	});
+
 	table->getSourceWatcher().addSourceListener(this);
 
 	component = t;
@@ -3133,12 +3138,14 @@ void ScriptedControlAudioParameter::setValue(float newValue)
 	if(recursive || shouldSkipHostUpdate())
 		return;
 
+	ScopedValueSetter<bool> svs(sendToHost, false);
+
 	if(scriptProcessor != nullptr)
 	{
 		const float convertedValue = range.convertFrom0to1(newValue);
 		const float snappedValue = range.snapToLegalValue(convertedValue);
 
-		scriptProcessor->setAttribute(attributeIndex, snappedValue, sendNotificationAsync);
+		scriptProcessor->setAttribute(attributeIndex, snappedValue, sendNotificationSync);
 	}
 }
 

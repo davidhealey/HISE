@@ -189,7 +189,9 @@ struct HisePluginParameterBase: public ControlledObject,
 		if(v != parameterValueToSend)
 		{
 			parameterValueToSend = v;
-			refreshParameterValue();
+
+			if(sendToHost)
+				refreshParameterValue();
 		}
 	}
 
@@ -236,6 +238,10 @@ struct HisePluginParameterBase: public ControlledObject,
 	void setIgnoreNextHostUpdate(bool shouldSkip) { skipHostUpdate = shouldSkip;}
 
 	bool shouldSkipHostUpdate() const { return skipHostUpdate; }
+
+protected:
+
+	bool sendToHost = true;
 
 private:
 

@@ -306,8 +306,6 @@ PolyFilterEffect::PolyFilterEffect(MainController *mc, const String &uid, int nu
 	gain(getDefaultValue(PolyFilterEffect::Parameters::Gain)),
 	mode((FilterBank::FilterMode)(int)getDefaultValue(PolyFilterEffect::Parameters::Mode))
 {
-	useNewFilterModStyle = HISE_GET_PREPROCESSOR(mc, HISE_NEW_FILTER_MOD);
-
 	modChains.reserve(numInternalChains);
 
 	modChains += {this, "Frequency Modulation"};
@@ -316,8 +314,6 @@ PolyFilterEffect::PolyFilterEffect(MainController *mc, const String &uid, int nu
 	modChains += {this, "Q Modulation"};
 
 	finaliseModChains();
-
-	filterMod.init(this, modChains, FrequencyChain, BipolarFrequencyChain);
 
 	for (auto& mb : modChains)
 		mb.getChain()->getHandler()->addPostEventListener(this);
@@ -336,7 +332,8 @@ PolyFilterEffect::PolyFilterEffect(MainController *mc, const String &uid, int nu
 		return Table::getDefaultTextValue(input);
 	};
 
-	filterMod.setTableValueConverter(f);
+	modChains[InternalChains::FrequencyChain].getChain()->setTableValueConverter(f);
+	modChains[InternalChains::BipolarFrequencyChain].getChain()->setTableValueConverter(f);
 
 	auto fg = [t](float input)
 	{
@@ -368,13 +365,6 @@ PolyFilterEffect::PolyFilterEffect(MainController *mc, const String &uid, int nu
 	voiceFilters.setMode((FilterBank::FilterMode)(int)getDefaultValue(PolyFilterEffect::Mode));
 	monoFilters.setMode((FilterBank::FilterMode)(int)getDefaultValue(PolyFilterEffect::Mode));
 
-	NormalisableRange<float> nr(20.0, 20000.0);
-
-	// Use 1.5kHz as midpoint for the modulation
-	if(useNewFilterModStyle)
-		nr.setSkewForCentre(1500.0);
-
-	filterMod.setParameterRange(nr);
 }
 
 PolyFilterEffect::~PolyFilterEffect()
@@ -417,7 +407,7 @@ float PolyFilterEffect::getAttribute(int parameterIndex) const
 	case PolyFilterEffect::Q:			return q;
 	case PolyFilterEffect::Mode:		return (float)(int)mode;
     case PolyFilterEffect::Quality:		return (float)getSampleAmountForRenderQuality();
-	case PolyFilterEffect::BipolarIntensity: return useNewFilterModStyle ? 1.0f : bipolarParameterValue;
+	case PolyFilterEffect::BipolarIntensity: return bipolarParameterValue;
 	default:							jassertfalse; return 1.0f;
 	}
 }
@@ -461,19 +451,8 @@ void PolyFilterEffect::setInternalAttribute(int parameterIndex, float newValue)
     case PolyFilterEffect::Quality:		setRenderQuality((int)newValue); break;
 	case PolyFilterEffect::BipolarIntensity:
 	{
-		if(!useNewFilterModStyle)
-		{
-			bipolarParameterValue = jlimit<float>(-1.0f, 1.0f, newValue);
-			bipolarIntensity.setTargetValue(bipolarParameterValue); break;
-		}
-		else
-		{
-			// we hardwire that bad boy to 1 since we don't need it anymore...
-			bipolarParameterValue = 1.0f;
-			bipolarIntensity.setTargetValue(1.0f);
-			bipolarIntensity.reset(0);
-		}
-
+		bipolarParameterValue = jlimit<float>(-1.0f, 1.0f, newValue);
+		bipolarIntensity.setTargetValue(bipolarParameterValue); break;
 		break;
 	}
 		
@@ -492,25 +471,21 @@ float PolyFilterEffect::getDefaultValue(int parameterIndex) const
 	case PolyFilterEffect::Q:			return 1.0f;
 	case PolyFilterEffect::Mode:		return (float)(int)FilterBank::FilterMode::StateVariableLP;
 	case PolyFilterEffect::Quality:   return 256.0f;
-	case PolyFilterEffect::BipolarIntensity: return useNewFilterModStyle ? 1.0f : 0.0f;
+	case PolyFilterEffect::BipolarIntensity: return 0.0f;
 	default:		jassertfalse; return 1.0f;
 	}
 }
 
-ModulationDisplayValue::QueryFunction PolyFilterEffect::getModulationQueryFunction(int parameterIndex) const
+ModulationDisplayValue::QueryFunction::Ptr PolyFilterEffect::getModulationQueryFunction(int parameterIndex) const
 {
 	switch(parameterIndex)
 	{
-	case PolyFilterEffect::Frequency: 
-		return [](Processor* p, double v, NormalisableRange<double> nr)
-		{
-			auto typed = static_cast<PolyFilterEffect*>(p);
-	        return typed->filterMod.getModulationOutput(p, v, nr);
-		};
+	case PolyFilterEffect::Frequency:
+		return new ModulatorChain::GetModulationOutput<(int)InternalChains::FrequencyChain>();
 	case PolyFilterEffect::Q:
-		return ModulatorChain::GetModulationOutput<(int)InternalChains::ResonanceChain>();
+		return new ModulatorChain::GetModulationOutput<(int)InternalChains::ResonanceChain>();
 	case PolyFilterEffect::Gain:
-		return ModulatorChain::GetModulationOutput<(int)InternalChains::GainChain>();
+		return new ModulatorChain::GetModulationOutput<(int)InternalChains::GainChain>();
 	}
 
 	return VoiceEffectProcessor::getModulationQueryFunction(parameterIndex);
@@ -566,16 +541,9 @@ void PolyFilterEffect::renderNextBlock(AudioSampleBuffer &b, int startSample, in
 {
 	if (!forceMono && (hasPolyMods() || !blockIsActive))
 	{
-		filterMod.setParameterValue(frequency);
-		auto f = filterMod.getOneModulationValue(startSample);
-		auto gainModValue = (double)modChains[GainChain].getOneModulationValue(startSample);
-
-		monoFilters.setDisplayModValues(-1, f, gainModValue);
-
-#if 0
+		
 		FilterHelpers::RenderData r(b, startSample, numSamples);
 		r.voiceIndex = -1;
-
 		r.freqModValue = modChains[FrequencyChain].getOneModulationValue(startSample);
 
 		modChains[FrequencyChain].setDisplayValue(r.freqModValue);
@@ -597,8 +565,8 @@ void PolyFilterEffect::renderNextBlock(AudioSampleBuffer &b, int startSample, in
 		r.gainModValue = (double)modChains[GainChain].getOneModulationValue(startSample);
 		r.qModValue = (double)modChains[ResonanceChain].getOneModulationValue(startSample);
 
-		monoFilters.setDisplayModValues(-1, (float)r.applyModValue(frequency), (float)r.gainModValue);
-#endif
+		monoFilters.setDisplayModValues(-1, (float)r.applyModValue(frequency), (float)r.gainModValue, (float)r.qModValue);
+
 		return;
 	}
 		
@@ -616,20 +584,6 @@ void PolyFilterEffect::renderNextBlock(AudioSampleBuffer &b, int startSample, in
 
 		FilterHelpers::RenderData r(b, startSample, subBlockSize);
 		r.voiceIndex = -1;
-		
-		filterMod.setParameterValue(frequency);
-		auto f = filterMod.getOneModulationValue(startSample);
-
-		auto gainMod = (double)modChains[GainChain].getOneModulationValue(startSample);
-		r.gainModValue = (double)(Decibels::decibelsToGain(gain * (gainMod - 1.0)));
-		r.qModValue = (double)modChains[ResonanceChain].getOneModulationValue(startSample);
-
-		monoFilters.setFrequency(f);
-
-		monoFilters.setDisplayModValues(-1, f, (float)r.gainModValue);
-		monoFilters.renderMono(r);
-
-#if 0
 		r.freqModValue = modChains[FrequencyChain].getOneModulationValue(startSample);
 		modChains[FrequencyChain].setDisplayValue(r.freqModValue);
 
@@ -649,14 +603,10 @@ void PolyFilterEffect::renderNextBlock(AudioSampleBuffer &b, int startSample, in
 
 		auto gainMod = (double)modChains[GainChain].getOneModulationValue(startSample);
 		r.gainModValue = (double)(Decibels::decibelsToGain(gain * (gainMod - 1.0)));
-
 		r.qModValue = (double)modChains[ResonanceChain].getOneModulationValue(startSample);
-		
-		
 
-		monoFilters.setDisplayModValues(-1, (float)r.applyModValue(frequency), (float)r.gainModValue);
+		monoFilters.setDisplayModValues(-1, (float)r.applyModValue(frequency), (float)r.gainModValue, (float)r.qModValue);
 		monoFilters.renderMono(r);
-#endif
 
 		startSample += subBlockSize;
 	}
@@ -729,22 +679,6 @@ void PolyFilterEffect::applyEffect(int voiceIndex, AudioSampleBuffer &b, int sta
 
 	FilterHelpers::RenderData r(b, startSample, numSamples);
 	r.voiceIndex = voiceIndex;
-
-	filterMod.setParameterValue(frequency);
-	auto f = filterMod.getOneModulationValue(startSample);
-
-	auto gainMod = (double)modChains[GainChain].getOneModulationValue(startSample);
-  
-	if(gainMod != 1.0f)
-		r.gainModValue = (double)(Decibels::decibelsToGain(gain * (gainMod - 1.0f)));
-  
-	r.qModValue = (double)modChains[ResonanceChain].getOneModulationValue(startSample);
-
-	voiceFilters.setFrequency(f);
-    voiceFilters.setDisplayModValues(voiceIndex, f, (float)r.gainModValue);
-	voiceFilters.renderPoly(r);
-	
-#if 0
 	r.freqModValue = modChains[FrequencyChain].getOneModulationValue(startSample);
 
 	auto bp = bipolarIntensity.getNextValue();
@@ -762,13 +696,12 @@ void PolyFilterEffect::applyEffect(int voiceIndex, AudioSampleBuffer &b, int sta
 	auto gainMod = (double)modChains[GainChain].getOneModulationValue(startSample);
   
 	if(gainMod != 1.0f)
-    r.gainModValue = (double)(Decibels::decibelsToGain(gain * (gainMod - 1.0f)));
-  
+	    r.gainModValue = (double)(Decibels::decibelsToGain(gain * (gainMod - 1.0f)));
+
 	r.qModValue = (double)modChains[ResonanceChain].getOneModulationValue(startSample);
 
-    voiceFilters.setDisplayModValues(voiceIndex, (float)r.applyModValue(frequency), (float)r.gainModValue);
+    voiceFilters.setDisplayModValues(voiceIndex, (float)r.applyModValue(frequency), (float)r.gainModValue, (float)r.qModValue);
 	voiceFilters.renderPoly(r);
-#endif
 }
 
 void PolyFilterEffect::startVoice(int voiceIndex, const HiseEvent& e)

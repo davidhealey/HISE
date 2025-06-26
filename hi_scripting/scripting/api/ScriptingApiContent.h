@@ -1383,6 +1383,11 @@ public:
 		/** Registers this table (and returns a reference to the data) with the given index so you can use it from the outside. */
 		var registerAtParent(int index);
 
+		/** Customizes the dragging behaviour of the script table. */
+		void setMouseHandlingProperties(var propertyObject);
+
+		LambdaBroadcaster<var> dragProperties;
+
 		// ========================================================================================================
 
 		struct Wrapper;
