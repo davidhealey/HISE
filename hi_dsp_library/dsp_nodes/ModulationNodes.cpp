@@ -23,21 +23,19 @@
  *   http://www.hise.audio/
  *
  *   HISE is based on the JUCE library,
- *   which also must be licensed for commercial applications:
+ *   which also must be licenced for commercial applications:
  *
  *   http://www.juce.com
  *
  *   ===========================================================================
  */
 
-#pragma once
-
-namespace scriptnode {
-using namespace juce;
-using namespace hise;
-
-namespace core
+namespace scriptnode
 {
+namespace control
+{
+using namespace hise;
+using namespace juce;
 
-} // namespace core
-} // namespace scriptnode
+}
+}

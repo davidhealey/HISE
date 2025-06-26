@@ -133,7 +133,7 @@ struct GlobalRoutingManager: public ReferenceCountedObject
 	        target->onData(data, numBytes);
         }
 
-        runtime_target::target_base<double>* target;
+        runtime_target::typed_target<double>* target;
     };
     
 	struct RoutingIcons : public PathFactory
@@ -186,7 +186,7 @@ struct GlobalRoutingManager: public ReferenceCountedObject
 	struct Cable : public SlotBase,
                    public runtime_target::source_base
 	{
-        using TargetType = runtime_target::target_base<double>;
+        using TargetType = runtime_target::typed_target<double>;
         
 		Cable(const String& id_);;
 
@@ -212,18 +212,19 @@ struct GlobalRoutingManager: public ReferenceCountedObject
         
         
         
-        template <bool Add> static bool connectStatic(runtime_target::source_base* sb, TargetType* target)
+        template <bool Add> static bool connectStatic(runtime_target::source_base* sb, runtime_target::target_base* target)
         {
 			auto c = dynamic_cast<Cable*>(sb);
+			auto tt = dynamic_cast<TargetType*>(target);
 
             auto& rt = c->initRuntimeTarget();
             
             if(Add)
             {
-                return rt.runtimeTargets.addIfNotAlreadyThere(target);
+                return rt.runtimeTargets.addIfNotAlreadyThere(tt);
             }
             else
-                return rt.runtimeTargets.removeAllInstancesOf(target) != 0;
+                return rt.runtimeTargets.removeAllInstancesOf(tt) != 0;
 
         }
         
@@ -231,8 +232,8 @@ struct GlobalRoutingManager: public ReferenceCountedObject
         {
             auto c = source_base::createConnection();
             
-            c.connectFunction = (void*)connectStatic<true>;
-            c.disconnectFunction = (void*)connectStatic<false>;
+            c.connectFunction = connectStatic<true>;
+            c.disconnectFunction = connectStatic<false>;
             c.sendBackFunction = (void*)setValueStatic;
 			c.sendBackDataFunction = (void*)sendDataStatic;
             

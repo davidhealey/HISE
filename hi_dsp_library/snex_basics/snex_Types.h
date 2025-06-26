@@ -328,6 +328,7 @@ struct sdouble : public pimpl::_ramp<double>
 {};
 
 
+
 /** A small helper class for usage within a wrap::mod node.
  \ingroup snex_helpers
 */
@@ -1100,7 +1101,7 @@ template <typename T, int NumVoices> struct PolyData
 		if constexpr (!isPolyphonic())
 			return true;
 
-		return begin() == getFirst();
+		return begin() == &getFirst();
 	}
 
 	/** Returns a reference to the first data. This can be used for UI purposes. */
@@ -1124,19 +1125,27 @@ template <typename T, int NumVoices> struct PolyData
 		return isVoiceRenderingActive();
 	}
 
-private:
+	T& getWithIndex(int index)
+	{
+		return *(data + getVoiceIndex(index));
+	}
 
-	
-	
-	static constexpr bool isPolyphonic() { return NumVoices > 1; }
-
-	
+	const T& getWithIndex(int index) const
+	{
+		return *(data + getVoiceIndex(index));
+	}
 
 	bool isVoiceRenderingActive() const
 	{
 		return isPolyphonic() &&
 			voicePtr != nullptr && voicePtr->getVoiceIndex() != -1;
 	}
+
+private:
+
+	static constexpr bool isPolyphonic() { return NumVoices > 1; }
+
+	
 
 	int getCurrentVoiceIndex() const
 	{
@@ -1150,18 +1159,7 @@ private:
 		auto rv = index & (NumVoices - 1);
 		return rv;
 	}
-
-
-	T& getWithIndex(int index)
-	{
-		return *(data + getVoiceIndex(index));
-	}
-
-	const T& getWithIndex(int index) const
-	{
-		return *(data + getVoiceIndex(index));
-	}
-
+	
 private:
 
 	PolyHandler* voicePtr = nullptr;

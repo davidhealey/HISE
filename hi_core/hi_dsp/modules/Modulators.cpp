@@ -470,114 +470,25 @@ void TimeModulation::applyGainModulation(float *calculatedModulationValues, floa
 {
 	const float a = 1.0f - fixedIntensity;
 
-#if 0
-	constexpr int BlockSize = 32;
-
-	BlockDivider<BlockSize> divider;
-
-	using SSEType = dsp::SIMDRegister<float>;
-
-	jassert(SSEType::isSIMDAligned(calculatedModulationValues) == SSEType::isSIMDAligned(destinationValues));
-
-	float rampValue = *calculatedModulationValues * fixedIntensity + a;
-
-	while (numValues > 0)
+	for(int i = 0; i < numValues; i++)
 	{
-		bool calculateNew;
-		int subBlockSize = divider.cutBlock(numValues, calculateNew, calculatedModulationValues);
-
-		if (subBlockSize == 0)
-		{
-			calculatedModulationValues += BlockSize;
-			const float end = *(calculatedModulationValues-1) * fixedIntensity + a;
-			constexpr float ratio = 1.0f / (float)BlockSize;
-			const float delta1 = (end - rampValue) * ratio;
-
-			AlignedSSERamper<BlockSize> ramper(destinationValues);
-			ramper.ramp(rampValue, delta1);
-
-			rampValue = end;
-			destinationValues += BlockSize;
-		}
-		else
-		{
-			while (--subBlockSize >= 0)
-			{
-				*destinationValues++ *= *calculatedModulationValues++ * fixedIntensity + a;
-			}
-		}
+		destinationValues[i] -= zeroPosition;
+		destinationValues[i] *= (a + fixedIntensity * calculatedModulationValues[i]);
+		destinationValues[i] += zeroPosition;
 	}
-#endif
-
-	FloatVectorOperations::multiply(calculatedModulationValues, fixedIntensity, numValues);
-	FloatVectorOperations::add(calculatedModulationValues, a, numValues);
-	FloatVectorOperations::multiply(destinationValues, calculatedModulationValues, numValues);
 }
 
 void TimeModulation::applyGainModulation(float *calculatedModulationValues, float *destinationValues, float fixedIntensity, const float *intensityValues, int numValues) const noexcept
 {
-	while (--numValues >= 0)
+	for(int i = 0; i < numValues; i++)
 	{
-		const float intensityValue = fixedIntensity * *intensityValues++;
+		const float intensityValue = fixedIntensity * intensityValues[i];
 		const float a = 1.0f - intensityValue;
 
-		*destinationValues++ *= (a + intensityValue * *calculatedModulationValues++);
+		destinationValues[i] -= zeroPosition;
+		destinationValues[i] *= (a + intensityValue * calculatedModulationValues[i]);
+		destinationValues[i] += zeroPosition;
 	}
-
-
-#if 0
-	const float a = 1.0f - fixedIntensity;
-
-	constexpr int BlockSize = 32;
-
-	BlockDivider<BlockSize> divider;
-
-	using SSEType = dsp::SIMDRegister<float>;
-
-	jassert(SSEType::isSIMDAligned(calculatedModulationValues) == SSEType::isSIMDAligned(destinationValues) == SSEType::isSIMDAligned(intensityValues));
-
-	float intensityRampValue = fixedIntensity * *intensityValues;
-	float invIntensityRampValue = 1.0f - intensityRampValue;
-
-	float rampValue = *calculatedModulationValues * intensityRampValue + invIntensityRampValue;
-
-	while (numValues > 0)
-	{
-		bool calculateNew;
-		int subBlockSize = divider.cutBlock(numValues, calculateNew, calculatedModulationValues);
-
-		if (subBlockSize == 0)
-		{
-			calculatedModulationValues += BlockSize;
-			intensityValues += BlockSize;
-
-			intensityRampValue = fixedIntensity * *(intensityValues-1);
-			invIntensityRampValue = 1.0f - intensityRampValue;
-
-
-			const float end = *(calculatedModulationValues-1) * intensityRampValue + invIntensityRampValue;
-
-			constexpr float ratio = 1.0f / (float)BlockSize;
-			const float delta1 = (end - rampValue) * ratio;
-
-			AlignedSSERamper<BlockSize> ramper(destinationValues);
-			ramper.ramp(rampValue, delta1);
-
-			rampValue = end;
-			destinationValues += BlockSize;
-		}
-		else
-		{
-			while (--subBlockSize >= 0)
-			{
-				const float intensityValue = fixedIntensity * *intensityValues++;
-				const float invIntensity = 1.0f - intensityValue;
-
-				*destinationValues++ *= *calculatedModulationValues++ * intensityValue + invIntensity;
-			}
-		}
-	}
-#endif
 }
 
 void TimeModulation::applyPitchModulation(float* calculatedModulationValues, float *destinationValues, float fixedIntensity, int numValues) const noexcept
@@ -636,21 +547,18 @@ void TimeModulation::applyOffsetModulation(float* calculatedModValues, float* de
 	auto src = calculatedModValues;
 	auto dst = destinationValues;
 
-	while(--numValues >= 0)
-	{
-		auto v = *src++;
-
+    for(int i = 0; i < numValues; i++)
+    {
+        auto v = src[i];
 		if(isBipolar())
 		{
 			v *= 2.0f;
 			v -= 1.0f;
 		}
-
 		v *= fixedIntensity;
-		v *= *intensityValues++;
-
-		*dst++ += v;
-	}
+		v *= intensityValues[i];
+		dst[i] += v;
+    }
 }
 
 void TimeModulation::applyOffsetModulation(float* calculatedModValues, float* destinationValues, float fixedIntensity,
@@ -660,9 +568,9 @@ void TimeModulation::applyOffsetModulation(float* calculatedModValues, float* de
 	auto src = calculatedModValues;
 	auto dst = destinationValues;
 
-	while(--numValues >= 0)
+    for(int i = 0; i < numValues; i++)
 	{
-		auto v = *src++;
+		auto v = src[i];
 
 		if(isBipolar())
 		{
@@ -672,7 +580,8 @@ void TimeModulation::applyOffsetModulation(float* calculatedModValues, float* de
 
 		v *= fixedIntensity;
 
-		*dst++ += v;
+        v += dst[i];
+		dst[i] = v;
 	}	
 }
 
@@ -682,91 +591,66 @@ void TimeModulation::applyIntensityForGainValues(float* calculatedModulationValu
 {
 	const float a = 1.0f - fixedIntensity;
 
-	while (--numValues >= 0)
+	for(int i = 0; i < numValues; i++)
 	{
-        const float modValue = *calculatedModulationValues * fixedIntensity + a;
-        
-		*calculatedModulationValues++ = modValue;
+        const float modValue = calculatedModulationValues[i] * fixedIntensity + a;
+		calculatedModulationValues[i] = modValue;
 	}
 }
 
 
 void TimeModulation::applyIntensityForGainValues(float* calculatedModulationValues, float fixedIntensity, const float* intensityValues, int numValues) const
 {
-	while (--numValues >= 0)
+	for(int i = 0; i < numValues; i++)
 	{
-		const float intensityValue = fixedIntensity * *intensityValues++;
+		const float intensityValue = fixedIntensity * intensityValues[i];
 		const float invIntensity = 1.0f - intensityValue;
-        const float modValue = intensityValue * *calculatedModulationValues + invIntensity;
-		*calculatedModulationValues++ = modValue;
-        
+        const float modValue = intensityValue * calculatedModulationValues[i] + invIntensity;
+		calculatedModulationValues[i] = modValue;
 	}
 }
 
 void TimeModulation::applyIntensityForPitchValues(float* calculatedModulationValues, float fixedIntensity, int numValues) const
 {
 	float* modValues = calculatedModulationValues;
-	int numLoop = numValues;
-
-	if (isBipolar())
-	{
-		while (--numLoop >= 0)
-		{
-			const float bipolarModValue = *modValues * 2.0f - 1.0f;
-			*modValues++ = bipolarModValue * fixedIntensity;
-		}
-
-		//FloatVectorOperations::multiply(calculatedModulationValues, 2.0f, numValues);
-		//FloatVectorOperations::add(calculatedModulationValues, -1.0f, numValues);
-		//FloatVectorOperations::multiply(calculatedModulationValues, fixedIntensity, numValues);
-
-		// modvalues (-1 ... -intensity ... 0 ... +intensity ... 1)
-	}
-	else
-	{
-		FloatVectorOperations::multiply(calculatedModulationValues, fixedIntensity, numValues);
-
-		// modValues ( 0 ... +-intensity ... 1 )
-	}
-
 	
+    if(isBipolar())
+    {
+        for(int i = 0; i < numValues; i++)
+        {
+            const float bipolarModValue = modValues[i] * 2.0f - 1.0f;
+            modValues[i] = bipolarModValue * fixedIntensity;
+        }
+    }
+    else
+    {
+        for(int i = 0; i < numValues; i++)
+            modValues[i] *= fixedIntensity;
+    }
 }
 
 
 void TimeModulation::applyIntensityForPitchValues(float* calculatedModulationValues, float fixedIntensity, const float* intensityValues, int numValues) const
 {
 	float* modValues = calculatedModulationValues;
-	int numLoop = numValues;
-
-	// input: modValues (0 ... 1), intensity (-1 ... 1), intensityValues (0.5 ... 2.0)
-
-	if (isBipolar())
-	{
-		while (--numLoop >= 0)
-		{
-			const float intensityValue = *intensityValues++ * fixedIntensity;
-			const float bipolarModValue = 2.0f * *modValues - 1.0f;
-			*modValues++ = bipolarModValue * intensityValue;
-		}
-
-		//FloatVectorOperations::multiply(intensityValues, fixedIntensity, numValues);
-		//FloatVectorOperations::multiply(calculatedModulationValues, 2.0f, numValues);
-		//FloatVectorOperations::add(calculatedModulationValues, -1.0f, numValues);
-		//FloatVectorOperations::multiply(calculatedModulationValues, intensityValues, numValues);
-	}
-	else
-	{
-		while (--numValues >= 0)
-		{
-			const float intensityValue = *intensityValues++ * fixedIntensity;
-			*modValues++ *= intensityValue;
-		}
-
-		//FloatVectorOperations::multiply(intensityValues, fixedIntensity, numValues);
-		//FloatVectorOperations::multiply(calculatedModulationValues, intensityValues, numValues);
-	}
-
 	
+    if(isBipolar())
+    {
+        for(int i = 0; i < numValues; i++)
+        {
+			const float intensityValue = intensityValues[i] * fixedIntensity;
+            const float bipolarModValue = modValues[i] * 2.0f - 1.0f;
+            modValues[i] = bipolarModValue * intensityValue;
+        }
+    }
+    else
+    {
+        for(int i = 0; i < numValues; i++)
+        {
+	        const float intensityValue = intensityValues[i] * fixedIntensity;
+			modValues[i] *= intensityValue;
+        }
+    }
 }
 
 
@@ -776,46 +660,40 @@ void TimeModulation::applyPanModulation(float * calculatedModValues, float * des
 
 	if (isBipolar())
 	{
-		while (--numValues >= 0)
+        for(int i = 0; i < numValues; i++)
 		{
-
-			const float bipolarModValue = 2.0f * *calculatedModValues++ - 1.0f;
-			*destinationValues++ += bipolarModValue * fixedIntensity * *intensityValues++;
+			const float bipolarModValue = 2.0f * calculatedModValues[i] - 1.0f;
+			destinationValues[i] += bipolarModValue * fixedIntensity * intensityValues[i];
 		}
 	}
 	else
 	{
-		while (--numValues >= 0)
+		for(int i = 0; i < numValues; i++)
 		{
-			const float modValue = fixedIntensity * *intensityValues++ * *calculatedModValues++;
-			*destinationValues++ += modValue;
+			const float modValue = fixedIntensity * intensityValues[i] * calculatedModValues[i];
+			destinationValues[i] += modValue;
 		}
 	}
-
-	
-
 }
 
 void TimeModulation::applyPanModulation(float * calculatedModValues, float * destinationValues, float fixedIntensity, int numValues) const noexcept
 {
 	// input: modValues (0 ... 1), intensity (-1 ... 1)
 	// output: 0 -> 0.5
-
 	if (isBipolar())
 	{
-		while (--numValues >= 0)
+		for(int i = 0; i < numValues; i++)
 		{
-			
-			const float bipolarModValue = 2.0f * *calculatedModValues++ - 1.0f;
-			*destinationValues++ += bipolarModValue * fixedIntensity;
+			const float bipolarModValue = 2.0f * calculatedModValues[i] - 1.0f;
+			destinationValues[i] += bipolarModValue * fixedIntensity;
 		}
 	}
 	else
 	{
-		while (--numValues >= 0)
+		for(int i = 0; i < numValues; i++)
 		{
-			const float modValue = *calculatedModValues++ * fixedIntensity;
-			*destinationValues++ += modValue;
+			const float modValue = calculatedModValues[i] * fixedIntensity;
+			destinationValues[i] += modValue;
 		}
 	}
 }
@@ -1349,63 +1227,13 @@ void TimeVariantModulator::render(float* monoModulationValues, float* scratchBuf
 #endif
 }
 
+
+
 void Modulation::PitchConverters::normalisedRangeToPitchFactor(float* rangeValues, int numValues)
 {
-	if (numValues > 1)
-	{
-#if HISE_ENABLE_FULL_CONTROL_RATE_PITCH_MOD
+	ModBufferExpansion::normalisedRangeToPitchFactor(rangeValues, numValues);
 
-		bool hasDeltaSignChange = false;
-
-		float prevValue = rangeValues[0];
-		float delta = 0.0f;
-
-		for (int i = 1; i < numValues; i++)
-		{
-			auto thisValue = rangeValues[i];
-			auto thisDelta = thisValue - prevValue;
-
-			hasDeltaSignChange |= (delta != 0.0f && (hmath::sign(thisDelta) != hmath::sign(delta)));
-			delta = thisDelta;
-			prevValue = thisValue;
-		}
-
-#else
-		auto hasDeltaSignChange = false;
-#endif
-
-		if (hasDeltaSignChange)
-		{			
-			for (int i = 0; i < numValues; i++)
-				rangeValues[i] = normalisedRangeToPitchFactor(rangeValues[i]);
-		}
-		else
-		{
-			float startValue = normalisedRangeToPitchFactor(rangeValues[0]);
-			const float endValue = normalisedRangeToPitchFactor(rangeValues[numValues - 1]);
-			float delta = (endValue - startValue);
-
-
-			if (delta < 0.0003f)
-			{
-				FloatVectorOperations::fill(rangeValues, (startValue + endValue) * 0.5f, numValues);
-			}
-			else
-			{
-				delta /= (float)numValues;
-
-				while (--numValues >= 0)
-				{
-					*rangeValues++ = startValue;
-					startValue += delta;
-				}
-			}
-		}
-	}
-	else if (numValues == 1)
-	{
-		rangeValues[0] = normalisedRangeToPitchFactor(rangeValues[0]);
-	}
+	
 }
 
 } // namespace hise

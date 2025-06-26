@@ -479,6 +479,8 @@ JavascriptPolyphonicEffect::~JavascriptPolyphonicEffect()
 	clearExternalWindows();
 	cleanupEngine();
 
+	DspNetwork::Holder::disconnectRuntimeTargets(this);
+
 #if USE_BACKEND
 	if (consoleEnabled)
 	{
@@ -658,6 +660,18 @@ void JavascriptPolyphonicEffect::handleHiseEvent(const HiseEvent &m)
 	}
 }
 
+void JavascriptPolyphonicEffect::connectToRuntimeTargets(scriptnode::OpaqueNode& opaqueNode, bool shouldAdd)
+{
+	Processor::connectToRuntimeTargets(opaqueNode, shouldAdd);
+
+	if(auto pitchChain = dynamic_cast<ModulatorChain*>(getParentProcessor(true)->getChildProcessor(ModulatorSynth::InternalChains::PitchModulation)))
+	{
+		pitchChain->connectToRuntimeTargets(opaqueNode, shouldAdd);
+	}
+}
+
+
+
 JavascriptMasterEffect::JavascriptMasterEffect(MainController *mc, const String &id):
 JavascriptProcessor(mc),
 ProcessorWithScriptingContent(mc),
@@ -697,6 +711,8 @@ JavascriptMasterEffect::~JavascriptMasterEffect()
 {
 	clearExternalWindows();
 	cleanupEngine();
+
+	DspNetwork::Holder::disconnectRuntimeTargets(this);
 
 #if USE_BACKEND
 	if (consoleEnabled)
@@ -827,6 +843,21 @@ void JavascriptMasterEffect::restoreFromValueTree(const ValueTree& v)
 
 int JavascriptMasterEffect::getControlCallbackIndex() const
 { return (int)Callback::onControl; }
+
+void JavascriptMasterEffect::connectToRuntimeTargets(scriptnode::OpaqueNode& opaqueNode, bool shouldAdd)
+{
+	Processor::connectToRuntimeTargets(opaqueNode, shouldAdd);
+
+	if(auto pitchChain = dynamic_cast<ModulatorChain*>(getParentProcessor(true)->getChildProcessor(ModulatorSynth::InternalChains::PitchModulation)))
+	{
+		pitchChain->connectToRuntimeTargets(opaqueNode, shouldAdd);
+	}
+
+	for(int i = 0; i < modChains.size(); i++)
+	{
+		modChains[i].getChain()->connectToRuntimeTargets(opaqueNode, shouldAdd);
+	}
+}
 
 void JavascriptMasterEffect::registerApiClasses()
 {
@@ -1170,6 +1201,8 @@ JavascriptTimeVariantModulator::~JavascriptTimeVariantModulator()
 
 	cleanupEngine();
 
+	DspNetwork::Holder::disconnectRuntimeTargets(this);
+
 	onInitCallback = new SnippetDocument("onInit");
 	prepareToPlayCallback = new SnippetDocument("prepareToPlay", "sampleRate samplesPerBlock");
 	processBlockCallback = new SnippetDocument("processBlock", "buffer");
@@ -1429,6 +1462,9 @@ Modulation(m)
 JavascriptEnvelopeModulator::~JavascriptEnvelopeModulator()
 {
 	cleanupEngine();
+
+	DspNetwork::Holder::disconnectRuntimeTargets(this);
+
 	clearExternalWindows();
 }
 
@@ -1748,6 +1784,20 @@ JavascriptSynthesiser::JavascriptSynthesiser(MainController *mc, const String &i
 
 JavascriptSynthesiser::~JavascriptSynthesiser()
 {
+	DspNetwork::Holder::disconnectRuntimeTargets(this);
+}
+
+void JavascriptSynthesiser::connectToRuntimeTargets(scriptnode::OpaqueNode& opaqueNode, bool shouldAdd)
+{
+	Processor::connectToRuntimeTargets(opaqueNode, shouldAdd);
+
+	if(auto pitchChain = dynamic_cast<ModulatorChain*>(getChildProcessor(ModulatorSynth::InternalChains::PitchModulation)))
+	{
+		pitchChain->connectToRuntimeTargets(opaqueNode, shouldAdd);
+	}
+
+	modChains[Extra1].getChain()->connectToRuntimeTargets(opaqueNode, shouldAdd);
+	modChains[Extra2].getChain()->connectToRuntimeTargets(opaqueNode, shouldAdd);
 
 }
 

@@ -1369,7 +1369,7 @@ DspNetwork* DspNetwork::Holder::getActiveNetwork() const
 
 
 
-void DspNetwork::Holder::connectRuntimeTargets(MainController* mc)
+void DspNetwork::Holder::connectRuntimeTargets(Processor*)
 {
 	if(auto n = getActiveNetwork())
 	{
@@ -1380,7 +1380,7 @@ void DspNetwork::Holder::connectRuntimeTargets(MainController* mc)
 	}
 }
 
-void DspNetwork::Holder::disconnectRuntimeTargets(MainController* mc)
+void DspNetwork::Holder::disconnectRuntimeTargets(Processor*)
 {
 	if(auto n = getActiveNetwork())
 	{

@@ -970,6 +970,25 @@ template <bool EnableBuffer> struct display_buffer_base : public base,
 		}
 	}
 
+	void updateBuffer(const float* values, int numSamples)
+	{
+		if constexpr (EnableBuffer)
+		{
+			DataReadLock sl(this);
+
+			auto shouldWrite = rb != nullptr && rb->isActive();
+
+#if !SNEX_THROW_IF_MULTIPLE_WRITERS
+			shouldWrite |= rb != nullptr &&  rb->getCurrentWriter() == this;
+#endif
+
+			const float* v[1] = { values };
+
+			if(shouldWrite)
+				rb->write(v, 1, numSamples);
+		}
+	}
+
 	static constexpr bool isRingBufferEnabled() { return EnableBuffer; }
 
 	virtual void registerPropertyObject(SimpleRingBuffer::Ptr rb) 

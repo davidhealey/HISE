@@ -701,6 +701,7 @@ void FloatingTileContent::Factory::handlePopupMenu(PopupMenu& m, FloatingTile* p
 	case PopupMenuOptions::ComplexGroupEditor:	parent->setNewContent(GET_PANEL_NAME(ComplexGroupManagerFloatingTile)); break;
 	case PopupMenuOptions::WavetablePreview:	parent->setNewContent(GET_PANEL_NAME(WaveformComponent::Panel)); break;
 	case PopupMenuOptions::AHDSRGraph:			parent->setNewContent(GET_PANEL_NAME(AhdsrEnvelope::Panel)); break;
+	case PopupMenuOptions::FlexAHDSRGraph:		parent->setNewContent(GET_PANEL_NAME(FlexAhdsrEnvelope::Panel)); break;
 	case PopupMenuOptions::MarkdownPreviewPanel:parent->setNewContent(GET_PANEL_NAME(MarkdownPreviewPanel)); break;
 	case PopupMenuOptions::MarkdownEditor:		parent->setNewContent(GET_PANEL_NAME(MarkdownEditorPanel)); break;
 	case PopupMenuOptions::FilterGraphPanel:	parent->setNewContent(GET_PANEL_NAME(FilterGraph::Panel)); break;

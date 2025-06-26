@@ -328,6 +328,17 @@ struct CustomNodeProperties
 #endif
 	}
 
+	/** Use this to query whether the given node needs a runtime target. */
+	template <typename T> static bool isRuntimeTarget()
+	{
+		String id = T::WrappedObjectType::getStaticId().toString();
+
+		auto d = nodeHasProperty(id, PropertyIds::IsDynamicRuntimeTarget);
+		auto f = nodeHasProperty(id, PropertyIds::IsFixRuntimeTarget);
+
+		return d || f;
+	}
+
 	static StringArray getAllNodesWithProperty(const Identifier& propId)
 	{
 		CustomNodeProperties d;

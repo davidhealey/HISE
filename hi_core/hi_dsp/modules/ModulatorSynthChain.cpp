@@ -245,8 +245,9 @@ void ModulatorSynthChain::compileAllScripts()
             
         while(auto m = rti.getNextProcessor())
         {
-			m->disconnectRuntimeTargets(getMainController());
-	        m->connectRuntimeTargets(getMainController());
+			auto as_p = dynamic_cast<Processor*>(m);
+			m->disconnectRuntimeTargets(as_p);
+	        m->connectRuntimeTargets(as_p);
         }
             
 	}

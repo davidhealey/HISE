@@ -682,7 +682,7 @@ public:
             // a uninitialised processor got inserted into the processing
             // chain, which is bad. Initialise all processors BEFORE
             // adding them there...
-            jassert(p->isValidAndInitialised());
+            jassert(p->isValidAndInitialised() || p->getMainController()->isFlakyThreadingAllowed());
             
             for(int i = 0; i < p->getNumChildProcessors(); i++)
             {
@@ -839,7 +839,13 @@ public:
 
 		NEW_PROCESSOR_DISPATCH(dispatcher.setNumAttributes(numForced));
 	}
+
     
+
+    virtual void connectToRuntimeTargets(scriptnode::OpaqueNode& on, bool shouldAdd)
+    {
+        getMainController()->connectToGlobalRuntimeTargets(on, shouldAdd);
+    }
 protected:
 
 	/** Overwrite this method if you want to supply a custom symbol for the Processor. 

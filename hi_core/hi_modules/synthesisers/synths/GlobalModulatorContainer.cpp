@@ -65,7 +65,13 @@ struct GlobalModulatorContainer::GlobalModulatorCable
 					auto idx = gs->getEnvelopeIndex(mod);
 
 					if (auto data = gs->getEnvelopeValuesForModulator(idx, startSample, ev))
+					{
 						modValue = *data;
+					}
+					else
+					{
+						return;
+					}
 				}
 			}
 			else
@@ -140,11 +146,14 @@ GlobalModulatorContainer::~GlobalModulatorContainer()
 
 	data.clear();
 	allParameters.clear();
+	runtimeSource.clear();
 }
 
 void GlobalModulatorContainer::restoreFromValueTree(const ValueTree &v)
 {
 	ModulatorSynth::restoreFromValueTree(v);
+
+	runtimeSource.restore(v.getChildWithName(MatrixIds::MatrixData), nullptr);
 
 	refreshList();
 }
@@ -239,6 +248,41 @@ void GlobalModulatorContainer::sendVoiceStartCableValue(Modulator* m, const Hise
     }
 }
 
+void GlobalModulatorContainer::connectToRuntimeTargets(scriptnode::OpaqueNode& on, bool shouldAdd)
+{
+	auto useLock = !LockHelpers::freeToGo(getMainController());
+	LockHelpers::SafeLock sl(getMainController(), LockHelpers::Type::AudioLock, useLock);
+	runtimeSource.connectToRuntimeTargets(on, shouldAdd);
+}
+void GlobalModulatorContainer::RuntimeSource::restore(const ValueTree& v, UndoManager* um)
+{
+	jassert(v.getType() == MatrixIds::MatrixData);
+	matrixData.removeAllChildren(um);
+
+	for(auto c: v)
+	{
+		matrixData.addChild(c.createCopy(), -1, um);
+	}
+}
+
+void GlobalModulatorContainer::RuntimeSource::clear()
+{
+	matrixData.removeAllChildren(nullptr);
+
+	if(!connectedNodes.isEmpty())
+	{
+		auto c = createConnection();
+
+		for(auto on: connectedNodes)
+			on->connectToRuntimeTarget(false, c);
+
+		connectedNodes.clear();
+	}
+
+	// must be cleared from the connectStatic method...
+	jassert(connectedTargets.isEmpty());
+}
+
 void GlobalModulatorContainer::preStartVoice(int voiceIndex, const HiseEvent& e)
 {
 	ModulatorSynth::preStartVoice(voiceIndex, e);
@@ -307,6 +351,20 @@ void GlobalModulatorContainer::preVoiceRendering(int startSample, int numThisTim
 	
 	auto scratchBuffer = modChains[GainChain].getScratchBuffer();
 
+	for(auto& ev: envelopeData)
+	{
+		if(auto mod = ev.getModulator())
+		{
+			if (mod->isInMonophonicMode() && !mod->isBypassed())
+			{
+				auto modBuffer = ev.initialiseMonophonicBuffer(startSample_cr, numSamples_cr);
+
+				mod->setScratchBuffer(scratchBuffer, startSample_cr + numSamples_cr);
+				mod->render(0, modBuffer, scratchBuffer, startSample_cr, numSamples_cr);
+			}
+		}
+	}
+
 	for (auto& tv : timeVariantData)
 	{
 		if (auto mod = tv.getModulator())
@@ -328,7 +386,9 @@ void GlobalModulatorContainer::preVoiceRendering(int startSample, int numThisTim
 	}
     
     SimpleReadWriteLock::ScopedReadLock sl(cableLock);
-    
+
+	lastBlockSize = numThisTime;
+
     for(auto& c: timeVariantCables)
     {
         c.send(-1);
@@ -339,11 +399,15 @@ void GlobalModulatorContainer::prepareToPlay(double newSampleRate, int samplesPe
 {
 	ModulatorSynth::prepareToPlay(newSampleRate, samplesPerBlock);
 
-	for (auto& d : timeVariantData)
-		d.prepareToPlay(samplesPerBlock);
+	{
+		for (auto& d : timeVariantData)
+			d.prepareToPlay(samplesPerBlock);
 
-	for (auto& d : envelopeData)
-		d.prepareToPlay(samplesPerBlock);
+		for (auto& d : envelopeData)
+			d.prepareToPlay(samplesPerBlock);
+
+		runtimeSource.updateTargets();
+	}
 
 	for (int i = 0; i < data.size(); i++)
 	{
@@ -430,6 +494,8 @@ void GlobalModulatorContainer::restoreModulatedParameters(const ValueTree& v)
 
 void GlobalModulatorContainer::refreshList()
 {
+	jassert(isIdleOrHasAudioLock());
+
 	// Delete all old datas
 
 	voiceStartData.clearQuick();
@@ -453,9 +519,12 @@ void GlobalModulatorContainer::refreshList()
 	envelopeData.clearQuick();
 
 	for (auto& mod : handler_->activeEnvelopesList)
-	{
 		envelopeData.add(EnvelopeData(mod, getLargestBlockSize()));
-	}
+
+	for(auto& mod: handler_->activeMonophonicEnvelopesList)
+		envelopeData.add(EnvelopeData(mod, getLargestBlockSize()));
+
+	runtimeSource.updateTargets();
 }
 
 void GlobalModulatorContainerVoice::startNote(int midiNoteNumber, float /*velocity*/, SynthesiserSound*, int /*currentPitchWheelPosition*/)
@@ -470,7 +539,7 @@ void GlobalModulatorContainerVoice::startNote(int midiNoteNumber, float /*veloci
 
 	ModulatorChain *g = static_cast<ModulatorChain*>(gc->getChildProcessor(ModulatorSynth::GainModulation));
 
-	if (g->hasActivePolyEnvelopes())
+	if (g->hasActiveEnvelopesAtAll())
 	{
 		for (auto& e : gc->envelopeData)
 		{
@@ -486,10 +555,15 @@ void GlobalModulatorContainerVoice::calculateBlock(int startSample, int numSampl
 
 	auto gs = static_cast<GlobalModulatorContainer*>(getOwnerSynth());
 
-	for (auto& e : gs->envelopeCables)
+	if(gs->getLastStartedVoice() == this)
 	{
-		e.send(getVoiceIndex(), true, startSample);
+		for (auto& e : gs->envelopeCables)
+		{
+			e.send(getVoiceIndex(), true, startSample);
+		}
 	}
+
+	
 		
 
 #if 0
@@ -512,7 +586,7 @@ void GlobalModulatorContainerVoice::checkRelease()
 
 	bool somePlaying = false;
 
-	if (g->hasActivePolyEnvelopes())
+	if (g->hasActiveEnvelopesAtAll())
 	{
 		for (auto& e : gc->envelopeData)
 		{

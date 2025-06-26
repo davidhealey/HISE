@@ -2301,6 +2301,8 @@ int ModulatorSynthVoice::getVoicePositionInSamples(bool wrapLoop) const
 
 			return v;
 		}
+
+		return 0;
 	}
 	else
 		return voiceUptime;

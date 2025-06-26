@@ -380,6 +380,7 @@ public:
 			SampleMapBrowser,
 			WavetablePreview,
 			AHDSRGraph,
+			FlexAHDSRGraph,
 			MarkdownEditor,
 			ServerController,
 			MarkdownPreviewPanel,

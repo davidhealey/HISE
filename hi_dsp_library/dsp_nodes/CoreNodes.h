@@ -746,7 +746,10 @@ public:
 
 	bool handleModulation(double& v)
 	{
-		return state.get().modValue.getChangedValue(v);
+		if(!isPolyphonic() || state.isVoiceRenderingActive())
+			return state.get().modValue.getChangedValue(v);
+
+		return false;
 	}
 
 	template <typename FrameDataType> void processFrame(FrameDataType& data)

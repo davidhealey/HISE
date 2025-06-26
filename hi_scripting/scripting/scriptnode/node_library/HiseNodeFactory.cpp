@@ -1733,10 +1733,21 @@ Factory::Factory(DspNetwork* network) :
 	registerNode<faust>();
 #endif // HISE_INCLUDE_FAUST_JIT
 
-	registerModNode<dp<extra_mod>, data::ui::displaybuffer_editor>();
-	registerModNode<dp<pitch_mod>, data::ui::displaybuffer_editor>();
-	registerModNode<dp<global_mod>, data::ui::displaybuffer_editor>();
+	using fi = runtime_target::indexers::fix_hash<1>;
+	using pci = modulation::config::PitchIndexer;
+	using mc = modulation::config::dynamic_with_display;
+	using ec = modulation::config::extra_config_with_display;
+	using pc = modulation::config::pitch_config_with_display;
+
+	using ei = modulation::config::ExtraIndexer;
 	
+
+
+	registerPolyModNode<dp<global_mod<1, fi, mc>>, dp<global_mod<NUM_POLYPHONIC_VOICES, fi, mc>>, data::ui::displaybuffer_editor>();
+	registerPolyModNode<dp<pitch_mod<1, pci, pc>>, dp<pitch_mod<NUM_POLYPHONIC_VOICES, pci, pc>>, data::ui::displaybuffer_editor>();
+	registerPolyModNode<dp<extra_mod<1, ei, ec>>, dp<extra_mod<NUM_POLYPHONIC_VOICES, ei, ec>>, data::ui::displaybuffer_editor>();
+	registerPolyModNode<dp<matrix_mod<1>>, dp<matrix_mod<NUM_POLYPHONIC_VOICES>>, data::ui::displaybuffer_editor>();
+
 	registerModNode<dp<peak>, data::ui::displaybuffer_editor>();
 	registerModNode<dp<peak_unscaled>, data::ui::displaybuffer_editor>();
 	registerPolyModNode<dp<ramp<1, true>>, dp<ramp<NUM_POLYPHONIC_VOICES, true>>, data::ui::displaybuffer_editor>();

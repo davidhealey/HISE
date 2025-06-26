@@ -619,6 +619,8 @@ public:
 
     
     
+	void connectToRuntimeTargets(scriptnode::OpaqueNode& opaqueNode, bool shouldAdd) override;
+
 	float getAttribute(int index) const override;
 
 	void setInternalAttribute(int index, float newValue) override;
@@ -792,6 +794,8 @@ public:
             voiceData.reset(voiceIndex);
     }
     
+	void connectToRuntimeTargets(scriptnode::OpaqueNode& opaqueNode, bool shouldAdd) override;
+
 private:
 
 	VoiceDataStack voiceData;
@@ -856,6 +860,8 @@ public:
 	JavascriptSynthesiser(MainController *mc, const String &id, int numVoices);
 		
 	~JavascriptSynthesiser();
+
+	void connectToRuntimeTargets(scriptnode::OpaqueNode& opaqueNode, bool shouldAdd) override;
 
 	Path getSpecialSymbol() const override;
 

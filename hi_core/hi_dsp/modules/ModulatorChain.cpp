@@ -1808,6 +1808,41 @@ void ModulatorChain::ModulatorChainHandler::checkActiveState()
 		chain->addBufferData->checkActiveState(chain);
 }
 
+int ModulatorChain::RuntimeTargetSource::getRuntimeHash() const
+{
+	auto p = parent.getParentProcessor();
+	auto parentAsSynth = dynamic_cast<ModulatorSynth*>(p);
+
+	for(int i = 0; i < p->getNumChildProcessors(); i++)
+	{
+		if(p->getChildProcessor(i) == &parent)
+		{
+			if(parentAsSynth != nullptr)
+			{
+				if(i == ModulatorSynth::InternalChains::GainModulation)
+					return modulation::config::GainModulation;
+				if(i == ModulatorSynth::InternalChains::PitchModulation)
+					return modulation::config::PitchModulation;
+			}
+
+			return modulation::config::CustomOffset;
+		}
+	}
+
+	jassertfalse;
+	return -1;
+}
+
+void ModulatorChain::RuntimeTargetSource::copyModulationValues(const float* modValues, float constantValue,
+	int startSample_cr, int numSamples_cr)
+{
+	jassert(isEnabled() && isPositiveAndBelow(startSample_cr + numSamples_cr, signalData.getNumSamples() + 1));
+
+	if(modValues != nullptr)
+		FloatVectorOperations::copy(signalData.getWritePointer(0, startSample_cr), modValues + startSample_cr, numSamples_cr);
+	else
+		FloatVectorOperations::fill(signalData.getWritePointer(0, startSample_cr), constantValue, numSamples_cr);
+}
 void ModulatorChain::AddBufferData::prepare(double sampleRate, int blockSize)
 {
 	auto numToAllocate = blockSize / HISE_EVENT_RASTER;
@@ -1936,46 +1971,9 @@ Processor *ModulatorChainFactoryType::createProcessor(int typeIndex, const Strin
 	return MainController::createProcessor(factory, s, id);
 };
 
-bool ModBufferExpansion::isEqual(float rampStart, const float* data, int numElements)
-{
-	auto range = FloatVectorOperations::findMinAndMax(data, numElements);
-	return (range.contains(rampStart) || range.getEnd() == rampStart) && range.getLength() < 0.001f;
-}
 
-bool ModBufferExpansion::expand(const float* modulationData, int startSample, int numSamples, float& rampStart)
-{
-	const int startSample_cr = startSample / HISE_CONTROL_RATE_DOWNSAMPLING_FACTOR;
-	const int numSamples_cr = numSamples / HISE_CONTROL_RATE_DOWNSAMPLING_FACTOR;
 
-	if (isEqual(rampStart, modulationData + startSample_cr, numSamples_cr))
-	{
-		rampStart = modulationData[startSample_cr];
-		return false;
-	}
-	else
-	{
-#if HISE_USE_CONTROLRATE_DOWNSAMPLING
 
-		float* temp = (float*)alloca(sizeof(float) * (numSamples_cr));
-		FloatVectorOperations::copy(temp, modulationData + startSample_cr, numSamples_cr);
-		float* d = const_cast<float*>(modulationData + startSample);
-
-		constexpr float ratio = 1.0f / (float)HISE_CONTROL_RATE_DOWNSAMPLING_FACTOR;
-
-		for (int i = 0; i < numSamples_cr; i++)
-		{
-			AlignedSSERamper<HISE_CONTROL_RATE_DOWNSAMPLING_FACTOR> ramper(d);
-
-			const float delta1 = (temp[i] - rampStart) * ratio;
-			ramper.ramp(rampStart, delta1);
-			rampStart = temp[i];
-			d += HISE_CONTROL_RATE_DOWNSAMPLING_FACTOR;
-		}
-#endif
-
-		return true;
-	}
-}
 
 int ModulatorChainFactoryType::fillPopupMenu(PopupMenu& menu, int startIndex)
 {

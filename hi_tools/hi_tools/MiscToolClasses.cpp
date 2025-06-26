@@ -919,6 +919,176 @@ void FloatSanitizers::Test::testArray()
 			
 }
 
+bool ModBufferExpansion::isEqual(float rampStart, const float* data, int numElements)
+{
+	auto range = FloatVectorOperations::findMinAndMax(data, numElements);
+	return (range.contains(rampStart) || range.getEnd() == rampStart) && range.getLength() < 0.001f;
+}
+
+bool ModBufferExpansion::expand(const float* modulationData, int startSample, int numSamples, float& rampStart)
+{
+	const int startSample_cr = startSample / HISE_CONTROL_RATE_DOWNSAMPLING_FACTOR;
+	const int numSamples_cr = numSamples / HISE_CONTROL_RATE_DOWNSAMPLING_FACTOR;
+
+	if (isEqual(rampStart, modulationData + startSample_cr, numSamples_cr))
+	{
+		rampStart = modulationData[startSample_cr];
+		return false;
+	}
+	else
+	{
+#if HISE_USE_CONTROLRATE_DOWNSAMPLING
+
+		float* temp = (float*)alloca(sizeof(float) * (numSamples_cr));
+		FloatVectorOperations::copy(temp, modulationData + startSample_cr, numSamples_cr);
+		float* d = const_cast<float*>(modulationData + startSample);
+
+		constexpr float ratio = 1.0f / (float)HISE_CONTROL_RATE_DOWNSAMPLING_FACTOR;
+
+		for (int i = 0; i < numSamples_cr; i++)
+		{
+			AlignedSSERamper<HISE_CONTROL_RATE_DOWNSAMPLING_FACTOR> ramper(d);
+
+			const float delta1 = (temp[i] - rampStart) * ratio;
+			ramper.ramp(rampStart, delta1);
+			rampStart = temp[i];
+			d += HISE_CONTROL_RATE_DOWNSAMPLING_FACTOR;
+		}
+#endif
+
+		return true;
+	}
+}
+
+
+template <bool Inverse> struct PitchSimd
+{
+	template <class Arch>
+    void operator()(Arch, float* rangeValues, int numValues)
+    {
+		using b_type = xsimd::batch<float, Arch>;
+	    auto inc = (int)b_type::size;
+		auto numVectorized = numValues - numValues % inc;
+
+	    for (int i = 0; i < numVectorized; i += inc)
+	    {
+	        auto v = b_type::load_unaligned(rangeValues + i);
+
+			if constexpr (Inverse)
+			{
+				v = xsimd::log2(v);
+				v *= 0.5f;
+				v += 0.5f;
+			}
+			else
+				v = xsimd::exp2(v);
+
+	        v.store_unaligned(rangeValues + i);
+	    }
+
+		if constexpr (Inverse)
+		{
+			for (int i = numVectorized; i < numValues; ++i)
+				rangeValues[i] = 0.5f * std::log2(rangeValues[i]) + 0.5f;
+		}
+		else
+		{
+			for (int i = numVectorized; i < numValues; ++i)
+				rangeValues[i] = std::exp2(rangeValues[i]);
+		}
+    }
+};
+
+struct SkewSimd
+{
+	template <class Arch>
+    void operator()(Arch, float* data, int numValues, Range<float> targetRange, float skew)
+    {
+		using b_type = xsimd::batch<float, Arch>;
+	    auto inc = (int)b_type::size;
+		auto numVectorized = numValues - numValues % inc;
+
+		auto min = targetRange.getStart();
+		auto max = targetRange.getEnd();
+
+		auto offset = min;
+		auto scale = max - min;
+
+		// return min + (max - min) * hmath::exp(hmath::log(value) / skew);
+
+		if(skew != 1.0f)
+		{
+			skew = 1.0f / skew;
+
+			for (int i = 0; i < numVectorized; i += inc)
+		    {
+		        auto v = b_type::load_unaligned(data + i);
+
+				v = xsimd::clip(v, b_type(0.0f), b_type(1.0f));
+
+				v = xsimd::log(v);
+				v *= skew;
+				v = xsimd::exp(v);
+				v *= scale;
+				v += offset;
+
+		        v.store_unaligned(data + i);
+		    }
+
+			for(int i = numVectorized; i < numValues; i++)
+			{
+				auto v = jlimit(0.0f, 1.0f, data[i]);
+				v = std::exp(std::log(v) * skew);
+				v *= scale;
+				v += offset;
+
+				data[i] = v;
+			}
+		}
+		else
+		{
+			for(int i = 0; i < numValues; i++)
+			{
+				data[i] *= scale;
+				data[i] += offset;
+			}
+		}
+    }
+};
+
+
+
+void ModBufferExpansion::pitchFactorToNormalisedRange(float* data, int numSamples)
+{
+	xsimd::dispatch(PitchSimd<true>{})(data, numSamples);
+}
+
+void ModBufferExpansion::normalisedRangeToPitchFactor(float* data, int numSamples)
+{
+	xsimd::dispatch(PitchSimd<false>{})(data, numSamples);
+}
+
+void ModBufferExpansion::applySkewFactor(float* data, int numSamples, Range<float> targetRange, float skewFactor)
+{
+	xsimd::dispatch(SkewSimd{})(data, numSamples, targetRange, skewFactor);
+}
+
+Ramper::Ramper():
+	targetValue(0.0f),
+	stepDelta(0.0f),
+	stepAmount(-1)
+{}
+
+void Ramper::setTarget(float currentValue, float newTarget, int numberOfSteps)
+{
+	if (numberOfSteps != -1) stepDelta = (newTarget - currentValue) / numberOfSteps;
+	else if (stepAmount != -1) stepDelta = (newTarget - currentValue) / stepAmount;
+	else jassertfalse; // Either the step amount should be set, or a new step amount should be supplied
+
+	targetValue = newTarget;
+	busy = true;
+}
+
 
 HiseDeviceSimulator::DeviceType HiseDeviceSimulator::currentDevice = HiseDeviceSimulator::DeviceType::Desktop;
 
@@ -3615,6 +3785,14 @@ bool TextEditorWithAutocompleteComponent::AutocompleteNavigator::keyPressed(cons
 TextEditorWithAutocompleteComponent::Autocomplete* TextEditorWithAutocompleteComponent::getCurrentAutocomplete()
 {
 	return dynamic_cast<Autocomplete*>(currentAutocomplete.get());
+}
+
+void ModulationDisplayValue::clipTo0To1()
+{
+	normalisedValue = jlimit(0.0, 1.0, normalisedValue);
+	addValue = jlimit(0.0, 1.0, scaledValue + addValue) - scaledValue;
+	modulationRange.setStart(jlimit(0.0, 1.0, modulationRange.getStart()));
+	modulationRange.setEnd(jlimit(0.0, 1.0, modulationRange.getEnd()));
 }
 
 String ValueToTextConverter::getTextForValue(double v) const

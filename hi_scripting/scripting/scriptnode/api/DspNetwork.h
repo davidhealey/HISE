@@ -204,8 +204,8 @@ public:
 
 		DspNetwork* getActiveNetwork() const;
 
-		void connectRuntimeTargets(MainController* mc) override;
-		void disconnectRuntimeTargets(MainController* mc) override;
+		void connectRuntimeTargets(Processor* p) override;
+		void disconnectRuntimeTargets(Processor* p) override;
 
 		ExternalDataHolder* getExternalDataHolder();
 

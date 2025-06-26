@@ -494,22 +494,74 @@ Node::Ptr ValueTreeBuilder::parseRuntimeTargetNode(Node::Ptr u)
         auto mid = getNodeId(u->nodeTree).getIdentifier().toString();
 
         mid << "_index";
-        
-        if(CustomNodeProperties::nodeHasProperty(u->nodeTree, PropertyIds::IsFixRuntimeTarget))
+
+		if(CustomNodeProperties::nodeHasProperty(u->nodeTree, PropertyIds::IsDynamicRuntimeTarget))
+		{
+			indexClass = NamespacedIdentifier::fromString("runtime_target::indexers::dynamic");
+			UsingTemplate idx(*this, mid, indexClass);
+			idx.flushIfNot();
+			*u << idx;
+		}
+        else if(CustomNodeProperties::nodeHasProperty(u->nodeTree, PropertyIds::IsFixRuntimeTarget))
         {
             indexClass = NamespacedIdentifier::fromString("runtime_target::indexers::fix_hash");
-            
-            auto hashCode = ValueTreeIterator::getFixRuntimeHash(u->nodeTree);
-            
             UsingTemplate idx(*this, mid, indexClass);
-            
+			auto hashCode = ValueTreeIterator::getFixRuntimeHash(u->nodeTree);
             idx << hashCode;
-        
             idx.flushIfNot();
-            
             *u << idx;
         }
-        
+		else
+		{
+			jassertfalse;
+		}
+
+		if(CustomNodeProperties::nodeHasProperty(u->nodeTree, PropertyIds::NeedsModConfig))
+		{
+			auto cid = getNodeId(u->nodeTree).getIdentifier().toString();
+			cid << "_config";
+
+			auto modeParameter = u->nodeTree.getChildWithName(PropertyIds::Parameters).getChildWithProperty(PropertyIds::ID, "Mode");
+			auto processParameter = u->nodeTree.getChildWithName(PropertyIds::Parameters).getChildWithProperty(PropertyIds::ID, "ProcessSignal");
+
+			auto dynamicMode = (bool)modeParameter[PropertyIds::Automated];
+			auto dynamicProcess = (bool)processParameter[PropertyIds::Automated];
+
+			auto mustBeDynamic = false;
+			mustBeDynamic = dynamicMode || dynamicProcess;
+
+			auto d = NamespacedIdentifier::fromString("modulation::config::dynamic");
+			auto c = NamespacedIdentifier::fromString("modulation::config::constant");
+			
+
+			UsingTemplate configClass(*this, cid, mustBeDynamic ? d : c);
+
+			if(!mustBeDynamic)
+			{
+				auto shouldProcess = (bool)processParameter[PropertyIds::Value];
+				auto modeIndex = (modulation::TargetMode)(int)modeParameter[PropertyIds::Value];
+
+				configClass << String(shouldProcess ? "true" : "false");
+
+				switch(modeIndex)
+				{
+				case modulation::TargetMode::Gain:
+					configClass << "modulation::TargetMode::Gain:";
+					break;
+				case modulation::TargetMode::Unipolar:
+					configClass << "modulation::TargetMode::Unipolar:";
+					break;
+				case modulation::TargetMode::Bipolar:
+					configClass << "modulation::TargetMode::Bipolar";
+					break;
+				default: ;
+				}
+			}
+
+			configClass.flushIfNot();
+
+			*u << configClass;
+		}
     }
     
     return parseRoutingNode(u);
@@ -1843,6 +1895,14 @@ int ValueTreeIterator::getFixRuntimeHash(const ValueTree &nodeTree)
         auto c = getNodeProperty(nodeTree, PropertyIds::Connection).toString();
         return c.hashCode();
     }
+	if(path == NamespacedIdentifier::fromString("core::global_mod"))
+	{
+		return 1;
+	}
+	if(path == NamespacedIdentifier::fromString("core::pitch_mod"))
+	{
+		return modulation::config::PitchModulation;
+	}
     if(path == NamespacedIdentifier::fromString("math::neural"))
     {
         auto c = getNodeProperty(nodeTree, PropertyIds::Model).toString();

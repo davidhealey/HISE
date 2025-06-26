@@ -790,7 +790,103 @@ public:
 		ModulatorChain *chain;
 	};
 
-	ScaleAddCombo* getConnectedScaleAddCombo() const { return sac; }
+	void connectToRuntimeTargets(scriptnode::OpaqueNode& on, bool shouldAdd) override
+	{
+		// do not call this, as this is already called by the processor that owns the Opaque node...
+		//Processor::connectToRuntimeTargets(on, shouldAdd);
+
+		auto c = runtimeTargetSource.createConnection();
+
+
+		on.connectToRuntimeTarget(shouldAdd, c);
+	}
+
+	struct RuntimeTargetSource: public scriptnode::modulation::Host,
+							    public runtime_target::source_base
+    {
+		using TargetType = runtime_target::typed_target<scriptnode::modulation::SignalSource>;
+		using EventData = scriptnode::modulation::EventData;
+
+		RuntimeTargetSource(ModulatorChain& parent_):
+		  parent(parent_),
+		  signalData(1, 0)
+		{}
+
+		int getRuntimeHash() const override;
+
+		runtime_target::connection createConnection() const override
+		{
+			auto c = source_base::createConnection();
+			c.connectFunction = connectStatic<true>;
+			c.disconnectFunction = connectStatic<false>;
+			return c;
+		}
+
+		runtime_target::RuntimeTarget getType() const override { return runtime_target::RuntimeTarget::ExternalModulatorChain; }
+
+		static EventData getEventData(Host* rt, const HiseEvent& e)
+		{
+			auto typed = static_cast<RuntimeTargetSource*>(rt);
+			EventData d;
+			d.type = scriptnode::modulation::SourceType::Envelope;
+			d.signal = typed->signalData.getWritePointer(0);
+			d.thisBlockSize = &typed->thisBlockSize;
+			d.constantValue = 0.0f;
+			return d;
+		}
+
+		bool addConnection(bool shouldBeAdded, TargetType* target)
+		{
+			scriptnode::modulation::SignalSource signal;
+
+			if(shouldBeAdded)
+			{
+				signal.sampleRate_cr = parent.getSampleRate() / HISE_CONTROL_RATE_DOWNSAMPLING_FACTOR;
+				signal.numSamples_cr = parent.getLargestBlockSize() / HISE_CONTROL_RATE_DOWNSAMPLING_FACTOR;
+				signal.modValueFunctions[0] = { this, getEventData };
+				numConnections++;
+			}
+			else
+			{
+				numConnections = jmax(0, numConnections-1);
+			}
+
+			if(numConnections > 0)
+			{
+				ProcessorHelpers::increaseBufferIfNeeded(signalData, signal.numSamples_cr);
+				thisBlockSize = signalData.getNumSamples();
+			}
+			else
+			{
+				signalData = AudioSampleBuffer(1, 0);
+				thisBlockSize = 0;
+			}
+
+			target->onValue(signal);
+			return true;
+		}
+
+		template <bool Add> static bool connectStatic(runtime_target::source_base* host, runtime_target::target_base* target)
+		{
+			auto rt = static_cast<RuntimeTargetSource*>(host);
+			auto tt = dynamic_cast<TargetType*>(target);
+			return rt->addConnection(Add, tt);
+		}
+
+		void copyModulationValues(const float* modValues, float constantValue, int startSample_cr, int numSamples_cr);
+
+		bool isEnabled() const
+		{
+			return numConnections > 0;
+		}
+
+		// this points to the currentVoiceData buffer...
+		AudioSampleBuffer signalData;
+		ModulatorChain& parent;
+		int thisBlockSize = 0;
+		int numConnections = 0;
+
+    } runtimeTargetSource;
 
 private:
 
@@ -822,9 +918,7 @@ private:
 
 	ScopedPointer<AddBufferData> addBufferData;
 
-	std::pair<float, float> getCombinedOutputValues() const;
-
-	ScaleAddCombo* sac = nullptr;
+	std::pair<std::pair<float, float>, Range<double>> getCombinedOutputValues() const;
 
     std::function<void(Modulator* m, const HiseEvent& e)> postEventFunction;
     
@@ -862,18 +956,7 @@ private:
 };
 
 
-struct ModBufferExpansion
-{
 
-	static bool isEqual(float rampStart, const float* data, int numElements);
-
-	/** Expands the data found in modulationData + startsample according to the HISE_CONTROL_RATE_DOWNSAMPLING_FACTOR.
-	*
-	*	It updates the rampstart and returns true if there was movement in the modulation data.
-	*
-	*/
-	static bool expand(const float* modulationData, int startSample, int numSamples, float& rampStart);
-};
 
 /**	Allows creation of TimeVariantModulators.
 *

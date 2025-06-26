@@ -61,10 +61,12 @@ public:
 
 };
 
-template <class ModulatorType> class GlobalModulatorDataBase
+template <class ModulatorType> class GlobalModulatorDataBase: public scriptnode::modulation::Host
 {
 public:
 
+	using RuntimeData = scriptnode::modulation::EventData;
+	
 	GlobalModulatorDataBase(Modulator* mod_):
 		mod(mod_)
 	{}
@@ -109,6 +111,19 @@ public:
 		}
 	}
 
+	static RuntimeData getModulationSignalStatic(Host* obj, const HiseEvent& e)
+	{
+		if(e.isEmpty())
+			return {};
+
+		RuntimeData d;
+		d.type = scriptnode::modulation::SourceType::VoiceStart;
+		auto typed = static_cast<VoiceStartData*>(obj);
+		d.constantValue = typed->voiceValues[e.getNoteNumberIncludingTransposeAmount()];
+
+		return d;
+	}
+
 	float getConstantVoiceValue(int noteNumber) const
 	{
         if(auto m = const_cast<VoiceStartData*>(this)->getModulator())
@@ -146,12 +161,25 @@ public:
 		ProcessorHelpers::increaseBufferIfNeeded(savedValuesForBlock, samplesPerBlock);
 	}
 
+	static RuntimeData getModulationSignalStatic(Host* obj, const HiseEvent&)
+	{
+		auto typed = static_cast<TimeVariantData*>(obj);
+
+		RuntimeData d;
+		d.type = scriptnode::modulation::SourceType::TimeVariant;
+		d.thisBlockSize = &typed->thisBlockSize;
+		d.signal = (float*)typed->getReadPointer(0);
+		d.constantValue = 0.0f;
+		return d;
+	}
+
 	void saveValues(const float* data, int startSample, int numSamples)
 	{
 		jassertfalse;
 		auto dest = savedValuesForBlock.getWritePointer(0, startSample);
 		FloatVectorOperations::copy(dest, data + startSample, numSamples);
 		isClear = false;
+		thisBlockSize = startSample + numSamples;
 	}
 
 	const float* getReadPointer(int startSample) const
@@ -167,6 +195,7 @@ public:
 		auto wp = savedValuesForBlock.getWritePointer(0, 0);
 		FloatVectorOperations::fill(wp + startSample, 1.0f, numSamples);
 		isClear = false;
+		thisBlockSize = startSample + numSamples;
 		return wp;
 	}
 
@@ -176,12 +205,14 @@ public:
 		{
 			FloatVectorOperations::fill(savedValuesForBlock.getWritePointer(0, 0), 1.0f, savedValuesForBlock.getNumSamples());
 			isClear = true;
+			thisBlockSize = 0;
 		}
 	}
 
 private:
 
 	AudioSampleBuffer savedValuesForBlock;
+	int thisBlockSize = 0;
 	bool isClear = false;
 };
 
@@ -199,10 +230,15 @@ public:
 
 	EnvelopeData(Modulator* mod, int samplesPerBlock) :
 		GlobalModulatorDataBase(mod),
-		savedValuesForBlock(NUM_POLYPHONIC_VOICES, 0)
+		savedValuesForBlock(NUM_POLYPHONIC_VOICES, 0),
+	    emptyBlock(1, 0)
 	{
 		for(int i = 0; i < NUM_POLYPHONIC_VOICES; i++)
+		{
 			isClear[i] = ClearState::Reset;
+			thisBlockSize[i] = 0;
+		}
+			
 
 		prepareToPlay(samplesPerBlock);
 	}
@@ -210,6 +246,7 @@ public:
 	void prepareToPlay(int samplesPerBlock)
 	{
 		ProcessorHelpers::increaseBufferIfNeeded(savedValuesForBlock, samplesPerBlock);
+		ProcessorHelpers::increaseBufferIfNeeded(emptyBlock, samplesPerBlock);
 	}
 
 	bool isPlaying(const HiseEvent& voiceEvent) const
@@ -232,6 +269,42 @@ public:
 		return savedValuesForBlock.getReadPointer(voiceIndex, startSample);
 	}
 
+	float* initialiseMonophonicBuffer(int startSample, int numSamples)
+	{
+		auto wp = savedValuesForBlock.getWritePointer(0, 0);
+		FloatVectorOperations::fill(wp + startSample, 1.0f, numSamples);
+		isClear[0] = ClearState::Playing;
+		thisBlockSize[0] = startSample + numSamples;
+		return wp;
+	}
+
+	std::pair<const int*, const float*> getRuntimePointer(const HiseEvent& e, int startSample) const
+	{
+		auto voiceIndex = getIndexForEvent(e);
+
+		if(voiceIndex == -1 || (isClear[voiceIndex] == ClearState::Reset))
+			return { nullptr, nullptr };
+
+
+		return { thisBlockSize + voiceIndex, savedValuesForBlock.getReadPointer(voiceIndex, startSample) };
+	}
+
+	static RuntimeData getModulationSignalStatic(Host* obj, const HiseEvent& e)
+	{
+		auto typed = static_cast<EnvelopeData*>(obj);
+
+		RuntimeData d;
+		d.type = scriptnode::modulation::SourceType::Envelope;
+		d.constantValue = 0.0f;
+
+		auto rt = typed->getRuntimePointer(e, 0);
+
+		d.thisBlockSize = rt.first;
+		d.signal = rt.second;
+	
+		return d;
+	}
+
 	void saveValues(const HiseEvent& voiceEvent, const float* data, int startSample, int numSamples)
 	{
 		auto voiceIndex = getIndexForEvent(voiceEvent);
@@ -243,6 +316,7 @@ public:
 
 		if(flag != ClearState::Reset)
 		{
+			thisBlockSize[voiceIndex] = startSample + numSamples;
 			auto dest = savedValuesForBlock.getWritePointer(voiceIndex, startSample);
 			FloatVectorOperations::copy(dest, data + startSample, numSamples);
 		}
@@ -286,6 +360,11 @@ public:
 			else if (isClear[voiceIndex] == ClearState::PendingReset2)
 			{
 				isClear[voiceIndex] = ClearState::Reset;
+				thisBlockSize[voiceIndex] = 0;
+				return false;
+			}
+			else if (isClear[voiceIndex] == ClearState::Reset)
+			{
 				return false;
 			}
 		}
@@ -293,10 +372,17 @@ public:
 		return true;
 	}
 
+	
+
 private:
+
+	
 
 	int getIndexForEvent(const HiseEvent& voiceEvent) const
 	{
+		if(getModulator()->isInMonophonicMode())
+			return 0;
+
 		if(voiceEvent.isEmpty())
 			return -1;
 
@@ -304,6 +390,8 @@ private:
 	}
 
 	AudioSampleBuffer savedValuesForBlock;
+	AudioSampleBuffer emptyBlock;
+	int thisBlockSize[NUM_POLYPHONIC_VOICES];
 
 	ClearState isClear[NUM_POLYPHONIC_VOICES];
 };
@@ -499,14 +587,177 @@ public:
 	void renderEnvelopeData(int voiceIndex, int startSample, int numSamples);
     void sendVoiceStartCableValue(Modulator* m, const HiseEvent& e);
 
+	runtime_target::connection getMatrixModulatorConnection() const { return runtimeSource.createConnection(); }
+
 	void handleRetriggeredNote(ModulatorSynthVoice *voice) override
 	{
 		voice->checkRelease();
 		// do nothing here, it should not kill the old voice...
 	}
 
+	void connectToRuntimeTargets(scriptnode::OpaqueNode& on, bool shouldAdd);
+
 
 private:
+
+	int lastBlockSize = 0;
+
+	bool isIdleOrHasAudioLock() const
+	{
+		return LockHelpers::freeToGo(getMainController()) || LockHelpers::isLockedBySameThread(getMainController(), LockHelpers::Type::AudioLock);
+	}
+
+	struct RuntimeSource: public runtime_target::source_base
+	{
+		RuntimeSource(GlobalModulatorContainer& parent_):
+		  parent(parent_),
+		  matrixData(MatrixIds::MatrixData)
+		{
+			deleter.setCallback(matrixData, 
+								{ MatrixIds::SourceIndex, MatrixIds::TargetId }, 
+								valuetree::AsyncMode::Synchronously,
+								BIND_MEMBER_FUNCTION_2(RuntimeSource::onMatrixDisconnect));
+		};
+
+		~RuntimeSource()
+		{
+			matrixData.removeAllChildren(nullptr);
+			clear();
+		}
+
+		virtual int getRuntimeHash() const
+		{
+			return 1;
+		}
+
+		void onMatrixDisconnect(const ValueTree& v, const Identifier& id)
+		{
+			bool shouldDelete = false;
+
+			if(id == MatrixIds::SourceIndex)
+				shouldDelete = (int)v[id] == -1;
+			if(id == MatrixIds::TargetId)
+			{
+				auto tid = v[id].toString();
+				shouldDelete = tid.isEmpty() || tid == "No connection";
+			}
+				
+
+			if(shouldDelete)
+				v.getParent().removeChild(v, parent.getMainController()->getControlUndoManager());
+		}
+
+	    runtime_target::RuntimeTarget getType() const override
+	    {
+		    return runtime_target::RuntimeTarget::GlobalModulator;
+	    }
+
+		runtime_target::connection createConnection() const override
+		{
+			auto c = source_base::createConnection();
+			c.connectFunction = connectStatic<true>;
+	        c.disconnectFunction = connectStatic<false>;
+	        c.sendBackFunction = nullptr;
+			c.sendBackDataFunction = nullptr;
+			return c;
+		}
+
+		void restore(const ValueTree& v, UndoManager* um);
+
+		void clear();
+
+		void updateTargets()
+		{
+			// This should only be called when the processing is suspended...
+			jassert(parent.isIdleOrHasAudioLock());
+
+			currentSignal.sampleRate_cr = parent.getSampleRate() / HISE_CONTROL_RATE_DOWNSAMPLING_FACTOR;
+			currentSignal.numSamples_cr = parent.getLargestBlockSize() / HISE_CONTROL_RATE_DOWNSAMPLING_FACTOR;
+
+			auto modChain = parent.getChildProcessor(ModulatorSynth::InternalChains::GainModulation);
+
+			for(int i = 0; i < modChain->getNumChildProcessors(); i++)
+			{
+				auto mod = modChain->getChildProcessor(i);
+
+				if(auto envelope = dynamic_cast<EnvelopeModulator*>(mod))
+					currentSignal.modValueFunctions[i] = getModFunction(parent.envelopeData, mod);
+				else if (auto tv = dynamic_cast<TimeVariantModulator*>(mod))
+					currentSignal.modValueFunctions[i] = getModFunction(parent.timeVariantData, mod);
+				else if (auto vs = dynamic_cast<VoiceStartModulator*>(mod))
+					currentSignal.modValueFunctions[i] = getModFunction(parent.voiceStartData, mod);
+			}
+
+			for(auto t: connectedTargets)
+				t->onValue(currentSignal);
+		}
+
+		template <typename T> static std::pair<scriptnode::modulation::Host*, scriptnode::modulation::EventData::QueryFunction*> getModFunction(Array<T>& list, Processor* mod)
+		{
+			for(auto& vsd: list)
+			{
+				if(vsd.getModulator() == mod)
+				{
+					auto h = static_cast<scriptnode::modulation::Host*>(&vsd);
+					return { h, T::getModulationSignalStatic };
+					break;
+				}
+			}
+
+			jassertfalse;
+			return { nullptr, nullptr }; 
+		}
+
+		void connectToRuntimeTargets(OpaqueNode& on, bool shouldAdd)
+		{
+			auto c = createConnection();
+			on.connectToRuntimeTarget(shouldAdd, c);
+
+			if(shouldAdd)
+				connectedNodes.addIfNotAlreadyThere(&on);
+			else
+				connectedNodes.removeAllInstancesOf(&on);
+		}
+
+		template <bool Add> static bool connectStatic(runtime_target::source_base* obj, runtime_target::target_base* t)
+	    {
+			auto typed = static_cast<RuntimeSource*>(obj);
+			auto tt = dynamic_cast<runtime_target::typed_target<modulation::SignalSource>*>(t);
+
+			// This should only be called when the processing is suspended...
+			jassert(typed->parent.isIdleOrHasAudioLock());
+
+			if(Add)
+			{
+				if(!typed->connectedTargets.contains(tt))
+				{
+					typed->connectedTargets.insert(tt);
+					tt->onValue(typed->currentSignal);
+					return true;
+				}
+			}
+			else
+			{
+				if(typed->connectedTargets.contains(tt))
+				{
+					typed->connectedTargets.remove(tt);
+					return true;
+				}
+			}
+
+			return false;
+	    }
+
+		ValueTree matrixData;
+
+		valuetree::RecursivePropertyListener deleter;
+
+		hise::UnorderedStack<runtime_target::typed_target<modulation::SignalSource>*> connectedTargets;
+		Array<OpaqueNode*> connectedNodes;
+
+		modulation::SignalSource currentSignal;
+		GlobalModulatorContainer& parent;
+	} runtimeSource;
 
     struct GlobalModulatorCable;
 

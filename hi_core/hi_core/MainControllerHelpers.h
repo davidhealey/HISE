@@ -97,8 +97,8 @@ class RuntimeTargetHolder
 public:
 
 	virtual ~RuntimeTargetHolder() {};
-	virtual void connectRuntimeTargets(MainController* mc) = 0;
-	virtual void disconnectRuntimeTargets(MainController* mc) = 0;
+	virtual void connectRuntimeTargets(Processor* p) = 0;
+	virtual void disconnectRuntimeTargets(Processor* p) = 0;
 };
 
 /** This handles the MIDI automation for the frontend plugin.

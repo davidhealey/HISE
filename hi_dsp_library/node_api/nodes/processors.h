@@ -569,7 +569,11 @@ public:
 
 	}
 
-	
+	void connectToRuntimeTarget(bool add, const runtime_target::connection& c)
+    {
+        if constexpr (prototypes::check::connectToRuntimeTarget<T>::value)
+            obj.connectToRuntimeTarget(add, c);
+    }
 
 	template <int P> void setParameter(double v)
 	{
@@ -1122,6 +1126,12 @@ template <class T, class DataHandler = default_data<T>> struct data : public wra
 		T::template setParameterStatic<P>(&this->obj, v);
 	}
 
+	void connectToRuntimeTarget(bool addConnection, const runtime_target::connection& c)
+	{
+		if constexpr (prototypes::check::connectToRuntimeTarget<T>::value)
+			this->obj.connectToRuntimeTarget(addConnection, c);
+	}
+
 	JUCE_DECLARE_WEAK_REFERENCEABLE(data);
 };
 
@@ -1574,7 +1584,13 @@ template <class ParameterClass, class T> struct mod
             obj.createParameters(data);
         
     }
-    
+
+	void connectToRuntimeTarget(bool add, const runtime_target::connection& c)
+    {
+        if constexpr (prototypes::check::connectToRuntimeTarget<T>::value)
+            obj.connectToRuntimeTarget(add, c);
+    }
+
 	void setExternalData(const ExternalData& d, int index)
 	{
 		if constexpr (prototypes::check::setExternalData<T>::value)
