@@ -1647,6 +1647,9 @@ template <typename T> struct illegal_poly: public scriptnode::data::base,
 	void initialise(NodeBase* n) { obj.initialise(n); }
 
 	void createParameters(ParameterDataList& l) { obj.createParameters(l); }
+
+	SN_DEFAULT_CREATE_MOD_INFO(T);
+
 	T obj;
 };
 
@@ -1685,6 +1688,8 @@ template <class T> struct node : public scriptnode::data::base
 	static constexpr int NumDisplayBuffers = MetadataClass::NumDisplayBuffers;
 
 	static constexpr int getFixChannelAmount() { return NumChannels; };
+
+	static constexpr std::pair<int, int> getModulationProperties() { return T::getModulationProperties(); }
 
 	// We treat everything in this node as opaque...
 	SN_GET_SELF_AS_OBJECT(node);
@@ -1784,6 +1789,11 @@ template <class T> struct node : public scriptnode::data::base
         if constexpr (prototypes::check::connectToRuntimeTarget<T>::value)
             obj.connectToRuntimeTarget(add, c);
     }
+
+	void createExternalModulationInfo(OpaqueNode::ModulationProperties& info) const
+	{
+		info.template fromNode<node>();
+	}
 
 	void createParameters(ParameterDataList& data)
 	{

@@ -58,6 +58,7 @@
 #include "snex_basics/snex_ExternalData.cpp"
 #include "node_api/helpers/Error.cpp"
 #include "node_api/helpers/ParameterData.cpp"
+#include "node_api/helpers/modulation.cpp"
 #include "node_api/nodes/Base.cpp"
 #include "node_api/nodes/OpaqueNode.cpp"
 #include "node_api/nodes/prototypes.cpp"

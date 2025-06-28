@@ -63,7 +63,8 @@ DspNetwork::DspNetwork(hise::ProcessorWithScriptingContent* p, ValueTree data_, 
 #if HISE_INCLUDE_SNEX
 	codeManager(*this),
 #endif
-	parentHolder(dynamic_cast<Holder*>(p))
+	parentHolder(dynamic_cast<Holder*>(p)),
+	dynamicParameterProperties(*this) 
 {
 	jassert(data.getType() == PropertyIds::Network);
 
@@ -93,7 +94,10 @@ DspNetwork::DspNetwork(hise::ProcessorWithScriptingContent* p, ValueTree data_, 
 
     if(!data.hasProperty(PropertyIds::CompileChannelAmount))
         data.setProperty(PropertyIds::CompileChannelAmount, 2, nullptr);
-    
+
+	if(!data.hasProperty(PropertyIds::ModulationBlockSize))
+		data.setProperty(PropertyIds::ModulationBlockSize, 0, nullptr);
+	
 	if (!data.hasProperty(PropertyIds::HasTail))
 		data.setProperty(PropertyIds::HasTail, true, nullptr);
 
@@ -219,6 +223,8 @@ DspNetwork::DspNetwork(hise::ProcessorWithScriptingContent* p, ValueTree data_, 
 	checkIfDeprecated();
 
 	runPostInitFunctions();
+
+	dynamicParameterProperties.init();
 }
 
 DspNetwork::~DspNetwork()
@@ -536,7 +542,6 @@ void DspNetwork::process(AudioSampleBuffer& b, HiseEventBuffer* e)
 {
 	ProcessDataDyn d(b.getArrayOfWritePointers(), b.getNumSamples(), b.getNumChannels());
 	d.setEventBuffer(*e);
-
 	process(d);
 }
 
@@ -588,6 +593,8 @@ void DspNetwork::prepareToPlay(double sampleRate, double blockSize)
 	if (sampleRate > 0.0)
 	{
 		SimpleReadWriteLock::ScopedWriteLock sl(getConnectionLock(), isInitialised());
+
+		blockSize = dynamicParameterProperties.data.getBlockSize(blockSize);
 
 		try
 		{
@@ -2285,6 +2292,80 @@ bool ScriptnodeExceptionHandler::autofixInternal(NodeBase* n, Error::ErrorCode c
 	}
 
 	return false;
+}
+
+void DspNetwork::DynamicParameterModulationProperties::refreshProcessSpecs()
+{
+	auto sp = parent.getCurrentSpecs();
+
+	if(!sp)
+		return;
+
+	auto fullBlockSize = dynamic_cast<Processor*>(parent.getScriptProcessor())->getLargestBlockSize();
+	sp.blockSize = data.getBlockSize(fullBlockSize);
+	parent.prepareToPlay(sp.sampleRate, sp.blockSize);
+}
+
+void DspNetwork::DynamicParameterModulationProperties::refreshConnections()
+{
+	auto anyWasConnected = data.isAnyConnected();
+
+	SimpleReadWriteLock::ScopedWriteLock sl(parent.getConnectionLock(), parent.isInitialised());
+	data.fromValueTree(parent.data);
+
+	if(data.isAnyConnected() != anyWasConnected)
+	{
+		refreshProcessSpecs();
+	}
+
+	if(auto extra = parent.getParentHolder()->getExtraModulationHandler())
+	{
+		auto f = [this](int pIndex)
+		{
+			ModulatorChain::ExtraModulatorRuntimeTargetSource::ParameterInitData pd;
+
+			auto pTree = parent.getRootNode()->getParameterTree().getChild(pIndex);
+			pd.ir = RangeHelpers::getDoubleRange(pTree);
+			pd.vtc = ValueToTextConverter::createForMode(pTree[PropertyIds::TextToValueConverter].toString());
+			pd.initValue = (float)pTree[PropertyIds::Value];
+
+			return pd;
+		};
+
+		extra->updateModulationProperties(data, f);
+	}
+}
+
+void DspNetwork::DynamicParameterModulationProperties::init()
+{
+	propertyListener.setCallback(parent.data, { PropertyIds::ExternalModulation }, valuetree::AsyncMode::Synchronously, 
+	[this](const ValueTree& v, const Identifier& id)
+	{
+		refreshConnections();
+	});
+
+	refreshConnections();
+
+	blockSizeListener.setCallback(parent.data, { PropertyIds::ModulationBlockSize}, valuetree::AsyncMode::Synchronously, 
+		[this](const Identifier&, const var& newValue)
+	{
+		{
+			SimpleReadWriteLock::ScopedWriteLock sl(parent.getConnectionLock(), parent.isInitialised());
+			data.fromValueTree(parent.data);
+		}
+
+		refreshProcessSpecs();
+	});
+
+	connectionListener.setTypeToWatch(PropertyIds::Connections);
+	connectionListener.setCallback(parent.getRootNode()->getParameterTree(), valuetree::AsyncMode::Synchronously,
+	[this](const ValueTree& v, bool wasAdded)
+	{
+		if(v.getType() == PropertyIds::Connection)
+		{
+			refreshConnections();
+		}
+	});
 }
 
 DspNetwork::AnonymousNodeCloner::AnonymousNodeCloner(DspNetwork& p, NodeBase::Holder* other):

@@ -213,6 +213,8 @@ public:
 
 		void setVoiceKillerToUse(snex::Types::VoiceResetter* vk_);
 
+		virtual ModulatorChain::ExtraModulatorRuntimeTargetSource* getExtraModulationHandler() { return nullptr; }
+
 		SimpleReadWriteLock& getNetworkLock();
 
 		DspNetwork* getDebuggedNetwork();;
@@ -714,9 +716,28 @@ public:
     
 	String getNonExistentId(String id, StringArray& usedIds) const;
 
-	
+	const modulation::ParameterProperties& getParameterProperties() const noexcept { return dynamicParameterProperties.data; }
 
 private:
+
+	struct DynamicParameterModulationProperties
+	{
+		DynamicParameterModulationProperties(DspNetwork& parent_):
+		  parent(parent_)
+		{}
+
+		void init();
+
+		void refreshConnections();
+
+		void refreshProcessSpecs();
+
+		DspNetwork& parent;
+		scriptnode::modulation::ParameterProperties data;
+		valuetree::RecursivePropertyListener propertyListener;
+		valuetree::PropertyListener blockSizeListener;
+		valuetree::RecursiveTypedChildListener connectionListener;
+	} dynamicParameterProperties;
 
 	String initialId;
 

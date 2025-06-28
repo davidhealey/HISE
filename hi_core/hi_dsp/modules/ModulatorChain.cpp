@@ -293,6 +293,101 @@ ModulationDisplayValue ModulatorChain::SpecialQueryFunctions::PitchModulation::g
 	return mv;
 }
 
+ModulationDisplayValue ModulatorChain::getModulationDisplayValue(double pValue, NormalisableRange<double> nr) const
+{
+	auto normValue = nr.convertTo0to1(pValue);
+
+	ModulationDisplayValue mv;
+
+	mv.normalisedValue = normValue;
+	mv.modulationActive = shouldBeProcessedAtAll();
+
+	if(mv.modulationActive)
+	{
+		switch(getMode())
+		{
+		case Modulation::GainMode:
+		case Modulation::GlobalMode:
+		{
+			mv.scaledValue = getOutputValue();
+
+			ModIterator<Modulator> iter(this);
+
+			auto maxValue = normValue;
+			auto minValue = normValue;
+
+			while(auto m = iter.next())
+			{
+				auto iv = (double)dynamic_cast<Modulation*>(m)->getIntensity();
+				minValue = jmin(minValue, (1.0 - iv) * maxValue);
+			}
+
+			mv.modulationRange = { minValue, maxValue };
+			break;
+		}
+		case Modulation::PitchMode:
+		{
+			// Use SpecialQueryFunction::PitchModulation instead...
+			jassertfalse;
+			break;
+		}
+		case Modulation::PanMode:
+		case Modulation::OffsetMode:
+		{
+			mv.scaledValue = getOutputValue();
+
+			ModIterator<Modulator> iter(this);
+
+			auto maxValue = normValue;
+			auto minValue = normValue;
+
+			while(auto m = iter.next())
+			{
+				auto iv = (double)dynamic_cast<Modulation*>(m)->getIntensity();
+
+				maxValue += iv;
+
+				if(dynamic_cast<Modulation*>(m)->isBipolar())
+					minValue -= iv;
+
+				if(minValue > maxValue)
+					std::swap(minValue, maxValue);
+			}
+
+			mv.modulationRange = { minValue, maxValue };
+			mv.clipTo0To1();
+
+			break;
+		}
+			
+			
+		case Modulation::Mode::CombinedMode:
+		{
+			auto rv = getCombinedOutputValues();
+			auto x = rv.first;
+
+			mv.scaledValue = jlimit(0.0, 1.0, (double)x.first);
+			mv.addValue = jlimit(0.0, 1.0, mv.scaledValue + x.second) - mv.scaledValue;
+
+			double l = mv.scaledValue;
+			double u = normValue;
+
+			u += mv.addValue;
+
+			if(isBipolar())
+				l -= mv.addValue;
+
+			mv.modulationRange = rv.second;
+			break;
+		}
+		default:
+			break;
+		}
+	}
+
+	return mv;
+}
+
 const Chain::Handler* ModulatorChain::getHandler() const
 {return &handler;}
 
@@ -1587,8 +1682,15 @@ void ModulatorChain::setMode(Mode newMode, NotificationType n)
     {
         Modulation::setMode(newMode, n);
 
-		if(newMode != Modulation::Mode::CombinedMode)
+		if(newMode == Modulation::Mode::CombinedMode)
 		{
+			// make sure that it creates the addBufferData object
+			if(getSampleRate() > 0.0)
+				prepareToPlay(getSampleRate(), getLargestBlockSize());
+		}
+		else
+		{
+			// set all child modulators to the mode
 			for(auto m: allModulators)
 				dynamic_cast<Modulation*>(m)->setMode(newMode, n);
 		}
@@ -1923,6 +2025,90 @@ void ModulatorChain::RuntimeTargetSource::copyModulationValues(const float* modV
 	else
 		FloatVectorOperations::fill(signalData.getWritePointer(0, startSample_cr), constantValue, numSamples_cr);
 }
+
+int ModulatorChain::ExtraModulatorRuntimeTargetSource::getRuntimeHash() const
+{ return scriptnode::modulation::config::CustomOffset; }
+
+runtime_target::RuntimeTarget ModulatorChain::ExtraModulatorRuntimeTargetSource::getType() const
+{ return runtime_target::RuntimeTarget::ExternalModulatorChain; }
+
+runtime_target::connection ModulatorChain::ExtraModulatorRuntimeTargetSource::createConnection() const
+{
+	auto c = source_base::createConnection();
+	c.connectFunction = connectStatic<true>;
+	c.disconnectFunction = connectStatic<false>;
+	return c;
+}
+
+void ModulatorChain::ExtraModulatorRuntimeTargetSource::init(Collection& modChains, int offset)
+{
+	for(int i = offset; i < modChains.size(); i++)
+	{
+		auto& mb = modChains[i];
+		mb.setAllowModificationOfVoiceValues(true);
+		mb.setExpandToAudioRate(false);
+		mb.setIncludeMonophonicValuesInVoiceRendering(true);
+		mb.setClampTo0To1(true);
+		mb.setForceProcessing(true);
+
+		extraMods.add(&mb);
+	}
+}
+
+void ModulatorChain::ExtraModulatorRuntimeTargetSource::connectToRuntimeTarget(scriptnode::OpaqueNode& on,
+	bool shouldAdd)
+{
+	auto c = createConnection();
+	on.connectToRuntimeTarget(shouldAdd, c);
+}
+
+ModulationDisplayValue::QueryFunction::Ptr ModulatorChain::ExtraModulatorRuntimeTargetSource::
+getModulationQueryFunction(const ParameterProperties& pp, int parameterIndex) const
+{
+	auto mi = pp.getModulationChainIndex(parameterIndex);
+
+	if(isPositiveAndBelow(mi, extraMods.size()))
+	{
+		auto mc = extraMods[mi]->getChain();
+		return new ModulatorChain::SelfQueryFunction(mc);
+	}
+
+	return nullptr;
+}
+
+
+
+
+bool ModulatorChain::ExtraModulatorRuntimeTargetSource::addConnection(bool shouldBeAdded, TargetType* target)
+{
+	if(extraMods.isEmpty())
+		return false;
+
+	scriptnode::modulation::SignalSource signal;
+
+	auto& first = extraMods.getFirst()->getChain()->runtimeTargetSource;
+
+	if(shouldBeAdded)
+	{
+		signal.sampleRate_cr = first.parent.getSampleRate() / HISE_CONTROL_RATE_DOWNSAMPLING_FACTOR;
+		signal.numSamples_cr = first.parent.getLargestBlockSize() / HISE_CONTROL_RATE_DOWNSAMPLING_FACTOR;
+
+		for(int i = 0; i < extraMods.size(); i++)
+		{
+			auto rt = &extraMods[i]->getChain()->runtimeTargetSource;
+			signal.modValueFunctions[i] = { rt, RuntimeTargetSource::getEventData };
+		}
+	}
+
+	for(auto mc: extraMods)
+		mc->getChain()->runtimeTargetSource.handleConnection(shouldBeAdded, signal.numSamples_cr);
+
+	target->onValue(signal);
+	return true;
+}
+
+
+
 
 bool ModulatorChain::onIntensityDrag(bool isMouseDown, float delta)
 {

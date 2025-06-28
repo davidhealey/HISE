@@ -91,22 +91,7 @@ struct EventData
 	 * - if the modulation signal is constant: Types::ID::Float with the constant value
 	 * - if the modulation signal is dynamic: Types::ID::Block with the modulation signal reference
 	 */
-	VariableStorage getReadPointer() const
-	{
-		if(type == SourceType::Disabled)
-			return {};
-
-		if(thisBlockSize != nullptr)
-		{
-			if(auto num = *thisBlockSize)
-			{
-				if(signal != nullptr)
-					return block((float*)signal, num);
-			}
-		}
-		
-		return VariableStorage(constantValue);
-	}
+	VariableStorage getReadPointer() const;
 
 	SourceType    type          = SourceType::Disabled; // defines the source type of modulation
 	const float*  signal        = nullptr;              // a pointer to the start of the modulation signal
@@ -150,58 +135,10 @@ struct SignalSource
  */
 struct ParameterProperties
 {
-	static StringArray getModulationModeNames()
-	{
-		return {
-		"Disabled",
-		"Combined",
-		"Gain",
-		"Offset",	
-		"Pan", 
-		"Disabled"
-		};
-	}
+	static StringArray getModulationModeNames();
+	static ParameterMode getModeFromVar(const var& value);
 
-	ParameterProperties()
-	{
-		reset();
-	}
-
-	void reset()
-	{
-		for(auto& m: modulationModes)
-			m = ParameterMode::Disabled;
-
-		anyConnected = false;
-
-		for(auto& i: modulationConnectState)
-			i = 0;
-
-		for(auto& i: modulationToParameter)
-			i = -1;
-
-		for(auto& i: parameterToModulation)
-			i = -1;
-
-		numUsedModulationSlots = 0;
-	}
-
-	void setModulationMode(int parameterIndex, ParameterMode m, bool isConnected)
-	{
-		if(isPositiveAndBelow(parameterIndex, NumMaxModulationSources))
-		{
-			modulationModes[parameterIndex] = m;
-
-			if(m != ParameterMode::Disabled)
-			{
-				parameterToModulation[parameterIndex] = numUsedModulationSlots;
-				modulationToParameter[numUsedModulationSlots] = parameterIndex;
-				modulationConnectState[numUsedModulationSlots] = isConnected ? 1 : 0;
-				anyConnected |= isConnected;
-				numUsedModulationSlots++;
-			}
-		}
-	}
+	ParameterProperties();
 
 	template <typename NodeClass> void fromNode()
 	{
@@ -217,122 +154,59 @@ struct ParameterProperties
 		readFromStream(mis);
 	}
 
-	void fromValueTree(const ValueTree& v)
-	{
-		jassert(v.getType() == PropertyIds::Network);
-		modulationBlocksize = (int)v.getProperty(PropertyIds::ModulationBlockSize, 0);
+	// Clears the state of this object. */
+	void reset();
 
-		if(modulationBlocksize != 0)
-			modulationBlocksize = jlimit(8, 1024, nextPowerOfTwo(modulationBlocksize));
-
-		reset();
-
-		auto pTree = v.getChildWithName(PropertyIds::Node).getChildWithName(PropertyIds::Parameters);
-
-		jassert(pTree.isValid());
-
-		for(auto c: pTree)
-		{
-			auto idx = pTree.indexOf(c);
-			auto n = c[PropertyIds::ExternalModulation];
-
-			auto isConnected = c.getChildWithName(PropertyIds::Connections).getNumChildren() > 0;
-
-			setModulationMode(idx, getModeFromVar(n), isConnected);
-		}
-	}
-
-	static ParameterMode getModeFromVar(const var& value)
-	{
-		auto n = value.toString();
-		auto mi = getModulationModeNames().indexOf(n);
-		return mi != -1 ? (ParameterMode)mi : ParameterMode::Disabled;
-	}
-
-	bool isUsed(int modulationIndex) const
-	{
-		if(modulationIndex == -1)
-			return false;
-
-		return modulationToParameter[modulationIndex] != -1;
-	}
+	void fromValueTree(const ValueTree& v);
+	bool isUsed(int modulationIndex) const;
 
 	/** Checks whether the slot is used and the parameter is connected to something
 	 *
 	 *  (Note that a parameter can still be used but not be connected if it is controlling
 	 *	a modulation chain with a `extra_mod` connection.
 	 */
-	bool isConnected(int modulationIndex) const
-	{
-		if(anyConnected && isPositiveAndBelow(modulationIndex, numUsedModulationSlots))
-			return (bool)modulationConnectState[modulationIndex] && isUsed(modulationIndex);
-
-		return false;
-	}
+	bool isConnected(int modulationIndex) const;
 
 	/** Returns the block size that should be used for chunking.
 	 *
 	 *  - if nothing is connected, the full block size will be used
 	 *	- if the modulationBlockSize is zero, the full block size will be used.
 	 */
-	int getBlockSize(int fullBlocksize) const
+	int getBlockSize(int fullBlocksize) const;
+
+	
+	void writeToStream(OutputStream& output) const;
+	
+	int getParameterIndex(int modulationIndex) const;
+	int getModulationChainIndex(int parameterIndex) const;
+
+	int getNumUsed(int maxNumber) const noexcept
 	{
-		return (modulationBlocksize == 0 || !anyConnected) ? fullBlocksize : jmin(fullBlocksize, modulationBlocksize);
+		return jmin(maxNumber, (int)numUsedModulationSlots);
 	}
 
-	void setNumUsedSlots(int& numTotalSlots) const
+	bool isAnyConnected() const noexcept { return anyConnected; }
+
+	ParameterMode getParameterMode(int parameterIndex) const noexcept
 	{
-		if(numUsedModulationSlots != -1)
-			numTotalSlots = jmin(numTotalSlots, (int)numUsedModulationSlots);
+		return modulationModes[parameterIndex];
 	}
 
-	void writeToStream(OutputStream& output)
-	{
-		output.writeByte(58);
-		output.writeCompressedInt(modulationBlocksize);
-		static_assert(sizeof(std::array<ParameterMode, NumMaxModulationSources>) == 16, "not 16 byte");
-		output.write(modulationModes.data(), 16);
-		output.write(modulationConnectState.data(), 16);
-	}
+private:
 
-	void readFromStream(InputStream& input) 
-	{
-		auto ok = input.readByte();
+	friend class ParameterPropertiesTest;
 
-		if(ok == 58)
-		{
-			modulationBlocksize = input.readCompressedInt();
-			ParameterMode modes[NumMaxModulationSources];
-			input.read(modes, 16);
-			char bf[NumMaxModulationSources];
-			input.read(bf, 16);
-			
-			for(int i = 0; i < 16; i++)
-				setModulationMode(i, modes[i], bf[i] == 1);
-		}
-	}
+	
 
-	int getParameterIndex(int modulationIndex) const
-	{
-		if(modulationIndex == -1 || numUsedModulationSlots == 0)
-			return -1;
+	
 
-		auto pIndex = (int)modulationToParameter[modulationIndex];
-		jassert(pIndex != -1);
-		jassert(modulationIndex == (int)parameterToModulation[pIndex]);
-		return pIndex;
-	}
+	/** Sets the connected flag for the given parameterIndex. */
+	void setConnected(int parameterIndex, bool isConnected);
 
-	int getModulationChainIndex(int parameterIndex) const
-	{
-		if(parameterIndex == -1 || numUsedModulationSlots == 0)
-			return -1;
 
-		auto mIndex = (int)parameterToModulation[parameterIndex];
-		jassert(mIndex != -1);
-		jassert(parameterIndex == (int)modulationToParameter[mIndex]);
-		return mIndex;
-	}
+	void setModulationMode(int parameterIndex, ParameterMode m);
+
+	void readFromStream(InputStream& input);
 
 	std::array<ParameterMode, NumMaxModulationSources> modulationModes;
 	std::array<char, NumMaxModulationSources> parameterToModulation;    
@@ -360,6 +234,8 @@ using GainIndexer = runtime_target::indexers::fix_hash<GainModulation>;
 /** A index type that allows dynamic changing of the modulation properties. */
 template <bool EnableBuffer> struct dynamic_internal
 {
+	~dynamic_internal() = default;
+
 	static constexpr bool shouldEnableDisplayBuffer() { return EnableBuffer; }
 	static constexpr bool isNormalisedModulation() { return true; }
 	bool shouldProcessSignal() const { return processSignal; }
@@ -369,6 +245,9 @@ template <bool EnableBuffer> struct dynamic_internal
 
 	void setProcessSignal(bool shouldProcess) { processSignal = shouldProcess; }
 	void setMode(TargetMode m) { mode = m; }
+
+	SN_EMPTY_INITIALISE;
+	SN_EMPTY_PREPARE;
 
 	bool processSignal = false;
 	TargetMode mode = TargetMode::Gain;
@@ -380,11 +259,17 @@ using dynamic_with_display = dynamic_internal<true>;
 /** A special index type for the extra modulators. */
 template <bool EnableBuffer> struct extra_config_internal
 {
+	virtual ~extra_config_internal() = default;
+
 	static constexpr bool shouldEnableDisplayBuffer() { return EnableBuffer; }
 	static constexpr bool isNormalisedModulation() { return true; }
 	static constexpr TargetMode getMode() { return TargetMode::Raw; };
 	static constexpr bool useMidPositionAsZero() { return false; }
 	static constexpr void setUseMidPositionAsZero(bool) {}
+
+	// overriden by a scriptnode config class that validates MIDI processing
+	virtual SN_EMPTY_PREPARE; 
+	virtual SN_EMPTY_INITIALISE;
 
 	void setProcessSignal(bool shouldProcess) { processSignal = shouldProcess; };
 	bool shouldProcessSignal() const { return processSignal; }
@@ -405,6 +290,9 @@ template <bool EnableBuffer> struct pitch_config_internal
 	static constexpr bool useMidPositionAsZero() { return true; }
 	static constexpr void setUseMidPositionAsZero(bool) {}
 
+	SN_EMPTY_PREPARE;
+	SN_EMPTY_INITIALISE;
+
 	void setProcessSignal(bool shouldProcess) { processSignal = shouldProcess; };
 	bool shouldProcessSignal() const { return processSignal; }
 
@@ -415,7 +303,7 @@ using pitch_config = pitch_config_internal<false>;
 using pitch_config_with_display = pitch_config_internal<true>;
 
 /** This is used by the C++ code creator if the modulation properties are static. */
-template <bool UseProcess, TargetMode Mode, bool EnableDisplayBuffer> struct constant
+template <bool UseProcess, TargetMode Mode, bool EnableDisplayBuffer=false> struct constant
 {
 	static constexpr bool shouldEnableDisplayBuffer() { return EnableDisplayBuffer; }
 	static constexpr bool isNormalisedModulation() { return true; }
@@ -423,6 +311,9 @@ template <bool UseProcess, TargetMode Mode, bool EnableDisplayBuffer> struct con
 	static constexpr TargetMode getMode() { return Mode; };
 	static constexpr bool useMidPositionAsZero() { return false; }
 	static constexpr void setUseMidPositionAsZero(bool) {}
+
+	SN_EMPTY_PREPARE;
+	SN_EMPTY_INITIALISE;
 
 	void setProcessSignal(bool) {};
 	void setMode(TargetMode m) {};

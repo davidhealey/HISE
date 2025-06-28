@@ -351,59 +351,7 @@ public:
 		};
 	};
 
-	ModulationDisplayValue getModulationDisplayValue(double pValue, NormalisableRange<double> nr) const
-	{
-		auto normValue = nr.convertTo0to1(pValue);
-
-		ModulationDisplayValue mv;
-
-		mv.normalisedValue = normValue;
-		mv.modulationActive = shouldBeProcessedAtAll();
-
-		if(mv.modulationActive)
-		{
-			switch(getMode())
-			{
-			case Modulation::GainMode:
-			case Modulation::GlobalMode:
-				mv.scaledValue = getOutputValue();
-				break;
-			case Modulation::PitchMode:
-			{
-				// Use SpecialQueryFunction::PitchModulation instead...
-				jassertfalse;
-				break;
-			}
-			case Modulation::PanMode:
-			case Modulation::OffsetMode:
-				mv.addValue = getOutputValue();
-				break;
-			case Modulation::Mode::CombinedMode:
-			{
-				auto rv = getCombinedOutputValues();
-				auto x = rv.first;
-
-				mv.scaledValue = jlimit(0.0, 1.0, (double)x.first);
-				mv.addValue = jlimit(0.0, 1.0, mv.scaledValue + x.second) - mv.scaledValue;
-
-				double l = mv.scaledValue;
-				double u = normValue;
-
-				u += mv.addValue;
-
-				if(isBipolar())
-					l -= mv.addValue;
-
-				mv.modulationRange = rv.second;
-				break;
-			}
-			default:
-				break;
-			}
-		}
-
-		return mv;
-	}
+	ModulationDisplayValue getModulationDisplayValue(double pValue, NormalisableRange<double> nr) const;
 
 	/* Use this with HiSlider::setIsUsingModulatedRing(). */
     template <int P > struct GetModulationOutput: public ModulationDisplayValue::QueryFunction
@@ -680,6 +628,8 @@ public:
 		on.connectToRuntimeTarget(shouldAdd, c);
 	}
 
+	
+	/* Provides a modulation source for a single modulation chain. */
 	struct RuntimeTargetSource: public scriptnode::modulation::Host,
 							    public runtime_target::source_base
     {
@@ -714,15 +664,10 @@ public:
 			return d;
 		}
 
-		bool addConnection(bool shouldBeAdded, TargetType* target)
+		void handleConnection(bool shouldBeAdded, int numSamples)
 		{
-			scriptnode::modulation::SignalSource signal;
-
 			if(shouldBeAdded)
 			{
-				signal.sampleRate_cr = parent.getSampleRate() / HISE_CONTROL_RATE_DOWNSAMPLING_FACTOR;
-				signal.numSamples_cr = parent.getLargestBlockSize() / HISE_CONTROL_RATE_DOWNSAMPLING_FACTOR;
-				signal.modValueFunctions[0] = { this, getEventData };
 				numConnections++;
 			}
 			else
@@ -732,7 +677,7 @@ public:
 
 			if(numConnections > 0)
 			{
-				ProcessorHelpers::increaseBufferIfNeeded(signalData, signal.numSamples_cr);
+				ProcessorHelpers::increaseBufferIfNeeded(signalData, numSamples);
 				thisBlockSize = signalData.getNumSamples();
 			}
 			else
@@ -740,6 +685,20 @@ public:
 				signalData = AudioSampleBuffer(1, 0);
 				thisBlockSize = 0;
 			}
+		}
+
+		bool addConnection(bool shouldBeAdded, TargetType* target)
+		{
+			scriptnode::modulation::SignalSource signal;
+
+			if(shouldBeAdded)
+			{
+				signal.sampleRate_cr = parent.getSampleRate() / HISE_CONTROL_RATE_DOWNSAMPLING_FACTOR;
+				signal.numSamples_cr = parent.getLargestBlockSize() / HISE_CONTROL_RATE_DOWNSAMPLING_FACTOR;
+				signal.modValueFunctions[0] = { this, getEventData };
+			}
+
+			handleConnection(shouldBeAdded, signal.numSamples_cr);
 
 			target->onValue(signal);
 			return true;
@@ -766,6 +725,205 @@ public:
 		int numConnections = 0;
 
     } runtimeTargetSource;
+
+	/** Provides multiple modulation sources for the extra_mod. */
+	struct ExtraModulatorRuntimeTargetSource: public scriptnode::modulation::Host,
+											  public runtime_target::source_base
+	{
+		using TargetType = runtime_target::typed_target<scriptnode::modulation::SignalSource>;
+		using EventData = scriptnode::modulation::EventData;
+		using ParameterProperties = scriptnode::modulation::ParameterProperties;
+
+		ExtraModulatorRuntimeTargetSource() = default;
+
+		int getRuntimeHash() const override;
+		runtime_target::RuntimeTarget getType() const override;
+
+		runtime_target::connection createConnection() const override;
+
+		template <bool Add> static bool connectStatic(runtime_target::source_base* host, runtime_target::target_base* target)
+		{
+			auto rt = static_cast<ExtraModulatorRuntimeTargetSource*>(host);
+			auto tt = dynamic_cast<TargetType*>(target);
+			return rt->addConnection(Add, tt);
+		}
+
+		template <typename T> struct RenderData
+		{
+			RenderData(T& obj_, const ParameterProperties& pp_, HiseEventBuffer* eventBuffer, float** data_, int numChannels, int startSample, int numSamples):
+			    obj(obj_),
+				pd(data, numSamples, numChannels),
+				pp(pp_),
+				startOffset(startSample)
+			{
+				if(eventBuffer != nullptr)
+					pd.setEventBuffer(*eventBuffer);
+
+				for(int i = 0; i < numChannels; i++)
+					data[i] = data_[i] + startSample;
+			}
+
+			float* data[NUM_MAX_CHANNELS];
+			ProcessDataDyn pd;
+
+			void handleModulation(int pIndex, double mv) const
+			{
+				if constexpr (std::is_same<T, scriptnode::OpaqueNode>())
+				{
+					auto p = obj.getParameter(pIndex);
+					auto r = p->toRange();
+					auto value = r.convertFrom0to1(mv, false);
+					p->callback.call((double)value);
+				}
+				if constexpr (std::is_same<T, scriptnode::NodeBase>())
+				{
+					auto p = obj.getParameterFromIndex(pIndex)->getDynamicParameter();
+					auto r = p->getRange();
+					auto value = r.convertFrom0to1(mv, false);
+					p->call(value);
+				}
+			}
+
+			void process(ProcessDataDyn& data)
+			{
+				obj.process(data);
+			}
+
+			T& obj;
+
+			const ParameterProperties& pp;
+			const int startOffset;
+		};
+
+		/** Call this with the mod collection in your processors constructor after finalizing the modchains. */
+		void init(Collection& modChains, int offset=0);
+
+		/** Use this function in the Processor::connectToRuntimeTargets function. */
+		void connectToRuntimeTarget(scriptnode::OpaqueNode& on, bool shouldAdd);
+
+		/** Plug this in the Processor::getModulationQueryFunction function. */
+		ModulationDisplayValue::QueryFunction::Ptr getModulationQueryFunction(const ParameterProperties& pp, int parameterIndex) const;
+
+		/** Use this function to process the audio buffer and it will process all modulation chains and chunk
+		 *  the data according to the given modulation block size. */
+		template <typename RD> void processChunkedWithModulation(RD& rd)
+		{
+			auto thisBlockSize = rd.pp.getBlockSize(rd.pd.getNumSamples());
+
+			int startSample = rd.startOffset;
+
+
+			if(thisBlockSize == rd.pd.getNumSamples())
+			{
+				handleModulation(rd, startSample);
+				rd.process(rd.pd);
+			}
+			else
+			{
+				ChunkableProcessData<ProcessDataDyn, true> cd(rd.pd);
+						
+				while(auto numLeft = cd.getNumLeft())
+				{
+					auto numThisTime = jmin(numLeft, thisBlockSize);
+					auto chunk = cd.getChunk(numThisTime);
+
+					handleModulation(rd, startSample);
+
+					rd.process(chunk.toData());
+					startSample += numThisTime;
+				}
+			}
+		}
+
+		struct ParameterInitData
+		{
+			using QueryFunction = std::function<ParameterInitData(int)>;
+
+			float initValue;
+			scriptnode::InvertableParameterRange ir;
+			ValueToTextConverter vtc;
+		};
+
+		void updateModulationProperties(const ParameterProperties& pp, const ParameterInitData::QueryFunction& pf)
+		{
+			int idx = 0;
+
+			for(auto& mb: extraMods)
+			{
+				auto isUsed = pp.isUsed(idx);
+
+				mb->getChain()->setBypassed(!isUsed);
+				mb->setForceProcessing(isUsed);
+
+				if(isUsed)
+				{
+					auto parameterIndex = pp.getParameterIndex(idx);
+
+					if(parameterIndex != -1)
+					{
+						auto mode = Modulation::getModeFromModProperties(pp, parameterIndex);
+
+						auto zp = mode == Modulation::Mode::PanMode ? 0.5f : 0.0f;
+						mb->getChain()->setZeroPosition(zp);
+						mb->getChain()->setMode(Modulation::Mode::CombinedMode, sendNotificationAsync);
+
+						auto pd = pf(parameterIndex);
+
+						auto initialValue = pd.ir.convertTo0to1(pd.initValue, false);
+						mb->getChain()->setInitialValue(initialValue);
+
+						mb->getChain()->setTableValueConverter([pd](float v)
+						{
+							v = pd.ir.convertFrom0to1(v, false);
+
+							if(pd.vtc.active)
+								return pd.vtc.getTextForValue(v);
+							else
+								return String(v);
+						});
+					}
+				}
+
+				idx++;
+			}
+
+		}
+
+		ModulatorChain* getModulatorChain(int modulatorIndex) const
+		{
+			if(isPositiveAndBelow(modulatorIndex, extraMods.size()))
+			{
+				return extraMods[modulatorIndex]->getChain();
+			}
+
+			return nullptr;
+		}
+
+	private:
+
+		template <typename RD> void handleModulation(const RD& rd, int startSample)
+		{
+			if(!rd.pp.isAnyConnected())
+				return;
+
+			int numParametersToModulate = rd.pp.getNumUsed(extraMods.size());
+
+			for(int mi = 0; mi < numParametersToModulate; mi++)
+			{
+				if(rd.pp.isConnected(mi))
+				{
+					auto mv = extraMods[mi]->getOneModulationValue(startSample);
+					auto pIndex = rd.pp.getParameterIndex(mi);
+					jassert(pIndex != -1);
+					rd.handleModulation(pIndex, mv);
+				}
+			}
+		}
+
+		bool addConnection(bool shouldBeAdded, TargetType* target);
+
+		Array<ModChainWithBuffer*> extraMods;
+	};
 
 	bool onIntensityDrag(bool isMouseDown, float delta);
 

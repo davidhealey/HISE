@@ -2186,7 +2186,6 @@ bool ModulatorSynthVoice::isTailingOff() const
 void ModulatorSynthVoice::prepareToPlay(double sampleRate, int samplesPerBlock)
 {
 	SynthesiserVoice::setCurrentPlaybackSampleRate(sampleRate);
-
 	ProcessorHelpers::increaseBufferIfNeeded(voiceBuffer, samplesPerBlock);
 }
 
@@ -2579,6 +2578,7 @@ void ModulatorSynthChainFactoryType::fillTypeNameList()
 	ADD_NAME_TO_TYPELIST(MacroModulationSource);
 	ADD_NAME_TO_TYPELIST(SendContainer);
 	ADD_NAME_TO_TYPELIST(SilentSynth);
+	ADD_NAME_TO_TYPELIST(HardcodedSynthesiser);
 }
 
 
@@ -2602,6 +2602,7 @@ Processor* ModulatorSynthChainFactoryType::createProcessor	(int typeIndex, const
 	case macroModulationSource: return new MacroModulationSource(m, id, numVoices);
 	case sendContainer:			return new SendContainer(m, id);
 	case silentSynth:			return new SilentSynth(m, id, numVoices);
+	case hardcodedSynth:		return new HardcodedSynthesiser(m, id, numVoices);
 	default:					jassertfalse; return nullptr;
 	}
 };

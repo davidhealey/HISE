@@ -81,7 +81,10 @@ public:
 		Incompatible
 	};
 
-	SN_EMPTY_INITIALISE;
+	void initialise(NodeBase* n)
+	{
+		config.initialise(n);
+	}
 	
 	void onConnectionChange() override {}
 
@@ -103,6 +106,8 @@ public:
 
 	void prepare(snex::Types::PrepareSpecs ps) override
 	{
+		config.prepare(ps);
+
 		lastSpecs = ps;
 		checkSignalRatio();
 
@@ -998,6 +1003,9 @@ private:
 		static constexpr bool shouldProcessSignal() { return true; }
 		bool useMidPositionAsZero() const { return false; }
 		void setUseMidPositionAsZero(bool ) {}
+
+		SN_EMPTY_PREPARE;
+		SN_EMPTY_INITIALISE;
 	};
 
 	global_mod<NV, MIndex, internal_config<modulation::TargetMode::Raw>> sourceMod;

@@ -521,29 +521,18 @@ Node::Ptr ValueTreeBuilder::parseRuntimeTargetNode(Node::Ptr u)
 			auto cid = getNodeId(u->nodeTree).getIdentifier().toString();
 			cid << "_config";
 
-			auto modeParameter = u->nodeTree.getChildWithName(PropertyIds::Parameters).getChildWithProperty(PropertyIds::ID, "Mode");
-			auto processParameter = u->nodeTree.getChildWithName(PropertyIds::Parameters).getChildWithProperty(PropertyIds::ID, "ProcessSignal");
-
-			auto dynamicMode = (bool)modeParameter[PropertyIds::Automated];
-			auto dynamicProcess = (bool)processParameter[PropertyIds::Automated];
-
-			auto mustBeDynamic = false;
-			mustBeDynamic = dynamicMode || dynamicProcess;
+			auto config = ValueTreeIterator::getTargetModeForModConfig(u->nodeTree);
 
 			auto d = NamespacedIdentifier::fromString("modulation::config::dynamic");
 			auto c = NamespacedIdentifier::fromString("modulation::config::constant");
 			
+			UsingTemplate configClass(*this, cid, config.isConstant ? c : d);
 
-			UsingTemplate configClass(*this, cid, mustBeDynamic ? d : c);
-
-			if(!mustBeDynamic)
+			if(config.isConstant)
 			{
-				auto shouldProcess = (bool)processParameter[PropertyIds::Value];
-				auto modeIndex = (modulation::TargetMode)(int)modeParameter[PropertyIds::Value];
+				configClass << String(config.config.shouldProcessSignal() ? "true" : "false");
 
-				configClass << String(shouldProcess ? "true" : "false");
-
-				switch(modeIndex)
+				switch(config.config.getMode())
 				{
 				case modulation::TargetMode::Gain:
 					configClass << "modulation::TargetMode::Gain:";
@@ -554,6 +543,8 @@ Node::Ptr ValueTreeBuilder::parseRuntimeTargetNode(Node::Ptr u)
 				case modulation::TargetMode::Bipolar:
 					configClass << "modulation::TargetMode::Bipolar";
 					break;
+				case modulation::TargetMode::Raw:
+					configClass << "modulation::TargetMode::Raw";
 				default: ;
 				}
 			}
@@ -1899,6 +1890,17 @@ int ValueTreeIterator::getFixRuntimeHash(const ValueTree &nodeTree)
 	{
 		return 1;
 	}
+	if(path == NamespacedIdentifier::fromString("core::extra_mod"))
+	{
+		return modulation::config::CustomOffset;
+#if 0
+		auto ptree = nodeTree.getChildWithName(PropertyIds::Parameters).getChildWithProperty(PropertyIds::ID, "Index");
+		jassert(ptree.isValid());
+		jassert(!ptree.hasProperty(PropertyIds::Automated));
+		auto v = (int)ptree[PropertyIds::Value];
+		return v;
+#endif
+	}
 	if(path == NamespacedIdentifier::fromString("core::pitch_mod"))
 	{
 		return modulation::config::PitchModulation;
@@ -1913,6 +1915,80 @@ int ValueTreeIterator::getFixRuntimeHash(const ValueTree &nodeTree)
     return 0;
     
 
+}
+
+ValueTreeIterator::ModConfigCodegenData ValueTreeIterator::getTargetModeForModConfig(const ValueTree& nodeTree)
+{
+	auto path = getNodeFactoryPath(nodeTree);
+
+	ModConfigCodegenData rv;
+
+	modulation::config::dynamic d;
+
+	auto processParameter = nodeTree.getChildWithName(PropertyIds::Parameters).getChildWithProperty(PropertyIds::ID, "ProcessSignal");
+	auto dynamicProcess = (bool)processParameter[PropertyIds::Automated];
+	auto shouldProcess = (bool)processParameter[PropertyIds::Value];
+
+	rv.config.setUseMidPositionAsZero(false);
+
+	if(path == NamespacedIdentifier::fromString("core::global_mod"))
+	{
+		// We check the connection parameter and return a mod config based on whether it's automated or not
+		// the modulation mode will be determined by the "Mode" parameter
+		auto modeParameter = nodeTree.getChildWithName(PropertyIds::Parameters).getChildWithProperty(PropertyIds::ID, "Mode");
+		auto dynamicMode = (bool)modeParameter[PropertyIds::Automated];
+		auto modeIndex = (modulation::TargetMode)(int)modeParameter[PropertyIds::Value];
+
+		rv.isConstant = dynamicMode || dynamicProcess;
+		rv.config.setProcessSignal(shouldProcess);
+		rv.config.setMode(modeIndex);
+			
+	}
+	if(path == NamespacedIdentifier::fromString("core::extra_mod"))
+	{
+		// we look up in the parent's root parameter for the target type of the associated modulation chain
+
+		rv.isConstant = !dynamicProcess;
+		rv.config.setProcessSignal(shouldProcess);
+		rv.config.setMode(modulation::TargetMode::Raw);
+
+		auto ip = nodeTree.getChildWithName(PropertyIds::Parameters).getChildWithProperty(PropertyIds::ID, "Index");
+		jassert(ip.isValid());
+		auto modChainIndex = (int)ip[PropertyIds::Value];
+
+
+		auto rootNetwork = findParentWithType(nodeTree, PropertyIds::Network);
+		auto rootNode = rootNetwork.getChild(0);
+		jassert(rootNode.getType() == PropertyIds::Node);
+		auto pTree = rootNode.getChildWithName(PropertyIds::Parameters);
+
+		int ci = 0;
+
+		for(auto p: pTree)
+		{
+			if(p.hasProperty(PropertyIds::ExternalModulation))
+			{
+				if(ci == modChainIndex)
+				{
+					// we found the parameter that will be associated to this extra_mod
+					auto modType = p[PropertyIds::ExternalModulation].toString();
+					auto idx = (int)OpaqueNode::ModulationProperties::getModulationModeNames().indexOf(modType);
+					rv.pm = (modulation::ParameterMode)(idx);
+					break;
+				}
+
+				ci++;
+			}
+		}
+
+		if(rv.pm == modulation::ParameterMode::numModulationModes)
+		{
+			// no parameter was found that connects to this extra mod, bad!
+			jassertfalse;
+		}
+	}
+
+	return rv;
 }
 
 bool ValueTreeIterator::isRuntimeTargetNode(const ValueTree& nodeTree)
@@ -2472,6 +2548,9 @@ void ValueTreeBuilder::RootContainerBuilder::addMetadata()
 	scriptnode::parameter::encoder encoder(pCopy);
 
 	cppgen::EncodedParameterMacro(parent, encoder);
+
+	cppgen::EncodedModulationProperties(parent, root->nodeTree.getParent());
+
 	m.flushIfNot();
 	parent.addEmptyLine();
 }

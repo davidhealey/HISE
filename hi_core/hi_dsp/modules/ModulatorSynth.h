@@ -835,7 +835,8 @@ public:
 		scriptSynth,
 		macroModulationSource,
 		sendContainer,
-		silentSynth
+		silentSynth,
+		hardcodedSynth
 	};
 
 	ModulatorSynthChainFactoryType(int numVoices_, Processor *ownerProcessor);;

@@ -85,7 +85,7 @@ namespace hise { using namespace juce;
 	{
 		using namespace scriptnode::modulation;
 
-		auto m = modProperties.modulationModes[parameterIndex];
+		auto m = modProperties.getParameterMode(parameterIndex);
 
 		switch(m)
 		{

@@ -79,7 +79,16 @@ struct ValueTreeIterator: public valuetree::Helpers
 	static ValueTree getTargetParameterTree(const ValueTree& connectionTree);
 
     static int getFixRuntimeHash(const ValueTree& nodeTree);
-    
+
+	struct ModConfigCodegenData
+	{
+		bool isConstant = false;
+		modulation::config::dynamic config;
+		modulation::ParameterMode pm = modulation::ParameterMode::numModulationModes;
+	};
+
+	static ModConfigCodegenData getTargetModeForModConfig(const ValueTree& nodeTree);
+
 	static int calculateChannelCount(const ValueTree& nodeTree, int numCurrentChannels);
 
 	static bool isContainerWithFixedParameters(const ValueTree& nodeTree);

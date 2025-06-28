@@ -1736,7 +1736,57 @@ Factory::Factory(DspNetwork* network) :
 	using fi = runtime_target::indexers::fix_hash<1>;
 	using pci = modulation::config::PitchIndexer;
 	using mc = modulation::config::dynamic_with_display;
-	using ec = modulation::config::extra_config_with_display;
+
+	struct ec: public modulation::config::extra_config_with_display
+	{
+		void prepare(PrepareSpecs ps) override
+		{
+			if(parentNode != nullptr)
+				ScriptnodeExceptionHandler::validateMidiProcessingContext(parentNode);
+		}
+
+		void checkIndex(const Identifier& id, const var& newValue)
+		{
+			if(parentNode != nullptr)
+			{
+				auto root = parentNode->getRootNetwork();
+
+				root->getExceptionHandler().removeError(parentNode, Error::ErrorCode::RootIdMismatch);
+				auto mi = (int)newValue;
+				auto nn = root->getParameterProperties();
+				auto pi = nn.getParameterIndex(mi);
+
+				auto ok = nn.isUsed(mi);
+
+				if(!ok)
+				{
+					root->getExceptionHandler().addCustomError(parentNode, Error::ErrorCode::RootIdMismatch, "No parameter assigned to modulation slot #" + String(mi+1));
+				}
+			}
+		}
+
+		void initialise(NodeBase* n) override
+		{
+			parentNode = n;
+
+			if(n != nullptr)
+			{
+				auto ptree = n->getParameterTree().getChildWithProperty(PropertyIds::ID, "Index");
+
+				auto root = n->getRootNetwork();
+
+				indexListener.setCallback(ptree, 
+									      { PropertyIds::Value }, 
+										  valuetree::AsyncMode::Asynchronously, 
+										  BIND_MEMBER_FUNCTION_2(ec::checkIndex));
+			}
+		}
+
+
+		valuetree::PropertyListener indexListener;
+		WeakReference<NodeBase> parentNode;
+	};
+
 	using pc = modulation::config::pitch_config_with_display;
 
 	using ei = modulation::config::ExtraIndexer;

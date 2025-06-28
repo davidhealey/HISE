@@ -86,7 +86,9 @@
 #include "effects/fx/Analyser.cpp"
 #include "effects/fx/WaveShapers.cpp"
 #include "effects/fx/ShapeFX.cpp"
-#include "effects/fx/HardcodedNetworkEffect.cpp"
+
+#include "hardcoded/HardcodedModuleBase.cpp"
+#include "hardcoded/HardcodedModules.cpp"
 
 #if USE_BACKEND
 
