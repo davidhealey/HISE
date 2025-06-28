@@ -239,9 +239,6 @@ private:
 		{
 			DEACTIVATE(PolyFilterEffect);
 
-#if HISE_INCLUDE_OLD_MONO_FILTER
-			DEACTIVATE(MonoFilterEffect);
-#endif
             DEACTIVATE(PolyshapeFX);
 			DEACTIVATE(HarmonicFilter);
 			DEACTIVATE(HarmonicMonophonicFilter);
