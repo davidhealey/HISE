@@ -293,6 +293,8 @@ struct PooledCableType : public UsingTemplate,
 		UsingTemplate(p, id, NamespacedIdentifier::fromString("cable").getChildId(c.isFrame ? "frame" : "block")),
 		data(c)
 	{
+		addTemplateIntegerArgument("NV", true);
+
 		*this << c.numChannels;
 	}
 
