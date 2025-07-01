@@ -439,18 +439,28 @@ void ModulatorSynthChain::restoreFromValueTree(const ValueTree &v)
 
 void ModulatorSynthChain::reset()
 {
-
 	Processor::Iterator<Processor> iter(this, false);
 
-#if 0
+
+
+	if(getMainController()->isBeingDeleted())
 	{
 		sendDeleteMessage();
 
 		while (auto p = iter.getNextProcessor())
 			p->sendDeleteMessage();
 	}
-#endif
-	
+
+	Processor::Iterator<JavascriptProcessor> jiter(this, false);
+
+	while(auto jp = jiter.getNextProcessor())
+		jp->cleanupEngine();
+
+	Processor::Iterator<HardcodedSwappableEffect> fxiter(this, false);
+
+	while(auto fx = fxiter.getNextProcessor())
+		fx->shutdown();
+
     midiProcessorChain->getHandler()->clearAsync(midiProcessorChain);
     gainChain->getHandler()->clearAsync(gainChain);
     effectChain->getHandler()->clearAsync(effectChain);

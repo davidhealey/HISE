@@ -44,7 +44,7 @@ public:
 
 	static Identifier getSanitizedParameterId(const String& id);
 
-	virtual ~HardcodedSwappableEffect();
+	~HardcodedSwappableEffect() override;
 
 	// ===================================================================================== Complex Data API calls
 
@@ -83,6 +83,29 @@ public:
 
 	// ===================================================================================== Processor API tool functions
 
+	/** Call this in every derived destructor. */
+	void shutdown()
+	{
+		mc_->removeTempoListener(&tempoSyncer);
+		shutdownCalled = true;
+		effectUpdater.shutdown();
+
+		listeners.clear();
+		disconnectRuntimeTargets(&asProcessor());
+
+		if(opaqueNode != nullptr)
+		{
+			factory->deinitOpaqueNode(opaqueNode);
+			opaqueNode = nullptr;
+		}
+
+		tables.clear();
+		audioFiles.clear();
+		filterData.clear();
+		sliderPacks.clear();
+		modProperties.reset();
+	}
+
 	Result sanityCheck();
 
 	void setHardcodedAttribute(int index, float newValue);
@@ -97,7 +120,15 @@ public:
 	virtual void renderData(ProcessDataDyn& data);
 	bool hasHardcodedTail() const;
     var getParameterProperties() const override;
-    
+
+	void setupChannelData(float** data, AudioSampleBuffer& b, int startSample)
+	{
+		for (int i = 0; i < numChannelsToRender; i++)
+		{
+			data[i] = b.getWritePointer(channelIndexes[i], startSample);
+		}
+	}
+
     void disconnectRuntimeTargets(Processor* p) override;
     void connectRuntimeTargets(Processor* p) override;
 
@@ -156,6 +187,8 @@ protected:
 #endif
 
 	String currentEffect = "No network";
+
+	bool shutdownCalled = false;
 
 	int numParameters = 0;
 	ObjectStorage<sizeof(float) * OpaqueNode::NumMaxParameters, 8> lastParameters;

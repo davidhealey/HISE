@@ -65,7 +65,7 @@ static const unsigned char projectTemplate_jucer_lines[] = R"(
   </MAINGROUP>
   <EXPORTFORMATS>
     <%VS_VERSION% targetFolder="Builds/%TARGET_FOLDER%" vstLegacyFolder="%VSTSDK_FOLDER%" vst3Folder="%VSTSDK3_FOLDER%" aaxFolder="%AAX_PATH%" 
-            IPP1ALibrary="%IPP_1A%" extraDefs="%PLUGIN_CHANNEL_AMOUNT%&#10;%EXTRA_DEFINES_WIN%&#10;%PERFETTO_INCLUDE_WIN%" extraCompilerFlags="/bigobj /cgthreads8 %MSVC_WARNINGS% %PERFETTO_COMPILER_FLAGS_WIN%">
+            IPP1ALibrary="%IPP_1A%" extraDefs="%PLUGIN_CHANNEL_AMOUNT%&#10;%EXTRA_DEFINES_WIN%&#10;%PERFETTO_INCLUDE_WIN%" extraCompilerFlags="/bigobj /cgthreads8 %MSVC_WARNINGS% %PERFETTO_COMPILER_FLAGS_WIN%&#10;/arch:AVX&#10;">
       <CONFIGURATIONS>
         <CONFIGURATION name="Debug" winWarningLevel="1" generateManifest="1" winArchitecture="x64"
                        isDebug="1" optimisation="1" targetName="%NAME% Debug" headerPath ="%FAUST_HEADER_PATH%"

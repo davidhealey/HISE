@@ -658,22 +658,28 @@ void JavascriptPolyphonicEffect::renderVoice(int voiceIndex, AudioSampleBuffer &
 
 	if (auto n = getActiveNetwork())
 	{
-		auto rn = n->getRootNode();
+		if (auto s = SimpleReadWriteLock::ScopedTryReadLock(n->getConnectionLock()))
+		{
+			if (n->getExceptionHandler().isOk())
+			{
+				auto rn = n->getRootNode();
 
-		using RD = ModulatorChain::ExtraModulatorRuntimeTargetSource::RenderData<NodeBase>;
-		RD rd(*rn, n->getParameterProperties(), nullptr, b.getArrayOfWritePointers(), b.getNumChannels(), startSample, numSamples);
+				using RD = ModulatorChain::ExtraModulatorRuntimeTargetSource::RenderData<NodeBase>;
+				RD rd(*rn, n->getParameterProperties(), nullptr, b.getArrayOfWritePointers(), b.getNumChannels(), startSample, numSamples);
 
-		if (checkPreSuspension(voiceIndex, rd.pd))
-			return;
+				if (checkPreSuspension(voiceIndex, rd.pd))
+					return;
 
-		scriptnode::DspNetwork::VoiceSetter vs(*n, voiceIndex);
-		extraModSources.processChunkedWithModulation(rd);
-		
-		checkPostSuspension(voiceIndex, rd.pd);
+				scriptnode::DspNetwork::VoiceSetter vs(*n, voiceIndex);
+				extraModSources.processChunkedWithModulation(rd);
+				
+				checkPostSuspension(voiceIndex, rd.pd);
 
-		// overwrite the tailing with the voice index to cater in
-		// voice resetting calls...
-		isTailing = voiceData.containsVoiceIndex(voiceIndex);
+				// overwrite the tailing with the voice index to cater in
+				// voice resetting calls...
+				isTailing = voiceData.containsVoiceIndex(voiceIndex);
+			}
+		}
 	}
 }
 
@@ -1065,15 +1071,25 @@ void JavascriptMasterEffect::applyEffect(AudioSampleBuffer &b, int startSample, 
 
 	if (auto n = getActiveNetwork())
 	{
-		ProcessDataDyn d(b.getArrayOfWritePointers(), b.getNumSamples(), b.getNumChannels());
+		TRACE_DSP();
+    
+	    if(!n->isInitialised())
+	        return;
 
-		const auto& pp = n->getParameterProperties();
-		auto rn = n->getRootNode();
+		if (auto s = SimpleReadWriteLock::ScopedTryReadLock(n->getConnectionLock()))
+		{
+			if (n->getExceptionHandler().isOk())
+			{
+				ProcessDataDyn d(b.getArrayOfWritePointers(), b.getNumSamples(), b.getNumChannels());
 
-		using RD = ModulatorChain::ExtraModulatorRuntimeTargetSource::RenderData<NodeBase>;
+				const auto& pp = n->getParameterProperties();
+				auto rn = n->getRootNode();
+				using RD = ModulatorChain::ExtraModulatorRuntimeTargetSource::RenderData<NodeBase>;
 
-		RD rd(*rn, pp, eventBuffer, b.getArrayOfWritePointers(), b.getNumChannels(), startSample, numSamples);
-		extraModSources.processChunkedWithModulation(rd);
+				RD rd(*rn, pp, eventBuffer, b.getArrayOfWritePointers(), b.getNumChannels(), startSample, numSamples);
+				extraModSources.processChunkedWithModulation(rd);
+			}
+		}
 
 		return;
 	}
@@ -2183,14 +2199,20 @@ void JavascriptSynthesiser::Voice::calculateBlock(int startSample, int numSample
 
 		voiceBuffer.clear();
 
-		using RD = ModulatorChain::ExtraModulatorRuntimeTargetSource::RenderData<NodeBase>;
+		if (auto s = SimpleReadWriteLock::ScopedTryReadLock(n->getConnectionLock()))
+		{
+			if (n->getExceptionHandler().isOk())
+			{
+				using RD = ModulatorChain::ExtraModulatorRuntimeTargetSource::RenderData<NodeBase>;
 
-		int numChannels = voiceBuffer.getNumChannels();
+				int numChannels = voiceBuffer.getNumChannels();
 
-		RD rd(*n->getRootNode(), n->getParameterProperties(), nullptr, voiceBuffer.getArrayOfWritePointers(), numChannels, startSample, numSamples);
+				RD rd(*n->getRootNode(), n->getParameterProperties(), nullptr, voiceBuffer.getArrayOfWritePointers(), numChannels, startSample, numSamples);
 
-		scriptnode::DspNetwork::VoiceSetter vs(*n, getVoiceIndex());
-		synth->extraModSources.processChunkedWithModulation(rd);
+				scriptnode::DspNetwork::VoiceSetter vs(*n, getVoiceIndex());
+				synth->extraModSources.processChunkedWithModulation(rd);
+			}
+		}
 
 		if (auto modValues = getOwnerSynth()->getVoiceGainValues())
 		{

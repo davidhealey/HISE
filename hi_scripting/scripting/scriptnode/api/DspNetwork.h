@@ -726,12 +726,22 @@ private:
 		  parent(parent_)
 		{}
 
+		void shutdown()
+		{
+			shutdownCalled = true;
+			data.reset();
+			propertyListener.shutdown();
+			blockSizeListener.shutdown();
+			connectionListener.shutdown();
+		}
+
 		void init();
 
 		void refreshConnections();
 
 		void refreshProcessSpecs();
 
+		bool shutdownCalled = false;
 		DspNetwork& parent;
 		scriptnode::modulation::ParameterProperties data;
 		valuetree::RecursivePropertyListener propertyListener;

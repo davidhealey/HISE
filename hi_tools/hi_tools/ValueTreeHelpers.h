@@ -98,6 +98,11 @@ public:
 		priorisedListener = listenerToPriorise;
 	}
 
+	virtual void shutdown()
+	{
+		cancelPendingUpdate();
+	}
+
 protected:
 
 	WeakReference<Base> priorisedListener;
@@ -148,11 +153,19 @@ struct AnyListener : private Base,
 
 	void setForwardCallback(CallbackType c, bool shouldForward);
 
+	void shutdown() override
+	{
+		Base::shutdown();
+		data.removeListener(this);
+	}
+
 protected:	
 
 	void setPropertyCondition(const PropertyConditionFunc& f);
 
 	virtual void anythingChanged(CallbackType cb) = 0;
+
+	
 
 private:
 
@@ -247,6 +260,14 @@ struct AnyPropertyListener: public Base
 
 	bool isRegisteredTo(const ValueTree& t) const;
 
+	void shutdown() override
+	{
+		Base::shutdown();
+		v.removeListener(this);
+		changedIds.clear();
+		f = {};
+	}
+
 private:
 
 	void handleAsyncUpdate() override;
@@ -282,6 +303,15 @@ struct PropertyListener : public Base
 		return v == t;
 	}
 
+	void shutdown() override
+	{
+		changedIds.clear();
+		Base::shutdown();
+		v.removeListener(this);
+		lastValue = var();
+		f = {};
+	}
+
 private:
 
 	void handleAsyncUpdate() override;
@@ -304,6 +334,13 @@ struct RecursivePropertyListener : public Base
 	using RecursivePropertyCallback = std::function<void(ValueTree, Identifier)>;
 
 	void setCallback(ValueTree parent, const Array<Identifier>& ids_, AsyncMode asyncMode, const RecursivePropertyCallback& f_);
+
+	void shutdown() override
+	{
+		Base::shutdown();
+		v.removeListener(this);
+		pendingChanges.clear();
+	}
 
 private:
 
@@ -457,6 +494,14 @@ struct ChildListener : public Base
 
 	/** Get the index of the valuetree before it was removed from its parent. */
 	int getRemoveIndex() const;
+
+	void shutdown() override
+	{
+		Base::shutdown();
+		v.removeListener(this);
+		pendingChanges.clear();
+		cb = {};
+	}
 
 protected:
 

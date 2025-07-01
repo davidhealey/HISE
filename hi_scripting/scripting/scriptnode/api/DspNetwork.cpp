@@ -229,6 +229,8 @@ DspNetwork::DspNetwork(hise::ProcessorWithScriptingContent* p, ValueTree data_, 
 
 DspNetwork::~DspNetwork()
 {
+	dynamicParameterProperties.shutdown();
+
 	stopTimer();
 
 	root = nullptr;
@@ -2296,6 +2298,9 @@ bool ScriptnodeExceptionHandler::autofixInternal(NodeBase* n, Error::ErrorCode c
 
 void DspNetwork::DynamicParameterModulationProperties::refreshProcessSpecs()
 {
+	if(shutdownCalled)
+		return;
+
 	auto sp = parent.getCurrentSpecs();
 
 	if(!sp)
@@ -2308,6 +2313,9 @@ void DspNetwork::DynamicParameterModulationProperties::refreshProcessSpecs()
 
 void DspNetwork::DynamicParameterModulationProperties::refreshConnections()
 {
+	if(shutdownCalled)
+		return;
+
 	auto anyWasConnected = data.isAnyConnected();
 
 	SimpleReadWriteLock::ScopedWriteLock sl(parent.getConnectionLock(), parent.isInitialised());

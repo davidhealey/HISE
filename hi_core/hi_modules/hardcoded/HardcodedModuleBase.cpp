@@ -338,16 +338,13 @@ Identifier HardcodedSwappableEffect::getSanitizedParameterId(const String& id)
 
 HardcodedSwappableEffect::~HardcodedSwappableEffect()
 {
-	mc_->removeTempoListener(&tempoSyncer);
+	jassert(shutdownCalled);
+	
 
 	// Call disconnectRuntimeTargets in the derived destructor!
 	jassert(disconnected);
 
-	if(opaqueNode != nullptr)
-	{
-		factory->deinitOpaqueNode(opaqueNode);
-		opaqueNode = nullptr;
-	}
+	
 
 	factory = nullptr;
 }
@@ -910,11 +907,7 @@ bool HardcodedSwappableEffect::processHardcoded(AudioSampleBuffer& b, HiseEventB
 			return false;
 
 		auto d = (float**)alloca(sizeof(float*) * numChannelsToRender);
-
-		for (int i = 0; i < numChannelsToRender; i++)
-		{
-			d[i] = b.getWritePointer(channelIndexes[i], startSample);
-		}
+		setupChannelData(d, b, startSample);
 
 		ProcessDataDyn pd(d, numSamples, numChannelsToRender);
 

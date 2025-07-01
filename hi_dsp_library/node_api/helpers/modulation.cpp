@@ -93,14 +93,16 @@ void ParameterProperties::reset()
 
 void ParameterProperties::setConnected(int parameterIndex, bool isConnected)
 {
-	auto mi = getModulationChainIndex(parameterIndex);
-
-	if(modulationModes[parameterIndex] != ParameterMode::Disabled)
+	if(isPositiveAndBelow(parameterIndex, NumMaxModulationSources))
 	{
-		modulationConnectState[mi] = isConnected ? 1 : 0;
-		anyConnected |= isConnected;
-	}
+		auto mi = getModulationChainIndex(parameterIndex);
 
+		if(modulationModes[parameterIndex] != ParameterMode::Disabled)
+		{
+			modulationConnectState[mi] = isConnected ? 1 : 0;
+			anyConnected |= isConnected;
+		}
+	}
 }
 
 void ParameterProperties::setModulationMode(int parameterIndex, ParameterMode m)
@@ -139,12 +141,15 @@ void ParameterProperties::fromValueTree(const ValueTree& v)
 	for(auto c: pTree)
 	{
 		auto idx = pTree.indexOf(c);
-		auto n = c[PropertyIds::ExternalModulation];
 
-		auto isConnected = c.getChildWithName(PropertyIds::Connections).getNumChildren() > 0;
+		if(isPositiveAndBelow(idx, NumMaxModulationSources))
+		{
+			auto n = c[PropertyIds::ExternalModulation];
+			auto isConnected = c.getChildWithName(PropertyIds::Connections).getNumChildren() > 0;
 
-		setModulationMode(idx, getModeFromVar(n));
-		setConnected(idx, isConnected);
+			setModulationMode(idx, getModeFromVar(n));
+			setConnected(idx, isConnected);
+		}
 	}
 }
 
@@ -217,16 +222,18 @@ int ParameterProperties::getParameterIndex(int modulationIndex) const
 
 int ParameterProperties::getModulationChainIndex(int parameterIndex) const
 {
-	if(parameterIndex == -1 || numUsedModulationSlots == 0)
-		return -1;
+	if(isPositiveAndBelow(parameterIndex, NumMaxModulationSources) && numUsedModulationSlots > 0)
+	{
+		auto mIndex = (int)parameterToModulation[parameterIndex];
 
-	auto mIndex = (int)parameterToModulation[parameterIndex];
+		if(mIndex == -1)
+			return -1;
 
-	if(mIndex == -1)
-		return -1;
+		jassert(parameterIndex == (int)modulationToParameter[mIndex]);
+		return mIndex;
+	}
 
-	jassert(parameterIndex == (int)modulationToParameter[mIndex]);
-	return mIndex;
+	return -1;
 }
 
 ParameterMode ParameterProperties::getModeFromVar(const var& value)

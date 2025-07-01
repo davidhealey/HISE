@@ -2563,7 +2563,7 @@ void ScriptingApi::Content::ScriptSlider::setMode(String mode)
 	auto cp = currentModeDefaultRange;
 	auto mp = (double)getScriptObjectProperty(ScriptSlider::Properties::middlePosition);
 
-	if(cp.getRange().contains(mp))
+	if(cp.getRange().contains(mp) && mp > cp.start)
 		cp.setSkewForCentre(mp);
 
 	const bool sameSkew = cp.skew == 1.0;

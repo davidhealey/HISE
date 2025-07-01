@@ -60,7 +60,7 @@ HardcodedMasterFX::HardcodedMasterFX(MainController* mc, const String& uid) :
 
 HardcodedMasterFX::~HardcodedMasterFX()
 {
-	HardcodedSwappableEffect::disconnectRuntimeTargets(this);
+	this->shutdown();
 	modChains.clear();
 }
 
@@ -265,8 +265,9 @@ void HardcodedMasterFX::applyEffect(AudioSampleBuffer &b, int startSample, int n
 	if(on != nullptr && channelCountMatches)
 	{
 		using RD = ModulatorChain::ExtraModulatorRuntimeTargetSource::RenderData<OpaqueNode>;
-
-		RD rd(*on, modProperties, eventBuffer, b.getArrayOfWritePointers(), b.getNumChannels(), startSample, numSamples);
+		auto ch = static_cast<float**>(alloca(numChannelsToRender * sizeof(float*)));
+		setupChannelData(ch, b, 0);
+		RD rd(*on, modProperties, eventBuffer, ch, numChannelsToRender, startSample, numSamples);
 		extraMods.processChunkedWithModulation(rd);
 	}
 
@@ -326,7 +327,7 @@ HardcodedPolyphonicFX::HardcodedPolyphonicFX(MainController *mc, const String &u
 
 HardcodedPolyphonicFX::~HardcodedPolyphonicFX()
 {
-	HardcodedSwappableEffect::disconnectRuntimeTargets(this);
+	this->shutdown();
 	modChains.clear();
 }
 
@@ -439,7 +440,12 @@ void HardcodedPolyphonicFX::applyEffect(int voiceIndex, AudioSampleBuffer &b, in
 	if(on != nullptr)
 	{
 		using RD = ModulatorChain::ExtraModulatorRuntimeTargetSource::RenderData<OpaqueNode>;
-		RD rd(*on, modProperties, nullptr, b.getArrayOfWritePointers(), b.getNumChannels(), startSample, numSamples);
+
+		auto ch = static_cast<float**>(alloca(numChannelsToRender * sizeof(float*)));
+
+		setupChannelData(ch, b, 0);
+
+		RD rd(*on, modProperties, nullptr, ch, numChannelsToRender, startSample, numSamples);
 
 		if (checkPreSuspension(voiceIndex, rd.pd))
 			return;
@@ -579,7 +585,7 @@ HardcodedTimeVariantModulator::HardcodedTimeVariantModulator(hise::MainControlle
 
 HardcodedTimeVariantModulator::~HardcodedTimeVariantModulator()
 {
-	HardcodedSwappableEffect::disconnectRuntimeTargets(this);
+	this->shutdown();
 }
 
 void HardcodedTimeVariantModulator::calculateBlock(int startSample, int numSamples)
@@ -689,7 +695,7 @@ HardcodedEnvelopeModulator::HardcodedEnvelopeModulator(MainController* mc, const
 
 HardcodedEnvelopeModulator::~HardcodedEnvelopeModulator()
 {
-	disconnectRuntimeTargets(this);
+	this->shutdown();
 }
 
 ValueTree HardcodedEnvelopeModulator::exportAsValueTree() const
@@ -968,7 +974,8 @@ HardcodedSynthesiser::HardcodedSynthesiser(MainController* mc, const String& id,
 
 HardcodedSynthesiser::~HardcodedSynthesiser()
 {
-	disconnectRuntimeTargets(this);
+	this->shutdown();
+	modChains.clear();
 }
 
 ProcessorEditorBody* HardcodedSynthesiser::createEditor(ProcessorEditor* parentEditor)

@@ -46,7 +46,7 @@ public:
 	SET_PROCESSOR_NAME("Hardcoded Master FX", "HardcodedMasterFX", "A master effect wrapper around a compiled DSP network");
 
 	HardcodedMasterFX(MainController* mc, const String& uid);
-	~HardcodedMasterFX();;
+	~HardcodedMasterFX() override;
 
 	bool hasTail() const override;
 
@@ -162,7 +162,7 @@ public:
     SET_PROCESSOR_NAME("Hardcoded Timevariant Modulator", "HardcodedTimeVariantModulator", "Atime variant modulator wrapper around a compiled DSP network");
 
     HardcodedTimeVariantModulator(MainController* mc, const String& uid, Modulation::Mode m);
-    ~HardcodedTimeVariantModulator();;
+    ~HardcodedTimeVariantModulator() override;;
 
     Processor *getChildProcessor(int processorIndex) override { return nullptr; };
     const Processor *getChildProcessor(int processorIndex) const override { return nullptr; }

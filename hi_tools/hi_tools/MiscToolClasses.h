@@ -1487,6 +1487,17 @@ template <typename...Ps> struct LambdaBroadcaster final
 		return std::get<P>(lastValue);
 	}
 
+	void shutdown()
+	{
+		if(lockfreeUpdater != nullptr)
+		{
+			lockfreeUpdater->stop();
+		}
+
+		updater.cancelPendingUpdate();
+		removeAllListeners();
+	}
+
 private:
     
 	void sendMessageInternal(NotificationType n, const std::tuple<Ps...>& value)

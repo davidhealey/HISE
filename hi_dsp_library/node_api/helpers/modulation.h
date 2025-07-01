@@ -189,16 +189,15 @@ struct ParameterProperties
 
 	ParameterMode getParameterMode(int parameterIndex) const noexcept
 	{
-		return modulationModes[parameterIndex];
+		if(isPositiveAndBelow(parameterIndex, NumMaxModulationSources))
+			return modulationModes[parameterIndex];
+
+		return ParameterMode::Disabled;
 	}
 
 private:
 
 	friend class ParameterPropertiesTest;
-
-	
-
-	
 
 	/** Sets the connected flag for the given parameterIndex. */
 	void setConnected(int parameterIndex, bool isConnected);
