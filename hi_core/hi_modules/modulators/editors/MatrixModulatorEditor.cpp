@@ -115,7 +115,6 @@ void MatrixModulatorBody::RangeEditor::resized()
 {
 	auto b = getLocalBounds();
 	b.removeFromLeft(80);
-	auto w = b.getWidth() / editors.size();
 
 	for(auto e: editors)
 	{

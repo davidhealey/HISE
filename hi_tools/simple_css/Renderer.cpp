@@ -907,6 +907,14 @@ void Renderer::drawBackground(Graphics& g, Rectangle<float> area, StyleSheet::Pt
 
             if(v.isNotEmpty())
                 renderText(g, afterArea2, v, ss, PseudoElementType::After2);
+
+			if(!afterAbsolute2)
+            {
+                if(afterArea2.getX() == ma.getX())
+                    ma.removeFromLeft(afterArea2.getWidth());
+                else if (afterArea2.getRight() == ma.getRight())
+                    ma.removeFromRight(afterArea2.getWidth());
+            }
         }
 	}
 }

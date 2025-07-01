@@ -1385,7 +1385,7 @@ uint8 ComplexGroupManagerComponent::FileTokenSelector::getCurrentTokenValue(cons
 
 	if(ok)
 	{
-		int tokenIndex;
+		int tokenIndex = 0;
 
 		if(useFileTokens())
 		{

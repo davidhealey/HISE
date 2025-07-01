@@ -578,11 +578,8 @@ void MatrixBase::RowBase::setIntensityConverter(JavascriptMidiProcessor* jmp, in
 		for(int i = 0; i < getNumIntensitySliders(); i++)
 		{
 			auto si = getIntensitySlider(i);
-
 			auto sourceIndex = getSourceIndexForIntensitySlider(i);
-
 			auto cd = s->createIntensityConverter(sourceIndex);
-			auto tm = getTargetModeForIntensitySlider(i);
 
 			cd.connectedSlider = si;
 			customConverters.add(new MatrixIds::Helpers::IntensityTextConverter(cd));
@@ -1055,11 +1052,8 @@ SliderMatrix::Row::Row(SliderMatrix& parent_, const StringArray& sources, const 
 		auto si = new IntensitySlider(Identifier(s));
 
 		si->setCustomPopupFunction(BIND_MEMBER_FUNCTION_1(Row::handlePopup));
-
 		si->setDoubleClickReturnValue(true, 0.0);
-
 		Helpers::writeSelectorsToProperties(*si, { ".slider" });
-
 		Helpers::setFallbackStyleSheet(*si, "height:30px;flex-grow:1;");
 
 		addFlexItem(*si);
@@ -1067,11 +1061,7 @@ SliderMatrix::Row::Row(SliderMatrix& parent_, const StringArray& sources, const 
 		intensitySliders.add(si);
 
 		auto con = getConnectionForSlider(idx, false);
-
-		auto tm = (modulation::TargetMode)(int)con[MatrixIds::Mode];
-
 		auto shouldBeActive = con.isValid() && (double)con[MatrixIds::Intensity] != 0.0;
-
 		si->setActive(shouldBeActive, con);
 
 		idx++;
@@ -1502,8 +1492,6 @@ ModulationMatrixControlPanel::ModulationMatrixControlPanel(FloatingTile* parent)
 
 Component* ModulationMatrixControlPanel::createMatrixComponent(const String& targetId)
 {
-	auto p = simple_css::CSSRootComponent::find(*this);
-
 	if(getParentShell()->isOnInterface())
 	{
 		auto controller = new MatrixContent::Controller(getMainController(), *getParentShell());

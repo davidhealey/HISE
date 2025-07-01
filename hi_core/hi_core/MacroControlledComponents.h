@@ -895,7 +895,7 @@ public:
 
 	bool changePluginParameter(AudioProcessor* p, int parameterIndex);
 
-	bool callWhenSingleMacro(const std::function<bool(AudioProcessor* p, int parameterIndex)>& f);
+	
 
 	bool isUsingModulatedRing() const noexcept;;
 

@@ -1142,32 +1142,7 @@ StringArray ComplexGroupManager::Helpers::getTokens(const ValueTree& layerData, 
 		{
 			// The tokens must be calculated otherwise...
 			return {};
-
-			jassertfalse;
 		}
-
-		
-#if 0
-		auto range = getKeyRange(layerData);
-
-		StringArray sa;
-
-		auto useNumbers = (bool)layerData[groupIds::useNumbers];
-
-		for(int i = 0; i < 128; i++)
-		{
-			if(range[i])
-			{
-				sa.add(useNumbers ? String(i) : MidiMessage::getMidiNoteName(i, true, true, 3));
-			}
-		}
-
-		sa.removeDuplicates(false);
-		sa.removeEmptyStrings(true);
-		sa.trim();
-
-		return sa;
-#endif
 	}
 	else
 	{

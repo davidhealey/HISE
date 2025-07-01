@@ -463,17 +463,12 @@ void MatrixModulator::restoreFromValueTree(const ValueTree& v)
 	auto vr = v.getChildWithName(MatrixIds::ValueRange);
 	auto ri = vr.getChildWithName(MatrixIds::InputRange);
 	auto ro = vr.getChildWithName(MatrixIds::OutputRange);
-	auto set = scriptnode::RangeHelpers::IdSet::ScriptComponents;
 
 	if(ri.isValid())
-	{
 		getRangeData(true).copyPropertiesFrom(ri, nullptr);
-	}
 		
 	if(ro.isValid())
-	{
 		getRangeData(false).copyPropertiesFrom(ro, nullptr);
-	}
 }
 
 ValueTree MatrixModulator::exportAsValueTree() const

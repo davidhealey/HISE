@@ -6353,6 +6353,8 @@ bool ScriptingApi::Content::ScriptDynamicContainer::ChildReference::assign(const
 		componentData.setProperty(id, newValue, nullptr);
 		return true;
 	}
+
+	return false;
 }
 
 var ScriptingApi::Content::ScriptDynamicContainer::ChildReference::getDotProperty(const Identifier& id) const

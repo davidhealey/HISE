@@ -1908,17 +1908,10 @@ void MacroParameterSlider::checkAllParametersForWarning(const Identifier& , cons
 void MacroParameterSlider::updateExternalModulation(const ValueTree& v, const Identifier& id)
 {
 	auto newValue = v[id];
-	auto m = modulation::ParameterProperties::getModeFromVar(newValue);
-
-	auto pIndex = slider.pTree.getParent().indexOf(slider.pTree);
-	auto r = slider.node->getRootNetwork()->getValueTree();
 	auto mi = sticker.update();
 
-
 	if(v == slider.pTree)
-	{
 		slider.setExternalModulationIndex(mi);
-	}
 
 	repaint();
 }

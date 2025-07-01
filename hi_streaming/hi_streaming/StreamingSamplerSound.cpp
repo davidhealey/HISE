@@ -1307,8 +1307,6 @@ std::vector<int> StreamingSamplerSound::FileReader::calculateZeroCrossings()
 {
 	std::vector<int> zeroCrossings;
 
-	float l1, l2, r1, r2;
-
 	openFileHandles();
 
 	ScopedPointer<AudioFormatReader> readerToUse = createMonolithicReaderForPreview();// getReader();

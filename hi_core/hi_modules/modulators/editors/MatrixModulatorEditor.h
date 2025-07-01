@@ -33,10 +33,12 @@
 
 namespace hise { using namespace juce;
 
-struct MatrixModulatorBody: public ProcessorEditorBody,
+class MatrixModulatorBody: public ProcessorEditorBody,
 						    public ControlledObject,
 							public MatrixContent::Parent
 {
+public:
+
 	static constexpr int Margin = 10;
 	static constexpr int TopRowHeight = 64;
 	static constexpr int ButtonHeight = 24;

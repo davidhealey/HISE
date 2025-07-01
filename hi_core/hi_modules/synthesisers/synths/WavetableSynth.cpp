@@ -358,26 +358,7 @@ struct ResynthInfo: public ControlledObject
 		AudioSampleBuffer wt(slice.getNumChannels(), sliceLength);
 
 		for(int i = 0; i < wt.getNumChannels(); i++)
-		{
 			wt.copyFrom(i, 0, slice, i, 0, sliceLength);
-		}
-
-
-		for(int c = 0; c < wt.getNumChannels(); c++)
-		{
-			auto ptr = wt.getReadPointer(c);
-
-			for(int i = 0; i < wt.getNumSamples(); i++)
-			{
-				auto v = ptr[i];
-
-				if(std::abs(v) > 10.0f)
-				{
-					int x = 5;
-				}
-			}
-		}
-
 
 		return wt;
 	}
@@ -390,9 +371,6 @@ struct ResynthInfo: public ControlledObject
 
 	static int tryToGuessCycleLength(const AudioSampleBuffer& b)
 	{
-		auto maxFreq = 1500.0;
-		auto minFreq = 40.0;
-
 		auto minLag = 128;
 		auto maxLag = 2048;
 
@@ -900,12 +878,8 @@ void WavetableSynth::loadWavetableInternal()
 			if(!isPowerOfTwo(cycleLength) || cycleLength > 2048)
 				cycleLength = 0;
 
-			auto sampleLength = getBuffer().getCurrentRange().getLength();
-
 			if(cycleLength == 0)
-			{
 				cycleLength = ResynthInfo::tryToGuessCycleLength(b);
-			}
 
 			WavetableHelpers::ExportData ed;
 

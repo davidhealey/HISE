@@ -141,9 +141,8 @@ struct CSSRootComponent
 	};
 
 	struct CSSDebugger: public Component,
-                    public Timer,
-                    public PathFactory,
-					public MouseListener
+	                    public Timer,
+	                    public PathFactory
 	{
 		enum class OverlayMode
 		{

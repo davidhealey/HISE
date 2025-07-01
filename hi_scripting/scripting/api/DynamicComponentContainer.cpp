@@ -89,9 +89,9 @@ const Array<Identifier>& Helpers::getProperties()
 	return all;
 }
 
-var Helpers::getDefaultValue(const Identifier& id)
+var Helpers::getDefaultValue(const Identifier& p)
 {
-	jassert(isValidProperty(id));
+	jassert(isValidProperty(p));
 
 	static NamedValueSet defaultValues;
 
@@ -139,7 +139,7 @@ var Helpers::getDefaultValue(const Identifier& id)
 	defaultValues.set(itemColour2, Colours::white.withAlpha(0.2f).getARGB());
 	defaultValues.set(textColour, Colours::white.withAlpha(0.8f).getARGB());
 
-	return defaultValues[id];
+	return defaultValues[p];
 }
 }
 
@@ -412,8 +412,6 @@ struct Slider: public Base,
 
 	void setSlider(juce::Slider* s)
 	{
-		auto laf = &getLookAndFeel();
-
 		simple_css::FlexboxComponent::Helpers::writeClassSelectors(*s, { simple_css::Selector(".scriptslider") }, true);
 		s->setDoubleClickReturnValue(true, (double)dataTree[dcid::defaultValue]);
 		s->setTextBoxStyle(juce::Slider::NoTextBox, false, 0, 0);
@@ -1228,6 +1226,12 @@ Data::RefreshType Data::getRefreshType(const var& t)
 			return RefreshType::loseFocus;
 		else if (refreshMode_ == "resetValueToDefault")
 			return RefreshType::resetValueToDefault;
+		else
+		{
+			jassertfalse;
+			return RefreshType::numRefreshTypes;
+		}
+			
 	}
 	else
 		return (RefreshType)(int)t;

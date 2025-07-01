@@ -134,6 +134,9 @@ bool HardcodedMasterFX::setEffect(const String& newEffect, bool cond)
 
 void HardcodedMasterFX::connectToRuntimeTargets(scriptnode::OpaqueNode& on, bool shouldAdd)
 {
+	if(getMainController()->isBeingDeleted())
+		return;
+
 	Processor::connectToRuntimeTargets(on, shouldAdd);
 
 	if(auto pitchChain = dynamic_cast<ModulatorChain*>(getParentProcessor(true)->getChildProcessor(ModulatorSynth::InternalChains::PitchModulation)))
@@ -256,13 +259,6 @@ void HardcodedMasterFX::applyEffect(AudioSampleBuffer &b, int startSample, int n
 	}
 
 	masterState.currentlySuspended = false;
-
-	
-#if USE_BACKEND
-	auto useMods = modChains.size() > 0;
-#else
-	constexpr auto useMods = NUM_HARDCODED_FX_MODS > 0;
-#endif
 
 	auto on = opaqueNode.get();
 
@@ -554,6 +550,9 @@ bool HardcodedPolyphonicFX::setEffect(const String& effectName, bool cond)
 
 void HardcodedPolyphonicFX::connectToRuntimeTargets(scriptnode::OpaqueNode& on, bool shouldAdd)
 {
+	if(getMainController()->isBeingDeleted())
+		return;
+
 	Processor::connectToRuntimeTargets(on, shouldAdd);
 
 	if(auto pitchChain = dynamic_cast<ModulatorChain*>(getParentProcessor(true)->getChildProcessor(ModulatorSynth::InternalChains::PitchModulation)))
@@ -1085,6 +1084,9 @@ void HardcodedSynthesiser::setInternalAttribute(int parameterIndex, float newVal
 
 void HardcodedSynthesiser::connectToRuntimeTargets(scriptnode::OpaqueNode& opaqueNode, bool shouldAdd)
 {
+	if(getMainController()->isBeingDeleted())
+		return;
+
 	Processor::connectToRuntimeTargets(opaqueNode, shouldAdd);
 
 	if(auto pitchChain = dynamic_cast<ModulatorChain*>(getChildProcessor(ModulatorSynth::InternalChains::PitchModulation)))

@@ -354,6 +354,9 @@ HardcodedSwappableEffect::~HardcodedSwappableEffect()
 
 void HardcodedSwappableEffect::connectRuntimeTargets(Processor* p)
 {
+	if(p->getMainController()->isBeingDeleted())
+		return;
+
 	jassert(p != nullptr);
 
     if(opaqueNode != nullptr)

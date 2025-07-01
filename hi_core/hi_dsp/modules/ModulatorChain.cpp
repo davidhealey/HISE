@@ -199,7 +199,6 @@ ModulationDisplayValue ModulatorChain::SpecialQueryFunctions::GainModulation::ge
 	jassert(dynamic_cast<ModulatorSynth*>(p) != nullptr);
 	auto modChain = dynamic_cast<ModulatorChain*>(p->getChildProcessor(ModulatorSynth::InternalChains::GainModulation)); 
 
-	auto gainValue = Decibels::decibelsToGain(v);
 	ModulationDisplayValue mv;
 
 	mv.normalisedValue = nr.convertTo0to1(v);

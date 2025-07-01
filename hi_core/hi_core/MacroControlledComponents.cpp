@@ -634,9 +634,6 @@ void HiSlider::sliderValueChanged(Slider *s)
 	if(!sendValueOnDrag)
 		return;
 
-	if (callWhenSingleMacro(BIND_MEMBER_FUNCTION_2(HiSlider::changePluginParameter)))
-		return;
-
 	auto useMacrosAsParameter = (bool)HISE_GET_PREPROCESSOR(getProcessor()->getMainController(), HISE_MACROS_ARE_PLUGIN_PARAMETERS);
 	
 	if(!useMacrosAsParameter)
@@ -706,46 +703,6 @@ bool HiSlider::changePluginParameter(AudioProcessor* p, int macroIndex)
 		value = hp->getNormalisableRange().convertTo0to1(value);
 		pp->setValueNotifyingHost(value);
 		return true;
-	}
-
-#if 0
-	auto parameters = p->getParameters();
-
-	for(auto pr: parameters)
-	{
-		if(auto typed = dynamic_cast<HisePluginParameterBase*>(pr))
-		{
-			auto isMacro = typed->getType() == HisePluginParameterBase::Type::Macro;
-
-			if(isMacro && typed->matchesIndex(getMacroIndex()))
-			{
-				jassert(typed == getConnectedPluginParameter());
-				auto value = getValue();
-				value = typed->getNormalisableRange().convertTo0to1(value);
-				pr->setValueNotifyingHost(value);
-				return true;
-			}
-		}
-	}
-#endif
-
-	return false;
-}
-
-bool HiSlider::callWhenSingleMacro(const std::function<bool(AudioProcessor* p, int parameterIndex)>& f)
-{
-	return false;
-	auto mc = getProcessor()->getMainController();
-	auto useMacrosAsParameter = (bool)HISE_GET_PREPROCESSOR(mc, HISE_MACROS_ARE_PLUGIN_PARAMETERS);
-
-	if (useMacrosAsParameter && getMacroIndex() != -1)
-	{
-		auto md = mc->getMainSynthChain()->getMacroControlData(getMacroIndex());
-
-		if (md->getNumParameters() == 1)
-		{
-			return f(dynamic_cast<AudioProcessor*>(mc), getMacroIndex());
-		}
 	}
 
 	return false;
@@ -992,7 +949,8 @@ void HiSlider::HoverPopupLookandFeel::drawModulationDragger(Graphics& g, HiSlide
 
 	double ARC = 2.5;
 
-	double start, end;
+	double start = 0.0;
+	double end = 1.0;
 	
 	switch(obj.targetMode)
 	{
@@ -1666,14 +1624,6 @@ struct HiSlider::HoverPopup: public Component,
 	SliderStyle sliderStyle;
 };
 
-struct Dudel
-{
-	RectangleList<int> getIntensityDragAreas(Rectangle<int> parentBounds, Rectangle<int> sliderBounds, const StringArray& sourceList)
-	{
-		
-	}
-};
-
 void HiSlider::showModHoverPopup(bool shouldShow, bool closeOnExit)
 {
 	if(modUpdater != nullptr && modUpdater->modFunction)
@@ -1717,8 +1667,6 @@ void HiSlider::showModHoverPopup(bool shouldShow, bool closeOnExit)
 
 					for(auto idx: connectedSources)
 						sourceList.add(allSources[idx]);
-
-					Dudel d;
 
 					if(auto pd = getHoverPopupLookAndFeel().getModulatorDragData(*this, sourceList))
 					{
@@ -1814,9 +1762,6 @@ void HiSlider::touchAndHold(Point<int> /*downPosition*/)
 void HiSlider::onTextValueChange(double newValue)
 {
 	setValue(newValue, dontSendNotification);
-
-	if (callWhenSingleMacro(BIND_MEMBER_FUNCTION_2(HiSlider::changePluginParameter)))
-		return;
 
 	setAttributeWithUndo((float)newValue);
 }
@@ -2465,15 +2410,7 @@ void HiToggleButton::buttonClicked(Button *b)
 
 	void MacroControlledObject::checkMouseClickProfiler(bool isDown)
 	{
-		return;
-#if HISE_INCLUDE_PROFILING_TOOLKIT
-		if(getProcessor() != nullptr)
-		{
-			getProcessor()->getMainController()->getDebugSession().checkMouseClickProfiler(isDown);
-		}
-#else
-		ignoreUnused(isDown);
-#endif
+		
 	}
 
 	Processor* MacroControlledObject::getProcessor()

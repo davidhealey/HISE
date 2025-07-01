@@ -619,6 +619,9 @@ public:
 
 	void connectToRuntimeTargets(scriptnode::OpaqueNode& on, bool shouldAdd) override
 	{
+		if(getMainController()->isBeingDeleted())
+			return;
+
 		// do not call this, as this is already called by the processor that owns the Opaque node...
 		//Processor::connectToRuntimeTargets(on, shouldAdd);
 

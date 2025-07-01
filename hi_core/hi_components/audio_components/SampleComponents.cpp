@@ -1793,11 +1793,6 @@ void WaterfallComponent::rebuildPaths()
 				auto l = first->getWaveTableData(0, tableIndex);
 				FloatVectorOperations::copy(data.get(), l, first->getTableSize());
 
-				auto gf = first->getUnnormalizedGainValue(tableIndex);
-				auto scale = gf / maxGain;
-				
-				
-
 				if(thisInterpolate)
 				{
 					auto ud = first->getWaveTableData(0, upperIndex);
@@ -1882,8 +1877,6 @@ void WaterfallComponent::rebuildPaths()
 		for(int i = 0; i < newPaths.size(); i++)
 		{
 			auto pt = perspective.translated(displacement.x * (float)i * displacementFactor, displacement.y * (float)i * displacementFactor);
-
-			auto norm = (float)i / (float)newPaths.size();
 
 			auto& p = newPaths.getReference(i);
 

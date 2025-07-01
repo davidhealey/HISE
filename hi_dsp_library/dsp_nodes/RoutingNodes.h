@@ -262,8 +262,6 @@ protected:
 		{
 			FrameConverters::increaseBuffer(buffer, ps);
 
-			auto ptr = buffer.begin();
-
 			for(int i = 0; i < channels.size(); i++)
 			{
 				if(isPositiveAndBelow(i, ps.numChannels))

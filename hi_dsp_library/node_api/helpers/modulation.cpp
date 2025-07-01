@@ -237,8 +237,10 @@ ParameterMode ParameterProperties::getModeFromVar(const var& value)
 }
 
 
-struct ParameterPropertiesTest: public UnitTest
+class ParameterPropertiesTest: public UnitTest
 {
+public:
+
 	ParameterPropertiesTest():
 	  UnitTest("Testing modulation::ParameterProperties", "modulation")
 	{};

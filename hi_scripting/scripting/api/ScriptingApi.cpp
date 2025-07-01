@@ -7738,8 +7738,6 @@ void ScriptingApi::Threads::startProfiling(var options, var finishCallback)
 
 	if(HiseJavascriptEngine::isJavascriptFunction(finishCallback))
 	{
-		bool add = !threadProfileCallback;
-
 		threadProfileCallback = WeakCallbackHolder(getScriptProcessor(), this, finishCallback, 1);
 		threadProfileCallback.incRefCount();
 

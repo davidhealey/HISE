@@ -143,11 +143,11 @@ namespace dcid
 			return basicProperties;
 		}
 
-		static var getDefaultValue(const Identifier& id);
+		static var getDefaultValue(const Identifier& p);
 
-		static bool isValidProperty(const Identifier& id)
+		static bool isValidProperty(const Identifier& p)
 		{
-			return getProperties().contains(id);
+			return getProperties().contains(p);
 		}
 	};
 
@@ -177,7 +177,8 @@ struct Data: public ReferenceCountedObject,
 		changed,
 		updateValueFromProcessorConnection,
 		loseFocus,
-		resetValueToDefault
+		resetValueToDefault,
+		numRefreshTypes
 	};
 
 	static RefreshType getRefreshType(const var& t);

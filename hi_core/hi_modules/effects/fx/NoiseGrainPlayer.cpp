@@ -146,8 +146,6 @@ void NoiseGrainPlayer::applyEffect(int voiceIndex, AudioSampleBuffer &b, int sta
 		auto t = jlimit(0.0f, 1.0f, tableIndex);
 		auto m = mixGain;
 
-		float tableModValue = t;
-
 		auto tg = modChains[InternalChains::PositionChain].getOneModulationValue(startSample);
 		auto tb = modChains[InternalChains::PositionBipolar].getOneModulationValue(startSample);
 
@@ -278,11 +276,8 @@ void NoiseGrainPlayer::recalculate()
 	{
 		auto typed = static_cast<NoiseGrainPlayer*>(p);
 
-		const auto& bf = typed->getAudioSampleBuffer();
-
 		SiTraNoConverter::ConfigData cd;
 		cd.fastFFTOrder = 7 + typed->grainSize;
-
 		SiTraNoConverter converter(typed->getBuffer().sampleRate, cd);
 
 		converter.process(typed->getAudioSampleBuffer());

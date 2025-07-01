@@ -1089,6 +1089,9 @@ hise::RLottieManager::Ptr MainController::getRLottieManager()
 
 void MainController::connectToGlobalRuntimeTargets(scriptnode::OpaqueNode& on, bool shouldAdd)
 {
+	if(isBeingDeleted())
+		return;
+
     if(auto rm = dynamic_cast<scriptnode::routing::GlobalRoutingManager*>(getGlobalRoutingManager()))
     {
         rm->connectToRuntimeTargets(on, shouldAdd);

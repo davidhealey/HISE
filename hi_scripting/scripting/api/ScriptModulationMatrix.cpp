@@ -132,11 +132,7 @@ void ScriptingApi::Content::ScriptSlider::MatrixCableConnection::Target::timerCa
 	jassert(isVoiceStart);
 
 	auto now = Time::getMillisecondCounter();
-			
-
 	auto sr = parent.getMainController()->getMainSynthChain()->getSampleRate();
-	auto blockSize = parent.getMainController()->getMainSynthChain()->getLargestBlockSize();
-
 	auto deltaSeconds = jmin((double)(now - lastMs) * 0.001, 0.03);
 
 	lastMs = now;

@@ -1100,8 +1100,8 @@ template <typename T, int NumVoices> struct PolyData
 	{
 		if constexpr (!isPolyphonic())
 			return true;
-
-		return begin() == &getFirst();
+		else
+			return begin() == &getFirst();
 	}
 
 	/** Returns a reference to the first data. This can be used for UI purposes. */

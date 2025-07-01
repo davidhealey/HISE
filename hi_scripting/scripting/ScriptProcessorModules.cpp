@@ -718,6 +718,9 @@ void JavascriptPolyphonicEffect::onVoiceReset(bool allVoices, int voiceIndex)
 
 void JavascriptPolyphonicEffect::connectToRuntimeTargets(scriptnode::OpaqueNode& opaqueNode, bool shouldAdd)
 {
+	if(getMainController()->isBeingDeleted())
+		return;
+
 	Processor::connectToRuntimeTargets(opaqueNode, shouldAdd);
 
 	if(auto pitchChain = dynamic_cast<ModulatorChain*>(getParentProcessor(true)->getChildProcessor(ModulatorSynth::InternalChains::PitchModulation)))
@@ -913,6 +916,9 @@ int JavascriptMasterEffect::getControlCallbackIndex() const
 
 void JavascriptMasterEffect::connectToRuntimeTargets(scriptnode::OpaqueNode& opaqueNode, bool shouldAdd)
 {
+	if(getMainController()->isBeingDeleted())
+		return;
+
 	Processor::connectToRuntimeTargets(opaqueNode, shouldAdd);
 
 	if(auto pitchChain = dynamic_cast<ModulatorChain*>(getParentProcessor(true)->getChildProcessor(ModulatorSynth::InternalChains::PitchModulation)))
@@ -1876,6 +1882,9 @@ JavascriptSynthesiser::~JavascriptSynthesiser()
 
 void JavascriptSynthesiser::connectToRuntimeTargets(scriptnode::OpaqueNode& opaqueNode, bool shouldAdd)
 {
+	if(getMainController()->isBeingDeleted())
+		return;
+
 	Processor::connectToRuntimeTargets(opaqueNode, shouldAdd);
 
 	if(auto pitchChain = dynamic_cast<ModulatorChain*>(getChildProcessor(ModulatorSynth::InternalChains::PitchModulation)))

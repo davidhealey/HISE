@@ -459,7 +459,6 @@ public:
 
 			    for(int i = 0; i < N; i++)
 			    {
-					auto L = (double)(N-1);
 					auto alpha = hmath::fmod(uptime, 1.0);
 					auto lo = (int)(uptime);
 					auto hi = (lo + 1) % N;
@@ -912,7 +911,6 @@ public:
 	{
 		if(auto s = dynamic_cast<WavetableSound*>(getSound(sampleIndex)))
 		{
-			auto data = s->getWaveTableData(0, 0);
 			auto size = s->getWavetableAmount() * s->getTableSize();
 
 			AudioSampleBuffer b(s->isStereo() ? 2 : 1, size);

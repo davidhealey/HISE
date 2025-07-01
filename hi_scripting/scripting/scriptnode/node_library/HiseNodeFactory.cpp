@@ -1754,8 +1754,6 @@ Factory::Factory(DspNetwork* network) :
 				root->getExceptionHandler().removeError(parentNode, Error::ErrorCode::RootIdMismatch);
 				auto mi = (int)newValue;
 				auto nn = root->getParameterProperties();
-				auto pi = nn.getParameterIndex(mi);
-
 				auto ok = nn.isUsed(mi);
 
 				if(!ok)
@@ -1772,8 +1770,6 @@ Factory::Factory(DspNetwork* network) :
 			if(n != nullptr)
 			{
 				auto ptree = n->getParameterTree().getChildWithProperty(PropertyIds::ID, "Index");
-
-				auto root = n->getRootNetwork();
 
 				indexListener.setCallback(ptree, 
 									      { PropertyIds::Value }, 

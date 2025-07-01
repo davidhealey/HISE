@@ -596,13 +596,8 @@ struct SliderMatrix: public MatrixBase
 
 			if(matches.isEmpty())
 			{
-				int idx = 1;
-
-				for(auto si: intensitySliders)
-				{
-					auto show =  matches.contains(si);
-					setFlexChildVisibility(idx++, false, false);
-				}
+				for(int i = 0; i < intensitySliders.size(); i++)
+					setFlexChildVisibility(i, false, false);
 
 				RowBase::updateSearchVisibility(shouldBeVisible, searchTerm);
 				return;

@@ -61,7 +61,7 @@ var WavetableHelpers::ResynthesisOptions::toVar() const
 
 int WavetableHelpers::ResynthesisOptions::getHash() const
 {
-	return JSON::toString(toVar(), true).hash();
+	return (int)JSON::toString(toVar(), true).hash();
 }
 
 void WavetableHelpers::ResynthesisOptions::fromVar(const var& o)
@@ -477,7 +477,6 @@ WavetableHelpers::StoreData WavetableHelpers::createMipMapRange(int targetNoteNu
 	AudioSampleBuffer resampled(ed.getNumChannels(), targetCycleLength * ed.cycles.size());
 
 	int offset = 0;
-	int cycleIndex = 0;
 
 	for (auto& cycle : ed.cycles)
 	{
@@ -1296,8 +1295,6 @@ void SampleMapToWavetableConverter::renderAllWavetablesFromSingleWavetables(int 
 
 			auto fileContent = hlac::CompressionHelpers::loadFile(ref.getFile(), unused, &fileSampleRate);
 			ed.numChannels = fileContent.getNumChannels();
-
-			auto isStereo = ed.getNumChannels() == 2;
 
 			auto thisCycleLength = cycleLength;
 

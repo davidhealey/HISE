@@ -2973,7 +2973,6 @@ ScriptCreatedComponentWrappers::DynamicComponentWrapper::DynamicComponentWrapper
 	ScriptingApi::Content::ScriptDynamicContainer* container, int index):
 	ScriptCreatedComponentWrapper(content, index)
 {
-	auto mc = const_cast<MainController*>(dynamic_cast<const Processor*>(content->getScriptProcessor())->getMainController());
 	auto wc = new WrapperComponent();
 	container->dataBroadcaster.addListener(*wc, WrapperComponent::onChange);
 	component = wc;

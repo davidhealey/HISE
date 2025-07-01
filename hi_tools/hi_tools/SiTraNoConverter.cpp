@@ -491,7 +491,6 @@ void SiTraNoConverter::MagnitudeMatrix::applyMedianFilter(double horizontalFrequ
 		if(windowSize % 2 == 0)
 			windowSize++;
 
-		const int pad = windowSize / 2;
 		std::vector<float> medianValues(numRows, 0.0f);
 		std::vector<float> filteredValues(numRows, 0.0f);
 
@@ -507,7 +506,7 @@ void SiTraNoConverter::MagnitudeMatrix::applyMedianFilter(double horizontalFrequ
 			}
 
 			mf.reset();
-			mf.apply(medianValues.data(), filteredValues.data(), medianValues.size());
+			mf.apply(medianValues.data(), filteredValues.data(), (int)medianValues.size());
 
 			for(int i = 0; i < numRows; i++)
 				horizontallyFiltered[i][h] = filteredValues[i];
@@ -521,7 +520,6 @@ void SiTraNoConverter::MagnitudeMatrix::applyMedianFilter(double horizontalFrequ
 		if(windowSize % 2 == 0)
 			windowSize++;
 
-		const int pad = windowSize / 2;
 		std::vector<float> medianValues(numBins, 0.0f);
 
 		MedianFilter mf(windowSize);
@@ -530,7 +528,7 @@ void SiTraNoConverter::MagnitudeMatrix::applyMedianFilter(double horizontalFrequ
 		for (int i = 0; i < numRows; ++i)
 		{
 			FloatVectorOperations::copy(medianValues.data(), verticallyFiltered[i].data(), numBins);
-			mf.apply(medianValues.data(), verticallyFiltered[i].data(), medianValues.size());
+			mf.apply(medianValues.data(), verticallyFiltered[i].data(), (int)medianValues.size());
 		}
 	}
 }
@@ -681,6 +679,7 @@ void SiTraNoConverter::FFTData::applyMask(SignalComponent c, AudioSampleBuffer& 
 	//jassert(mask.size() == complexMatrix.size());
 	//jassert(mask[0].size() == complexMatrix[0].size());
 	jassert(numSamples == b.getNumSamples());
+	ignoreUnused(numSamples);
 
 	HeapBlock<juce::dsp::Complex<float>> result;
 	result.calloc(numColumns * fft.getSize());

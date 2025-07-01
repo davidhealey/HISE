@@ -154,7 +154,6 @@ public:
 			{
 				auto in = intensity.advance();
 				auto bv = baseValue.advance();
-				auto v = hmath::abs(in);
 				const auto a = bv - in;
 
 				if(config.useMidPositionAsZero())
@@ -197,7 +196,7 @@ public:
 				auto in = intensity.advance();
 				auto bv = baseValue.advance();
 				auto v = (1.0f - in) + in * data[i];
-				data[i] = v * baseValue.advance();
+				data[i] = v * bv;
 			}
 
 			return;
@@ -218,7 +217,7 @@ public:
 			auto& s = state.get();
 			VariableStorage mv = s.eventData.getReadPointer();
 
-			float v;
+			float v = 0.0f;
 
 			auto t = mv.getType();
 
@@ -295,7 +294,7 @@ public:
 				if(t == Types::ID::Float)
 				{
 					auto v = mv.toFloat();
-					s.lastRampValue = mv.toFloat();
+					s.lastRampValue = v;
 					FloatVectorOperations::fill(target.begin(), s.lastRampValue, numToCopy);
 					applyModulation(target.begin(), data.getNumSamples(), s.baseValue, s.intensity);
 				}
@@ -350,7 +349,7 @@ public:
 			}
 			else
 			{
-				float v;
+				float v = 0.0f;
 
 				if(t == Types::ID::Float)
 				{

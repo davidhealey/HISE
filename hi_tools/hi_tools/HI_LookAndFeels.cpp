@@ -692,7 +692,7 @@ void GlobalHiseLookAndFeel::drawVectorRotaryKnob(Graphics& g, Rectangle<float> a
 	{
 		g.setColour(ringColour);
 		PathFactory::scalePath(scaledModRing, area.reduced(ringWidth));
-		g.strokePath(scaledModRing, PathStrokeType(3.8));
+		g.strokePath(scaledModRing, PathStrokeType(3.8f));
 
 		if(mv.addValue != 0.0)
 		{
@@ -703,11 +703,11 @@ void GlobalHiseLookAndFeel::drawVectorRotaryKnob(Graphics& g, Rectangle<float> a
 			else
 				useActiveColour = mv.addValue > 0.0;
 
-			auto c = useActiveColour ? ringColour.withMultipliedBrightness(1.3) : inactiveColour.withMultipliedBrightness(1.3);
+			auto c = useActiveColour ? ringColour.withMultipliedBrightness(1.3f) : inactiveColour.withMultipliedBrightness(1.3f);
 
 			g.setColour(c);
 			PathFactory::scalePath(addModRing, area.reduced(ringWidth));
-			g.strokePath(addModRing, PathStrokeType(3.8));
+			g.strokePath(addModRing, PathStrokeType(3.8f));
 		}
 	}
 	
