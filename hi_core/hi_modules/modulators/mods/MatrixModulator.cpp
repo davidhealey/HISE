@@ -30,42 +30,7 @@
 *   ===========================================================================
 */
 
-/** TODO:
-*
-* - change display buffer of each item to only show the mod value OK
-* - add getDisplayValue() OK
-* - fix opaqueness of displaybuffer OK
-* - rename SmoothingTime to Smoothing OK
-* - add this to ScriptComponent::connectToModulatedParameter() OK
-* - add CSS flexbox OK
-* - add drag & drop system from controller OK
-* - add CSS stylability to controller (with drag & drop elements having a seperate class) OK
-
-* - implement scaleDrag (alongside with HiSlider::setEnableScaleDrag) OK
-* - use first idle connection instead of adding a new one OK
-* - add floating tile for controller OK
-* - fix persistance & other data model bugs OK
-* - automatically add the parameter connection if a slider is connected to the value parameter OK
-* - add range with value converters & range display OK
-* - add slider style property to switch to linear slider OK
-* - remove text box when using CSS slider OK
-* - add CSS stylability to plotter OK
-* - make default value 1.0 when source not connected OK
-* - fix global modulator container voices not being killed OK
-* - add aux intensity parameter OK
-* - add invert parameter OK
-* - add drag & drop support for ScriptPanel.startInternalDrag() OK
-
-* - improve performance of output skew with XSIMD OK
-* - add "AI output range builder" lolololol OK
-
-* - add scripting object (remove scriptmodulationmatrix)
-* - check with all modulation chain types
-*/
-
-
 namespace hise { using namespace juce;
-
 
 Array<Identifier> MatrixModulator::getRangeIds(bool isInput)
 {

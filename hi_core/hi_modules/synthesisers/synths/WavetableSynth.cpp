@@ -907,20 +907,6 @@ void WavetableSynth::loadWavetableInternal()
 				cycleLength = ResynthInfo::tryToGuessCycleLength(b);
 			}
 
-			// TODO: add write to hwt (or other cache)
-			// - fix a few samples (check more examples)
-			// - add proper stereo support OK
-			// - fix jassert with slightly above 1.0
-			// - check offset off by 1
-			// - add wavetable script object with save / dump / configure / log / process functionality
-			// - check ability to remove noise before wavetable resynthesis
-			// - add system to configure the setup (maybe with metadata?)
-			// - add support for .SFZ file import?
-			// - cleanup this code
-			// - add basic inbuilt waveforms
-			// - add post processors from wavetable editor to script object
-			// - add the FFT resynthesis options to the sample zero crossing detector
-
 			WavetableHelpers::ExportData ed;
 
 			if(loadFromCache(filename, ed))

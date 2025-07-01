@@ -550,22 +550,6 @@ struct MatrixContent: public MatrixBase
 };
 
 
-/** TODO:
- *
- * - fix intensity update when adding connections OK
- * - add kill voice to avoid clicks?
- * - add CSS to popup menu OK
- * - add "inactive" text when intensity == 0 OK
- * - add pseudoclasses to slider: active when not idle, disabled when disabled OK
- * - add CSS classes to slider on mode change: .bipolar, .unipolar, .scale OK
- * - fix text entry values being off (at least at frequency mode)
- * - move rows into viewport OK
- * - add search field with filter to both matrixes OK
- * - add search field to row matrix
- * - fix pitch slider not being reset to middle position
- * - fix source filtering not working when backspacing search term
- * - add modulation display value to sliders?
- */
 struct SliderMatrix: public MatrixBase
 {
 	SliderMatrix(MainController* mc, const String& targetFilter);;

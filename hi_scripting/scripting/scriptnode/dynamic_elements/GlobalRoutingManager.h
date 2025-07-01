@@ -52,21 +52,6 @@ struct LocalCableHelpers
 	
 };
 
-/* TODO: Ideas for routing:
-
-	- make popup that shows all routing destination / targets OK
-	- make debug popup OK
-	- add debug popup to module browser
-	- use connection range from script component
-	- implement code goto
-	- allow set from receive OK
-	- make scripting layer for cables / signals OK
-	- attach scripting callback to the value send (with sync / async option)... OK
-	- increase margin in cable editor OK
-	- make global 64 block processing
-	- throw error if network is set to compileable (perhaps make compile-check system based on a `AllowCompilation` property listener) OK
-*/
-
 struct GlobalRoutingManager: public ReferenceCountedObject
 {
 	using Ptr = ReferenceCountedObjectPtr<GlobalRoutingManager>;

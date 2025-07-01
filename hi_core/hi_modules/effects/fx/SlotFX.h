@@ -11,13 +11,6 @@
 #ifndef SLOTFX_H_INCLUDED
 #define SLOTFX_H_INCLUDED
 
-/** TODO:
- *
- * - add modulation node that picks up the modulation signal from the chain ?
- *   (simulate the value within scriptnode)
- * - refactor & add the logic to poly FX
- */
-
 namespace hise { using namespace juce;
 using namespace scriptnode;
 
