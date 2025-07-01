@@ -66,6 +66,7 @@ public:
 		WebView,
 		FloatingTile,
 		MultipageDialog,
+		DynamicContainer,
 		duplicateComponent,
 		numComponentTypes
 	};

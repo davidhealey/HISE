@@ -232,6 +232,35 @@ struct IterationProtector : public Base
 	
 };
 
+/** This class fires the callback whenever any property is changed. */
+struct AnyPropertyListener: public Base
+{
+	using PropertyCallback = std::function<void(Identifier, var)>;
+
+	AnyPropertyListener():
+		f({})
+	{}
+
+	~AnyPropertyListener() override;
+
+	void setCallback(ValueTree d, AsyncMode asyncMode, const PropertyCallback& f_, bool sendAtInit);
+
+	bool isRegisteredTo(const ValueTree& t) const;
+
+private:
+
+	void handleAsyncUpdate() override;
+
+	void valueTreePropertyChanged(ValueTree& v_, const Identifier& id) override;
+
+	PropertyCallback f;
+
+	ValueTree v;
+	Array<Identifier> ids;
+	Array<Identifier> changedIds;
+	var lastValue;
+};
+
 /** This class fires the given callback whenever the property changes. Can be used as member object
 	instead of deriving. */
 struct PropertyListener : public Base
@@ -242,11 +271,7 @@ struct PropertyListener : public Base
 		f({})
 	{}
 
-	~PropertyListener()
-	{
-		cancelPendingUpdate();
-		v.removeListener(this);
-	}
+	~PropertyListener() override;
 
 	void setCallback(ValueTree d, const Array<Identifier>& ids_, AsyncMode asyncMode, const PropertyCallback& f_);
 
@@ -259,7 +284,7 @@ struct PropertyListener : public Base
 
 private:
 
-	void handleAsyncUpdate();
+	void handleAsyncUpdate() override;
 
 	void valueTreePropertyChanged(ValueTree& v_, const Identifier& id_) override;
 
@@ -274,12 +299,7 @@ private:
 
 struct RecursivePropertyListener : public Base
 {
-
-	~RecursivePropertyListener()
-	{
-		cancelPendingUpdate();
-		v.removeListener(this);
-	}
+	~RecursivePropertyListener() override;
 
 	using RecursivePropertyCallback = std::function<void(ValueTree, Identifier)>;
 

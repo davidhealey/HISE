@@ -107,6 +107,9 @@ xcopy "xml\structhise_1_1_scripting_api_1_1_content_1_1_scripted_viewport.xml" "
 xcopy "xml\structhise_1_1_scripting_api_1_1_content_1_1_script_floating_tile.xml" "xml\selection"
 xcopy "xml\structhise_1_1_scripting_api_1_1_content_1_1_script_audio_waveform.xml" "xml\selection"
 xcopy "xml\structhise_1_1_scripting_api_1_1_content_1_1_script_multipage_dialog.xml" "xml\selection"
+xcopy "xml\structhise_1_1_scripting_api_1_1_content_1_1_script_dynamic_container.xml" "xml\selection"
+xcopy "xml\structhise_1_1_scripting_api_1_1_content_1_1_script_dynamic_container_1_1_child_reference.xml" "xml\selection"
+
 xcopy "xml\classhise_1_1_scripting_objects_1_1_script_rectangle.xml" "xml\selection"
 
 
@@ -204,6 +207,8 @@ ren "xml\selection\structhise_1_1_scripting_api_1_1_content_1_1_script_floating_
 ren "xml\selection\structhise_1_1_scripting_api_1_1_content_1_1_script_web_view.xml" "ScriptWebView.xml"
 ren "xml\selection\structhise_1_1_scripting_api_1_1_content_1_1_script_audio_waveform.xml" "ScriptAudioWaveform.xml"
 ren "xml\selection\structhise_1_1_scripting_api_1_1_content_1_1_script_multipage_dialog.xml" "ScriptMultipageDialog.xml"
+ren "xml\selection\structhise_1_1_scripting_api_1_1_content_1_1_script_dynamic_container.xml" "ScriptDynamicContainer.xml"
+ren "xml\selection\structhise_1_1_scripting_api_1_1_content_1_1_script_dynamic_container_1_1_child_reference.xml" "ContainerChild.xml";
 
 ren "xml\selection\classhise_1_1_scripting_objects_1_1_script_buffer.xml" "Buffer.xml"
 ren "xml\selection\structhise_1_1_scripting_objects_1_1_script_error_handler.xml" "ErrorHandler.xml"

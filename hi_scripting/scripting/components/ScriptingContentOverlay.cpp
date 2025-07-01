@@ -82,6 +82,7 @@ void ScriptEditHandler::createNewComponent(ComponentType componentType, int x, i
 	case ComponentType::WebView:			componentName = "WebView"; break;
 	case ComponentType::FloatingTile:		componentName = "FloatingTile"; break;
 	case ComponentType::MultipageDialog:	componentName = "MultipageDialog"; break;
+	case ComponentType::DynamicContainer:	componentName = "DynamicContainer"; break;
 	case ComponentType::duplicateComponent:
 	{
 		auto b = getScriptEditHandlerOverlay()->getScriptComponentEditBroadcaster();
@@ -143,6 +144,9 @@ void ScriptEditHandler::createNewComponent(ComponentType componentType, int x, i
 		break;
 	case hise::ScriptEditHandler::ComponentType::MultipageDialog:
 		newComponent = content->createNewComponent<ScriptingApi::Content::ScriptMultipageDialog>(id, x, y);
+		break;
+	case hise::ScriptEditHandler::ComponentType::DynamicContainer:
+		newComponent = content->createNewComponent<ScriptingApi::Content::ScriptDynamicContainer>(id, x, y);
 		break;
 	case hise::ScriptEditHandler::ComponentType::duplicateComponent:
 		jassertfalse;
@@ -609,6 +613,7 @@ void ScriptingContentOverlay::mouseUp(const MouseEvent &e)
 			m.addItem((int)ScriptEditHandler::ComponentType::WebView, "Add new WebView");
 			m.addItem((int)ScriptEditHandler::ComponentType::FloatingTile, "Add new FloatingTile");
 			m.addItem((int)ScriptEditHandler::ComponentType::MultipageDialog, "Add new MultipageDialog");
+			m.addItem((int)ScriptEditHandler::ComponentType::DynamicContainer, "Add new DynamicContainer");
 
 			auto components = b->getSelection();
 

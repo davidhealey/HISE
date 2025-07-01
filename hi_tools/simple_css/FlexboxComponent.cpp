@@ -656,10 +656,10 @@ float FlexboxComponent::getAutoHeightForWidth(float fullWidth)
                 if(!isVisibleOrPlaceHolder(child))
                     continue;
 
-                
-
                 if(auto ssChild = childSheets[child])
                     h += (float)getHeightFromItem(ssChild->getFlexItem(child, getLocalBounds().toFloat()));
+				else
+					h += (float)Helpers::getDefaultBounds(*child).getHeight();
                 
                 if(child != lastComponent)
                     h += gap;
@@ -676,6 +676,10 @@ float FlexboxComponent::getAutoHeightForWidth(float fullWidth)
 
                 if(auto ssChild = childSheets[child])
                     h = jmax(h, getHeightFromItem(ssChild->getFlexItem(child, getLocalBounds().toFloat())));
+				else
+				{
+					h = jmax(h, (float)Helpers::getDefaultBounds(*child).getHeight());
+				}
             }
         }
     }
@@ -891,7 +895,11 @@ FlexboxComponent::PositionData FlexboxComponent::createPositionData()
 				}
 			}
 			else
-				data.flexBox.items.add(FlexItem(*c).withMargin(thisMargin));
+			{
+				;
+				data.flexBox.items.add(Helpers::createDefaultFlexItem(*c, thisMargin));
+			}
+				
 		}
 	}
 
@@ -920,7 +928,7 @@ void FlexboxViewport::setDefaultStyleSheet(const String& styleSheet)
 void FlexboxViewport::setCSS(StyleSheet::Collection& css)
 {
 	content.setCSS(css);
-	ss = css.getWithAllStates(this, s);
+	ss = css.getForComponent(&content);
 }
 
 void FlexboxViewport::resized()

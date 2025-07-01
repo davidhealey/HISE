@@ -409,16 +409,37 @@ StyleSheet::Ptr StyleSheet::Collection::operator[](const Selector& s) const
 {
 	StyleSheet::Ptr all;
 
-	for(auto& l: list)
+	if(useIsolatedCollections)
 	{
-		if(l->matchesSelectorList({s}))
+		for(auto& c: childCollections)
 		{
-			if(l->isAll())
-				all = l;
-			else
-				return l;
+			for(auto l: c.second)
+			{
+				if(l->matchesSelectorList({s}))
+				{
+					if(l->isAll())
+						all = l;
+					else
+						return l;
+				}
+			}
 		}
 	}
+	else
+	{
+		for(auto& l: list)
+		{
+			if(l->matchesSelectorList({s}))
+			{
+				if(l->isAll())
+					all = l;
+				else
+					return l;
+			}
+		}
+	}
+
+	
 
 	return all;
 }
@@ -450,6 +471,8 @@ String StyleSheet::Collection::getDebugLogForComponent(Component* c) const
 
 StyleSheet::Ptr StyleSheet::Collection::getForElementSelector(Component* c) const
 {
+	c = simple_css::FlexboxComponent::Helpers::getComponentForStyleSheet(c);
+
 	for(auto ss: list)
 	{
 		auto es = FlexboxComponent::Helpers::getElementSelector(*c);
@@ -463,6 +486,8 @@ StyleSheet::Ptr StyleSheet::Collection::getForElementSelector(Component* c) cons
 
 StyleSheet::Ptr StyleSheet::Collection::getForComponent(Component* c)
 {
+	c = simple_css::FlexboxComponent::Helpers::getComponentForStyleSheet(c);
+
 	for(const auto& existing: cachedMaps)
 	{
 		if(existing.first.getComponent() == c)
@@ -770,6 +795,8 @@ String StyleSheet::Collection::toString() const
 
 StyleSheet::Ptr StyleSheet::Collection::getWithAllStates(Component* c, const Selector& s)
 {
+	c = simple_css::FlexboxComponent::Helpers::getComponentForStyleSheet(c);
+
 	for(const auto& existing: cachedMapForAllStates)
 	{
 		if(existing.first.second.exactMatch(s) && existing.first.first == c)
@@ -936,6 +963,8 @@ bool StyleSheet::Collection::clearCache(Component* c)
 	}
 	else
 	{
+		c = simple_css::FlexboxComponent::Helpers::getComponentForStyleSheet(c);
+
 		for(int i = 0; i < cachedMaps.size(); i++)
 		{
 			if(cachedMaps[i].first.getComponent() == c)
@@ -2572,6 +2601,19 @@ FlexItem StyleSheet::getFlexItem(Component* c, Rectangle<float> fullArea) const
 	item.maxWidth = getPixelValue(b, { "max-width", {}}, -1.0f);
 	item.minHeight = getPixelValue(b, { "min-height", {}}, -1.0f);
 	item.maxHeight = getPixelValue(b, { "max-height", {}}, -1.0f);
+
+	if(item.height == -1 || item.width == -1)
+	{
+		auto db = FlexboxComponent::Helpers::getDefaultBounds(*c);
+
+		if(item.height == -1.0f && db.getHeight() > 0)
+			item.height = db.getHeight();
+
+		if(item.width == -1.0f && db.getWidth() > 0)
+			item.width = db.getWidth();
+	}
+
+	c = FlexboxComponent::Helpers::getComponentForStyleSheet(c);
 
 	if(auto bt = dynamic_cast<Button*>(c))
 	{

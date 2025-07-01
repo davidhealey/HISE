@@ -515,6 +515,42 @@ void ScriptContentComponent::setHeatmap(DebugInformationBase::Ptr p, const std::
 #endif
 }
 
+struct ControlledDataProvider: public simple_css::StyleSheet::Collection::DataProvider,
+						 public ControlledObject
+{
+	ControlledDataProvider(MainController* mc):
+	  ControlledObject(mc)
+	{}
+
+	Font loadFont(const String& fontName, const String& url) override
+	{
+		return getMainController()->getFontFromString(fontName, 16.0f);
+	}
+
+	String importStyleSheet(const String& url) override
+	{
+		jassertfalse;
+		return {};
+	}
+
+	Image loadImage(const String& imageURL) override
+	{
+		PoolReference ref(getMainController(), imageURL, ProjectHandler::Images);
+		auto img = getMainController()->getActiveFileHandler()->pool->getImagePool().loadFromReference(ref, PoolHelpers::LoadingType::DontCreateNewEntry);
+
+		if(img != nullptr && img->data.isValid())
+			return img->data;
+
+		debugError(getMainController()->getMainSynthChain(), "Can't find image reference " + imageURL);
+		return {};
+	}
+};
+
+simple_css::StyleSheet::Collection::DataProvider* ScriptContentComponent::createDataProvider()
+{
+	return new ControlledDataProvider(p->getMainController());
+}
+
 void ScriptContentComponent::scriptWasCompiled(JavascriptProcessor *jp)
 {
 	if (jp == getScriptProcessor())

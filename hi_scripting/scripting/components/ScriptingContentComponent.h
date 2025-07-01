@@ -317,6 +317,8 @@ public:
 
 	void setHeatmap(DebugInformationBase::Ptr p, const std::map<int, double>* map);
 
+	simple_css::StyleSheet::Collection::DataProvider* createDataProvider() override;
+
 private:
 
 	std::vector<std::pair<Rectangle<int>, float>> heatmap;

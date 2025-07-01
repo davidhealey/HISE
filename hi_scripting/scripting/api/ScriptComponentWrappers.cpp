@@ -2968,13 +2968,25 @@ void ScriptCreatedComponentWrappers::FloatingTileWrapper::updateLookAndFeel()
     }
 }
 
+
+ScriptCreatedComponentWrappers::DynamicComponentWrapper::DynamicComponentWrapper(ScriptContentComponent* content,
+	ScriptingApi::Content::ScriptDynamicContainer* container, int index):
+	ScriptCreatedComponentWrapper(content, index)
+{
+	auto mc = const_cast<MainController*>(dynamic_cast<const Processor*>(content->getScriptProcessor())->getMainController());
+	auto wc = new WrapperComponent();
+	container->dataBroadcaster.addListener(*wc, WrapperComponent::onChange);
+	component = wc;
+
+	initAllProperties();
+}
+
 ScriptCreatedComponentWrappers::MultipageDialogWrapper::MultipageDialogWrapper(ScriptContentComponent* content,
-	ScriptDialog* mp, int index):
+                                                                               ScriptDialog* mp, int index):
 	ScriptCreatedComponentWrapper(content, index)
 {
 	component = mp->createBackdrop();
 	initAllProperties();
-			
 }
 
 void ScriptCreatedComponentWrappers::FloatingTileWrapper::updateComponent()

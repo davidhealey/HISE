@@ -43,6 +43,7 @@ struct FlexboxContainer
 	virtual void setDefaultStyleSheet(const String& code) = 0;
 	virtual void setCSS(StyleSheet::Collection& css) = 0;
 	virtual void addFlexItem(Component& c) = 0;
+	virtual void removeFlexItem(Component& c) = 0;
     virtual void rebuildLayout() = 0;
     
 	bool fullRebuild = true;
@@ -138,6 +139,21 @@ struct FlexboxComponent: public Component,
 			return (int)c.getProperties().getWithDefault("manualPseudoState", var(0));
 		}
 
+		static FlexItem createDefaultFlexItem(Component& c, FlexItem::Margin margin)
+		{
+			FlexItem item(c);
+
+			auto db = getDefaultBounds(c);
+
+			if(db.getWidth() > 0.0)
+				item = item.withWidth(db.getWidth());
+
+			if(db.getHeight() > 0.0)
+				item = item.withHeight(db.getHeight());
+
+			return item.withMargin(margin);
+		}
+
 		static void writeSelectorsToProperties(Component& c, const StringArray& selectors);
 		static Selector getTypeSelectorFromComponentClass(Component* c);
 		static Array<Selector> getClassSelectorFromComponentClass(Component* c);
@@ -145,6 +161,55 @@ struct FlexboxComponent: public Component,
 		static void writeClassSelectors(Component& c, const Array<Selector>& classList, bool append);
 
 		static void invalidateCache(Component& c);
+
+		static void storeDefaultBounds(Component& c, Rectangle<int> b)
+		{
+			if(b.getWidth() > 0)
+				c.getProperties().set("defaultWidth", b.getWidth());
+
+			if(b.getHeight() > 0)
+				c.getProperties().set("defaultHeight", b.getHeight());
+		}
+
+		/** Use this for components that wrap another component that should be queried for the style sheet. */
+		static void setIsOpaqueWrapper(Component& c, bool shouldBeOpaque)
+		{
+			if(shouldBeOpaque)
+			{
+				jassert(c.getNumChildComponents() == 1);
+			}
+
+			c.getProperties().set("invisibleParent", true);
+		}
+
+		/** Use this to get the component that might have style sheets attached. */
+		static Component* getComponentForStyleSheet(Component* c)
+		{
+			if(c == nullptr)
+				return nullptr;
+
+			if(c->getProperties()["invisibleParent"])
+			{
+				jassert(c->getNumChildComponents() == 1);
+				return getComponentForStyleSheet(c->getChildComponent(0));
+			}
+
+			return c;
+		}
+
+		static Rectangle<int> getDefaultBounds(Component& c)
+		{
+			int w = 0;
+			int h = 0;
+
+			if(c.getProperties().contains("defaultWidth"))
+				w = c.getProperties()["defaultWidth"];
+
+			if(c.getProperties().contains("defaultHeight"))
+				h = c.getProperties()["defaultHeight"];
+
+			return { 0, 0, w, h };
+		}
 
 		static Selector getIdSelectorFromComponentClass(Component* c);
 
@@ -218,6 +283,12 @@ struct FlexboxComponent: public Component,
 
 	void addFlexItem(Component& c) override;
 
+    void removeFlexItem(Component& c) override
+    {
+		childSheets.erase(&c);
+		removeChildComponent(&c);
+    }
+
     void addDynamicFlexItem(Component& c);
 
     void changeClass(const Selector& s, bool add);
@@ -259,6 +330,20 @@ struct FlexboxComponent: public Component,
 		}
 
 		return c->isVisible();
+	}
+
+	void setFlexChildVisibility(Component* c, bool mustBeVisible, bool mustBeHidden)
+	{
+		VisibleState s;
+		s.mustBeHidden = mustBeHidden;
+		s.mustBeVisible = mustBeVisible;
+		setFlexChildVisibility(c, s);
+	}
+
+	void setFlexChildVisibility(Component* c, VisibleState newState)
+	{
+		jassert(c->getParentComponent() == this);
+		visibleStates[c] = newState;
 	}
 
     void setFlexChildVisibility(int childIndex, VisibleState newState)
@@ -339,6 +424,8 @@ private:
 	float lastWrapHeight = -1.0f;
 };
 
+
+
 struct FlexboxViewport: public Component,
 					    public FlexboxContainer
 {
@@ -348,11 +435,44 @@ struct FlexboxViewport: public Component,
 
 	void setCSS(StyleSheet::Collection& css) override;
 
+	void paint(Graphics& g) override
+	{
+		if(ss != nullptr)
+		{
+			if(auto root = CSSRootComponent::find(*this))
+			{
+				Renderer r(this, root->stateWatcher);
+
+				auto s = r.getPseudoClassState();
+
+				if(content.getNumChildComponents() == 0)
+				{
+					s |= (int)PseudoClassType::Empty;
+					r.setPseudoClassState(s, true);
+				}
+
+				root->stateWatcher.checkChanges(this, ss, s);
+
+				auto b = getLocalBounds().toFloat();
+				r.setApplyMargin(true);
+				r.drawBackground(g, b, ss);
+
+				auto text = content.getNumChildComponents() == 0 ? "No child elements" : "";
+				r.renderText(g, b, text, ss);
+			}
+		}
+	}
+
 	void resized() override;
 
 	void rebuildLayout() override;
 
 	void addFlexItem(Component& c) override;
+
+	void removeFlexItem(Component& c) override
+	{
+		content.removeFlexItem(c);
+	}
 
 	Viewport viewport;
     ScrollbarFader sf;
