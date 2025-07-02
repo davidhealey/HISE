@@ -30,7 +30,7 @@
 *   ===========================================================================
 */
 
-#if JUCE_WINDOWS && USE_IPP
+#if JUCE_WINDOWS && USE_IPP && 0 // enough...
 #define USE_IPP_MEDIAN_FILTER 1
 #else
 #define USE_IPP_MEDIAN_FILTER 0
