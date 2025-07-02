@@ -137,10 +137,6 @@
  //#define USE_SCRIPT_COPY_PROTECTION 0
 #endif
 
-#ifndef    USE_IPP
- //#define USE_IPP 1
-#endif
-
 #ifndef    USE_VDSP_FFT
  //#define USE_VDSP_FFT 1
 #endif
@@ -355,6 +351,10 @@
 
 #ifndef    HLAC_INCLUDE_TEST_SUITE
  //#define HLAC_INCLUDE_TEST_SUITE 0
+#endif
+
+#ifndef    USE_IPP
+ //#define USE_IPP 1
 #endif
 
 //==============================================================================

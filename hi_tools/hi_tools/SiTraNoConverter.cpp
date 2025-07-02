@@ -32,7 +32,6 @@
 
 #if JUCE_WINDOWS && USE_IPP
 #define USE_IPP_MEDIAN_FILTER 1
-#include <ipps.h>
 #else
 #define USE_IPP_MEDIAN_FILTER 0
 #endif
