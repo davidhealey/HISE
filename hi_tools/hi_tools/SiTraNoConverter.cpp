@@ -30,7 +30,7 @@
 *   ===========================================================================
 */
 
-#if _IPP_SEQUENTIAL_STATIC || _IPP_SEQUENTIAL_DYNAMIC || _IPP_PARALLEL_STATIC || _IPP_PARALLEL_DYNAMIC
+#if JUCE_WINDOWS && USE_IPP
 #define USE_IPP_MEDIAN_FILTER 1
 #include <ipps.h>
 #else
