@@ -99,7 +99,7 @@ struct SiTraNoConverter
 {
     struct ConfigData
     {
-        ConfigData() = default;
+        ConfigData() {};
 
         ConfigData(const var& obj);
 

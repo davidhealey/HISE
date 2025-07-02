@@ -451,11 +451,6 @@ void ModulatorSynthChain::reset()
 			p->sendDeleteMessage();
 	}
 
-	Processor::Iterator<JavascriptProcessor> jiter(this, false);
-
-	while(auto jp = jiter.getNextProcessor())
-		jp->cleanupEngine();
-
 	Processor::Iterator<HardcodedSwappableEffect> fxiter(this, false);
 
 	while(auto fx = fxiter.getNextProcessor())

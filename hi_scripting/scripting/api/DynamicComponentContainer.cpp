@@ -143,7 +143,7 @@ var Helpers::getDefaultValue(const Identifier& p)
 }
 }
 
-struct Factory
+struct Factory: public ReferenceCountedObject
 {
 	Factory();
 
@@ -1365,7 +1365,7 @@ ReferenceCountedObjectPtr<Base> Data::create(const ValueTree& v)
 	if(id.isNotEmpty() && v.hasProperty(dcid::defaultValue) && !values.hasProperty(Identifier(id)))
 		values.setProperty(Identifier(id), v[dcid::defaultValue], nullptr);
 	
-	return factory->create(this, v);
+	return getFactory()->create(this, v);
 }
 
 void Data::onValueChange(const Identifier& id, const var& newValue, bool useUndoManager)
@@ -1383,6 +1383,11 @@ const ValueTree& Data::getValueTree(TreeType t) const
 void Data::setValueCallback(const ValueCallback& v)
 {
 	valueCallback = v;
+}
+
+Factory* Data::getFactory()
+{
+    return dynamic_cast<Factory*>(factory.get());
 }
 
 void Data::setDataProviderCallbacks(const ImageProvider& ip_, const FontProvider& fp_)

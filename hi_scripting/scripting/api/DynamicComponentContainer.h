@@ -244,6 +244,8 @@ struct Data: public ReferenceCountedObject,
 		return nullptr;
 	}
 
+    Factory* getFactory();
+    
 private:
 
 	OwnedArray<std::pair<ValueTree, ReferenceCountedObjectPtr<ScriptingObjects::GraphicsObject>>> registeredDrawHandlers;
@@ -258,7 +260,7 @@ private:
 	ValueTree data;
 	ValueTree values;
 
-	ScopedPointer<Factory> factory;
+	ReferenceCountedObjectPtr<ReferenceCountedObject> factory;
 
 };
 
