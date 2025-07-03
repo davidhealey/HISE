@@ -229,8 +229,6 @@ will break compatibility with older projects / presets because the tempo indexes
 #include "hi_tools/runtime_target.h"
 
 #if USE_IPP
-
-#include "ipp.h"
 #include "hi_tools/IppFFT.h"
 #endif
 
