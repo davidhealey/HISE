@@ -907,7 +907,17 @@ void DspNetworkCompileExporter::createProjucerFile()
 	auto rlsName = rlsFile.getNonexistentSibling(false).getFileNameWithoutExtension().removeCharacters(" ");
 	auto ciName =  ciFile.getNonexistentSibling(false).getFileNameWithoutExtension().removeCharacters(" ");
 
-    
+	const auto& data = dynamic_cast<GlobalSettingManager*>(chainToExport->getMainController())->getSettingsObject();
+
+#if JUCE_WINDOWS
+	if (!useIpp) 
+		useIpp = data.getSetting(HiseSettings::Compiler::UseIPP);
+
+	REPLACE_WILDCARD_WITH_STRING("%USE_IPP%", useIpp ? "1" : "0");
+    REPLACE_WILDCARD_WITH_STRING("%IPP_1A%", useIpp ? "Static_Library" : String());
+#endif
+
+	
     
 #if JUCE_MAC
     REPLACE_WILDCARD_WITH_STRING("%USE_IPP_MAC%", useIpp ? "USE_IPP=1" : String());
