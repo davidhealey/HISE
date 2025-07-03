@@ -24,6 +24,7 @@ xcopy "xml\classhise_1_1_scripting_api_1_1_date.xml" "xml\selection"
 xcopy "xml\structhise_1_1fixobj_1_1_array.xml" "xml\selection"
 xcopy "xml\structhise_1_1fixobj_1_1_factory.xml" "xml\selection"
 xcopy "xml\structhise_1_1fixobj_1_1_stack.xml" "xml\selection"
+xcopy "xml\structhise_1_1_scripting_objects_1_1_script_wavetable_controller.xml" "xml\selection"
 
 xcopy "xml\classhise_1_1_scripting_objects_1_1_script_file.xml" "xml\selection"
 xcopy "xml\classhise_1_1_scripting_api_1_1_server.xml" "xml\selection"
@@ -106,6 +107,9 @@ xcopy "xml\structhise_1_1_scripting_api_1_1_content_1_1_scripted_viewport.xml" "
 xcopy "xml\structhise_1_1_scripting_api_1_1_content_1_1_script_floating_tile.xml" "xml\selection"
 xcopy "xml\structhise_1_1_scripting_api_1_1_content_1_1_script_audio_waveform.xml" "xml\selection"
 xcopy "xml\structhise_1_1_scripting_api_1_1_content_1_1_script_multipage_dialog.xml" "xml\selection"
+xcopy "xml\structhise_1_1_scripting_api_1_1_content_1_1_script_dynamic_container.xml" "xml\selection"
+xcopy "xml\structhise_1_1_scripting_api_1_1_content_1_1_script_dynamic_container_1_1_child_reference.xml" "xml\selection"
+
 xcopy "xml\classhise_1_1_scripting_objects_1_1_script_rectangle.xml" "xml\selection"
 
 
@@ -203,6 +207,8 @@ ren "xml\selection\structhise_1_1_scripting_api_1_1_content_1_1_script_floating_
 ren "xml\selection\structhise_1_1_scripting_api_1_1_content_1_1_script_web_view.xml" "ScriptWebView.xml"
 ren "xml\selection\structhise_1_1_scripting_api_1_1_content_1_1_script_audio_waveform.xml" "ScriptAudioWaveform.xml"
 ren "xml\selection\structhise_1_1_scripting_api_1_1_content_1_1_script_multipage_dialog.xml" "ScriptMultipageDialog.xml"
+ren "xml\selection\structhise_1_1_scripting_api_1_1_content_1_1_script_dynamic_container.xml" "ScriptDynamicContainer.xml"
+ren "xml\selection\structhise_1_1_scripting_api_1_1_content_1_1_script_dynamic_container_1_1_child_reference.xml" "ContainerChild.xml";
 
 ren "xml\selection\classhise_1_1_scripting_objects_1_1_script_buffer.xml" "Buffer.xml"
 ren "xml\selection\structhise_1_1_scripting_objects_1_1_script_error_handler.xml" "ErrorHandler.xml"
@@ -233,6 +239,7 @@ ren "xml\selection\classhise_1_1_beatport_manager.xml" "BeatportManager.xml"
 ren "xml\selection\classhise_1_1_scripting_api_1_1_date.xml" "Date.xml"
 ren "xml\selection\classhise_1_1_scripting_objects_1_1_script_neural_network.xml" "NeuralNetwork.xml"
 ren "xml\selection\classhise_1_1_scripting_objects_1_1_script_rectangle.xml" "Rectangle.xml"
+ren "xml\selection\structhise_1_1_scripting_objects_1_1_script_wavetable_controller.xml" "WavetableController.xml"
 
 ApiExtractor.exe xml\selection xml\selection
 

@@ -515,6 +515,22 @@ void ModulatorSynth::processHiseEventBuffer(const HiseEventBuffer &inputBuffer, 
 
 	midiProcessorChain->renderNextHiseEventBuffer(eventBuffer, numSamples);
 
+	delayedSoundEventIds.clearQuick();
+
+	for(auto& s: delayedSounds)
+	{
+		if(s.delayTimeSamples < (double)numSamples)
+		{
+			auto ts = roundToInt(s.delayTimeSamples);
+			HiseEvent dm(s.m);
+			dm.setTimeStamp(ts);
+			eventBuffer.addEvent(dm);
+			delayedSoundEventIds.insertWithoutSearch(dm.getEventId());
+		}
+
+		s.delayTimeSamples -= (double)numSamples;
+	}
+
 	eventBuffer.alignEventsToRaster<HISE_EVENT_RASTER>(numSamples);
 }
 
@@ -599,7 +615,41 @@ void ModulatorSynth::renderNextBlockWithModulators(AudioSampleBuffer& outputBuff
 			
 		}
 
-		handleHiseEvent(m);
+		if(delayedSoundEventIds.contains(m.getEventId()))
+		{
+			for(int i = 0; i < delayedSounds.size(); i++)
+			{
+				auto s = delayedSounds[i];
+				if(s.m.getEventId() == m.getEventId())
+				{
+#if JUCE_DEBUG
+					// Save this for later...
+					eventForSoundCollection = m;
+#endif
+
+					if(auto v = startSoundInternal(m, s.sound))
+					{
+						if(s.fadeInTimeSeconds != 0.0)
+						{
+							v->setVolumeFade(0.0, 0.0);
+							v->setVolumeFade(s.fadeInTimeSeconds, 1.0);
+
+							if(s.fixedLengthSamples > 0.0)
+							{
+								v->setFadeOutAtUptime(s.fixedLengthSamples, s.fadeInTimeSeconds);
+							}
+						}
+					}
+
+					delayedSounds.removeElement(i--);
+					delayedSoundEventIds.remove(m.getEventId());
+				}
+			}
+		}
+		else
+		{
+			handleHiseEvent(m);
+		}
 
 		startSample += samplesToNextMidiMessage;
 		numSamples -= samplesToNextMidiMessage;
@@ -656,8 +706,15 @@ void ModulatorSynth::renderVoice(int startSample, int numThisTime)
 
 	clearPendingRemoveVoices();
 
+	bool first = true;
+
 	for (auto v : activeVoices)
 	{
+		// this is picked up by monophonic envelopes to only render the modulation signal
+		// for the first voice
+		v->setIsFirstRenderedVoice(first);
+		first = false;
+
 		Profiler vp(*this, (int)ProfileEnumIds::RenderVoice);
 
 		jassert(!v->isInactive());
@@ -1175,6 +1232,24 @@ bool ModulatorSynth::isChainDisabled(InternalChains chain) const
 	return disabledChains[chain];
 }
 
+void ModulatorSynth::syncAfterDelayStart(bool waitForDelay, int voiceIndex)
+{
+	LockHelpers::SafeLock sl(getMainController(), LockHelpers::Type::AudioLock, isOnAir());
+
+	for(auto& mb: modChains)
+	{
+		if(!waitForDelay)
+		{
+			mb.resetVoice(voiceIndex);
+			mb.getChain()->syncAfterDelayStart(waitForDelay, voiceIndex);
+		}
+	}
+
+	effectChain->syncAfterDelayStart(waitForDelay, voiceIndex);
+
+		
+}
+
 int ModulatorSynth::getNumFreeVoices() const
 {
 	auto numActive = activeVoices.size() - pendingRemoveVoices.size();
@@ -1278,36 +1353,70 @@ void ModulatorSynth::noteOn(const HiseEvent &m)
 	// Make room for the sounds
 	handleVoiceLimit(numSoundsToStart);
 
-	
-
 	for(auto sound: soundsToBeStarted)
 	{
-		auto v = getVoiceToStart(m);
-
-		if( v != nullptr)
+		if(soundCollector != nullptr)
 		{
-			jassert(v->isInactive());
+			if(auto ss = soundCollector->getSpecialSoundStart(m, sound))
+			{
+				auto playNote = ss.delayTimeSamples == 0.0;
 
-			const int voiceIndex = v->getVoiceIndex();
+				ss.m.setStartOffset(ss.m.getStartOffset() + ss.startOffset);
 
-			LOG_SYNTH_EVENT("Start voice " + String(voiceIndex));
+				if(playNote)
+				{
+					if(auto v = startSoundInternal(ss.m, sound))
+					{
+						if(ss.fadeInTimeSeconds != 0.0)
+						{
+							v->setVolumeFade(0.0f, 0.0f);
+							v->setVolumeFade(ss.fadeInTimeSeconds, 1.0f);
 
-			jassert(voiceIndex != -1);
+							if(ss.fixedLengthSamples > 0.0)
+							{
+								v->setFadeOutAtUptime(ss.fixedLengthSamples, ss.fadeInTimeSeconds);
+							}
+						}
+					}
+				}
+				else
+				{
+					auto deltaThisBlock = getLargestBlockSize() - m.getTimeStamp();
+					ss.delayTimeSamples -= deltaThisBlock;
+					delayedSounds.insertWithoutSearch(ss);
+				}
 
-			v->setStartUptime(getMainController()->getUptime());
-			v->setCurrentHiseEvent(m);
+#if 0
+				if(delay > 0.0)
+				{
+					auto deltaThisBlock = getLargestBlockSize() - m.getTimeStamp();
 
-			preStartVoice(voiceIndex, m);
+					delay -= deltaThisBlock;
 
-			startVoiceWithHiseEvent (v, sound, m);
+					SoundCollectorBase::SpecialStart ss;
+
+					ss.delayTimeSamples = delay;
+
+
+
+					delayedSounds.insertWithoutSearch({ m, sound, delay });
+					
+				}
+				else
+				{
+					HiseEvent m2(m);
+					m2.setStartOffset(m.getStartOffset() + -1.0 * delay);
+					startSoundInternal(m2, sound);
+					
+				}
+#endif
+
+				continue;
+			}
 		}
-		else
-		{
-			// your handleVoiceLimit() function failed...
-			jassertfalse;
-		}
+
+		startSoundInternal(m, sound);
     }
-	
 }
 
 void ModulatorSynth::noteOn(int midiChannel, int midiNoteNumber, float velocity)
@@ -1322,6 +1431,14 @@ void ModulatorSynth::noteOn(int midiChannel, int midiNoteNumber, float velocity)
 
 void ModulatorSynth::noteOff(const HiseEvent &m)
 {
+	for(int i = 0; i < delayedSounds.size(); i++)
+	{
+		if(delayedSounds[i].m.getEventId() == m.getEventId())
+		{
+			delayedSounds.removeElement(i--);
+		}
+	}
+
 	float velocity = m.getFloatVelocity();
 	const int midiChannel = m.getChannel();
 
@@ -1431,9 +1548,10 @@ void ModulatorSynthVoice::resetVoice()
 	killThisVoice = false;
 	killFadeLevel = 1.0f;
 
+	fixedFadeOutUptime = -1.0;
+	fixedFadeTimeSeconds = 0.0;
 
 	gainFader.setValueWithoutSmoothing(1.0f);
-
 	pitchFader.setValueWithoutSmoothing(1.0);
 
 	os->flagVoiceAsRemoved(this);
@@ -1957,6 +2075,36 @@ hise::ModulatorSynthVoice* ModulatorSynth::getVoiceToStart(const HiseEvent& m)
 	return v;
 }
 
+ModulatorSynthVoice* ModulatorSynth::startSoundInternal(const HiseEvent& m, ModulatorSynthSound* sound)
+{
+	auto v = getVoiceToStart(m);
+
+	if( v != nullptr)
+	{
+		jassert(v->isInactive());
+
+		const int voiceIndex = v->getVoiceIndex();
+
+		LOG_SYNTH_EVENT("Start voice " + String(voiceIndex));
+
+		jassert(voiceIndex != -1);
+
+		v->setStartUptime(getMainController()->getUptime());
+		v->setCurrentHiseEvent(m);
+
+		preStartVoice(voiceIndex, m);
+		startVoiceWithHiseEvent (v, sound, m);
+		return v;
+	}
+	else
+	{
+		// your handleVoiceLimit() function failed...
+		jassertfalse;
+	}
+
+	return nullptr;
+}
+
 ModulatorSynthVoice::ModulatorSynthVoice(ModulatorSynth* ownerSynth_):
 	SynthesiserVoice(),
 	ownerSynth(ownerSynth_),
@@ -1997,6 +2145,12 @@ bool ModulatorSynthVoice::canPlaySound(SynthesiserSound* s)
 	return s != nullptr;
 }
 
+void ModulatorSynthVoice::setFadeOutAtUptime(double fixedLengthSamples, double fadeInTimeSeconds)
+{
+	fixedFadeOutUptime = fixedLengthSamples;
+	fixedFadeTimeSeconds = fadeInTimeSeconds;
+}
+
 const HiseEvent& ModulatorSynthVoice::getCurrentHiseEvent() const
 { return currentHiseEvent; }
 
@@ -2032,7 +2186,6 @@ bool ModulatorSynthVoice::isTailingOff() const
 void ModulatorSynthVoice::prepareToPlay(double sampleRate, int samplesPerBlock)
 {
 	SynthesiserVoice::setCurrentPlaybackSampleRate(sampleRate);
-
 	ProcessorHelpers::increaseBufferIfNeeded(voiceBuffer, samplesPerBlock);
 }
 
@@ -2129,6 +2282,32 @@ double ModulatorSynthVoice::getVoiceUptime() const noexcept
 void ModulatorSynthVoice::setStartUptime(double newUptime) noexcept
 { startUptime = newUptime; }
 
+int ModulatorSynthVoice::getVoicePositionInSamples(bool wrapLoop) const
+{
+	if(wrapLoop)
+	{
+		if(auto s = static_cast<ModulatorSamplerSound*>(getCurrentlyPlayingSound().get()))
+		{
+			auto sound = s->getReferenceToSound();
+
+			if(!sound->isLoopEnabled() || voiceUptime < sound->getLoopEnd() || sound->getLoopLength() == 0)
+				return voiceUptime;
+
+			auto v = (int)voiceUptime;
+			v -= sound->getLoopStart();
+			v %= sound->getLoopLength();
+			v += sound->getLoopStart();
+
+			return v;
+		}
+
+		return 0;
+	}
+	else
+		return voiceUptime;
+
+}
+
 void ModulatorSynthVoice::setScriptGainValue(float newGainValue)
 { scriptGainValue = newGainValue; }
 
@@ -2193,6 +2372,8 @@ void ModulatorSynthVoice::renderNextBlock (AudioSampleBuffer& outputBuffer, int 
 	if (isActive)
     { 
 		calculateBlock(startSample, numSamples);
+
+		checkFixedLength();
 
 		if (gainFader.isSmoothing())
 		{
@@ -2397,6 +2578,7 @@ void ModulatorSynthChainFactoryType::fillTypeNameList()
 	ADD_NAME_TO_TYPELIST(MacroModulationSource);
 	ADD_NAME_TO_TYPELIST(SendContainer);
 	ADD_NAME_TO_TYPELIST(SilentSynth);
+	ADD_NAME_TO_TYPELIST(HardcodedSynthesiser);
 }
 
 
@@ -2420,6 +2602,7 @@ Processor* ModulatorSynthChainFactoryType::createProcessor	(int typeIndex, const
 	case macroModulationSource: return new MacroModulationSource(m, id, numVoices);
 	case sendContainer:			return new SendContainer(m, id);
 	case silentSynth:			return new SilentSynth(m, id, numVoices);
+	case hardcodedSynth:		return new HardcodedSynthesiser(m, id, numVoices);
 	default:					jassertfalse; return nullptr;
 	}
 };

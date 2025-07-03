@@ -204,14 +204,16 @@ public:
 
 		DspNetwork* getActiveNetwork() const;
 
-		void connectRuntimeTargets(MainController* mc) override;
-		void disconnectRuntimeTargets(MainController* mc) override;
+		void connectRuntimeTargets(Processor* p) override;
+		void disconnectRuntimeTargets(Processor* p) override;
 
 		ExternalDataHolder* getExternalDataHolder();
 
 		void setExternalDataHolderToUse(ExternalDataHolder* newHolder);
 
 		void setVoiceKillerToUse(snex::Types::VoiceResetter* vk_);
+
+		virtual ModulatorChain::ExtraModulatorRuntimeTargetSource* getExtraModulationHandler() { return nullptr; }
 
 		SimpleReadWriteLock& getNetworkLock();
 
@@ -714,9 +716,38 @@ public:
     
 	String getNonExistentId(String id, StringArray& usedIds) const;
 
-	
+	const modulation::ParameterProperties& getParameterProperties() const noexcept { return dynamicParameterProperties.data; }
 
 private:
+
+	struct DynamicParameterModulationProperties
+	{
+		DynamicParameterModulationProperties(DspNetwork& parent_):
+		  parent(parent_)
+		{}
+
+		void shutdown()
+		{
+			shutdownCalled = true;
+			data.reset();
+			propertyListener.shutdown();
+			blockSizeListener.shutdown();
+			connectionListener.shutdown();
+		}
+
+		void init();
+
+		void refreshConnections();
+
+		void refreshProcessSpecs();
+
+		bool shutdownCalled = false;
+		DspNetwork& parent;
+		scriptnode::modulation::ParameterProperties data;
+		valuetree::RecursivePropertyListener propertyListener;
+		valuetree::PropertyListener blockSizeListener;
+		valuetree::RecursiveTypedChildListener connectionListener;
+	} dynamicParameterProperties;
 
 	String initialId;
 

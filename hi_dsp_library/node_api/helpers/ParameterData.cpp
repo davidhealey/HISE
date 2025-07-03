@@ -180,7 +180,21 @@ void RangeHelpers::storeDoubleRange(ValueTree& d, InvertableParameterRange r, Un
 	}
 	
 	d.setProperty(ri(rangeIdSet, RangeIdentifier::StepSize), r.rng.interval, um);
-	d.setProperty(ri(rangeIdSet, RangeIdentifier::SkewFactor), r.rng.skew, um);
+
+	if(rangeIdSet == IdSet::ScriptComponents)
+	{
+		if(r.rng.skew != 1.0)
+		{
+			auto midPosition = r.convertFrom0to1(0.5, false);
+			d.setProperty(ri(rangeIdSet, RangeIdentifier::SkewFactor), midPosition, um);
+		}
+	}
+	else
+	{
+		d.setProperty(ri(rangeIdSet, RangeIdentifier::SkewFactor), r.rng.skew, um);
+	}
+
+	
 }
 
 void RangeHelpers::storeDoubleRange(var& obj, InvertableParameterRange r, IdSet rangeIdSet)
@@ -211,7 +225,19 @@ void RangeHelpers::storeDoubleRange(var& obj, InvertableParameterRange r, IdSet 
 	}
 
 	d->setProperty(ri(rangeIdSet, RangeIdentifier::StepSize), r.rng.interval);
-	d->setProperty(ri(rangeIdSet, RangeIdentifier::SkewFactor), r.rng.skew);
+
+	if(rangeIdSet == IdSet::ScriptComponents)
+	{
+		if(r.rng.skew != 1.0)
+		{
+			auto midPosition = r.convertFrom0to1(0.5, false);
+			d->setProperty(ri(rangeIdSet, RangeIdentifier::SkewFactor), midPosition);
+		}
+	}
+	else
+	{
+		d->setProperty(ri(rangeIdSet, RangeIdentifier::SkewFactor), r.rng.skew);
+	}
 }
 
 bool RangeHelpers::equalsWithError(const InvertableParameterRange& r1, const InvertableParameterRange& r2, double maxError)
@@ -283,7 +309,8 @@ scriptnode::InvertableParameterRange RangeHelpers::getDoubleRange(const ValueTre
 			r.rng.skew = jlimit(0.001, 100.0, (double)t[skewId]);
 		}
 	}
-		
+
+	r.checkIfIdentity();
 
 	return r;
 }
@@ -330,6 +357,7 @@ namespace parameter
 		RangeHelpers::storeDoubleRange(p, info.toRange(), nullptr);
 
 		p.setProperty(PropertyIds::ID, info.getId(), nullptr);
+		p.setProperty(PropertyIds::TextToValueConverter, pod::getTextValueConverterNames()[(int)info.textConverter], nullptr);
 		p.setProperty(PropertyIds::Value, info.defaultValue, nullptr);
 		p.setProperty(PropertyIds::DefaultValue, info.defaultValue, nullptr);
 		return p;
@@ -443,6 +471,13 @@ namespace parameter
 		skew = (DataType)range.rng.skew;
 		interval = (DataType)range.rng.interval;
 		defaultValue = (DataType)v[PropertyIds::Value];
+
+		auto tv = getTextValueConverterNames().indexOf(v[PropertyIds::TextToValueConverter].toString());
+
+		if(tv != -1)
+		{
+			textConverter = (TextValueConverters)tv;
+		}
 	}
 
 	pod::pod(MemoryInputStream& mis)
@@ -451,9 +486,11 @@ namespace parameter
 
 		auto safe = mis.readByte();
 
-		if (safe == 91)
+		if (safe == 92)
 		{
 			ok = true;
+
+			textConverter = (TextValueConverters)mis.readByte();
 			index = mis.readInt();
 			auto s = mis.readString();
 
@@ -476,6 +513,7 @@ namespace parameter
 		s << "id: " << parameterName << nl;
 		s << "min: " << min << nl;
 		s << "max: " << max << nl;
+		s << "converter: " << getTextValueConverterNames()[(int)textConverter];
 
 		return s;
 	}
@@ -516,7 +554,8 @@ namespace parameter
 
 	void pod::writeToStream(MemoryOutputStream& b)
 	{
-		b.writeByte(91);
+		b.writeByte(92);
+		b.writeByte((uint8)textConverter);
 		b.writeInt(index);
 
 		String id(parameterName);

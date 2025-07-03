@@ -208,6 +208,7 @@ will break compatibility with older projects / presets because the tempo indexes
 #include "hi_tools/UpdateMerger.h"
 
 #include "hi_tools/MiscToolClasses.h"
+#include "hi_tools/SiTraNoConverter.h"
 
 #include "hi_tools/PathFactory.h"
 #include "hi_tools/HI_LookAndFeels.h"
@@ -228,8 +229,6 @@ will break compatibility with older projects / presets because the tempo indexes
 #include "hi_tools/runtime_target.h"
 
 #if USE_IPP
-
-#include "ipp.h"
 #include "hi_tools/IppFFT.h"
 #endif
 
@@ -324,7 +323,7 @@ using ComponentWithMiddleMouseDrag = juce::Component;
 #include "hi_standalone_components/eq_plot/FilterInfo.h"
 #include "hi_standalone_components/eq_plot/FilterGraph.h"
 
-
+#include "hi_neural/RTNeural/modules/xsimd/xsimd.hpp"
 
 #if HISE_INCLUDE_RT_NEURAL
 #include "hi_neural/hi_neural.h"

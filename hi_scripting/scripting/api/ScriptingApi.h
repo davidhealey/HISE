@@ -319,6 +319,13 @@ public:
 		/** Returns the downsampling factor for the modulation signal (default is 8). */
 		double getControlRateDownsamplingFactor() const;
 
+		/** Uses one of the inbuilt text converters to prettify a numeric value. */
+		String getTextForValue(double value, String converterMode)
+		{
+			auto vtc = ValueToTextConverter::createForMode(converterMode);
+			return vtc.getTextForValue(value);
+		}
+
 		/** Iterates the given sub-directory of the Samples folder and returns a list with all references to audio files. */
 		var getSampleFilesFromDirectory(const String& relativePathFromSampleFolder, bool recursive);
 
@@ -1284,6 +1291,9 @@ public:
 		/** Creates a reference to the routing matrix of the given processor. */
 		ScriptRoutingMatrix* getRoutingMatrix(const String& processorId);
 
+		/** Creates a object to control the wavetable synthesiser features. */
+		ScriptingObjects::ScriptWavetableController* getWavetableController(const String& processorId);
+
 		/** Returns the index of the Modulator in the chain with the supplied chainId */
 		int getModulatorIndex(int chainId, const String &id) const;
 
@@ -1775,9 +1785,13 @@ private:
 
 		ProcessorWithScriptingContent* p;
 
+		static File getFileFromVar(const var& fileObjectDirectoryConstantOrAbsolutePath, MainController* mc);
+
 	private:
 
 		void browseInternally(File startFolder, bool forSaving, bool isDirectory, String wildcard, var callback);
+
+		static File getFileStatic(SpecialLocations l, MainController* mc);
 
 		File getFile(SpecialLocations l);
 

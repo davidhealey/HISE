@@ -76,7 +76,7 @@ struct EventDataEditor: public ProcessorEditorBody
 		dataSlot.setup(getProcessor(), isEnvelope ? 
 			(int)EventDataEnvelope::Parameter::SlotIndex :
 			(int)EventDataModulator::Parameter::SlotIndex, "SlotIndex");
-		dataSlot.setMode(HiSlider::Discrete, 0.0, (double)AdditionalEventStorage::NumDataSlots, DBL_MAX,  1.0);
+		dataSlot.setMode(HiSlider::Discrete, {0.0, (double)AdditionalEventStorage::NumDataSlots, 1.0});
 
 		dataSlot.setTooltip (TRANS("Set the Slot index for the event data"));
 	    dataSlot.setSliderStyle (Slider::RotaryHorizontalVerticalDrag);
@@ -88,7 +88,9 @@ struct EventDataEditor: public ProcessorEditorBody
 		{
 			addAndMakeVisible(smoothingSlider = new HiSlider("SmoothingTime"));
 			smoothingSlider->setup(getProcessor(), EventDataEnvelope::Parameter::SmoothingTime, "SmoothingTime");
-			smoothingSlider->setMode(HiSlider::Time, 0.0, 2000.0, 100.0);
+			NormalisableRange<double> tr(0.0, 2000.0);
+			tr.setSkewForCentre(100.0);
+			smoothingSlider->setMode(HiSlider::Time, tr);
 			smoothingSlider->setTooltip (TRANS("The value if the event data hasn't been written"));
 		    smoothingSlider->setSliderStyle (Slider::RotaryHorizontalVerticalDrag);
 		    smoothingSlider->setTextBoxStyle (Slider::TextBoxRight, true, 80, 20);

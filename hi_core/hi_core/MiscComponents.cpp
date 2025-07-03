@@ -1077,7 +1077,19 @@ void BorderPanel::paint(Graphics &g)
 	}
 	else
 	{
-        if(auto laf = dynamic_cast<simple_css::StyleSheetLookAndFeel*>(&getLookAndFeel()))
+		auto thisLaf = &getLookAndFeel();
+
+		auto laf = dynamic_cast<simple_css::StyleSheetLookAndFeel*>(thisLaf);
+
+		if(laf == nullptr)
+		{
+			if(auto scriptedLaf = dynamic_cast<hise::ScriptingObjects::ScriptedLookAndFeel::LafBase*>(thisLaf))
+			{
+				laf = scriptedLaf->getStyleSheetLookAndFeel();
+			}
+		}
+
+        if(laf != nullptr)
         {
 			if(auto root = simple_css::CSSRootComponent::find(*this))
 			{

@@ -120,6 +120,13 @@ If enabled, then the unit test suite will be compiled and added to all unit test
 #define HLAC_INCLUDE_TEST_SUITE 0
 #endif
 
+/** Config: USE_IPP
+
+Use the Intel Performance Primitives Library for the convolution reverb.
+*/
+#ifndef USE_IPP
+#define USE_IPP 1
+#endif
 
 #include "hlac/BitCompressors.h"
 #include "hlac/CompressionHelpers.h"

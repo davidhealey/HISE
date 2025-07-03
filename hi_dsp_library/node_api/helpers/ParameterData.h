@@ -91,6 +91,8 @@ struct InvertableParameterRange
 	juce::NormalisableRange<double> rng;
 	bool inv = false;
 
+	bool isNonDefault() const { return !isIdentity; }
+
 private:
 
 	bool isIdentity = false;
@@ -280,6 +282,32 @@ private:
 
 struct pod
 {
+	enum TextValueConverters: uint8
+	{
+		Undefined,
+		Frequency,
+		Time,
+		TempoSync,
+		Pan,
+		NormalizedPercentage,
+		Decibel,
+		numTextValueConverters
+	};
+
+	static StringArray getTextValueConverterNames()
+	{
+		return {
+			"Undefined",
+			"Frequency",
+			"Time",
+			"TempoSync",
+			"Pan",
+			"NormalizedPercentage",
+			"Decibel",
+			"Undefined"
+		};
+	}
+
 	static constexpr int MaxParameterNameLength = 32;
 
 	pod()
@@ -319,6 +347,7 @@ struct pod
 
 	bool inverted = false;
 	bool ok = false;
+	TextValueConverters textConverter = TextValueConverters::Undefined;
 
 	void writeToStream(MemoryOutputStream& b);
 };
@@ -362,6 +391,28 @@ struct data
 		info.defaultValue = newDefaultValue;
 	}
 
+	hise::ValueToTextConverter getValueToTextConverter() const
+	{
+		if(!parameterNames.isEmpty())
+		{
+			return ValueToTextConverter::createForOptions(parameterNames);
+		}
+
+		switch(info.textConverter)
+		{
+		case pod::Frequency: return ValueToTextConverter::createForMode("Frequency");
+		case pod::Time:		 return ValueToTextConverter::createForMode("Time");
+		case pod::TempoSync: return ValueToTextConverter::createForMode("TempoSync");
+		case pod::Pan:		 return ValueToTextConverter::createForMode("Pan");
+		case pod::NormalizedPercentage:
+							 return ValueToTextConverter::createForMode("NormalizedPercentage");
+		case pod::Decibel:   return ValueToTextConverter::createForMode("Decibel");
+		case pod::Undefined:
+		case pod::numTextValueConverters:
+		default: return {};
+		}
+	}
+
 	operator bool() const
 	{
 		return info.ok;
@@ -372,7 +423,6 @@ struct data
 
 	pod info;
 	dynamic callback;
-
 	StringArray parameterNames;
 };
 

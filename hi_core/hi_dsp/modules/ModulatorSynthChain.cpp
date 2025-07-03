@@ -245,8 +245,9 @@ void ModulatorSynthChain::compileAllScripts()
             
         while(auto m = rti.getNextProcessor())
         {
-			m->disconnectRuntimeTargets(getMainController());
-	        m->connectRuntimeTargets(getMainController());
+			auto as_p = dynamic_cast<Processor*>(m);
+			m->disconnectRuntimeTargets(as_p);
+	        m->connectRuntimeTargets(as_p);
         }
             
 	}
@@ -438,18 +439,23 @@ void ModulatorSynthChain::restoreFromValueTree(const ValueTree &v)
 
 void ModulatorSynthChain::reset()
 {
-
 	Processor::Iterator<Processor> iter(this, false);
 
-#if 0
+
+
+	if(getMainController()->isBeingDeleted())
 	{
 		sendDeleteMessage();
 
 		while (auto p = iter.getNextProcessor())
 			p->sendDeleteMessage();
 	}
-#endif
-	
+
+	Processor::Iterator<HardcodedSwappableEffect> fxiter(this, false);
+
+	while(auto fx = fxiter.getNextProcessor())
+		fx->shutdown();
+
     midiProcessorChain->getHandler()->clearAsync(midiProcessorChain);
     gainChain->getHandler()->clearAsync(gainChain);
     effectChain->getHandler()->clearAsync(effectChain);
@@ -709,6 +715,7 @@ SynthGroupConstrainer::SynthGroupConstrainer()
 	ADD_NAME_TO_TYPELIST(ModulatorSynthChain);
 	ADD_NAME_TO_TYPELIST(GlobalModulatorContainer);
 	ADD_NAME_TO_TYPELIST(ModulatorSynthGroup);
+	ADD_NAME_TO_TYPELIST(MacroModulationSource);
 
 	forbiddenModulators.addArray(typeNames);
 }

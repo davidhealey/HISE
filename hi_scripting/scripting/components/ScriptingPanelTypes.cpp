@@ -823,7 +823,6 @@ void ScriptContentPanel::Editor::rebuildAfterContentChange()
 	addSpacer(10);
 
 	addButton("edit-json");
-	addButton("debug-css");
 	addButton("profile");
 
 	addCustomComponent(overlaySelector);
@@ -856,16 +855,6 @@ void ScriptContentPanel::Editor::addButton(const String& name)
 		b->enabledFunction = isSelected;
 		b->actionFunction = Actions::editJson;
 		b->setTooltip("Edits the raw property data object as JSON (Dangerzone!)");
-	}
-	if(name == "debug-css")
-	{
-		b->enabledFunction = [](Editor& e)
-		{
-			return callRecursive<simple_css::HeaderContentFooter>(&e, [](simple_css::HeaderContentFooter*){ return true; });
-		};
-
-		b->actionFunction = Actions::debugCSS;
-		b->setTooltip("Show the CSS debugger for the current dialog");
 	}
 	if(name == "suspend")
 	{

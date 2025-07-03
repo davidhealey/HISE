@@ -634,7 +634,7 @@ public:
 
 		Processor* getConnectedProcessor() const { return connectedProcessor.get(); };
 
-		int getConnectedParameterIndex() { return connectedParameterIndex; };
+		int getConnectedParameterIndex() const { return connectedParameterIndex; };
 
         bool isConnectedToMacroControll() const noexcept
         {
@@ -931,6 +931,7 @@ public:
 			scrollWheel,
 			enableMidiLearn,
 			sendValueOnDrag,
+			matrixTargetId,
 			numProperties,
 		};
 
@@ -946,6 +947,7 @@ public:
                 addConstant("FineTune", "FineTune");
                 addConstant("ResetToDefault", "ResetToDefault");
                 addConstant("ContextMenu", "ContextMenu");
+				addConstant("ScaleModulation", "ScaleModulation");
                 
                 static const String doubleClick("doubleClick");
                 static const String rightClick("rightClick");
@@ -1025,6 +1027,9 @@ public:
 		/** Sets the upper range end to the given value. */
 		void setMaxValue(double max) noexcept;
 
+		/** Connects this slider to the modulation slot. */
+		void connectToModulatedParameter(String moduleId, var parameterId);
+
         /** Creates a object with constants for setModifiers(). */
         var createModifiers();
         
@@ -1040,7 +1045,13 @@ public:
 		/** Checks if the given value is within the range. */
 		bool contains(double value);
 
+		
+
 		// ========================================================================================================
+
+		SimpleRingBuffer::Ptr getMatrixPlotter(int sourceIndex);
+
+		MatrixIds::Helpers::IntensityTextConverter::ConstructData createIntensityConverter(int sourceIndex);
 
 		struct Wrapper;
 
@@ -1053,8 +1064,9 @@ public:
         
 	private:
 
-        
-        
+        struct MatrixCableConnection;
+		ScopedPointer<ControlledObject> matrixConnection;
+
 		double minimum, maximum;
 		PooledImage image;
 
@@ -1379,6 +1391,11 @@ public:
 
 		/** Registers this table (and returns a reference to the data) with the given index so you can use it from the outside. */
 		var registerAtParent(int index);
+
+		/** Customizes the dragging behaviour of the script table. */
+		void setMouseHandlingProperties(var propertyObject);
+
+		LambdaBroadcaster<var> dragProperties;
 
 		// ========================================================================================================
 
@@ -2217,6 +2234,201 @@ public:
 		// ========================================================================================================
 	};
 
+	struct ScriptDynamicContainer : public ScriptComponent,
+									public Dispatchable
+	{
+		struct ChildReference: public ConstScriptingObject,
+							   public AssignableDotObject,
+							   public ObjectWithJSONConverter
+		{
+			ChildReference(ProcessorWithScriptingContent* base, dyncomp::Data::Ptr data_, const ValueTree& cd);
+			~ChildReference() override;
+
+			Identifier getObjectName() const override { RETURN_STATIC_IDENTIFIER("ContainerChild"); }
+			bool objectExists() const override { return isValid(); }
+
+			// ==================================================================== API Methods
+
+			/** Sets the component property. */
+			void set(const String& id, const var& newValue);
+
+			/** Returns the given property (or the default value for the property). */
+			var get(const String& id) const;
+
+			/** Sets the component bounds from the given rectangle. */
+			void setBounds(var area);
+
+			/** Returns the component bounds at the origin with the given margin. */
+			var getLocalBounds(int margin) const;
+
+			/** Checks whether this reference points to a valid component within the component tree. */
+			bool isValid() const;
+
+			/** Returns a reference object to the component's parent. */
+			var getParent() const;
+
+			/** Recursively searches the child components and returns the first with the given ID. */
+			var getComponent(const String& childId);
+
+			/** Recursively searches all child components and returns all matches. */
+			var getAllComponents(const String& regex);
+
+			/** Adds a child component from the given JSON data. */
+			var addChildComponent(const var& childData);
+
+			/** Removes the component. */
+			void removeFromParent();
+
+			/** Removes all child components. */
+			void removeAllChildren();
+
+			/** Sets the value of this component without causing a control callback. */
+			void setValue(var newValue);
+
+			/** Undoably sets the value of this component without causing a control callback. */
+			void setValueWithUndo(var newValue);
+
+			/** causes the control callback to fire. */
+			void changed();
+
+			/** Returns the value of this component (or the defaultValue property if not initialised). */
+			var getValue() const;
+
+			/** Attaches a value callback to this child reference. */
+			void setControlCallback(var controlCallback);
+
+			/** Sends a repaint message to this component. */
+			void sendRepaintMessage(bool recursive);
+
+			/** Causes a value update from the processor connection. */
+			void updateValueFromProcessorConnection(bool recursive);
+
+			/** Sends a message to the component to lose the keyboard focus. */
+			void loseFocus(bool recursive);
+
+			/** Sends a message to the component to reset its value. */
+			void resetValueToDefault(bool recursive);
+
+			/** Registers a paint routine that draws the panel's content. */
+			void setPaintRoutine(var newPaintRoutine)
+			{
+				if(isValid() && HiseJavascriptEngine::isJavascriptFunction(newPaintRoutine))
+				{
+					paintRoutine = WeakCallbackHolder(getScriptProcessor(), this, newPaintRoutine, 1);
+					paintRoutine.incRefCount();
+					paintRoutine.setThisObject(this);
+
+					graphics = data->createGraphicsObject(componentData, this);
+
+					onRefresh(*this, componentData, dyncomp::Data::RefreshType::repaint, false);
+				}
+			}
+
+			// ================================================================= END OF API Methods
+
+			void onValue(const Identifier&, const var& newValue);
+			bool assign(const Identifier& id, const var& newValue) override;
+			var getDotProperty(const Identifier& id) const override;
+			void writeAsJSON (OutputStream& os, int indentLevel, bool allOnOneLine, int maximumDecimalPlaces) override;
+			void writeToStream(OutputStream& os) override;
+
+		private:
+
+			mutable bool invalid = false;
+			var lastValue;
+
+			static void onRefresh(ChildReference& obj, const ValueTree& v, dyncomp::Data::RefreshType rt, bool isRecursive);
+
+			void sendMessage(dyncomp::Data::RefreshType rt, bool recursive=false);
+
+			struct Wrapper;
+
+			WeakCallbackHolder valueCallback;
+			WeakCallbackHolder paintRoutine;
+			ReferenceCountedObjectPtr<ScriptingObjects::GraphicsObject> graphics;
+			valuetree::PropertyListener valueListener;
+			ValueTree componentData;
+			dyncomp::Data::Ptr data;
+
+			JUCE_DECLARE_WEAK_REFERENCEABLE(ChildReference);
+			JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(ChildReference);
+		};
+
+		enum Properties
+		{
+			numProperties
+		};
+
+		// ========================================================================================================
+
+		ScriptDynamicContainer(ProcessorWithScriptingContent *base, Content *parentContent, Identifier panelName, int x, int y, int width, int height);
+		~ScriptDynamicContainer() override;
+
+		void handleDefaultDeactivatedProperties() final
+		{
+			deactivatedProperties.addIfNotAlreadyThere(getIdFor(ScriptComponent::Properties::macroControl));
+			deactivatedProperties.addIfNotAlreadyThere(getIdFor(ScriptComponent::Properties::isPluginParameter));
+			deactivatedProperties.addIfNotAlreadyThere(getIdFor(ScriptComponent::Properties::min));
+			deactivatedProperties.addIfNotAlreadyThere(getIdFor(ScriptComponent::Properties::max));
+			deactivatedProperties.addIfNotAlreadyThere(getIdFor(ScriptComponent::Properties::defaultValue));
+			deactivatedProperties.addIfNotAlreadyThere(getIdFor(ScriptComponent::Properties::pluginParameterName));
+			deactivatedProperties.addIfNotAlreadyThere(getIdFor(ScriptComponent::Properties::text));
+			deactivatedProperties.addIfNotAlreadyThere(getIdFor(ScriptComponent::Properties::tooltip));
+			deactivatedProperties.addIfNotAlreadyThere(getIdFor(ScriptComponent::Properties::processorId));
+			deactivatedProperties.addIfNotAlreadyThere(getIdFor(ScriptComponent::Properties::parameterId));
+			deactivatedProperties.addIfNotAlreadyThere(getIdFor(ScriptComponent::Properties::isMetaParameter));
+			deactivatedProperties.addIfNotAlreadyThere(getIdFor(ScriptComponent::Properties::linkedTo));
+			deactivatedProperties.addIfNotAlreadyThere(getIdFor(ScriptComponent::Properties::automationId));
+			deactivatedProperties.addIfNotAlreadyThere(getIdFor(ScriptComponent::Properties::deferControlCallback));
+			deactivatedProperties.addIfNotAlreadyThere(getIdFor(ScriptComponent::Properties::pluginParameterGroup));
+		}
+
+		// ========================================================================================================
+
+		static Identifier getStaticObjectName() { RETURN_STATIC_IDENTIFIER("ScriptDynamicContainer"); }
+		Identifier 	getObjectName() const override { return getStaticObjectName(); }
+		ScriptCreatedComponentWrapper *createComponentWrapper(ScriptContentComponent *content, int index) override;
+
+		// ============================================================================= API methods
+
+		/** Sets the content data for this container. */
+		var setData(const var& newData);
+
+		/** Sets a callback that will be executed whenever a value is changed. */
+		void setValueCallback(const var& valueFunction);
+
+		/** Sets a callback that will be executed whenever a child is added or removed. */
+		void setChildCallback(const var& childCallback);
+
+		/** Updates all child component values from the provided JSON file. */
+		void setValue(var newValue) override;
+
+		// =============================================================================
+
+		dyncomp::Data::Ptr getData() { return data; }
+
+		ValueTree exportAsValueTree() const override;
+		void restoreFromValueTree(const ValueTree& v) override;
+
+		LambdaBroadcaster<dyncomp::Data::Ptr> dataBroadcaster;
+
+	private:
+
+		WeakCallbackHolder valueCallback;
+		WeakCallbackHolder childCallback;
+
+		valuetree::AnyPropertyListener valueListener;
+		valuetree::RecursiveTypedChildListener childListener;
+
+		struct Wrapper;
+
+		dyncomp::Data::Ptr data;
+
+		JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(ScriptDynamicContainer);
+
+		// ========================================================================================================
+	};
+
 	/*
 
 		TODO:
@@ -2687,6 +2899,9 @@ public:
 
 	/** Adds a multipage dialog component. */
 	ScriptMultipageDialog* addMultipageDialog(Identifier dialogId, int x, int y);
+
+	/** Adds a dynamic container component. */
+	ScriptDynamicContainer* addDynamicContainer(Identifier containerId, int x, int y);
 
 	/** Returns the reference to the given component. */
 	var getComponent(var name);

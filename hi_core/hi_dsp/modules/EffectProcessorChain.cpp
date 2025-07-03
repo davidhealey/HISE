@@ -341,6 +341,7 @@ void EffectProcessorChainFactoryType::fillTypeNameList()
 	ADD_NAME_TO_TYPELIST(HardcodedMasterFX);
 	ADD_NAME_TO_TYPELIST(HardcodedPolyphonicFX);
 	ADD_NAME_TO_TYPELIST(MidiMetronome);
+	ADD_NAME_TO_TYPELIST(NoiseGrainPlayer);
 	
 };
 
@@ -375,6 +376,7 @@ Processor* EffectProcessorChainFactoryType::createProcessor	(int typeIndex, cons
 	case hardcodedMasterFx:				return new HardcodedMasterFX(m, id);
 	case polyHardcodedFx:				return new HardcodedPolyphonicFX(m, id, numVoices);
 	case midiMetronome:					return new MidiMetronome(m, id);
+	case noiseGrainPlayer:				return new NoiseGrainPlayer(m, id, numVoices);
 	default:					jassertfalse; return nullptr;
 	}
 };

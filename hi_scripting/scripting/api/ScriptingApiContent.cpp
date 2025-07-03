@@ -2006,6 +2006,7 @@ struct ScriptingApi::Content::ScriptSlider::Wrapper
 	API_METHOD_WRAPPER_1(ScriptSlider, contains);
     API_METHOD_WRAPPER_0(ScriptSlider, createModifiers);
     API_VOID_METHOD_WRAPPER_2(ScriptSlider, setModifiers);
+	API_VOID_METHOD_WRAPPER_2(ScriptSlider, connectToModulatedParameter);
 };
 
 ScriptingApi::Content::ScriptSlider::ScriptSlider(ProcessorWithScriptingContent *base, Content* /*parentContent*/, Identifier name_, int x, int y, int, int) :
@@ -2033,21 +2034,7 @@ maximum(1.0f)
 	ADD_SCRIPT_PROPERTY(i15, "scrollWheel"); 	ADD_TO_TYPE_SELECTOR(SelectorTypes::ToggleSelector);
 	ADD_SCRIPT_PROPERTY(i16, "enableMidiLearn"); ADD_TO_TYPE_SELECTOR(SelectorTypes::ToggleSelector);
 	ADD_SCRIPT_PROPERTY(i17, "sendValueOnDrag"); ADD_TO_TYPE_SELECTOR(SelectorTypes::ToggleSelector);
-
-#if 0
-	componentProperties->setProperty(getIdFor(Mode), 0);
-	componentProperties->setProperty(getIdFor(Style), 0);
-	componentProperties->setProperty(getIdFor(stepSize), 0);
-	componentProperties->setProperty(getIdFor(middlePosition), 0);
-	componentProperties->setProperty(getIdFor(defaultValue), 0);
-	componentProperties->setProperty(getIdFor(suffix), 0);
-	componentProperties->setProperty(getIdFor(filmstripImage), String());
-	componentProperties->setProperty(getIdFor(numStrips), 0);
-	componentProperties->setProperty(getIdFor(isVertical), true);
-	componentProperties->setProperty(getIdFor(mouseSensitivity), 1.0);
-	componentProperties->setProperty(getIdFor(dragDirection), 0);
-	componentProperties->setProperty(getIdFor(showValuePopup), 0);
-#endif
+	ADD_SCRIPT_PROPERTY(i18, "matrixTargetId"); 
 
 	priorityProperties.add(getIdFor(Mode));
 
@@ -2074,6 +2061,7 @@ maximum(1.0f)
 	setDefaultValue(ScriptSlider::Properties::scrollWheel, true);
 	setDefaultValue(ScriptSlider::Properties::enableMidiLearn, true);
 	setDefaultValue(ScriptSlider::Properties::sendValueOnDrag, true);
+	setDefaultValue(ScriptSlider::Properties::matrixTargetId, "");
 	
 	ScopedValueSetter<bool> svs(removePropertyIfDefault, false);
 
@@ -2101,6 +2089,7 @@ maximum(1.0f)
 	ADD_API_METHOD_0(getMaxValue);
 	ADD_API_METHOD_1(contains);
     ADD_API_METHOD_0(createModifiers);
+	ADD_API_METHOD_2(connectToModulatedParameter);
     ADD_TYPED_API_METHOD_2(setModifiers, VarTypeChecker::String, VarTypeChecker::IndexOrArray);
 
 	//addConstant("Decibel", HiSlider::Mode::Decibel);
@@ -2129,6 +2118,19 @@ void ScriptingApi::Content::ScriptSlider::setScriptObjectPropertyWithChangeMessa
 		setMode(newValue.toString());
 		return;
 	}
+	else if(id == getIdFor(parameterId))
+	{
+		ScriptComponent::setScriptObjectPropertyWithChangeMessage(id, newValue, notifyEditor);
+
+		if(auto mm = dynamic_cast<MatrixModulator*>(getConnectedProcessor()))
+		{
+			if(getConnectedParameterIndex() == MatrixModulator::SpecialParameters::Value)
+			{
+				auto id = mm->getIdentifierForParameterIndex(MatrixModulator::SpecialParameters::Value);
+				connectToModulatedParameter(mm->getId(), id.toString());
+			}
+		}
+	}
 	else if (id == propertyIds[Style])
 	{
 		jassert(isCorrectlyInitialised(id));
@@ -2150,15 +2152,34 @@ void ScriptingApi::Content::ScriptSlider::setScriptObjectPropertyWithChangeMessa
                                 (double)newValue);
         
         v = FloatSanitizers::sanitizeFloatNumber(v);
-        
         setScriptObjectProperty(defaultValue, var(v));
-        
         
         return;
     }
+	else if (id == getIdFor(matrixTargetId))
+	{
+		if(auto gc = ProcessorHelpers::getFirstProcessorWithType<GlobalModulatorContainer>(getScriptProcessor()->getMainController_()->getMainSynthChain()))
+		{
+			// change this to the property to allow multiple targets with the same text...
+			
+			auto targetId = newValue.toString();
 
-
-
+			if(targetId.isEmpty())
+			{
+				setModulationData(nullptr);
+				matrixConnection = nullptr;
+			}
+			else
+			{
+				if(matrixConnection == nullptr || dynamic_cast<MatrixCableConnection*>(matrixConnection.get())->targetId != targetId)
+				{
+					setModulationData(gc->createMatrixModulationPopupData(targetId));
+					matrixConnection = new MatrixCableConnection(*this, gc->getMatrixModulatorData(), targetId);
+				}
+			}
+		}
+		
+	}
 	else if (id == getIdFor(filmstripImage))
 	{
 		jassert(isCorrectlyInitialised(id));
@@ -2329,6 +2350,52 @@ void ScriptingApi::Content::ScriptSlider::setMaxValue(double max) noexcept
 	}
 }
 
+void ScriptingApi::Content::ScriptSlider::connectToModulatedParameter(String moduleId, var parameterId)
+{
+	auto idx = getScriptProcessor()->getScriptingContent()->getComponentIndex(this);
+
+	if(auto p = ProcessorHelpers::getFirstProcessorWithName(getScriptProcessor()->getMainController_()->getMainSynthChain(), moduleId))
+	{
+		int parameterIndex;
+
+		if(parameterId.isInt())
+			parameterIndex = (int)parameterId;
+		else
+		{
+			Identifier pid(parameterId.toString());
+
+			ModulationDisplayValue::QueryFunction::Ptr mv;
+
+			if(pid == Identifier("GainModulation"))
+			{
+				mv = new ModulatorChain::SpecialQueryFunctions::GainModulation();
+			}
+			else if(pid == Identifier("PitchModulation"))
+			{
+				mv = new ModulatorChain::SpecialQueryFunctions::PitchModulation();
+			}
+			else
+			{
+				parameterIndex = p->getParameterIndexForIdentifier(pid);
+				mv = p->getModulationQueryFunction(parameterIndex);
+			}
+			
+			getScriptProcessor()->setModulationDisplayQueryFunction(idx, p, mv);
+
+			if(auto gc = ProcessorHelpers::getFirstProcessorWithType<GlobalModulatorContainer>(p->getMainController()->getMainSynthChain()))
+			{
+				setModulationData(gc->createMatrixModulationPopupData(p, parameterIndex));
+			}
+		}
+		
+	}
+	else
+	{
+		getScriptProcessor()->setModulationDisplayQueryFunction(idx, nullptr, {});
+		reportScriptError("Can't find module with ID " + moduleId);
+	}
+}
+
 double ScriptingApi::Content::ScriptSlider::getMinValue() const
 {
 
@@ -2367,6 +2434,26 @@ bool ScriptingApi::Content::ScriptSlider::contains(double valueToCheck)
 		logErrorAndContinue("contains() can only be called on sliders in 'Range' mode.");
 		return false;
 	}
+}
+
+MatrixIds::Helpers::IntensityTextConverter::ConstructData ScriptingApi::Content::ScriptSlider::createIntensityConverter(int sourceIndex)
+{
+	if(matrixConnection != nullptr)
+	{
+		return dynamic_cast<MatrixCableConnection*>(matrixConnection.get())->createIntensityConverter(sourceIndex);
+	}
+
+	return {};
+}
+
+SimpleRingBuffer::Ptr ScriptingApi::Content::ScriptSlider::getMatrixPlotter(int sourceIndex)
+{
+	if(matrixConnection != nullptr)
+	{
+		return dynamic_cast<MatrixCableConnection*>(matrixConnection.get())->getDisplayBuffer(sourceIndex);
+	}
+
+	return nullptr;
 }
 
 
@@ -2479,10 +2566,15 @@ void ScriptingApi::Content::ScriptSlider::setMode(String mode)
 	
 	const bool sameStep = currentModeDefaultRange.interval == (double)getScriptObjectProperty(ScriptSlider::Properties::stepSize);
 	
-	auto skew1 = HiSlider::getMidPointFromRangeSkewFactor(currentModeDefaultRange);
-	auto skew2 = (double)getScriptObjectProperty(ScriptSlider::Properties::middlePosition);
+	
 
-	const bool sameSkew = (skew2 == -1.0) || skew1 == skew2;
+	auto cp = currentModeDefaultRange;
+	auto mp = (double)getScriptObjectProperty(ScriptSlider::Properties::middlePosition);
+
+	if(cp.getRange().contains(mp) && mp > cp.start)
+		cp.setSkewForCentre(mp);
+
+	const bool sameSkew = cp.skew == 1.0;
 
 	bool isUsingDefaultRange = sameStart && sameEnd && sameStep && sameSkew;
 
@@ -2497,10 +2589,8 @@ void ScriptingApi::Content::ScriptSlider::setMode(String mode)
 		setScriptObjectProperty(stepSize, nr.interval);
 		setScriptObjectProperty(ScriptSlider::Properties::suffix, HiSlider::getSuffixForMode(m, getValue()));
 
-		setMidPoint(HiSlider::getMidPointFromRangeSkewFactor(nr));
-
-
-		//setMidPoint(getScriptObjectProperty(ScriptSlider::Properties::middlePosition));
+		auto midPoint = HiSlider::getRangeForMode(m).convertFrom0to1(0.5);
+		setScriptObjectProperty(middlePosition, midPoint);
 	}
 }
 
@@ -3222,6 +3312,7 @@ struct ScriptingApi::Content::ScriptTable::Wrapper
 	API_VOID_METHOD_WRAPPER_1(ScriptTable, setSnapValues);
 	API_METHOD_WRAPPER_1(ScriptTable, registerAtParent);
 	API_VOID_METHOD_WRAPPER_1(ScriptTable, referToData);
+	API_VOID_METHOD_WRAPPER_1(ScriptTable, setMouseHandlingProperties);
 };
 
 ScriptingApi::Content::ScriptTable::ScriptTable(ProcessorWithScriptingContent *base, Content* /*parentContent*/, Identifier name, int x, int y, int , int ) :
@@ -3254,6 +3345,7 @@ ComplexDataScriptComponent(base, name, snex::ExternalData::DataType::Table)
 	ADD_API_METHOD_1(referToData);
 	ADD_API_METHOD_1(setTablePopupFunction);
 	ADD_API_METHOD_1(registerAtParent);
+	ADD_API_METHOD_1(setMouseHandlingProperties);
 }
 
 ScriptingApi::Content::ScriptTable::~ScriptTable()
@@ -3340,6 +3432,11 @@ void ScriptingApi::Content::ScriptTable::referToData(var tableData)
 var ScriptingApi::Content::ScriptTable::registerAtParent(int index)
 {
 	return registerComplexDataObjectAtParent(index);
+}
+
+void ScriptingApi::Content::ScriptTable::setMouseHandlingProperties(var propertyObject)
+{
+	dragProperties.sendMessage(sendNotificationAsync, propertyObject);
 }
 
 struct ScriptingApi::Content::ScriptSliderPack::Wrapper
@@ -5964,6 +6061,530 @@ void ScriptingApi::Content::ScriptFloatingTile::setContentData(var data)
 	//triggerAsyncUpdate();
 }
 
+struct ScriptingApi::Content::ScriptDynamicContainer::ChildReference::Wrapper
+{
+	API_VOID_METHOD_WRAPPER_2(ChildReference, set);
+	API_METHOD_WRAPPER_1(ChildReference, get);
+	API_VOID_METHOD_WRAPPER_1(ChildReference, setBounds);
+	API_METHOD_WRAPPER_1(ChildReference, getLocalBounds);
+	API_METHOD_WRAPPER_0(ChildReference, isValid);
+	API_METHOD_WRAPPER_0(ChildReference, getParent);
+	API_METHOD_WRAPPER_1(ChildReference, getComponent);
+	API_METHOD_WRAPPER_1(ChildReference, getAllComponents);
+	API_METHOD_WRAPPER_1(ChildReference, addChildComponent);
+	API_VOID_METHOD_WRAPPER_0(ChildReference, removeFromParent);
+	API_VOID_METHOD_WRAPPER_0(ChildReference, removeAllChildren);
+	API_VOID_METHOD_WRAPPER_1(ChildReference, setValue);
+	API_VOID_METHOD_WRAPPER_1(ChildReference, setValueWithUndo);
+	API_VOID_METHOD_WRAPPER_0(ChildReference, changed);
+	API_METHOD_WRAPPER_0(ChildReference, getValue);
+	API_VOID_METHOD_WRAPPER_1(ChildReference, setControlCallback);
+	API_VOID_METHOD_WRAPPER_1(ChildReference, sendRepaintMessage); 
+	API_VOID_METHOD_WRAPPER_1(ChildReference, updateValueFromProcessorConnection); 
+	API_VOID_METHOD_WRAPPER_1(ChildReference, loseFocus); 
+	API_VOID_METHOD_WRAPPER_1(ChildReference, resetValueToDefault);
+	API_VOID_METHOD_WRAPPER_1(ChildReference, setPaintRoutine);
+};
+
+ScriptingApi::Content::ScriptDynamicContainer::ChildReference::ChildReference(ProcessorWithScriptingContent* base,
+	dyncomp::Data::Ptr data_, const ValueTree& cd):
+	ConstScriptingObject(base, 0),
+	data(data_),
+	componentData(cd),
+	valueCallback(base, this, var(), 2),
+	paintRoutine(base, this, var(), 1) 
+{
+	ADD_API_METHOD_2(set);
+	ADD_API_METHOD_1(get);
+	ADD_API_METHOD_1(setBounds);
+	ADD_API_METHOD_1(getLocalBounds);
+	ADD_API_METHOD_0(isValid);
+	ADD_API_METHOD_0(getParent);
+	ADD_API_METHOD_1(getComponent);
+	ADD_API_METHOD_1(getAllComponents);
+	ADD_API_METHOD_1(addChildComponent);
+	ADD_API_METHOD_0(removeFromParent);
+	ADD_API_METHOD_0(removeAllChildren);
+	ADD_API_METHOD_1(setValue);
+	ADD_API_METHOD_1(setValueWithUndo);
+	ADD_API_METHOD_0(changed);
+	ADD_API_METHOD_0(getValue);
+	ADD_API_METHOD_1(setControlCallback);
+	ADD_API_METHOD_1(sendRepaintMessage); 
+	ADD_API_METHOD_1(updateValueFromProcessorConnection); 
+	ADD_API_METHOD_1(loseFocus); 
+	ADD_API_METHOD_1(resetValueToDefault);
+	ADD_API_METHOD_1(setPaintRoutine);
+
+	data->refreshBroadcaster.addListener(*this, onRefresh, false);
+}
+
+ScriptingApi::Content::ScriptDynamicContainer::ChildReference::~ChildReference()
+{
+	lastValue = var();
+	data->refreshBroadcaster.removeListener(*this);
+	data = nullptr;
+}
+
+void ScriptingApi::Content::ScriptDynamicContainer::ChildReference::set(const String& id, const var& newValue)
+{
+	if(isValid())
+	{
+		Identifier id_(id);
+
+		if(!dyncomp::dcid::Helpers::isValidProperty(id_))
+			reportScriptError("unknown property " + id);
+
+		componentData.setProperty(id_, newValue, nullptr);
+	}
+}
+
+var ScriptingApi::Content::ScriptDynamicContainer::ChildReference::get(const String& id) const
+{
+	if(isValid())
+	{
+		Identifier id_(id);
+
+		if(!dyncomp::dcid::Helpers::isValidProperty(id_))
+			reportScriptError("Unknown property " + id);
+
+		if(componentData.hasProperty(id_))
+			return componentData[id_];
+
+		return dyncomp::dcid::Helpers::getDefaultValue(id_);
+	}
+
+	return var();
+}
+
+void ScriptingApi::Content::ScriptDynamicContainer::ChildReference::setBounds(var area)
+{
+	auto r = Result::ok();
+	auto b = ApiHelpers::getRectangleFromVar(area, &r);
+
+	if(r.failed())
+		reportScriptError(r.getErrorMessage());
+
+	componentData.setProperty(dyncomp::dcid::x, b.getX(), nullptr);
+	componentData.setProperty(dyncomp::dcid::y, b.getY(), nullptr);
+	componentData.setProperty(dyncomp::dcid::width, b.getWidth(), nullptr);
+	componentData.setProperty(dyncomp::dcid::height, b.getHeight(), nullptr);
+}
+
+var ScriptingApi::Content::ScriptDynamicContainer::ChildReference::getLocalBounds(int margin) const
+{
+	using namespace dyncomp;
+
+	Rectangle<int> b((int)componentData.getProperty(dcid::x, 0), 
+	                 (int)componentData.getProperty(dcid::y, 0), 
+	                 (int)componentData.getProperty(dcid::width, 128), 
+	                 (int)componentData.getProperty(dcid::height, 50));
+
+	return ApiHelpers::getVarRectangle(true, b.reduced(margin).toFloat());
+}
+
+bool ScriptingApi::Content::ScriptDynamicContainer::ChildReference::isValid() const
+{
+	if(invalid)
+		return false;
+
+	auto dt = data->getValueTree(dyncomp::Data::TreeType::Data);
+
+	auto valid = valuetree::Helpers::isParent(componentData, dt);
+
+	if(!valid)
+	{
+		data->refreshBroadcaster.removeListener(*const_cast<ChildReference*>(this));
+		invalid = true;
+	}
+
+	return valid;
+}
+
+var ScriptingApi::Content::ScriptDynamicContainer::ChildReference::getParent() const
+{
+	if(isValid())
+	{
+		auto p = componentData.getParent();
+		return var(new ChildReference(const_cast<ProcessorWithScriptingContent*>(getScriptProcessor()), data, p));
+	}
+
+	return var();
+}
+
+var ScriptingApi::Content::ScriptDynamicContainer::ChildReference::getComponent(const String& childId)
+{
+	if(isValid())
+	{
+		ValueTree c;
+		auto ok = valuetree::Helpers::forEach(componentData, [&](const ValueTree& v)
+		{
+			if(v[dyncomp::dcid::id].toString() == childId)
+			{
+				c = v;
+				return true;
+			}
+
+			return false;
+		});
+
+		if(ok)
+		{
+			return var(new ChildReference(getScriptProcessor(), data, c));
+		}
+	}
+
+	return var();
+}
+
+var ScriptingApi::Content::ScriptDynamicContainer::ChildReference::getAllComponents(const String& regex)
+{
+	Array<var> matches;
+
+	if(isValid())
+	{
+		valuetree::Helpers::forEach(componentData, [&](const ValueTree& v)
+		{
+			if(RegexFunctions::matchesWildcard(regex, v[dyncomp::dcid::id].toString()))
+				matches.add(new ChildReference(getScriptProcessor(), data, v));
+
+			return false;
+		});
+	}
+
+	return matches;
+}
+
+var ScriptingApi::Content::ScriptDynamicContainer::ChildReference::addChildComponent(const var& childData)
+{
+	using namespace dyncomp;
+
+	Rectangle<int> b((int)childData.getProperty(dcid::x, 0), 
+	                 (int)childData.getProperty(dcid::y, 0), 
+	                 (int)childData.getProperty(dcid::width, 128), 
+	                 (int)childData.getProperty(dcid::height, 50));
+
+	auto v = dyncomp::Data::fromJSON(childData, b);
+	componentData.addChild(v, -1, nullptr);
+	return new ChildReference(getScriptProcessor(), data, v);
+}
+
+void ScriptingApi::Content::ScriptDynamicContainer::ChildReference::removeFromParent()
+{
+	if(isValid())
+		componentData.getParent().removeChild(componentData, nullptr);
+}
+
+void ScriptingApi::Content::ScriptDynamicContainer::ChildReference::removeAllChildren()
+{
+	if(isValid())
+		componentData.removeAllChildren(nullptr);
+}
+
+void ScriptingApi::Content::ScriptDynamicContainer::ChildReference::setValue(var newValue)
+{
+	auto id = componentData[dyncomp::dcid::id].toString();
+	auto vt = data->getValueTree(dyncomp::Data::TreeType::Values);
+	vt.setPropertyExcludingListener(&valueListener, id, newValue, nullptr);
+}
+
+void ScriptingApi::Content::ScriptDynamicContainer::ChildReference::setValueWithUndo(var newValue)
+{
+	auto id = componentData[dyncomp::dcid::id].toString();
+	auto vt = data->getValueTree(dyncomp::Data::TreeType::Values);
+	vt.setPropertyExcludingListener(&valueListener, id, newValue, data->getMainController()->getControlUndoManager());
+}
+
+void ScriptingApi::Content::ScriptDynamicContainer::ChildReference::changed()
+{
+	valueListener.sendMessageForAllProperties();
+	sendMessage(dyncomp::Data::RefreshType::changed);
+}
+
+var ScriptingApi::Content::ScriptDynamicContainer::ChildReference::getValue() const
+{
+	auto id = componentData[dyncomp::dcid::id].toString();
+	auto vt = data->getValueTree(dyncomp::Data::TreeType::Values);
+
+	if(vt.hasProperty(id))
+		return vt[id];
+
+	return componentData[dyncomp::dcid::defaultValue];
+}
+
+void ScriptingApi::Content::ScriptDynamicContainer::ChildReference::setControlCallback(var controlCallback)
+{
+	if(isValid() && HiseJavascriptEngine::isJavascriptFunction(controlCallback))
+	{
+		valueCallback = WeakCallbackHolder(getScriptProcessor(), this, controlCallback, 2);
+		valueCallback.incRefCount();
+		valueCallback.setHighPriority();
+
+		Array<Identifier> ids;
+
+		ids.add(componentData[dyncomp::dcid::id].toString());
+
+		valueListener.setCallback(data->getValueTree(dyncomp::Data::TreeType::Values), 
+		                          ids, 
+		                          valuetree::AsyncMode::Synchronously,
+		                          BIND_MEMBER_FUNCTION_2(ChildReference::onValue));
+	}
+}
+
+void ScriptingApi::Content::ScriptDynamicContainer::ChildReference::sendRepaintMessage(bool recursive)
+{
+	sendMessage(dyncomp::Data::RefreshType::repaint, recursive);
+}
+
+void ScriptingApi::Content::ScriptDynamicContainer::ChildReference::updateValueFromProcessorConnection(bool recursive)
+{
+	sendMessage(dyncomp::Data::RefreshType::updateValueFromProcessorConnection, recursive);
+}
+
+void ScriptingApi::Content::ScriptDynamicContainer::ChildReference::loseFocus(bool recursive)
+{
+	sendMessage(dyncomp::Data::RefreshType::loseFocus, recursive);
+}
+
+void ScriptingApi::Content::ScriptDynamicContainer::ChildReference::resetValueToDefault(bool recursive)
+{
+	sendMessage(dyncomp::Data::RefreshType::resetValueToDefault, recursive);
+}
+
+void ScriptingApi::Content::ScriptDynamicContainer::ChildReference::onValue(const Identifier&, const var& newValue)
+{
+	if(isValid() && valueCallback && !newValue.isVoid() && newValue != lastValue)
+	{
+		lastValue = newValue;
+		var args[2];
+		args[0] = var(this);
+		args[1] = newValue;
+		valueCallback.call(args, 2);
+	}
+}
+
+bool ScriptingApi::Content::ScriptDynamicContainer::ChildReference::assign(const Identifier& id, const var& newValue)
+{
+	if(dyncomp::dcid::Helpers::isValidProperty(id))
+	{
+		componentData.setProperty(id, newValue, nullptr);
+		return true;
+	}
+
+	return false;
+}
+
+var ScriptingApi::Content::ScriptDynamicContainer::ChildReference::getDotProperty(const Identifier& id) const
+{ return componentData[id]; }
+
+void ScriptingApi::Content::ScriptDynamicContainer::ChildReference::writeAsJSON(OutputStream& os, int indentLevel,
+	bool allOnOneLine, int maximumDecimalPlaces)
+{
+	auto obj = ValueTreeConverters::convertContentPropertiesToDynamicObject(componentData);
+	obj.getDynamicObject()->writeAsJSON(os, indentLevel, allOnOneLine, maximumDecimalPlaces);
+}
+
+void ScriptingApi::Content::ScriptDynamicContainer::ChildReference::writeToStream(OutputStream& os)
+{
+	auto obj = ValueTreeConverters::convertContentPropertiesToDynamicObject(componentData);
+	obj.getDynamicObject()->writeToStream(os);
+}
+
+void ScriptingApi::Content::ScriptDynamicContainer::ChildReference::onRefresh(ChildReference& obj, const ValueTree& v,
+	dyncomp::Data::RefreshType rt, bool isRecursive)
+{
+	if(!obj.isValid())
+		return;
+
+	if(rt == dyncomp::Data::RefreshType::repaint && obj.paintRoutine)
+	{
+		auto p = &obj.getScriptProcessor()->getMainController_()->getJavascriptThreadPool();
+		auto jp = dynamic_cast<JavascriptProcessor*>(obj.getScriptProcessor());
+
+		auto t = var(&obj);
+
+		p->addJob(JavascriptThreadPool::Task::LowPriorityCallbackExecution, jp, [t](JavascriptProcessor* p)
+		{
+			auto s = dynamic_cast<ChildReference*>(t.getObject());
+
+			var args(var(s->graphics.get()));
+
+			auto ok = s->paintRoutine.callSync(&args, 1);
+
+			s->graphics->getDrawHandler().flush(0, 0);
+
+			return Result::ok();
+		});
+	}
+
+	if(rt == dyncomp::Data::RefreshType::changed && obj.componentData == v)
+	{
+		obj.onValue({}, obj.getValue());
+	}
+}
+
+void ScriptingApi::Content::ScriptDynamicContainer::ChildReference::sendMessage(dyncomp::Data::RefreshType rt,
+	bool recursive)
+{
+	data->refreshBroadcaster.sendMessage(sendNotificationAsync, componentData, rt, recursive);
+}
+
+
+struct ScriptingApi::Content::ScriptDynamicContainer::Wrapper
+{
+	API_METHOD_WRAPPER_1(ScriptDynamicContainer, setData);
+	API_VOID_METHOD_WRAPPER_1(ScriptDynamicContainer, setValueCallback);
+	API_VOID_METHOD_WRAPPER_1(ScriptDynamicContainer, setChildCallback);
+};
+
+ScriptingApi::Content::ScriptDynamicContainer::ScriptDynamicContainer(ProcessorWithScriptingContent* base,
+	Content* parentContent, Identifier panelName, int x, int y, int width, int height):
+	ScriptComponent(base, panelName, 0),
+	valueCallback(base, this, var(), 2),
+	childCallback(base, this, var(), 2)
+{
+	setDefaultValue(ScriptComponent::Properties::x, x);
+	setDefaultValue(ScriptComponent::Properties::y, y);
+	setDefaultValue(ScriptComponent::Properties::width, 200);
+	setDefaultValue(ScriptComponent::Properties::height, 100);
+	setDefaultValue(ScriptComponent::Properties::saveInPreset, false);
+
+	handleDefaultDeactivatedProperties();
+
+	ADD_API_METHOD_1(setData);
+	ADD_API_METHOD_1(setValueCallback);
+	ADD_API_METHOD_1(setChildCallback);
+}
+
+ScriptingApi::Content::ScriptDynamicContainer::~ScriptDynamicContainer()
+{
+	data = nullptr;
+}
+
+
+ScriptCreatedComponentWrapper* ScriptingApi::Content::ScriptDynamicContainer::createComponentWrapper(
+	ScriptContentComponent* content, int index)
+{
+	return new ScriptCreatedComponentWrappers::DynamicComponentWrapper(content, this, index);
+}
+
+var ScriptingApi::Content::ScriptDynamicContainer::setData(const var& newData)
+{
+	auto json = newData;
+
+	bool getFirstChild = false;
+
+	if(!json.isArray())
+	{
+		json = var(Array<var>(newData));
+		getFirstChild = true;
+	}
+
+	auto b = ApiHelpers::getIntRectangleFromVar(getLocalBounds(0));
+	data = new dyncomp::Data(getScriptProcessor()->getMainController_(), json, b);
+
+	auto dt = data->getValueTree(dyncomp::Data::TreeType::Data);
+
+	if(getFirstChild)
+		dt = dt.getChild(0);
+
+	dataBroadcaster.sendMessage(sendNotificationAsync, data);
+
+	return var(new ChildReference(getScriptProcessor(), data, dt));
+}
+
+void ScriptingApi::Content::ScriptDynamicContainer::setValueCallback(const var& valueFunction)
+{
+	if(data != nullptr && HiseJavascriptEngine::isJavascriptFunction(valueFunction))
+	{
+		valueCallback = WeakCallbackHolder(getScriptProcessor(), this, valueFunction, 2);
+		valueCallback.incRefCount();
+		valueCallback.setThisObject(this);
+		valueCallback.setHighPriority();
+
+		valueListener.setCallback(data->getValueTree(dyncomp::Data::TreeType::Values), valuetree::AsyncMode::Synchronously, [this](const Identifier& id, const var& newValue)
+		{
+			if(valueCallback)
+			{
+				var args[2];
+				args[0] = id.toString();
+				args[1] = newValue;
+				valueCallback.call(args, 2);
+			}
+				
+		}, false);
+	}
+}
+
+void ScriptingApi::Content::ScriptDynamicContainer::setChildCallback(const var& newChildCallback)
+{
+	if(data != nullptr && HiseJavascriptEngine::isJavascriptFunction(newChildCallback))
+	{
+		childCallback = WeakCallbackHolder(getScriptProcessor(), this, newChildCallback, 2);
+		childCallback.incRefCount();
+		childCallback.setThisObject(this);
+
+		childListener.setCallback(data->getValueTree(dyncomp::Data::TreeType::Data), valuetree::AsyncMode::Synchronously, [this](const ValueTree& v, bool wasAdded)
+		{
+			if(childCallback)
+			{
+				var args[2];
+				args[0] = v[dyncomp::dcid::id].toString();
+				args[1] = wasAdded;
+				childCallback.call(args, 2);
+			}
+				
+		});
+	}
+}
+
+void ScriptingApi::Content::ScriptDynamicContainer::setValue(var newValue)
+{
+	ScriptComponent::setValue(newValue);
+
+	if(data != nullptr && newValue.getDynamicObject() != nullptr)
+	{
+		auto vt = data->getValueTree(dyncomp::Data::TreeType::Values);
+
+		const auto& prop = newValue.getDynamicObject()->getProperties();
+
+		for(const auto& nv: prop)
+			vt.setProperty(nv.name, nv.value, nullptr);
+	}
+}
+
+ValueTree ScriptingApi::Content::ScriptDynamicContainer::exportAsValueTree() const
+{
+	ValueTree v("Control");
+
+	v.setProperty("type", getObjectName().toString(), nullptr);
+	v.setProperty("id", getName().toString(), nullptr);
+	v.addChild(data->getValueTree(dyncomp::Data::TreeType::Data).createCopy(), -1, nullptr);
+	v.addChild(data->getValueTree(dyncomp::Data::TreeType::Values).createCopy(), -1, nullptr);
+	return v;
+}
+
+void ScriptingApi::Content::ScriptDynamicContainer::restoreFromValueTree(const ValueTree& v)
+{
+	auto vt = v.getChildWithName("Values");
+	auto dt = v.getChildWithName("ContentProperties");
+
+	if(dt.isValid())
+	{
+		if(!dt.hasProperty(dyncomp::dcid::id))
+			dt = dt.getChild(0);
+
+		auto obj = ValueTreeConverters::convertContentPropertiesToDynamicObject(dt);
+		setData(obj);
+
+		if(data != nullptr)
+		{
+			auto dst = data->getValueTree(dyncomp::Data::TreeType::Values);
+			dst.copyPropertiesFrom(vt, nullptr);
+		}
+	}
+}
+
 struct ScriptingApi::Content::ScriptMultipageDialog::Wrapper
 {
 	API_VOID_METHOD_WRAPPER_0(ScriptMultipageDialog, resetDialog);
@@ -6692,6 +7313,8 @@ void ScriptingApi::Content::ScriptFloatingTile::handleDefaultDeactivatedProperti
 	deactivatedProperties.addIfNotAlreadyThere(getIdFor(ScriptComponent::Properties::isMetaParameter));
 	deactivatedProperties.addIfNotAlreadyThere(getIdFor(ScriptComponent::Properties::linkedTo));
 	deactivatedProperties.addIfNotAlreadyThere(getIdFor(ScriptComponent::Properties::automationId));
+	deactivatedProperties.addIfNotAlreadyThere(getIdFor(ScriptComponent::Properties::deferControlCallback));
+	deactivatedProperties.addIfNotAlreadyThere(getIdFor(ScriptComponent::Properties::pluginParameterGroup));
 }
 
 bool ScriptingApi::Content::ScriptFloatingTile::fillScriptPropertiesWithFloatingTile(FloatingTile* ft)
@@ -6782,6 +7405,7 @@ colour(Colour(0xff777777))
 	setMethod("addFloatingTile", Wrapper::addFloatingTile);
 	setMethod("addMultipageDialog", Wrapper::addMultipageDialog);
 	setMethod("addWebView", Wrapper::addWebView);
+	setMethod("addDynamicContainer", Wrapper::addDynamicContainer);
 	setMethod("setContentTooltip", Wrapper::setContentTooltip);
 	setMethod("setToolbarProperties", Wrapper::setToolbarProperties);
 	setMethod("setHeight", Wrapper::setHeight);
@@ -6956,6 +7580,12 @@ ScriptingApi::Content::ScriptMultipageDialog* ScriptingApi::Content::addMultipag
 	int y)
 {
 	return addComponent<ScriptMultipageDialog>(dialogId, x, y);
+}
+
+ScriptingApi::Content::ScriptDynamicContainer* ScriptingApi::Content::addDynamicContainer(Identifier containerId, int x,
+	int y)
+{
+	return addComponent<ScriptDynamicContainer>(containerId, x, y);
 }
 
 
@@ -8853,6 +9483,9 @@ ScriptingApi::Content::ScriptComponent * ScriptingApi::Content::Helpers::createC
 		return sc;
 
 	if(auto sc = createComponentIfTypeMatches<ScriptMultipageDialog>(c, typeId, name, x, y, w, h))
+		return sc;
+
+	if(auto sc = createComponentIfTypeMatches<ScriptDynamicContainer>(c, typeId, name, x, y, w, h))
 		return sc;
 
 	return nullptr;

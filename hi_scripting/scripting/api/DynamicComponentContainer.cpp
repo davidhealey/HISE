@@ -30,13 +30,120 @@
 *   ===========================================================================
 */
 
-#include "DynamicComponentContainer.h"
+
 
 namespace hise {
 namespace dyncomp
 {
 
-struct Factory
+namespace dcid
+{
+const Array<Identifier>& Helpers::getProperties()
+{
+	static const Array<Identifier> all({
+		id,
+		type,
+		text,
+		enabled,
+		visible,
+		tooltip,
+		class_,
+		defaultValue,
+		useUndoManager,
+		elementStyle,
+		parentComponent,
+		x,
+		y,
+		width,
+		height,
+		isMomentary,
+		radioGroupId,
+		setValueOnClick,
+		useCustomPopup,
+		items,
+		editable,
+		multiline,
+		updateEachKey,
+		min,
+		max,
+		middlePosition,
+		stepSize,
+		mode,
+		suffix,
+		style,
+		showValuePopup,
+		processorId,
+		parameterId,
+		filmstripImage,
+		numStrips,
+		isVertical,
+		scaleFactor,
+		animationSpeed,
+		dragMargin,
+		bgColour,
+		itemColour,
+		itemColour2,
+		textColour
+	});
+
+	return all;
+}
+
+var Helpers::getDefaultValue(const Identifier& p)
+{
+	jassert(isValidProperty(p));
+
+	static NamedValueSet defaultValues;
+
+	defaultValues.set(id, var(""));
+	defaultValues.set(type, var(""));
+	defaultValues.set(text, var(""));
+	defaultValues.set(enabled, var(true));
+	defaultValues.set(visible, var(true));
+	defaultValues.set(tooltip, var(""));
+	defaultValues.set(class_, var(""));
+	defaultValues.set(defaultValue, var(0.0));
+	defaultValues.set(useUndoManager, var(false));
+	defaultValues.set(elementStyle, var(""));
+	defaultValues.set(parentComponent, var(""));
+	defaultValues.set(x, var(0));
+	defaultValues.set(y, var(0));
+	defaultValues.set(width, var(128));
+	defaultValues.set(height, var(50));
+	defaultValues.set(isMomentary, var(false));
+	defaultValues.set(radioGroupId, var(0));
+	defaultValues.set(setValueOnClick, var(false));
+	defaultValues.set(useCustomPopup, var(false));
+	defaultValues.set(items, var(""));
+	defaultValues.set(editable, var(true));
+	defaultValues.set(multiline, var(false));
+	defaultValues.set(updateEachKey, var(false));
+	defaultValues.set(min, var(0.0));
+	defaultValues.set(max, var(1.0));
+	defaultValues.set(middlePosition, var(-10));
+	defaultValues.set(stepSize, var(0.01));
+	defaultValues.set(mode, var(""));
+	defaultValues.set(suffix, var(""));
+	defaultValues.set(style, var("Knob"));
+	defaultValues.set(showValuePopup, var(false));
+	defaultValues.set(processorId, var(""));
+	defaultValues.set(parameterId, var(""));
+	defaultValues.set(filmstripImage, var(""));
+	defaultValues.set(numStrips, var(64));
+	defaultValues.set(isVertical, var(true));
+	defaultValues.set(scaleFactor, var(1.0));
+	defaultValues.set(animationSpeed, var());
+	defaultValues.set(dragMargin, var());
+	defaultValues.set(bgColour, Colours::black.withAlpha(0.5f).getARGB());
+	defaultValues.set(itemColour, Colours::white.withAlpha(0.2f).getARGB());
+	defaultValues.set(itemColour2, Colours::white.withAlpha(0.2f).getARGB());
+	defaultValues.set(textColour, Colours::white.withAlpha(0.8f).getARGB());
+
+	return defaultValues[p];
+}
+}
+
+struct Factory: public ReferenceCountedObject
 {
 	Factory();
 
@@ -69,12 +176,12 @@ private:
 template <typename ComponentType> struct WrapperBase: public Base
 {
 	WrapperBase(Data::Ptr d, const ValueTree& v):
-	  Base(d, v)
+	  Base(d, v),
+	  component(v[dcid::id.toString()])
 	{
 		addAndMakeVisible(component);
 
-		auto idSelector = String("#") + getId().toString();
-		component.getProperties().set(dcid::id, idSelector);
+		
 
 		if constexpr(std::is_base_of<SettableTooltipClient, ComponentType>())
 		{
@@ -119,17 +226,39 @@ struct Button: public WrapperBase<juce::ToggleButton>
 		this->component.onClick = [&]()
 		{
 			data->onValueChange(getId(), this->component.getToggleState(), useUndoManager());
+
+			auto rid = this->component.getRadioGroupId();
+
+			if(rid != 0)
+			{
+				if(auto r = findParentComponentOfClass<Root>())
+				{
+					Component::callRecursive<Button>(r, [&](Button* b)
+					{
+						if(this == b)
+							return false;
+
+						if(b->component.getRadioGroupId() == rid)
+							b->data->onValueChange(b->getId(), false, b->useUndoManager());
+
+						return false;
+					});
+				}
+			}
 		};
 
 		component.setClickingTogglesState(!(bool)this->dataTree[dcid::isMomentary]);
-		component.setRadioGroupId((int)this->dataTree[dcid::radioGroupId]);
+		
 		component.setTriggeredOnMouseDown((bool)this->dataTree[dcid::setValueOnClick]);
 		
-		initSpecialProperties({ dcid::text });
+		initSpecialProperties({ dcid::text, dcid::radioGroupId });
+		initCSSForChildComponent();
 	};
 
 	void onValue(const var& newValue) override
 	{
+		
+
 		this->component.setToggleState((bool)newValue, dontSendNotification);
 	}
 
@@ -138,6 +267,10 @@ struct Button: public WrapperBase<juce::ToggleButton>
 		if(id == dcid::text)
 		{
 			this->component.setButtonText(newValue.toString());
+		}
+		if(id == dcid::radioGroupId)
+		{
+			this->component.setRadioGroupId((int)newValue, dontSendNotification);
 		}
 	}
 
@@ -162,6 +295,7 @@ struct ComboBox: public WrapperBase<hise::SubmenuComboBox>
 
 		// Call it once synchronously so that the init value works
 		updateSpecialProperties(dcid::items, this->dataTree[dcid::items]);
+		initCSSForChildComponent();
 	}
 
 	static Base* createComponent(Data::Ptr d, const ValueTree& v) { return new ComboBox(d, v); }
@@ -187,40 +321,51 @@ struct ComboBox: public WrapperBase<hise::SubmenuComboBox>
 	}
 };
 
-struct DynSlider: public juce::Slider,
-				  public hise::SliderWithShiftTextBox
-{
-	void mouseDoubleClick(const MouseEvent& e) override
-	{
-		performModifierAction(e, true);
-	}
 
-	void mouseDown(const MouseEvent& e) override
-	{
-		if(performModifierAction(e, false))
-			return;
 
-		Slider::mouseDown(e);
-	}
-};
-
-struct Slider: public WrapperBase<DynSlider>
+struct Slider: public Base,
+			   public ControlledObject,
+			   public juce::Slider::Listener	
 {
 	SN_NODE_ID("Slider");
 
-	Slider(Data::Ptr d, const ValueTree& v):
-	  WrapperBase<DynSlider>(d, v)
+	struct UnconnectedSlider: public hise::SliderWithShiftTextBox,
+							  juce::Slider
 	{
-		simple_css::FlexboxComponent::Helpers::writeClassSelectors(this->component, { simple_css::Selector(".scriptslider") }, true);
-		this->component.setDoubleClickReturnValue(true, (double)this->dataTree[dcid::defaultValue]);
-		this->component.setTextBoxStyle(juce::Slider::NoTextBox, false, 0, 0);
+		UnconnectedSlider(const String& name):
+		  juce::Slider(name)
+		{}
 
-		this->component.onValueChange = [this]()
+		void mouseDoubleClick(const MouseEvent& e) override
 		{
-			this->data->onValueChange (getId(), this->component.getValue(), this->useUndoManager());
-		};
+			performModifierAction(e, true);
+		}
 
-		initSpecialProperties({
+		void mouseDown(const MouseEvent& e) override
+		{
+			if(performModifierAction(e, false))
+				return;
+
+			Slider::mouseDown(e);
+		}
+	};
+
+	Slider(Data::Ptr d, const ValueTree& v):
+	  Base(d, v),
+	  ControlledObject(d->getMainController())
+	{
+		connectionListener.setCallback(v, getSliderIds(), valuetree::AsyncMode::Asynchronously, BIND_MEMBER_FUNCTION_2(Slider::updateSliderProperty));
+		updateSliderProperty(dcid::processorId, dataTree[dcid::processorId]);
+	}
+
+	void sliderValueChanged(juce::Slider* slider) override
+	{
+		this->data->onValueChange (getId(), this->slider->getValue(), false);
+	}
+
+	static Array<Identifier> getSliderIds()
+	{
+		static const Array<Identifier> sliderIds({
 		 dcid::min, 
 		 dcid::max, 
 		 dcid::middlePosition, 
@@ -228,13 +373,74 @@ struct Slider: public WrapperBase<DynSlider>
 		 dcid::mode, 
 		 dcid::suffix, 
 		 dcid::style, 
-		 dcid::showValuePopup
+		 dcid::showValuePopup,
+         dcid::processorId,
+		 dcid::parameterId
 		});
 
-		if(auto laf = createFilmstripLookAndFeel())
+		return sliderIds;
+	}
+
+	void lookAndFeelChanged() override
+	{
+		if(slider != nullptr)
+			slider->setLookAndFeel(&getLookAndFeel());
+	}
+
+	std::pair<Processor*, int> getConnectedParameter()
+	{
+		auto pid = dataTree[dcid::processorId].toString();
+
+		auto p = ProcessorHelpers::getFirstProcessorWithName(getMainController()->getMainSynthChain(), pid);
+
+		if(p != nullptr)
 		{
-			fslaf = laf;
-			component.setLookAndFeel(laf);
+			auto parameter = dataTree[dcid::parameterId];
+			int pIndex = -1;
+
+			if(parameter.isString())
+				pIndex = p->getParameterIndexForIdentifier(Identifier(parameter));
+			else
+				pIndex = (int)parameter;
+
+			if(pIndex != -1)
+				return { p, pIndex };
+		}
+
+		return { nullptr, -1 };
+	}
+
+	void setSlider(juce::Slider* s)
+	{
+		simple_css::FlexboxComponent::Helpers::writeClassSelectors(*s, { simple_css::Selector(".scriptslider") }, true);
+		s->setDoubleClickReturnValue(true, (double)dataTree[dcid::defaultValue]);
+		s->setTextBoxStyle(juce::Slider::NoTextBox, false, 0, 0);
+
+		s->addListener(this);
+
+		GlobalHiseLookAndFeel::setDefaultColours(*s);
+
+		slider = s;
+		addAndMakeVisible(s);
+
+		for(auto id: getSliderIds())
+		{
+			if(id == dcid::parameterId || id == dcid::processorId)
+				continue;
+
+			updateSliderProperty(id, getPropertyOrDefault(id));
+		}
+
+		initCSSForChildComponent();
+		resized();
+	}
+
+	void onValue(const var& newValue) override
+	{
+		if(slider != nullptr)
+		{
+			auto isConnected = dynamic_cast<HiSlider*>(slider.get()) != nullptr;
+			slider->setValue((double)newValue, isConnected ? sendNotificationSync : dontSendNotification);
 		}
 	}
 
@@ -268,11 +474,34 @@ struct Slider: public WrapperBase<DynSlider>
 		return nullptr;
 	}
 
-	void updateSpecialProperties(const Identifier& id, const var& newValue) override
+
+	void updateSliderProperty(const Identifier& id, const var& newValue)
 	{
+		if(id == dcid::parameterId || id == dcid::processorId)
+		{
+			auto connection = getConnectedParameter();
+			auto name = dataTree[dcid::text].toString();
+
+			if(name.isEmpty())
+				name = dataTree[dcid::id].toString();
+
+			if(connection.first != nullptr)
+			{
+				auto s = new HiSlider(dataTree[dcid::id].toString());
+				s->setup(connection.first, connection.second, name);
+				setSlider(s);
+				auto laf = &getLookAndFeel();
+				s->setLookAndFeel(laf);
+			}
+			else
+			{
+				auto s = new UnconnectedSlider(name);
+				setSlider(s);
+			}
+		}
 		if(id == dcid::suffix)
 		{
-			this->component.setTextValueSuffix(newValue.toString());
+			this->slider->setTextValueSuffix(newValue.toString());
 		}
 		else if (id == dcid::style)
 		{
@@ -286,11 +515,15 @@ struct Slider: public WrapperBase<DynSlider>
 			auto idx = values.indexOf(newValue.toString());
 
 			if(idx != -1)
-				this->component.setSliderStyle(styles[idx]);
+				this->slider->setSliderStyle(styles[idx]);
 		}
 		else if (isFilmStripId(id))
 		{
-			
+			if(auto laf = createFilmstripLookAndFeel())
+			{
+				fslaf = laf;
+				slider->setLookAndFeel(laf);
+			}
 		}
 		else if(id == dcid::mode)
 		{
@@ -298,13 +531,13 @@ struct Slider: public WrapperBase<DynSlider>
 
 			if(vtc.active)
 			{
-				this->component.textFromValueFunction = vtc;
-				this->component.valueFromTextFunction = vtc;
+				this->slider->textFromValueFunction = vtc;
+				this->slider->valueFromTextFunction = vtc;
 			}
 			else
 			{
-				this->component.textFromValueFunction = {};
-				this->component.valueFromTextFunction = {};
+				this->slider->textFromValueFunction = {};
+				this->slider->valueFromTextFunction = {};
 			}
 		}
 		else if (id == dcid::showValuePopup)
@@ -314,47 +547,97 @@ struct Slider: public WrapperBase<DynSlider>
 		else
 		{
 			auto rng = scriptnode::RangeHelpers::getDoubleRange(this->dataTree, RangeHelpers::IdSet::ScriptComponents);
-			this->component.setRange(rng.rng.getRange(), rng.rng.interval);
-			this->component.setSkewFactor(rng.rng.skew);
+			this->slider->setRange(rng.rng.getRange(), rng.rng.interval);
+			this->slider->setSkewFactor(rng.rng.skew);
 		}
 	}
 
-	void onValue(const var& newValue) override
+	void resized() override
 	{
-		component.setValue((double)newValue, dontSendNotification);
+		if(slider != nullptr)
+			slider->setBounds(getLocalBounds());
 	}
 
 	static Base* createComponent(Data::Ptr d, const ValueTree& v) { return new Slider(d, v); }
 
-	ScopedPointer<FilmstripLookAndFeel> fslaf;
-};	
+private:
 
-struct Label: public WrapperBase<hise::MultilineLabel>
+	valuetree::PropertyListener connectionListener;
+	ScopedPointer<juce::Slider> slider;
+	ScopedPointer<FilmstripLookAndFeel> fslaf;
+};
+
+
+struct Label: public WrapperBase<hise::MultilineLabel>,
+			  public Timer,
+	          public juce::Label::Listener,	
+			  public juce::TextEditor::Listener	
 {
 	SN_NODE_ID("Label");
 
 	Label(Data::Ptr d, const ValueTree& v):
 	  WrapperBase<MultilineLabel>(d, v)
 	{
-		component.onTextChange = [&]()
-		{
-			this->data->onValueChange(getId(), component.getText(), useUndoManager());
-		};
+		component.addListener(this);
 
-#if 0
 		if((bool)dataTree[dcid::updateEachKey])
 		{
-
-			component.onTextChange = component.onReturnKey;
+			component.onTextChange = [this]()
+			{
+				this->startTimer(500);
+			};
 		}
-#endif
 
 		initSpecialProperties({ dcid::text, dcid::multiline, dcid::editable});
+
+		initCSSForChildComponent();
+	}
+
+	void labelTextChanged (juce::Label* labelThatHasChanged) override
+	{
+		if(!component.isBeingEdited())
+			this->data->onValueChange(getId(), component.getText(), useUndoManager());
+	}
+
+	void editorShown(juce::Label*, TextEditor& te) override
+	{
+		if(auto r = simple_css::CSSRootComponent::find(*this))
+		{
+			if(auto ss = r->css.getForComponent(&te))
+			{
+				ss->setupComponent(r, &te, 0);
+			}
+		}
+
+		te.addListener(this);
+	}
+
+	void editorHidden(juce::Label*, TextEditor& te) override
+	{
+		te.removeListener(this);
+	}
+
+	String currentText;
+
+	void textEditorTextChanged(TextEditor& te) override
+	{
+		if((bool)dataTree[dcid::updateEachKey])
+		{
+			currentText = te.getText();
+			startTimer(500);
+		}
+	}
+
+	void timerCallback() override
+	{
+		this->data->onValueChange(getId(), currentText, useUndoManager());
+		stopTimer();
 	}
 
 	void onValue(const var& newValue) override
 	{
-		component.setText(newValue.toString(), dontSendNotification);
+		if(!component.isBeingEdited())
+			component.setText(newValue.toString(), dontSendNotification);
 	}
 
 	static Base* createComponent(Data::Ptr d, const ValueTree& v) { return new Label(d, v); }
@@ -375,6 +658,155 @@ struct Label: public WrapperBase<hise::MultilineLabel>
 		}
 	}
 };	
+
+struct FloatingTile: public Base
+{
+	SN_NODE_ID("FloatingTile");
+
+	FloatingTile(Data::Ptr d, const ValueTree& v):
+	  Base(d, v)
+	{
+		onValue(d->getFloatingTileData(v[dcid::id].toString()));
+	}
+
+	void lookAndFeelChanged() override
+	{
+		if(ft != nullptr)
+		{
+			auto laf = &getLookAndFeel();
+
+			Component::callRecursive<Component>(ft, [laf](Component* c)
+			{
+				c->setLookAndFeel(laf);
+				return false;
+			});
+		}
+	}
+
+	void onValue(const var& newValue) override
+	{
+		if(newValue.getDynamicObject() != nullptr)
+		{
+			addAndMakeVisible(ft = new hise::FloatingTile(data->getMainController(), nullptr, newValue));
+			simple_css::FlexboxComponent::Helpers::setIsOpaqueWrapper(*this, true);
+
+			auto idSelector = String("#") + getId().toString();
+			ft->getProperties().set(dcid::id, idSelector);
+			ft->setLookAndFeel(&getLookAndFeel());
+			resized();
+		}
+		else
+		{
+			ft = nullptr;
+		}
+	}
+
+	static Base* createComponent(Data::Ptr d, const ValueTree& v)
+	{
+		return new FloatingTile(d, v);
+	}
+
+	void resized() override
+	{
+		if(ft != nullptr)
+			ft->setBounds(getLocalBounds());
+	}
+
+	ScopedPointer<hise::FloatingTile> ft;
+};
+
+struct TextBox: public WrapperBase<SimpleMarkdownDisplay>
+{
+	SN_NODE_ID("TextBox");
+
+	TextBox(Data::Ptr d, const ValueTree& v):
+	  WrapperBase<hise::SimpleMarkdownDisplay>(d, v)
+	{
+		simple_css::FlexboxComponent::Helpers::setCustomType(component, simple_css::Selector(simple_css::ElementType::Paragraph));
+		simple_css::FlexboxComponent::Helpers::setFallbackStyleSheet(component, "width: 100%; height: auto;");
+		initSpecialProperties({dcid::text});
+		component.setResizeToFit(true);
+		simple_css::FlexboxComponent::Helpers::storeDefaultBounds(*this, {});
+
+		initCSSForChildComponent();
+	}
+
+	void updateSpecialProperties(const Identifier& id, const var& newValue) override
+	{
+		if(id == dcid::text)
+		{
+			if(getLocalBounds().isEmpty())
+			{
+				waitForNotEmpty = true;
+			}
+			else
+			{
+				waitForNotEmpty = false;
+
+				component.setText(newValue.toString());
+
+				if(component.totalHeight > 0.0)
+					dataTree.setProperty(dcid::height, component.totalHeight, nullptr);
+
+				
+			}
+			
+		}
+	}
+
+	void onValue(const var& newValue) override
+	{
+		
+	}
+
+	void resized() override
+	{
+		if(waitForNotEmpty && !getLocalBounds().isEmpty())
+		{
+			if(auto r = simple_css::CSSRootComponent::find(*this))
+			{
+				auto sd = r->css.getMarkdownStyleData(&component);
+
+				ss = r->css.getForComponent(&component);
+				component.r.setStyleData(sd);
+			}
+
+			component.setText(dataTree[dcid::text].toString());
+
+			if(component.totalHeight > 0.0)
+			{
+				waitForNotEmpty = true;
+				dataTree.setProperty(dcid::height, component.totalHeight, nullptr);
+				updatePosition({},{});
+			}
+		}
+
+		if(ss != nullptr)
+		{
+			auto area = getLocalBounds().toFloat();
+
+			auto ma = ss->getArea(area, { "margin", 0});
+			auto pa = ss->getArea(ma, { "padding", 0});
+
+			
+
+			this->component.setBounds(pa.toNearestInt());
+
+			auto h = roundToInt(component.totalHeight + (area.getHeight() - pa.getHeight()));
+			dataTree.setProperty(dcid::height, h, nullptr);
+		}
+		else
+		{
+			WrapperBase::resized();
+		}
+	}
+
+	static Base* createComponent(Data::Ptr d, const ValueTree& v) { return new TextBox(d, v); }
+
+	simple_css::StyleSheet::Ptr ss;
+
+	bool waitForNotEmpty = false;
+};
 
 struct DragContainer: public Base
 {
@@ -617,8 +1049,6 @@ struct DragContainer: public Base
 				        return 1;
 				}
 
-				
-
 				return 0;
 			}
 
@@ -655,13 +1085,23 @@ struct Panel: public Base
 	SN_NODE_ID("Panel");
 
 	Panel(Data::Ptr d, const ValueTree& v):
-	  Base(d, v)
+	  Base(d, v),
+	  bp(getDrawHandler())
 	{
+		addAndMakeVisible(bp);
+
+		bp.isUsingCustomImage = getDrawHandler() != &fallback;
+
 		auto idSelector = String("#") + getId().toString();
+		simple_css::FlexboxComponent::Helpers::setCustomType(bp, simple_css::Selector(simple_css::ElementType::Panel));
+		bp.getProperties().set(dcid::id, idSelector);
+		initCSSForChildComponent();
+	}
 
-		simple_css::FlexboxComponent::Helpers::setCustomType(*this, simple_css::Selector(simple_css::ElementType::Panel));
-
-		getProperties().set(dcid::id, idSelector);
+	DrawActions::Handler* getDrawHandler()
+	{
+		auto dh = data->getDrawHandler(dataTree);
+		return dh != nullptr ? dh : &fallback;
 	}
 
 	void onValue(const var& newValue) override
@@ -671,32 +1111,142 @@ struct Panel: public Base
 
 	void paint(Graphics& g) override
 	{
-		auto slaf = dynamic_cast<simple_css::StyleSheetLookAndFeel*>(&getLookAndFeel());
-		slaf->drawComponentBackground(g, this);
-
-		auto text = dataTree[dcid::text].toString();
-
-		if(text.isNotEmpty())
+#if 0
+		if(auto slaf = dynamic_cast<simple_css::StyleSheetLookAndFeel*>(&getLookAndFeel()))
 		{
-			slaf->drawGenericComponentText(g, text, this);
+			slaf->drawComponentBackground(g, this);
+
+			auto text = dataTree[dcid::text].toString();
+
+			if(text.isNotEmpty())
+			{
+				slaf->drawGenericComponentText(g, text, this);
+			}
 		}
+#endif
+	}
+
+	void resized() override
+	{
+		bp.setBounds(getLocalBounds());
 	}
 
 	static Base* createComponent(Data::Ptr d, const ValueTree& v)
 	{
 		return new Panel(d, v);
 	}
+
+	DrawActions::Handler fallback;
+	BorderPanel bp;
+};
+
+struct FlexBox: public Base,
+				public AsyncUpdater
+{
+	SN_NODE_ID("Viewport");
+
+	FlexBox(Data::Ptr d, const ValueTree& v):
+	  Base(d, v),
+	  content(simple_css::Selector("#" + v[dcid::id].toString()))
+	{
+		simple_css::FlexboxComponent::Helpers::writeSelectorsToProperties(content, {".scriptviewport"});
+		addAndMakeVisible(content);
+	}
+
+	void onValue(const var& newValue) override {}
+
+	void handleAsyncUpdate() override
+	{
+		content.rebuildLayout();
+	}
+
+	void baseChildChanged(Base::Ptr c, bool wasAdded) override
+	{
+		if(wasAdded)
+			content.addFlexItem(*c);
+		else
+			content.removeFlexItem(*c);
+		
+		triggerAsyncUpdate();
+	}
+
+	void hideChild(Base::Ptr b, bool shouldBeVisible)
+	{
+		content.content.setFlexChildVisibility(b.get(), shouldBeVisible, !shouldBeVisible);
+		triggerAsyncUpdate();
+	}
+
+	void resizeChild(Base::Ptr b, Rectangle<int> newBounds) override
+	{
+		simple_css::FlexboxComponent::Helpers::storeDefaultBounds(*b, newBounds);
+		triggerAsyncUpdate();
+	}
+
+	void resized() override
+	{
+		if(!initialised)
+		{
+			if(auto root = simple_css::CSSRootComponent::find(*this))
+			{
+				content.setCSS(root->css);
+				initialised = true;
+			}
+		}
+
+		if(content.getLocalBounds() != getLocalBounds())
+			content.setBounds(getLocalBounds());
+		else
+			content.resized();
+	}
+
+	static Base* createComponent(Data::Ptr d, const ValueTree& v)
+	{
+		return new FlexBox(d, v);
+	}
+
+	bool initialised = false;
+
+	simple_css::FlexboxViewport content;
 };
 
 
+Data::RefreshType Data::getRefreshType(const var& t)
+{
+	if(t.isString())
+	{
+		auto refreshMode_ = t.toString();
 
+		if (refreshMode_ == "repaint")
+			return RefreshType::repaint;
+		else if (refreshMode_ == "changed")
+			return RefreshType::changed;
+		else if (refreshMode_ == "updateValueFromProcessorConnection")
+			return RefreshType::updateValueFromProcessorConnection;
+		else if (refreshMode_ == "loseFocus")
+			return RefreshType::loseFocus;
+		else if (refreshMode_ == "resetValueToDefault")
+			return RefreshType::resetValueToDefault;
+		else
+		{
+			jassertfalse;
+			return RefreshType::numRefreshTypes;
+		}
+			
+	}
+	else
+		return (RefreshType)(int)t;
+}
 
-Data::Data(const var& obj, Rectangle<int> position):
+Data::Data(MainController* mc, const var& obj, Rectangle<int> position):
+	ControlledObject(mc),
 	data(fromJSON(obj, position)),
 	values(ValueTree("Values")),
-	factory(new Factory())
+	factory(new Factory()),
+	floatingTileData(obj[dcid::FloatingTileData].getDynamicObject()),
+	um(mc->getControlUndoManager())
 {
-		
+	refreshBroadcaster.enableLockFreeUpdate(mc->getGlobalUIUpdater());
+	refreshBroadcaster.setEnableQueue(true);
 }
 
 void Data::setValues(const var& valueObject)
@@ -710,9 +1260,68 @@ void Data::setValues(const var& valueObject)
 	}
 }
 
+Image Data::getImage(const String& ref)
+{
+	if(ip)
+	{
+		return ip(ref);
+	}
+
+	return {};
+}
+
+simple_css::StyleSheet::Collection::DataProvider* Data::createDataProvider() const
+{
+	struct DP: public simple_css::StyleSheet::Collection::DataProvider
+	{
+		DP() = default;
+
+		Font loadFont(const String& fontName, const String& url) override
+		{
+			if(fp)
+				return fp(fontName, url);
+
+			return Font(fontName, 13.0f, Font::plain);
+		}
+
+		String importStyleSheet(const String& url) override
+		{
+			return {};
+		}
+
+		Image loadImage(const String& imageURL) override
+		{
+			if(ip)
+				return ip(imageURL);
+
+			return {};
+		}
+
+		ImageProvider ip;
+		FontProvider fp;
+	};
+
+	auto np = new DP();
+	np->ip = ip;
+	np->fp = fp;
+	return np;
+}
+
 ValueTree Data::fromJSON(const var& obj, Rectangle<int> position)
 {
-	auto v = ValueTreeConverters::convertDynamicObjectToContentProperties(obj);
+	var ft;
+
+	ValueTree v;
+
+	if(obj.hasProperty(dcid::ContentProperties))
+	{
+		v = ValueTreeConverters::convertDynamicObjectToContentProperties(obj[dcid::ContentProperties]);
+		ft = obj[dcid::FloatingTileData];
+	}
+	else
+	{
+		v = ValueTreeConverters::convertDynamicObjectToContentProperties(obj);
+	}
 
 	v.setProperty(dcid::x, position.getX(), nullptr);
 	v.setProperty(dcid::y, position.getY(), nullptr);
@@ -724,7 +1333,8 @@ ValueTree Data::fromJSON(const var& obj, Rectangle<int> position)
 		{ "ScriptSlider", "Slider" },
 		{ "ScriptComboBox", "ComboBox" },
 		{ "ScriptLabel", "Label" },
-		{ "ScriptPanel", "Panel" }
+		{ "ScriptPanel", "Panel" },
+		{ "ScriptViewport", "Viewport"}
 	};
 
 	valuetree::Helpers::forEach(v, [&](ValueTree& c)
@@ -755,7 +1365,7 @@ ReferenceCountedObjectPtr<Base> Data::create(const ValueTree& v)
 	if(id.isNotEmpty() && v.hasProperty(dcid::defaultValue) && !values.hasProperty(Identifier(id)))
 		values.setProperty(Identifier(id), v[dcid::defaultValue], nullptr);
 	
-	return factory->create(this, v);
+	return getFactory()->create(this, v);
 }
 
 void Data::onValueChange(const Identifier& id, const var& newValue, bool useUndoManager)
@@ -770,15 +1380,36 @@ const ValueTree& Data::getValueTree(TreeType t) const
 	return t == TreeType::Data ? data : values;
 }
 
+void Data::setValueCallback(const ValueCallback& v)
+{
+	valueCallback = v;
+}
+
+Factory* Data::getFactory()
+{
+    return dynamic_cast<Factory*>(factory.get());
+}
+
+void Data::setDataProviderCallbacks(const ImageProvider& ip_, const FontProvider& fp_)
+{
+	ip = ip_;
+	fp = fp_;
+}
+
 Base::Base(Data::Ptr d, const ValueTree& v):
 	data(d),
 	dataTree(v),
 	valueReference(data->getValueTree(Data::TreeType::Values))
 {
-	basicPropertyListener.setCallback(dataTree, { dcid::enabled, dcid::visible, dcid::class_, dcid::elementStyle}, valuetree::AsyncMode::Asynchronously, BIND_MEMBER_FUNCTION_2(Base::updateBasicProperties));
+	auto basicProperties = dcid::Helpers::getBasicProperties();
+
+	basicPropertyListener.setCallback(dataTree, basicProperties, valuetree::AsyncMode::Asynchronously, BIND_MEMBER_FUNCTION_2(Base::updateBasicProperties));
+
 	positionListener.setCallback(dataTree, { dcid::x, dcid::y, dcid::width, dcid::height}, valuetree::AsyncMode::Coallescated, BIND_MEMBER_FUNCTION_2(Base::updatePosition));
 
 	childListener.setCallback(dataTree, valuetree::AsyncMode::Asynchronously, BIND_MEMBER_FUNCTION_2(Base::updateChild));
+
+	d->refreshBroadcaster.addListener(*this, onRefreshStatic, false);
 
 	if(getId().isValid())
 	{
@@ -790,7 +1421,9 @@ Base::Base(Data::Ptr d, const ValueTree& v):
 }
 
 Base::~Base()
-{}
+{
+	data->refreshBroadcaster.removeListener(*this);
+}
 
 Identifier Base::getId() const
 {
@@ -811,7 +1444,7 @@ void Base::updateChild(const ValueTree& v, bool wasAdded)
 		{
 			if(c->dataTree == v)
 			{
-				removeChildComponent(c);
+				baseChildChanged(c, false);
 				children.removeObject(c);
 				break;
 			}
@@ -836,30 +1469,142 @@ void Base::updateBasicProperties(const Identifier& id, const var& newValue)
 		classes.removeEmptyStrings();
 		
 		simple_css::FlexboxComponent::Helpers::writeSelectorsToProperties(*c, classes);
+		simple_css::FlexboxComponent::Helpers::invalidateCache(*c);
     }
 	if(id == dcid::elementStyle)
 	{
 	    simple_css::FlexboxComponent::Helpers::writeInlineStyle (*getCSSTarget(), newValue.toString());
 	}
+	if(id == dcid::bgColour || id == dcid::itemColour || id == dcid::itemColour2 || id == dcid::textColour)
+	{
+		if(auto root = simple_css::CSSRootComponent::find(*this))
+		{
+			if(auto ptr = root->css.getForComponent(this))
+			{
+				ptr->setPropertyVariable(id, newValue);
+				repaint();
+			}
+		}
+	}
 	if(id == dcid::enabled)
 		setEnabled((bool)newValue);
 	if(id == dcid::visible)
-		setVisible((bool)newValue);
+	{
+		if(auto p = findParentComponentOfClass<Base>())
+			p->hideChild(this, (newValue));
+		else
+			setVisible((bool)newValue);
+	}
 }
 
 void Base::updatePosition(const Identifier&, const var&)
 {
 	Rectangle<int> b((int)dataTree[dcid::x], (int)dataTree[dcid::y], (int)dataTree[dcid::width], (int)dataTree[dcid::height]);
-	setBounds(b);
-	resized();
+
+	if(auto parent = findParentComponentOfClass<Base>())
+	{
+		parent->resizeChild(this, b);
+	}
+}
+
+void Base::baseChildChanged(Base::Ptr c, bool wasAdded)
+{
+	if(wasAdded)
+	{
+		c->updatePosition({}, {});
+		addAndMakeVisible(c.get());
+	}
+	else
+	{
+		removeChildComponent(c.get());
+	}
+		
+}
+
+void Base::resizeChild(Base::Ptr b, Rectangle<int> newBounds)
+{
+	b->setBounds(newBounds);
+	b->resized();
+}
+
+void Base::initCSSForChildComponent()
+{
+	jassert(getNumChildComponents() == 1);
+
+	simple_css::FlexboxComponent::Helpers::setIsOpaqueWrapper(*this, true);
+
+	auto idSelector = String("#") + getId().toString();
+	getChildComponent(0)->getProperties().set(dcid::id, idSelector);
+
+	if(dataTree.hasProperty(dcid::class_))
+		updateBasicProperties(dcid::class_, dataTree[dcid::class_]);
+	if(dataTree.hasProperty(dcid::elementStyle))
+		updateBasicProperties(dcid::elementStyle, dataTree[dcid::elementStyle]);
+}
+
+void Base::onRefresh(Data::RefreshType rt, bool recursive)
+{
+	switch(rt)
+	{
+	case Data::RefreshType::repaint:
+		getCSSTarget()->repaint();
+		break;
+	case Data::RefreshType::changed:
+		onValue(getValueOrDefault());
+		break;
+	case Data::RefreshType::updateValueFromProcessorConnection:
+		jassertfalse;
+		break;
+	case Data::RefreshType::loseFocus:
+		unfocusAllComponents();
+		return; // no recursion needed
+	case Data::RefreshType::resetValueToDefault:
+		onValue(dataTree[dcid::defaultValue]);
+	default: ;
+	}
+
+	if(recursive)
+	{
+		for(auto c: children)
+			c->onRefresh(rt, true);
+	}
 }
 
 void Base::addChild(Base::Ptr c)
 {
-	c->setLookAndFeel(&getLookAndFeel());
-	children.add(c);
-	addAndMakeVisible(c.get());
-	c->updatePosition({}, {});
+	if(c != nullptr)
+	{
+		children.add(c);
+		c->setLookAndFeel(&getLookAndFeel());
+		baseChildChanged(c, true);
+	}
+}
+
+void Base::writePositionInValueTree(Rectangle<int> tb, bool useUndoManager)
+{
+	dataTree.setProperty(dcid::x, tb.getX(), nullptr);
+	dataTree.setProperty(dcid::y, tb.getY(), nullptr);
+	dataTree.setProperty(dcid::width, tb.getWidth(), nullptr);
+	dataTree.setProperty(dcid::height, tb.getHeight(), nullptr);
+}
+
+var Base::getValueOrDefault() const
+{
+	Identifier id_(dataTree[dcid::id].toString());
+	auto vt = data->getValueTree(Data::TreeType::Values);
+
+	if(vt.hasProperty(id_))
+		return vt[id_];
+
+	return dataTree[dcid::defaultValue];
+}
+
+var Base::getPropertyOrDefault(const Identifier& id) const
+{
+	if(dataTree.hasProperty(id))
+		return dataTree[id];
+
+	return dcid::Helpers::getDefaultValue(id);
 }
 
 Factory::Factory()
@@ -869,38 +1614,17 @@ Factory::Factory()
 	registerItem<ComboBox>();
 	registerItem<Panel>();
 	registerItem<Label>();
+	registerItem<FloatingTile>();
 	registerItem<DragContainer>();
-}
-
-void Root::setCSS(const String& styleSheetCode)
-{
-	simple_css::Parser p(styleSheetCode);
-	auto ok = p.parse();
-	this->css = p.getCSSValues();
-
-	ScopedPointer<simple_css::StyleSheet::Collection::DataProvider> dp = createDataProvider();
-
-	this->css.performAtRules(dp);
-
-	dp = nullptr;
-
-	this->css.setAnimator(&animator);
-
-	auto newLaf = new simple_css::StyleSheetLookAndFeel(*this);
-
-	Component::callRecursive<Base>(this, [newLaf](Base* b)
-	{
-		b->setLookAndFeel(newLaf);
-		return false;
-	});
-
-	laf = newLaf;
+	registerItem<FlexBox>();
+	registerItem<TextBox>();
 }
 
 Root::Root(Data::Ptr d):
   Base(d, d->getValueTree(Data::TreeType::Data))
 {
-	
+	simple_css::FlexboxComponent::Helpers::setCustomType(*this, simple_css::Selector(simple_css::ElementType::Body));
+	simple_css::FlexboxComponent::Helpers::setFallbackStyleSheet(*this, "background-color:transparent;");
 }
 
 } // namespace dyncomp

@@ -236,7 +236,7 @@ struct MacroPropertyEditor : public Component,
 	};
 
 	MacroPropertyEditor(NodeBase* b, ValueTree data, Identifier childDataId = PropertyIds::Connections) :
-    parameterProperties(b, false, data, {}),
+    parameterProperties(b, false, data, { PropertyIds::IsVertical, }),
 		node(b),
 		connectionContent(*this),
 		containerMode(dynamic_cast<NodeContainer*>(b) != nullptr || childDataId == PropertyIds::ModulationTargets),

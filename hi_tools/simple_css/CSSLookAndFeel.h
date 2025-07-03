@@ -36,6 +36,13 @@ namespace simple_css
 using namespace juce;
 
 
+struct HardcodedStyleSheetLookAndFeel: public GlobalHiseLookAndFeel
+{
+	virtual ~HardcodedStyleSheetLookAndFeel() {};
+
+	virtual void drawBackground(Graphics& g, Rectangle<float> fullBounds, PseudoState type) = 0;
+};
+
 
 /** A look and feel class that applies CSS styling to most stock JUCE controls.
  *
