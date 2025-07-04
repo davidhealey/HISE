@@ -139,10 +139,8 @@ void HardcodedMasterFX::connectToRuntimeTargets(scriptnode::OpaqueNode& on, bool
 
 	Processor::connectToRuntimeTargets(on, shouldAdd);
 
-	if(auto pitchChain = dynamic_cast<ModulatorChain*>(getParentProcessor(true)->getChildProcessor(ModulatorSynth::InternalChains::PitchModulation)))
-	{
+	if(auto pitchChain = getPitchChain())
 		pitchChain->connectToRuntimeTargets(on, shouldAdd);
-	}
 
 	extraMods.connectToRuntimeTarget(on, shouldAdd);
 }
@@ -561,11 +559,9 @@ void HardcodedPolyphonicFX::connectToRuntimeTargets(scriptnode::OpaqueNode& on, 
 
 	Processor::connectToRuntimeTargets(on, shouldAdd);
 
-	if(auto pitchChain = dynamic_cast<ModulatorChain*>(getParentProcessor(true)->getChildProcessor(ModulatorSynth::InternalChains::PitchModulation)))
-	{
+	if(auto pitchChain = getPitchChain())
 		pitchChain->connectToRuntimeTargets(on, shouldAdd);
-	}
-
+	
 	extraModSources.connectToRuntimeTarget(on, shouldAdd);
 }
 
@@ -1096,10 +1092,8 @@ void HardcodedSynthesiser::connectToRuntimeTargets(scriptnode::OpaqueNode& opaqu
 
 	Processor::connectToRuntimeTargets(opaqueNode, shouldAdd);
 
-	if(auto pitchChain = dynamic_cast<ModulatorChain*>(getChildProcessor(ModulatorSynth::InternalChains::PitchModulation)))
-	{
+	if(auto pitchChain = getPitchChain())
 		pitchChain->connectToRuntimeTargets(opaqueNode, shouldAdd);
-	}
 
 	extraModSources.connectToRuntimeTarget(opaqueNode, shouldAdd);
 }
