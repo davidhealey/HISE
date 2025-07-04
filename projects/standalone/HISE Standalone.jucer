@@ -29,7 +29,7 @@
   <EXPORTFORMATS>
     <XCODE_MAC targetFolder="Builds/MacOSX" smallIcon="ho3qQy" bigIcon="ho3qQy"
                customPList="&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;&#10;&lt;!DOCTYPE plist PUBLIC &quot;-//Apple//DTD PLIST 1.0//EN&quot; &quot;http://www.apple.com/DTDs/PropertyList-1.0.dtd&quot;&gt;&#10;&lt;plist version=&quot;1.0&quot;&gt;&#10;&lt;dict&gt;&#10;&lt;key&gt;NSAppTransportSecurity&lt;/key&gt; &#10;&lt;dict&gt; &#10;&lt;key&gt;NSAllowsArbitraryLoads&lt;/key&gt;&lt;true/&gt;&#10;&lt;/dict&gt;&#10;&lt;/dict&gt;&#10;&lt;/plist&gt;"
-               extraDefs="USE_IPP=0&#10;HI_ENABLE_EXPANSION_EDITING=1&#10;HISE_ENABLE_EXPANSIONS=1&#10;HISE_SCRIPT_SERVER_TIMEOUT=20000&#10;HISE_INCLUDE_PROFILING_TOOLKIT=0&#10;"
+               extraDefs="HI_ENABLE_EXPANSION_EDITING=1&#10;HISE_ENABLE_EXPANSIONS=1&#10;HISE_SCRIPT_SERVER_TIMEOUT=20000&#10;HISE_INCLUDE_PROFILING_TOOLKIT=0&#10;"
                extraCompilerFlags="-Wno-reorder -Wno-inconsistent-missing-override -faligned-allocation -Wno-switch -ffp-contract=off"
                xcodeValidArchs="arm64,arm64e,x86_64" extraLinkerFlags="-rpath $(SRCROOT)/../../../../tools/faust/lib "
                externalLibraries="faust" iosDevelopmentTeamID="">
@@ -100,8 +100,7 @@
     </XCODE_MAC>
     <VS2022 targetFolder="Builds/VisualStudio2022" smallIcon="ho3qQy" bigIcon="ho3qQy"
             useIPP="Sequential" IPPLibrary="" extraDefs="HISE_SCRIPT_SERVER_TIMEOUT=20000&#10;HISE_USE_VS2022=1&#10;PERFETTO=0&#10;HISE_INCLUDE_PROFILING_TOOLKIT=1"
-            extraCompilerFlags="/bigobj  /cgthreads8 /wd&quot;4100&quot; /wd&quot;4661&quot; /wd&quot;4456&quot; /wd&quot;4244&quot; /wd&quot;4457&quot; /wd&quot;4458&quot; /wd&quot;4127&quot; /vmg&#10;/arch:AVX&#10; "
-            IPP1ALibrary="Static_Library">
+            extraCompilerFlags="/bigobj  /cgthreads8 /wd&quot;4100&quot; /wd&quot;4661&quot; /wd&quot;4456&quot; /wd&quot;4244&quot; /wd&quot;4457&quot; /wd&quot;4458&quot; /wd&quot;4127&quot; /vmg&#10;/arch:AVX&#10; ">
       <CONFIGURATIONS>
         <CONFIGURATION name="Debug" generateManifest="1" winArchitecture="x64" isDebug="1"
                        optimisation="1" targetName="HISE Debug" headerPath="../../../../tools/SDK/ASIOSDK2.3/common"
@@ -171,7 +170,7 @@
         <MODULEPATH id="melatonin_blur" path="../../"/>
       </MODULEPATHS>
     </VS2022>
-    <LINUX_MAKE targetFolder="Builds/LinuxMakefile" extraDefs="USE_IPP=0&#10;HI_ENABLE_EXPANSION_EDITING=1&#10;HISE_ENABLE_EXPANSIONS=1&#10;HISE_SCRIPT_SERVER_TIMEOUT=20000&#10;PERFETTO=0&#10;HISE_INCLUDE_PROFILING_TOOLKIT=0"
+    <LINUX_MAKE targetFolder="Builds/LinuxMakefile" extraDefs="HI_ENABLE_EXPANSION_EDITING=1&#10;HISE_ENABLE_EXPANSIONS=1&#10;HISE_SCRIPT_SERVER_TIMEOUT=20000&#10;PERFETTO=0&#10;HISE_INCLUDE_PROFILING_TOOLKIT=0"
                 smallIcon="bfBEgJ" bigIcon="bfBEgJ" linuxExtraPkgConfig="x11 xinerama xext"
                 extraLinkerFlags="-no-pie&#10;-flto=auto&#10;-fuse-ld=gold" extraCompilerFlags="-fno-strict-aliasing"
                 externalLibraries="faust">

@@ -916,6 +916,14 @@ bool CompileExporter::checkSanity(TargetTypes type, BuildOption option)
 
     const bool frontWasFound = chainToExport->hasDefinedFrontInterface();
 
+#if !USE_IPP
+	if(useIpp)
+	{
+		printErrorMessage("IPP setting mismatch", "You cannot compile a plugin with IPP if you have not compiled HISE with IPP.  \n> Turn off the `UseIpp` setting in the Compiler settings of HISE and retry.");
+		return false;
+	}
+#endif
+
 	if (!frontWasFound)
 	{
 		printErrorMessage("No Interface found.", "You have to add at least one script processor and call Synth.addToFront(true).");
@@ -1928,8 +1936,6 @@ void CompileExporter::ProjectTemplateHelpers::handleCompilerInfo(CompileExporter
     
     REPLACE_WILDCARD_WITH_STRING("%FAUST_HEADER_PATH%", headerPath);
     
-    REPLACE_WILDCARD_WITH_STRING("%USE_IPP%", exporter->useIpp ? "1" : "0");
-
     REPLACE_WILDCARD_WITH_STRING("%IPP_1A%", exporter->useIpp ? "Static_Library" : String());
 		REPLACE_WILDCARD_WITH_STRING("%UAC_LEVEL%", exporter->dataObject.getSetting(HiseSettings::Project::AdminPermissions) ? "/MANIFESTUAC:level='requireAdministrator'" : String());
     
@@ -1975,24 +1981,6 @@ void CompileExporter::ProjectTemplateHelpers::handleCompilerInfo(CompileExporter
 #endif
     
 	REPLACE_WILDCARD_WITH_STRING("%COPY_PLUGIN%", copyPlugin ? "1" : "0");
-
-#if JUCE_MAC
-	REPLACE_WILDCARD_WITH_STRING("%IPP_COMPILER_FLAGS%", exporter->useIpp ? "/opt/intel/ipp/lib/libippi.a  /opt/intel/ipp/lib/libipps.a /opt/intel/ipp/lib/libippvm.a /opt/intel/ipp/lib/libippcore.a" : String());
-	REPLACE_WILDCARD_WITH_STRING("%IPP_HEADER%", exporter->useIpp ? "/opt/intel/ipp/include" : String());
-	REPLACE_WILDCARD_WITH_STRING("%IPP_LIBRARY%", exporter->useIpp ? "/opt/intel/ipp/lib" : String());
-#endif
-
-#if JUCE_LINUX
-	REPLACE_WILDCARD_WITH_STRING("%IPP_COMPILER_FLAGS%", exporter->useIpp ? "/opt/intel/ipp/lib/intel64/libippi.a  /opt/intel/ipp/lib/intel64/libipps.a /opt/intel/ipp/lib/intel64/libippvm.a /opt/intel/ipp/lib/intel64/libippcore.a" : String());
-	REPLACE_WILDCARD_WITH_STRING("%IPP_HEADER%", exporter->useIpp ? "/opt/intel/ipp/include" : String());
-	REPLACE_WILDCARD_WITH_STRING("%IPP_LIBRARY%", exporter->useIpp ? "/opt/intel/ipp/lib" : String());
-#endif
-
-#if !JUCE_MAC && !JUCE_LINUX
-	REPLACE_WILDCARD_WITH_STRING("%IPP_COMPILER_FLAGS%", String());
-	REPLACE_WILDCARD_WITH_STRING("%IPP_HEADER%", String());
-	REPLACE_WILDCARD_WITH_STRING("%IPP_LIBRARY%", String());
-#endif
 
 	const auto includePerfetto = (bool)exporter->dataObject.getSetting(HiseSettings::Project::CompileWithPerfetto);
 
