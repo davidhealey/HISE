@@ -471,7 +471,7 @@ void PropertyListener::handleAsyncUpdate()
 
 	for (auto id : changedIds)
     {
-        jassert(v.hasProperty(id) || (id == Identifier("Coallescated")));
+        //jassert(v.hasProperty(id) || (id == Identifier("Coallescated")));
         f(id, v[id]);
     }
 

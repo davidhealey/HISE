@@ -1658,6 +1658,10 @@ void DspNetwork::Holder::restoreNetworks(const ValueTree& d)
 
 				c = fh->getEmbeddedNetwork(nid);
 				jassert(c.isValid());
+
+				if(!c.isValid())
+					return;
+
 			}
 
 			auto newNetwork = new DspNetwork(dynamic_cast<ProcessorWithScriptingContent*>(this),

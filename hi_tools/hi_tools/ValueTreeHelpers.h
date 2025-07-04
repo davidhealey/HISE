@@ -39,6 +39,12 @@ using namespace juce;
 namespace valuetree
 {
 
+// Use these macros for binding class methods to the listeners
+#define VT_BIND_CHILD_LISTENER(methodName) [this](const ValueTree& v, bool wasAdded){ this->methodName(v, wasAdded); }
+#define VT_BIND_PROPERTY_LISTENER(methodName) [this](const Identifier& id, const var& newValue){ this->methodName(id, newValue); }
+#define VT_BIND_RECURSIVE_PROPERTY_LISTENER(methodName) [this](const ValueTree& v, const Identifier& id){ this->methodName(v, id); }
+
+
 struct Helpers
 {
 	enum class IterationType
@@ -90,6 +96,7 @@ public:
 
 	virtual ~Base()
 	{
+		ScopedLock sl(asyncLock);
 		cancelPendingUpdate();
 	};
 
@@ -286,6 +293,7 @@ private:
 	instead of deriving. */
 struct PropertyListener : public Base
 {
+	// use VT_BIND_PROPERTY_LISTENER(methodName) for this prototype
 	using PropertyCallback = std::function<void(Identifier, var)>;
 
 	PropertyListener():
@@ -331,6 +339,7 @@ struct RecursivePropertyListener : public Base
 {
 	~RecursivePropertyListener() override;
 
+	// use VT_BIND_RECURSIVE_PROPERTY_LISTENER(methodName) for this prototype
 	using RecursivePropertyCallback = std::function<void(ValueTree, Identifier)>;
 
 	void setCallback(ValueTree parent, const Array<Identifier>& ids_, AsyncMode asyncMode, const RecursivePropertyCallback& f_);

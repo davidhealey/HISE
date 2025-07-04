@@ -1044,18 +1044,20 @@ void Renderer::renderText(Graphics& g, Rectangle<float> area, const String& text
 {
 	auto currentState = PseudoState(getPseudoClassState()).withElement(type);
 
+	auto textToDraw = ss->getText(text, currentState);
+
+	if(textToDraw.isEmpty())
+		return;
+
 	auto totalArea = area;
 		
 	totalArea = ss->getArea(totalArea, { "margin", currentState });
 	totalArea = ss->getArea(totalArea, { "padding", currentState });
 
-
 	if(type == PseudoElementType::None && truncateBeforeAfter)
 		totalArea = ss->truncateBeforeAndAfter(totalArea, currentState.stateFlag);
 	
 	g.setFont(ss->getFont(currentState, totalArea));
-
-	auto textToDraw = ss->getText(text, currentState);
 
 	auto j = jToUse.getFlags() ? jToUse : ss->getJustification(currentState);
 

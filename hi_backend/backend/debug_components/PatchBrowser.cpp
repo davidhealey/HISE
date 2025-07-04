@@ -550,26 +550,9 @@ void PatchBrowser::paint(Graphics &g)
 		auto endPoint = c->getPointForTreeGraph(false).toFloat();
 		auto endPointInParent = getLocalPoint(c, endPoint);
 
-        bool paintUniform = false;
-        
-        if(auto ms = dynamic_cast<ModulatorSynth*>(c->getProcessor()))
-        {
-            if(ms->isUsingUniformVoiceHandler())
-                paintUniform = true;
-            
-            if(auto msc = dynamic_cast<ModulatorSynthChain*>(ms))
-            {
-                if(msc->isUniformVoiceHandlerRoot())
-                    paintUniform = false;
-            }
-        }
-        
-		g.setColour(paintUniform ? Colour(0xFF888888) :
-            Colour(0xFF222222));
-
+		g.setColour(Colour(0xFF222222));
 		g.drawLine((float)startPointInParent.getX(), (float)startPointInParent.getY(), (float)startPointInParent.getX(), (float)endPointInParent.getY(), 2.0f);
 		g.drawLine((float)startPointInParent.getX(), (float)endPointInParent.getY(), (float)endPointInParent.getX(), (float)endPointInParent.getY(), 2.0f);
-
 	}
     
     if(showChains)
@@ -1474,27 +1457,7 @@ void PatchBrowser::PatchCollection::paint(Graphics &g)
 
 	idLabel.setColour(Label::ColourIds::textColourId, Colours::white.withAlpha(bypassed ? 0.2f : 0.8f));
     
-    if(auto ms = dynamic_cast<ModulatorSynthChain*>(getProcessor()))
-    {
-        if(ms->isUniformVoiceHandlerRoot())
-        {
-            
-            g.setFont(GLOBAL_BOLD_FONT().withHeight(10.0f));
-            
-            
-            
-            auto b = iconSpace2.removeFromRight(30.0f);
-            
-            g.setColour(JUCE_LIVE_CONSTANT_OFF(Colour(0x14FFFFFF)));
-            g.fillRoundedRectangle(b.reduced(3.0f), 2.0f);
-            
-            g.setColour(Colour(0xFF888888));
-            g.drawText("UVH", b, Justification::centred);
-        }
-        
-    }
-
-	auto ds = getDragState();
+    auto ds = getDragState();
 
 	if(ds != DragState::Inactive)
 	{
