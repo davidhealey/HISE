@@ -6067,15 +6067,26 @@ struct ScriptingApi::Content::ScriptDynamicContainer::ChildReference::Wrapper
 	API_VOID_METHOD_WRAPPER_1(ChildReference, loseFocus); 
 	API_VOID_METHOD_WRAPPER_1(ChildReference, resetValueToDefault);
 	API_VOID_METHOD_WRAPPER_1(ChildReference, setPaintRoutine);
+	API_VOID_METHOD_WRAPPER_1(ChildReference, setChildCallback);
+	API_METHOD_WRAPPER_0(ChildReference, getNumChildComponents);
+	API_METHOD_WRAPPER_1(ChildReference, getChildComponentIndex);
+	API_METHOD_WRAPPER_1(ChildReference, isEqual);
+	API_METHOD_WRAPPER_1(ChildReference, toBase64);
+	API_VOID_METHOD_WRAPPER_1(ChildReference, fromBase64);
+	API_VOID_METHOD_WRAPPER_1(ChildReference, addStateToUserPreset);
+
 };
 
-ScriptingApi::Content::ScriptDynamicContainer::ChildReference::ChildReference(ProcessorWithScriptingContent* base,
+ScriptingApi::Content::ScriptDynamicContainer::ChildReference::ChildReference(ScriptDynamicContainer* parent,
 	dyncomp::Data::Ptr data_, const ValueTree& cd):
-	ConstScriptingObject(base, 0),
+	ConstScriptingObject(parent->getScriptProcessor(), 0),
+	parentContainer(parent),
 	data(data_),
 	componentData(cd),
-	valueCallback(base, this, var(), 2),
-	paintRoutine(base, this, var(), 1) 
+	valueCallback(getScriptProcessor(), this, var(), 1),
+	paintRoutine(getScriptProcessor(), this, var(), 1),
+	childCallback(getScriptProcessor(), this, var(), 2),
+	um(cd[dyncomp::dcid::useUndoManager] ? getScriptProcessor()->getMainController_()->getControlUndoManager() : nullptr)
 {
 	ADD_API_METHOD_2(set);
 	ADD_API_METHOD_1(get);
@@ -6098,33 +6109,91 @@ ScriptingApi::Content::ScriptDynamicContainer::ChildReference::ChildReference(Pr
 	ADD_API_METHOD_1(loseFocus); 
 	ADD_API_METHOD_1(resetValueToDefault);
 	ADD_API_METHOD_1(setPaintRoutine);
+	ADD_API_METHOD_1(setChildCallback);
+	ADD_API_METHOD_1(isEqual);
+	ADD_API_METHOD_0(getNumChildComponents);
+	ADD_API_METHOD_1(getChildComponentIndex);
+
+	ADD_API_METHOD_1(toBase64);
+	ADD_API_METHOD_1(fromBase64);
+	ADD_API_METHOD_1(addStateToUserPreset);
 
 	data->refreshBroadcaster.addListener(*this, onRefresh, false);
 }
 
 ScriptingApi::Content::ScriptDynamicContainer::ChildReference::~ChildReference()
 {
+	getScriptProcessor()->getMainController_()->getUserPresetHandler().removeStateManager(this);
+
+	valueCallback.clear();
+	childCallback.clear();
+
 	lastValue = var();
 	data->refreshBroadcaster.removeListener(*this);
 	data = nullptr;
 }
 
+int ScriptingApi::Content::ScriptDynamicContainer::ChildReference::getChildComponentIndex(
+	const var& childIdOrComponent) const
+{
+	if(childIdOrComponent.isString())
+	{
+		auto id = childIdOrComponent.toString();
+
+		for(int i = 0; i < componentData.getNumChildren(); i++)
+		{
+			auto thisId = componentData.getChild(i)[dyncomp::dcid::id].toString();
+
+			if(thisId == id)
+				return i;
+		}
+	}
+	else if (auto cr = dynamic_cast<ChildReference*>(childIdOrComponent.getObject()))
+	{
+		for(int i = 0; i < componentData.getNumChildren(); i++)
+		{
+			if(componentData.getChild(i) == cr->componentData)
+			{
+				return i;
+			}
+		}
+	}
+
+	return -1;
+}
+
+bool ScriptingApi::Content::ScriptDynamicContainer::ChildReference::isEqual(const var& other) const
+{
+	if(other.isString())
+	{
+		return componentData[dyncomp::dcid::id] == other;
+	}
+	if(auto ref = dynamic_cast<ChildReference*>(other.getObject()))
+	{
+		return ref->componentData == componentData;
+	}
+
+	return false;
+}
+
+
+
 void ScriptingApi::Content::ScriptDynamicContainer::ChildReference::set(const String& id, const var& newValue)
 {
-	if(isValid())
+	if(isValidOrThrow())
 	{
 		Identifier id_(id);
 
 		if(!dyncomp::dcid::Helpers::isValidProperty(id_))
 			reportScriptError("unknown property " + id);
 
-		componentData.setProperty(id_, newValue, nullptr);
+		componentData.setProperty(id_, newValue, um);
 	}
 }
 
 var ScriptingApi::Content::ScriptDynamicContainer::ChildReference::get(const String& id) const
 {
-	if(isValid())
+	if(isValidOrThrow())
 	{
 		Identifier id_(id);
 
@@ -6148,18 +6217,18 @@ void ScriptingApi::Content::ScriptDynamicContainer::ChildReference::setBounds(va
 	if(r.failed())
 		reportScriptError(r.getErrorMessage());
 
-	componentData.setProperty(dyncomp::dcid::x, b.getX(), nullptr);
-	componentData.setProperty(dyncomp::dcid::y, b.getY(), nullptr);
-	componentData.setProperty(dyncomp::dcid::width, b.getWidth(), nullptr);
-	componentData.setProperty(dyncomp::dcid::height, b.getHeight(), nullptr);
+	componentData.setProperty(dyncomp::dcid::x, b.getX(), um);
+	componentData.setProperty(dyncomp::dcid::y, b.getY(), um);
+	componentData.setProperty(dyncomp::dcid::width, b.getWidth(), um);
+	componentData.setProperty(dyncomp::dcid::height, b.getHeight(), um);
 }
 
 var ScriptingApi::Content::ScriptDynamicContainer::ChildReference::getLocalBounds(int margin) const
 {
 	using namespace dyncomp;
 
-	Rectangle<int> b((int)componentData.getProperty(dcid::x, 0), 
-	                 (int)componentData.getProperty(dcid::y, 0), 
+	Rectangle<int> b(0, 
+	                 0, 
 	                 (int)componentData.getProperty(dcid::width, 128), 
 	                 (int)componentData.getProperty(dcid::height, 50));
 
@@ -6168,7 +6237,7 @@ var ScriptingApi::Content::ScriptDynamicContainer::ChildReference::getLocalBound
 
 bool ScriptingApi::Content::ScriptDynamicContainer::ChildReference::isValid() const
 {
-	if(invalid)
+	if(invalid || parentContainer.get() == nullptr)
 		return false;
 
 	auto dt = data->getValueTree(dyncomp::Data::TreeType::Data);
@@ -6186,10 +6255,10 @@ bool ScriptingApi::Content::ScriptDynamicContainer::ChildReference::isValid() co
 
 var ScriptingApi::Content::ScriptDynamicContainer::ChildReference::getParent() const
 {
-	if(isValid())
+	if(isValidOrThrow())
 	{
 		auto p = componentData.getParent();
-		return var(new ChildReference(const_cast<ProcessorWithScriptingContent*>(getScriptProcessor()), data, p));
+		return parentContainer->getOrCreateChildReference(p);
 	}
 
 	return var();
@@ -6197,7 +6266,7 @@ var ScriptingApi::Content::ScriptDynamicContainer::ChildReference::getParent() c
 
 var ScriptingApi::Content::ScriptDynamicContainer::ChildReference::getComponent(const String& childId)
 {
-	if(isValid())
+	if(isValidOrThrow())
 	{
 		ValueTree c;
 		auto ok = valuetree::Helpers::forEach(componentData, [&](const ValueTree& v)
@@ -6212,9 +6281,7 @@ var ScriptingApi::Content::ScriptDynamicContainer::ChildReference::getComponent(
 		});
 
 		if(ok)
-		{
-			return var(new ChildReference(getScriptProcessor(), data, c));
-		}
+			return parentContainer->getOrCreateChildReference(c);
 	}
 
 	return var();
@@ -6224,12 +6291,12 @@ var ScriptingApi::Content::ScriptDynamicContainer::ChildReference::getAllCompone
 {
 	Array<var> matches;
 
-	if(isValid())
+	if(isValidOrThrow())
 	{
 		valuetree::Helpers::forEach(componentData, [&](const ValueTree& v)
 		{
 			if(RegexFunctions::matchesWildcard(regex, v[dyncomp::dcid::id].toString()))
-				matches.add(new ChildReference(getScriptProcessor(), data, v));
+				matches.add(parentContainer->getOrCreateChildReference(v));
 
 			return false;
 		});
@@ -6240,48 +6307,106 @@ var ScriptingApi::Content::ScriptDynamicContainer::ChildReference::getAllCompone
 
 var ScriptingApi::Content::ScriptDynamicContainer::ChildReference::addChildComponent(const var& childData)
 {
-	using namespace dyncomp;
+	if(isValidOrThrow())
+	{
+		using namespace dyncomp;
 
-	Rectangle<int> b((int)childData.getProperty(dcid::x, 0), 
-	                 (int)childData.getProperty(dcid::y, 0), 
-	                 (int)childData.getProperty(dcid::width, 128), 
-	                 (int)childData.getProperty(dcid::height, 50));
+		Rectangle<int> b;
 
-	auto v = dyncomp::Data::fromJSON(childData, b);
-	componentData.addChild(v, -1, nullptr);
-	return new ChildReference(getScriptProcessor(), data, v);
+		if(childData.hasProperty(dyncomp::dcid::bounds))
+		{
+			b = ApiHelpers::getRectangleFromVar(childData[dcid::bounds]).toNearestInt();
+		}
+		else
+		{
+			b = Rectangle<int>((int)childData.getProperty(dcid::x, 0), 
+		                 (int)childData.getProperty(dcid::y, 0), 
+		                 (int)childData.getProperty(dcid::width, 128), 
+		                 (int)childData.getProperty(dcid::height, 50));
+		}
+
+		auto v = dyncomp::Data::fromJSON(childData, b);
+		componentData.addChild(v, -1, um);
+
+		return parentContainer->getOrCreateChildReference(v);
+	}
+
+	RETURN_IF_NO_THROW(var());
 }
 
 void ScriptingApi::Content::ScriptDynamicContainer::ChildReference::removeFromParent()
 {
-	if(isValid())
-		componentData.getParent().removeChild(componentData, nullptr);
+	// we want to use the parent's undo manager for this operation...
+	UndoManager* parentUm = nullptr;
+
+	if(componentData.getParent().isValid() && componentData.getParent()[dyncomp::dcid::useUndoManager])
+		parentUm = getScriptProcessor()->getMainController_()->getControlUndoManager();
+
+	if(isValidOrThrow())
+	{
+		valueCallback.clear();
+
+		valuetree::Helpers::forEach(componentData, [&](ValueTree& v)
+		{
+			Identifier idToRemove(v[dyncomp::dcid::id].toString());
+
+			auto vt = data->getValueTree(dyncomp::Data::TreeType::Values);
+			vt.removeProperty(idToRemove, parentUm);
+
+			return false;
+		});
+
+		SafeAsyncCall::call<ChildReference>(*this, [parentUm](ChildReference& r)
+		{
+			r.componentData.getParent().removeChild(r.componentData, parentUm);
+		});
+	}
+		
 }
 
 void ScriptingApi::Content::ScriptDynamicContainer::ChildReference::removeAllChildren()
 {
-	if(isValid())
-		componentData.removeAllChildren(nullptr);
+	if(isValidOrThrow())
+	{
+		SafeAsyncCall::call<ChildReference>(*this, [](ChildReference& r)
+		{
+			r.componentData.removeAllChildren(r.um);
+		});
+	}
+		
 }
 
 void ScriptingApi::Content::ScriptDynamicContainer::ChildReference::setValue(var newValue)
 {
-	auto id = componentData[dyncomp::dcid::id].toString();
-	auto vt = data->getValueTree(dyncomp::Data::TreeType::Values);
-	vt.setPropertyExcludingListener(&valueListener, id, newValue, nullptr);
+	if(isValidOrThrow())
+	{
+		auto id = componentData[dyncomp::dcid::id].toString();
+		auto vt = data->getValueTree(dyncomp::Data::TreeType::Values);
+
+		// force the undomanager to be nullptr here as we have the other method
+		vt.setPropertyExcludingListener(&valueListener, id, newValue, nullptr);
+	}
+	
 }
 
 void ScriptingApi::Content::ScriptDynamicContainer::ChildReference::setValueWithUndo(var newValue)
 {
-	auto id = componentData[dyncomp::dcid::id].toString();
-	auto vt = data->getValueTree(dyncomp::Data::TreeType::Values);
-	vt.setPropertyExcludingListener(&valueListener, id, newValue, data->getMainController()->getControlUndoManager());
+	if(isValidOrThrow())
+	{
+		auto id = componentData[dyncomp::dcid::id].toString();
+		auto vt = data->getValueTree(dyncomp::Data::TreeType::Values);
+
+		vt.setPropertyExcludingListener(&valueListener, id, newValue, data->getMainController()->getControlUndoManager());
+	}
 }
 
 void ScriptingApi::Content::ScriptDynamicContainer::ChildReference::changed()
 {
-	valueListener.sendMessageForAllProperties();
-	sendMessage(dyncomp::Data::RefreshType::changed);
+	if(isValidOrThrow())
+	{
+		valueListener.sendMessageForAllProperties();
+		sendMessage(dyncomp::Data::RefreshType::changed);
+	}
 }
 
 var ScriptingApi::Content::ScriptDynamicContainer::ChildReference::getValue() const
@@ -6297,10 +6422,11 @@ var ScriptingApi::Content::ScriptDynamicContainer::ChildReference::getValue() co
 
 void ScriptingApi::Content::ScriptDynamicContainer::ChildReference::setControlCallback(var controlCallback)
 {
-	if(isValid() && HiseJavascriptEngine::isJavascriptFunction(controlCallback))
+	if(isValidOrThrow() && HiseJavascriptEngine::isJavascriptFunction(controlCallback))
 	{
-		valueCallback = WeakCallbackHolder(getScriptProcessor(), this, controlCallback, 2);
+		valueCallback = WeakCallbackHolder(getScriptProcessor(), this, controlCallback, 1);
 		valueCallback.incRefCount();
+		valueCallback.setThisObject(this);
 		valueCallback.setHighPriority();
 
 		Array<Identifier> ids;
@@ -6310,7 +6436,7 @@ void ScriptingApi::Content::ScriptDynamicContainer::ChildReference::setControlCa
 		valueListener.setCallback(data->getValueTree(dyncomp::Data::TreeType::Values), 
 		                          ids, 
 		                          valuetree::AsyncMode::Synchronously,
-		                          BIND_MEMBER_FUNCTION_2(ChildReference::onValue));
+								  VT_BIND_PROPERTY_LISTENER(onValue));
 	}
 }
 
@@ -6334,15 +6460,150 @@ void ScriptingApi::Content::ScriptDynamicContainer::ChildReference::resetValueTo
 	sendMessage(dyncomp::Data::RefreshType::resetValueToDefault, recursive);
 }
 
+void ScriptingApi::Content::ScriptDynamicContainer::ChildReference::setPaintRoutine(var newPaintRoutine)
+{
+	if(isValid() && HiseJavascriptEngine::isJavascriptFunction(newPaintRoutine))
+	{
+		paintRoutine = WeakCallbackHolder(getScriptProcessor(), this, newPaintRoutine, 1);
+		paintRoutine.incRefCount();
+		paintRoutine.setThisObject(this);
+
+		graphics = data->createGraphicsObject(componentData, this);
+
+		onRefresh(*this, componentData, dyncomp::Data::RefreshType::repaint, false);
+	}
+}
+
+void ScriptingApi::Content::ScriptDynamicContainer::ChildReference::setChildCallback(const var& newChildCallback)
+{
+	if(isValidOrThrow() && HiseJavascriptEngine::isJavascriptFunction(newChildCallback))
+	{
+		childCallback = WeakCallbackHolder(getScriptProcessor(), this, newChildCallback, 2);
+		childCallback.incRefCount();
+		childCallback.setThisObject(this);
+
+		childListener.setCallback(componentData, 
+          valuetree::AsyncMode::Synchronously,
+          VT_BIND_CHILD_LISTENER(onChildChange));
+	}
+}
+
+String ScriptingApi::Content::ScriptDynamicContainer::ChildReference::toBase64(bool includeValues) const
+{
+	MemoryBlock mb;
+
+	zstd::ZDefaultCompressor comp;
+
+	ValueTree v(componentData[dyncomp::dcid::id].toString());
+
+	v.addChild(componentData.createCopy(), -1, nullptr);
+
+	if(includeValues)
+	{
+		ValueTree vt("Values");
+		ValueTree all = data->getValueTree(dyncomp::Data::TreeType::Values);
+
+		valuetree::Helpers::forEach(componentData, [&](const ValueTree& v)
+		{
+			auto id = Identifier(v[dyncomp::dcid::id].toString());
+
+			auto value = all[id];
+			vt.setProperty(id, value, nullptr);
+
+			return false;
+		});
+
+		v.addChild(vt, -1, nullptr);
+	}
+
+	comp.compress(v, mb);
+
+	return mb.toBase64Encoding();
+}
+
+void ScriptingApi::Content::ScriptDynamicContainer::ChildReference::fromBase64(String b64)
+{
+	MemoryBlock mb;
+	mb.fromBase64Encoding(b64);
+	ValueTree v;
+	zstd::ZDefaultCompressor comp;
+	comp.expand(mb, v);
+
+	auto dt = v.getChildWithName("Component");
+	auto vt = v.getChildWithName("Values");
+
+	SafeAsyncCall::call<ChildReference>(*this, [vt, dt](ChildReference& r)
+	{
+		r.componentData.removeAllChildren(r.um);
+		r.componentData.removeAllProperties(r.um);
+		r.componentData.copyPropertiesAndChildrenFrom(dt, r.um);
+
+		if(vt.isValid())
+		{
+			auto all = r.data->getValueTree(dyncomp::Data::TreeType::Values);
+			all.copyPropertiesFrom(vt, r.um);
+		}
+	});
+}
+
+void ScriptingApi::Content::ScriptDynamicContainer::ChildReference::addStateToUserPreset(bool shouldAdd)
+{
+	if(shouldAdd)
+	{
+		getScriptProcessor()->getMainController_()->getUserPresetHandler().addStateManager(this);
+	}
+	else
+	{
+		getScriptProcessor()->getMainController_()->getUserPresetHandler().removeStateManager(this);
+	}
+}
+
+void ScriptingApi::Content::ScriptDynamicContainer::ChildReference::resetUserPresetState()
+{
+	removeAllChildren();
+
+	auto defaultValue = componentData[dyncomp::dcid::defaultValue];
+
+	if(!(defaultValue.isVoid() || defaultValue.isUndefined()))
+	{
+		setValue(defaultValue);
+		changed();
+	}
+}
+
+ValueTree ScriptingApi::Content::ScriptDynamicContainer::ChildReference::exportAsValueTree() const
+{
+	ValueTree v(getUserPresetStateId());
+	auto b64 = toBase64(true);
+	v.setProperty("state", b64, nullptr);
+	return v;
+}
+
+void ScriptingApi::Content::ScriptDynamicContainer::ChildReference::restoreFromValueTree(const ValueTree& v)
+{
+	auto b64 = v["state"].toString();
+	fromBase64(b64);
+}
+
+void ScriptingApi::Content::ScriptDynamicContainer::ChildReference::onChildChange(ValueTree v, bool wasAdded)
+{
+	if(isValid() && childCallback)
+	{
+		var args[2];
+		args[0] = v[dyncomp::dcid::id];
+		args[1] = wasAdded;
+		childCallback.call(args, 2);
+	}
+}
+
 void ScriptingApi::Content::ScriptDynamicContainer::ChildReference::onValue(const Identifier&, const var& newValue)
 {
-	if(isValid() && valueCallback && !newValue.isVoid() && newValue != lastValue)
+	if(isValid() && !newValue.isVoid() && newValue != lastValue)
 	{
 		lastValue = newValue;
-		var args[2];
-		args[0] = var(this);
-		args[1] = newValue;
-		valueCallback.call(args, 2);
+
+		if(valueCallback)
+			valueCallback.call1(lastValue);
 	}
 }
 
@@ -6350,7 +6611,7 @@ bool ScriptingApi::Content::ScriptDynamicContainer::ChildReference::assign(const
 {
 	if(dyncomp::dcid::Helpers::isValidProperty(id))
 	{
-		componentData.setProperty(id, newValue, nullptr);
+		componentData.setProperty(id, newValue, um);
 		return true;
 	}
 
@@ -6373,8 +6634,40 @@ void ScriptingApi::Content::ScriptDynamicContainer::ChildReference::writeToStrea
 	obj.getDynamicObject()->writeToStream(os);
 }
 
+bool ScriptingApi::Content::ScriptDynamicContainer::ChildReference::matchesValueTree(const ValueTree& v) const
+{
+	return componentData == v;
+}
+
+void ScriptingApi::Content::ScriptDynamicContainer::ChildReference::setInvalid(UndoManager* umToUse)
+{
+	invalid = true;
+	valueCallback.clear();
+	childCallback.clear();
+	paintRoutine.clear();
+	valueListener.shutdown();
+	childListener.shutdown();
+
+	Identifier idToRemove(componentData[dyncomp::dcid::id].toString());
+
+	auto vt = data->getValueTree(dyncomp::Data::TreeType::Values);
+	vt.removeProperty(idToRemove, umToUse);
+
+	lastValue = var();
+}
+
+bool ScriptingApi::Content::ScriptDynamicContainer::ChildReference::isValidOrThrow() const
+{
+	auto ok = isValid();
+
+	if(!ok)
+		reportScriptError("component was removed");
+
+	RETURN_IF_NO_THROW(ok);
+}
+
 void ScriptingApi::Content::ScriptDynamicContainer::ChildReference::onRefresh(ChildReference& obj, const ValueTree& v,
-	dyncomp::Data::RefreshType rt, bool isRecursive)
+                                                                              dyncomp::Data::RefreshType rt, bool isRecursive)
 {
 	if(!obj.isValid())
 		return;
@@ -6417,31 +6710,48 @@ struct ScriptingApi::Content::ScriptDynamicContainer::Wrapper
 {
 	API_METHOD_WRAPPER_1(ScriptDynamicContainer, setData);
 	API_VOID_METHOD_WRAPPER_1(ScriptDynamicContainer, setValueCallback);
-	API_VOID_METHOD_WRAPPER_1(ScriptDynamicContainer, setChildCallback);
 };
 
 ScriptingApi::Content::ScriptDynamicContainer::ScriptDynamicContainer(ProcessorWithScriptingContent* base,
 	Content* parentContent, Identifier panelName, int x, int y, int width, int height):
 	ScriptComponent(base, panelName, 0),
-	valueCallback(base, this, var(), 2),
-	childCallback(base, this, var(), 2)
+	valueCallback(base, this, var(), 2)
 {
 	setDefaultValue(ScriptComponent::Properties::x, x);
 	setDefaultValue(ScriptComponent::Properties::y, y);
 	setDefaultValue(ScriptComponent::Properties::width, 200);
 	setDefaultValue(ScriptComponent::Properties::height, 100);
-	setDefaultValue(ScriptComponent::Properties::saveInPreset, false);
 
 	handleDefaultDeactivatedProperties();
 
 	ADD_API_METHOD_1(setData);
 	ADD_API_METHOD_1(setValueCallback);
-	ADD_API_METHOD_1(setChildCallback);
 }
 
 ScriptingApi::Content::ScriptDynamicContainer::~ScriptDynamicContainer()
 {
+	childReferences.clear();
 	data = nullptr;
+}
+
+void ScriptingApi::Content::ScriptDynamicContainer::handleDefaultDeactivatedProperties()
+{
+	deactivatedProperties.addIfNotAlreadyThere(getIdFor(ScriptComponent::Properties::macroControl));
+	deactivatedProperties.addIfNotAlreadyThere(getIdFor(ScriptComponent::Properties::isPluginParameter));
+	deactivatedProperties.addIfNotAlreadyThere(getIdFor(ScriptComponent::Properties::min));
+	deactivatedProperties.addIfNotAlreadyThere(getIdFor(ScriptComponent::Properties::max));
+	deactivatedProperties.addIfNotAlreadyThere(getIdFor(ScriptComponent::Properties::defaultValue));
+	deactivatedProperties.addIfNotAlreadyThere(getIdFor(ScriptComponent::Properties::pluginParameterName));
+	deactivatedProperties.addIfNotAlreadyThere(getIdFor(ScriptComponent::Properties::text));
+	deactivatedProperties.addIfNotAlreadyThere(getIdFor(ScriptComponent::Properties::tooltip));
+	deactivatedProperties.addIfNotAlreadyThere(getIdFor(ScriptComponent::Properties::processorId));
+	deactivatedProperties.addIfNotAlreadyThere(getIdFor(ScriptComponent::Properties::parameterId));
+	deactivatedProperties.addIfNotAlreadyThere(getIdFor(ScriptComponent::Properties::isMetaParameter));
+	deactivatedProperties.addIfNotAlreadyThere(getIdFor(ScriptComponent::Properties::linkedTo));
+	deactivatedProperties.addIfNotAlreadyThere(getIdFor(ScriptComponent::Properties::automationId));
+	deactivatedProperties.addIfNotAlreadyThere(getIdFor(ScriptComponent::Properties::deferControlCallback));
+	deactivatedProperties.addIfNotAlreadyThere(getIdFor(ScriptComponent::Properties::pluginParameterGroup));
+	deactivatedProperties.addIfNotAlreadyThere(getIdFor(ScriptComponent::Properties::saveInPreset));
 }
 
 
@@ -6453,6 +6763,13 @@ ScriptCreatedComponentWrapper* ScriptingApi::Content::ScriptDynamicContainer::cr
 
 var ScriptingApi::Content::ScriptDynamicContainer::setData(const var& newData)
 {
+	for(auto c: childReferences)
+	{
+		c->setInvalid(nullptr);
+	}
+
+	childReferences.clear();
+
 	auto json = newData;
 
 	bool getFirstChild = false;
@@ -6473,7 +6790,7 @@ var ScriptingApi::Content::ScriptDynamicContainer::setData(const var& newData)
 
 	dataBroadcaster.sendMessage(sendNotificationAsync, data);
 
-	return var(new ChildReference(getScriptProcessor(), data, dt));
+	return getOrCreateChildReference(dt);
 }
 
 void ScriptingApi::Content::ScriptDynamicContainer::setValueCallback(const var& valueFunction)
@@ -6499,74 +6816,25 @@ void ScriptingApi::Content::ScriptDynamicContainer::setValueCallback(const var& 
 	}
 }
 
-void ScriptingApi::Content::ScriptDynamicContainer::setChildCallback(const var& newChildCallback)
+var ScriptingApi::Content::ScriptDynamicContainer::getOrCreateChildReference(const ValueTree& v)
 {
-	if(data != nullptr && HiseJavascriptEngine::isJavascriptFunction(newChildCallback))
+	for(int i = 0; i < childReferences.size(); i++)
 	{
-		childCallback = WeakCallbackHolder(getScriptProcessor(), this, newChildCallback, 2);
-		childCallback.incRefCount();
-		childCallback.setThisObject(this);
-
-		childListener.setCallback(data->getValueTree(dyncomp::Data::TreeType::Data), valuetree::AsyncMode::Synchronously, [this](const ValueTree& v, bool wasAdded)
-		{
-			if(childCallback)
-			{
-				var args[2];
-				args[0] = v[dyncomp::dcid::id].toString();
-				args[1] = wasAdded;
-				childCallback.call(args, 2);
-			}
-				
-		});
+		if(!childReferences[i]->isValid())
+			childReferences.remove(i--);
 	}
-}
 
-void ScriptingApi::Content::ScriptDynamicContainer::setValue(var newValue)
-{
-	ScriptComponent::setValue(newValue);
-
-	if(data != nullptr && newValue.getDynamicObject() != nullptr)
+	for(auto ref: childReferences)
 	{
-		auto vt = data->getValueTree(dyncomp::Data::TreeType::Values);
-
-		const auto& prop = newValue.getDynamicObject()->getProperties();
-
-		for(const auto& nv: prop)
-			vt.setProperty(nv.name, nv.value, nullptr);
+		if(ref->matchesValueTree(v))
+			return var(ref);
 	}
+
+	auto newRef = new ChildReference(this, data, v);
+	childReferences.add(newRef);
+	return var(newRef);
 }
 
-ValueTree ScriptingApi::Content::ScriptDynamicContainer::exportAsValueTree() const
-{
-	ValueTree v("Control");
-
-	v.setProperty("type", getObjectName().toString(), nullptr);
-	v.setProperty("id", getName().toString(), nullptr);
-	v.addChild(data->getValueTree(dyncomp::Data::TreeType::Data).createCopy(), -1, nullptr);
-	v.addChild(data->getValueTree(dyncomp::Data::TreeType::Values).createCopy(), -1, nullptr);
-	return v;
-}
-
-void ScriptingApi::Content::ScriptDynamicContainer::restoreFromValueTree(const ValueTree& v)
-{
-	auto vt = v.getChildWithName("Values");
-	auto dt = v.getChildWithName("ContentProperties");
-
-	if(dt.isValid())
-	{
-		if(!dt.hasProperty(dyncomp::dcid::id))
-			dt = dt.getChild(0);
-
-		auto obj = ValueTreeConverters::convertContentPropertiesToDynamicObject(dt);
-		setData(obj);
-
-		if(data != nullptr)
-		{
-			auto dst = data->getValueTree(dyncomp::Data::TreeType::Values);
-			dst.copyPropertiesFrom(vt, nullptr);
-		}
-	}
-}
 
 struct ScriptingApi::Content::ScriptMultipageDialog::Wrapper
 {

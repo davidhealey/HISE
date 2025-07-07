@@ -1912,6 +1912,36 @@ void PatchBrowser::PatchItem::paint(Graphics& g)
 		g.setColour(Colour(0xFF222222));
 	}
 
+	if(auto fx = dynamic_cast<MasterEffectProcessor*>(p.get()))
+	{
+		if(auto fxChain = dynamic_cast<EffectProcessorChain*>(fx->getParentProcessor(false, false)))
+		{
+			auto idx = fxChain->getProcessingOrderIndex(fx);
+
+			if(idx.first)
+			{
+				g.setColour(Colour(0xFF222222));
+				g.setFont(GLOBAL_BOLD_FONT());
+				g.drawText(String(idx.second+1), iconSpace.translated(0.0f, -1.0f), Justification::centred);
+			}
+		}
+	}
+
+	if(auto fx = dynamic_cast<VoiceEffectProcessor*>(p.get()))
+	{
+		if(auto fxChain = dynamic_cast<EffectProcessorChain*>(fx->getParentProcessor(false, false)))
+		{
+			auto idx = fxChain->getProcessingOrderIndex(fx);
+
+			if(idx.first)
+			{
+				g.setColour(Colour(0xFF222222));
+				g.setFont(GLOBAL_BOLD_FONT());
+				g.drawText(String(idx.second+1), iconSpace.translated(0.0f, -1.0f), Justification::centred);
+			}
+		}
+	}
+
 	g.drawRoundedRectangle(iconSpace, 2.0f, 2.0f);
 
 	g.setColour(ProcessorHelpers::is<Chain>(p.get()) ? Colours::black.withAlpha(0.6f) : Colours::black);
