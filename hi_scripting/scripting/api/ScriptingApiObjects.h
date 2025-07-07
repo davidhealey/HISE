@@ -2261,7 +2261,7 @@ namespace ScriptingObjects
 		var addStaticGlobalModulator(var chainIndex, var timeVariantMod, String modName);
 
 		/** Changes the processing order of the effects of this sound generator. */
-		void setEffectChainOrder(bool isPoly, var slotRange, var chainOrder);
+		void setEffectChainOrder(bool doPoly, var slotRange, var chainOrder);
 
 		/** Returns a reference as Sampler or undefined if no Sampler. */
 		var asSampler();

@@ -268,7 +268,7 @@ void Data::ComplexDataHandler::onConnectionChange(const Identifier&, const var&)
 {
 	auto nd = dcid::Helpers::getComplexDataBase(getMainController(), componentData, dt);
 			
-	if(nd != complexData)
+	if(nd != complexData.get())
 	{
 		if(complexData != nullptr)
 			complexData->getUpdater().removeEventListener(this);
