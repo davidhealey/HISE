@@ -1135,6 +1135,11 @@ template <typename T, int NumVoices> struct PolyData
 		return *(data + getVoiceIndex(index));
 	}
 
+	bool isPolyHandlerEnabled() const
+	{
+		return NumVoices > 1 && voicePtr != nullptr && voicePtr->isEnabled();
+	}
+
 	bool isVoiceRenderingActive() const
 	{
 		return isPolyphonic() &&

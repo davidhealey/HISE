@@ -918,6 +918,9 @@ void ModulatorChain::ModChainWithBuffer::calculateMonophonicModulationValues(int
 		auto useSignal = c->hasActiveTimeVariantMods() || c->hasActiveMonoEnvelopes();
 		auto staticSignal = lastInitialMonoValue;
 
+		auto tf = c->getMainController()->getBufferSizeForCurrentBlock() / HISE_CONTROL_RATE_DOWNSAMPLING_FACTOR;
+
+		c->runtimeTargetSource.updateThisBlockSize(tf);
 		c->runtimeTargetSource.copyModulationValues(useSignal ? modBuffer.monoValues : nullptr, staticSignal, startSample_cr, numSamples_cr);
 	}
 }

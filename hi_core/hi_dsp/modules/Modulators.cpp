@@ -1024,7 +1024,7 @@ float EnvelopeModulator::getAttribute(int parameterIndex) const
 {
 	switch (parameterIndex)
 	{
-	case Parameters::Monophonic: return isMonophonic;
+	case Parameters::Monophonic: return isInMonophonicMode();
 	case Parameters::Retrigger:  return shouldRetrigger;
 	default:					 jassertfalse; return 0.0f;
 	}
@@ -1034,7 +1034,7 @@ float EnvelopeModulator::getDefaultValue(int parameterIndex) const
 {
 	switch (parameterIndex)
 	{
-	case Parameters::Monophonic: return 0.0f;
+	case Parameters::Monophonic: return getVoiceAmount() == 1 ? 1.0f : 0.0f;
 	case Parameters::Retrigger:  return 1.0f;
 	default:					 jassertfalse; return 0.0f;
 	}
@@ -1047,6 +1047,9 @@ void EnvelopeModulator::setInternalAttribute(int parameterIndex, float newValue)
 	case Parameters::Monophonic:
 	{
 		auto m = newValue > 0.5f;
+
+		if(getVoiceAmount() == 1)
+			m = true;
 
 		if(isMonophonic != m)
 		{
@@ -1164,7 +1167,9 @@ void EnvelopeModulator::prepareToPlay(double sampleRate, int samplesPerBlock)
 }
 
 bool EnvelopeModulator::isInMonophonicMode() const
-{ return isMonophonic; }
+{
+	return isMonophonic || getVoiceAmount() == 1;
+}
 
 float EnvelopeModulator::startVoice(int)
 {
@@ -1191,7 +1196,7 @@ void EnvelopeModulator::render(int voiceIndex, float* voiceBuffer, float* scratc
 		auto ownerSynth = static_cast<ModulatorSynth*>(getParentProcessor(true));
 		auto voice = static_cast<ModulatorSynthVoice*>(ownerSynth->getVoice(voiceIndex));
 
-		if(voice->isFirstRenderedVoice())
+		if(voice->isFirstRenderedVoice() || getVoiceAmount() == 1)
 		{
 			saveFirst = true;
 		}

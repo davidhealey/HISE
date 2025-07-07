@@ -521,12 +521,16 @@ void MatrixModulator::reset(int voiceIndex)
 {
 	EnvelopeModulator::reset(voiceIndex);
 
-	SimpleReadWriteLock::ScopedReadLock sl(matrixLock);
-	PolyHandler::ScopedVoiceSetter svs(polyHandler, voiceIndex);
-
-	for(auto m: allMods)
+	// only call reset in poly mode because it will reset
+	// the uptime in the target mods and the monophonic envelope
+	// will have a continuous stream of samples.
+	if(!isInMonophonicMode())
 	{
-		m->reset();
+		SimpleReadWriteLock::ScopedReadLock sl(matrixLock);
+		PolyHandler::ScopedVoiceSetter svs(polyHandler, voiceIndex);
+
+		for(auto m: allMods)
+			m->reset();
 	}
 }
 
