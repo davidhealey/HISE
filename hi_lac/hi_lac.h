@@ -120,11 +120,11 @@ If enabled, then the unit test suite will be compiled and added to all unit test
 #define HLAC_INCLUDE_TEST_SUITE 0
 #endif
 
-
+#if JUCE_WINDOWS || JUCE_MAC
 #ifdef USE_IPP
-#error "this should not be defined before this so if this error appears, remove USE_IPP from your preprocessor definitions...
+#error "this should not be defined before this so if this error appears, remove USE_IPP from your preprocessor definitions..."
 #endif
-
+#endif
 
 #if JUCE_WINDOWS
 #if _IPP_SEQUENTIAL_STATIC || _IPP_SEQUENTIAL_DYNAMIC || _IPP_PARALLEL_STATIC || _IPP_PARALLEL_DYNAMIC
@@ -132,8 +132,12 @@ If enabled, then the unit test suite will be compiled and added to all unit test
 #else
 #define USE_IPP 0
 #endif
-#else
+#elif JUCE_MAC
 #define USE_IPP 0
+#else
+#ifndef USE_IPP
+#define USE_IPP 0
+#endif
 #endif
 
 #include "hlac/BitCompressors.h"

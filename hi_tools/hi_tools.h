@@ -231,6 +231,8 @@ will break compatibility with older projects / presets because the tempo indexes
 #if USE_IPP
 #if _IPP_SEQUENTIAL_STATIC || _IPP_SEQUENTIAL_DYNAMIC || _IPP_PARALLEL_STATIC || _IPP_PARALLEL_DYNAMIC
 #include "hi_tools/IppFFT.h"
+#elif JUCE_LINUX
+#include "hi_tools/IppFFT.h"
 #else
 #error "USE_IPP flag mismatch. Make sure that you use the OneAPI projucer setting / the Hise UseIpp setting instead of manually setting this flag."
 #endif

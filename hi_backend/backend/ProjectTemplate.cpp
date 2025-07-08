@@ -202,12 +202,12 @@ static const unsigned char projectTemplate_jucer_lines[] = R"(
       </MODULEPATHS>
     </XCODE_IPHONE>)"
     R"(
-    <LINUX_MAKE targetFolder="Builds/LinuxMakefile" vstLegacyFolder="%VSTSDK_FOLDER%" extraLinkerFlags="" extraCompilerFlags="-fpermissive" extraDefs="%PLUGIN_CHANNEL_AMOUNT%&#10;%EXTRA_DEFINES_LINUX%" linuxExtraPkgConfig="%LINUX_GUI_LIBS%">
+    <LINUX_MAKE targetFolder="Builds/LinuxMakefile" vstLegacyFolder="%VSTSDK_FOLDER%" extraLinkerFlags="-flto=auto&#10;-fuse-ld=gold&#10;%IPP_COMPILER_FLAGS%" extraCompilerFlags="-fpermissive" extraDefs="%PLUGIN_CHANNEL_AMOUNT%&#10;%EXTRA_DEFINES_LINUX%&#10;JUCE_DISABLE_NATIVE_FILECHOOSERS=1" linuxExtraPkgConfig="%LINUX_GUI_LIBS%">
       <CONFIGURATIONS>
         <CONFIGURATION name="Debug" isDebug="1" optimisation="1" linkTimeOptimisation="0"
-                       targetName="%NAME% Debug" headerPath="%FAUST_HEADER_PATH%" libraryPath=""/>
+                       targetName="%NAME% Debug" headerPath="%IPP_HEADER%;%FAUST_HEADER_PATH%" libraryPath="%IPP_LIBRARY%"/>
         <CONFIGURATION name="Release" isDebug="0" optimisation="3" linkTimeOptimisation="%LINK_TIME_OPTIMISATION%"
-                       targetName="%NAME%" headerPath="%FAUST_HEADER_PATH%" libraryPath=""/>
+                       targetName="%NAME%" headerPath="%IPP_HEADER%;%FAUST_HEADER_PATH%" libraryPath="%IPP_LIBRARY%"/>
       </CONFIGURATIONS>
       <MODULEPATHS>
         <MODULEPATH id="juce_product_unlocking" path="%JUCE_PATH%"/>
