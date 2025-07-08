@@ -352,20 +352,6 @@ float ModulatorSynth::getConstantVoicePitchModulationValueDeleteSoon() const
 HiseEventBuffer* ModulatorSynth::getEventBuffer()
 { return &eventBuffer; }
 
-void ModulatorSynth::setUseUniformVoiceHandler(bool shouldUseVoiceHandler, UniformVoiceHandler* externalHandlerToUse)
-{
-	currentUniformVoiceHandler = shouldUseVoiceHandler ? externalHandlerToUse :
-		                             nullptr;
-}
-
-bool ModulatorSynth::isUsingUniformVoiceHandler() const
-{ return currentUniformVoiceHandler.get() != nullptr; }
-
-UniformVoiceHandler* ModulatorSynth::getUniformVoiceHandler() const
-{
-	return currentUniformVoiceHandler.get();
-        
-}
 
 bool ModulatorSynth::synthNeedsEnvelope() const
 { return true; }
@@ -1012,11 +998,6 @@ void ModulatorSynth::startVoiceWithHiseEvent(ModulatorSynthVoice* voice, Synthes
 
 	activeVoices.insert(voice);
 
-	if (auto uvh = getUniformVoiceHandler())
-	{
-		uvh->incVoiceCounter(this, voice->getVoiceIndex());
-	}
-
 	Synthesiser::startVoice(static_cast<SynthesiserVoice*>(voice), sound, e.getChannel(), e.getNoteNumber(), e.getFloatVelocity());
 
 	voice->saveStartUptimeDelta();
@@ -1557,11 +1538,6 @@ void ModulatorSynthVoice::resetVoice()
 	os->flagVoiceAsRemoved(this);
 
 	currentHiseEvent = HiseEvent();
-
-	if (auto uvh = getOwnerSynth()->getUniformVoiceHandler())
-	{
-		uvh->decVoiceCounter(getOwnerSynth(), getVoiceIndex());
-	}
 }
 
 void ModulatorSynthVoice::checkRelease()
@@ -2037,24 +2013,6 @@ hise::ModulatorSynthVoice* ModulatorSynth::getVoiceToStart(const HiseEvent& m)
 {
     ModulatorSynthVoice* v = nullptr;
     
-	if (auto uv = getUniformVoiceHandler())
-	{
-		if (soundsToBeStarted.size() > 1)
-		{
-			debugError(this, "Can't start more than one sound when uniform mode is enabled");
-			return nullptr;
-		}
-
-		auto idx = uv->getVoiceIndex(m);
-
-		if (isPositiveAndBelow(idx, voices.size()))
-		{
-			v = static_cast<ModulatorSynthVoice*>(voices[idx]);
-			jassert(v->isInactive());
-		}
-			
-	}
-
 	const bool retriggerWithDifferentChannels = getMainController()->getMacroManager().getMidiControlAutomationHandler()->getMPEData().isMpeEnabled();
 
 	for (int j = 0; j < voices.size(); j++)
@@ -2411,134 +2369,6 @@ void ModulatorSynthVoice::setCurrentHiseEvent(const HiseEvent &m)
 	eventPitchFactor = m.getPitchFactorForEvent();
 	gainFader.setValueWithoutSmoothing(eventGainFactor);
 	pitchFader.setValueWithoutSmoothing(eventPitchFactor);
-}
-
-
-UniformVoiceHandler::UniformVoiceHandler(ModulatorSynth* parent_): parent(parent_)
-{ rebuildChildSynthList(); }
-
-UniformVoiceHandler::~UniformVoiceHandler()
-{
-	childSynths.clear();
-	parent = nullptr;
-}
-
-void UniformVoiceHandler::rebuildChildSynthList()
-{
-    Processor::Iterator<ModulatorSynth> iter(parent.get());
-
-    Array<std::tuple<WeakReference<ModulatorSynth>, VoiceBitMap<NUM_POLYPHONIC_VOICES>>> newChilds;
-
-    while (auto s = iter.getNextProcessor())
-    {
-        if (s->isInGroup())
-            continue;
-
-        if (dynamic_cast<ModulatorSynthChain*>(s) != nullptr ||
-            dynamic_cast<SendContainer*>(s) != nullptr)
-        {
-            continue;
-        }
-        
-        newChilds.add({ s, VoiceBitMap<NUM_POLYPHONIC_VOICES>() });
-    }
-
-    {
-        SimpleReadWriteLock::ScopedWriteLock sl(arrayLock);
-        std::swap(newChilds, childSynths);
-    }
-}
-
-void UniformVoiceHandler::processEventBuffer(const HiseEventBuffer& eventBuffer)
-{
-    for (const auto& e : eventBuffer)
-    {
-        if (e.isAllNotesOff())
-        {
-            for (auto& s : childSynths)
-            {
-                std::get<1>(s) = {};
-                memset(currentEvents.begin(), 0, sizeof(currentEvents));
-            }
-        }
-
-        if (e.isNoteOn())
-        {
-            SimpleReadWriteLock::ScopedReadLock sl(arrayLock);
-
-            VoiceBitMap<NUM_POLYPHONIC_VOICES> voiceMap;
-
-            for (auto& s : childSynths)
-            {
-                auto& bi = std::get<1>(s);
-                voiceMap |= bi;
-            }
-
-            auto voiceIndex = voiceMap.getFirstFreeBit();
-
-            if (isPositiveAndBelow(voiceIndex, NUM_POLYPHONIC_VOICES))
-            {
-                for (auto& cs : childSynths)
-                    std::get<1>(cs).setBit(voiceIndex, true);
-
-                currentEvents[voiceIndex] = { e, 0 };
-            }
-        }
-    }
-}
-
-int UniformVoiceHandler::getVoiceIndex(const HiseEvent& e)
-{
-    int idx = 0;
-
-    for (const auto& s : currentEvents)
-    {
-        if (e == std::get<0>(s))
-            return idx;
-
-        idx++;
-    }
-
-    return -1;
-}
-
-void UniformVoiceHandler::incVoiceCounter(ModulatorSynth* s, int voiceIndex)
-{
-    auto& num = std::get<1>(currentEvents[voiceIndex]);
-    num++;
-}
-
-void UniformVoiceHandler::decVoiceCounter(ModulatorSynth* s, int voiceIndex)
-{
-    for (auto& cs : childSynths)
-    {
-        if (std::get<0>(cs) == s)
-        {
-            std::get<1>(cs).setBit(voiceIndex, false);
-            break;
-        }
-    }
-
-    auto& num = std::get<1>(currentEvents[voiceIndex]);
-    num = jmax(0, num-1);
-}
-
-void UniformVoiceHandler::cleanupAfterProcessing()
-{
-    int voiceIndex = 0;
-
-    for (auto& s : currentEvents)
-    {
-        if (!std::get<0>(s).isEmpty() && std::get<1>(s) == 0)
-        {
-            std::get<0>(s) = HiseEvent();
-
-            for (auto& cs : childSynths)
-                std::get<1>(cs).setBit(voiceIndex, false);
-        }
-
-        voiceIndex++;
-    }
 }
 
 bool ModulatorSynthSound::appliesToMessage(int midiChannel, const int midiNoteNumber, const int velocity)

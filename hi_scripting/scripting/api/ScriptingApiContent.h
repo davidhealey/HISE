@@ -30,8 +30,7 @@
 *   ===========================================================================
 */
 
-#ifndef SCRIPTINGAPICONTENT_H_INCLUDED
-#define SCRIPTINGAPICONTENT_H_INCLUDED
+#pragma once
 
 namespace hise { using namespace juce;
 
@@ -612,6 +611,12 @@ public:
 		
 		void setChanged(bool isChanged = true) noexcept{ hasChanged = isChanged; }
 		bool isChanged() const noexcept{ return hasChanged; };
+
+		/** Override this if you want to change the `component` parameter of the popup menu callback. */
+		virtual var getPopupMenuTarget(const MouseEvent& e)
+		{
+			return var(this);
+		}
 
 		var value;
 		Identifier name;
@@ -2239,15 +2244,22 @@ public:
 	{
 		struct ChildReference: public ConstScriptingObject,
 							   public AssignableDotObject,
-							   public ObjectWithJSONConverter
+							   public ObjectWithJSONConverter,
+							   public UserPresetStateManager	
 		{
-			ChildReference(ProcessorWithScriptingContent* base, dyncomp::Data::Ptr data_, const ValueTree& cd);
+			ChildReference(ScriptDynamicContainer* base, dyncomp::Data::Ptr data_, const ValueTree& cd);
 			~ChildReference() override;
 
 			Identifier getObjectName() const override { RETURN_STATIC_IDENTIFIER("ContainerChild"); }
 			bool objectExists() const override { return isValid(); }
 
 			// ==================================================================== API Methods
+
+			/** Returns the index of the child component (or ID). */
+			int getChildComponentIndex(const var& childIdOrComponent) const;
+
+			/** Checks if the other object (either ID or child reference) points to the same component. */
+			bool isEqual(const var& other) const;
 
 			/** Sets the component property. */
 			void set(const String& id, const var& newValue);
@@ -2310,38 +2322,51 @@ public:
 			void resetValueToDefault(bool recursive);
 
 			/** Registers a paint routine that draws the panel's content. */
-			void setPaintRoutine(var newPaintRoutine)
-			{
-				if(isValid() && HiseJavascriptEngine::isJavascriptFunction(newPaintRoutine))
-				{
-					paintRoutine = WeakCallbackHolder(getScriptProcessor(), this, newPaintRoutine, 1);
-					paintRoutine.incRefCount();
-					paintRoutine.setThisObject(this);
+			void setPaintRoutine(var newPaintRoutine);
 
-					graphics = data->createGraphicsObject(componentData, this);
+			/** Returns the number of child components. */
+			int getNumChildComponents() const { return componentData.getNumChildren(); }
 
-					onRefresh(*this, componentData, dyncomp::Data::RefreshType::repaint, false);
-				}
-			}
+			/** Attaches a callback that is executed whenever a child component is added / removed to this component. */
+			void setChildCallback(const var& newChildCallback);
+
+			/** Returns a Base64 encoded state of this component and all of its children. */
+			String toBase64(bool includeValue) const;
+
+			/** Restores this component and all its children with the given Base64 encoded state. */
+			void fromBase64(String b64);
+
+			/** Stores / restores the values & components from this component in the user preset. */
+			void addStateToUserPreset(bool shouldAdd);
 
 			// ================================================================= END OF API Methods
 
+			Identifier getUserPresetStateId() const override { return Identifier(componentData[dyncomp::dcid::id].toString()); }
+			void resetUserPresetState() override;
+			ValueTree exportAsValueTree() const override;
+			void restoreFromValueTree(const ValueTree& v) override;
+
+			void onChildChange(ValueTree v, bool wasAdded);
 			void onValue(const Identifier&, const var& newValue);
 			bool assign(const Identifier& id, const var& newValue) override;
 			var getDotProperty(const Identifier& id) const override;
 			void writeAsJSON (OutputStream& os, int indentLevel, bool allOnOneLine, int maximumDecimalPlaces) override;
 			void writeToStream(OutputStream& os) override;
+			bool matchesValueTree(const ValueTree& v) const;
+			void setInvalid(UndoManager* umToUse);
 
 		private:
 
-			mutable bool invalid = false;
-			var lastValue;
-
+			bool isValidOrThrow() const;
 			static void onRefresh(ChildReference& obj, const ValueTree& v, dyncomp::Data::RefreshType rt, bool isRecursive);
-
 			void sendMessage(dyncomp::Data::RefreshType rt, bool recursive=false);
 
-			struct Wrapper;
+			WeakReference<ScriptDynamicContainer> parentContainer;
+
+			UndoManager* um = nullptr;
+
+			mutable bool invalid = false;
+			var lastValue;
 
 			WeakCallbackHolder valueCallback;
 			WeakCallbackHolder paintRoutine;
@@ -2349,6 +2374,11 @@ public:
 			valuetree::PropertyListener valueListener;
 			ValueTree componentData;
 			dyncomp::Data::Ptr data;
+
+			WeakCallbackHolder childCallback;
+			valuetree::ChildListener childListener;
+
+			struct Wrapper;
 
 			JUCE_DECLARE_WEAK_REFERENCEABLE(ChildReference);
 			JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(ChildReference);
@@ -2364,24 +2394,7 @@ public:
 		ScriptDynamicContainer(ProcessorWithScriptingContent *base, Content *parentContent, Identifier panelName, int x, int y, int width, int height);
 		~ScriptDynamicContainer() override;
 
-		void handleDefaultDeactivatedProperties() final
-		{
-			deactivatedProperties.addIfNotAlreadyThere(getIdFor(ScriptComponent::Properties::macroControl));
-			deactivatedProperties.addIfNotAlreadyThere(getIdFor(ScriptComponent::Properties::isPluginParameter));
-			deactivatedProperties.addIfNotAlreadyThere(getIdFor(ScriptComponent::Properties::min));
-			deactivatedProperties.addIfNotAlreadyThere(getIdFor(ScriptComponent::Properties::max));
-			deactivatedProperties.addIfNotAlreadyThere(getIdFor(ScriptComponent::Properties::defaultValue));
-			deactivatedProperties.addIfNotAlreadyThere(getIdFor(ScriptComponent::Properties::pluginParameterName));
-			deactivatedProperties.addIfNotAlreadyThere(getIdFor(ScriptComponent::Properties::text));
-			deactivatedProperties.addIfNotAlreadyThere(getIdFor(ScriptComponent::Properties::tooltip));
-			deactivatedProperties.addIfNotAlreadyThere(getIdFor(ScriptComponent::Properties::processorId));
-			deactivatedProperties.addIfNotAlreadyThere(getIdFor(ScriptComponent::Properties::parameterId));
-			deactivatedProperties.addIfNotAlreadyThere(getIdFor(ScriptComponent::Properties::isMetaParameter));
-			deactivatedProperties.addIfNotAlreadyThere(getIdFor(ScriptComponent::Properties::linkedTo));
-			deactivatedProperties.addIfNotAlreadyThere(getIdFor(ScriptComponent::Properties::automationId));
-			deactivatedProperties.addIfNotAlreadyThere(getIdFor(ScriptComponent::Properties::deferControlCallback));
-			deactivatedProperties.addIfNotAlreadyThere(getIdFor(ScriptComponent::Properties::pluginParameterGroup));
-		}
+		void handleDefaultDeactivatedProperties() final;
 
 		// ========================================================================================================
 
@@ -2397,34 +2410,33 @@ public:
 		/** Sets a callback that will be executed whenever a value is changed. */
 		void setValueCallback(const var& valueFunction);
 
-		/** Sets a callback that will be executed whenever a child is added or removed. */
-		void setChildCallback(const var& childCallback);
-
-		/** Updates all child component values from the provided JSON file. */
-		void setValue(var newValue) override;
-
 		// =============================================================================
 
-		dyncomp::Data::Ptr getData() { return data; }
+		var getPopupMenuTarget(const MouseEvent& e) override
+		{
+			if(auto b = dyncomp::Base::findBaseParent(e.eventComponent))
+				return getOrCreateChildReference(b->getDataTree());
 
-		ValueTree exportAsValueTree() const override;
-		void restoreFromValueTree(const ValueTree& v) override;
+			return var(this);
+		}
+
+		dyncomp::Data::Ptr getData() { return data; }
 
 		LambdaBroadcaster<dyncomp::Data::Ptr> dataBroadcaster;
 
 	private:
 
-		WeakCallbackHolder valueCallback;
-		WeakCallbackHolder childCallback;
+		var getOrCreateChildReference(const ValueTree& v);
 
+		ReferenceCountedArray<ChildReference> childReferences;
+		WeakCallbackHolder valueCallback;
 		valuetree::AnyPropertyListener valueListener;
-		valuetree::RecursiveTypedChildListener childListener;
+		dyncomp::Data::Ptr data;
 
 		struct Wrapper;
 
-		dyncomp::Data::Ptr data;
-
 		JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(ScriptDynamicContainer);
+		JUCE_DECLARE_WEAK_REFERENCEABLE(ScriptDynamicContainer);
 
 		// ========================================================================================================
 	};
@@ -3499,4 +3511,3 @@ struct PrimitiveArrayDisplay : public SimpleVarBody,
 
 
 } // namespace hise
-#endif  // SCRIPTINGAPICONTENT_H_INCLUDED

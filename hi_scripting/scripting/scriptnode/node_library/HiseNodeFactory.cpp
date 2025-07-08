@@ -1941,28 +1941,10 @@ BackendHostFactory::BackendHostFactory(DspNetwork* n, ProjectDll::Ptr dll) :
 
 	if(numNodesInDll == 0)
 	{
-		auto propFile = BackendDllManager::getSubFolder(mc, BackendDllManager::FolderSubType::ThirdParty).getChildFile("node_properties.json");
+		std::pair<Array<Identifier>, int> rv = BackendDllManager::initialiseThirdPartyProperties(mc);
 
-		NamespacedIdentifier rootId("project");
-
-		auto thirdPartyList = JSON::parse(propFile.loadFileAsString());
-
-		if(auto obj = thirdPartyList.getDynamicObject())
-		{
-			for(const auto& nv: obj->getProperties())
-			{
-				thirdPartyOffset++;
-				idsFromJSON.add(nv.name);
-
-				if(nv.value.isArray())
-				{
-					for(const auto& v: *nv.value.getArray())
-					{
-						cppgen::CustomNodeProperties::addNodeIdManually(nv.name, v.toString());
-					}
-				}
-			}
-		}
+		thirdPartyOffset = rv.second;
+		idsFromJSON = rv.first;
 	}
 	else
 	{

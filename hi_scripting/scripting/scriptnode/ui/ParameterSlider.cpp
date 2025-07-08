@@ -1257,9 +1257,8 @@ void ParameterSlider::paint(Graphics& g)
 
 void ParameterSlider::timerCallback()
 {
-	if(externalModulationIndex != -1)
+	if(externalModulationIndex != -1 && modulationQueryFunction != nullptr)
 	{
-		jassert(modulationQueryFunction != nullptr);
 		jassert(modulationQueryProcessor.get() != nullptr);
 
 		NormalisableRange<double> nr(getRange());

@@ -140,6 +140,18 @@ struct ScriptCreatedComponentWrapper::AdditionalMouseCallback: public MouseListe
 				{
 					alignToBottom = sp->getScriptObjectProperty(ScriptingApi::Content::ScriptPanel::popupMenuAlign);
 				}
+				if(auto dc = dynamic_cast<ScriptingApi::Content::ScriptDynamicContainer*>(safeThis->scriptComponent.get()))
+				{
+					alignToBottom = false;
+
+					auto b = dynamic_cast<dyncomp::Base*>(event.eventComponent);
+
+					if(b == nullptr)
+						b = event.eventComponent->findParentComponentOfClass<dyncomp::Base>();
+
+					if(b != nullptr)
+						alignToBottom = b->getPropertyOrDefault(dyncomp::dcid::popupMenuAlign);
+				}
 
 				if (auto r = PopupLookAndFeel::showAtComponent(m, event.eventComponent, alignToBottom))
 				{
@@ -243,7 +255,7 @@ struct ScriptCreatedComponentWrapper::AdditionalMouseCallback: public MouseListe
             {
                 var arguments[2];
 
-                arguments[0] = var(scriptComponent.get());
+                arguments[0] = scriptComponent->getPopupMenuTarget(event);
 
                 if (data.mouseCallbackLevel != MouseCallbackComponent::CallbackLevel::PopupMenuOnly)
                 {

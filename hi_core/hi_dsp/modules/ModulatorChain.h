@@ -656,7 +656,7 @@ public:
 
 		runtime_target::RuntimeTarget getType() const override { return runtime_target::RuntimeTarget::ExternalModulatorChain; }
 
-		static EventData getEventData(Host* rt, const HiseEvent& e)
+		static EventData getEventData(Host* rt, const HiseEvent& e, bool wantsPolyphonicSignal)
 		{
 			auto typed = static_cast<RuntimeTargetSource*>(rt);
 			EventData d;
@@ -665,6 +665,11 @@ public:
 			d.thisBlockSize = &typed->thisBlockSize;
 			d.constantValue = 0.0f;
 			return d;
+		}
+
+		void updateThisBlockSize(int numSamplesThisBlock)
+		{
+			thisBlockSize = numSamplesThisBlock;
 		}
 
 		void handleConnection(bool shouldBeAdded, int numSamples)

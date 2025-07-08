@@ -353,10 +353,6 @@
  //#define HLAC_INCLUDE_TEST_SUITE 0
 #endif
 
-#ifndef    USE_IPP
- //#define USE_IPP 1
-#endif
-
 //==============================================================================
 // hi_loris flags:
 

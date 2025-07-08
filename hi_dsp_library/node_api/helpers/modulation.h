@@ -83,7 +83,7 @@ struct Host
 struct EventData
 {
 	// an alias that is called on a host to return the event data for the given HISE event. */
-	using QueryFunction = EventData(Host*, const HiseEvent&);
+	using QueryFunction = EventData(Host*, const HiseEvent&, bool);
 
 	/** This will query the addresses provided in this object and return a VariableStorage object
 	 *
@@ -108,14 +108,14 @@ struct SignalSource
 
 	operator bool() const noexcept { return sampleRate_cr > 0.0; }
 
-	EventData getEventData(int slotIndex, const HiseEvent& e) const
+	EventData getEventData(int slotIndex, const HiseEvent& e, bool wantsPolyphonicSignal) const
 	{
 		if(isPositiveAndBelow(slotIndex, NumMaxModulationSources))
 		{
 			auto& s = modValueFunctions[slotIndex];
 
 			if(s.first != nullptr)
-				return s.second(s.first, e);
+				return s.second(s.first, e, wantsPolyphonicSignal);
 		}
 
 		return {};

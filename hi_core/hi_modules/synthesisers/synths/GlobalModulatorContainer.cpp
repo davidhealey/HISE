@@ -482,12 +482,18 @@ void GlobalModulatorContainer::preVoiceRendering(int startSample, int numThisTim
 	{
 		if(auto mod = ev.getModulator())
 		{
-			if (mod->isInMonophonicMode() && !mod->isBypassed())
+			if (mod->isInMonophonicMode())
 			{
-				auto modBuffer = ev.initialiseMonophonicBuffer(startSample_cr, numSamples_cr);
-
-				mod->setScratchBuffer(scratchBuffer, startSample_cr + numSamples_cr);
-				mod->render(0, modBuffer, scratchBuffer, startSample_cr, numSamples_cr);
+				if(!mod->isBypassed())
+				{
+					auto modBuffer = ev.initialiseMonophonicBuffer(startSample_cr, numSamples_cr);
+					mod->setScratchBuffer(scratchBuffer, startSample_cr + numSamples_cr);
+					mod->render(0, modBuffer, scratchBuffer, startSample_cr, numSamples_cr);
+				}
+			}
+			else
+			{
+				ev.updateThisBufferSize();
 			}
 		}
 	}

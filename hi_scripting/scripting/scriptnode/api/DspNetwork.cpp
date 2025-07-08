@@ -279,7 +279,10 @@ void DspNetwork::createAllNodesOnce()
 	}
 
 #if USE_BACKEND
-    
+
+	// First create all properties of the third party node from the node_properties.json file
+	BackendDllManager::initialiseThirdPartyProperties(getScriptProcessor()->getMainController_());
+
     // Now check whether the compiled nodes should be rendered with a template
     // argument for their voice count
     auto fileList = BackendDllManager::getNetworkFiles(getScriptProcessor()->getMainController_(), false);
@@ -1658,6 +1661,10 @@ void DspNetwork::Holder::restoreNetworks(const ValueTree& d)
 
 				c = fh->getEmbeddedNetwork(nid);
 				jassert(c.isValid());
+
+				if(!c.isValid())
+					return;
+
 			}
 
 			auto newNetwork = new DspNetwork(dynamic_cast<ProcessorWithScriptingContent*>(this),

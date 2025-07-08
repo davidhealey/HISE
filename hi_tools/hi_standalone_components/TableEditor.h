@@ -89,6 +89,7 @@ class TableEditor : public Component,
 {
 public:
 
+	using ComplexDataType = hise::Table;
 	struct LookAndFeelMethods
 	{
         virtual ~LookAndFeelMethods();;

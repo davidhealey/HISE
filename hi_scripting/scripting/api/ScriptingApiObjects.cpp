@@ -4093,6 +4093,7 @@ struct ScriptingObjects::ScriptingSynth::Wrapper
 	API_METHOD_WRAPPER_0(ScriptingSynth, getRoutingMatrix);
 	API_METHOD_WRAPPER_0(ScriptingSynth, getId);
 	API_VOID_METHOD_WRAPPER_2(ScriptingSynth, setModulationInitialValue);
+	API_VOID_METHOD_WRAPPER_3(ScriptingSynth, setEffectChainOrder);
 };
 
 ScriptingObjects::ScriptingSynth::ScriptingSynth(ProcessorWithScriptingContent *p, ModulatorSynth *synth_) :
@@ -4135,6 +4136,7 @@ ScriptingObjects::ScriptingSynth::ScriptingSynth(ProcessorWithScriptingContent *
 	ADD_API_METHOD_0(asSampler);
 	ADD_API_METHOD_0(getRoutingMatrix);
 	ADD_API_METHOD_2(setModulationInitialValue);
+	ADD_API_METHOD_3(setEffectChainOrder);
 };
 
 
@@ -4374,6 +4376,23 @@ var ScriptingObjects::ScriptingSynth::addStaticGlobalModulator(var chainIndex, v
 	}
 
 	return var();
+}
+
+void ScriptingObjects::ScriptingSynth::setEffectChainOrder(bool doPoly, var slotRange, var chainOrder)
+{
+	if(checkValidObject())
+	{
+		auto r = Result::ok();
+		auto p = ApiHelpers::getPointFromVar(slotRange, &r).toInt();
+
+		if(!r.wasOk())
+			reportScriptError(r.getErrorMessage());
+
+		if(auto fx = dynamic_cast<EffectProcessorChain*>(synth->getChildProcessor(ModulatorSynth::EffectChain)))
+		{
+			fx->setFXOrder(false, { p.x, p.y }, chainOrder);
+		}
+	}
 }
 
 var ScriptingObjects::ScriptingSynth::asSampler()

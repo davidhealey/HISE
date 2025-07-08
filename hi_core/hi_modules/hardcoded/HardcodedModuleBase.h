@@ -140,6 +140,25 @@ public:
 
 protected:
 
+	ModulatorChain* getPitchChain()
+	{
+		if(auto synth = dynamic_cast<ModulatorSynth*>(&asProcessor()))
+		{
+			auto mc = synth->getChildProcessor(ModulatorSynth::InternalChains::PitchModulation);
+			return dynamic_cast<ModulatorChain*>(mc);
+		}
+
+		auto pp = asProcessor().getParentProcessor(true);
+
+		if(pp != nullptr)
+		{
+			auto mc = pp->getChildProcessor(ModulatorSynth::InternalChains::PitchModulation);
+			return dynamic_cast<ModulatorChain*>(mc);
+		}
+
+		return nullptr;
+	}
+
 	bool hasLoadedButUncompiledEffect() const;
 
 	HardcodedSwappableEffect(MainController* mc, bool isPolyphonic);

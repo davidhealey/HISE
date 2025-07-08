@@ -30,8 +30,7 @@
 *   ===========================================================================
 */
 
-#if JUCE_WINDOWS && USE_IPP
-#include <ipp.h>
+#if USE_IPP
 #define USE_IPP_MEDIAN_FILTER 1
 #else
 #define USE_IPP_MEDIAN_FILTER 0

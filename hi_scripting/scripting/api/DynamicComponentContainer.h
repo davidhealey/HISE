@@ -32,128 +32,9 @@
 
 #pragma once
 
-/** TODO:
- *
- * add containers: viewport / flexbox (maybe with flexboxviewport) OK
- * - remove methods from root class OK
- * * check image provider OK
- * * - use component width / height property when dimension property is auto in css::flexbox OK
- * fix duplicate stuff OK
- ** - add components: textbox with markdown support OK
- * - add sendRepaintMessage() OK
- * - fix class property not working OK
- * add connection to processors / scriptnode - use HiSlider or other class OK
- * * add persistence (maybe user preset model?) OK
- *
- * add logic callback to drag container
- * - make examples: file browser, FX section, 
- * - add color properties
- * - add component properties to CSS stylesheet
- * - use BorderPanel for panel with paint routine OK
- */
-
-
 namespace hise {
-namespace dyncomp
-{
-
-using namespace hise;
+namespace dyncomp {
 using namespace juce;
-
-#define DECLARE_ID(x) static const Identifier x(#x);
-
-namespace dcid
-{
-	DECLARE_ID(ContentProperties);
-	DECLARE_ID(Root);
-
-	DECLARE_ID(id);
-	DECLARE_ID(type);
-	DECLARE_ID(text);
-	DECLARE_ID(enabled);
-	DECLARE_ID(visible);
-	DECLARE_ID(tooltip);
-	DECLARE_ID(defaultValue);
-	DECLARE_ID(useUndoManager);
-
-    static const Identifier class_("class");
-    DECLARE_ID(elementStyle);
-
-	DECLARE_ID(parentComponent);
-	DECLARE_ID(x);
-	DECLARE_ID(y);
-	DECLARE_ID(width);
-	DECLARE_ID(height);
-	
-	DECLARE_ID(isMomentary);
-	DECLARE_ID(radioGroupId);
-	DECLARE_ID(setValueOnClick);
-
-	DECLARE_ID(useCustomPopup);
-	DECLARE_ID(items);
-
-	DECLARE_ID(editable);
-	DECLARE_ID(multiline);
-	DECLARE_ID(updateEachKey);
-
-	DECLARE_ID(min);
-	DECLARE_ID(max);
-	DECLARE_ID(middlePosition);
-	DECLARE_ID(stepSize);
-	DECLARE_ID(mode);
-	DECLARE_ID(suffix);
-    DECLARE_ID(style);
-	DECLARE_ID(showValuePopup);
-
-	DECLARE_ID(processorId);
-	DECLARE_ID(parameterId);
-
-	DECLARE_ID(filmstripImage);
-    DECLARE_ID(numStrips);
-	DECLARE_ID(isVertical);
-	DECLARE_ID(scaleFactor);
-
-    DECLARE_ID(animationSpeed);
-    DECLARE_ID(dragMargin);
-
-	DECLARE_ID(FloatingTileData);
-
-	DECLARE_ID(bgColour);
-	DECLARE_ID(itemColour);
-	DECLARE_ID(itemColour2);
-	DECLARE_ID(textColour);
-
-	struct Helpers
-	{
-		static const Array<Identifier>& getProperties();
-
-		static const Array<Identifier>& getBasicProperties()
-		{
-			static const Array<Identifier> basicProperties({ 
-			dcid::enabled,
-			dcid::visible,
-			dcid::class_,
-			dcid::elementStyle,
-			dcid::bgColour,
-			dcid::itemColour,
-			dcid::itemColour2,
-			dcid::textColour
-			});
-
-			return basicProperties;
-		}
-
-		static var getDefaultValue(const Identifier& p);
-
-		static bool isValidProperty(const Identifier& p)
-		{
-			return getProperties().contains(p);
-		}
-	};
-
-}
-
-#undef DECLARE_ID
 
 struct Factory;
 struct Base;
@@ -191,6 +72,8 @@ struct Data: public ReferenceCountedObject,
 
 	Data(MainController* mc, const var& obj, Rectangle<int> position);
 
+	~Data() override;
+
 	void setValues(const var& valueObject);
 
 	Image getImage(const String& ref);
@@ -216,40 +99,101 @@ struct Data: public ReferenceCountedObject,
 
 	LambdaBroadcaster<ValueTree, RefreshType, bool> refreshBroadcaster;
 
-	ReferenceCountedObjectPtr<ScriptingObjects::GraphicsObject> createGraphicsObject(const ValueTree& dataTree, ConstScriptingObject* obj)
-	{
-		jassert(dataTree.getType() == Identifier("Component"));
+	ReferenceCountedObjectPtr<ScriptingObjects::GraphicsObject> createGraphicsObject(const ValueTree& dataTree, ConstScriptingObject* obj);
 
-		for(auto r: registeredDrawHandlers)
-		{
-			if(r->first == dataTree)
-				return r->second;
-		}
+	DrawActions::Handler* getDrawHandler(const ValueTree& dataTree) const;
 
-		auto n = new std::pair<ValueTree, ReferenceCountedObjectPtr<ScriptingObjects::GraphicsObject>>();
-		n->first = dataTree;
-		n->second = new ScriptingObjects::GraphicsObject(obj->getScriptProcessor(), obj);
-		registeredDrawHandlers.add(n);
-		return registeredDrawHandlers.getLast()->second;
-	}
+	Factory* getFactory();
 
-	DrawActions::Handler* getDrawHandler(const ValueTree& dataTree) const
-	{
-		for(auto r: registeredDrawHandlers)
-		{
-			if(r->first == dataTree)
-				return &r->second->getDrawHandler();
-		}
+	void onChildAdd(const ValueTree& v, bool wasAdded);
 
-		return nullptr;
-	}
-
-    Factory* getFactory();
-    
 private:
 
-	OwnedArray<std::pair<ValueTree, ReferenceCountedObjectPtr<ScriptingObjects::GraphicsObject>>> registeredDrawHandlers;
+	/** A subclass that performs additional data handling of a child component.
+	 *
+	 *  This subclass will react to both child add / remove events with the given type
+	 *	as well as value changes. All callbacks are executed synchronously so you can adapt the
+	 *	data model. 
+	 */
+	struct SubDataHandler: public ControlledObject
+	{
+		SubDataHandler(Data* d, const ValueTree& v);
 
+		~SubDataHandler()
+		{
+			valueListener.shutdown();
+		}
+
+		bool matches(const ValueTree& v) const { return componentData == v; }
+
+		// call this in your constructor
+		void initValueListener();
+		
+		/** Override this and store the data. This is called whenever the value changes. */
+		virtual void onValue(const Identifier& id, const var& newValue);
+
+	protected:
+
+		const Identifier id;
+
+		ValueTree componentData;
+		ValueTree values;
+		valuetree::PropertyListener valueListener;
+	};
+
+	/** A data handler that manages the drag container connection to a FX chain. It performs these steps
+	 *
+	 *  - on value change it will switch the order of the FX processing
+	 *	- on child add / remove it will call HotswappableProcessor::setEffect() with the `text` property of
+	 *	  the child element (or an empty string if removed). It will also bypass the FX that are not active
+	 */
+	struct DragContainerHandler: public SubDataHandler
+	{
+		struct EffectChainManager;
+
+		DragContainerHandler(Data* d, const ValueTree& v);
+		void onValue(const Identifier& id, const var& newValue) override;
+		EffectProcessorChain* getDragContainerEffectChain();
+		void onChildAdd(ValueTree v, bool wasAdded);
+
+	private:
+
+		Range<int> dragEffectRange;
+		var lastValue;
+		valuetree::ChildListener connectionListener;
+		valuetree::PropertyListener valueListener;
+	};
+
+	/** A data handler that connects to a given complex data type (sliderpack, table, audiofile) and
+	 *  stores / restores the state using the base64 representation of the data type. */
+	struct ComplexDataHandler: public SubDataHandler,
+						       public ComplexDataUIUpdaterBase::EventListener,
+						       public AsyncUpdater
+	{
+		ComplexDataHandler(Data* d, const ValueTree& v_, const ExternalData::DataType& dt_);
+		~ComplexDataHandler() override;
+
+		void handleAsyncUpdate() override;
+		void onComplexDataEvent(ComplexDataUIUpdaterBase::EventType t, var data) override;
+		void onValue(const Identifier& id, const var& newValue) override;
+		void onConnectionChange(const Identifier& , const var& );
+
+	private:
+
+		bool recursive = false;
+		const ExternalData::DataType dt;
+		valuetree::PropertyListener connectionListener;
+		ComplexDataUIBase::Ptr complexData;
+
+		JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(ComplexDataHandler);
+	};
+
+	void updateComplexDataHandler(const ValueTree& v, bool wasAdded, ExternalData::DataType dt);
+	void updateDragContainer(const ValueTree& v, bool wasAdded);
+
+	OwnedArray<SubDataHandler> subDataHandlers;
+	valuetree::RecursiveTypedChildListener valueInitialiser;
+	OwnedArray<std::pair<ValueTree, ReferenceCountedObjectPtr<ScriptingObjects::GraphicsObject>>> registeredDrawHandlers;
 	DynamicObject::Ptr floatingTileData;
 
 	ValueCallback valueCallback;
@@ -262,6 +206,7 @@ private:
 
 	ReferenceCountedObjectPtr<ReferenceCountedObject> factory;
 
+	JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(Data);
 };
 
 struct Base: public Component,
@@ -271,6 +216,9 @@ struct Base: public Component,
 	using WeakPtr = WeakReference<Base>;
 	using List = ReferenceCountedArray<Base>;
 	using WeakList = Array<WeakPtr>;
+
+	static Base* findBaseParent(Component* c);
+	static void onRefreshStatic(Base& b, const ValueTree& v, Data::RefreshType rt, bool isRecursive);
 
 	Base(Data::Ptr d, const ValueTree& v);
 	~Base() override;
@@ -285,45 +233,45 @@ struct Base: public Component,
 	virtual void updatePosition(const Identifier&, const var&);
 	virtual void baseChildChanged(Base::Ptr c, bool wasAdded);
 	virtual void resizeChild(Base::Ptr b, Rectangle<int> newBounds);
-	virtual void hideChild(Base::Ptr b, bool shouldBeVisible)
-	{
-		b->setVisible(shouldBeVisible);
-	}
+	virtual void hideChild(Base::Ptr b, bool shouldBeVisible);
 
-	static void onRefreshStatic(Base& b, const ValueTree& v, Data::RefreshType rt, bool isRecursive)
-	{
-		if(b.dataTree == v)
-			b.onRefresh(rt, isRecursive);
-	}
-
+	void updateCSSProperties(const Identifier&, const var& );
 	void initCSSForChildComponent();
+
+	/** Override this if this component should forward all stuff to its
+	 *  first child element. */
+	virtual bool forwardToFirstChild() const = 0;
 
 	virtual void onRefresh(Data::RefreshType rt, bool recursive);
 
 	void addChild(Base::Ptr c);
 
-	bool operator==(const Base& other) const noexcept
-	{
-		return dataTree == other.dataTree;
-	}
-
-	bool operator==(const ValueTree& otherData) const noexcept
-	{
-		return dataTree == otherData;
-	}
+	bool operator==(const Base& other) const noexcept;
+	bool operator==(const ValueTree& otherData) const noexcept;
 
 	void writePositionInValueTree(Rectangle<int> tb, bool useUndoManager);
 
 	var getValueOrDefault() const;
 	var getPropertyOrDefault(const Identifier& id) const;
 
+	const Component* getContentComponent() const { return forwardToFirstChild() ? getChildComponent(0) : this; }
+	Component* getContentComponent() { return forwardToFirstChild() ? getChildComponent(0) : this; }
+
+	ValueTree getDataTree() const { return dataTree; }
+
+	void setColourFromData(const Identifier& id, int colourId);
+
+	// override this in the derived classes if the colour ids don't match
+	virtual void updateColours();
+
+	void writeComponentPropertiesToStyleSheet(bool force = false);
+
 protected:
 
-    virtual Component* getCSSTarget() { return simple_css::FlexboxComponent::Helpers::getComponentForStyleSheet(this); }
-    
 	Data::Ptr data;
 	ValueTree dataTree;
 	ValueTree valueReference;
+	simple_css::StyleSheet::Ptr css;
 
 private:
 
@@ -331,10 +279,12 @@ private:
 	valuetree::PropertyListener positionListener;
 	valuetree::PropertyListener valueListener;
 	valuetree::ChildListener childListener;
+	valuetree::PropertyListener cssListener;
 
 	List children;
 
 	JUCE_DECLARE_WEAK_REFERENCEABLE(Base);
+	JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(Base);
 };
 
 struct Root: public Base
@@ -343,16 +293,14 @@ struct Root: public Base
 
 	void onValue(const var& newValue) override {}
 
-	void paint(Graphics& g) override
-	{
-		if(auto slaf = dynamic_cast<simple_css::StyleSheetLookAndFeel*>(&getLookAndFeel()))
-			slaf->drawComponentBackground(g, this);
-	}
+	void paint(Graphics& g) override;
 
 	void updatePosition(const Identifier&, const var&) override
 	{
 		
 	}
+
+	bool forwardToFirstChild() const override { return false; }
 };
 
 } // namespace dyncomp

@@ -212,11 +212,19 @@ void StyleSheetLookAndFeel::drawRotarySlider(Graphics& graphics, int x, int y, i
 	                                        rotaryEndAngle, slider);
 }
 
-void StyleSheetLookAndFeel::drawGenericComponentText(Graphics& g, const String& text, Component* c, Selector s)
+void StyleSheetLookAndFeel::drawGenericComponentText(Graphics& g, const String& text, bool drawEmptyText, Component* c, Selector s)
 {
 	if(auto ss = s ? root.css.getWithAllStates(c, s) : root.css.getForComponent(c))
 	{
 		Renderer r(c, root.stateWatcher);
+
+		auto currentState = Renderer::getPseudoClassFromComponent(c);
+
+		if(drawEmptyText)
+			currentState |= (int)PseudoClassType::Empty;
+
+		r.setPseudoClassState(currentState, true);
+
 		r.renderText(g, c->getLocalBounds().toFloat(), text, ss);
 	}
 }
@@ -534,7 +542,15 @@ void StyleSheetLookAndFeel::drawComboBox(Graphics& g, int width, int height, boo
 		if(ss->hasNonLayoutProperties())
 		{
 			Renderer r(&cb, root.stateWatcher);
-			root.stateWatcher.checkChanges(&cb, ss, r.getPseudoClassState());
+
+			auto state = r.getPseudoClassState();
+
+			if(cb.getNumItems() == 0)
+				state |= (int)PseudoClassType::Empty;
+
+			r.setPseudoClassState(state, true);
+
+			root.stateWatcher.checkChanges(&cb, ss, state);
 			r.drawBackground(g, cb.getLocalBounds().toFloat(), ss);
 			r.renderText(g, cb.getLocalBounds().toFloat(), cb.getText(), ss);
 			return;

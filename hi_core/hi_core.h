@@ -555,15 +555,6 @@ For all defined variables:
 *	New files must be added in the specific subfolder header / .cpp file.
 */
 
-
-#if USE_IPP
-#include "ipp.h"
-#endif
-
-
-
-
-
 #include "LibConfig.h"
 #include "Macros.h"
 

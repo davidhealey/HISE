@@ -6619,18 +6619,7 @@ int ScriptingApi::Synth::getModulatorIndex(int chain, const String &id) const
 
 void ScriptingApi::Synth::setUseUniformVoiceHandler(String containerId, bool shouldUseUniformVoiceHandling)
 {
-	Processor::Iterator<ModulatorSynthChain> iter(getScriptProcessor()->getMainController_()->getMainSynthChain());
-
-	while (auto s = iter.getNextProcessor())
-	{
-		if (s->getId() == containerId)
-		{
-			s->setUseUniformVoiceHandler(shouldUseUniformVoiceHandling, nullptr);
-			return;
-		}
-	}
-
-	reportScriptError("Can't find Container with ID " + containerId);
+	reportScriptError("This function is deprecated. Just remove that call and enjoy global envelopes...");
 }
 
 // ====================================================================================================== Console functions
