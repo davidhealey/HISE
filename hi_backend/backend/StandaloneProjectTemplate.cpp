@@ -143,10 +143,10 @@ static const unsigned char projectStandaloneTemplate_jucer_lines[] = R"(
 		%LORIS_MODULEPATH%
       </MODULEPATHS>
     </XCODE_MAC>
-   <LINUX_MAKE targetFolder="Builds/LinuxMakefile" linuxExtraPkgConfig="%LINUX_GUI_LIBS%" extraLinkerFlags="-no-pie&#10;-flto=auto&#10;-fuse-ld=gold&#10;" extraCompilerFlags="-fpermissive" extraDefs="%EXTRA_DEFINES_LINUX%">
+   <LINUX_MAKE targetFolder="Builds/LinuxMakefile" linuxExtraPkgConfig="%LINUX_GUI_LIBS%" extraLinkerFlags="-no-pie&#10;-flto=auto&#10;-fuse-ld=gold&#10;%IPP_COMPILER_FLAGS%" extraCompilerFlags="-fpermissive" extraDefs="%EXTRA_DEFINES_LINUX%">
       <CONFIGURATIONS>
-        <CONFIGURATION name="Debug" isDebug="1" optimisation="1" targetName="%NAME%" headerPath="%FAUST_HEADER_PATH%" libraryPath=""/>
-        <CONFIGURATION name="Release" isDebug="0" optimisation="3" targetName="%NAME%" headerPath="%FAUST_HEADER_PATH%" libraryPath="" linkTimeOptimisation="%LINK_TIME_OPTIMISATION%"/>
+        <CONFIGURATION name="Debug" isDebug="1" optimisation="1" targetName="%NAME%" headerPath="%IPP_HEADER%;%FAUST_HEADER_PATH%" libraryPath="%IPP_LIBRARY%"/>
+        <CONFIGURATION name="Release" isDebug="0" optimisation="3" targetName="%NAME%" headerPath="%IPP_HEADER%;%FAUST_HEADER_PATH%" libraryPath="%IPP_LIBRARY%" linkTimeOptimisation="%LINK_TIME_OPTIMISATION%"/>
       </CONFIGURATIONS>
       <MODULEPATHS>
         <MODULEPATH id="juce_product_unlocking" path="%HISE_PATH%"/>
