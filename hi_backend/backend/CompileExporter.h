@@ -208,7 +208,7 @@ public:
 	File hisePath;
 	
     bool useIpp;
-    
+		    
     bool legacyCpuSupport = false;
 
 	bool rawMode = false;
@@ -345,7 +345,6 @@ protected:
 	ErrorCodes copyHISEImageFiles();
 
 	File getProjucerProjectFile();
-	File getIppRoot(File fallbackStartDir);
 	
 	ErrorCodes createStandaloneAppHeaderFile(const String& solutionDirectory, const String& uniqueId, const String& version, String publicKey);
 	CompileExporter::ErrorCodes createStandaloneAppProjucerFile(BuildOption option);
