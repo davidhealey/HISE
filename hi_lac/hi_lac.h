@@ -122,7 +122,7 @@ If enabled, then the unit test suite will be compiled and added to all unit test
 
 
 #ifdef USE_IPP
-#error "this should not be defined before this so if this error appears, remove USE_IPP from your preprocessor definitions...
+#error "this should not be defined before this so if this error appears, remove USE_IPP from your preprocessor definitions..."
 #endif
 
 
