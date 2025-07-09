@@ -69,11 +69,11 @@ static const unsigned char projectTemplate_jucer_lines[] = R"(
             extraLinkerFlags="%FFT_LINKER_FLAGS%">
       <CONFIGURATIONS>
         <CONFIGURATION name="Debug" winWarningLevel="1" generateManifest="1" winArchitecture="x64"
-                       isDebug="1" optimisation="1" targetName="%NAME% Debug" headerPath ="%FFT_HEADER_PATH%;%FAUST_HEADER_PATH%"
-                       libraryPath="%FFT_LIBRARY_PATH%;%AAX_DEBUG_LIB%;%WIN_STATIC_LIB_FOLDER_D64%" binaryPath="Compiled/" useRuntimeLibDLL="0" prebuildCommand="%PREBUILD_COMMAND%"/>
+                       isDebug="1" optimisation="1" targetName="%NAME% Debug" headerPath ="%FFT_HEADER_PATH%&#10;%FAUST_HEADER_PATH%"
+                       libraryPath="%FFT_LIBRARY_PATH%&#10;%AAX_DEBUG_LIB%;%WIN_STATIC_LIB_FOLDER_D64%" binaryPath="Compiled/" useRuntimeLibDLL="0" prebuildCommand="%PREBUILD_COMMAND%"/>
         <CONFIGURATION name="Release" winWarningLevel="1" generateManifest="1"
-                       winArchitecture="x64" isDebug="0" optimisation="3" targetName="%NAME%" headerPath ="%FFT_HEADER_PATH%;%FAUST_HEADER_PATH%"
-                       libraryPath="%FFT_LIBRARY_PATH%;%AAX_RELEASE_LIB%;%WIN_STATIC_LIB_FOLDER_R64%" binaryPath="Compiled/" linkTimeOptimisation="%LINK_TIME_OPTIMISATION%" useRuntimeLibDLL="0" prebuildCommand="%PREBUILD_COMMAND%;%STRIP_SYMBOLS_WIN%"/>
+                       winArchitecture="x64" isDebug="0" optimisation="3" targetName="%NAME%" headerPath ="%FFT_HEADER_PATH%&#10;%FAUST_HEADER_PATH%"
+                       libraryPath="%FFT_LIBRARY_PATH%&#10;%AAX_RELEASE_LIB%;%WIN_STATIC_LIB_FOLDER_R64%" binaryPath="Compiled/" linkTimeOptimisation="%LINK_TIME_OPTIMISATION%" useRuntimeLibDLL="0" prebuildCommand="%PREBUILD_COMMAND%;%STRIP_SYMBOLS_WIN%"/>
       </CONFIGURATIONS>
       <MODULEPATHS>
         <MODULEPATH id="juce_core" path="%JUCE_PATH%"/>
