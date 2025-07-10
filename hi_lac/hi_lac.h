@@ -124,7 +124,6 @@ If enabled, then the unit test suite will be compiled and added to all unit test
 #ifdef USE_IPP
 #error "this should not be defined before this so if this error appears, remove USE_IPP from your preprocessor definitions..."
 #endif
-#endif
 
 #if JUCE_WINDOWS
 #if _IPP_SEQUENTIAL_STATIC || _IPP_SEQUENTIAL_DYNAMIC || _IPP_PARALLEL_STATIC || _IPP_PARALLEL_DYNAMIC

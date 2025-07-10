@@ -2048,7 +2048,7 @@ namespace ScriptingObjects
 
 		// ============================================================================================================
 
-		ScriptingSlotFX(ProcessorWithScriptingContent *p, EffectProcessor *fx);
+		ScriptingSlotFX(ProcessorWithScriptingContent *p, Processor *fx);
 		~ScriptingSlotFX() {};
 
 		static Identifier getClassName() { RETURN_STATIC_IDENTIFIER("SlotFX"); }
@@ -2077,10 +2077,10 @@ namespace ScriptingObjects
 		void clear();
 
 		/** Loads the effect with the given name and returns a reference to it. */
-		ScriptingEffect* setEffect(String effectName);
+		var setEffect(String effectName);
 
 		/** Returns a reference to the currently loaded effect. */
-		ScriptingEffect* getCurrentEffect();
+		var getCurrentEffect();
 
 		/** Swaps the effect with the other slot. */
 		bool swap(var otherSlot);
@@ -2096,11 +2096,13 @@ namespace ScriptingObjects
         
 		// ============================================================================================================
 
+	private:
+
 		struct Wrapper;
 
 		HotswappableProcessor* getSlotFX();
 
-	private:
+		DspNetwork::Holder* getDspNetworkHolder();
 
 		WeakReference<Processor> slotFX;
 

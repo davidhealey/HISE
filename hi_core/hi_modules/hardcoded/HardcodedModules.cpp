@@ -221,9 +221,14 @@ void HardcodedMasterFX::handleHiseEvent(const HiseEvent &m)
 {
 	MasterEffectProcessor::handleHiseEvent(m);
 
+	// The HISE events will be processed if there are nodes in a midi_chain
+	// but the default behaviour should ignore the HISE events so that it matches
+	// the script FX behaviour...
+#if 0
 	HiseEvent copy(m);
 	if (opaqueNode != nullptr)
 		opaqueNode->handleHiseEvent(copy);
+#endif
 }
 
 void HardcodedMasterFX::applyEffect(AudioSampleBuffer &b, int startSample, int numSamples)

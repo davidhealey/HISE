@@ -943,7 +943,7 @@ public:
         struct ModifierObject: public ConstScriptingObject
         {
             ModifierObject(ProcessorWithScriptingContent* sp):
-               ConstScriptingObject(sp, 12)
+               ConstScriptingObject(sp, 13)
             {
                 using Action = SliderWithShiftTextBox::ModifierObject::Action;
                 using Flags = ModifierKeys::Flags;
