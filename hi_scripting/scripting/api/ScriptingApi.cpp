@@ -6179,11 +6179,21 @@ ScriptingApi::Synth::ScriptSlotFX* ScriptingApi::Synth::getSlotFX(const String& 
 	{
 		Processor::Iterator<HotswappableProcessor> it(owner);
 
-		while (auto s = dynamic_cast<EffectProcessor*>(it.getNextProcessor()))
+		while (auto p = dynamic_cast<Processor*>(it.getNextProcessor()))
 		{
-			if (s->getId() == name)
+			if (p->getId() == name)
 			{
-				return new ScriptSlotFX(getScriptProcessor(), s);
+				return new ScriptSlotFX(getScriptProcessor(), p);
+			}
+		}
+
+		Processor::Iterator<DspNetwork::Holder> it2(owner);
+
+		while (auto p = dynamic_cast<Processor*>(it2.getNextProcessor()))
+		{
+			if (p->getId() == name)
+			{
+				return new ScriptSlotFX(getScriptProcessor(), p);
 			}
 		}
 
@@ -6192,7 +6202,7 @@ ScriptingApi::Synth::ScriptSlotFX* ScriptingApi::Synth::getSlotFX(const String& 
 	}
 	else
 	{
-		reportIllegalCall("getScriptingAudioSampleProcessor()", "onInit");
+		reportIllegalCall("getSlotFX()", "onInit");
 		RETURN_IF_NO_THROW(new ScriptSlotFX(getScriptProcessor(), nullptr))
 	}
 }
@@ -7882,7 +7892,7 @@ struct ScriptingApi::Server::Wrapper
 };
 
 ScriptingApi::Server::Server(JavascriptProcessor* jp_):
-	ApiClass(4),
+	ApiClass(5),
 	ScriptingObject(dynamic_cast<ProcessorWithScriptingContent*>(jp_)),
 	jp(jp_),
 	globalServer(*getScriptProcessor()->getMainController_()->getJavascriptThreadPool().getGlobalServer()),
