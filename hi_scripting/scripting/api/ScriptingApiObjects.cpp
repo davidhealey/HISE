@@ -3648,7 +3648,7 @@ struct ScriptingObjects::ScriptingSlotFX::Wrapper
     API_METHOD_WRAPPER_0(ScriptingSlotFX, getCurrentEffectId);
 };
 
-ScriptingObjects::ScriptingSlotFX::ScriptingSlotFX(ProcessorWithScriptingContent *p, EffectProcessor *fx) :
+ScriptingObjects::ScriptingSlotFX::ScriptingSlotFX(ProcessorWithScriptingContent *p, Processor* fx) :
 ConstScriptingObject(p, fx != nullptr ? fx->getNumParameters()+1 : 1),
 slotFX(fx)
 {
@@ -3685,6 +3685,10 @@ void ScriptingObjects::ScriptingSlotFX::clear()
 	{
         slot->clearEffect();
 	}
+	else if (auto holder = getDspNetworkHolder())
+	{
+		holder->clearAllNetworks();
+	}
 	else
 	{
 		reportScriptError("Invalid Slot");
@@ -3692,7 +3696,7 @@ void ScriptingObjects::ScriptingSlotFX::clear()
 }
 
 
-ScriptingObjects::ScriptingEffect* ScriptingObjects::ScriptingSlotFX::setEffect(String effectName)
+var ScriptingObjects::ScriptingSlotFX::setEffect(String effectName)
 {
 	if (effectName == "undefined")
 	{
@@ -3715,6 +3719,19 @@ ScriptingObjects::ScriptingEffect* ScriptingObjects::ScriptingSlotFX::setEffect(
 
 		return new ScriptingEffect(getScriptProcessor(), dynamic_cast<EffectProcessor*>(slot->getCurrentEffect()));
     }
+	else if (auto holder = getDspNetworkHolder())
+	{
+		if(auto an = holder->getActiveNetwork())
+		{
+			if(an->getId() == effectName)
+				return var(an);
+		}
+
+		holder->clearAllNetworks();
+		auto dn = holder->getOrCreate(effectName);
+
+		return var(dn);
+	}
 	else
 	{
 		reportScriptError("Invalid Slot");
@@ -3722,14 +3739,19 @@ ScriptingObjects::ScriptingEffect* ScriptingObjects::ScriptingSlotFX::setEffect(
 	}
 }
 
-ScriptingObjects::ScriptingEffect* ScriptingObjects::ScriptingSlotFX::getCurrentEffect()
+var ScriptingObjects::ScriptingSlotFX::getCurrentEffect()
 {
 	if (auto slot = getSlotFX())
 	{
 		if (auto fx = slot->getCurrentEffect())
 		{
-			return new ScriptingEffect(getScriptProcessor(), dynamic_cast<EffectProcessor*>(fx));
+			return var(new ScriptingEffect(getScriptProcessor(), dynamic_cast<EffectProcessor*>(fx)));
 		}
+	}
+	else if (auto holder = getDspNetworkHolder())
+	{
+		if(auto an = holder->getActiveNetwork())
+			return var(an);
 	}
 
 	return {};
@@ -3774,6 +3796,18 @@ juce::var ScriptingObjects::ScriptingSlotFX::getModuleList()
 		for (const auto& s : sa)
 			list.add(var(s));
 	}
+	else if (auto h = getDspNetworkHolder())
+	{
+#if USE_BACKEND
+		auto files = BackendDllManager::getNetworkFiles(getScriptProcessor()->getMainController_());
+
+		for(auto n: files)
+			list.add(var(n.getFileNameWithoutExtension()));
+#else
+		jassertfalse;
+#endif
+
+	}
 
 	return var(list);
 }
@@ -3784,6 +3818,11 @@ String ScriptingObjects::ScriptingSlotFX::getCurrentEffectId()
     {
         return slot->getCurrentEffectId();
     }
+	else if (auto h = getDspNetworkHolder())
+	{
+		if(auto an = h->getActiveNetwork())
+			return an->getId();
+	}
     
     return "";
 }
@@ -3792,13 +3831,46 @@ var ScriptingObjects::ScriptingSlotFX::getParameterProperties()
 {
     if(auto slot = getSlotFX())
         return slot->getParameterProperties();
+	else if (auto h = getDspNetworkHolder())
+	{
+		if(auto an = h->getActiveNetwork())
+		{
+			auto rn = an->getRootNode();
+
+			Array<var> list;
     
+		    for (int i = 0; i < rn->getNumParameters(); i++)
+			{
+				auto pdata = rn->getParameterFromIndex(i)->data;
+				auto rng = scriptnode::RangeHelpers::getDoubleRange(pdata);
+				auto prop = new DynamicObject();
+
+				var obj(prop);
+
+				scriptnode::RangeHelpers::storeDoubleRange(obj, rng, RangeHelpers::IdSet::ScriptComponents);
+
+				prop->setProperty("text", pdata[PropertyIds::ID]);
+				prop->setProperty("defaultValue", pdata[PropertyIds::DefaultValue]);
+
+				list.add(var(prop));
+			}
+		    
+		    return var(list);
+		}
+		
+	}
+
     return var();
 }
 
 HotswappableProcessor* ScriptingObjects::ScriptingSlotFX::getSlotFX()
 {
 	return dynamic_cast<HotswappableProcessor*>(slotFX.get());
+}
+
+DspNetwork::Holder* ScriptingObjects::ScriptingSlotFX::getDspNetworkHolder()
+{
+	return dynamic_cast<DspNetwork::Holder*>(slotFX.get());
 }
 
 struct ScriptingObjects::ScriptRoutingMatrix::Wrapper
