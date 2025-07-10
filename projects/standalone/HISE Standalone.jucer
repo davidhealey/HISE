@@ -129,13 +129,6 @@
                        linkTimeOptimisation="1" libraryPath="../../../../tools/fftw/windows&#10;C:\Program Files\Faust\lib"
                        postbuildCommand="copy /Y &quot;C:\Program Files\Faust\lib\faust.dll&quot;  &quot;$(TargetDir)faust.dll&quot;"
                        defines="HISE_INCLUDE_FAUST=1&#10;HISE_FAUST_USE_LLVM_JIT=1&#10;HISE_INCLUDE_FAUST_JIT=1"/>
-        <CONFIGURATION name="Release Perfetto" generateManifest="1" winArchitecture="x64"
-                       isDebug="0" targetName="HISE" headerPath="../../../../tools/SDK/ASIOSDK2.3/common&#10;../../../../tools/SDK/perfetto&#10;../../../../tools/fftw&#10;C:\Program Files\Faust\include"
-                       useRuntimeLibDLL="0" enableIncrementalLinking="1" alwaysGenerateDebugSymbols="1"
-                       debugInformationFormat="ProgramDatabase" enablePluginBinaryCopyStep="0"
-                       linkTimeOptimisation="1" libraryPath="../../../../tools/fftw/windows&#10;C:\Program Files\Faust\lib"
-                       postbuildCommand="copy /Y &quot;C:\Program Files\Faust\lib\faust.dll&quot;  &quot;$(TargetDir)faust.dll&quot;"
-                       defines="HISE_INCLUDE_FAUST=1&#10;HISE_FAUST_USE_LLVM_JIT=1&#10;HISE_INCLUDE_FAUST_JIT=1"/>
         <CONFIGURATION name="Minimal Build" generateManifest="1" winArchitecture="x64"
                        isDebug="1" optimisation="1" targetName="HISE Debug" headerPath="../../../../tools/SDK/ASIOSDK2.3/common&#10;../../../../tools/fftw&#10;C:\Program Files\Faust\include"
                        useRuntimeLibDLL="0" debugInformationFormat="ProgramDatabase"
