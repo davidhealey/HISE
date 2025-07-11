@@ -59,10 +59,10 @@ static const unsigned char projectStandaloneTemplate_jucer_lines[] = R"(
     <%VS_VERSION% targetFolder="Builds/%TARGET_FOLDER%/" IPP1ALibrary="%IPP_1A%"  %ICON_FILE% extraDefs="%EXTRA_DEFINES_WIN%&#10;%PERFETTO_INCLUDE_WIN%"  extraLinkerFlags="%FFT_LINKER_FLAGS%&#10;%UAC_LEVEL%" extraCompilerFlags="/bigobj /cgthreads8 %MSVC_WARNINGS% %PERFETTO_COMPILER_FLAGS_WIN%&#10;/arch:AVX&#10;">
       <CONFIGURATIONS>
         <CONFIGURATION name="Debug" winWarningLevel="1" generateManifest="1" winArchitecture="x64"
-                       libraryPath="%FFT_LIBRARY_PATH%&#10;%WIN_STATIC_LIB_FOLDER_D64%" isDebug="1" optimisation="1" targetName="%NAME% Debug"
+                       libraryPath="%WIN_STATIC_LIB_FOLDER_D64%" isDebug="1" optimisation="1" targetName="%NAME% Debug"
                        binaryPath="Compiled/" headerPath="%FFT_HEADER_PATH%&#10;%ASIO_SDK_PATH%;%FAUST_HEADER_PATH%" useRuntimeLibDLL="0" prebuildCommand="%PREBUILD_COMMAND%"/>
         <CONFIGURATION name="Release" winWarningLevel="1" generateManifest="1" winArchitecture="x64"
-                       libraryPath="%FFT_LIBRARY_PATH%&#10;%WIN_STATIC_LIB_FOLDER_R64%" isDebug="0" optimisation="3" targetName="%NAME%"
+                       libraryPath="%WIN_STATIC_LIB_FOLDER_R64%" isDebug="0" optimisation="3" targetName="%NAME%"
                        binaryPath="Compiled/" headerPath="%FFT_HEADER_PATH%&#10;%ASIO_SDK_PATH%;%FAUST_HEADER_PATH%" linkTimeOptimisation="%LINK_TIME_OPTIMISATION%" useRuntimeLibDLL="0" prebuildCommand="%PREBUILD_COMMAND%;%STRIP_SYMBOLS_WIN%"/>
       </CONFIGURATIONS>
       <MODULEPATHS>

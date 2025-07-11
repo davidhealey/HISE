@@ -1986,17 +1986,18 @@ void CompileExporter::ProjectTemplateHelpers::handleCompilerInfo(CompileExporter
 	bool useFFTW = false;
 
 	#if JUCE_LINUX
-		useFFTW = exporter->dataObject.getSetting(HiseSettings::Project::ExtraDefinitionsLinux).toString().contains("AUDIOFFT_FFTW3=1");
+		useFFTW = !exporter->useIpp && exporter->dataObject.getSetting(HiseSettings::Project::ExtraDefinitionsLinux).toString().contains("AUDIOFFT_FFTW3=1");
 	#elif JUCE_WINDOWS
-		useFFTW = exporter->dataObject.getSetting(HiseSettings::Project::ExtraDefinitionsWindows).toString().contains("AUDIOFFT_FFTW3=1");
+		useFFTW = !exporter->useIpp && exporter->dataObject.getSetting(HiseSettings::Project::ExtraDefinitionsWindows).toString().contains("AUDIOFFT_FFTW3=1");
 	#endif
 
 	REPLACE_WILDCARD_WITH_STRING("%USE_STATIC_FFTW%", useFFTW ? "enabled" : "disabled");
 
 	#if JUCE_WINDOWS
-		REPLACE_WILDCARD_WITH_STRING("%FFT_HEADER_PATH%", useFFTW ? "$(FFTWROOT)" : String());
-		REPLACE_WILDCARD_WITH_STRING("%FFT_LIBRARY_PATH%", useFFTW ? "$(FFTWROOT)" : String());
-		REPLACE_WILDCARD_WITH_STRING("%FFT_LINKER_FLAGS%", useFFTW ? "$(FFTWROOT)/libfftw3f-3.lib" : String());
+		const File fftwPath = exporter->hisePath.getChildFile("tools/fftw");
+		
+		REPLACE_WILDCARD_WITH_STRING("%FFT_HEADER_PATH%", useFFTW ? fftwPath.getFullPathName() : String());
+		REPLACE_WILDCARD_WITH_STRING("%FFT_LINKER_FLAGS%", useFFTW ? fftwPath.getFullPathName() + "/windows/fftw3f.lib" : String());
 	#elif JUCE_LINUX
 	
 		if (exporter->useIpp)
