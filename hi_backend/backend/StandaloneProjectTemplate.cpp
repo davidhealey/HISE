@@ -56,14 +56,14 @@ static const unsigned char projectStandaloneTemplate_jucer_lines[] = R"(
     </GROUP>
   </MAINGROUP>
   <EXPORTFORMATS>
-    <%VS_VERSION% targetFolder="Builds/%TARGET_FOLDER%/" IPP1ALibrary="%IPP_1A%"  %ICON_FILE% extraDefs="%EXTRA_DEFINES_WIN%&#10;%PERFETTO_INCLUDE_WIN%"  extraLinkerFlags="%UAC_LEVEL%" extraCompilerFlags="/bigobj /cgthreads8 %MSVC_WARNINGS% %PERFETTO_COMPILER_FLAGS_WIN%&#10;/arch:AVX&#10;">
+    <%VS_VERSION% targetFolder="Builds/%TARGET_FOLDER%/" IPP1ALibrary="%IPP_1A%"  %ICON_FILE% extraDefs="%EXTRA_DEFINES_WIN%&#10;%PERFETTO_INCLUDE_WIN%"  extraLinkerFlags="%FFT_LINKER_FLAGS%&#10;%UAC_LEVEL%" extraCompilerFlags="/bigobj /cgthreads8 %MSVC_WARNINGS% %PERFETTO_COMPILER_FLAGS_WIN%&#10;/arch:AVX&#10;">
       <CONFIGURATIONS>
         <CONFIGURATION name="Debug" winWarningLevel="1" generateManifest="1" winArchitecture="x64"
                        libraryPath="%WIN_STATIC_LIB_FOLDER_D64%" isDebug="1" optimisation="1" targetName="%NAME% Debug"
-                       binaryPath="Compiled/" headerPath="%ASIO_SDK_PATH%;%FAUST_HEADER_PATH%" useRuntimeLibDLL="0" prebuildCommand="%PREBUILD_COMMAND%"/>
+                       binaryPath="Compiled/" headerPath="%FFT_HEADER_PATH%&#10;%ASIO_SDK_PATH%;%FAUST_HEADER_PATH%" useRuntimeLibDLL="0" prebuildCommand="%PREBUILD_COMMAND%"/>
         <CONFIGURATION name="Release" winWarningLevel="1" generateManifest="1" winArchitecture="x64"
                        libraryPath="%WIN_STATIC_LIB_FOLDER_R64%" isDebug="0" optimisation="3" targetName="%NAME%"
-                       binaryPath="Compiled/" headerPath="%ASIO_SDK_PATH%;%FAUST_HEADER_PATH%" linkTimeOptimisation="%LINK_TIME_OPTIMISATION%" useRuntimeLibDLL="0" prebuildCommand="%PREBUILD_COMMAND%"%STRIP_SYMBOLS_WIN%/>
+                       binaryPath="Compiled/" headerPath="%FFT_HEADER_PATH%&#10;%ASIO_SDK_PATH%;%FAUST_HEADER_PATH%" linkTimeOptimisation="%LINK_TIME_OPTIMISATION%" useRuntimeLibDLL="0" prebuildCommand="%PREBUILD_COMMAND%;%STRIP_SYMBOLS_WIN%"/>
       </CONFIGURATIONS>
       <MODULEPATHS>
         <MODULEPATH id="juce_core" path="%JUCE_PATH%"/>
@@ -143,7 +143,7 @@ static const unsigned char projectStandaloneTemplate_jucer_lines[] = R"(
 		%LORIS_MODULEPATH%
       </MODULEPATHS>
     </XCODE_MAC>
-   <LINUX_MAKE targetFolder="Builds/LinuxMakefile" linuxExtraPkgConfig="%LINUX_GUI_LIBS%" extraLinkerFlags="-no-pie&#10;" extraCompilerFlags="-fpermissive" extraDefs="%EXTRA_DEFINES_LINUX%">
+   <LINUX_MAKE targetFolder="Builds/LinuxMakefile" linuxExtraPkgConfig="%LINUX_GUI_LIBS%" extraLinkerFlags="-no-pie&#10;-flto=auto&#10;-fuse-ld=gold&#10;%FFT_LINKER_FLAGS%" extraCompilerFlags="-fpermissive" extraDefs="%EXTRA_DEFINES_LINUX%">
       <CONFIGURATIONS>
         <CONFIGURATION name="Debug" isDebug="1" optimisation="1" targetName="%NAME%" headerPath="%FAUST_HEADER_PATH%" libraryPath=""/>
         <CONFIGURATION name="Release" isDebug="0" optimisation="3" targetName="%NAME%" headerPath="%FAUST_HEADER_PATH%" libraryPath="" linkTimeOptimisation="%LINK_TIME_OPTIMISATION%"/>
@@ -221,7 +221,7 @@ static const unsigned char projectStandaloneTemplate_jucer_lines[] = R"(
                ENABLE_PLOTTER="disabled" ENABLE_SCRIPTING_SAFE_CHECKS="disabled"
                ENABLE_ALL_PEAK_METERS="disabled" ENABLE_CONSOLE_OUTPUT="disabled"
                JUCE_ASIO="%USE_ASIO%" JUCE_JACK="%USE_JACK%" USE_SPLASH_SCREEN="%USE_SPLASH_SCREEN%" HISE_OVERWRITE_OLD_USER_PRESETS="%OVERWRITE_OLD_USER_PRESETS%" HI_ENABLE_LEGACY_CPU_SUPPORT="%LEGACY_CPU_SUPPORT%" HISE_INCLUDE_RLOTTIE="enabled" HISE_INCLUDE_FAUST="%HISE_INCLUDE_FAUST%" HISE_USE_SYSTEM_APP_DATA_FOLDER="%USE_GLOBAL_APP_FOLDER%"  HLAC_MEASURE_DECODING_PERFORMANCE="disabled" HLAC_DEBUG_LOG="disabled" HLAC_INCLUDE_TEST_SUITE="disabled" STANDALONE_STREAMING="disabled"
-			   JUCE_DSP_USE_INTEL_MKL="disabled" JUCE_WEB_BROWSER="disabled" JUCE_USE_CURL="disabled" JUCE_DSP_USE_SHARED_FFTW="disabled" JUCE_DSP_USE_STATIC_FFTW="disabled" HISE_USE_CUSTOM_EXPANSION_TYPE="%USE_CUSTOM_EXPANSION_TYPE%" HISE_INCLUDE_LORIS="%HISE_INCLUDE_LORIS%"/>
+         JUCE_DSP_USE_INTEL_MKL="disabled" JUCE_WEB_BROWSER="disabled" JUCE_USE_CURL="disabled" JUCE_DSP_USE_SHARED_FFTW="disabled" JUCE_DSP_USE_STATIC_FFTW="%USE_STATIC_FFTW%" HISE_USE_CUSTOM_EXPANSION_TYPE="%USE_CUSTOM_EXPANSION_TYPE%" HISE_INCLUDE_LORIS="%HISE_INCLUDE_LORIS%"/>
 </JUCERPROJECT>)";
 
 const char* projectStandaloneTemplate_jucer = (const char*)projectStandaloneTemplate_jucer_lines;
