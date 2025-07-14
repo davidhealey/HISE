@@ -508,7 +508,10 @@ void ScriptTableListModel::setup(juce::TableListBox* t)
 			else
 				w = jmax(min, w);
 
-			int flag = TableHeaderComponent::ColumnPropertyFlags::visible;
+			int flag = 0;
+
+			if (c.getProperty("Visible", true))
+				flag |= TableHeaderComponent::ColumnPropertyFlags::visible;
 
 			if(tableMetadata.getProperty("Sortable", false))
 				flag |= TableHeaderComponent::ColumnPropertyFlags::sortable;
