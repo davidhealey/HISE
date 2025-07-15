@@ -709,11 +709,8 @@ public:
 
     bool isSignalDisplayEnabled() const { return signalDisplayEnabled; }
     
-    void setSignalDisplayEnabled(bool shouldBeEnabled)
-    {
-        signalDisplayEnabled = shouldBeEnabled;
-    }
-    
+    void setSignalDisplayEnabled(bool shouldBeEnabled);
+
 	String getNonExistentId(String id, StringArray& usedIds) const;
 
 	const modulation::ParameterProperties& getParameterProperties() const noexcept { return dynamicParameterProperties.data; }
@@ -753,7 +750,11 @@ private:
 
 	void checkId(const Identifier& id, const var& newValue);
 
+	void updateRootParameters(const ValueTree& v, bool wasAdded);
+
 	valuetree::PropertyListener idGuard;
+
+	valuetree::ChildListener rootParameterListener;
 
     bool signalDisplayEnabled = false;
     

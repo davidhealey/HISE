@@ -135,7 +135,18 @@ Result ValueTreeBuilder::cleanValueTreeIds(ValueTree& vToClean)
     
     auto r = Result::ok();
     auto rptr = &r;
-    
+
+	jassert(vToClean.getType() == PropertyIds::Node);
+
+	auto rootParameters = vToClean.getChildWithName(PropertyIds::Parameters);
+	jassert(rootParameters.isValid());
+
+	for(auto p: rootParameters)
+	{
+		if(p[PropertyIds::ID].toString() == "Type")
+			return Result::fail("`Type` is not a valid parameter name (it will overwrite the HISE module property in the XML file)");
+	}
+
 	ValueTreeIterator::forEach(vToClean, [&existingIds, rptr](ValueTree& c)
 	{
 		static const Array<Identifier> idsToClean = { PropertyIds::ID, PropertyIds::NodeId, PropertyIds::ParameterId };
@@ -152,7 +163,7 @@ Result ValueTreeBuilder::cleanValueTreeIds(ValueTree& vToClean)
             
             existingIds.add(thisId);
         }
-        
+
 		for (const auto& id : idsToClean)
 		{
 			if (c.hasProperty(id))

@@ -125,7 +125,7 @@ xcopy "xml\classscriptnode_1_1_dsp_network.xml" "xml\selection"
 xcopy "xml\structscriptnode_1_1_script_network_test.xml" "xml\selection"
 xcopy "xml\classscriptnode_1_1_node_base.xml" "xml\selection"
 xcopy "xml\classscriptnode_1_1_connection_base.xml" "xml\selection"
-xcopy "xml\classscriptnode_1_1_node_base_1_1_parameter.xml" "xml\selection"
+xcopy "xml\classscriptnode_1_1_parameter.xml" "xml\selection"
 
 
 ren "xml\selection\classhise_1_1_scripting_api_1_1_colours.xml" "Colours.xml"
@@ -223,7 +223,7 @@ ren "xml\selection\classscriptnode_1_1_dsp_network.xml" "DspNetwork.xml"
 ren "xml\selection\structscriptnode_1_1_script_network_test.xml" "NetworkTest.xml"
 ren "xml\selection\classscriptnode_1_1_node_base.xml" "Node.xml"
 ren "xml\selection\classscriptnode_1_1_connection_base.xml" "Connection.xml"
-ren "xml\selection\classscriptnode_1_1_node_base_1_1_parameter.xml" "Parameter.xml"
+ren "xml\selection\classscriptnode_1_1_parameter.xml" "Parameter.xml"
 
 ren "xml\selection\structhise_1_1_scripting_objects_1_1_global_cable_reference.xml" "GlobalCable.xml"
 ren "xml\selection\structhise_1_1_scripting_objects_1_1_global_routing_manager_reference.xml" "GlobalRoutingManager.xml"

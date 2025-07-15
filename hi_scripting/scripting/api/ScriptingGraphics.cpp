@@ -2958,6 +2958,18 @@ ScriptingObjects::ScriptedLookAndFeel::CSSLaf::CSSLaf(ScriptedLookAndFeel* paren
 			}
 		};
 
+		auto initProperty = [ptr](const ValueTree& v)
+		{
+			for(int i = 0; i < v.getNumProperties(); i++)
+			{
+				auto id = v.getPropertyName(i);
+				ptr->setPropertyVariable(id, v[id].toString());
+			}
+		};
+
+		initProperty(parent->additionalProperties);
+		initProperty(additionalDataCopy);
+
 		additionalPropertyUpdater.setCallback(parent->additionalProperties, {}, valuetree::AsyncMode::Asynchronously, updateProperty);
 		additionalComponentPropertyUpdater.setCallback(additionalDataCopy, {}, valuetree::AsyncMode::Asynchronously, updateProperty);
 

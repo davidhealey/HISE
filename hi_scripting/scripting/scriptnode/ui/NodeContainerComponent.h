@@ -534,7 +534,12 @@ public:
 				}
 
 				if(name.isNotEmpty())
-					pc->parent.node->getParameter(name);
+				{
+					auto obj = new DynamicObject();
+					obj->setProperty(PropertyIds::ID, name);
+					pc->parent.node->getOrCreateParameter(var(obj));
+				}
+					
 			}
 			if (b == &dragButton)
 			{

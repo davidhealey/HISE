@@ -632,6 +632,22 @@ bool JavascriptPolyphonicEffect::isSuspendedOnSilence() const
 	return true;
 }
 
+Processor* JavascriptPolyphonicEffect::getChildProcessor(int idx)
+{
+	if(isPositiveAndBelow(idx, modChains.size()))
+		return modChains[idx].getChain();
+
+	return nullptr;
+}
+
+const Processor* JavascriptPolyphonicEffect::getChildProcessor(int idx) const
+{
+	if(isPositiveAndBelow(idx, modChains.size()))
+		return modChains[idx].getChain();
+
+	return nullptr;
+}
+
 void JavascriptPolyphonicEffect::prepareToPlay(double sampleRate, int samplesPerBlock)
 {
 	VoiceEffectProcessor::prepareToPlay(sampleRate, samplesPerBlock);
@@ -885,10 +901,20 @@ int JavascriptMasterEffect::getNumSnippets() const
 { return (int)Callback::numCallbacks; }
 
 Processor* JavascriptMasterEffect::getChildProcessor(int idx)
-{ return modChains[idx].getChain(); }
+{
+	if(isPositiveAndBelow(idx, modChains.size()))
+		return modChains[idx].getChain();
+
+	return nullptr;
+}
 
 const Processor* JavascriptMasterEffect::getChildProcessor(int idx) const
-{ return modChains[idx].getChain(); }
+{
+	if(isPositiveAndBelow(idx, modChains.size()))
+		return modChains[idx].getChain();
+
+	return nullptr;
+}
 
 int JavascriptMasterEffect::getNumInternalChains() const
 { return modChains.size(); }
@@ -2105,8 +2131,10 @@ Processor* JavascriptSynthesiser::getChildProcessor(int processorIndex)
 	processorIndex -= ModulatorSynth::numInternalChains;
 	processorIndex += 2;
 
-	return modChains[processorIndex].getChain();
-	
+	if(isPositiveAndBelow(processorIndex, modChains.size()))
+		return modChains[processorIndex].getChain();
+
+	return nullptr;
 }
 
 const Processor* JavascriptSynthesiser::getChildProcessor(int processorIndex) const
