@@ -418,9 +418,20 @@ struct Renderer: public Animator::ScopedComponentSetter
 		applyMargin = useMargin;
 	}
 
-	
+	void setRenderTextWithBackground(bool shouldRenderText)
+	{
+		renderTextWithBackground = shouldRenderText;
+	}
+
+	void setRenderPseudoElements(bool shouldRenderPseudoElements)
+	{
+		renderPseudoElements = shouldRenderPseudoElements;
+	}
 
 private:
+
+	bool renderPseudoElements = true;
+	bool renderTextWithBackground = true;
 
 	bool applyMargin = true;
 

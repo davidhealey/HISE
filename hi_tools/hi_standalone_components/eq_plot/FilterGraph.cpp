@@ -260,9 +260,13 @@ void FilterGraph::paint (Graphics& g)
 	}
 	else
 	{
-		auto laf = getSpecialLookAndFeel<LookAndFeelMethods>();
-		
-		jassert(laf != nullptr);
+		LookAndFeelMethods fallback;
+		auto laf = &fallback;
+
+		if(auto laf2 = getSpecialLookAndFeel<LookAndFeelMethods>(this))
+		{
+			laf = laf2;
+		}
 
 		laf->drawFilterBackground(g, *this);
 

@@ -224,7 +224,7 @@ struct StyleSheet: public ReferenceCountedObject
 
 	String getURLFromProperty(const PropertyKey& key) const;
 
-	Rectangle<float> getLocalBoundsFromText(const String& text) const;
+	Rectangle<float> getLocalBoundsFromText(const String& text, PseudoState state={}) const;
 
 	std::pair<bool, PseudoState> matchesRawList(const Selector::RawList& blockSelectors) const;
 

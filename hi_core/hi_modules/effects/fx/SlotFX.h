@@ -39,16 +39,6 @@ public:
 
 
 
-
-
-
-
-
-
-
-
-
-
 /** Aplaceholder for another effect that can be swapped pretty conveniently.
 	@ingroup effectTypes.
 	

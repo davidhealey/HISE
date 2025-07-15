@@ -1147,7 +1147,7 @@ float TableEditor::getLastIndex() const
 
 TableEditor::LookAndFeelMethods* TableEditor::getTableLookAndFeel()
 {
-	if (auto lm = getSpecialLookAndFeel<LookAndFeelMethods>())
+	if (auto lm = getSpecialLookAndFeel<LookAndFeelMethods>(this))
 		return lm;
 
 	return &defaultLaf;
