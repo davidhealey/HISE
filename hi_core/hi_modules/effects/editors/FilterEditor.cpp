@@ -164,13 +164,15 @@ FilterEditor::~FilterEditor()
 
 void FilterEditor::timerCallback()
 {
-	auto c = dynamic_cast<FilterEffect*>(getProcessor())->getCurrentCoefficients();
+	auto c = dynamic_cast<FilterEffect*>(getProcessor())->getCoefficients();
 
 	if (!sameCoefficients(c, currentCoefficients))
 	{
 		currentCoefficients = c;
 
-		filterGraph->setCoefficients(0, getProcessor()->getSampleRate(), dynamic_cast<FilterEffect*>(getProcessor())->getCurrentCoefficients());
+        
+
+		filterGraph->setCoefficients(0, getProcessor()->getSampleRate(), dynamic_cast<FilterEffect*>(getProcessor())->getCoefficients());
 	}
 
 	freqSlider->setDisplayValue(getProcessor()->getChildProcessor(PolyFilterEffect::FrequencyChain)->getOutputValue());

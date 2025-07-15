@@ -569,7 +569,8 @@ private:
 
 class JavascriptMasterEffect : public JavascriptProcessor,
 							   public ProcessorWithScriptingContent,
-							   public MasterEffectProcessor
+							   public MasterEffectProcessor,
+							   public ProcessorWithCustomFilterStatistics
 {
 public:
 

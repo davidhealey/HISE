@@ -930,6 +930,8 @@ float JavascriptMasterEffect::getAttribute(int index) const
 void JavascriptMasterEffect::setInternalAttribute(int index, float newValue)
 { 
 	getCurrentNetworkParameterHandler(&contentParameterHandler)->setParameter(index, newValue);
+
+	handleFilterStatisticUpdate();
 }
 
 Identifier JavascriptMasterEffect::getIdentifierForParameterIndex(int parameterIndex) const

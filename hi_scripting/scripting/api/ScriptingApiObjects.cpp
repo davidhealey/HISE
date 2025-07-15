@@ -3304,6 +3304,8 @@ struct ScriptingObjects::ScriptingEffect::Wrapper
 	API_METHOD_WRAPPER_1(ScriptingEffect, getModulatorChain);
 	API_METHOD_WRAPPER_3(ScriptingEffect, addStaticGlobalModulator);
 	API_METHOD_WRAPPER_0(ScriptingEffect, getId);
+	API_VOID_METHOD_WRAPPER_1(ScriptingEffect, setDraggableFilterData);
+	API_METHOD_WRAPPER_0(ScriptingEffect, getDraggableFilterData);
 };
 
 ScriptingObjects::ScriptingEffect::ScriptingEffect(ProcessorWithScriptingContent *p, EffectProcessor *fx) :
@@ -3347,6 +3349,9 @@ moduleHandler(fx, dynamic_cast<JavascriptProcessor*>(p))
 	ADD_API_METHOD_1(getModulatorChain);
 	ADD_API_METHOD_3(addGlobalModulator);
 	ADD_API_METHOD_3(addStaticGlobalModulator);
+
+	ADD_API_METHOD_1(setDraggableFilterData);
+	ADD_API_METHOD_0(getDraggableFilterData);
 };
 
 
@@ -3597,6 +3602,22 @@ var ScriptingObjects::ScriptingEffect::addStaticGlobalModulator(var chainIndex, 
 
 			return var();
 		}
+	}
+
+	return var();
+}
+
+void ScriptingObjects::ScriptingEffect::setDraggableFilterData(var filterData)
+{
+	if(auto h = dynamic_cast<ProcessorWithCustomFilterStatistics*>(getEffect()))
+		h->setFilterStatistics(filterData);
+}
+
+var ScriptingObjects::ScriptingEffect::getDraggableFilterData()
+{
+	if(auto h = dynamic_cast<ProcessorWithCustomFilterStatistics*>(getEffect()))
+	{
+		return h->getFilterStatisticsJSON();
 	}
 
 	return var();

@@ -42,7 +42,9 @@ namespace hise { using namespace juce;
 */
 class PolyFilterEffect: public VoiceEffectProcessor,
 						public FilterEffect,
-						public ModulatorChain::Handler::Listener
+						public ModulatorChain::Handler::Listener,
+						public scriptnode::data::filter_base,
+						public ProcessorWithCustomFilterStatistics
 {
 public:
 
@@ -106,11 +108,17 @@ public:
 	
 	ProcessorEditorBody *createEditor(ProcessorEditor *parentEditor)  override;
 
-	FilterDataObject::CoefficientData getCurrentCoefficients() const override;;
+	FilterDataObject::CoefficientData getApproximateCoefficients() const override;
 
 	bool hasPolyMods() const noexcept;
 
+	
 private:
+
+	void updateDisplayCoefficients()
+	{
+		getFilterData(0)->getUpdater().sendDisplayChangeMessage(0, sendNotificationAsync);
+	}
 
 	friend class FilterEditor;
 

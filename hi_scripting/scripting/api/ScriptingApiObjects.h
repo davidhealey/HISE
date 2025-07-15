@@ -2024,6 +2024,12 @@ namespace ScriptingObjects
 		/** Adds and connects a receiving static time variant modulator for the given global modulator. */
 		var addStaticGlobalModulator(var chainIndex, var timeVariantMod, String modName);
 
+		/** Sets the draggable filter data object (if applicable). */
+		void setDraggableFilterData(var filterData);
+
+		/** Returns the draggable filter data object (if applicable). */
+		var getDraggableFilterData();
+
 		// ============================================================================================================
 
 		struct Wrapper;
