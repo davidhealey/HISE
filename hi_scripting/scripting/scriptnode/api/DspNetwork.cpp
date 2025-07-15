@@ -785,6 +785,12 @@ void DspNetwork::clear(bool removeNodesFromSignalChain, bool removeUnusedNodes)
 				i--;
 			}
 		}
+
+		// Also clear out all filter objects as they might hang on to dangling nodes.
+		if(auto h = dynamic_cast<ExternalDataHolder*>(getScriptProcessor()))
+		{
+			h->garbageCollectFilterCoefficients();
+		}
 	}
 }
 

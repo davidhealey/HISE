@@ -447,7 +447,9 @@ bool HardcodedSwappableEffect::setEffect(const String& factoryId, bool /*unused*
 			newNode = nullptr;
 
         asProcessor().connectToRuntimeTargets(*newNode, true);
-        
+
+		ExternalDataHolder::garbageCollectFilterCoefficients();
+
 		bool somethingChanged = false;
 
 		// Create all complex data types we need...
