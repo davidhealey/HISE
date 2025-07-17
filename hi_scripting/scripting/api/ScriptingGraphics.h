@@ -509,6 +509,9 @@ namespace ScriptingObjects
 		/** Returns the area ([x, y, width, height]) that the path is occupying with the scale factor applied. */
 		var getBounds(var scaleFactor);
 
+		/** Sets a (minimal) bounding box for the path. */
+		void setBounds(var boundingBox);
+
 		/** Returns the length of the path. */
 		var getLength();
 

@@ -1012,6 +1012,7 @@ struct ScriptingObjects::PathObject::Wrapper
 	API_METHOD_WRAPPER_1(PathObject, getPointOnPath);
 	API_METHOD_WRAPPER_1(PathObject, contains);
 	API_METHOD_WRAPPER_1(PathObject, getBounds);
+	API_VOID_METHOD_WRAPPER_1(PathObject, setBounds);
 	API_METHOD_WRAPPER_0(PathObject, getLength);
 	API_METHOD_WRAPPER_0(PathObject, toString);
 	API_METHOD_WRAPPER_0(PathObject, toBase64);
@@ -1045,6 +1046,7 @@ ScriptingObjects::PathObject::PathObject(ProcessorWithScriptingContent* p) :
 	ADD_API_METHOD_3(getIntersection);
 	ADD_API_METHOD_1(contains);
 	ADD_API_METHOD_1(getBounds);
+	ADD_API_METHOD_1(setBounds);
 	ADD_API_METHOD_0(getLength);
 	ADD_API_METHOD_2(createStrokedPath);
 	ADD_API_METHOD_0(toString);
@@ -1251,6 +1253,18 @@ var ScriptingObjects::PathObject::getBounds(var scaleFactor)
 	auto r = p.getBoundsTransformed(AffineTransform::scale(scaleFactor));
 
 	return ApiHelpers::getVarRectangle(useRectangleClass, r);
+}
+
+void ScriptingObjects::PathObject::setBounds(var boundingBox)
+{
+	auto r = Result::ok();
+	auto tb = ApiHelpers::getRectangleFromVar(boundingBox, &r);
+
+	if(r.failed())
+		reportScriptError(r.getErrorMessage());
+
+	p.startNewSubPath(tb.getTopLeft());
+	p.startNewSubPath(tb.getBottomRight());
 }
 
 juce::var ScriptingObjects::PathObject::createStrokedPath(var strokeData, var dotData)
