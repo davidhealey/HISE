@@ -336,7 +336,10 @@ scriptnode::InvertableParameterRange RangeHelpers::getDoubleRange(const ValueTre
 	{
 		if(set == IdSet::ScriptComponents)
 		{
-			r.rng.setSkewForCentre(jlimit(r.rng.start, r.rng.end, (double)t[skewId]));
+			auto midPos = (double)t[skewId];
+
+			if(midPos > r.rng.start && midPos < r.rng.end)
+				r.rng.setSkewForCentre(jlimit(r.rng.start, r.rng.end, midPos));
 		}
 		else
 		{
