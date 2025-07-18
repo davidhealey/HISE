@@ -1069,8 +1069,21 @@ public:
         
 	private:
 
-        struct MatrixCableConnection;
-		ScopedPointer<ControlledObject> matrixConnection;
+		struct MatrixConnectionBase: public ControlledObject
+		{
+			MatrixConnectionBase(ScriptSlider& parent_, const ValueTree& matrixData, const String& targetId);;
+
+			virtual SimpleRingBuffer::Ptr getDisplayBuffer(int index) = 0;
+			virtual MatrixIds::Helpers::IntensityTextConverter::ConstructData createIntensityConverter(int sourceIndex) = 0;
+
+			WeakReference<ScriptSlider> parent;
+			WeakReference<GlobalModulatorContainer> gc;
+			ValueTree matrixData;
+			String targetId;
+		};
+
+        struct MatrixCableConnection; struct MultiMatrixModulatorConnection;
+		ScopedPointer<MatrixConnectionBase> matrixConnection;
 
 		double minimum, maximum;
 		PooledImage image;

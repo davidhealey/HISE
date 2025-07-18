@@ -2152,8 +2152,6 @@ void ScriptingApi::Content::ScriptSlider::setScriptObjectPropertyWithChangeMessa
 	{
 		if(auto gc = ProcessorHelpers::getFirstProcessorWithType<GlobalModulatorContainer>(getScriptProcessor()->getMainController_()->getMainSynthChain()))
 		{
-			// change this to the property to allow multiple targets with the same text...
-			
 			auto targetId = newValue.toString();
 
 			if(targetId.isEmpty())
@@ -2163,10 +2161,16 @@ void ScriptingApi::Content::ScriptSlider::setScriptObjectPropertyWithChangeMessa
 			}
 			else
 			{
-				if(matrixConnection == nullptr || dynamic_cast<MatrixCableConnection*>(matrixConnection.get())->targetId != targetId)
+				if(matrixConnection == nullptr || matrixConnection->targetId != targetId)
 				{
 					setModulationData(gc->createMatrixModulationPopupData(targetId));
-					matrixConnection = new MatrixCableConnection(*this, gc->getMatrixModulatorData(), targetId);
+
+					auto tt = MatrixIds::Helpers::getTargetType(gc->getMainController(), targetId);
+
+					if(tt == MatrixIds::Helpers::TargetType::Modulators)
+						matrixConnection = new MultiMatrixModulatorConnection(*this, gc->getMatrixModulatorData(), targetId);
+					else
+						matrixConnection = new MatrixCableConnection(*this, gc->getMatrixModulatorData(), targetId);
 				}
 			}
 		}
@@ -2432,18 +2436,25 @@ MatrixIds::Helpers::IntensityTextConverter::ConstructData ScriptingApi::Content:
 {
 	if(matrixConnection != nullptr)
 	{
-		return dynamic_cast<MatrixCableConnection*>(matrixConnection.get())->createIntensityConverter(sourceIndex);
+		return matrixConnection->createIntensityConverter(sourceIndex);
 	}
 
 	return {};
 }
 
+ScriptingApi::Content::ScriptSlider::MatrixConnectionBase::MatrixConnectionBase(ScriptSlider& parent_,
+	const ValueTree& matrixData_, const String& targetId_):
+	ControlledObject(parent_.getScriptProcessor()->getMainController_()),
+	parent(&parent_),
+	targetId(targetId_),
+	matrixData(matrixData_),
+	gc(ProcessorHelpers::getFirstProcessorWithType<GlobalModulatorContainer>(getMainController()->getMainSynthChain()))
+{}
+
 SimpleRingBuffer::Ptr ScriptingApi::Content::ScriptSlider::getMatrixPlotter(int sourceIndex)
 {
 	if(matrixConnection != nullptr)
-	{
-		return dynamic_cast<MatrixCableConnection*>(matrixConnection.get())->getDisplayBuffer(sourceIndex);
-	}
+		return matrixConnection->getDisplayBuffer(sourceIndex);
 
 	return nullptr;
 }

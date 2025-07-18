@@ -78,59 +78,9 @@ struct MatrixBase: public Component,
 			Slider::mouseDrag(event);
 		}
 
-		void mouseDoubleClick(const MouseEvent& event) override
-		{
-			if(performModifierAction(event, true, false))
-				return;
+		void mouseDoubleClick(const MouseEvent& event) override;
 
-			Slider::mouseDoubleClick(event);
-		}
-
-		void setActive(bool shouldBeActive, const ValueTree& connectionData)
-		{
-			jassert(!connectionData.isValid() || connectionData.getType() == MatrixIds::Connection);
-			auto intensityValue = (double)connectionData[MatrixIds::Intensity];
-			FloatSanitizers::sanitizeDoubleNumber(intensityValue);
-			auto m = (modulation::TargetMode)(int)connectionData[MatrixIds::Mode];
-
-			auto minValue = shouldBeActive && m != modulation::TargetMode::Gain ? -1.0 : 0.0;
-
-			if(!shouldBeActive)
-				intensityValue = 0.0;
-
-			setRange(minValue, 1.0);
-			setValue(intensityValue, dontSendNotification);
-
-			int state = 0;
-
-			bool update = false;
-
-			if(!shouldBeActive)
-				state |= (int)simple_css::PseudoClassType::Empty;
-
-			if(lastMode != m)
-			{
-				lastMode = m;
-
-				static const StringArray classes({ ".scaled", ".unipolar", ".bipolar" });
-				auto c = classes[(int)lastMode];
-				simple_css::FlexboxComponent::Helpers::writeSelectorsToProperties(*this, { ".slider", c });
-				update = true;
-			}
-
-			if(lastPseudoState != state)
-			{
-				lastPseudoState = state;
-				simple_css::FlexboxComponent::Helpers::writeManualPseudoState(*this, state);
-				update = true;
-			}
-
-			if(update)
-			{
-				simple_css::FlexboxComponent::Helpers::invalidateCache(*this);
-				repaint();
-			}
-		}
+		void setActive(bool shouldBeActive, const ValueTree& connectionData, bool updateIntensity);
 
 		int lastPseudoState = 0;
 		modulation::TargetMode lastMode = modulation::TargetMode::Raw;
@@ -157,46 +107,9 @@ struct MatrixBase: public Component,
 	{
 		struct ClearButton: public Button
 		{
-			ClearButton():
-			  Button("clear"),
-			  pathData("230.t0FP.ZBQN++OCIlNbdCQN++OCA.fEQj5Od2P..XQDA..dNjX..XQDs.N.OjNbdCQZ..2CADflPjF.v8PhgDYUPjF.v8P..3ADs.N.OD..d.Q..fmCIF..d.Qp+3cCgDYUPjy++yP.AnID47++LzXsQKmdPD..34PrgElTPzHIH6PrI1dbPTAPG7PrADflPD+F25Pr4IgvPTAPG7ProBZ3PzHIH6Pro7XtPD..34ProBZ3Pz81m3Pr4IgvPj8eQ2PrADflPjG433PrI1dbPj8eQ2PrgElTPz81m3PrQKmdPD..34PiUF")
-			{
-				simple_css::FlexboxComponent::Helpers::writeSelectorsToProperties(*this, { "#clearsearch" });
-				simple_css::FlexboxComponent::Helpers::setFallbackStyleSheet(*this, "background-image:var(--icon);background-color:#666;margin:5px;");
+			ClearButton();
 
-				MemoryBlock mb;
-				mb.fromBase64Encoding(pathData);
-				icon.loadPathFromData(mb.getData(), mb.getSize());
-
-				onClick = [this]()
-				{
-					auto sb = findParentComponentOfClass<SearchBar>();
-					sb->setText("", dontSendNotification);
-					sb->updateSearch("");
-					this->setVisible(false);
-				};
-			}
-
-			void paintButton(Graphics& g, bool shouldDrawButtonAsHighlighted, bool shouldDrawButtonAsDown) override
-			{
-				if(auto root = simple_css::CSSRootComponent::find(*this))
-				{
-					if(auto ss = root->css.getForComponent(this))
-					{
-						ss->setPropertyVariable("icon", pathData);
-						simple_css::Renderer r(this, root->stateWatcher);
-
-						auto currentState = simple_css::Renderer::getPseudoClassFromComponent(this);
-						root->stateWatcher.checkChanges(this, ss, currentState);
-
-						r.drawBackground(g, getLocalBounds().toFloat(), ss);
-						return;
-					}
-				}
-
-				g.setColour(Colours::white.withAlpha(shouldDrawButtonAsHighlighted ? 0.5f : 0.4f));
-				g.fillPath(icon);
-			}
+			void paintButton(Graphics& g, bool shouldDrawButtonAsHighlighted, bool shouldDrawButtonAsDown) override;
 
 			void resized() override
 			{
@@ -223,20 +136,7 @@ struct MatrixBase: public Component,
 			addChildComponent(clearButton);
 		}
 
-		void updateSearch(const String& searchTerm)
-		{
-			auto b = findParentComponentOfClass<MatrixBase>();
-
-			Component::callRecursive<RowBase>(b, [&](RowBase* b)
-			{
-				auto tid = b->getTargetId().toLowerCase();
-				auto shouldBeVisible = searchTerm.isEmpty() || (tid.isNotEmpty() && tid.contains(searchTerm));
-				b->updateSearchVisibility(shouldBeVisible, searchTerm);
-				return false;
-			});
-
-			b->resized();
-		}
+		void updateSearch(const String& searchTerm);
 
 		void timerCallback() override
 		{
@@ -244,43 +144,11 @@ struct MatrixBase: public Component,
 			stopTimer();
 		}
 
-		int getHeightToUse()
-		{
-			if(auto root = simple_css::CSSRootComponent::find(*this))
-			{
-				if(auto ss = root->css.getForComponent(this))
-				{
-					auto labelHeight = ss->getLocalBoundsFromText("test").getHeight();
-					auto shouldBeVisible = ss->getPropertyValue({ "display", 0}).toString() != "none";
-					ss->setPropertyVariable("icon", searchIcon);
-					return shouldBeVisible ? labelHeight : 0;
-				}
-			}
-
-			return 32;
-		}
+		int getHeightToUse();
 
 		String currentSearchTerm;
 
-        void editorShown (Label*, TextEditor& te)
-		{
-			simple_css::FlexboxComponent::Helpers::writeSelectorsToProperties(te, { ".search" });
-			simple_css::FlexboxComponent::Helpers::invalidateCache(te);
-			te.addListener(this);
-
-			clearButton.setVisible(false);
-
-			if(auto root = simple_css::CSSRootComponent::find(*this))
-			{
-				if(auto ss = root->css.getForComponent(&te))
-				{
-					ss->setPropertyVariable("icon", searchIcon);
-					ss->setupComponent(root, &te, 0);
-				}
-			}
-
-			te.setSelectAllWhenFocused(true);
-		}
+        void editorShown (Label*, TextEditor& te) override;
 
 		void resized() override
 		{
@@ -323,7 +191,7 @@ struct MatrixBase: public Component,
 
 		~RowBase() override {};
 
-		void setIntensityConverter(MatrixModulator* mm);
+		virtual void setIntensityConverter(MatrixModulator* mm);
 		void setIntensityConverter(JavascriptMidiProcessor* jmp, int componentIndex);
 
 		virtual String getTargetId() const = 0;
@@ -572,6 +440,29 @@ struct SliderMatrix: public MatrixBase
 		void handlePopup(const MouseEvent& e);
 		void resized() override;
 
+		void setIntensityConverter(MatrixModulator* mm) override
+		{
+			int idx = 0;
+			for(auto s: intensitySliders)
+			{
+				if(!getConnectionForSlider(idx++).isValid())
+				{
+					auto m = mm->getMode();
+
+					switch(m)
+					{
+					case Modulation::GainMode:
+						s->lastMode = modulation::TargetMode::Gain;
+					default:
+						s->lastMode = mm->isBipolar() ? modulation::TargetMode::Bipolar : modulation::TargetMode::Unipolar;
+						break;
+					}
+				}
+			}
+
+			RowBase::setIntensityConverter(mm);
+		}
+
 		String getTargetId() const override { return targetId; }
 
 		int getNumIntensitySliders() const override { return intensitySliders.size(); };
@@ -581,48 +472,9 @@ struct SliderMatrix: public MatrixBase
 			return index;
 		}
 
-		void updateSearchVisibility(bool shouldBeVisible, const String& searchTerm) override
-		{
-			Array<IntensitySlider*> matches;
+		void updateSearchVisibility(bool shouldBeVisible, const String& searchTerm) override;
 
-			if(searchTerm.isNotEmpty())
-			{
-				for(auto si: intensitySliders)
-				{
-					if(si->getName().toLowerCase().contains(searchTerm))
-						matches.add(si);
-				}
-			}
-
-			if(matches.isEmpty())
-			{
-				for(int i = 0; i < intensitySliders.size(); i++)
-					setFlexChildVisibility(i, false, false);
-
-				RowBase::updateSearchVisibility(shouldBeVisible, searchTerm);
-				return;
-			}
-
-			int idx = 1;
-
-			for(auto si: intensitySliders)
-			{
-				auto show =  matches.contains(si);
-				setFlexChildVisibility(idx++, false, !show);
-			}
-
-			rebuildLayout();
-		}
-
-		modulation::TargetMode getTargetModeForIntensitySlider(int index) const override
-		{
-			auto x = getConnectionForSlider(index, false);
-
-			if(x.isValid())
-				return (scriptnode::modulation::TargetMode)(int)x[MatrixIds::Mode];
-
-			return modulation::TargetMode::Gain;
-		}
+		modulation::TargetMode getTargetModeForIntensitySlider(int index) const override;
 
 		SliderMatrix& parent;
 		String targetId;

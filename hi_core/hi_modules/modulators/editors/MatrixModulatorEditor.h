@@ -119,6 +119,7 @@ public:
 	MatrixContent content;
 	MatrixContent::Controller controller;
 	TextButton autofixButton;
+	TextEditor targetIdEditor;
 };
 
 

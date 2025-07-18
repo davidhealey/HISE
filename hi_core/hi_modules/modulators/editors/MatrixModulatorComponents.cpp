@@ -119,7 +119,7 @@ String MatrixBase::getColumnStyleSheet(const Identifier& id)
 		return "width: 128px;height:48px;";
 
 	if(id == MatrixIds::Inverted)
-		return "width: 100px;height:48px;";
+		return "width: 60px;height:48px;";
 
 	if(id == MatrixIds::AuxIndex)
 		return"width: 128px;height:24px;";
@@ -129,6 +129,65 @@ String MatrixBase::getColumnStyleSheet(const Identifier& id)
 
 	jassertfalse;
 	return {};
+}
+
+void MatrixBase::IntensitySlider::mouseDoubleClick(const MouseEvent& event)
+{
+	if(performModifierAction(event, true, false))
+		return;
+
+	Slider::mouseDoubleClick(event);
+}
+
+void MatrixBase::IntensitySlider::setActive(bool shouldBeActive, const ValueTree& connectionData, bool updateIntensity)
+{
+	jassert(!connectionData.isValid() || connectionData.getType() == MatrixIds::Connection);
+	auto intensityValue = (double)connectionData[MatrixIds::Intensity];
+	FloatSanitizers::sanitizeDoubleNumber(intensityValue);
+	auto m = (modulation::TargetMode)(int)connectionData[MatrixIds::Mode];
+
+	if(updateIntensity)
+	{
+		auto minValue = (m != modulation::TargetMode::Gain) ? -1.0 : 0.0;
+
+		if(!shouldBeActive)
+			intensityValue = 0.0;
+
+		setRange(minValue, 1.0);
+		setValue(intensityValue, dontSendNotification);
+	}
+	
+	int state = 0;
+
+	bool update = false;
+
+	if(!shouldBeActive)
+		state |= (int)simple_css::PseudoClassType::Empty;
+
+	if(lastMode != m)
+	{
+		// only update the mode when it's not the auxillary slider...
+		if(updateIntensity)
+			lastMode = m;
+
+		static const StringArray classes({ ".scaled", ".unipolar", ".bipolar" });
+		auto c = classes[(int)lastMode];
+		simple_css::FlexboxComponent::Helpers::writeSelectorsToProperties(*this, { ".slider", c });
+		update = true;
+	}
+
+	if(lastPseudoState != state)
+	{
+		lastPseudoState = state;
+		simple_css::FlexboxComponent::Helpers::writeManualPseudoState(*this, state);
+		update = true;
+	}
+
+	if(update)
+	{
+		simple_css::FlexboxComponent::Helpers::invalidateCache(*this);
+		repaint();
+	}
 }
 
 MatrixBase::HeaderBase::HeaderBase():
@@ -193,6 +252,48 @@ Component* MatrixContent::HeaderBase::addHeaderItem(const Identifier& id, const 
 	}
 }
 
+MatrixBase::SearchBar::ClearButton::ClearButton():
+	Button("clear"),
+	pathData("230.t0FP.ZBQN++OCIlNbdCQN++OCA.fEQj5Od2P..XQDA..dNjX..XQDs.N.OjNbdCQZ..2CADflPjF.v8PhgDYUPjF.v8P..3ADs.N.OD..d.Q..fmCIF..d.Qp+3cCgDYUPjy++yP.AnID47++LzXsQKmdPD..34PrgElTPzHIH6PrI1dbPTAPG7PrADflPD+F25Pr4IgvPTAPG7ProBZ3PzHIH6Pro7XtPD..34ProBZ3Pz81m3Pr4IgvPj8eQ2PrADflPjG433PrI1dbPj8eQ2PrgElTPz81m3PrQKmdPD..34PiUF")
+{
+	simple_css::FlexboxComponent::Helpers::writeSelectorsToProperties(*this, { "#clearsearch" });
+	simple_css::FlexboxComponent::Helpers::setFallbackStyleSheet(*this, "background-image:var(--icon);background-color:#666;margin:5px;");
+
+	MemoryBlock mb;
+	mb.fromBase64Encoding(pathData);
+	icon.loadPathFromData(mb.getData(), mb.getSize());
+
+	onClick = [this]()
+	{
+		auto sb = findParentComponentOfClass<SearchBar>();
+		sb->setText("", dontSendNotification);
+		sb->updateSearch("");
+		this->setVisible(false);
+	};
+}
+
+void MatrixBase::SearchBar::ClearButton::paintButton(Graphics& g, bool shouldDrawButtonAsHighlighted,
+	bool shouldDrawButtonAsDown)
+{
+	if(auto root = simple_css::CSSRootComponent::find(*this))
+	{
+		if(auto ss = root->css.getForComponent(this))
+		{
+			ss->setPropertyVariable("icon", pathData);
+			simple_css::Renderer r(this, root->stateWatcher);
+
+			auto currentState = simple_css::Renderer::getPseudoClassFromComponent(this);
+			root->stateWatcher.checkChanges(this, ss, currentState);
+
+			r.drawBackground(g, getLocalBounds().toFloat(), ss);
+			return;
+		}
+	}
+
+	g.setColour(Colours::white.withAlpha(shouldDrawButtonAsHighlighted ? 0.5f : 0.4f));
+	g.fillPath(icon);
+}
+
 MatrixBase::IntensitySlider::IntensitySlider(const Identifier& id):
 	Slider(id.toString()),
 	vtc(ValueToTextConverter::createForMode("NormalizedPercentage"))
@@ -231,7 +332,8 @@ MatrixContent::Row::Row(MainController* mc, ValueTree rowData, const String& tar
 	addComponent(auxSelector, MatrixIds::AuxIndex);
 	addComponent(auxIntensitySlider, MatrixIds::AuxIntensity);
 	Helpers::writeSelectorsToProperties(plotter, { "#plotter", ".modplotter" });
-	
+	Helpers::setFallbackStyleSheet(plotter, "flex-grow:1;height:48px;");
+
 	addFlexItem(plotter);
 
 	targetSelector.setEnabled(targetId.isEmpty());
@@ -331,7 +433,7 @@ void MatrixContent::Row::updateValue(const Identifier& id, const var& newValue)
 {
 	if(id == MatrixIds::Intensity)
 	{
-		intensitySlider.setActive(true, data);
+		intensitySlider.setActive(true, data, true);
 	}
 	else if (id == MatrixIds::AuxIntensity)
 	{
@@ -358,13 +460,16 @@ void MatrixContent::Row::updateValue(const Identifier& id, const var& newValue)
 			else
 				plotter.setUseFixRange(r);
 
-			intensitySlider.setActive(true, data);
+			intensitySlider.setActive(true, data, true);
 
 			updateIntensityConverter();
 		}
 		else if (id == MatrixIds::AuxIndex)
 		{
 			auto isEnabled = (int)newValue != -1;
+
+			auxIntensitySlider.setActive(isEnabled, this->data, false);
+
 			auxIntensitySlider.setEnabled(isEnabled);
 		}
 		else if (id == MatrixIds::SourceIndex)
@@ -544,6 +649,57 @@ void MatrixContent::Row::setSliderStyle(Slider::SliderStyle sliderStyle)
 		auxIntensitySlider.setColour(Slider::textBoxOutlineColourId, Colours::transparentBlack);
 		auxIntensitySlider.setTextBoxStyle(Slider::NoTextBox, false, 0, 0);
 	}
+}
+
+void MatrixBase::SearchBar::updateSearch(const String& searchTerm)
+{
+	auto b = findParentComponentOfClass<MatrixBase>();
+
+	Component::callRecursive<RowBase>(b, [&](RowBase* b)
+	{
+		auto tid = b->getTargetId().toLowerCase();
+		auto shouldBeVisible = searchTerm.isEmpty() || (tid.isNotEmpty() && tid.contains(searchTerm));
+		b->updateSearchVisibility(shouldBeVisible, searchTerm);
+		return false;
+	});
+
+	b->resized();
+}
+
+int MatrixBase::SearchBar::getHeightToUse()
+{
+	if(auto root = simple_css::CSSRootComponent::find(*this))
+	{
+		if(auto ss = root->css.getForComponent(this))
+		{
+			auto labelHeight = ss->getLocalBoundsFromText("test").getHeight();
+			auto shouldBeVisible = ss->getPropertyValue({ "display", 0}).toString() != "none";
+			ss->setPropertyVariable("icon", searchIcon);
+			return shouldBeVisible ? labelHeight : 0;
+		}
+	}
+
+	return 32;
+}
+
+void MatrixBase::SearchBar::editorShown(Label* label, TextEditor& te)
+{
+	simple_css::FlexboxComponent::Helpers::writeSelectorsToProperties(te, { ".search" });
+	simple_css::FlexboxComponent::Helpers::invalidateCache(te);
+	te.addListener(this);
+
+	clearButton.setVisible(false);
+
+	if(auto root = simple_css::CSSRootComponent::find(*this))
+	{
+		if(auto ss = root->css.getForComponent(&te))
+		{
+			ss->setPropertyVariable("icon", searchIcon);
+			ss->setupComponent(root, &te, 0);
+		}
+	}
+
+	te.setSelectAllWhenFocused(true);
 }
 
 void MatrixBase::RowBase::setIntensityConverter(MatrixModulator* mm)
@@ -934,6 +1090,8 @@ void MatrixContent::resized()
 			r->setBounds(b.removeFromTop(h));
 		}
 	}
+
+	repaint();
 }
 
 void MatrixContent::paint(Graphics& g)
@@ -943,12 +1101,15 @@ void MatrixContent::paint(Graphics& g)
 		if(auto ss = root->css.getForComponent(this))
 		{
 			simple_css::Renderer r(this, root->stateWatcher);
-			r.drawBackground(g, getLocalBounds().toFloat(), ss);
+
+			int state = 0;
 
 			if(rows.isEmpty())
-			{
-				r.renderText(g, getLocalBounds().toFloat(), "No connections", ss);
-			}
+				state |= (int)simple_css::PseudoClassType::Empty;
+
+			r.setPseudoClassState(state, true);
+			r.drawBackground(g, getLocalBounds().toFloat(), ss);
+			r.renderText(g, getLocalBounds().toFloat(), {}, ss);
 		}
 	}
 }
@@ -1062,7 +1223,7 @@ SliderMatrix::Row::Row(SliderMatrix& parent_, const StringArray& sources, const 
 
 		auto con = getConnectionForSlider(idx, false);
 		auto shouldBeActive = con.isValid() && (double)con[MatrixIds::Intensity] != 0.0;
-		si->setActive(shouldBeActive, con);
+		si->setActive(shouldBeActive, con, true);
 
 		idx++;
 	}
@@ -1168,6 +1329,55 @@ void SliderMatrix::Row::resized()
 		for(auto s: intensitySliders)
 			s->setBounds(b.removeFromLeft(w));
 	}
+}
+
+void SliderMatrix::Row::updateSearchVisibility(bool shouldBeVisible, const String& searchTerm)
+{
+	Array<IntensitySlider*> matches;
+
+	if(searchTerm.isNotEmpty())
+	{
+		for(auto si: intensitySliders)
+		{
+			if(si->getName().toLowerCase().contains(searchTerm))
+				matches.add(si);
+		}
+	}
+
+	if(matches.isEmpty())
+	{
+		for(int i = 0; i < intensitySliders.size(); i++)
+			setFlexChildVisibility(i, false, false);
+
+		RowBase::updateSearchVisibility(shouldBeVisible, searchTerm);
+		return;
+	}
+
+	int idx = 1;
+
+	for(auto si: intensitySliders)
+	{
+		auto show =  matches.contains(si);
+		setFlexChildVisibility(idx++, false, !show);
+	}
+
+	rebuildLayout();
+}
+
+modulation::TargetMode SliderMatrix::Row::getTargetModeForIntensitySlider(int index) const
+{
+	auto x = getConnectionForSlider(index, false);
+
+	if(x.isValid() && x.hasProperty(MatrixIds::Mode))
+		return (scriptnode::modulation::TargetMode)(int)x[MatrixIds::Mode];
+	else if (isPositiveAndBelow(index, intensitySliders.size()))
+	{
+		return intensitySliders[index]->lastMode;
+		jassertfalse;
+	}
+
+
+	return modulation::TargetMode::Gain;
 }
 
 void SliderMatrix::paint(Graphics& g)
@@ -1286,9 +1496,12 @@ void SliderMatrix::onPropertyChange(const ValueTree& v, const Identifier& id)
 
 				if(id == MatrixIds::Intensity || id == MatrixIds::Mode)
 				{
-					sl->setActive(true, v);
+					sl->setActive(true, v, true);
 				}
 			}
+
+			if(id == MatrixIds::Mode)
+				r->updateIntensityConverter();
 		}
 	}
 }
@@ -1310,7 +1523,7 @@ void SliderMatrix::onConnectionChange(const ValueTree& v, bool wasAdded)
 
 				if(!isConnected)
 				{
-					r->intensitySliders[i]->setActive(false, v);
+					r->intensitySliders[i]->setActive(false, v, true);
 				}
 			}
 		}
@@ -1325,7 +1538,7 @@ void SliderMatrix::onConnectionChange(const ValueTree& v, bool wasAdded)
 		{
 			if(isPositiveAndBelow(sourceIndex, r->intensitySliders.size()))
 			{
-				r->getIntensitySlider(sourceIndex)->setActive(wasAdded, v);
+				r->getIntensitySlider(sourceIndex)->setActive(wasAdded, v, true);
 			}
 
 			break;

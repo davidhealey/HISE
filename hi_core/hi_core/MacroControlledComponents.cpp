@@ -1133,6 +1133,9 @@ HiSlider::HiSlider(const String &name) :
 	setColour(HiseColourScheme::ComponentOutlineColourId, Colours::white.withAlpha(0.3f));
 	setColour(TextEditor::highlightColourId, Colour(SIGNAL_COLOUR).withAlpha(0.5f));
 	setColour(TextEditor::ColourIds::focusedOutlineColourId, Colour(SIGNAL_COLOUR));
+
+	// init the modulationDragState property so that it's not undefined before the first drag...
+	getProperties().set("modulationDragState", 0);
 }
 
 HiSlider::~HiSlider()
@@ -1244,7 +1247,23 @@ struct HiSlider::HoverPopup: public Component,
 			if(auto pwsc = dynamic_cast<ProcessorWithScriptingContent*>(parent->getProcessor()))
 			{
 				if(auto sc = pwsc->getScriptingContent()->getComponent(parent->getParameter()))
+				{
 					mod = dynamic_cast<MatrixModulator*>(sc->getConnectedProcessor());
+				}
+
+				if(mod == nullptr)
+				{
+					Processor::Iterator<MatrixModulator> iter(parent->getProcessor()->getMainController()->getMainSynthChain());
+
+					while(auto n = iter.getNextProcessor())
+					{
+						if(n->getMatrixTargetId() == targetId)
+						{
+							mod = n;
+							break;
+						}
+					}
+				}
 			}
 
 			if(mod != nullptr)
