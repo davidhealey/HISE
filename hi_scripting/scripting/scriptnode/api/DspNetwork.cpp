@@ -225,6 +225,11 @@ DspNetwork::DspNetwork(hise::ProcessorWithScriptingContent* p, ValueTree data_, 
 	runPostInitFunctions();
 
 	dynamicParameterProperties.init();
+
+	rootParameterListener.setCallback(
+		getRootNode()->getParameterTree(), 
+		valuetree::AsyncMode::Synchronously,
+		VT_BIND_CHILD_LISTENER(updateRootParameters));
 }
 
 DspNetwork::~DspNetwork()
@@ -780,6 +785,12 @@ void DspNetwork::clear(bool removeNodesFromSignalChain, bool removeUnusedNodes)
 				i--;
 			}
 		}
+
+		// Also clear out all filter objects as they might hang on to dangling nodes.
+		if(auto h = dynamic_cast<ExternalDataHolder*>(getScriptProcessor()))
+		{
+			h->garbageCollectFilterCoefficients();
+		}
 	}
 }
 
@@ -1108,6 +1119,11 @@ bool DspNetwork::updateIdsInValueTree(ValueTree& v, StringArray& usedIds)
 }
 
 
+void DspNetwork::setSignalDisplayEnabled(bool shouldBeEnabled)
+{
+	signalDisplayEnabled = shouldBeEnabled;
+}
+
 juce::String DspNetwork::getNonExistentId(String id, StringArray& usedIds) const
 {
 	if (getRootNode() == nullptr)
@@ -1154,6 +1170,15 @@ void DspNetwork::checkId(const Identifier& id, const var& newValue)
 		Error e;
 		e.error = Error::RootIdMismatch;
 		getExceptionHandler().addError(getRootNode(), e, "ID mismatch between DSP network file and root container.  \n> Rename the root container back to `" + initialId + "` in order to clear this error.");
+	}
+}
+
+void DspNetwork::updateRootParameters(const ValueTree& v, bool wasAdded)
+{
+	if(getParentHolder()->getActiveNetwork() == this)
+	{
+		if(auto p = dynamic_cast<Processor*>(getScriptProcessor()))
+			p->updateParameterSlots();
 	}
 }
 

@@ -569,7 +569,8 @@ private:
 
 class JavascriptMasterEffect : public JavascriptProcessor,
 							   public ProcessorWithScriptingContent,
-							   public MasterEffectProcessor
+							   public MasterEffectProcessor,
+							   public ProcessorWithCustomFilterStatistics
 {
 public:
 
@@ -728,8 +729,8 @@ public:
 
 	bool isSuspendedOnSilence() const override;
 
-	Processor *getChildProcessor(int i) override { return modChains[i].getChain(); };
-	const Processor *getChildProcessor(int i) const override { return modChains[i].getChain(); };
+	Processor *getChildProcessor(int i) override;;
+	const Processor *getChildProcessor(int i) const override;;
 
 	int getNumInternalChains() const override { return modChains.size(); };
 	int getNumChildProcessors() const override { return modChains.size(); };

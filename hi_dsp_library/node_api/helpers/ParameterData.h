@@ -171,20 +171,24 @@ struct RangeHelpers
 
 	static InvertableParameterRange getDoubleRange(const var& obj, IdSet rangeIdSet = IdSet::scriptnode);
 
+	/** Tries to find the applicable IdSet for the given JSON object. It simply looks for the first match in one of the id lists.
+	 *  If nothing can be found it defaults to IdSet::scriptnode.
+	 *
+	 */
+	static IdSet getIdSetForJSON(const var& obj);
+
+	/** This tries to fetch the default value from a given object.
+	 *
+	 *	It tries to derive the IdSet, then sanitizes and checks that the value is within the range. */
+	static std::pair<bool, double> getDefaultValue(const var& obj);
+
 	static void storeDoubleRange(var& obj, InvertableParameterRange r, IdSet rangeIdSet = IdSet::scriptnode);
 
 	static void storeDoubleRange(ValueTree& d, InvertableParameterRange r, UndoManager* um, IdSet rangeIdSet = IdSet::scriptnode);
 
 	static bool equalsWithError(const InvertableParameterRange& r1, const InvertableParameterRange& r2, double maxError);
 
-	static bool isEqual(const InvertableParameterRange& r1, const InvertableParameterRange& r2)
-	{
-		return  r1.rng.start == r2.rng.start &&
-				r1.rng.end == r2.rng.end &&
-				r1.rng.skew == r2.rng.skew &&
-				r1.rng.interval == r2.rng.interval &&
-				r1.inv == r2.inv;
-	}
+	static bool isEqual(const InvertableParameterRange& r1, const InvertableParameterRange& r2);
 
 	static Array<Identifier> getHiddenIds()
 	{

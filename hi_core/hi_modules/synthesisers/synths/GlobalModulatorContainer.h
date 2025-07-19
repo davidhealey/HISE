@@ -676,9 +676,9 @@ private:
 		  matrixData(MatrixIds::MatrixData)
 		{
 			deleter.setCallback(matrixData, 
-								{ MatrixIds::SourceIndex, MatrixIds::TargetId }, 
+								{ MatrixIds::SourceIndex, MatrixIds::TargetId, MatrixIds::AuxIndex }, 
 								valuetree::AsyncMode::Synchronously,
-								BIND_MEMBER_FUNCTION_2(RuntimeSource::onMatrixDisconnect));
+								VT_BIND_RECURSIVE_PROPERTY_LISTENER(onMatrixDisconnect));
 		};
 
 		~RuntimeSource()
@@ -692,9 +692,11 @@ private:
 			return 1;
 		}
 
-		void onMatrixDisconnect(const ValueTree& v, const Identifier& id)
+		void onMatrixDisconnect(ValueTree v, const Identifier& id)
 		{
 			bool shouldDelete = false;
+
+			auto um = parent.getMainController()->getControlUndoManager();
 
 			if(id == MatrixIds::SourceIndex)
 				shouldDelete = (int)v[id] == -1;
@@ -703,10 +705,11 @@ private:
 				auto tid = v[id].toString();
 				shouldDelete = tid.isEmpty() || tid == "No connection";
 			}
-				
+			if(id == MatrixIds::AuxIndex && (int)v[id] == -1)
+				v.setProperty(MatrixIds::AuxIntensity, 0.0f, um);
 
 			if(shouldDelete)
-				v.getParent().removeChild(v, parent.getMainController()->getControlUndoManager());
+				v.getParent().removeChild(v, um);
 		}
 
 	    runtime_target::RuntimeTarget getType() const override

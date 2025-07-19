@@ -87,7 +87,7 @@ void WaveformComponent::setBypassed(bool shouldBeBypassed)
 
 void WaveformComponent::paint(Graphics &g)
 {
-	auto laf = getSpecialLookAndFeel<LookAndFeelMethods>();
+	auto laf = getSpecialLookAndFeel<LookAndFeelMethods>(this);
 	laf->drawOscilloscopeBackground(g, *this, getLocalBounds().toFloat());
 	laf->drawOscilloscopePath(g, *this, path);
 }

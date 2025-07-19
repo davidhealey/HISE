@@ -858,18 +858,20 @@ public:
 	struct ScopedAttributeNotificationSuspender
     {
 	    ScopedAttributeNotificationSuspender(Processor* p_):
-          p(*p_),
-          prevValue(p.forceDeactivateUpdates)
+          p(p_),
+          prevValue(p != nullptr ? p->forceDeactivateUpdates : false)
 	    {
-		    p.forceDeactivateUpdates = true;
+            if(p != nullptr)
+				p->forceDeactivateUpdates = true;
 	    }
 
         ~ScopedAttributeNotificationSuspender()
 	    {
-		    p.forceDeactivateUpdates = prevValue;
+            if(p != nullptr)
+				p->forceDeactivateUpdates = prevValue;
 	    }
 
-        Processor& p;
+        Processor* p;
         bool prevValue;
     };
 

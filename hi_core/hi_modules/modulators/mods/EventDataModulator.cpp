@@ -191,6 +191,12 @@ EventDataEnvelope::EventDataEnvelope(MainController *mc, const String &id, int v
 
 void EventDataEnvelope::setInternalAttribute(int parameterIndex, float newValue)
 {
+	if(parameterIndex < EnvelopeModulator::Parameters::numParameters)
+	{
+		EnvelopeModulator::setInternalAttribute(parameterIndex, newValue);
+		return;
+	}
+
 	FloatSanitizers::sanitizeFloatNumber(newValue);
 
 	switch(parameterIndex)
@@ -210,6 +216,9 @@ void EventDataEnvelope::setInternalAttribute(int parameterIndex, float newValue)
 
 float EventDataEnvelope::getAttribute(int parameterIndex) const
 {
+	if(parameterIndex < EnvelopeModulator::Parameters::numParameters)
+		return EnvelopeModulator::getAttribute(parameterIndex);
+
 	switch(parameterIndex)
 	{
 	case Parameter::SlotIndex:		  return (float)dataSlot;

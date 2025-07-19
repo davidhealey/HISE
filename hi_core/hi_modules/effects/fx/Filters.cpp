@@ -35,6 +35,7 @@ namespace hise { using namespace juce;
 
 PolyFilterEffect::PolyFilterEffect(MainController *mc, const String &uid, int numVoices) :
 	VoiceEffectProcessor(mc, uid, numVoices),
+	FilterEffect(mc),
 	voiceFilters(numVoices),
 	monoFilters(1),
 	frequency(getDefaultValue(PolyFilterEffect::Parameters::Frequency)),
@@ -42,6 +43,8 @@ PolyFilterEffect::PolyFilterEffect(MainController *mc, const String &uid, int nu
 	gain(getDefaultValue(PolyFilterEffect::Parameters::Gain)),
 	mode((FilterBank::FilterMode)(int)getDefaultValue(PolyFilterEffect::Parameters::Mode))
 {
+	getFilterData(0)->getUpdater().setUpdater(mc->getGlobalUIUpdater());
+
 	modChains.reserve(numInternalChains);
 
 	modChains += {this, "Frequency Modulation"};
@@ -101,10 +104,13 @@ PolyFilterEffect::PolyFilterEffect(MainController *mc, const String &uid, int nu
 	voiceFilters.setMode((FilterBank::FilterMode)(int)getDefaultValue(PolyFilterEffect::Mode));
 	monoFilters.setMode((FilterBank::FilterMode)(int)getDefaultValue(PolyFilterEffect::Mode));
 
+	registerAtObject(getFilterData(0));
 }
 
 PolyFilterEffect::~PolyFilterEffect()
 {
+	deregisterAtObject(getFilterData(0));
+
 	for (auto& mb : modChains)
 		mb.getChain()->getHandler()->removePostEventListener(this);
 
@@ -196,6 +202,8 @@ void PolyFilterEffect::setInternalAttribute(int parameterIndex, float newValue)
 	}
 
 	changeFlag = true;
+
+	handleFilterStatisticUpdate();
 }
 
 float PolyFilterEffect::getDefaultValue(int parameterIndex) const
@@ -302,10 +310,10 @@ void PolyFilterEffect::renderNextBlock(AudioSampleBuffer &b, int startSample, in
 		r.qModValue = (double)modChains[ResonanceChain].getOneModulationValue(startSample);
 
 		monoFilters.setDisplayModValues(-1, (float)r.applyModValue(frequency), (float)r.gainModValue, (float)r.qModValue);
+		updateDisplayCoefficients();
 
 		return;
 	}
-		
 
 	while (numSamples > 0)
 	{
@@ -344,6 +352,8 @@ void PolyFilterEffect::renderNextBlock(AudioSampleBuffer &b, int startSample, in
 		monoFilters.setDisplayModValues(-1, (float)r.applyModValue(frequency), (float)r.gainModValue, (float)r.qModValue);
 		monoFilters.renderMono(r);
 
+		updateDisplayCoefficients();
+
 		startSample += subBlockSize;
 	}
 
@@ -372,7 +382,7 @@ ProcessorEditorBody *PolyFilterEffect::createEditor(ProcessorEditor *parentEdito
 #endif
 }
 
-FilterDataObject::CoefficientData PolyFilterEffect::getCurrentCoefficients() const
+FilterDataObject::CoefficientData PolyFilterEffect::getApproximateCoefficients() const
 {
 	if (ownerSynthForCoefficients == nullptr)
 	{
@@ -438,6 +448,8 @@ void PolyFilterEffect::applyEffect(int voiceIndex, AudioSampleBuffer &b, int sta
 
     voiceFilters.setDisplayModValues(voiceIndex, (float)r.applyModValue(frequency), (float)r.gainModValue, (float)r.qModValue);
 	voiceFilters.renderPoly(r);
+
+	updateDisplayCoefficients();
 }
 
 void PolyFilterEffect::startVoice(int voiceIndex, const HiseEvent& e)

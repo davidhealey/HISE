@@ -1681,9 +1681,18 @@ struct ComplexDataUIBase : public ReferenceCountedObject
 
 		virtual void setSpecialLookAndFeel(LookAndFeel* l, bool shouldOwn = false);
 
-		template <typename T> T* getSpecialLookAndFeel()
+		template <typename T> T* getSpecialLookAndFeel(Component* c)
         {
-            return dynamic_cast<T*>(laf);
+			if(auto typed = dynamic_cast<T*>(laf))
+				return typed;
+
+			if(c != nullptr)
+			{
+				if(auto typed = dynamic_cast<T*>(&c->getLookAndFeel()))
+					return typed;
+			}
+
+			return nullptr;
         }
 
 	private:

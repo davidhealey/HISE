@@ -37,7 +37,73 @@ namespace hise { using namespace juce;
 class GlobalModulator;
 class GlobalModulatorContainer;
 
-struct ScriptingApi::Content::ScriptSlider::MatrixCableConnection: public ControlledObject
+
+struct ScriptingApi::Content::ScriptSlider::MultiMatrixModulatorConnection: public MatrixConnectionBase,
+																			public Processor::AttributeListener
+{
+	MultiMatrixModulatorConnection(ScriptSlider& s, const ValueTree& matrixData, const String& targetId):
+	  MatrixConnectionBase(s, matrixData, targetId),
+	  AttributeListener(s.getScriptProcessor()->getMainController_()->getRootDispatcher())
+	{
+		Processor::Iterator<MatrixModulator> iter(getMainController()->getMainSynthChain());
+
+		while(auto mm = iter.getNextProcessor())
+		{
+			if(mm->getMatrixTargetId() == targetId)
+				connectedMods.add(mm);
+		}
+
+		if(auto m = connectedMods.getFirst())
+		{
+			auto mvf = m->getModulationQueryFunction(MatrixModulator::SpecialParameters::Value);
+			auto componentIndex = s.getScriptProcessor()->getScriptingContent()->getComponentIndex(&s);
+			s.getScriptProcessor()->setModulationDisplayQueryFunction(componentIndex, m, mvf);
+			uint16 indexes[1] = { (uint16)componentIndex };
+			addToProcessor(dynamic_cast<Processor*>(s.getScriptProcessor()), indexes, 1, dispatch::sendNotificationSync);
+		}
+	}
+
+	void onAttributeUpdate(Processor* p, uint16 index) override
+	{
+		auto v = p->getAttribute(index);
+
+		for(auto m: connectedMods)
+			m->setAttribute(MatrixModulator::SpecialParameters::Value, v, sendNotificationAsync);
+	}
+
+	SimpleRingBuffer::Ptr getDisplayBuffer(int index) override
+	{
+		if(auto m = connectedMods.getFirst())
+			m->getDisplayBuffer(index);
+
+		return nullptr;
+	}
+
+	MatrixIds::Helpers::IntensityTextConverter::ConstructData createIntensityConverter(int sourceIndex) override
+	{
+		MatrixIds::Helpers::IntensityTextConverter::ConstructData cd;
+		cd.parameterIndex = parent->getScriptProcessor()->getScriptingContent()->getComponentIndex(parent);
+		cd.p = dynamic_cast<Processor*>(parent->getScriptProcessor());
+		auto rng = RangeHelpers::getDoubleRange(parent->getPropertyValueTree(), RangeHelpers::IdSet::ScriptComponents);
+		cd.inputRange = rng.rng;
+		cd.prettifierMode = parent->getScriptObjectProperty(ScriptSlider::Mode);
+
+		auto con = MatrixIds::Helpers::getConnection(matrixData, sourceIndex, targetId);
+
+		if(con.isValid())
+		{
+			jassertfalse; //MatrixIds::Helpers::getTargetType();
+		}
+
+		return cd;
+	}
+
+	
+
+	Array<WeakReference<MatrixModulator>> connectedMods;
+};
+
+struct ScriptingApi::Content::ScriptSlider::MatrixCableConnection: public MatrixConnectionBase
 {
 	using CableType = routing::GlobalRoutingManager::Cable;
 	static constexpr auto C = routing::GlobalRoutingManager::SlotBase::SlotType::Cable;
@@ -114,9 +180,10 @@ struct ScriptingApi::Content::ScriptSlider::MatrixCableConnection: public Contro
 	~MatrixCableConnection() override;
 
 	void setTargetSlider(ScriptSlider* newParent);
-	MatrixIds::Helpers::IntensityTextConverter::ConstructData createIntensityConverter(int sourceIndex);
+	MatrixIds::Helpers::IntensityTextConverter::ConstructData createIntensityConverter(int sourceIndex) override;
 	void rebuildTargets();
-	SimpleRingBuffer::Ptr getDisplayBuffer(int sourceIndex);
+
+	SimpleRingBuffer::Ptr getDisplayBuffer(int sourceIndex) override;
 	ModulationDisplayValue getDisplayValue(double nv, NormalisableRange<double> nr);
 	void onSourceTargetChange(const ValueTree& v, const Identifier& id);
 	void addConnection(const ValueTree& v);
@@ -131,15 +198,12 @@ struct ScriptingApi::Content::ScriptSlider::MatrixCableConnection: public Contro
 	Target::List addTargets;
 	ModulationDisplayValue mv;
 
-	WeakReference<ScriptSlider> parent;
 	StringArray sourceNames;
-	String targetId;
 	valuetree::ChildListener connectionListener;
 	valuetree::RecursivePropertyListener sourceTargetListener;
 	InvertableParameterRange sliderRange;
 	Array<var> globalModCables;
-	WeakReference<GlobalModulatorContainer> gc;
-
+	
 	JUCE_DECLARE_WEAK_REFERENCEABLE(MatrixCableConnection);
 };
 

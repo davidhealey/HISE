@@ -827,7 +827,7 @@ void Renderer::drawBackground(Graphics& g, Rectangle<float> area, StyleSheet::Pt
 		}
 	}
 	
-	if(type == PseudoElementType::None)
+	if(type == PseudoElementType::None && renderPseudoElements)
 	{
 		auto beforeAbsolute = ss->getPropertyValue({"position", PseudoState(0).withElement(PseudoElementType::Before)}).toString() == "absolute";
 		auto beforeArea = ss->getPseudoArea(beforeAbsolute ? area : ma, stateFlag, PseudoElementType::Before);
@@ -838,10 +838,13 @@ void Renderer::drawBackground(Graphics& g, Rectangle<float> area, StyleSheet::Pt
 			Graphics::ScopedSaveState sss(g);
 			drawBackground(g, beforeArea, ss, PseudoElementType::Before);
 
-			auto v = ss->getPropertyValueString({"content", PseudoState().withElement(PseudoElementType::Before)});
+			if(renderTextWithBackground)
+			{
+				auto v = ss->getPropertyValueString({"content", PseudoState().withElement(PseudoElementType::Before)});
 
-			if(v.isNotEmpty())
-				renderText(g, beforeArea, v, ss, PseudoElementType::Before);
+				if(v.isNotEmpty())
+					renderText(g, beforeArea, v, ss, PseudoElementType::Before);
+			}
             
             if(!beforeAbsolute)
             {
@@ -862,10 +865,13 @@ void Renderer::drawBackground(Graphics& g, Rectangle<float> area, StyleSheet::Pt
             Graphics::ScopedSaveState sss(g);
             drawBackground(g, beforeArea2, ss, PseudoElementType::Before2);
 
-            auto v = ss->getPropertyValueString({"content", PseudoState().withElement(PseudoElementType::Before2)});
+			if(renderTextWithBackground)
+			{
+				auto v = ss->getPropertyValueString({"content", PseudoState().withElement(PseudoElementType::Before2)});
 
-            if(v.isNotEmpty())
-                renderText(g, beforeArea2, v, ss, PseudoElementType::Before2);
+	            if(v.isNotEmpty())
+	                renderText(g, beforeArea2, v, ss, PseudoElementType::Before2);
+			}
         }
 
 
@@ -879,10 +885,14 @@ void Renderer::drawBackground(Graphics& g, Rectangle<float> area, StyleSheet::Pt
 			Graphics::ScopedSaveState sss(g);
 			drawBackground(g, afterArea, ss, PseudoElementType::After);
 
-			auto v = ss->getPropertyValueString({"content", PseudoState().withElement(PseudoElementType::After)});
+			if(renderTextWithBackground)
+			{
+				auto v = ss->getPropertyValueString({"content", PseudoState().withElement(PseudoElementType::After)});
 
-			if(v.isNotEmpty())
-				renderText(g, afterArea, v, ss, PseudoElementType::After);
+				if(v.isNotEmpty())
+					renderText(g, afterArea, v, ss, PseudoElementType::After);
+			}
+			
             
             if(!afterAbsolute)
             {
@@ -903,10 +913,13 @@ void Renderer::drawBackground(Graphics& g, Rectangle<float> area, StyleSheet::Pt
             Graphics::ScopedSaveState sss(g);
             drawBackground(g, afterArea2, ss, PseudoElementType::After2);
 
-            auto v = ss->getPropertyValueString({"content", PseudoState().withElement(PseudoElementType::After2)});
+			if(renderTextWithBackground)
+			{
+				auto v = ss->getPropertyValueString({"content", PseudoState().withElement(PseudoElementType::After2)});
 
-            if(v.isNotEmpty())
-                renderText(g, afterArea2, v, ss, PseudoElementType::After2);
+	            if(v.isNotEmpty())
+	                renderText(g, afterArea2, v, ss, PseudoElementType::After2);
+			}
 
 			if(!afterAbsolute2)
             {

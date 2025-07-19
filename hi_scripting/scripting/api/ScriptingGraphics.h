@@ -509,6 +509,9 @@ namespace ScriptingObjects
 		/** Returns the area ([x, y, width, height]) that the path is occupying with the scale factor applied. */
 		var getBounds(var scaleFactor);
 
+		/** Sets a (minimal) bounding box for the path. */
+		void setBounds(var boundingBox);
+
 		/** Returns the length of the path. */
 		var getLength();
 
@@ -981,6 +984,8 @@ namespace ScriptingObjects
 					   public HiseAudioThumbnail::LookAndFeelMethods,
 					   public CustomKeyboardState::LookAndFeelBase,	
 					   public PresetBrowserLookAndFeelMethods,
+					   public FilterGraph::LookAndFeelMethods,
+					   public FilterDragOverlay::LookAndFeelMethods,
 					   public LafBase,
                        public simple_css::StyleSheet::Collection::DataProvider
 		{
@@ -1054,6 +1059,11 @@ namespace ScriptingObjects
 			void drawKeyboardBackground(Graphics &g, Component* c, int width, int height) override;
 			void drawWhiteNote(CustomKeyboardState* state, Component* c, int midiNoteNumber, Graphics &g, int x, int y, int w, int h, bool isDown, bool isOver, const Colour &lineColour, const Colour &textColour) override;
 			void drawBlackNote(CustomKeyboardState* state, Component* c, int midiNoteNumber, Graphics &g, int x, int y, int w, int h, bool isDown, bool isOver, const Colour &noteFillColour) override;
+
+			void drawFilterBackground(Graphics& g, FilterGraph& fg) override;
+			void drawFilterPath(Graphics& g, FilterGraph& fg, const Path& p) override;
+			void drawFilterGridLines(Graphics& g, FilterGraph& fg, const Path& gridPath) override;
+			void drawFilterDragHandle(Graphics& g, FilterDragOverlay& o, int index, Rectangle<float> handleBounds, const FilterDragOverlay::DragData& d) override;
 
 		private:
 
@@ -1236,6 +1246,23 @@ namespace ScriptingObjects
 		    void drawTableHeaderColumn (Graphics& g, TableHeaderComponent& th, const String& columnName, int columnId, int width, int height, bool isMouseOver, bool isMouseDown, int columnFlags) override
 			{
 				CALL_LAF(drawTableHeaderColumn, g, th, columnName, columnId, width, height, isMouseOver, isMouseDown, columnFlags);
+			}
+
+			void drawFilterDragHandle(Graphics& g, FilterDragOverlay& o, int index, Rectangle<float> handleBounds, const FilterDragOverlay::DragData& d) override
+			{
+				CALL_LAF(drawFilterDragHandle, g, o, index, handleBounds, d);
+			}
+			void drawFilterBackground(Graphics &g, FilterGraph& fg) override
+			{
+				CALL_LAF(drawFilterBackground, g, fg);
+			}
+			void drawFilterPath(Graphics& g, FilterGraph& fg, const Path& p) override
+			{
+				CALL_LAF(drawFilterPath,g, fg, p);
+			}
+			void drawFilterGridLines(Graphics &g, FilterGraph& fg, const Path& gridPath) override
+			{
+				CALL_LAF(drawFilterGridLines, g, fg, gridPath);
 			}
 
 			void drawScrollbar (Graphics& g, ScrollBar& scrollbar,

@@ -465,9 +465,13 @@ public:
 	}
 };
 
-class FilterEffect
+class FilterEffect: public ProcessorWithSingleStaticExternalData
 {
 public:
+
+	FilterEffect(MainController* mc):
+	  ProcessorWithSingleStaticExternalData(mc, ExternalData::DataType::FilterCoefficients, 1)
+	{}
 
 	static FilterDataObject::CoefficientData getDisplayCoefficients(FilterBank::FilterMode m, double frequency, double q, float gain, double samplerate);
 	static String getTableValueAsGain(float input);
@@ -479,7 +483,12 @@ public:
 
 	virtual ~FilterEffect() {};
 
-	virtual FilterDataObject::CoefficientData getCurrentCoefficients() const = 0;
+	FilterDataObject::CoefficientData getCoefficients()
+	{
+		return getFilterData(0)->getCoefficients(0);
+	}
+
+	//virtual FilterDataObject::CoefficientData getCurrentCoefficients() const = 0;
 
 protected:
 

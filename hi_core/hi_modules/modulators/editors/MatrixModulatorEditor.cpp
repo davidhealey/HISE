@@ -136,7 +136,7 @@ MatrixModulatorBody::MatrixModulatorBody(ProcessorEditor* parent):
 	ControlledObject(parent->getProcessor()->getMainController()),
 	valueSlider("Value"),
 	smoothingSlider("SmoothingTime"),
-	content(getMainController(), parent->getProcessor()->getId(), false),
+	content(getMainController(),  dynamic_cast<MatrixModulator*>(getProcessor())->getMatrixTargetId(), false),
 	controller(getMainController(), *this),
 	inputRangeEditor(createValueTreeFromRange(getProcessor(), true), getMainController()->getControlUndoManager()),
 	outputRangeEditor(createValueTreeFromRange(getProcessor(), false), getMainController()->getControlUndoManager()),
@@ -158,8 +158,10 @@ MatrixModulatorBody::MatrixModulatorBody(ProcessorEditor* parent):
 	smoothingSlider.setMode(HiSlider::Mode::Time, { 0.0, 200.0, 1.0 });
 	smoothingSlider.setSliderStyle(Slider::SliderStyle::RotaryHorizontalVerticalDrag);
 
-	controller.setValueTree(dynamic_cast<MatrixModulator*>(parent->getProcessor())->globalMatrixData, 
-	                        parent->getProcessor()->getId(), 
+	auto mm = dynamic_cast<MatrixModulator*>(parent->getProcessor());
+
+	controller.setValueTree(mm->globalMatrixData, 
+	                        mm->getMatrixTargetId(), 
 	                        getMainController()->getControlUndoManager());
 
 	addAndMakeVisible(smoothingSlider);
@@ -351,6 +353,7 @@ MatrixModulatorBody::MatrixModulatorBody(ProcessorEditor* parent):
 		inputRangeEditor.setVisible(on);
 		outputRangeEditor.setVisible(on);
 		autofixButton.setVisible(on);
+		targetIdEditor.setVisible(on);
 	};
 
 	content.setLookAndFeel(&laf);
@@ -372,6 +375,17 @@ MatrixModulatorBody::MatrixModulatorBody(ProcessorEditor* parent):
 	                                {
 		                                updateRangeProperty(false, id.toString(), newValue);
 	                                });
+
+	addAndMakeVisible(targetIdEditor);
+
+	GlobalHiseLookAndFeel::setTextEditorColours(targetIdEditor);
+	targetIdEditor.setText(p->getMatrixTargetId(), dontSendNotification);
+	targetIdEditor.setTextToShowWhenEmpty("targetId", Colours::grey);
+	targetIdEditor.setVisible(false);
+	targetIdEditor.onReturnKey = [this, p]()
+	{
+		p->setCustomTargetId(targetIdEditor.getText());
+	};
 }
 
 void MatrixModulatorBody::updateRangeProperty(bool isInputRange, const Identifier& id, const var& newValue)
@@ -465,6 +479,8 @@ void MatrixModulatorBody::resized()
 	smoothingSlider.setBounds(top.removeFromLeft(128));
 	top.removeFromLeft(2*Margin);
 	editRangeButton.setBounds(top.removeFromLeft(128).reduced(0, 10));
+
+	targetIdEditor.setBounds(top.removeFromLeft(148).reduced(10));
 
 	content.setBounds(b);
 

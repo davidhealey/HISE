@@ -38,6 +38,7 @@ using namespace juce;
 
 class HardcodedSwappableEffect : public HotswappableProcessor,
 							     public ProcessorWithExternalData,
+								 public ProcessorWithCustomFilterStatistics,
 								 public RuntimeTargetHolder
 {
 public:

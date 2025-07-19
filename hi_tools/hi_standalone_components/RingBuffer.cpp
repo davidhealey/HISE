@@ -412,7 +412,7 @@ ModPlotter::ModPlotter()
 
 void ModPlotter::paint(Graphics& g)
 {
-	auto laf = getSpecialLookAndFeel<LookAndFeelMethods>();
+	auto laf = getSpecialLookAndFeel<LookAndFeelMethods>(this);
 
 	laf->drawOscilloscopeBackground(g, *this, getLocalBounds().toFloat());
 	laf->drawOscilloscopePath(g, *this, p);
@@ -798,7 +798,7 @@ void flex_ahdsr_base::FlexAhdsrGraph::paint(Graphics& g)
 	LookAndFeelMethods* laf = dynamic_cast<LookAndFeelMethods*>(&getLookAndFeel());
 
 	if(laf == nullptr)
-		laf = getSpecialLookAndFeel<LookAndFeelMethods>();
+		laf = getSpecialLookAndFeel<LookAndFeelMethods>(this);
 
 	if(laf != nullptr)
 	{
@@ -1266,7 +1266,7 @@ AhdsrGraph::~AhdsrGraph()
 
 void AhdsrGraph::paint(Graphics &g)
 {
-	auto laf = getSpecialLookAndFeel<LookAndFeelMethods>();
+	auto laf = getSpecialLookAndFeel<LookAndFeelMethods>(this);
 
 	laf->drawAhdsrBackground(g, *this);
 	laf->drawAhdsrPathSection(g, *this, envelopePath, false);
@@ -1903,7 +1903,7 @@ juce::Path SimpleRingBuffer::PropertyObject::createPath(Range<int> sampleRange, 
 
 void FFTDisplayBase::drawSpectrum(Graphics& g)
 {
-	auto laf = getSpecialLookAndFeel<LookAndFeelMethods>();
+	auto laf = getSpecialLookAndFeel<LookAndFeelMethods>(dynamic_cast<Component*>(this));
 
 	auto targetBounds = dynamic_cast<Component*>(this)->getLocalBounds().toFloat();
 	laf->drawOscilloscopeBackground(g, *this, targetBounds);
@@ -1939,7 +1939,7 @@ void OscilloscopeBase::drawWaveform(Graphics& g)
 	{
 		if (auto sl = SimpleReadWriteLock::ScopedTryReadLock(rb->getDataLock()))
 		{
-			auto laf = getSpecialLookAndFeel<LookAndFeelMethods>();
+			auto laf = getSpecialLookAndFeel<LookAndFeelMethods>(dynamic_cast<Component*>(this));
 
 			auto b = dynamic_cast<Component*>(this)->getLocalBounds().toFloat();
 
@@ -2033,35 +2033,11 @@ void OscilloscopeBase::drawOscilloscope(Graphics &g, const AudioSampleBuffer &b)
 	auto lb = asComponent->getLocalBounds().toFloat();
 	auto path = rb->getPropertyObject()->createPath({ 0, b.getNumSamples() }, { -1.0f, 1.0f }, lb, 0.0);
 
-	auto laf = getSpecialLookAndFeel<LookAndFeelMethods>();
+	auto laf = getSpecialLookAndFeel<LookAndFeelMethods>(dynamic_cast<Component*>(this));
 
 	jassert(laf != nullptr);
 
 	laf->drawOscilloscopePath(g, *this, path);
-
-#if 0
-	auto dataL = b.getReadPointer(0);
-	auto dataR = b.getReadPointer(jmin(1, b.getNumChannels() -1));
-	
-	auto asComponent = dynamic_cast<Component*>(this);
-
-	drawPath(dataL, b.getNumSamples(), asComponent->getWidth(), lPath);
-	drawPath(dataR, b.getNumSamples(), asComponent->getWidth(), rPath);
-
-	auto lb = asComponent->getLocalBounds().toFloat();
-	auto top = lb.removeFromTop(lb.getHeight() / 2.0f).reduced(2.0f);
-	auto bottom = lb.reduced(2.0f);
-
-	lPath.scaleToFit(top.getX(), top.getY(), top.getWidth(), top.getHeight(), false);
-	rPath.scaleToFit(bottom.getX(), bottom.getY(), bottom.getWidth(), bottom.getHeight(), false);
-
-	auto laf = getSpecialLookAndFeel<LookAndFeelMethods>();
-
-	jassert(laf != nullptr);
-
-	laf->drawOscilloscopePath(g, *this, lPath);
-	laf->drawOscilloscopePath(g, *this, rPath);
-#endif
 }
 
 GoniometerBase::Shape::Shape(const AudioSampleBuffer& buffer, Rectangle<int> area)
@@ -2115,7 +2091,7 @@ void GoniometerBase::paintSpacialDots(Graphics& g)
 
 			Rectangle<int> area = { (asComponent->getWidth() - size) / 2, (asComponent->getHeight() - size) / 2, size, size };
 
-			auto laf = getSpecialLookAndFeel<LookAndFeelMethods>();
+			auto laf = getSpecialLookAndFeel<LookAndFeelMethods>(dynamic_cast<Component*>(this));
 
 			Array<Line<float>> lines;
 

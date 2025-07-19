@@ -1012,6 +1012,7 @@ struct ScriptingObjects::PathObject::Wrapper
 	API_METHOD_WRAPPER_1(PathObject, getPointOnPath);
 	API_METHOD_WRAPPER_1(PathObject, contains);
 	API_METHOD_WRAPPER_1(PathObject, getBounds);
+	API_VOID_METHOD_WRAPPER_1(PathObject, setBounds);
 	API_METHOD_WRAPPER_0(PathObject, getLength);
 	API_METHOD_WRAPPER_0(PathObject, toString);
 	API_METHOD_WRAPPER_0(PathObject, toBase64);
@@ -1045,6 +1046,7 @@ ScriptingObjects::PathObject::PathObject(ProcessorWithScriptingContent* p) :
 	ADD_API_METHOD_3(getIntersection);
 	ADD_API_METHOD_1(contains);
 	ADD_API_METHOD_1(getBounds);
+	ADD_API_METHOD_1(setBounds);
 	ADD_API_METHOD_0(getLength);
 	ADD_API_METHOD_2(createStrokedPath);
 	ADD_API_METHOD_0(toString);
@@ -1251,6 +1253,18 @@ var ScriptingObjects::PathObject::getBounds(var scaleFactor)
 	auto r = p.getBoundsTransformed(AffineTransform::scale(scaleFactor));
 
 	return ApiHelpers::getVarRectangle(useRectangleClass, r);
+}
+
+void ScriptingObjects::PathObject::setBounds(var boundingBox)
+{
+	auto r = Result::ok();
+	auto tb = ApiHelpers::getRectangleFromVar(boundingBox, &r);
+
+	if(r.failed())
+		reportScriptError(r.getErrorMessage());
+
+	p.startNewSubPath(tb.getTopLeft());
+	p.startNewSubPath(tb.getBottomRight());
 }
 
 juce::var ScriptingObjects::PathObject::createStrokedPath(var strokeData, var dotData)
@@ -2958,6 +2972,18 @@ ScriptingObjects::ScriptedLookAndFeel::CSSLaf::CSSLaf(ScriptedLookAndFeel* paren
 			}
 		};
 
+		auto initProperty = [ptr](const ValueTree& v)
+		{
+			for(int i = 0; i < v.getNumProperties(); i++)
+			{
+				auto id = v.getPropertyName(i);
+				ptr->setPropertyVariable(id, v[id].toString());
+			}
+		};
+
+		initProperty(parent->additionalProperties);
+		initProperty(additionalDataCopy);
+
 		additionalPropertyUpdater.setCallback(parent->additionalProperties, {}, valuetree::AsyncMode::Asynchronously, updateProperty);
 		additionalComponentPropertyUpdater.setCallback(additionalDataCopy, {}, valuetree::AsyncMode::Asynchronously, updateProperty);
 
@@ -3044,8 +3070,118 @@ void ScriptingObjects::ScriptedLookAndFeel::CSSLaf::updateMultipageDialog(multip
 	mp.update(css);
 }
 
+void ScriptingObjects::ScriptedLookAndFeel::CSSLaf::drawFilterPath(Graphics& g, FilterGraph& fg, const Path& p)
+{
+	using namespace simple_css;
+
+	if(auto ss = root.css.getForComponent(&fg))
+	{
+		Renderer r(&fg, root.stateWatcher);
+								
+		auto currentState = Renderer::getPseudoClassFromComponent(&fg);
+		root.stateWatcher.checkChanges(&fg, ss, currentState);
+
+		setPathAsVariable(ss, p, "filterPath");
+		r.drawBackground(g, fg.getLocalBounds().toFloat(), ss);
+
+		return;
+	}
+
+	FilterGraph::LookAndFeelMethods::drawFilterPath(g, fg, p);
+}
+
+void ScriptingObjects::ScriptedLookAndFeel::CSSLaf::drawFilterGridLines(Graphics& g, FilterGraph& fg,
+                                                                        const Path& gridPath)
+{
+	using namespace simple_css;
+
+	if(auto ss = root.css.getForComponent(&fg))
+	{
+		Renderer r(&fg, root.stateWatcher);
+								
+		auto currentState = Renderer::getPseudoClassFromComponent(&fg);
+		root.stateWatcher.checkChanges(&fg, ss, currentState);
+
+		setPathAsVariable(ss, gridPath, "gridLines");
+		r.drawBackground(g, fg.getLocalBounds().toFloat(), ss);
+
+		return;
+	}
+
+	FilterGraph::LookAndFeelMethods::drawFilterGridLines(g, fg, gridPath);
+}
+
+void ScriptingObjects::ScriptedLookAndFeel::CSSLaf::drawFilterDragHandle(Graphics& g, FilterDragOverlay& o, int index,
+                                                                         Rectangle<float> handleBounds, const FilterDragOverlay::DragData& d)
+{
+	using namespace simple_css;
+
+	if(auto ss = root.css.getWithAllStates(&o, Selector(SelectorType::Class, "filterHandle")))
+	{
+		Renderer r(&o, root.stateWatcher, index);
+
+		int state = 0;
+
+		if(d.hover)
+			state |= (int)PseudoClassType::Hover;
+
+		if(!d.enabled)
+			state |= (int)PseudoClassType::Disabled;
+
+		if(d.selected)
+			state |= (int)PseudoClassType::Focus;
+
+		if(d.dragging)
+			state |= (int)PseudoClassType::Active;
+
+		simple_css::Animator::RenderTarget rt(&o, index, handleBounds.toNearestInt());
+
+		root.stateWatcher.checkChanges(rt, ss, state);
+
+		ss->setPropertyVariable("type", d.type);
+		ss->setPropertyVariable("frequency", ValueToTextConverter::ConverterFunctions::Frequency(d.frequency));
+		ss->setPropertyVariable("q", String(d.q, 1));
+		ss->setPropertyVariable("gain", ValueToTextConverter::ConverterFunctions::Decibel(d.gain));
+		ss->setPropertyVariable("index", String(index));
+
+		r.setPseudoClassState(state, true);
+		r.setRenderPseudoElements(false); // we'll handle that with a better text area...
+		r.setRenderTextWithBackground(false);
+
+		auto renderText = [&](PseudoElementType et)
+		{
+			auto ps = PseudoState(state).withElement(et);
+			auto t = ss->getText({}, ps);
+
+			if(!t.isEmpty())
+			{
+				auto tb = ss->getLocalBoundsFromText(t, ps);
+				tb = ss->getBounds(tb, ps);
+				auto pos = tb.getTopLeft();
+				tb = handleBounds.withSizeKeepingCentre(tb.getWidth(), tb.getHeight());
+				tb = tb.translated(pos.getX(), pos.getY());
+				tb = tb.constrainedWithin(o.getLocalBounds().toFloat());
+				r.drawBackground(g, tb, ss, et);
+				r.renderText(g, tb, t, ss, et);
+			}
+			else if(et == PseudoElementType::None)
+			{
+				r.drawBackground(g, handleBounds, ss, et);
+			}
+		};
+
+		renderText(PseudoElementType::None);
+		renderText(PseudoElementType::Before);
+		renderText(PseudoElementType::After);
+		
+		return;
+	}
+
+	FilterDragOverlay::LookAndFeelMethods::drawFilterDragHandle(g, o, index, handleBounds, d);
+}
+
 Rectangle<float> ScriptingObjects::ScriptedLookAndFeel::CSSLaf::getTextLabelPopupArea(simple_css::StyleSheet::Ptr ss,
-	Rectangle<float> fullBounds, const String& text)
+                                                                                      Rectangle<float> fullBounds, const String& text)
 {
 	auto area = ss->getLocalBoundsFromText(text);
 	auto j = ss->getJustification({});
@@ -3434,6 +3570,24 @@ void ScriptingObjects::ScriptedLookAndFeel::CSSLaf::drawBlackNote(CustomKeyboard
 	{
 		LookAndFeelBase::drawBlackNote(state, c, midiNoteNumber, g, x, y, w, h, isDown, isOver, noteFillColour);
 	}
+}
+
+void ScriptingObjects::ScriptedLookAndFeel::CSSLaf::drawFilterBackground(Graphics& g, FilterGraph& fg)
+{
+	using namespace simple_css;
+
+	if(auto ss = root.css.getForComponent(&fg))
+	{
+		Renderer r(&fg, root.stateWatcher);
+								
+		auto currentState = Renderer::getPseudoClassFromComponent(&fg);
+		root.stateWatcher.checkChanges(&fg, ss, currentState);
+		r.drawBackground(g, fg.getLocalBounds().toFloat(), ss);
+
+		return;
+	}
+
+	FilterGraph::LookAndFeelMethods::drawFilterBackground(g, fg);
 }
 
 void ScriptingObjects::ScriptedLookAndFeel::CSSLaf::drawTableValueLabel(Graphics& g, TableEditor& te, Font f,

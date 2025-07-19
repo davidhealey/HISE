@@ -30,7 +30,9 @@ CurveEqEditor::CurveEqEditor (ProcessorEditor *p)
     addAndMakeVisible (typeSelector = new FilterTypeSelector());
     typeSelector->setName ("new component");
 
-    addAndMakeVisible (dragOverlay = new FilterDragOverlay(eq));
+    auto fn = eq->getOrCreateProcessorFilterStatistics();
+
+    addAndMakeVisible (dragOverlay = new FilterDragOverlay(eq, fn.get(), false));
     dragOverlay->setName ("new component");
 
 	dragOverlay->addListener(this);
@@ -177,7 +179,7 @@ void CurveEqEditor::buttonClicked (Button* buttonThatWasClicked)
 		{
 			auto pIndex = CurveEq::BandParameter::numBandParameters * currentlySelectedFilterBand + CurveEq::BandParameter::Enabled;
 
-			eq->setAttribute(pIndex, enableBandButton->getToggleState(), sendNotification);
+			eq->setAttribute(pIndex, enableBandButton->getToggleState(), sendNotificationAsync);
 		}
     }
 

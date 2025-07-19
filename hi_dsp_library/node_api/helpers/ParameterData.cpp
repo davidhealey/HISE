@@ -197,6 +197,31 @@ void RangeHelpers::storeDoubleRange(ValueTree& d, InvertableParameterRange r, Un
 	
 }
 
+std::pair<bool, double> RangeHelpers::getDefaultValue(const var& obj)
+{
+	double defaultValue = 0.0;
+
+	// the default value is not part of the RangeHelper::IdSet so we must fetch this manually
+	if(obj.hasProperty(PropertyIds::DefaultValue))
+		defaultValue = (double)obj[PropertyIds::DefaultValue];
+	else if(obj.hasProperty("defaultValue"))
+		defaultValue = (double)obj["defaultValue"];
+	else
+		return { false, 0.0 };
+		
+	FloatSanitizers::sanitizeDoubleNumber(defaultValue);
+
+	auto idSet = getIdSetForJSON(obj);
+	auto rng = getDoubleRange(obj, idSet);
+
+	if(defaultValue < rng.rng.start)
+		defaultValue = rng.getRange().getStart();
+	if(defaultValue > rng.rng.end)
+		defaultValue = rng.getRange().getEnd();
+
+	return {true, defaultValue};
+}
+
 void RangeHelpers::storeDoubleRange(var& obj, InvertableParameterRange r, IdSet rangeIdSet)
 {
 	using namespace PropertyIds;
@@ -259,6 +284,15 @@ bool RangeHelpers::equalsWithError(const InvertableParameterRange& r1, const Inv
 
 }
 
+bool RangeHelpers::isEqual(const InvertableParameterRange& r1, const InvertableParameterRange& r2)
+{
+	return  r1.rng.start == r2.rng.start &&
+		r1.rng.end == r2.rng.end &&
+		r1.rng.skew == r2.rng.skew &&
+		r1.rng.interval == r2.rng.interval &&
+		r1.inv == r2.inv;
+}
+
 scriptnode::InvertableParameterRange RangeHelpers::getDoubleRange(const ValueTree& t, IdSet set)
 {
 	using namespace PropertyIds;
@@ -302,7 +336,10 @@ scriptnode::InvertableParameterRange RangeHelpers::getDoubleRange(const ValueTre
 	{
 		if(set == IdSet::ScriptComponents)
 		{
-			r.rng.setSkewForCentre(jlimit(r.rng.start, r.rng.end, (double)t[skewId]));
+			auto midPos = (double)t[skewId];
+
+			if(midPos > r.rng.start && midPos < r.rng.end)
+				r.rng.setSkewForCentre(jlimit(r.rng.start, r.rng.end, midPos));
 		}
 		else
 		{
@@ -326,6 +363,31 @@ scriptnode::InvertableParameterRange RangeHelpers::getDoubleRange(const var& obj
 	}
 
 	return getDoubleRange(v, set);
+}
+
+RangeHelpers::IdSet RangeHelpers::getIdSetForJSON(const var& obj)
+{
+	Array<Identifier> thisIds;
+
+	if(auto o = obj.getDynamicObject())
+	{
+		for(auto& nv: o->getProperties())
+			thisIds.add(nv.name);
+	}
+
+	for(const auto& id: thisIds)
+	{
+		if(getRangeIds(false, IdSet::scriptnode).contains(id))
+			return IdSet::scriptnode;
+		if(getRangeIds(false, IdSet::ScriptComponents).contains(id))
+			return IdSet::ScriptComponents;
+		if(getRangeIds(false, IdSet::MidiAutomation).contains(id))
+			return IdSet::MidiAutomation;
+		if(getRangeIds(false, IdSet::MidiAutomationFull).contains(id))
+			return IdSet::MidiAutomationFull;
+	}
+
+	return IdSet::scriptnode;
 }
 
 namespace parameter

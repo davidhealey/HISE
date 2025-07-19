@@ -186,7 +186,15 @@ void Helpers::fillModSourceList(const MainController* mc, StringArray& items)
 void Helpers::fillModTargetList(const MainController* mc, StringArray& items, TargetType t)
 {
 	if(t == TargetType::All || t == TargetType::Modulators)
-		items.addArray(ProcessorHelpers::getAllIdsForType<MatrixModulator>(mc->getMainSynthChain()));
+	{
+		Processor::Iterator<MatrixModulator> iter(mc->getMainSynthChain());
+
+		while(auto mm = iter.getNextProcessor())
+		{
+			items.addIfNotAlreadyThere(mm->getMatrixTargetId());
+		}
+	}
+		
 
 	if(t == TargetType::All || t == TargetType::Parameters)
 	{
@@ -202,7 +210,7 @@ void Helpers::fillModTargetList(const MainController* mc, StringArray& items, Ta
 					auto tid = c[id].toString();
 
 					if(tid.isNotEmpty())
-						items.add(tid);
+						items.addIfNotAlreadyThere(tid);
 				}
 
 				return false;

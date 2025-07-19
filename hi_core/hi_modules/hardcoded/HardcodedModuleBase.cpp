@@ -447,7 +447,9 @@ bool HardcodedSwappableEffect::setEffect(const String& factoryId, bool /*unused*
 			newNode = nullptr;
 
         asProcessor().connectToRuntimeTargets(*newNode, true);
-        
+
+		ExternalDataHolder::garbageCollectFilterCoefficients();
+
 		bool somethingChanged = false;
 
 		// Create all complex data types we need...
@@ -654,6 +656,8 @@ void HardcodedSwappableEffect::setHardcodedAttribute(int parameterIndex, float n
 			p->callback.call((double)newValue);
 		}
 	}
+
+	handleFilterStatisticUpdate();
 }
 
 float HardcodedSwappableEffect::getHardcodedAttribute(int index) const
@@ -993,7 +997,7 @@ int HardcodedSwappableEffect::getNumDataObjects(ExternalData::DataType t) const
 	case ExternalData::DataType::SliderPack: return sliderPacks.size();
 	case ExternalData::DataType::AudioFile: return audioFiles.size();
 	case ExternalData::DataType::DisplayBuffer: return displayBuffers.size();
-	case ExternalData::DataType::FilterCoefficients: return 0;
+	case ExternalData::DataType::FilterCoefficients: return filterData.size();
 	default: jassertfalse; return 0;
 	}
 }

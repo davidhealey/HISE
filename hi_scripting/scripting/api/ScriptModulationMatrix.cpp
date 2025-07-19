@@ -212,9 +212,7 @@ void ScriptingApi::Content::ScriptSlider::MatrixCableConnection::Target::onPrope
 
 ScriptingApi::Content::ScriptSlider::MatrixCableConnection::MatrixCableConnection(ScriptSlider& slider,
                                                                                   const ValueTree& matrixData, const String& targetId_):
-	ControlledObject(slider.getScriptProcessor()->getMainController_()),
-	targetId(targetId_),
-	gc(ProcessorHelpers::getFirstProcessorWithType<GlobalModulatorContainer>(getMainController()->getMainSynthChain()))
+	MatrixConnectionBase(slider, matrixData, targetId_)
 {
 	setTargetSlider(&slider);
 

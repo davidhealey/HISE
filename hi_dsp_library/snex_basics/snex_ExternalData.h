@@ -636,6 +636,16 @@ struct ExternalDataHolder
 		});
 	}
 
+	/** Call this to cleanup dangling filter coefficient data. */
+	void garbageCollectFilterCoefficients()
+	{
+		for(int i = 0; i < getNumDataObjects(ExternalData::DataType::FilterCoefficients); i++)
+		{
+			if(auto fd = getFilterData(i))
+				fd->garbageCollect();
+		}
+	}
+
 	JUCE_DECLARE_WEAK_REFERENCEABLE(ExternalDataHolder);
 };
 

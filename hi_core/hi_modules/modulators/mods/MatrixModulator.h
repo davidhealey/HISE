@@ -124,9 +124,22 @@ public:
 
 	ValueTree getRangeData(bool inputRange) const { return valueRangeData.getChildWithName(inputRange ? MatrixIds::InputRange : MatrixIds::OutputRange); }
 
-	
+	String getMatrixTargetId() const
+	{
+		if(customTargetId.isEmpty())
+			return getId();
+
+		return customTargetId;
+	}
+
+	void setCustomTargetId(const String& newId)
+	{
+		customTargetId = newId;
+	}
 
 private:
+
+	String customTargetId;
 
 	static Array<Identifier> getRangeIds(bool isInput);
 

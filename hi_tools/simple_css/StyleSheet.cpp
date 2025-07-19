@@ -1862,6 +1862,9 @@ String StyleSheet::getText(const String& t, PseudoState currentState) const
 		textToUse = getPropertyValueString({"content", currentState});
 	}
 
+	if(textToUse.isEmpty())
+		return {};
+
 	if(auto v = getPropertyValue({ "text-transform", currentState}))
 	{
 		auto tv = v.getValue(varProperties);
@@ -2701,43 +2704,46 @@ String StyleSheet::getURLFromProperty(const PropertyKey& key) const
 	return {};
 }
 
-Rectangle<float> StyleSheet::getLocalBoundsFromText(const String& text) const
+Rectangle<float> StyleSheet::getLocalBoundsFromText(const String& text, PseudoState state) const
 {
-	auto f = getFont({}, {});
-	auto textWidth = f.getStringWidthFloat(getText(text, {}));
+	auto f = getFont(state, {});
+	auto textWidth = f.getStringWidthFloat(getText(text, state));
 	auto textHeight = f.getHeight();
 
 	Rectangle<float> area(0.0f, 0.0f, textWidth, textHeight);
 
-	area = getBounds(area, {});
-	area = expandArea(area, { "padding", {}});
-	area = expandArea(area, { "margin", {}});
+	area = getBounds(area, state);
+	area = expandArea(area, { "padding", state});
+	area = expandArea(area, { "margin", state});
 
-	auto ba = getPseudoArea(area, 0, PseudoElementType::Before);
-
-	if(!ba.isEmpty())
+	if(state.matchesElement(PseudoElementType::None))
 	{
-		auto pos = getPositionType(PseudoState().withElement(PseudoElementType::Before));
-		auto dontExtend = pos == PositionType::absolute || pos == PositionType::fixed;
-		if(dontExtend)
-			ba = {};
+		auto ba = getPseudoArea(area, 0, PseudoElementType::Before);
+
+		if(!ba.isEmpty())
+		{
+			auto pos = getPositionType(PseudoState().withElement(PseudoElementType::Before));
+			auto dontExtend = pos == PositionType::absolute || pos == PositionType::fixed;
+			if(dontExtend)
+				ba = {};
+		}
+
+		if(!ba.isEmpty())
+			area = area.withLeft(area.getX() - ba.getWidth());
+		
+	    auto ba2 = getPseudoArea(area, 0, PseudoElementType::Before2);
+
+	    if(!ba2.isEmpty())
+	    {
+	        auto pos = getPositionType(PseudoState().withElement(PseudoElementType::Before2));
+	        auto dontExtend = pos == PositionType::absolute || pos == PositionType::fixed;
+	        if(dontExtend)
+	            ba2 = {};
+	    }
+
+	    if(!ba2.isEmpty())
+	        area = area.withLeft(area.getX() - ba2.getWidth());
 	}
-
-	if(!ba.isEmpty())
-		area = area.withLeft(area.getX() - ba.getWidth());
-	
-    auto ba2 = getPseudoArea(area, 0, PseudoElementType::Before2);
-
-    if(!ba2.isEmpty())
-    {
-        auto pos = getPositionType(PseudoState().withElement(PseudoElementType::Before2));
-        auto dontExtend = pos == PositionType::absolute || pos == PositionType::fixed;
-        if(dontExtend)
-            ba2 = {};
-    }
-
-    if(!ba2.isEmpty())
-        area = area.withLeft(area.getX() - ba2.getWidth());
     
 	return area.withZeroOrigin();
 }
