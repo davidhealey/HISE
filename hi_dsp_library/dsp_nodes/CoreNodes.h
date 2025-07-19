@@ -146,7 +146,7 @@ template <bool Unscaled> class peak_base: public data::display_buffer_base<true>
 {
 public:
 	
-	SN_GET_SELF_AS_OBJECT(peak_base);
+	
 
 	~peak_base() override {};
 
@@ -248,12 +248,18 @@ public:
 struct peak: public peak_base<false>
 {
 	SN_NODE_ID("peak");
+
+	SN_GET_SELF_AS_OBJECT(peak);
+
 	SN_DESCRIPTION("create a modulation signal from the (absolute) input magnitude");
 };
 
 struct peak_unscaled: public peak_base<true>
 {
 	SN_NODE_ID("peak_unscaled");
+
+	SN_GET_SELF_AS_OBJECT(peak_unscaled);
+
 	SN_DESCRIPTION("create a raw modulation signal from the input");
 };
 
@@ -740,7 +746,10 @@ public:
 
 	bool handleModulation(double& v)
 	{
-		return state.get().modValue.getChangedValue(v);
+		if(!isPolyphonic() || state.isVoiceRenderingActive())
+			return state.get().modValue.getChangedValue(v);
+
+		return false;
 	}
 
 	template <typename FrameDataType> void processFrame(FrameDataType& data)

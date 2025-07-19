@@ -113,6 +113,8 @@ struct Helpers
 
 			fftBufferSize = getPropertyInternal("BufferLength", 8192);
 			refreshFFTSize();
+
+			b->setEnableProfiling("Process FFT buffer");
 		}
 
 		RingBufferComponentBase* createComponent();
@@ -329,6 +331,8 @@ struct Helpers
 		}
 
 		void transformReadBuffer(AudioSampleBuffer& b) override;
+
+		int currentProfileTrack = 0;
 
 		FFTHelpers::WindowType currentWindow = FFTHelpers::BlackmanHarris;
 
@@ -576,7 +580,7 @@ struct simple_gon_display : public hise::GoniometerBase,
 
 	void paint(Graphics& g) override
 	{
-		auto laf = getSpecialLookAndFeel<LookAndFeelMethods>();
+		auto laf = getSpecialLookAndFeel<LookAndFeelMethods>(this);
 		laf->drawOscilloscopeBackground(g, *this, getLocalBounds().toFloat());
 
 		GoniometerBase::paintSpacialDots(g);

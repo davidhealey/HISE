@@ -102,7 +102,14 @@ class DummyProfiledComponent
 {
 public:
 
-	void repaintWithProfileTrack(uint32) {}
+	virtual ~DummyProfiledComponent() = default;
+
+	void repaintWithProfileTrack(uint32)
+	{
+		auto c = dynamic_cast<Component*>(this);
+		jassert(c != nullptr);
+		c->repaint();
+	}
 
 	void setEnableProfiling(bool, void*, bool) {};
 };

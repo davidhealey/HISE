@@ -467,9 +467,9 @@ private:
 #endif
 
 
-#define CHECK_MIDDLE_MOUSE_DOWN(e) CHECK_TRIGGER(e); if(ZoomableViewport::checkMiddleMouseDrag(e, MouseEventFlags::Down)) return;
-#define CHECK_MIDDLE_MOUSE_UP(e) CHECK_TRIGGER(e); if(ZoomableViewport::checkMiddleMouseDrag(e, MouseEventFlags::Up)) return;
-#define CHECK_MIDDLE_MOUSE_DRAG(e) CHECK_TRIGGER(e); if(ZoomableViewport::checkMiddleMouseDrag(e, MouseEventFlags::Drag)) return;
+#define CHECK_MIDDLE_MOUSE_DOWN(e) CHECK_TRIGGER(true); if(ZoomableViewport::checkMiddleMouseDrag(e, MouseEventFlags::Down)) return;
+#define CHECK_MIDDLE_MOUSE_UP(e) CHECK_TRIGGER(false); if(ZoomableViewport::checkMiddleMouseDrag(e, MouseEventFlags::Up)) return;
+#define CHECK_MIDDLE_MOUSE_DRAG(e) if(ZoomableViewport::checkMiddleMouseDrag(e, MouseEventFlags::Drag)) return;
 #define CHECK_VIEWPORT_SCROLL(e, details) if(ZoomableViewport::checkViewportScroll(e, details)) return;
 
 struct ComponentWithMiddleMouseDrag: public Component
@@ -518,29 +518,49 @@ struct AbstractZoomableView: public ScrollBar::Listener,
 	{
 		enum class Direction: uint8
 		{
-			Up = 'w',
-			Down = 's',
+			Up = 'q',
+			Down = 'e',
 			Left = 'a',
-			Right = 'd'
+			Right = 'd',
+			In = 'w',
+			Out = 's'
 		};
+
+		enum class MovementType
+		{
+			Vertical,
+			Horizontal,
+			Zoom,
+			numMovementTypes
+		};
+
+		static constexpr int NumMovementTypes = (int)MovementType::numMovementTypes;
 
 		WASDKeyListener(Component& c);
 		~WASDKeyListener();
 
-		static int getDelta(Direction d) { return (d == Direction::Up || d == Direction::Right) ? 1 : -1; }
+		static int getDelta(Direction d) { return (d == Direction::Up || d == Direction::Right || d == Direction::In) ? 1 : -1; }
 		static bool isHorizontal(Direction d) { return d == Direction::Left || d == Direction::Right; }
+		static bool isVertical(Direction d) { return d == Direction::Up || d == Direction::Down; }
+		static bool isZoom(Direction d) { return d == Direction::In || d == Direction::Out; }
+
+		static bool isDirection(int kc)
+		{
+			return kc == (int)Direction::In || kc == (int)Direction::Out || kc == (int)Direction::Left ||
+                   kc == (int)Direction::Right || kc == (int)Direction::Up || kc == (int)Direction::Down;   
+		}
+		static MovementType getMovementType(Direction d) { return isHorizontal(d) ? MovementType::Horizontal : (isVertical(d) ? MovementType::Vertical : MovementType::Zoom); }
 
 		bool keyPressed(const KeyPress& key, Component* originatingComponent) override;
-		void setShiftMultiplier(double horizontalFactor, double verticalFactor);
+		void setShiftMultiplier(double horizontalFactor, double verticalFactor, double zoomFactor);
 		void timerCallback() override;
-		void handlePressedKey(Direction d);
 		bool keyStateChanged (bool isKeyDown, Component* originatingComponent) override;
 
-		LinearSmoothedValue<double> delta[2];
-		double shiftMultipliers[2] = { 3.0, 3.0 };
+		LinearSmoothedValue<double> delta[NumMovementTypes];
+		double shiftMultipliers[NumMovementTypes] = { 3.0, 3.0, 3.0 };
 		std::map<Direction, bool> state;
-		AnimatedPositionBehaviours::ContinuousWithMomentum behaviour[2];
-		std::function<void(bool, float)> onDirection;
+		AnimatedPositionBehaviours::ContinuousWithMomentum behaviour[NumMovementTypes];
+		std::function<void(MovementType, double)> onMovement;
 		Component& p;
 	};
 
@@ -597,13 +617,9 @@ struct AbstractZoomableView: public ScrollBar::Listener,
 
 	void onResize(Rectangle<int> viewportPosition);
 	void positionChanged(Animator&, double newPosition) override;
-	void handleMouseWheelEvent(const MouseEvent& e, const MouseWheelDetails& wheel);
 
-    void hangleMouseMagnify(const MouseEvent& e, float scaleFactor)
-    {
-        changeZoom(zoomFactor * (double)scaleFactor, e.getPosition().x);
-    }
-    
+	void handleMouseWheelEvent(const MouseEvent& e, const MouseWheelDetails& wheel);
+    void hangleMouseMagnify(const MouseEvent& e, float scaleFactor);
 	bool handleMouseEvent(const MouseEvent& e, MouseEventType t);
 	void zoomToRange(Range<double> newScaledRange);
 	void moveToRange(double normalisedNewXPosition);
@@ -619,6 +635,8 @@ struct AbstractZoomableView: public ScrollBar::Listener,
 
 protected:
 
+	virtual bool onWASDMovement(WASDKeyListener::MovementType t, double delta);
+
 	virtual UndoManager* getUndoManager() = 0;
 
 	float getZoomScale() const;
@@ -626,6 +644,10 @@ protected:
 	Range<double> getScaledZoomRange() const;
 	Range<double> getNormalisedZoomRange() const;
 	void updateIndexToShow();
+
+	ScrollbarFader& getFader() { return sf; }
+
+	bool useIntegerGrid = false;
 
 private:
 

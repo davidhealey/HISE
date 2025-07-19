@@ -162,8 +162,6 @@ bool MainController::unitTestMode = false;
 		lockProfile.getSource(i + (int)LockHelpers::Type::numLockTypes)->colour = Colour(HISE_ERROR_COLOUR);
 	}
 
-	lockProfile.clearSource((int)LockHelpers::Type::MessageLock); // 0
-	lockProfile.clearSource((int)LockHelpers::Type::MessageLock + (int)LockHelpers::Type::numLockTypes); // 0
 	lockProfile.clearSource((int)LockHelpers::Type::IteratorLock);
 	lockProfile.clearSource((int)LockHelpers::Type::IteratorLock + (int)LockHelpers::Type::numLockTypes);
 
@@ -197,6 +195,8 @@ bool MainController::unitTestMode = false;
 	hostInfo = new DynamicObject();
     
 	startTimer(HISE_UNDO_INTERVAL);
+
+	getGlobalUIUpdater()->setDebugSession(&getDebugSession());
 
 	javascriptThreadPool->startThread(8);
 	getKillStateHandler().setScriptingThreadId(javascriptThreadPool->getThreadId());
@@ -254,6 +254,81 @@ void MainController::initProjectDocsWithURL(const String& projectDocURL)
 	getProjectDocHolder()->setProjectURL(URL(projectDocURL));
 }
 
+#if USE_BACKEND
+int MainController::getExtraDefinitionsValue(const String& extraDefinition, int defaultValue) const
+{
+	if(cachedPreprocessors.contains(extraDefinition))
+		return cachedPreprocessors[extraDefinition];
+
+#if JUCE_WINDOWS
+	auto ed = HiseSettings::Project::ExtraDefinitionsWindows;
+#elif JUCE_MAC
+		auto ed = HiseSettings::Project::ExtraDefinitionsOSX;
+#else
+		auto ed = HiseSettings::Project::ExtraDefinitionsLinux;
+#endif
+
+	auto gm = dynamic_cast<const GlobalSettingManager*>(this);
+
+	String s;
+
+	if(gm == nullptr)
+	{
+		// commencing uggo sequence, we don't have the filehandler initialised
+		// as well as the settings are not available so we must do EVERYTHING by hand
+		auto hiseAppRoot = ProjectHandler::getAppDataDirectory(nullptr);
+
+		if(auto projectsXml = XmlDocument::parse(hiseAppRoot.getChildFile("projects.xml")))
+		{
+			auto currentProject = projectsXml->getStringAttribute("current");
+
+			if(File::isAbsolutePath(currentProject))
+			{
+				auto projectSettings = File(currentProject).getChildFile("project_info.xml");
+
+				if(auto projectXml = XmlDocument::parse(projectSettings))
+				{
+					if(auto c = projectXml->getChildByName(ed))
+					{
+						s = c->getStringAttribute("value");
+					}
+				}
+			}
+		}
+	}
+	else
+		s = gm->getSettingsObject().getSetting(ed).toString();
+
+	if(s.isEmpty())
+	{
+		cachedPreprocessors.set(extraDefinition, defaultValue);
+		return defaultValue;
+	}
+
+	StringArray entries;
+
+	if(s.contains("\n"))
+		entries = StringArray::fromTokens(s, "\n", "");
+	else if(s.contains(";"))
+		entries = StringArray::fromTokens(s, ";", "");
+	else
+		entries.add(s.trim());
+
+	for(const auto& e: entries)
+	{
+		auto key = e.upToFirstOccurrenceOf("=", false, false).trim();
+		if(key == extraDefinition)
+		{
+			auto v = e.fromFirstOccurrenceOf("=", false, false).trim().getIntValue();
+			cachedPreprocessors.set(extraDefinition, v);
+			return v;
+		}
+	}
+
+	cachedPreprocessors.set(extraDefinition, defaultValue);
+	return defaultValue;
+}
+#endif
 
 hise::SampleMapPool* MainController::getCurrentSampleMapPool()
 {
@@ -326,7 +401,7 @@ void MainController::clearPreset(NotificationType sendPresetLoadMessage)
 	while (auto p = iter.getNextProcessor())
     {
         if(auto sp = dynamic_cast<RuntimeTargetHolder*>(p))
-            sp->disconnectRuntimeTargets(this);
+            sp->disconnectRuntimeTargets(p);
         
         p->cleanRebuildFlagForThisAndParents();
     }
@@ -337,6 +412,7 @@ void MainController::clearPreset(NotificationType sendPresetLoadMessage)
 		SUSPEND_GLOBAL_DISPATCH(mc, "reset main controller");
 		LockHelpers::freeToGo(mc);
 
+		mc->rebuildPluginParameters();
 		mc->getMacroManager().getMidiControlAutomationHandler()->getMPEData().clear();
 		mc->getScriptComponentEditBroadcaster()->getUndoManager().clearUndoHistory();
 		mc->getControlUndoManager()->clearUndoHistory();
@@ -583,8 +659,9 @@ void MainController::compileAllScripts()
 
 			while(auto rt = iter.getNextProcessor())
 			{
-				rt->disconnectRuntimeTargets(p->getMainController());
-				rt->connectRuntimeTargets(p->getMainController());
+				auto as_p = dynamic_cast<Processor*>(rt);
+				rt->disconnectRuntimeTargets(as_p);
+				rt->connectRuntimeTargets(as_p);
 			}
 
 			return SafeFunctionCall::OK;
@@ -1010,12 +1087,20 @@ hise::RLottieManager::Ptr MainController::getRLottieManager()
 }
 #endif
 
-void MainController::connectToRuntimeTargets(scriptnode::OpaqueNode& on, bool shouldAdd)
+void MainController::connectToGlobalRuntimeTargets(scriptnode::OpaqueNode& on, bool shouldAdd)
 {
+	if(isBeingDeleted())
+		return;
+
     if(auto rm = dynamic_cast<scriptnode::routing::GlobalRoutingManager*>(getGlobalRoutingManager()))
     {
         rm->connectToRuntimeTargets(on, shouldAdd);
     }
+
+	if(auto gm = ProcessorHelpers::getFirstProcessorWithType<GlobalModulatorContainer>(getMainSynthChain()))
+	{
+		gm->connectToRuntimeTargets(on, shouldAdd);
+	}
 
 #if HISE_INCLUDE_RT_NEURAL
     for(const auto& id: getNeuralNetworks().getIdList())
@@ -1624,7 +1709,19 @@ void MainController::prepareToPlay(double sampleRate_, int samplesPerBlock)
 {
     if(sampleRate_ <= 0.0 || samplesPerBlock <= 0)
         return;
-    
+
+#if 0
+	if(auto ap = dynamic_cast<AudioProcessor*>(this))
+	{
+		juce::PluginHostType hostType;
+
+		if(hostType.isLogic())
+			getMasterClock().setClockTolerance(0.2);
+		else
+			getMasterClock().setClockTolerance(0.0);
+	}
+#endif
+
 	auto oldSampleRate = processingSampleRate;
 	auto oldBlockSize = processingBufferSize.get();
 
@@ -2223,6 +2320,73 @@ void MainController::timerCallback()
 #if USE_BACKEND
 	getScriptComponentEditBroadcaster()->getUndoManager().beginNewTransaction();
 #endif
+}
+
+void MainController::savePluginState(MemoryBlock& destData, int currentlyLoadedProgram)
+{
+	MemoryOutputStream output(destData, false);
+
+	ValueTree v("ControlData");
+
+	if (auto e = getExpansionHandler().getCurrentExpansion())
+		v.setProperty("CurrentExpansion", e->getProperty(ExpansionIds::Name), nullptr);
+
+	//synthChain->saveMacroValuesToValueTree(v);
+
+    getUserPresetHandler().saveStateManager(v, UserPresetIds::Modules);
+    
+    getUserPresetHandler().saveStateManager(v, UserPresetIds::MidiAutomation);
+
+	if (getUserPresetHandler().isUsingCustomDataModel())
+    {
+        getUserPresetHandler().saveStateManager(v, UserPresetIds::CustomJSON);
+        
+    }
+	else
+		getMainSynthChain()->saveInterfaceValues(v);
+
+	v.setProperty("MidiChannelFilterData", getMainSynthChain()->getActiveChannelData()->exportData(), nullptr);
+
+	v.setProperty("Program", currentlyLoadedProgram, nullptr);
+
+	auto storeTempo = HISE_GET_PREPROCESSOR(this, HISE_INCLUDE_TEMPO_IN_PLUGIN_STATE);
+
+	if(storeTempo)
+	{
+		auto globalBPM = dynamic_cast<GlobalSettingManager*>(this)->globalBPM;
+		v.setProperty("HostTempo", globalBPM, nullptr);
+	}
+
+	auto up = getActiveFileHandler()->getSubDirectory(FileHandlerBase::UserPresets);
+
+	auto currentUserPreset = getUserPresetHandler().getCurrentlyLoadedFile();
+
+	if(currentUserPreset.isAChildOf(up))
+	{
+		v.setProperty("UserPreset", currentUserPreset.getRelativePathFrom(up).replaceCharacter('\\', '/'), nullptr);
+	}
+	else
+	{
+		v.setProperty("UserPreset", currentUserPreset.getFullPathName(), nullptr);
+	}
+
+#if USE_BACKEND
+	auto version = GET_HISE_SETTING(getMainSynthChain(), HiseSettings::Project::Version).toString();
+#else
+	auto version = FrontendHandler::getVersionString();
+#endif
+
+	// Make sure to save the version string into the plugin state
+	v.setProperty("Version", version, nullptr);
+
+    getUserPresetHandler().saveStateManager(v, UserPresetIds::MPEData);
+	
+	// Reload the macro connections before restoring the preset values
+		// so that it will update the correct connections with `setMacroControl()` in a control callback
+	if (getMacroManager().isMacroEnabledOnFrontend())
+		getMacroManager().getMacroChain()->saveMacrosToValueTree(v);
+
+	v.writeToStream(output);
 }
 
 void MainController::handleSuspendedNoteOffs()

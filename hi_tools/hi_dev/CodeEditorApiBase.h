@@ -49,7 +49,7 @@ struct ValueTreeApiHelpers
 
 class DebugInformationBase;
 
-class DebugableObjectBase: public ObjectWithJSONConverter
+class DebugableObjectBase
 {
 public:
 
@@ -89,7 +89,7 @@ public:
 
 	virtual String getDebugDataType() const { return getDebugName(); }
 
-	void writeAsJSON (OutputStream&, int indentLevel, bool allOnOneLine, int maximumDecimalPlaces) override;
+	
 
 	virtual AttributedString getDescription() const
 	{
@@ -568,7 +568,7 @@ private:
 	WeakReference<DebugableObjectBase> obj;
 };
 
-
+#if !HISE_NO_GUI_TOOLS
 struct JSONViewer: public Component
 {
     JSONViewer(const var& obj)
@@ -602,6 +602,65 @@ struct JSONViewer: public Component
     CodeDocument doc;
     JavascriptTokeniser tokeniser;
     ScopedPointer<CodeEditorComponent> editor;
+};
+#endif
+
+struct RectViewer: public Component
+{
+	struct Item
+	{
+		String label;
+		Rectangle<double> rectangle;
+		Colour c;
+	};
+
+	Array<Item> items;
+	Rectangle<double> fullBounds;
+
+	RectViewer(const String& label, const var& data);
+
+	Array<int> hoveredIndexes;
+	Rectangle<int> currentDragRectangle;
+
+	void mouseDown(const MouseEvent& e) override
+	{
+		currentDragRectangle = {};
+		repaint();
+	}
+
+	void mouseDrag(const MouseEvent& event) override
+	{
+		currentDragRectangle = { event.getMouseDownPosition(), event.getPosition() };
+		repaint();
+	}
+
+	void mouseUp(const MouseEvent& event) override
+	{
+		currentDragRectangle = {};
+		repaint();
+	}
+
+	void mouseExit(const MouseEvent& e) override
+	{
+		currentDragRectangle = {};
+		hoveredIndexes.clear();
+		repaint();
+	}
+
+	void mouseMove(const MouseEvent& e) override;
+
+	void paint(Graphics& g) override;
+
+	void resized() override
+	{
+		resizer.setBounds(getLocalBounds().removeFromRight(20).removeFromBottom(20));
+	}
+
+	static bool callRecursive(const var& v, const String& label, const std::function<bool(const String&, const var&)>& f);
+
+	static bool wantsRectangleViewer(const var& v);
+
+	ResizableCornerComponent resizer;
 };
 
 struct BufferViewer : public Component,

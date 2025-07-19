@@ -7,11 +7,6 @@ struct WebViewData::TCPServer::Helpers
 {
 	static std::string btoa(void* data, size_t numBytes)
 	{
-		auto isBase64 = [](uint8 c)
-		{
-			return (std::isalnum(c) || (c == '+') || (c == '/'));
-		};
-
 		static const std::string b64Characters =
 			"ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 			"abcdefghijklmnopqrstuvwxyz"
@@ -71,7 +66,7 @@ struct WebViewData::TCPServer::Helpers
 
 	    int bytesRead = socket->read(buffer, sizeof(buffer), false);
 
-	    if (bytesRead <= 0) 
+	    if (!ok || bytesRead <= 0) 
 			return false;
 
 	    juce::String request(buffer);
@@ -257,7 +252,6 @@ public:
 
         // Extract the first byte (FIN, RSV, Opcode)
         uint8_t firstByte = frame[offset++];
-        bool fin = firstByte & 0x80;  // FIN bit
         uint8_t opcode = firstByte & 0x0F;  // Opcode (e.g., 0x1 for text, 0x2 for binary)
 
         // Extract the second byte (Mask bit, Payload length)
@@ -266,8 +260,10 @@ public:
         size_t payloadLength = secondByte & 0x7F;  // Payload length
 
         // If the payload length is 126 or 127, read the extended length
-        if (payloadLength == 126) {
-            payloadLength = (frame[offset++] << 8) | frame[offset++];
+        if (payloadLength == 126)
+        {
+            payloadLength = (frame[offset++] << 8);
+            payloadLength |= frame[offset++];
         } else if (payloadLength == 127) {
             payloadLength = 0; // 64-bit length (optional for normal use)
         }
@@ -275,10 +271,10 @@ public:
         // Extract the masking key if Mask bit is set
         uint32_t maskingKey = 0;
         if (mask) {
-            maskingKey = (frame[offset++] << 24) |
-                         (frame[offset++] << 16) |
-                         (frame[offset++] << 8) |
-                         frame[offset++];
+            maskingKey = (frame[offset++] << 24);
+            maskingKey |= (frame[offset++] << 16);
+            maskingKey |= (frame[offset++] << 8);
+            maskingKey |= frame[offset++];
         }
 
 		numParsed = offset + payloadLength;
@@ -300,7 +296,7 @@ public:
             
         } else if (opcode == 0x2) {
 
-			int numValues = payload.size() / 4;
+			int numValues = (int)payload.size() / 4;
 
 			buffer = new VariantBuffer(numValues);
 
@@ -339,6 +335,8 @@ public:
 				}
 			}
 	    }
+
+		return var();
     }
 
 private:
@@ -480,7 +478,8 @@ void WebViewData::TCPServer::Data::append(bool isString, const void* data, size_
 	size_t headerLength = 0;
 
 	// always send as binary stream
-	mos.writeByte(0x82);
+	uint8 binaryHeader = 0x82;
+	mos.write(&binaryHeader, 1);
 	headerLength++;
 
 	auto idLength = (uint16)id.toString().length() + 1;
@@ -496,24 +495,24 @@ void WebViewData::TCPServer::Data::append(bool isString, const void* data, size_
 	if (totalLength <= 125)
 	{
 		uint8_t payloadLen = static_cast<uint8_t>(totalLength);
-		mos.writeByte(payloadLen);
+		mos.write(&payloadLen, 1);
 		headerLength++;
 	}
 	else if (totalLength <= 65535)
 	{
 		uint8_t payloadLen = 126; // Extended length 16-bit
-		mos.writeByte(payloadLen);
+		mos.write(&payloadLen, 1);
 		headerLength++;
-		uint16_t len = juce::ByteOrder::swapIfLittleEndian(static_cast<uint16_t>(totalLength));
+		uint16_t len = static_cast<uint16_t>(totalLength);
 		mos.write(&len, sizeof(uint16_t));
 		headerLength += sizeof(uint16_t);
 	}
 	else
 	{
 		uint8_t payloadLen = 127; // Extended length 64-bit
-		mos.writeByte(payloadLen);
+		mos.write(&payloadLen, 1);
 		headerLength++;
-		uint64_t len = juce::ByteOrder::swapIfLittleEndian(static_cast<uint64_t>(totalLength));
+		uint64_t len = static_cast<uint64>(totalLength);
 		mos.write(&len, sizeof(uint64_t));
 		headerLength += sizeof(sizeof(uint64_t));
 	}

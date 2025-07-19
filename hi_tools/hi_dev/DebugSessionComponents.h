@@ -4,94 +4,6 @@ namespace hise
 {
 using namespace juce;
 
-struct DebugSession::ProfileDataSource::ViewComponents::BaseWithManagerConnection
-{
-	virtual ~BaseWithManagerConnection();;
-
-	virtual void onNavigation(BaseWithManagerConnection* navigationSource, ViewItem::Ptr totalRoot, ViewItem::Ptr currentRoot) {};
-
-	virtual void onSearchUpdate(const String& searchTerm, bool zoomToFirst) {};
-
-	virtual void onTimeDomainUpdate(TimeDomain newDomain, double context) {};
-
-protected:
-
-	Manager* getManager();
-
-	Manager* initManager();
-
-	
-
-private:
-
-	friend struct SingleThreadPopup;
-	WeakReference<Manager> currentManager;
-
-	JUCE_DECLARE_WEAK_REFERENCEABLE(BaseWithManagerConnection);
-};
-
-struct DebugSession::ProfileDataSource::ViewComponents::Manager: public Component
-{
-	struct SearchBar;
-	struct NavigationAction;
-	struct UndoableTotalRootChange;
-
-	struct Factory: public PathFactory
-	{
-		Path createPath(const String& url) const override;
-	};
-
-	/** Recursively goes up the parent component hierarchy to find the first manager component. */
-	static Manager* findManager(Component* c);
-
-	SET_GENERIC_PANEL_ID("ProfilerManager");
-
-	Manager(DebugSession& s);
-
-	static void onRec(Manager& m, bool isEnabled);
-
-	void resized() override;
-	void setRecording(bool isRecording);
-	void setTimeDomain(TimeDomain newDomain, double newDomainContext);
-	void toggleTypeFilter(SourceType source);
-	bool showSourceType(SourceType source) const;
-	void setPopupMode(bool usePopupMode);
-	void setSearchTerm(const String& searchTerm, bool zoomToFirst);
-	void zoomToFirstMatch(ViewItem::Ptr itemToZoomTo);
-	bool setNewRoot(BaseWithManagerConnection* source, ViewItem::Ptr newRoot, bool useUndoManager);
-	bool navigate(BaseWithManagerConnection* source, ViewItem::Ptr newTarget, bool useUndoManager);
-	void sendRootChangeMessage(BaseWithManagerConnection* source);
-	void setActiveViewer(Viewer* newViewer);
-
-    void paint(Graphics& g) override
-    {
-        session.initUIThread();
-    }
-    
-	VoiceBitMap<32> typeFilters;
-
-	TimeDomain currentDomain;
-	double domainContext;
-	String lastSearch;
-
-	WeakReference<Viewer> currentViewer;
-
-	Array<WeakReference<BaseWithManagerConnection>> connectedComponents;
-
-	ViewItem::Ptr totalRoot;
-	ViewItem::Ptr currentRoot;
-	
-	DebugSession& session;
-	Factory f;
-	HiseShapeButton openButton, saveButton, recordButton, initButton, trimButton;
-
-	HiseShapeButton undoButton, redoButton;
-	ScopedPointer<Component> searchBar;
-
-	UndoManager um;
-
-	JUCE_DECLARE_WEAK_REFERENCEABLE(Manager);
-};
 
 
 
@@ -124,7 +36,7 @@ struct DebugSession::ProfileDataSource::ViewComponents::StatisticsComponent: pub
 	{
 		using Ptr = ReferenceCountedObjectPtr<RowData>;
 
-		RowData(ViewItem& i, int index_);
+		RowData(ViewItem& i, int index_, int currentRunIndex);
 
 		void draw(Graphics& g, int columnId, Rectangle<float> rectangle, TimeDomain d, double domainContext, bool rowIsSelected);
 
@@ -140,6 +52,7 @@ struct DebugSession::ProfileDataSource::ViewComponents::StatisticsComponent: pub
 		Colour c;
 		int currentRunIndex = -1;
 		int index = 0;
+		int runMultiplier = 1;
 
 		JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(RowData);
 	};
@@ -167,9 +80,15 @@ struct DebugSession::ProfileDataSource::ViewComponents::StatisticsComponent: pub
 	void onNavigation(BaseWithManagerConnection* navigationSource, ViewItem::Ptr totalRoot, ViewItem::Ptr currentRoot) override;
 	void onTimeDomainUpdate(TimeDomain newDomain, double context) override;
 
+	void onRunIndexUpdate(int newRunIndex) override
+	{
+		setRootItem(currentRoot, newRunIndex);
+	}
+
 private:
 
 	int currentSelection = -1;
+	int currentRunIndex = -2;
 
 	TimeDomain domain = TimeDomain::Absolute;
 	double contextValue = 0.0;

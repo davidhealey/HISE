@@ -39,12 +39,32 @@ class DebugInformation;
 class HiseJavascriptEngine;
 
 /** Overwrite this method if you want to add debugging functionality to a object. */
-class DebugableObject: public DebugableObjectBase
+class DebugableObject: public DebugableObjectBase,
+					   public ObjectWithJSONConverter	
 {
 public:
 
+	DebugableObject()
+	{
+		registerStreamCreator(this);
+	}
+
     virtual ~DebugableObject() {};
-    
+
+	void writeAsJSON (OutputStream& outputStream, int indentLevel, bool allOnOneLine, int maximumDecimalPlaces) override
+	{
+		outputStream.writeString(getDebugName() + " - " + getDebugValue());
+	}
+
+	void writeToStream(OutputStream& os) override
+	{
+		jassertfalse;
+	}
+
+	static ObjectWithJSONConverter* createFromStream(InputStream& os) { return nullptr; }
+
+	JUCE_MAKE_STREAMABLE_OBJECT(2);
+
 	struct Helpers
 	{
 		static AttributedString getFunctionDoc(const String &docBody, const Array<Identifier> &parameters);

@@ -550,26 +550,9 @@ void PatchBrowser::paint(Graphics &g)
 		auto endPoint = c->getPointForTreeGraph(false).toFloat();
 		auto endPointInParent = getLocalPoint(c, endPoint);
 
-        bool paintUniform = false;
-        
-        if(auto ms = dynamic_cast<ModulatorSynth*>(c->getProcessor()))
-        {
-            if(ms->isUsingUniformVoiceHandler())
-                paintUniform = true;
-            
-            if(auto msc = dynamic_cast<ModulatorSynthChain*>(ms))
-            {
-                if(msc->isUniformVoiceHandlerRoot())
-                    paintUniform = false;
-            }
-        }
-        
-		g.setColour(paintUniform ? Colour(0xFF888888) :
-            Colour(0xFF222222));
-
+		g.setColour(Colour(0xFF222222));
 		g.drawLine((float)startPointInParent.getX(), (float)startPointInParent.getY(), (float)startPointInParent.getX(), (float)endPointInParent.getY(), 2.0f);
 		g.drawLine((float)startPointInParent.getX(), (float)endPointInParent.getY(), (float)endPointInParent.getX(), (float)endPointInParent.getY(), 2.0f);
-
 	}
     
     if(showChains)
@@ -746,6 +729,14 @@ void PatchBrowser::buttonClicked(Button *b)
 
 		if(shouldProfile)
 		{
+			Component::SafePointer<HiseShapeButton> b(profileButton.get());
+			auto delay = (int)session.getOptions().millisecondsToRecord;
+			Timer::callAfterDelay(delay, [b]()
+			{
+				if(b.getComponent() != nullptr && b->getToggleState())
+					b->setToggleState(false, sendNotificationSync);
+			});
+
 			session.clearData(&session);
 
 			session.heatmapManager.heatmapBroadcaster.addListener(*this, [](PatchBrowser& pb, DebugInformationBase::Ptr p, const std::map<int, double>* map)
@@ -1466,27 +1457,7 @@ void PatchBrowser::PatchCollection::paint(Graphics &g)
 
 	idLabel.setColour(Label::ColourIds::textColourId, Colours::white.withAlpha(bypassed ? 0.2f : 0.8f));
     
-    if(auto ms = dynamic_cast<ModulatorSynthChain*>(getProcessor()))
-    {
-        if(ms->isUniformVoiceHandlerRoot())
-        {
-            
-            g.setFont(GLOBAL_BOLD_FONT().withHeight(10.0f));
-            
-            
-            
-            auto b = iconSpace2.removeFromRight(30.0f);
-            
-            g.setColour(JUCE_LIVE_CONSTANT_OFF(Colour(0x14FFFFFF)));
-            g.fillRoundedRectangle(b.reduced(3.0f), 2.0f);
-            
-            g.setColour(Colour(0xFF888888));
-            g.drawText("UVH", b, Justification::centred);
-        }
-        
-    }
-
-	auto ds = getDragState();
+    auto ds = getDragState();
 
 	if(ds != DragState::Inactive)
 	{
@@ -1939,6 +1910,36 @@ void PatchBrowser::PatchItem::paint(Graphics& g)
 		g.drawEllipse(iconSpace.reduced(JUCE_LIVE_CONSTANT_OFF(3.0f)), 1.5f);
 
 		g.setColour(Colour(0xFF222222));
+	}
+
+	if(auto fx = dynamic_cast<MasterEffectProcessor*>(p.get()))
+	{
+		if(auto fxChain = dynamic_cast<EffectProcessorChain*>(fx->getParentProcessor(false, false)))
+		{
+			auto idx = fxChain->getProcessingOrderIndex(fx);
+
+			if(idx.first)
+			{
+				g.setColour(Colour(0xFF222222));
+				g.setFont(GLOBAL_BOLD_FONT());
+				g.drawText(String(idx.second+1), iconSpace.translated(0.0f, -1.0f), Justification::centred);
+			}
+		}
+	}
+
+	if(auto fx = dynamic_cast<VoiceEffectProcessor*>(p.get()))
+	{
+		if(auto fxChain = dynamic_cast<EffectProcessorChain*>(fx->getParentProcessor(false, false)))
+		{
+			auto idx = fxChain->getProcessingOrderIndex(fx);
+
+			if(idx.first)
+			{
+				g.setColour(Colour(0xFF222222));
+				g.setFont(GLOBAL_BOLD_FONT());
+				g.drawText(String(idx.second+1), iconSpace.translated(0.0f, -1.0f), Justification::centred);
+			}
+		}
 	}
 
 	g.drawRoundedRectangle(iconSpace, 2.0f, 2.0f);

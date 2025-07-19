@@ -85,7 +85,7 @@ public:
 	virtual Identifier getDefaultablePropertyId(int i) const;
 
 	/** Clears the given object and sets all defaultable properties to their initial values. */
-	void resetObject(DynamicObject* objectToClear);
+	void resetObject(DynamicObject* objectToClear) const;
 
 	void storePropertyInObject(var obj, int id, var value, var defaultValue = var()) const;
 	var getPropertyWithDefault(var obj, int id) const;
@@ -347,9 +347,11 @@ public:
 			RLottieDevPanel,
 			ScriptWatchTable,
 			ScriptComponentEditPanel,
+			ScriptComponentCSSDebugger,
 			DspNetworkGraph,
 			DspNodeList,
 			DspNodeParameterEditor,
+			PluginParameterSimulator,
             DspFaustEditorPanel,
 			ScriptBroadcasterMap,
 			PerfettoViewer,
@@ -378,6 +380,7 @@ public:
 			SampleMapBrowser,
 			WavetablePreview,
 			AHDSRGraph,
+			FlexAHDSRGraph,
 			MarkdownEditor,
 			ServerController,
 			MarkdownPreviewPanel,
@@ -385,6 +388,8 @@ public:
 			DraggableFilterPanel,
 			WavetableWaterfall,
 			MPEPanel,
+			ModulationMatrix,
+			ModulationMatrixController,
 			Matrix2x2,
 			ThreeColumns,
 			ThreeRows,

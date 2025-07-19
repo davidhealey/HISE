@@ -299,9 +299,12 @@ Point<float> ApiHelpers::getPointFromVar(const var& data, Result* r /*= nullptr*
 	}
 }
 
-var ApiHelpers::getVarRectangle(Rectangle<float> floatRectangle, Result* r /*= nullptr*/)
+var ApiHelpers::getVarRectangle(bool useRectangleClass, Rectangle<float> floatRectangle, Result* r /*= nullptr*/)
 {
 	ignoreUnused(r);
+
+	if(useRectangleClass)
+		return var(new ScriptingObjects::ScriptRectangle(floatRectangle.toDouble()));
 
 	Array<var> newRect;
 
@@ -340,6 +343,10 @@ Rectangle<float> ApiHelpers::getRectangleFromVar(const var &data, Result *r/*=nu
 			return Rectangle<float>();
 		}
 	}
+	else if(auto ro = dynamic_cast<RectangleDynamicObject*>(data.getDynamicObject()))
+	{
+		return ro->getRectangle().toFloat();
+	}
 	else
 	{
 		if (r != nullptr) *r = Result::fail("Rectangle data is not an array");
@@ -366,6 +373,10 @@ Rectangle<int> ApiHelpers::getIntRectangleFromVar(const var &data, Result* r/*=n
 			if (r != nullptr) *r = Result::fail("Rectangle array needs 4 elements");
 			return Rectangle<int>();
 		}
+	}
+	else if (auto ro = dynamic_cast<RectangleDynamicObject*>(data.getDynamicObject()))
+	{
+		return ro->getRectangle().toNearestInt();
 	}
 	else
 	{
@@ -1198,6 +1209,7 @@ struct ScriptingApi::Engine::Wrapper
 	API_METHOD_WRAPPER_1(Engine, intToHexString);
 	API_METHOD_WRAPPER_0(Engine, getOS);
 	API_METHOD_WRAPPER_0(Engine, getSystemStats);
+	API_METHOD_WRAPPER_2(Engine, getTextForValue);
 	API_METHOD_WRAPPER_0(Engine, isPlugin);
 	API_METHOD_WRAPPER_0(Engine, isHISE);
 	API_VOID_METHOD_WRAPPER_0(Engine, reloadAllSamples);
@@ -1227,6 +1239,7 @@ struct ScriptingApi::Engine::Wrapper
 	API_METHOD_WRAPPER_0(Engine, createGlobalScriptLookAndFeel);
 	API_METHOD_WRAPPER_1(Engine, createBackgroundTask);
 	API_METHOD_WRAPPER_0(Engine, createBXLicenser);
+	API_METHOD_WRAPPER_0(Engine, createNKSManager);
     API_METHOD_WRAPPER_1(Engine, createFixObjectFactory);
 	API_METHOD_WRAPPER_0(Engine, createErrorHandler);
 	API_METHOD_WRAPPER_1(Engine, createModulationMatrix);
@@ -1325,6 +1338,7 @@ parentMidiProcessor(dynamic_cast<ScriptBaseMidiProcessor*>(p))
 	ADD_API_METHOD_0(createMidiAutomationHandler);
 	ADD_API_METHOD_0(createMacroHandler);
 	ADD_API_METHOD_0(createBXLicenser);
+	ADD_API_METHOD_0(createNKSManager);
   ADD_API_METHOD_1(loadNextUserPreset);
 	ADD_API_METHOD_1(loadPreviousUserPreset);
 	ADD_API_METHOD_1(isUserPresetReadOnly);
@@ -1372,6 +1386,7 @@ parentMidiProcessor(dynamic_cast<ScriptBaseMidiProcessor*>(p))
 	ADD_API_METHOD_1(setAllowDuplicateSamples);
 	ADD_API_METHOD_1(isControllerUsedByAutomation);
 	ADD_API_METHOD_0(getSettingsWindowObject);
+	ADD_API_METHOD_2(getTextForValue);
 	ADD_API_METHOD_0(createTimerObject);
 	ADD_API_METHOD_0(createMessageHolder);
 	ADD_API_METHOD_1(createAndRegisterSliderPackData);
@@ -1699,13 +1714,16 @@ String ScriptingApi::Engine::getMacroName(int index)
 
 void ScriptingApi::Engine::setFrontendMacros(var nameList)
 {
-	auto& mm = getProcessor()->getMainController()->getMacroManager();
+	auto mc = getProcessor()->getMainController();
+	auto& mm = mc->getMacroManager();
 
 	if (auto ar = nameList.getArray())
 	{
 		mm.setEnableMacroOnFrontend(!ar->isEmpty());
-		
-		for (int i = 0; i < HISE_NUM_MACROS; i++)
+
+		auto numMacros = HISE_GET_PREPROCESSOR(mc, HISE_NUM_MACROS);
+
+		for (int i = 0; i < numMacros; i++)
 		{
 			auto macroName = (*ar)[i].toString();
 			mm.getMacroChain()->getMacroControlData(i)->setMacroName(macroName);
@@ -2434,6 +2452,16 @@ var ScriptingApi::Engine::createBXLicenser ()
 
 }
 
+var ScriptingApi::Engine::createNKSManager()
+{
+#if HISE_INCLUDE_NKS_SDK
+	return var(new ScriptingObjects::ScriptNKSManager(getScriptProcessor()));
+#else
+	reportScriptError ("NKS support is not enabled");
+    RETURN_IF_NO_THROW({});
+#endif
+}
+
 var ScriptingApi::Engine::getDspNetworkReference(String processorId, String id)
 {
 	Processor::Iterator<scriptnode::DspNetwork::Holder> iter(getScriptProcessor()->getMainController_()->getMainSynthChain());
@@ -3125,12 +3153,13 @@ void ScriptingApi::Engine::loadUserPreset(var file)
             userPresetToLoad = userPresetToLoad.withFileExtension(".preset");
 	}
 
-    if(!getProcessor()->getMainController()->isInitialised())
-    {
-        reportScriptError("Do not load user presets at startup.");
-    }
-    else if (userPresetToLoad.existsAsFile())
+    if (userPresetToLoad.existsAsFile())
 	{
+        if(!getProcessor()->getMainController()->isInitialised())
+        {
+            reportScriptError("Do not load user presets at startup.");
+        }
+        
 		getProcessor()->getMainController()->getUserPresetHandler().loadUserPreset(userPresetToLoad);
 	}
 	else
@@ -3377,17 +3406,18 @@ void ScriptingApi::Engine::rebuildCachedPools()
 
 DynamicObject * ScriptingApi::Engine::getPlayHead() { return getProcessor()->getMainController()->getHostInfoObject(); }
 
-int ScriptingApi::Engine::isControllerUsedByAutomation(int controllerNumber)
+int ScriptingApi::Engine::isControllerUsedByAutomation(var controllerNumber)
 {
 	auto handler = getProcessor()->getMainController()->getMacroManager().getMidiControlAutomationHandler();
 
-	for (int i = 0; i < handler->getNumActiveConnections(); i++)
-	{
-		if (handler->getDataFromIndex(i).ccNumber == controllerNumber)
-			return i;
-	}
+	MidiControllerAutomationHandler::Key k;
 
-	return -1;
+	if(controllerNumber.isArray())
+		k = { (int)controllerNumber[0], (int)controllerNumber[1] };
+	else
+		k = { -1, (int)controllerNumber };
+
+	return handler->getIndexForKey(k);
 }
 
 ScriptingObjects::MidiList *ScriptingApi::Engine::createMidiList() { return new ScriptingObjects::MidiList(getScriptProcessor()); };
@@ -5237,6 +5267,7 @@ struct ScriptingApi::Synth::Wrapper
 	API_METHOD_WRAPPER_1(Synth, getTableProcessor);
 	API_METHOD_WRAPPER_1(Synth, getSliderPackProcessor);
 	API_METHOD_WRAPPER_1(Synth, getRoutingMatrix);
+	API_METHOD_WRAPPER_1(Synth, getWavetableController);
 	API_METHOD_WRAPPER_1(Synth, getSampler);
 	API_METHOD_WRAPPER_1(Synth, getSlotFX);
 	API_METHOD_WRAPPER_1(Synth, getEffect);
@@ -5318,6 +5349,7 @@ ScriptingApi::Synth::Synth(ProcessorWithScriptingContent *p, Message* messageObj
 	ADD_API_METHOD_1(getDisplayBufferSource);
 	ADD_API_METHOD_1(getTableProcessor);
 	ADD_API_METHOD_1(getSliderPackProcessor);
+	ADD_API_METHOD_1(getWavetableController);
 	ADD_API_METHOD_1(getSampler);
 	ADD_API_METHOD_1(getSlotFX);
 	ADD_API_METHOD_1(getEffect);
@@ -6109,11 +6141,21 @@ ScriptingApi::Synth::ScriptSlotFX* ScriptingApi::Synth::getSlotFX(const String& 
 	{
 		Processor::Iterator<HotswappableProcessor> it(owner);
 
-		while (auto s = dynamic_cast<EffectProcessor*>(it.getNextProcessor()))
+		while (auto p = dynamic_cast<Processor*>(it.getNextProcessor()))
 		{
-			if (s->getId() == name)
+			if (p->getId() == name)
 			{
-				return new ScriptSlotFX(getScriptProcessor(), s);
+				return new ScriptSlotFX(getScriptProcessor(), p);
+			}
+		}
+
+		Processor::Iterator<DspNetwork::Holder> it2(owner);
+
+		while (auto p = dynamic_cast<Processor*>(it2.getNextProcessor()))
+		{
+			if (p->getId() == name)
+			{
+				return new ScriptSlotFX(getScriptProcessor(), p);
 			}
 		}
 
@@ -6122,7 +6164,7 @@ ScriptingApi::Synth::ScriptSlotFX* ScriptingApi::Synth::getSlotFX(const String& 
 	}
 	else
 	{
-		reportIllegalCall("getScriptingAudioSampleProcessor()", "onInit");
+		reportIllegalCall("getSlotFX()", "onInit");
 		RETURN_IF_NO_THROW(new ScriptSlotFX(getScriptProcessor(), nullptr))
 	}
 }
@@ -6155,6 +6197,17 @@ hise::ScriptingApi::Synth::ScriptRoutingMatrix* ScriptingApi::Synth::getRoutingM
 		reportScriptError(processorId + " does not have a routing matrix");
 
 	RETURN_IF_NO_THROW(new ScriptingObjects::ScriptRoutingMatrix(getScriptProcessor(), nullptr));
+}
+
+ScriptingObjects::ScriptWavetableController* ScriptingApi::Synth::getWavetableController(const String& processorId)
+{
+	auto p = ProcessorHelpers::getFirstProcessorWithName(getScriptProcessor()->getMainController_()->getMainSynthChain(), processorId);
+
+	if(auto wt = dynamic_cast<WavetableSynth*>(p))
+		return new ScriptingObjects::ScriptWavetableController(getScriptProcessor(), p);
+	
+	reportScriptError(processorId + " does not have a routing matrix");
+	RETURN_IF_NO_THROW(new ScriptingObjects::ScriptWavetableController(getScriptProcessor(), nullptr));
 }
 
 void ScriptingApi::Synth::setAttribute(int attributeIndex, float newAttribute)
@@ -6538,18 +6591,7 @@ int ScriptingApi::Synth::getModulatorIndex(int chain, const String &id) const
 
 void ScriptingApi::Synth::setUseUniformVoiceHandler(String containerId, bool shouldUseUniformVoiceHandling)
 {
-	Processor::Iterator<ModulatorSynthChain> iter(getScriptProcessor()->getMainController_()->getMainSynthChain());
-
-	while (auto s = iter.getNextProcessor())
-	{
-		if (s->getId() == containerId)
-		{
-			s->setUseUniformVoiceHandler(shouldUseUniformVoiceHandling, nullptr);
-			return;
-		}
-	}
-
-	reportScriptError("Can't find Container with ID " + containerId);
+	reportScriptError("This function is deprecated. Just remove that call and enjoy global envelopes...");
 }
 
 // ====================================================================================================== Console functions
@@ -6821,9 +6863,9 @@ void ScriptingApi::Console::breakInDebugger()
 
 void ScriptingApi::Console::startSampling(const String& sessionId)
 {
-	auto& dh = getScriptProcessor()->getMainController_()->getDebugSession();
-
 #if HISE_INCLUDE_PROFILING_TOOLKIT
+    auto& dh = getScriptProcessor()->getMainController_()->getDebugSession();
+    
 	if(auto s = dh.startSession(dynamic_cast<JavascriptProcessor*>(getScriptProcessor()), sessionId))
 	{
 		dynamic_cast<JavascriptProcessor*>(getScriptProcessor())->addInplaceDebugValue(id, lineNumber, s->getTextForName(), s);
@@ -7224,6 +7266,7 @@ ScriptingApi::FileSystem::FileSystem(ProcessorWithScriptingContent* pwsc):
 	addConstant("Downloads", (int)Downloads);
 	addConstant("Applications", (int)Applications);
 	addConstant("Temp", (int)Temp);
+	addConstant("Music", (int)Music);
 
 	ADD_API_METHOD_1(getFolder);
 	ADD_API_METHOD_3(findFiles);
@@ -7372,6 +7415,28 @@ int64 ScriptingApi::FileSystem::getBytesFreeOnVolume(var folder)
 	return numBytes;
 }
 
+File ScriptingApi::FileSystem::getFileFromVar(const var& fileObjectDirectoryConstantOrAbsolutePath, MainController* mc)
+{
+	if(fileObjectDirectoryConstantOrAbsolutePath.isVoid() || fileObjectDirectoryConstantOrAbsolutePath.isUndefined())
+		return File();
+
+	if(fileObjectDirectoryConstantOrAbsolutePath.isInt())
+	{
+		auto constant = (SpecialLocations)(int)fileObjectDirectoryConstantOrAbsolutePath;
+		return getFileStatic(constant, mc);
+	}
+	if(auto sf = dynamic_cast<ScriptingObjects::ScriptFile*>(fileObjectDirectoryConstantOrAbsolutePath.getObject()))
+	{
+		return sf->f;
+	}
+	if(File::isAbsolutePath(fileObjectDirectoryConstantOrAbsolutePath.toString()))
+	{
+		return File(fileObjectDirectoryConstantOrAbsolutePath.toString());
+	}
+
+	return File();
+}
+
 void ScriptingApi::FileSystem::browseInternally(File f, bool forSaving, bool isDirectory, String wildcard, var callback)
 {
 	static bool fileChooserIsOpen = false;
@@ -7470,7 +7535,7 @@ void ScriptingApi::FileSystem::loadExampleAssets()
 }
 
 
-juce::File ScriptingApi::FileSystem::getFile(SpecialLocations l)
+juce::File ScriptingApi::FileSystem::getFileStatic(SpecialLocations l, MainController* mc)
 {
 	File f;
 
@@ -7478,25 +7543,25 @@ juce::File ScriptingApi::FileSystem::getFile(SpecialLocations l)
 	{
 	case Samples:
 	
-		if(FullInstrumentExpansion::isEnabled(getMainController()))
+		if(FullInstrumentExpansion::isEnabled(mc))
 		{
-		  if (auto e = getMainController()->getExpansionHandler().getCurrentExpansion())
+		  if (auto e = mc->getExpansionHandler().getCurrentExpansion())
 		    f = e->getSubDirectory(FileHandlerBase::Samples);
 		}
 		else 
 		{
-			f = getMainController()->getCurrentFileHandler().getSubDirectory(FileHandlerBase::Samples);	
+			f = mc->getCurrentFileHandler().getSubDirectory(FileHandlerBase::Samples);	
 		}
 		
 		break;
-	case Expansions: return getMainController()->getExpansionHandler().getExpansionFolder();
+	case Expansions: return mc->getExpansionHandler().getExpansionFolder();
 #if USE_BACKEND
 	case AppData:
 	{
-		f = ProjectHandler::getAppDataRoot(getMainController());
+		f = ProjectHandler::getAppDataRoot(mc);
 
-		auto company = GET_HISE_SETTING(getMainController()->getMainSynthChain(), HiseSettings::User::Company);
-		auto project = GET_HISE_SETTING(getMainController()->getMainSynthChain(), HiseSettings::Project::Name);
+		auto company = GET_HISE_SETTING(mc->getMainSynthChain(), HiseSettings::User::Company);
+		auto project = GET_HISE_SETTING(mc->getMainSynthChain(), HiseSettings::Project::Name);
 
 		f = f.getChildFile(company.toString()).getChildFile(project.toString());
 
@@ -7511,7 +7576,7 @@ juce::File ScriptingApi::FileSystem::getFile(SpecialLocations l)
 #endif
 	case UserPresets:
 #if USE_BACKEND
-		f = getMainController()->getCurrentFileHandler().getSubDirectory(FileHandlerBase::UserPresets);
+		f = mc->getCurrentFileHandler().getSubDirectory(FileHandlerBase::UserPresets);
 #else
 		f = FrontendHandler::getUserPresetDirectory();
 #endif
@@ -7519,12 +7584,13 @@ juce::File ScriptingApi::FileSystem::getFile(SpecialLocations l)
 	case UserHome: f = File::getSpecialLocation(File::userHomeDirectory); break;
 	case Documents: f = File::getSpecialLocation(File::userDocumentsDirectory); break;
 	case Desktop:	f = File::getSpecialLocation(File::userDesktopDirectory); break;
+	case Music:		f = File::getSpecialLocation(File::userMusicDirectory); break;
 	case Downloads: f = File::getSpecialLocation(File::userHomeDirectory).getChildFile("Downloads"); break;
 	case Applications: f = File::getSpecialLocation(File::globalApplicationsDirectory); break;
 	case Temp: f = File::getSpecialLocation(File::tempDirectory); break;
 	case AudioFiles: 
 #if USE_BACKEND
-		f = getMainController()->getCurrentFileHandler().getSubDirectory(FileHandlerBase::AudioFiles);
+		f = mc->getCurrentFileHandler().getSubDirectory(FileHandlerBase::AudioFiles);
 #else
 #if !USE_RELATIVE_PATH_FOR_AUDIO_FILES
 		// You need to set this flag if you want to load audio files from the folder
@@ -7537,6 +7603,11 @@ juce::File ScriptingApi::FileSystem::getFile(SpecialLocations l)
 	}
 
 	return f;
+}
+
+juce::File ScriptingApi::FileSystem::getFile(SpecialLocations l)
+{
+	return getFileStatic(l, getMainController());
 }
 
 hise::FileHandlerBase::SubDirectories ScriptingApi::FileSystem::getSubdirectory(var locationType)
@@ -7599,6 +7670,18 @@ ScriptingApi::Threads::Threads(ProcessorWithScriptingContent* p):
 	ADD_API_METHOD_1(toString);
 	ADD_API_METHOD_0(getCurrentThreadName);
 	ADD_API_METHOD_2(startProfiling);
+
+#if HISE_INCLUDE_PROFILING_TOOLKIT
+	auto& dh = getScriptProcessor()->getMainController_()->getDebugSession();
+	dh.recordingFlushBroadcaster.addListener(*this, [](Threads& t, DebugSession::ProfileDataSource::ProfileInfoBase::Ptr p)
+	{
+		if(p != nullptr && t.threadProfileCallback)
+		{
+			auto b64 = p->toBase64();
+			t.threadProfileCallback.call1(b64);
+		}
+	}, false);
+#endif
 }
 
 int ScriptingApi::Threads::getCurrentThread() const
@@ -7646,35 +7729,45 @@ bool ScriptingApi::Threads::isLocked(int thread) const
 	return t != LockId::unused;
 }
 
-void ScriptingApi::Threads::startProfiling(double millisecondsToProfile, var finishCallback)
+void ScriptingApi::Threads::startProfiling(var options, var finishCallback)
 {
 #if HISE_INCLUDE_PROFILING_TOOLKIT
+
+	auto& dh = getScriptProcessor()->getMainController_()->getDebugSession();
+
 	if(HiseJavascriptEngine::isJavascriptFunction(finishCallback))
 	{
-		bool add = !threadProfileCallback;
-
 		threadProfileCallback = WeakCallbackHolder(getScriptProcessor(), this, finishCallback, 1);
+		threadProfileCallback.incRefCount();
 
-		if(add)
+#if USE_BACKEND
+		if(!getScriptProcessor()->getMainController_()->getExtraDefinitionsValue("HISE_INCLUDE_PROFILING_TOOLKIT", 0))
 		{
-			getScriptProcessor()->getMainController_()->getDebugSession().recordingFlushBroadcaster.addListener(*this, [](Threads& t, DebugSession::ProfileDataSource::ProfileInfoBase::Ptr p)
-			{
-				if(p != nullptr)
-				{
-
-					auto b64 = p->toBase64();
-					t.threadProfileCallback.call1(b64);
-				}
-
-			}, false);
+			debugError(dynamic_cast<Processor*>(getScriptProcessor()), " WARNING: HISE_INCLUDE_PROFILING_TOOLKIT=1 is not added to your project settings. Calling this function will not work in your plugin");
 		}
+#endif
+	}
+	else
+	{
+		threadProfileCallback = WeakCallbackHolder(getScriptProcessor(), this, var(), 1);
 	}
 
-	millisecondsToProfile = jlimit(10.0, 10000.0, millisecondsToProfile);
-
 	auto h = dynamic_cast<ApiProviderBase::Holder*>(getScriptProcessor());
-	getScriptProcessor()->getMainController_()->getDebugSession().startRecording(millisecondsToProfile, h);
-	
+
+	if(auto obj = options.getDynamicObject())
+	{
+		dh.setOptions(obj);
+
+		if(dh.getOptions().trigger == DebugSession::TriggerType::Manual)
+			dh.startRecording(dh.getOptions().millisecondsToRecord, h);
+			
+	}
+	else
+	{
+		auto millisecondsToProfile = jlimit(10.0, 10000.0, (double)options);
+		dh.startRecording(millisecondsToProfile, h);
+	}
+
 #else
 	reportScriptError("Profiling is not enabled");
 #endif
@@ -7758,7 +7851,7 @@ struct ScriptingApi::Server::Wrapper
 };
 
 ScriptingApi::Server::Server(JavascriptProcessor* jp_):
-	ApiClass(4),
+	ApiClass(5),
 	ScriptingObject(dynamic_cast<ProcessorWithScriptingContent*>(jp_)),
 	jp(jp_),
 	globalServer(*getScriptProcessor()->getMainController_()->getJavascriptThreadPool().getGlobalServer()),
@@ -7946,7 +8039,7 @@ void ScriptingApi::Server::setNumAllowedDownloads(int maxNumberOfParallelDownloa
 
 bool ScriptingApi::Server::isOnline()
 {
-	const char* urlsToTry[] = { "http://google.com/generate_204", "https://amazon.com", nullptr };
+	const char* urlsToTry[] = { "https://google.com/generate_204", "https://amazon.com", nullptr };
 
 	for (const char** url = urlsToTry; *url != nullptr; ++url)
 	{

@@ -199,6 +199,7 @@ public:
         MenuToolsCreateRnboTemplate,
 		MenuToolsCreateThirdPartyNode,
 		MenuToolsCreateGlobalCableCppCode,
+		MenuToolsCheckLatency,
 		// ----------------------------------
 		// License Management
 		MenuToolsCreateRSAKeys,
@@ -401,6 +402,7 @@ public:
 		static void exportAudio(BackendRootWindow* bpe);
 
 		static void replaceScriptModules(BackendRootWindow* bpe);
+		static void checkLatency(BackendRootWindow* bpe);
 	};
 
 private:

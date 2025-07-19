@@ -671,7 +671,7 @@ struct MultiChannelAudioBuffer : public ComplexDataUIBase
 
 	void loadFromEmbeddedData(SampleReference::Ptr r);
 
-	void loadBuffer(const AudioSampleBuffer& b, double sr);
+	void loadBuffer(const AudioSampleBuffer& b, double sr, Range<int> loopRange={});
 
 	void setLoopRange(Range<int> newLoopRange, NotificationType n);
 
@@ -808,6 +808,8 @@ class MultiChannelAudioBufferDisplay: public AudioDisplayComponent,
 									  public AudioDisplayComponent::Listener
 {
 public:
+
+	using ComplexDataType = hise::MultiChannelAudioBuffer;
 
 	enum AreaTypes
 	{

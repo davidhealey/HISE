@@ -86,11 +86,22 @@ struct ComponentWithGroupManagerConnection: public ControlledObject
 
 	UndoManager* getUndoManager() { return sampler->getUndoManager(); }
 
-	String getSampleFilename(const ModulatorSamplerSound* s, bool withExtension=true);
+	
 
 	virtual int getHeightToUse() const = 0;
 
+	void resizeWithoutRecursion()
+	{
+		if(!recursive)
+		{
+			ScopedValueSetter<bool> svs(recursive, true);
+			dynamic_cast<Component*>(this)->resized();
+		}
+	}
+
 protected:
+
+	
 
 	void clearRulersAndLabels()
 	{
@@ -111,7 +122,9 @@ protected:
 	void drawLabelsAndRulers(Graphics& g);
 
 private:
-	
+
+	bool recursive = false;
+
 	Array<std::pair<Rectangle<float>, String>> labels;
 	Array<Rectangle<int>> rulers;
 
@@ -145,6 +158,7 @@ public:
 		static Path getPath(LogicType lt);
 
 		static Colour getLayerColour(const ValueTree& v);
+		
 	};
 
 	struct LayerComponent: public Component,
@@ -161,13 +175,25 @@ public:
 		void paint(Graphics& g) override;
 		void resized() override;
 		void updateHeight(int newHeight);
+
 		
+
+		void mouseDoubleClick(const MouseEvent& event) override
+		{
+			if(data.getType() == groupIds::Layer)
+			{
+				auto isFolded = (bool)data[scriptnode::PropertyIds::Folded];
+				data.setProperty(PropertyIds::Folded, !isFolded, nullptr);
+			}
+		}
+
 		LogicType type = LogicType::numLogicTypes;
 		Factory f;
 		HiseShapeButton clearButton;
 		Path p;
 		String typeName;
 		ValueTree data;
+		valuetree::PropertyListener foldListener;
 
 		Colour c;
 
@@ -188,8 +214,16 @@ public:
 	struct FileTokenSelector: public Component,
 							  public ComponentWithGroupManagerConnection
 	{
+		enum class Action
+		{
+			DoNothing,
+			ParseFileToken,
+			SetToFixGroup,
+			SetIgnoreFlag,
+			Unassign,
+			numActions
+		};
 		
-
 		struct FileToken: public Component,
 						  public SettableTooltipClient
 		{
@@ -207,11 +241,32 @@ public:
 			bool active = false;
 		};
 
-		FileTokenSelector(ComponentWithGroupManagerConnection& parent, const StringArray& layerTokens, bool showIgnoreButton);
+		FileTokenSelector(ComponentWithGroupManagerConnection& parent, const StringArray& layerTokens, bool showIgnoreButton, bool addMode);
+
+		void checkApplyState();
+
+		void rebuildComboBox();
 
 		void setActiveToken(int idx = -1);
-		void updateSelection(const String& sampleName);
+		void updateSelection(const StringArray& fileTokens);
 		int getHeightToUse() const override;
+
+		StringArray getValidTokens() const
+		{
+			if(!legatoMode)
+				return layerTokens;
+			else
+			{
+				StringArray validNames;
+
+				for(int i = 0; i < 128; i++)
+					validNames.add(String(i));
+				for(int i = 0; i < 128; i++)
+					validNames.add(MidiMessage::getMidiNoteName(i, true, true, 3));
+
+				return validNames;
+			}
+		}
 
 		uint8 getCurrentTokenValue(const String& filename) const;
 
@@ -222,8 +277,55 @@ public:
 
 		bool useFileTokens() const;
 
-		int height = LayerComponent::TopBarHeight;
+		String performAction()
+		{
+			String msg;
+			auto data = findParentComponentOfClass<LayerComponent>()->data;
 
+			auto id = Helpers::getId(data);
+
+			if(currentAction == Action::DoNothing)
+				return "Skip layer " + id + "\n";
+
+			if(currentAction == Action::Unassign)
+			{
+				for(auto s: *getSampleEditHandler())
+				{
+					getComplexGroupManager()->clearSampleId(s.get(), { id }, true);
+					auto filename = Helpers::getSampleFilename(s.get());
+
+					
+					msg << "Unassigned layer " << id << " from sample " << filename;
+					msg << "\n";
+				}
+			}
+			else
+			{
+				for(auto s: *getSampleEditHandler())
+				{
+					Array<std::pair<Identifier, uint8>> values;
+
+					auto filename = Helpers::getSampleFilename(s.get());
+					auto v = getCurrentTokenValue(filename);
+
+					values.add({ id, v});
+
+					if(v == ComplexGroupManager::IgnoreFlag)
+						msg << filename << ": " << id << " > IGNORE_FLAG (0xFF)";
+					else
+						msg << filename << ": " << id << " > " << layerTokens[v-1];
+
+					msg << "\n";
+
+					getComplexGroupManager()->setSampleId(s.get(), values, true);
+				}
+			}
+
+			return msg;
+		}
+
+		const bool addMode;
+		int height = LayerComponent::TopBarHeight;
 		bool ok = false;
 
 		Factory f;
@@ -233,26 +335,40 @@ public:
 		StringArray layerTokens;
 		Array<Rectangle<float>> delimiters;
 		Rectangle<float> tokenLabel;
-		HiseShapeButton ignoreButton;
+		bool ignoreable = false;
 
 		SelectorLookAndFeel laf;
-		ComboBox modeSelector;
 
-		String currentSampleName;
+		Action currentAction = Action::DoNothing;
+
+		bool legatoMode = false;
+
+		hise::SubmenuComboBox modeSelector;
+
+		bool canUseFileTokens = false;
+
+		HiseShapeButton applyButton;
+
+		StringArray currentFileTokens;
 
 		std::function<void(uint8)> onTokenChange;
+
+		JUCE_DECLARE_WEAK_REFERENCEABLE(FileTokenSelector);
 	};
 
 	struct LogicTypeComponent: public LayerComponent,
 							   public ButtonListener
 	{
 		struct BodyBase: public Component,
-						 public ComponentWithGroupManagerConnection 
+						 public ComponentWithGroupManagerConnection,
+						 public SampleMap::Listener
 		{
+			static constexpr int ButtonHeight = 24;
+
 			struct ButtonBase: public Component,
 							   public SettableTooltipClient
 			{
-				ButtonBase();
+				ButtonBase(const ValueTree& layerData, uint8 layerIndex_);
 
 				virtual ~ButtonBase() {};
 				virtual int getWidthToUse() const = 0;
@@ -265,11 +381,73 @@ public:
 
 				bool active = false;
 				bool empty = false;
+				const uint8 layerIndex;
+			};
+
+			struct UnassignedButton: public ButtonBase
+			{
+				UnassignedButton(const ValueTree& layerData):
+				  ButtonBase(layerData, 0),
+				  f(GLOBAL_BOLD_FONT())
+				{
+					p = fa.createPath("unassigned");
+					setSize(getWidthToUse(), ButtonHeight);
+					
+				}
+
+				int getWidthToUse() const override { return ButtonHeight + f.getStringWidth("Unassigned") + 10; }
+
+				void paint(Graphics& g) override
+				{
+					g.setColour(Colours::white.withAlpha(0.5f));
+
+					g.setFont(f);
+					auto tb = getLocalBounds().toFloat();
+					g.fillPath(p);
+					tb.removeFromLeft(tb.getHeight());
+					g.drawText("Unassigned", tb, Justification::centred);
+				}
+
+				void resized() override
+				{
+					fa.scalePath(p, getLocalBounds().removeFromLeft(getHeight()).toFloat().reduced(3.0f));
+				}
+
+				Factory fa;
+				Path p;
+				Font f;
+			};
+
+			struct IgnoreButton: public ButtonBase
+			{
+				IgnoreButton(const ValueTree& layerData):
+				  ButtonBase(layerData, ComplexGroupManager::IgnoreFlag)
+				{
+					icon = f.createPath("ignorable");
+
+					setSize(getWidthToUse(), ButtonHeight);
+				}
+
+				int getWidthToUse() const override { return ButtonHeight; }
+
+				void resized() override
+				{
+					PathFactory::scalePath(icon, this, 3);
+				}
+
+				void paint(Graphics& g) override
+				{
+					g.setColour(Colours::white.withAlpha(0.5f));
+					g.fillPath(icon);
+				}
+
+				Factory f;
+				Path icon;
 			};
 
 			struct KeyswitchButton: public ButtonBase
 			{
-				KeyswitchButton(const String& n, bool addPowerButton=true);
+				KeyswitchButton(const ValueTree& layerData, uint8 layerIndex, const String& n, bool addPowerButton=true);
 
 				int getWidthToUse() const override;
 
@@ -287,11 +465,14 @@ public:
 			{
 				static constexpr int SelectionSize = 17;
 
-				SelectionTag(LogicTypeComponent& parent, Component* other, uint8 specialValue);
-
 				SelectionTag(ButtonBase* attachedButton, uint8 layerIndex_, uint8 layerValue_);
 
 				void mouseDown(const MouseEvent& e) override;
+
+				void mouseUp(const MouseEvent& e) override
+				{
+					active = false;
+				}
 
 				void refreshNumSamples();
 
@@ -309,11 +490,19 @@ public:
 
 				int numSamples = 0;
 
+				bool active = false;
+
 				uint8 layerIndex;
 				uint8 layerValue;
 			};
 
 			BodyBase(LogicTypeComponent& parent);
+
+			virtual ~BodyBase() override
+			{
+				if(getSampler() != nullptr)
+					getSampler()->getSampleMap()->removeListener(this);
+			}
 
 			void showSelectors(bool shouldShow);
 
@@ -330,6 +519,32 @@ public:
 			void resized() override;
 
 			void paint(Graphics& g) override;
+
+			Array<ButtonBase*> getAllButtonsToShow()
+			{
+				Array<ButtonBase*> list;
+
+				auto idx = Helpers::getLayerIndex(data);
+
+				auto showUnassigned = getComplexGroupManager()->getNumUnassignedAndIgnored(idx).first > 0;
+
+				unassignedButton->setVisible(showUnassigned);
+
+				if(showUnassigned)
+					list.add(unassignedButton.get());
+
+				for(auto b: buttons)
+					list.add(b);
+
+				auto showIgnorable = (bool)data[groupIds::ignorable];
+
+				ignoreButton->setVisible(showIgnorable);
+
+				if(showIgnorable)
+					list.add(ignoreButton.get());
+
+				return list;
+			}
 
 			static void onLockUpdate(BodyBase& l, uint8 layerIndex, bool active)
 			{
@@ -353,12 +568,53 @@ public:
 				repaint();
 			}
 
+			struct Updater: public AsyncUpdater
+			{
+				Updater(BodyBase& parent_):
+				  parent(parent_)
+				{}
+
+				void handleAsyncUpdate() override
+				{
+					parent.refreshButtons(sendNotificationSync);
+				}
+
+				BodyBase& parent;
+			} updater;
+
+			void refreshButtons(NotificationType n=sendNotificationAsync)
+			{
+				if(n != sendNotificationSync)
+					updater.triggerAsyncUpdate();
+				else
+				{
+					resized();
+
+					auto shouldShow = !selectors.isEmpty();
+					selectors.clear();
+					showSelectors(shouldShow);
+				}
+			}
+
+			void sampleMapWasChanged(PoolReference) override { refreshButtons(); }
+
+			void samplePropertyWasChanged(ModulatorSamplerSound*, const Identifier& id, const var&) override
+			{
+				if(id == SampleIds::RRGroup) refreshButtons();
+			};
+
+			void sampleAmountChanged() override { refreshButtons(); }
+			void sampleMapCleared() override { refreshButtons(); };
+
 			uint8 currentLayerValue = 0;
 			bool lockEnabled = false;
 			Rectangle<int> currentLock;
 
 			LogicType lt;
 			StringArray tokens;
+
+			ScopedPointer<ButtonBase> ignoreButton;
+			ScopedPointer<ButtonBase> unassignedButton;
 
 			OwnedArray<ButtonBase> buttons;
 			ValueTree data;
@@ -416,6 +672,8 @@ public:
 		struct Parser: public FileTokenSelector
 		{
 			Parser(ComponentWithGroupManagerConnection& parent, const ValueTree& v);
+
+			
 		};
 
 		LogicTypeComponent(ComponentWithGroupManagerConnection& parent, const ValueTree& d);
@@ -432,35 +690,7 @@ public:
 
 		void updateSampleCounters();
 
-		void showSelectors(bool shouldShow)
-		{
-			selectors.clear();
-
-			ignoreLabel.setVisible(shouldShow && data[groupIds::ignorable]);
-			unassignedLabel.setVisible(shouldShow);
-
-			if(shouldShow)
-			{
-				if(ignoreLabel.isVisible())
-					selectors.add(new BodyBase::SelectionTag(*this, &ignoreLabel, ComplexGroupManager::IgnoreFlag));
-
-				
-				selectors.add(new BodyBase::SelectionTag(*this, &unassignedLabel, 0));
-
-				auto numSamples = selectors.getLast()->numSamples;
-
-				if(numSamples == 0)
-				{
-					selectors.removeLast();
-					unassignedLabel.setVisible(false);
-				}
-				
-				for(auto s: selectors)
-					addAndMakeVisible(s);
-			}
-
-			body->showSelectors(shouldShow);
-		}
+		void showSelectors(bool shouldShow);
 
 		static void onPlaystateUpdate(LogicTypeComponent& l, uint8 value);
 
@@ -468,14 +698,15 @@ public:
 
 		StringArray items;
 		ScopedPointer<BodyBase> body;
-		//ScopedPointer<SampleCountComponent> sampleCount;
-		HiseShapeButton countButton, parseButton, lockButton, midiButton;
+		HiseShapeButton lockButton, midiButton;
 		Parser parser;
 
 		SelectorLookAndFeel laf;
 
-		Label unassignedLabel, ignoreLabel;
+		//Label unassignedLabel, ignoreLabel;
 		OwnedArray<BodyBase::SelectionTag> selectors;
+
+
 
 		JUCE_DECLARE_WEAK_REFERENCEABLE(LogicTypeComponent);
 	};
@@ -501,14 +732,14 @@ public:
 		void resized() override;
 		void paint(Graphics& g) override;
 
-		
+		void rebuildLayers(const ValueTree& v, const Identifier& id);
 
 		void layerAddOrRemoved(const ValueTree& v, bool wasAdded);
-		void setSampleForTokenSelector(const String& filename);
+		
 
 		int getHeightToUse() const override;
 
-		HiseShapeButton addButton, moreButton;
+		//HiseShapeButton addButton, moreButton;
 
 	private:
 
@@ -522,7 +753,7 @@ public:
 
 		static Array<Identifier> getSpecialIds()
 		{
-			return { SampleIds::LoKey, SampleIds::HiKey, groupIds::isChromatic, groupIds::useNumbers };
+			return { SampleIds::LoKey, SampleIds::HiKey, groupIds::isChromatic };
 		}
 
 		Component* addEditor(const Identifier& propertyId, const String& helpText, const String& type);;
@@ -535,7 +766,10 @@ public:
 		FileTokenSelector tokenSelector;
 
 		
+
+		
 		valuetree::ChildListener layerListener;
+		valuetree::RecursivePropertyListener groupRebuildListener;
 
 		OwnedArray<Component> editors;
 		OwnedArray<MarkdownHelpButton> helpButtons;
@@ -556,10 +790,7 @@ public:
 		void paint(Graphics& g) override;
 		void resized() override;
 
-		int getHeightToUse() const override
-		{
-			return ConsoleHeight + TopBarHeight + 2 * BodyMargin;
-		}
+		int getHeightToUse() const override;
 
 		void setLayersToParse(const Array<LogicTypeComponent*>& layers, int numSamples);
 		void logToConsole(const String& message);
@@ -643,6 +874,8 @@ public:
 
 private:
 
+	Factory f;
+
 	Array<std::pair<Identifier, uint8>> displayFilters;
 
 	Array<std::pair<uint8, uint8>> activeCountButtons;
@@ -656,6 +889,8 @@ private:
 	Viewport viewport;
 	Content content;
 	ScopedPointer<Logger> logger;
+
+	HiseShapeButton editButton, moreButton, tagButton, parseButton;
 
 	JUCE_DECLARE_WEAK_REFERENCEABLE(ComplexGroupManagerComponent);
 };

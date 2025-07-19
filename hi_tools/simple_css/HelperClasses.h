@@ -56,6 +56,8 @@ struct PseudoState
 	bool matchesElement(const PseudoState& other) const { return element == other.element; }
 	bool matchesElement(PseudoElementType otherType) const { return element == otherType; }
 
+	bool matchesPseudoClassType(PseudoClassType t) const { return stateFlag | (int)t; }
+
 	PseudoState withElement(PseudoElementType t) const { auto copy = *this; copy.element = t; return copy; }
 	PseudoState withAdditionalState(PseudoClassType t) const { auto copy = *this; copy.stateFlag |= (int)t; return copy; }
 
@@ -165,6 +167,7 @@ struct Transition
 	bool active = false;
 	double duration = 0.0;
 	double delay = 0.0;
+	String fName;
 	std::function<double(double)> f;
 };
 
@@ -230,6 +233,24 @@ struct Property
 	std::vector<std::pair<int, PropertyValue>> values;
 };
 
+struct ColourInfo
+{
+	bool isGradient() const { return second.getNumColours() > 0; }
+
+	bool operator!=(const ColourInfo& other) const noexcept
+	{
+		return !(*this == other);
+	}
+
+	bool operator==(const ColourInfo& other) const noexcept
+	{
+		return first == other.first && second == other.second;
+	}
+
+	Colour first;
+	ColourGradient second;
+};
+
 /** A helper class that renders non-uniform borders (borders that are not the same at every edge). */
 struct NonUniformBorderData
 {
@@ -243,20 +264,20 @@ struct NonUniformBorderData
 	};
 
 	NonUniformBorderData() = default;
-	NonUniformBorderData(Rectangle<float> totalArea_, float defaultWidth_, const std::pair<Colour, ColourGradient>& defaultColor_);
+	NonUniformBorderData(Rectangle<float> totalArea_, float defaultWidth_, const ColourInfo& defaultColor_);
 
 	static Border getBorderFromProperty(String s);
 
 	operator bool() const noexcept { return active; }
 
 	void setBorderSize(Border b, float newSize);
-	void setBorderColour(Border b, const std::pair<Colour, ColourGradient>& c);
+	void setBorderColour(Border b, const ColourInfo& c);
 	void draw(Graphics& g);
 
-	std::array<std::pair<Rectangle<float>, std::pair<Colour, ColourGradient>>, numBorders> data;
+	std::array<std::pair<Rectangle<float>, ColourInfo>, numBorders> data;
 	Rectangle<float> totalArea;
 	float defaultWidth = 0.0f;
-	std::pair<Colour, ColourGradient> defaultColour = { Colours::transparentBlack, ColourGradient() };
+	ColourInfo defaultColour;
 	bool active = false;
 };
 

@@ -46,7 +46,8 @@ NodeComponent::Header::Header(NodeComponent& parent_) :
 	parent(parent_),
 	powerButton(getPowerButtonId(false), this, f, getPowerButtonId(true)),
 	deleteButton("close", this, f),
-	parameterButton("parameter", this, f)
+	parameterButton("parameter", this, f),
+	autofixButton("Auto Fix")
 {
     String tooltip;
     
@@ -94,6 +95,8 @@ NodeComponent::Header::Header(NodeComponent& parent_) :
 	addAndMakeVisible(deleteButton);
 	addAndMakeVisible(parameterButton);
 
+	addChildComponent(autofixButton);
+
 	bool isContainer = false;
 
 	if(auto nc = dynamic_cast<NodeContainer*>(parent.node.get()))
@@ -107,6 +110,11 @@ NodeComponent::Header::Header(NodeComponent& parent_) :
 	{
 		parameterUpdater.setCallback(parent.node->getValueTree(), {PropertyIds::ShowParameters}, valuetree::AsyncMode::Asynchronously, BIND_MEMBER_FUNCTION_2(Header::updateConnectionButton));
 	}
+
+	autofixButton.onClick = [this]()
+	{
+		parent.node->getRootNetwork()->getExceptionHandler().autofix(parent.node.get());
+	};
 
     setRepaintsOnMouseActivity(true);
 }
@@ -160,6 +168,9 @@ void NodeComponent::Header::mouseDoubleClick(const MouseEvent& e)
 void NodeComponent::Header::resized()
 {
 	auto b = getLocalBounds();
+
+	if(autofixButton.isVisible())
+		autofixButton.setBounds(b.removeFromLeft(70).reduced(3));
 
 	powerButton.setBounds(b.removeFromLeft(getHeight()).reduced(3));
 	parameterButton.setBounds(b.removeFromLeft(getHeight()).reduced(3));
@@ -396,6 +407,17 @@ NodeComponent::NodeComponent(NodeBase* b) :
 		}
 
 		repaint();
+	});
+
+	node->getRootNetwork()->getExceptionHandler().errorBroadcaster.addListener(*this, [](NodeComponent& n, NodeBase* node, Error e)
+	{
+		auto shouldBeVisible = node != nullptr && n.node.get() == node && !e.isOk() && node->getRootNetwork()->getExceptionHandler().canBeAutofixed(node, e);
+
+		if(n.header.autofixButton.isVisible() != shouldBeVisible)
+		{
+			n.header.autofixButton.setVisible(shouldBeVisible);
+			n.header.resized();
+		}
 	});
 }
 

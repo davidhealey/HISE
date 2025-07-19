@@ -634,6 +634,9 @@ public:
 
 private:
 
+	SynthSoundWithBitmask::ValueWithFilter currentDisplayFilter;
+	BigInteger activeNotes;
+
 	bool isDefaultOrder = false;
 
 	friend class SamplerTable;

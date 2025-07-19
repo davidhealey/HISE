@@ -348,6 +348,12 @@ void SimpleRingBuffer::setPropertyObject(PropertyObject* newObject)
 
 	properties->initialiseRingBuffer(this);
 
+	if(auto u = getUpdater().getGlobalUIUpdater())
+	{
+		properties->onGlobalUpdaterInit(this, u);
+	}
+
+
 	auto ns = internalBuffer.getNumSamples();
 	auto nc = internalBuffer.getNumChannels();
 
@@ -406,7 +412,7 @@ ModPlotter::ModPlotter()
 
 void ModPlotter::paint(Graphics& g)
 {
-	auto laf = getSpecialLookAndFeel<LookAndFeelMethods>();
+	auto laf = getSpecialLookAndFeel<LookAndFeelMethods>(this);
 
 	laf->drawOscilloscopeBackground(g, *this, getLocalBounds().toFloat());
 	laf->drawOscilloscopePath(g, *this, p);
@@ -561,7 +567,7 @@ void ModPlotter::refresh()
 		p.clear();
 		p.startNewSubPath(offset, offset + maxHeight);
 
-		if(!hasNegativeValues)
+		if(!useFixRange && !hasNegativeValues)
 		{
 			auto thisRange = buffer.findMinMax(0, 0, buffer.getNumSamples());
 			hasNegativeValues = thisRange.getStart() < 0.0;
@@ -569,7 +575,7 @@ void ModPlotter::refresh()
 
 		if(hasNegativeValues)
 		{
-			if(hasNegativeValues)
+			if(hasNegativeValues && !useFixRange)
 			{
 				auto thisRange = buffer.findMinMax(0, 0, buffer.getNumSamples());
 				startRange = startRange.getUnionWith(thisRange);
@@ -585,19 +591,29 @@ void ModPlotter::refresh()
 				auto range = buffer.findMinMax(0, sampleIndex, numThisTime);
 
 				auto maxValue = hmath::abs(range.getStart()) > hmath::abs(range.getEnd()) ? range.getStart() : range.getEnd();
+				auto srs = startRange.getStart();
+				auto sre = startRange.getEnd();
 
 				FloatSanitizers::sanitizeFloatNumber(maxValue);
+				FloatSanitizers::sanitizeFloatNumber(srs);
+				FloatSanitizers::sanitizeFloatNumber(sre);
 
-				maxValue = NormalisableRange<float>(startRange).convertTo0to1(maxValue);
-				
-				float height = maxValue * maxHeight;
-				float y = offset + maxHeight - height;
+				if(srs != sre)
+				{
+					if(useFixRange)
+						maxValue = jlimit(srs, sre, maxValue);
 
-				sampleIndex += samplesPerPixel;
+					maxValue = NormalisableRange<float>(srs, sre).convertTo0to1(maxValue);
+					
+					float height = maxValue * maxHeight;
+					float y = offset + maxHeight - height;
 
-				p.lineTo(i + offset, maxHeight - height + offset);
+					sampleIndex += samplesPerPixel;
 
-				rectangles.addWithoutMerging({ i + offset, y, rectangleWidth, height});
+					p.lineTo(i + offset, maxHeight - height + offset);
+
+					rectangles.addWithoutMerging({ i + offset, y, rectangleWidth, height});
+				}
 			}
 		}
 		else
@@ -628,6 +644,582 @@ void ModPlotter::refresh()
 	}
 }
 
+int flex_ahdsr_base::Helpers::getAttributeIndex(State s, ParameterType t)
+{
+	if(t == ParameterType::Curve)
+	{
+		switch(s)
+		{
+		case State::ATTACK: return (int)SpecialParameters::AttackCurve;
+		case State::DECAY: return (int)SpecialParameters::DecayCurve;
+		case State::RELEASE: return (int)SpecialParameters::ReleaseCurve;
+		}
+	}
+	else if (t == ParameterType::Time)
+	{
+		switch(s)
+		{
+		case State::ATTACK: return (int)SpecialParameters::Attack;
+		case State::HOLD: return (int)SpecialParameters::Hold;
+		case State::DECAY: return (int)SpecialParameters::Decay;
+		case State::RELEASE: return (int)SpecialParameters::Release;
+		}
+	}
+	else if(t == ParameterType::Level)
+	{
+		switch(s)
+		{
+		case State::ATTACK:
+		case State::HOLD:    return (int)SpecialParameters::AttackLevel;
+		case State::SUSTAIN: return (int)SpecialParameters::Sustain;
+		}
+	}
+			
+	return -1;
+}
+
+String flex_ahdsr_base::Helpers::getLabel(State s, ParameterType t, float* uiValues)
+{
+	auto pIndex = getAttributeIndex(s, t);
+
+	if(pIndex != -1)
+	{
+		StringArray names({
+			"Attack Time",
+			"Hold Time",
+			"Decay Time",
+			"Sustain Level",
+			"Release Time",
+			"Mode",
+			"Attack Level",
+			"Attack Curve",
+			"Decay Curve",
+			"Release Curve"
+		});
+				
+		auto l = names[pIndex];
+				
+		l += ": ";
+				
+		auto converter = "NormalizedPercentage";
+				
+		if(t == ParameterType::Time)
+			converter = "Time";
+				
+		l += ValueToTextConverter::createForMode(converter).getTextForValue(uiValues[pIndex]);
+		return l;
+	}
+
+	return "";
+}
+
+double flex_ahdsr_base::Helpers::toNorm(State s, ParameterType t, double value)
+{
+	if(t == ParameterType::Time)
+		return std::pow(value / 30000.0, getTimeSkew());
+				
+	return value;
+}
+
+double flex_ahdsr_base::Helpers::fromNorm(State s, ParameterType t, double value)
+{
+	if(t == ParameterType::Time)
+		return std::pow(value, 1.0 / getTimeSkew()) * 30000.0;
+				
+	return value;
+}
+
+void flex_ahdsr_base::FlexAhdsrGraph::LookAndFeelMethods::drawFlexAhdsrBackground(Graphics& g, FlexAhdsrGraph& graph)
+{
+	g.setColour(graph.findColour(RingBufferComponentBase::bgColour));
+	g.fillRect(graph.getLocalBounds());
+
+
+}
+
+void flex_ahdsr_base::FlexAhdsrGraph::LookAndFeelMethods::drawFlexAhdsrSegment(Graphics& g, FlexAhdsrGraph& graph,
+	State s, const Path& segment, bool hover, bool active)
+{
+	if(hover)
+	{
+		g.setColour(graph.findColour(RingBufferComponentBase::fillColour).withAlpha(0.05f));
+		g.fillPath(segment);
+	}
+	
+	if(active && s == State::SUSTAIN)
+	{
+		g.setColour(graph.findColour(RingBufferComponentBase::fillColour).withAlpha(0.1f));
+		g.fillPath(segment);
+	}
+}
+
+void flex_ahdsr_base::FlexAhdsrGraph::LookAndFeelMethods::drawFlexAhdsrFullPath(Graphics& g, FlexAhdsrGraph& graph)
+{
+	g.setColour(graph.findColour(RingBufferComponentBase::lineColour));
+	g.strokePath(graph.fullPath, PathStrokeType(2.0));
+}
+
+void flex_ahdsr_base::FlexAhdsrGraph::LookAndFeelMethods::drawFlexAhdsrCurvePoint(Graphics& g, FlexAhdsrGraph& graph, State s,
+	Point<float> curvePoint, bool hover, bool down)
+{
+	g.setColour(graph.findColour(RingBufferComponentBase::lineColour));
+	auto margin = hover ? 10.0f : 7.0f;
+
+	if(down)
+		margin -= 1.0f;
+
+	g.fillEllipse(curvePoint.x-margin*0.5f, curvePoint.y-margin*0.5f, margin, margin);
+}
+
+void flex_ahdsr_base::FlexAhdsrGraph::LookAndFeelMethods::drawFlexAhdsrPosition(Graphics& g, FlexAhdsrGraph& graph,
+	State s, Point<float> pointOnPath)
+{
+	if(s == State::SUSTAIN)
+		return;
+
+	auto fillColour = graph.findColour(RingBufferComponentBase::fillColour);
+	auto left = s == State::RELEASE ? graph.boxes[(int)s].getX() : 0.0f;
+	left = jmax(pointOnPath.getX() - 80.0f, left);
+
+	g.setGradientFill(ColourGradient(Colours::transparentBlack, left, 0.0f, fillColour, pointOnPath.getX(), 0.0f, false));
+	g.fillRect(0.0f, (float)Margin, (float)pointOnPath.getX(), (float)graph.getHeight() - 2.0f * (float)Margin);
+}
+
+void flex_ahdsr_base::FlexAhdsrGraph::LookAndFeelMethods::drawFlexAhdsrText(Graphics& g, FlexAhdsrGraph& graph,
+	const String& text)
+{
+	g.setFont(GLOBAL_BOLD_FONT());
+	g.setColour(graph.findColour(HiseColourScheme::ComponentTextColourId));
+	g.drawText(text, graph.getLocalBounds().toFloat().reduced(Margin), Justification::topRight);;	
+}
+
+void flex_ahdsr_base::FlexAhdsrGraph::paint(Graphics& g)
+{
+	LookAndFeelMethods* laf = dynamic_cast<LookAndFeelMethods*>(&getLookAndFeel());
+
+	if(laf == nullptr)
+		laf = getSpecialLookAndFeel<LookAndFeelMethods>(this);
+
+	if(laf != nullptr)
+	{
+		laf->drawFlexAhdsrBackground(g, *this);
+
+		int s = 0;
+
+		for(const auto& seg: segments)
+		{
+			if(!seg.getBounds().isEmpty())
+			{
+				auto st = (State)s;
+				laf->drawFlexAhdsrSegment(g, *this, st, seg, st == currentHoverState, st == currentPlayState);
+			}
+
+			s++;
+		}
+
+		if(isPositiveAndBelow((int)currentPlayState, boxes.size()))
+		{
+			auto b = boxes[(int)currentPlayState];
+
+			if(!b.isEmpty())
+			{
+				Point<float> pos;
+
+				if(currentPlayState == State::SUSTAIN)
+				{
+					pos = sustainPoint;
+				}
+				else
+				{
+					auto xPos = b.getX() + positionWithinState * b.getWidth();
+					auto yPos = Helpers::getYAt(segments[(int)currentPlayState], xPos);
+					pos = { xPos, yPos };
+				}
+				
+				laf->drawFlexAhdsrPosition(g, *this, currentPlayState, pos);
+			}
+		}
+
+		laf->drawFlexAhdsrFullPath(g, *this);
+
+		s = 0;
+
+		auto down = Component::isMouseButtonDown();
+
+		for(const auto& p: curvePoints)
+		{
+			if(!p.isOrigin())
+			{
+				auto st = (State)s;
+				auto hover = currentHoverMode == ParameterType::Curve && currentHoverState == st;
+				laf->drawFlexAhdsrCurvePoint(g, *this, st, p, hover, down);
+			}
+
+			s++;
+		}
+
+		auto text = Helpers::getLabel(currentHoverState, currentHoverMode, values);
+		laf->drawFlexAhdsrText(g, *this, text);
+	}
+	else
+	{
+		jassertfalse;
+	}
+}
+
+void flex_ahdsr_base::FlexAhdsrGraph::refresh()
+{
+	auto area = getLocalBounds().reduced(Margin).toFloat();
+
+	if(area.isEmpty())
+		return;
+
+	if(auto fb = dynamic_cast<flex_ahdsr_base*>(rb->getCurrentWriter()))
+	{
+		FloatVectorOperations::copy(values, rb->getReadBuffer().getReadPointer(0), NumUIValues);
+
+		std::vector<Rectangle<float>> newBoxes;
+
+		
+
+		auto fullWidth = area.getWidth();
+		auto fullHeight = area.getHeight();
+
+		auto getNormTimeValue = [&](State s)
+		{
+			auto idx = Helpers::getAttributeIndex(s, ParameterType::Time);
+			jassert(idx != -1);
+			auto x = Helpers::toNorm(s, ParameterType::Time, values[idx]);
+			jassert(x >= 0.0 && x <= 1.0);
+			return x * 0.25;
+		};
+
+		auto getNormLevelValue = [&](State s)
+		{
+			auto idx = Helpers::getAttributeIndex(s, ParameterType::Level);
+			jassert(idx != -1);
+			auto x = Helpers::toNorm(s, ParameterType::Level, values[idx]);
+			jassert(x >= 0.0 && x <= 1.0);
+			return x;
+		};
+
+		auto getNormCurveValue = [&](State s)
+		{
+			auto idx = Helpers::getAttributeIndex(s, ParameterType::Curve);
+			jassert(idx != -1);
+			auto x = Helpers::toNorm(s, ParameterType::Curve, values[idx]);
+			jassert(x >= 0.0 && x <= 1.0);
+			return x;
+		};
+
+		auto getRectangle = [&](State s)
+		{
+			auto normWidth = getNormTimeValue(s);
+			return area.removeFromLeft(fullWidth * normWidth);
+		};
+
+		auto getHeight = [&](State s)
+		{
+			auto idx = Helpers::getAttributeIndex(s, ParameterType::Level);
+			jassert(idx != -1);
+			auto normHeight = Helpers::toNorm(s, ParameterType::Level, values[idx]);
+			return normHeight * fullHeight;
+		};
+
+		newBoxes.push_back({});
+		newBoxes.push_back(getRectangle(State::ATTACK).removeFromBottom(getHeight(State::ATTACK)));
+		newBoxes.push_back(getRectangle(State::HOLD).removeFromBottom(getHeight(State::ATTACK)));
+		newBoxes.push_back(getRectangle(State::DECAY).removeFromBottom(getHeight(State::ATTACK)));
+
+		auto state1 = getNormTimeValue(State::ATTACK) + getNormTimeValue(State::HOLD) + getNormTimeValue(State::DECAY);
+	
+		if(state1 < Helpers::getReleasePoint())
+			newBoxes.push_back(area.removeFromLeft((Helpers::getReleasePoint() - state1) * fullWidth));
+		else
+			newBoxes.push_back({});
+
+		newBoxes.push_back(getRectangle(State::RELEASE));
+
+		std::vector<Rectangle<float>> newHitBoxes(newBoxes);
+		
+		newHitBoxes[(int)State::ATTACK].setLeft(newHitBoxes[(int)State::ATTACK].getX() - Margin);
+		newHitBoxes[(int)State::DECAY].setWidth(newHitBoxes[(int)State::DECAY].getWidth() + Margin);
+		newHitBoxes[(int)State::SUSTAIN].setHeight(newHitBoxes[(int)State::SUSTAIN].getHeight() + Margin);
+		newHitBoxes[(int)State::RELEASE].setWidth(newHitBoxes[(int)State::RELEASE].getWidth() + Margin);
+
+		auto sx = newHitBoxes[(int)State::SUSTAIN].getRight();
+		auto sy = (float)(area.getY() + area.getHeight() * (1.0f - getNormLevelValue(State::SUSTAIN)));
+		sustainPoint = { sx, sy };
+
+		std::vector<Path> newSegments;
+
+		for(const auto& nb: newBoxes)
+		{
+			Path ns;
+
+			if(!nb.isEmpty())
+			{
+				ns.startNewSubPath(0.0f, 0.0f);
+				ns.startNewSubPath(1.0f, 1.0f);
+			}
+
+			newSegments.push_back(ns);
+		}
+
+		Path newPath;
+
+		float x = 0.0f;
+		float y = 0.0f;
+		float cx = 0.0f;
+		float cy = 1.0f;
+		float alpha = 0.5f;
+
+		newPath.startNewSubPath(1.0f, 0.0f); 
+	
+		newPath.startNewSubPath(x, 1.0f); 
+		
+		x += getNormTimeValue(State::ATTACK);
+		y = 1.0f - getNormLevelValue(State::ATTACK);
+		
+		alpha = getNormCurveValue(State::ATTACK);
+		
+		cy = alpha * cy + (1.0f - alpha) * y;
+		cx = (1.0f - alpha) * cx + (alpha) * x;
+		
+		newPath.quadraticTo(cx, cy, x, y);
+		
+		newSegments[(int)State::ATTACK].startNewSubPath(0.0, 1.0);
+		newSegments[(int)State::ATTACK].quadraticTo(cx, cy, x, y);
+		newSegments[(int)State::ATTACK].lineTo(x, 1.0);
+		newSegments[(int)State::ATTACK].closeSubPath();
+		
+		newSegments[(int)State::HOLD].startNewSubPath(x, 1.0);
+		newSegments[(int)State::HOLD].lineTo(x, y);
+		x += getNormTimeValue(State::HOLD);
+		newSegments[(int)State::HOLD].lineTo(x, y);
+		newSegments[(int)State::HOLD].lineTo(x, 1.0);
+		newSegments[(int)State::HOLD].closeSubPath();
+
+		newPath.lineTo(x, y);
+	
+		cx = x;
+		cy = y;
+		
+		newSegments[(int)State::DECAY].startNewSubPath(x, 1.0);
+		newSegments[(int)State::DECAY].lineTo(x, y);
+		
+		x += getNormTimeValue(State::DECAY);
+		y = 1.0 - getNormLevelValue(State::SUSTAIN);
+		
+		alpha = getNormCurveValue(State::DECAY);
+		
+		cy = alpha * cy + (1.0 - alpha) * y;
+		cx = (1.0 - alpha) * cx + (alpha) * x;
+		
+		newSegments[(int)State::DECAY].quadraticTo(cx, cy, x, y);
+		newSegments[(int)State::DECAY].lineTo(x, 1.0);
+		newSegments[(int)State::DECAY].closeSubPath();
+		
+		newPath.quadraticTo(cx, cy, x, y);
+		
+		if(x < Helpers::getReleasePoint())
+		{
+			newSegments[(int)State::SUSTAIN].startNewSubPath(x, 1.0);
+			newSegments[(int)State::SUSTAIN].lineTo(x, y);
+		
+
+			x = Helpers::getReleasePoint();
+			
+			newSegments[(int)State::SUSTAIN].lineTo(x, y);
+			newSegments[(int)State::SUSTAIN].lineTo(x, 1.0);
+			newSegments[(int)State::SUSTAIN].closeSubPath();
+			
+			
+			newPath.lineTo(x, y);
+		}
+		
+		cx = x;
+		cy = y;
+		
+		newSegments[(int)State::RELEASE].startNewSubPath(x, 1.0);
+		newSegments[(int)State::RELEASE].lineTo(x, y);
+		
+		x = Math.min(1.0, x + getNormTimeValue(State::RELEASE));
+		y = 1.0;
+		
+		alpha = getNormCurveValue(State::RELEASE);
+			
+		cy = alpha * cy + (1.0 - alpha) * y;
+		cx = (1.0 - alpha) * cx + (alpha) * x;
+		
+		newPath.quadraticTo(cx, cy, x, y);
+		newSegments[(int)State::RELEASE].quadraticTo(cx, cy, x, y);
+		newSegments[(int)State::RELEASE].closeSubPath();
+		
+		newPath.lineTo(1.0, 1.0);
+
+		auto fullBounds = getLocalBounds().toFloat().reduced((float)Margin);
+
+		newPath.scaleToFit(fullBounds.getX(), fullBounds.getY(), fullBounds.getWidth(), fullBounds.getHeight(), false);
+
+
+		std::vector<Point<float>> newCurvePoints;
+
+		int idx = 0;	
+		for(const auto& nb: newBoxes)
+		{
+			if(!nb.isEmpty())
+			{
+				auto midX = nb.getCentreX();
+		
+				if(idx == (int)State::HOLD || idx == (int)State::SUSTAIN || nb.getWidth() < 12.0f)
+				{
+					newCurvePoints.push_back({});
+				}
+				else
+				{
+					float y = Helpers::getYAt(newPath, midX);
+					
+					if(y != -1.0f)
+						newCurvePoints.push_back({midX, y});
+					else
+						newCurvePoints.push_back({});
+				}
+			}
+			else
+			{
+				newCurvePoints.push_back({});
+			}
+			
+			idx++;
+		}
+		
+		for(auto& p: newSegments)
+		{
+			if(!p.getBounds().isEmpty())
+			{
+				p.scaleToFit(fullBounds.getX(), fullBounds.getY(), fullBounds.getWidth(), fullBounds.getHeight(), false);
+			}
+		}
+
+		std::swap(newSegments, segments);
+		std::swap(newBoxes, boxes);
+		std::swap(newHitBoxes, hitboxes);
+		std::swap(newCurvePoints, curvePoints);
+		std::swap(fullPath, newPath);
+		
+		repaint();
+	}
+}
+
+void flex_ahdsr_base::FlexAhdsrGraph::resized()
+{
+	refresh();
+}
+
+void flex_ahdsr_base::FlexAhdsrGraph::mouseDown(const MouseEvent& e)
+{
+	auto pIndex = Helpers::getAttributeIndex(currentHoverState, currentHoverMode);
+
+	if(pIndex != -1)
+		downValue = Helpers::toNorm(currentHoverState, currentHoverMode, values[pIndex]);
+}
+
+void flex_ahdsr_base::FlexAhdsrGraph::mouseDrag(const MouseEvent& e)
+{
+	auto isX = currentHoverMode == ParameterType::Time;
+	auto delta = isX ? (0.8f * (float)e.getDistanceFromDragStartX() / (float)getWidth()) : (-1.0f * (float)e.getDistanceFromDragStartY() / (float)getHeight());
+
+	if(currentHoverMode == ParameterType::Curve && currentHoverState == State::ATTACK)
+		delta *= -1.0f;
+
+	auto newValue = jlimit(0.0f, 1.0f, downValue + delta);
+	auto pIndex = Helpers::getAttributeIndex(currentHoverState, currentHoverMode);
+
+	if(pIndex != -1)
+	{
+		if(auto b = dynamic_cast<flex_ahdsr_base*>(rb->getCurrentWriter()))
+		{
+			newValue = Helpers::fromNorm(currentHoverState, currentHoverMode, newValue);
+			b->handleUIDrag(pIndex, newValue);
+		}
+	}
+}
+
+void flex_ahdsr_base::FlexAhdsrGraph::mouseMove(const MouseEvent& e)
+{
+	auto prevMode = currentHoverMode;
+	auto prevState = currentHoverState;
+
+	currentHoverState = State::IDLE;
+	currentHoverMode = ParameterType::numTypes;
+
+	int i = 0;
+
+	for(auto& nb: hitboxes)
+	{
+		if(!nb.isEmpty() && nb.contains(e.getPosition().toFloat()))
+		{
+			currentHoverState = (State)i;
+					
+			auto yNorm = (float)(e.getPosition().y - nb.getY()) / nb.getHeight();
+					
+			auto isTime = yNorm > 0.2;
+					
+			if(currentHoverState == State::RELEASE || currentHoverState == State::DECAY) 
+				isTime = true;
+			else if(currentHoverState == State::SUSTAIN)
+				isTime = false;
+						
+			auto dx = curvePoints[i].x - (float)e.getPosition().x;
+			auto dy = curvePoints[i].y - (float)e.getPosition().y;
+			auto cd = std::sqrt(dx*dx + dy*dy);
+			auto curveHover = cd < 20.0;
+						
+			if(curveHover)
+				currentHoverMode = ParameterType::Curve;
+			else
+			{
+				if(isTime)
+					currentHoverMode = ParameterType::Time;
+				else
+					currentHoverMode = ParameterType::Level;
+			}
+					
+			break;
+		}
+
+		i++;
+	}
+
+	auto mc = MouseCursor::NormalCursor;
+
+	switch(currentHoverMode)
+	{
+	case ParameterType::Time: 
+		mc = MouseCursor::LeftRightResizeCursor;
+		break;
+	case ParameterType::Curve:
+		mc = MouseCursor::DraggingHandCursor;
+		break;
+	case ParameterType::Level:
+		mc = MouseCursor::UpDownResizeCursor;
+		break;
+	}
+
+	setMouseCursor(mc);
+
+	if(prevMode != currentHoverMode || prevState != currentHoverState)
+		repaint();
+}
+
+void flex_ahdsr_base::FlexAhdsrGraph::mouseExit(const MouseEvent& e)
+{
+	currentHoverState = State::IDLE;
+	currentHoverMode = ParameterType::numTypes;
+	setMouseCursor(MouseCursor::NormalCursor);
+	repaint();
+}
 
 
 void RingBufferComponentBase::LookAndFeelMethods::drawOscilloscopeBackground(Graphics& g, RingBufferComponentBase& ac, Rectangle<float> areaToFill)
@@ -674,7 +1266,7 @@ AhdsrGraph::~AhdsrGraph()
 
 void AhdsrGraph::paint(Graphics &g)
 {
-	auto laf = getSpecialLookAndFeel<LookAndFeelMethods>();
+	auto laf = getSpecialLookAndFeel<LookAndFeelMethods>(this);
 
 	laf->drawAhdsrBackground(g, *this);
 	laf->drawAhdsrPathSection(g, *this, envelopePath, false);
@@ -747,6 +1339,11 @@ void AhdsrGraph::onComplexDataEvent(ComplexDataUIUpdaterBase::EventType e, var n
 	{
 		refresh();
 	}
+}
+
+void AhdsrGraph::resized()
+{
+	rebuildGraph();
 }
 
 void AhdsrGraph::refresh()
@@ -878,6 +1475,36 @@ void AhdsrGraph::rebuildGraph()
 	//envelopePath.closeSubPath();
 }
 
+RingBufferComponentBase* flex_ahdsr_base::Properties::createComponent()
+{ return new FlexAhdsrGraph(); }
+
+bool flex_ahdsr_base::Properties::validateInt(const Identifier& id, int& v) const
+{
+	if (id == RingBufferIds::BufferLength)
+		return SimpleRingBuffer::toFixSize<NumUIValues>(v);
+
+	if (id == RingBufferIds::NumChannels)
+		return SimpleRingBuffer::toFixSize<1>(v);
+
+	return false;
+}
+
+Path flex_ahdsr_base::Properties::createPath(Range<int> sampleRange, Range<float> valueRange,
+	Rectangle<float> targetBounds, double x) const
+{
+	jassertfalse;
+	return {};
+}
+
+void flex_ahdsr_base::Properties::transformReadBuffer(AudioSampleBuffer& b)
+{
+	jassert(b.getNumChannels() == 1);
+	jassert(b.getNumSamples() == NumUIValues);
+
+	if (base != nullptr)
+		base->refreshUI(b.getWritePointer(0));
+}
+
 void AhdsrGraph::LookAndFeelMethods::drawAhdsrBackground(Graphics& g, AhdsrGraph& graph)
 {
 	g.setColour(graph.getColourForAnalyserBase(RingBufferComponentBase::bgColour));
@@ -925,6 +1552,41 @@ void AhdsrGraph::LookAndFeelMethods::drawAhdsrBallPosition(Graphics& g, AhdsrGra
 SimpleRingBuffer::WriterBase::~WriterBase()
 {}
 
+SimpleRingBuffer::PropertyObject::ScopedPathProfiler::ScopedPathProfiler(const PropertyObject& po):
+	obj(po)
+{
+#if HISE_INCLUDE_PROFILING_TOOLKIT
+
+	if(obj.pathSource != nullptr)
+	{
+		auto dh = dynamic_cast<DebugSession*>(obj.pathSource->holder.get());
+
+		if(dh != nullptr && dh->isRecordingMultithread())
+		{
+			DebugSession::ProfileDataSource::Profiler p(obj.pathSource);
+			p.startProfiling(dh);
+
+			if(obj.currentTrackEvent)
+				dh->closeTrackEvent(obj.currentTrackEvent);
+
+			running = true;
+		}
+	}
+#endif
+}
+
+SimpleRingBuffer::PropertyObject::ScopedPathProfiler::~ScopedPathProfiler()
+{
+#if HISE_INCLUDE_PROFILING_TOOLKIT
+	if(running)
+	{
+		auto dh = dynamic_cast<DebugSession*>(obj.pathSource->holder.get());
+		DebugSession::ProfileDataSource::Profiler p(obj.pathSource);
+		p.stopProfiling(dh);
+	}
+#endif
+}
+
 SimpleRingBuffer::PropertyObject::PropertyObject(WriterBase* b):
 	writerBase(b)
 {
@@ -955,6 +1617,21 @@ bool SimpleRingBuffer::PropertyObject::allowModDragger() const
 void SimpleRingBuffer::PropertyObject::initialiseRingBuffer(SimpleRingBuffer* b)
 {
 	buffer = b;
+
+}
+
+void SimpleRingBuffer::PropertyObject::onGlobalUpdaterInit(SimpleRingBuffer* b, PooledUIUpdater* updater)
+{
+#if HISE_INCLUDE_PROFILING_TOOLKIT
+	if(updater != nullptr && pathSource == nullptr)
+	{
+		pathSource = new DebugSession::ProfileDataSource();
+		pathSource->threadRoot = DebugSession::ThreadIdentifier::Type::UIThread;
+		pathSource->sourceType = DebugSession::ProfileDataSource::SourceType::Paint;
+		pathSource->name = "Create display buffer path";
+		pathSource->holder = updater->getDebugSession();		
+	}
+#endif
 }
 
 var SimpleRingBuffer::PropertyObject::getProperty(const Identifier& id) const
@@ -1002,6 +1679,47 @@ Array<Identifier> SimpleRingBuffer::PropertyObject::getPropertyList() const
 		ids.add(properties[i].first);
 	
 	return ids;
+}
+
+void SimpleRingBuffer::PropertyObject::setPropertyInternal(const String& c, var nv)
+{
+	for(auto& p: properties)
+	{
+		if(p.first == c)
+		{
+			p.second = nv;
+			return;
+		}
+	}
+
+	properties.add({ c, nv });
+}
+
+var SimpleRingBuffer::PropertyObject::getPropertyInternal(const String& c, var defaultValue) const
+{
+	for(const auto& p: properties)
+	{
+		if(p.first == c)
+			return p.second;
+	}
+
+	return defaultValue;
+}
+
+void SimpleRingBuffer::PropertyObject::openTrackEvent()
+{
+#if HISE_INCLUDE_PROFILING_TOOLKIT
+	if(pathSource != nullptr)
+	{
+		if(auto dh = dynamic_cast<DebugSession*>(pathSource->holder.get()))
+		{
+			if(dh->isRecordingMultithread())
+			{
+				currentTrackEvent = dh->openTrackEvent();
+			}
+		}
+	}
+#endif
 }
 
 bool SimpleRingBuffer::fromBase64String(const String& b64)
@@ -1185,7 +1903,7 @@ juce::Path SimpleRingBuffer::PropertyObject::createPath(Range<int> sampleRange, 
 
 void FFTDisplayBase::drawSpectrum(Graphics& g)
 {
-	auto laf = getSpecialLookAndFeel<LookAndFeelMethods>();
+	auto laf = getSpecialLookAndFeel<LookAndFeelMethods>(dynamic_cast<Component*>(this));
 
 	auto targetBounds = dynamic_cast<Component*>(this)->getLocalBounds().toFloat();
 	laf->drawOscilloscopeBackground(g, *this, targetBounds);
@@ -1221,7 +1939,7 @@ void OscilloscopeBase::drawWaveform(Graphics& g)
 	{
 		if (auto sl = SimpleReadWriteLock::ScopedTryReadLock(rb->getDataLock()))
 		{
-			auto laf = getSpecialLookAndFeel<LookAndFeelMethods>();
+			auto laf = getSpecialLookAndFeel<LookAndFeelMethods>(dynamic_cast<Component*>(this));
 
 			auto b = dynamic_cast<Component*>(this)->getLocalBounds().toFloat();
 
@@ -1315,35 +2033,11 @@ void OscilloscopeBase::drawOscilloscope(Graphics &g, const AudioSampleBuffer &b)
 	auto lb = asComponent->getLocalBounds().toFloat();
 	auto path = rb->getPropertyObject()->createPath({ 0, b.getNumSamples() }, { -1.0f, 1.0f }, lb, 0.0);
 
-	auto laf = getSpecialLookAndFeel<LookAndFeelMethods>();
+	auto laf = getSpecialLookAndFeel<LookAndFeelMethods>(dynamic_cast<Component*>(this));
 
 	jassert(laf != nullptr);
 
 	laf->drawOscilloscopePath(g, *this, path);
-
-#if 0
-	auto dataL = b.getReadPointer(0);
-	auto dataR = b.getReadPointer(jmin(1, b.getNumChannels() -1));
-	
-	auto asComponent = dynamic_cast<Component*>(this);
-
-	drawPath(dataL, b.getNumSamples(), asComponent->getWidth(), lPath);
-	drawPath(dataR, b.getNumSamples(), asComponent->getWidth(), rPath);
-
-	auto lb = asComponent->getLocalBounds().toFloat();
-	auto top = lb.removeFromTop(lb.getHeight() / 2.0f).reduced(2.0f);
-	auto bottom = lb.reduced(2.0f);
-
-	lPath.scaleToFit(top.getX(), top.getY(), top.getWidth(), top.getHeight(), false);
-	rPath.scaleToFit(bottom.getX(), bottom.getY(), bottom.getWidth(), bottom.getHeight(), false);
-
-	auto laf = getSpecialLookAndFeel<LookAndFeelMethods>();
-
-	jassert(laf != nullptr);
-
-	laf->drawOscilloscopePath(g, *this, lPath);
-	laf->drawOscilloscopePath(g, *this, rPath);
-#endif
 }
 
 GoniometerBase::Shape::Shape(const AudioSampleBuffer& buffer, Rectangle<int> area)
@@ -1397,7 +2091,7 @@ void GoniometerBase::paintSpacialDots(Graphics& g)
 
 			Rectangle<int> area = { (asComponent->getWidth() - size) / 2, (asComponent->getHeight() - size) / 2, size, size };
 
-			auto laf = getSpecialLookAndFeel<LookAndFeelMethods>();
+			auto laf = getSpecialLookAndFeel<LookAndFeelMethods>(dynamic_cast<Component*>(this));
 
 			Array<Line<float>> lines;
 

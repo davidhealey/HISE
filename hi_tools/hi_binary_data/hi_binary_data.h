@@ -140,6 +140,7 @@ namespace ExpansionIcons
 namespace EditorIcons
 {
 	DECLARE_DATA(searchIcon2, 485);
+	DECLARE_DATA(autofixIcon, 515);
 	DECLARE_DATA(resizeIcon, 230);
 	DECLARE_DATA(moveIcon, 196);
 	DECLARE_DATA(bookIcon, 195);
@@ -156,6 +157,7 @@ namespace EditorIcons
 	DECLARE_DATA(backIcon, 1275);
 	DECLARE_DATA(forwardIcon, 1275);
 	DECLARE_DATA(scissorIcon, 842);
+	DECLARE_DATA(cropIcon, 682);
 	DECLARE_DATA(favoriteIcon, 541);
 	DECLARE_DATA(searchIcon, 349);
 	DECLARE_DATA(clearTextEditorIcon, 232);

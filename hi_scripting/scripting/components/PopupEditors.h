@@ -278,9 +278,18 @@ private:
 					return;
 				}
 
-				auto message = errorMessage.upToFirstOccurrenceOf("{", false, false);
+				auto message = errorMessage.upToFirstOccurrenceOf("{{", false, false);
 				auto line = errorMessage.fromFirstOccurrenceOf("Line ", false, false).getIntValue();
 				auto col = errorMessage.fromFirstOccurrenceOf("column ", false, false).getIntValue();
+
+				if(line == 0 && col == 0)
+				{
+					auto charIndex = mcl::TextEditor::Error::Helpers::getCharNumberFromBase64String(errorMessage.fromFirstOccurrenceOf("{{", false, false).upToFirstOccurrenceOf("\n", false, false));
+
+					CodeDocument::Position pos(asmcl->editor.getDocument(), charIndex);
+					line = pos.getLineNumber() + 1;
+					col = pos.getIndexInLine();
+				}
 
 				String mclError = "Line ";
 				mclError << line << "(" << col << "): " << message;

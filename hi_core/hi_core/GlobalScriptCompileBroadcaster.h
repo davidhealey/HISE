@@ -222,7 +222,7 @@ public:
 	void sendScriptCompileMessage(JavascriptProcessor *processorThatWasCompiled);
 
 	/** Adds a ScriptListener. You can influence the order of the callback by inserting Listeners at the beginning of the list. */
-	void addScriptListener(GlobalScriptCompileListener *listener, bool insertAtBeginning = false);;
+	void addScriptListener(GlobalScriptCompileListener *listener, bool insertAtBeginning = false, bool insertAsFirstElement=false);;
 
 	void removeScriptListener(GlobalScriptCompileListener *listener);;
 
@@ -271,6 +271,8 @@ public:
 	void restoreWebResources(const ValueTree& v);
 
     void clearWebResources();
+
+	virtual void rebuildPluginParameters() {};
 
 	WebViewData::Ptr getOrCreateWebView(const Identifier& id);
 

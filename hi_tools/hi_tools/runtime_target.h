@@ -47,6 +47,7 @@ enum class RuntimeTarget
     GlobalCable,
     NeuralNetwork,
     GlobalModulator,
+    ExternalModulatorChain,
     numRuntimeTargets
 };
 
@@ -78,14 +79,24 @@ struct dynamic
 
 struct source_base;
 
+struct target_base
+{
+	virtual ~target_base() {};
+
+    virtual void onData(const void* data, size_t numBytes) { ignoreUnused(data); ignoreUnused(numBytes); };
+};
+
 struct connection
 {
+    using ConnectFunction = bool(source_base*, target_base*);
+
     connection() = default;
     virtual ~connection() {};
 
-    void* connectFunction = nullptr;
-    void* disconnectFunction = nullptr;
+    ConnectFunction* connectFunction = nullptr;
+    ConnectFunction* disconnectFunction = nullptr;
     void* sendBackFunction = nullptr;
+    void* sendBackDataFunction = nullptr;
     source_base* source = nullptr;
     
     void clear();
@@ -104,9 +115,9 @@ struct source_base
     virtual connection createConnection() const;
 };
 
-template <typename MessageType> struct target_base
+template <typename MessageType> struct typed_target: public target_base
 {
-    virtual ~target_base() {};
+    ~typed_target() override {};
     virtual void onValue(MessageType value) = 0;
 };
 
@@ -122,6 +133,7 @@ template <typename MessageType> struct typed_connection: public connection
         connectFunction = other.connectFunction;
         disconnectFunction = other.disconnectFunction;
         sendBackFunction = other.sendBackFunction;
+        sendBackDataFunction = other.sendBackDataFunction;
         return *this;
     }
     
@@ -134,8 +146,18 @@ template <typename MessageType> struct typed_connection: public connection
             tf(this->source, t);
         }
     }
+
+    void sendDataToSource(void* data, size_t numBytes)
+    {
+	    if(this->source != nullptr)
+	    {
+		    typedef void(*TypedFunction)(source_base*, void*, size_t);
+            auto tf = (TypedFunction)this->sendBackDataFunction;
+            tf(this->source, data, numBytes);
+	    }
+    }
     
-    template <bool Add> bool connect(target_base<MessageType>* obj)
+    template <bool Add> bool connect(typed_target<MessageType>* obj)
     {
         auto ptr = Add ? this->connectFunction : this->disconnectFunction;
      
@@ -143,27 +165,34 @@ template <typename MessageType> struct typed_connection: public connection
         // connect
         if(this->source != nullptr && ptr == nullptr)
             return true;
-        
-        typedef bool(*TypedFunction)(source_base*,  target_base<MessageType>*);
-        
-        auto typed = (TypedFunction)ptr;
-        return typed(this->source, obj);
+
+        return ptr(this->source, obj);
     }
 };
 
 
 template <typename IndexSetter, RuntimeTarget TypeIndex, typename MessageType>
 struct indexable_target:
-public target_base<MessageType>
+public typed_target<MessageType>
 {
     using TypedConnection = typed_connection<MessageType>;
     
     virtual ~indexable_target()
     {
-        if(currentConnection)
-            currentConnection.template connect<false>(this);
+        // this must be called before this constructor
+        jassert(!isConnected());
     };
-    
+
+    /** Call this in the derived class destructor where you implement onData() etc... */
+    void disconnect()
+    {
+	    if(currentConnection)
+	    {
+		    if(currentConnection.template connect<false>(this))
+			    currentConnection.clear();
+	    }
+    }
+
     bool match(int hash) const
     {
         return index.getIndex() == hash;
@@ -180,7 +209,7 @@ public target_base<MessageType>
         auto th = c.getHash();
         auto ch = currentConnection.getHash();
         
-        if(th != ch && match(th))
+        if(((th != ch) || !add) && match(th))
         {
             if (add)
             {
@@ -206,9 +235,17 @@ public target_base<MessageType>
     {
         currentConnection.sendValueToSource(v);
     }
+
+    bool sendDataToSource(void* data, size_t numBytes)
+    {
+	    currentConnection.sendDataToSource(data, numBytes);
+        return isConnected();
+    }
     
     IndexSetter& getIndex() { return index; }
-    
+
+    bool isConnected() const { return (bool)currentConnection; }
+
 protected:
     
     TypedConnection currentConnection;

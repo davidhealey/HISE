@@ -1070,7 +1070,7 @@ void ScriptBroadcasterMap::EntryBase::setCurrentError(const String& e)
 	
 	if (!hasErrorButton)
 	{
-		auto errorLocation = e.fromFirstOccurrenceOf("{", false, false);
+		auto errorLocation = e.fromFirstOccurrenceOf("{{", false, false);
 
 		menubar.addButton("error", Justification::right, [errorLocation](Button* b, bool value)
 		{
