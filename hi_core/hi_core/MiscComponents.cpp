@@ -176,6 +176,8 @@ void MouseCallbackComponent::setEnableFileDrop(const String& newCallbackLevel, c
 
 void MouseCallbackComponent::mouseDown(const MouseEvent& event)
 {
+	checkMouseClickProfiler(true);
+
 	CHECK_MIDDLE_MOUSE_DOWN(event);
 
 	ignoreMouseUp = false;
@@ -406,6 +408,8 @@ void MouseCallbackComponent::mouseExit(const MouseEvent &event)
 
 void MouseCallbackComponent::mouseUp(const MouseEvent &event)
 {
+	checkMouseClickProfiler(false);
+
 	CHECK_MIDDLE_MOUSE_UP(event);
 
 	abortTouch();
@@ -1073,7 +1077,19 @@ void BorderPanel::paint(Graphics &g)
 	}
 	else
 	{
-        if(auto laf = dynamic_cast<simple_css::StyleSheetLookAndFeel*>(&getLookAndFeel()))
+		auto thisLaf = &getLookAndFeel();
+
+		auto laf = dynamic_cast<simple_css::StyleSheetLookAndFeel*>(thisLaf);
+
+		if(laf == nullptr)
+		{
+			if(auto scriptedLaf = dynamic_cast<hise::ScriptingObjects::ScriptedLookAndFeel::LafBase*>(thisLaf))
+			{
+				laf = scriptedLaf->getStyleSheetLookAndFeel();
+			}
+		}
+
+        if(laf != nullptr)
         {
 			if(auto root = simple_css::CSSRootComponent::find(*this))
 			{

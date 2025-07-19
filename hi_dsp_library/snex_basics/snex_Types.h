@@ -108,7 +108,7 @@
 namespace snex {
 using namespace juce;
 
-using FloatType = float;
+using SnexFloatType = float;
 
 #define SNEX_ENABLE_DEBUG_TYPENAMES 0
 
@@ -326,6 +326,7 @@ struct sfloat : public pimpl::_ramp<float>
  \ingroup snex_helpers*/
 struct sdouble : public pimpl::_ramp<double>
 {};
+
 
 
 /** A small helper class for usage within a wrap::mod node.
@@ -803,6 +804,8 @@ struct VoiceDataStack
 		}
 	}
 
+	int getNumActiveVoices() const { return voiceNoteOns.size(); }
+
 	template <typename T> void startVoice(T& n, PolyHandler& ph, int voiceIndex, const HiseEvent& e)
 	{
 		voiceNoteOns.insertWithoutSearch({ voiceIndex, e });
@@ -1097,8 +1100,8 @@ template <typename T, int NumVoices> struct PolyData
 	{
 		if constexpr (!isPolyphonic())
 			return true;
-
-		return begin() == getFirst();
+		else
+			return begin() == &getFirst();
 	}
 
 	/** Returns a reference to the first data. This can be used for UI purposes. */
@@ -1122,19 +1125,32 @@ template <typename T, int NumVoices> struct PolyData
 		return isVoiceRenderingActive();
 	}
 
-private:
+	T& getWithIndex(int index)
+	{
+		return *(data + getVoiceIndex(index));
+	}
 
-	
-	
-	static constexpr bool isPolyphonic() { return NumVoices > 1; }
+	const T& getWithIndex(int index) const
+	{
+		return *(data + getVoiceIndex(index));
+	}
 
-	
+	bool isPolyHandlerEnabled() const
+	{
+		return NumVoices > 1 && voicePtr != nullptr && voicePtr->isEnabled();
+	}
 
 	bool isVoiceRenderingActive() const
 	{
 		return isPolyphonic() &&
 			voicePtr != nullptr && voicePtr->getVoiceIndex() != -1;
 	}
+
+private:
+
+	static constexpr bool isPolyphonic() { return NumVoices > 1; }
+
+	
 
 	int getCurrentVoiceIndex() const
 	{
@@ -1148,18 +1164,7 @@ private:
 		auto rv = index & (NumVoices - 1);
 		return rv;
 	}
-
-
-	T& getWithIndex(int index)
-	{
-		return *(data + getVoiceIndex(index));
-	}
-
-	const T& getWithIndex(int index) const
-	{
-		return *(data + getVoiceIndex(index));
-	}
-
+	
 private:
 
 	PolyHandler* voicePtr = nullptr;

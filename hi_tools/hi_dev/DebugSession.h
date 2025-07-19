@@ -31,7 +31,6 @@
 */
 
 #pragma once
-#include "CodeEditorApiBase.h"
 
 namespace hise { using namespace juce;
 
@@ -94,6 +93,15 @@ public:
 		numRecordingStates
 	};
 
+	enum class TriggerType
+	{
+		Manual,
+		Compilation,
+		MidiInput,
+		MouseClick,
+		numTriggerTypes
+	};
+
 	struct SerialisedData: public ReferenceCountedObject
 	{
 		using Ptr = ReferenceCountedObjectPtr<SerialisedData>;
@@ -135,7 +143,8 @@ public:
 			ScriptingThread,
 			ServerThread,
 			UIThread,
-			WorkerThread
+			WorkerThread,
+			numTypes
 		};
 
 		static String getThreadName(Type t)
@@ -143,7 +152,7 @@ public:
 			switch(t)
 			{
 			case Type::Undefined: return "Unknown";
-			case Type::AudioThread: return "AudioThread";
+			case Type::AudioThread: return "Audio Thread";
 			case Type::UIThread: return "UI Thread";
 			case Type::ScriptingThread: return "Scripting Thread";
 			case Type::LoadingThread: return "Loading Thread";
@@ -249,6 +258,7 @@ public:
 			Script,
 			ScriptCallback,
 			Broadcaster,
+			TimerCallback,
 			Server,
 			Paint,
 			DSP,
@@ -301,6 +311,7 @@ public:
 			case SourceType::Script: return "Script";
 			case SourceType::Scriptnode: return "Scriptnode";
 			case SourceType::ScriptCallback: return "Callback";
+			case SourceType::TimerCallback: return "TimerCallback";
 			case SourceType::Broadcaster: return "Broadcaster";
 			case SourceType::Paint: return "Paint";
 			case SourceType::DSP: return "DSP";
@@ -308,7 +319,9 @@ public:
 			case SourceType::Server: return "Server";
 			case SourceType::BackgroundTask: return "Background Task";
 			case SourceType::RecordingSession: return "Threads";
-			}
+            case SourceType::numSourceTypes:
+                    break;
+            }
 
 			return {};
 		}
@@ -612,6 +625,7 @@ public:
 	void stopRecording();
 	void initUIThread();
 	Component* createPopupViewer(const DebugInformationBase::Ptr ptr);
+	
 
 	LambdaBroadcaster<bool> syncRecordingBroadcaster;
 	LambdaBroadcaster<ProfileDataSource::ProfileInfoBase::Ptr> recordingFlushBroadcaster;
@@ -619,12 +633,19 @@ public:
 	void addAudioThread(ThreadIdentifier t);
 	void checkAudioThreadRecorders();
 
+	void checkMouseClickProfiler(bool isDown);
+
 	DebugSession* getDebugSession() override { return this; }
 	Component* createMultiViewer();
 
 	bool isRecordingMultithread() const;
-	bool shouldProfileInitialisation() const;
-	void setProfileInitialisation(bool shouldProfileInit);
+	TriggerType getTriggerType() const { return currentOptions.trigger; }
+
+	void setTriggerType(TriggerType newTriggerType)
+	{
+		currentOptions.trigger = newTriggerType;
+		optionBroadcaster.sendMessage(sendNotificationSync, &currentOptions);
+	}
 
 	int openTrackEvent();
 	void closeTrackEvent(int id);
@@ -633,7 +654,125 @@ public:
 
 	std::function<double()> getBufferDuration;
 
+	struct Options
+	{
+		Options()
+		{
+			for(int i = 0; i < (int)ProfileDataSource::SourceType::numSourceTypes; i++)
+			{
+				auto t = (ProfileDataSource::SourceType)i;
+				eventFilter.push_back(t);
+			}
+
+			for(int i = 0; i < (int)ThreadIdentifier::Type::numTypes; i++)
+			{
+				auto t = (ThreadIdentifier::Type)i;
+				threadFilter.push_back(t);
+			}
+		}
+
+		void writeToObject(DynamicObject::Ptr obj)
+		{
+			Array<var> filters;
+
+			for(auto tv: threadFilter)
+				filters.add(DebugSession::ThreadIdentifier::getThreadName(tv));
+
+			Array<var> eventFilters;
+
+			for(auto& ev: eventFilter)
+				eventFilters.add(DebugSession::ProfileDataSource::getSourceTypeName(ev));
+
+			obj->setProperty("threadFilter", var(filters));
+			obj->setProperty("eventFilter", var(eventFilters));
+			obj->setProperty("recordingLength", String((int)millisecondsToRecord) + " ms");
+			obj->setProperty("recordingTrigger", (int)trigger);
+		}
+
+		static Options fromDynamicObject(DynamicObject::Ptr obj)
+		{
+			auto ev = obj->getProperty("eventFilter");
+			auto tv = obj->getProperty("threadFilter");
+
+			Options newOptions;
+
+			newOptions.eventFilter.clear();
+			newOptions.threadFilter.clear();
+			newOptions.trigger = (TriggerType)(int)obj->getProperty("recordingTrigger");
+			newOptions.millisecondsToRecord = obj->getProperty("recordingLength").toString().getDoubleValue();
+
+			if(ev.isArray())
+			{
+				for(auto& v: *ev.getArray())
+				{
+					auto n = v.toString();
+					auto found = false;
+
+					for(int i = 0; i < (int)ProfileDataSource::SourceType::numSourceTypes; i++)
+					{
+						auto t = (ProfileDataSource::SourceType)i;
+
+						if(ProfileDataSource::getSourceTypeName(t) == n)
+						{
+							newOptions.eventFilter.push_back(t);
+							found = true;
+						}
+					}
+
+					jassert(found);
+				}
+			}
+
+			newOptions.eventFilter.push_back(ProfileDataSource::SourceType::Undefined);
+			newOptions.eventFilter.push_back(ProfileDataSource::SourceType::RecordingSession);
+
+			if(tv.isArray())
+			{
+				for(auto& v: *tv.getArray())
+				{
+					auto n = v.toString();
+					auto found = false;
+
+					for(int i = 0; i < (int)ThreadIdentifier::Type::numTypes; i++)
+					{
+						auto t = (ThreadIdentifier::Type)i;
+
+						if(ThreadIdentifier::getThreadName(t) == n)
+						{
+							newOptions.threadFilter.push_back(t);
+							found = true;
+						}
+					}
+
+					jassert(found);
+				}
+			}
+
+			return newOptions;
+		}
+
+		TriggerType trigger = TriggerType::Manual;
+		double millisecondsToRecord = 1000.0;
+
+		std::vector<ThreadIdentifier::Type> threadFilter;
+		std::vector<ProfileDataSource::SourceType> eventFilter;
+	};
+
+	const Options& getOptions() const { return currentOptions; }
+
+	void setOptions(const var& jsonObject)
+	{
+		currentOptions = Options::fromDynamicObject(jsonObject.getDynamicObject());
+		optionBroadcaster.sendMessage(sendNotificationAsync, &currentOptions);
+	}
+
+	bool isMidiTriggerEnabled() const { return currentOptions.trigger == TriggerType::MidiInput; }
+
+	LambdaBroadcaster<Options*> optionBroadcaster;
+
 private:
+
+	Options currentOptions;
 
 	GotoLocationCallback gotoLocation;
 
@@ -787,8 +926,6 @@ private:
 	WeakReference<ApiProviderBase::Holder> recordHolder;
 	double recordingStart= 0.0;
 	double recordingDelta = 0.0;
-
-	bool profileInitialisation = false;
 };
 
 

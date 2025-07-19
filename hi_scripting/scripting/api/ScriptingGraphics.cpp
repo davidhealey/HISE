@@ -1012,9 +1012,11 @@ struct ScriptingObjects::PathObject::Wrapper
 	API_METHOD_WRAPPER_1(PathObject, getPointOnPath);
 	API_METHOD_WRAPPER_1(PathObject, contains);
 	API_METHOD_WRAPPER_1(PathObject, getBounds);
+	API_VOID_METHOD_WRAPPER_1(PathObject, setBounds);
 	API_METHOD_WRAPPER_0(PathObject, getLength);
 	API_METHOD_WRAPPER_0(PathObject, toString);
 	API_METHOD_WRAPPER_0(PathObject, toBase64);
+	API_METHOD_WRAPPER_1(PathObject, getYAt);
 	API_VOID_METHOD_WRAPPER_1(PathObject, fromString);
 };
 
@@ -1044,11 +1046,15 @@ ScriptingObjects::PathObject::PathObject(ProcessorWithScriptingContent* p) :
 	ADD_API_METHOD_3(getIntersection);
 	ADD_API_METHOD_1(contains);
 	ADD_API_METHOD_1(getBounds);
+	ADD_API_METHOD_1(setBounds);
 	ADD_API_METHOD_0(getLength);
 	ADD_API_METHOD_2(createStrokedPath);
 	ADD_API_METHOD_0(toString);
 	ADD_API_METHOD_0(toBase64);
 	ADD_API_METHOD_1(fromString);
+	ADD_API_METHOD_1(getYAt);
+
+	useRectangleClass = HISE_GET_PREPROCESSOR(getScriptProcessor()->getMainController_(), HISE_USE_SCRIPT_RECTANGLE_OBJECT);
 }
 
 ScriptingObjects::PathObject::~PathObject()
@@ -1182,6 +1188,12 @@ void ScriptingObjects::PathObject::roundCorners(var radius)
 	p = p.createPathWithRoundedCorners(radius);
 }
 
+var ScriptingObjects::PathObject::getYAt(float xPos)
+{
+	auto x = flex_ahdsr_base::Helpers::getYAt(this->p, xPos);
+	return x != -1.0 ? var(x) : var();
+}
+
 var ScriptingObjects::PathObject::getIntersection(var start, var end, bool keepSectionOutsidePath)
 {
 	Point<float> p1 = ApiHelpers::getPointFromVar(start);
@@ -1240,14 +1252,19 @@ var ScriptingObjects::PathObject::getBounds(var scaleFactor)
 {
 	auto r = p.getBoundsTransformed(AffineTransform::scale(scaleFactor));
 
-	Array<var> area;
+	return ApiHelpers::getVarRectangle(useRectangleClass, r);
+}
 
-	area.add(r.getX());
-	area.add(r.getY());
-	area.add(r.getWidth());
-	area.add(r.getHeight());
+void ScriptingObjects::PathObject::setBounds(var boundingBox)
+{
+	auto r = Result::ok();
+	auto tb = ApiHelpers::getRectangleFromVar(boundingBox, &r);
 
-	return var(area);
+	if(r.failed())
+		reportScriptError(r.getErrorMessage());
+
+	p.startNewSubPath(tb.getTopLeft());
+	p.startNewSubPath(tb.getBottomRight());
 }
 
 juce::var ScriptingObjects::PathObject::createStrokedPath(var strokeData, var dotData)
@@ -1591,6 +1608,7 @@ struct ScriptingObjects::GraphicsObject::Wrapper
 	API_VOID_METHOD_WRAPPER_1(GraphicsObject, drawRepaintMarker);
 	API_VOID_METHOD_WRAPPER_3(GraphicsObject, drawDropShadow);
 	API_VOID_METHOD_WRAPPER_5(GraphicsObject, drawDropShadowFromPath);
+	API_VOID_METHOD_WRAPPER_5(GraphicsObject, drawInnerShadowFromPath);
 	API_VOID_METHOD_WRAPPER_2(GraphicsObject, addDropShadowFromAlpha);
 	API_VOID_METHOD_WRAPPER_3(GraphicsObject, drawTriangle);
 	API_VOID_METHOD_WRAPPER_2(GraphicsObject, fillTriangle);
@@ -1648,6 +1666,7 @@ ScriptingObjects::GraphicsObject::GraphicsObject(ProcessorWithScriptingContent *
 	ADD_API_METHOD_4(drawImage);
 	ADD_API_METHOD_3(drawDropShadow);
 	ADD_API_METHOD_5(drawDropShadowFromPath);
+	ADD_API_METHOD_5(drawInnerShadowFromPath);
 	ADD_API_METHOD_2(addDropShadowFromAlpha);
 	ADD_API_METHOD_3(drawTriangle);
 	ADD_API_METHOD_2(fillTriangle);
@@ -2028,10 +2047,12 @@ void ScriptingObjects::GraphicsObject::drawFittedText(String text, var area, Str
 	Result re = Result::ok();
 	auto just = ApiHelpers::getJustification(alignment, &re);
 
+	auto a = getRectangleFromVar(area).toNearestInt();
+
 	if (re.failed())
 		reportScriptError(re.getErrorMessage());
 
-	drawActionHandler.addDrawAction(new ScriptedDrawActions::drawFittedText(text, area, just, maxLines, scale));
+	drawActionHandler.addDrawAction(new ScriptedDrawActions::drawFittedText(text, a, just, maxLines, scale));
 }
 
 void ScriptingObjects::GraphicsObject::drawMultiLineText(String text, var xy, int maxWidth, String alignment, float leading)
@@ -2194,19 +2215,27 @@ void ScriptingObjects::GraphicsObject::drawDropShadow(var area, var colour, int 
 
 void ScriptingObjects::GraphicsObject::drawDropShadowFromPath(var path, var area, var colour, int radius, var offset)
 {
-	auto r = getIntRectangleFromVar(area);
-	auto o = getPointFromVar(offset);
+	auto r = getRectangleFromVar(area);
+	auto o = getPointFromVar(offset).toInt();
 	auto c = ScriptingApi::Content::Helpers::getCleanedObjectColour(colour);
-
-
 
 	if (auto p = dynamic_cast<ScriptingObjects::PathObject*>(path.getObject()))
 	{
 		Path sp = p->getPath();
-		
-		auto area = r.toFloat().translated(o.getX(), o.getY());
+		drawActionHandler.addDrawAction(new ScriptedDrawActions::drawDropShadowFromPath<melatonin::DropShadow>(sp, r, c, radius, o));
+	}
+}
 
-		drawActionHandler.addDrawAction(new ScriptedDrawActions::drawDropShadowFromPath(sp, area, c, radius));
+void ScriptingObjects::GraphicsObject::drawInnerShadowFromPath(var path, var area, var colour, int radius, var offset)
+{
+	auto r = getRectangleFromVar(area);
+	auto o = getPointFromVar(offset).toInt();
+	auto c = ScriptingApi::Content::Helpers::getCleanedObjectColour(colour);
+
+	if (auto p = dynamic_cast<ScriptingObjects::PathObject*>(path.getObject()))
+	{
+		Path sp = p->getPath();
+		drawActionHandler.addDrawAction(new ScriptedDrawActions::drawDropShadowFromPath<melatonin::InnerShadow>(sp, r, c, radius, o));
 	}
 }
 
@@ -2280,7 +2309,7 @@ void ScriptingObjects::GraphicsObject::fillPath(var path, var area)
 		if (p.getBounds().isEmpty())
 			return;
 
-		if (area.isArray())
+		if (area.isArray() || dynamic_cast<ScriptingObjects::ScriptRectangle*>(area.getDynamicObject()) != nullptr)
 		{
 			Rectangle<float> r = getRectangleFromVar(area);
 			p.scaleToFit(r.getX(), r.getY(), r.getWidth(), r.getHeight(), false);
@@ -2298,7 +2327,7 @@ void ScriptingObjects::GraphicsObject::drawPath(var path, var area, var strokeTy
 
 		
 
-		if (area.isArray())
+		if (area.isArray() || dynamic_cast<ScriptingObjects::ScriptRectangle*>(area.getDynamicObject()) != nullptr)
 		{
 			Rectangle<float> r = getRectangleFromVar(area);
 
@@ -2584,8 +2613,16 @@ Array<Identifier> ScriptingObjects::ScriptedLookAndFeel::getAllFunctionNames()
 		"drawAnalyserBackground",
 		"drawAnalyserPath",
 		"drawAnalyserGrid",
-        "drawMatrixPeakMeter"
-
+        "drawMatrixPeakMeter",
+		"getModulatorDragData",
+		"drawModulationDragBackground",
+		"drawModulationDragger",
+		"drawFlexAhdsrBackground",
+		"drawFlexAhdsrCurvePoint",
+		"drawFlexAhdsrFullPath",
+		"drawFlexAhdsrPosition",
+		"drawFlexAhdsrSegment",
+		"drawFlexAhdsrText"
 	};
 
 	return sa;
@@ -2860,7 +2897,6 @@ bool ScriptingObjects::ScriptedLookAndFeel::Laf::writeId(DynamicObject* obj, Com
 						
 	}
 
-	jassertfalse;
 	return false;
 }
 
@@ -2881,13 +2917,18 @@ ScriptingObjects::ScriptedLookAndFeel::CSSLaf::CSSLaf(ScriptedLookAndFeel* paren
 
 	initIds.addArray(StringArray::fromTokens(ad["class"].toString(), " ", ""));
 
+	initIds.sortNatural();
+	initIds.trim();
+	initIds.removeDuplicates(false);
+	initIds.removeEmptyStrings();
+
 	simple_css::FlexboxComponent::Helpers::writeSelectorsToProperties(*c, initIds);
-	
-	
+
 	if(auto ptr = root.css.getForComponent(c))
 	{
 		root.css.setAnimator(&root.animator);
-
+        root.css.performAtRules(this);
+        
 		auto cursor = ptr->getMouseCursor();
 
 		if(cursor != MouseCursor())
@@ -2931,6 +2972,18 @@ ScriptingObjects::ScriptedLookAndFeel::CSSLaf::CSSLaf(ScriptedLookAndFeel* paren
 			}
 		};
 
+		auto initProperty = [ptr](const ValueTree& v)
+		{
+			for(int i = 0; i < v.getNumProperties(); i++)
+			{
+				auto id = v.getPropertyName(i);
+				ptr->setPropertyVariable(id, v[id].toString());
+			}
+		};
+
+		initProperty(parent->additionalProperties);
+		initProperty(additionalDataCopy);
+
 		additionalPropertyUpdater.setCallback(parent->additionalProperties, {}, valuetree::AsyncMode::Asynchronously, updateProperty);
 		additionalComponentPropertyUpdater.setCallback(additionalDataCopy, {}, valuetree::AsyncMode::Asynchronously, updateProperty);
 
@@ -2967,6 +3020,45 @@ ScriptingObjects::ScriptedLookAndFeel::CSSLaf::CSSLaf(ScriptedLookAndFeel* paren
 	}
 }
 
+Font ScriptingObjects::ScriptedLookAndFeel::CSSLaf::loadFont(const String& fontName, const String& url)
+{
+    auto mc = get()->getScriptProcessor()->getMainController_();
+    
+#if USE_BACKEND
+    
+    if(auto tf = mc->getFont(fontName))
+    {
+        return Font(tf);
+    }
+    
+    if(url.isNotEmpty())
+    {
+        const String absolutePath = GET_PROJECT_HANDLER(mc->getMainSynthChain()).getFilePath(url, ProjectHandler::SubDirectories::Images);
+        File f(absolutePath);
+        auto fis = f.createInputStream();
+
+        if (fis == nullptr)
+        {
+            return Font();
+        }
+        else
+        {
+            MemoryBlock mb;
+            fis->readIntoMemoryBlock(mb);
+            mc->loadTypeFace(url, mb.getData(), mb.getSize(), fontName);
+        }
+    }
+    
+#endif
+    
+    if(auto tf = mc->getFont(fontName))
+    {
+        return Font(tf);
+    }
+    
+    return Font();
+}
+
 ScriptingObjects::ScriptedLookAndFeel* ScriptingObjects::ScriptedLookAndFeel::CSSLaf::get()
 { return parent.get(); }
 
@@ -2978,8 +3070,118 @@ void ScriptingObjects::ScriptedLookAndFeel::CSSLaf::updateMultipageDialog(multip
 	mp.update(css);
 }
 
+void ScriptingObjects::ScriptedLookAndFeel::CSSLaf::drawFilterPath(Graphics& g, FilterGraph& fg, const Path& p)
+{
+	using namespace simple_css;
+
+	if(auto ss = root.css.getForComponent(&fg))
+	{
+		Renderer r(&fg, root.stateWatcher);
+								
+		auto currentState = Renderer::getPseudoClassFromComponent(&fg);
+		root.stateWatcher.checkChanges(&fg, ss, currentState);
+
+		setPathAsVariable(ss, p, "filterPath");
+		r.drawBackground(g, fg.getLocalBounds().toFloat(), ss);
+
+		return;
+	}
+
+	FilterGraph::LookAndFeelMethods::drawFilterPath(g, fg, p);
+}
+
+void ScriptingObjects::ScriptedLookAndFeel::CSSLaf::drawFilterGridLines(Graphics& g, FilterGraph& fg,
+                                                                        const Path& gridPath)
+{
+	using namespace simple_css;
+
+	if(auto ss = root.css.getForComponent(&fg))
+	{
+		Renderer r(&fg, root.stateWatcher);
+								
+		auto currentState = Renderer::getPseudoClassFromComponent(&fg);
+		root.stateWatcher.checkChanges(&fg, ss, currentState);
+
+		setPathAsVariable(ss, gridPath, "gridLines");
+		r.drawBackground(g, fg.getLocalBounds().toFloat(), ss);
+
+		return;
+	}
+
+	FilterGraph::LookAndFeelMethods::drawFilterGridLines(g, fg, gridPath);
+}
+
+void ScriptingObjects::ScriptedLookAndFeel::CSSLaf::drawFilterDragHandle(Graphics& g, FilterDragOverlay& o, int index,
+                                                                         Rectangle<float> handleBounds, const FilterDragOverlay::DragData& d)
+{
+	using namespace simple_css;
+
+	if(auto ss = root.css.getWithAllStates(&o, Selector(SelectorType::Class, "filterHandle")))
+	{
+		Renderer r(&o, root.stateWatcher, index);
+
+		int state = 0;
+
+		if(d.hover)
+			state |= (int)PseudoClassType::Hover;
+
+		if(!d.enabled)
+			state |= (int)PseudoClassType::Disabled;
+
+		if(d.selected)
+			state |= (int)PseudoClassType::Focus;
+
+		if(d.dragging)
+			state |= (int)PseudoClassType::Active;
+
+		simple_css::Animator::RenderTarget rt(&o, index, handleBounds.toNearestInt());
+
+		root.stateWatcher.checkChanges(rt, ss, state);
+
+		ss->setPropertyVariable("type", d.type);
+		ss->setPropertyVariable("frequency", ValueToTextConverter::ConverterFunctions::Frequency(d.frequency));
+		ss->setPropertyVariable("q", String(d.q, 1));
+		ss->setPropertyVariable("gain", ValueToTextConverter::ConverterFunctions::Decibel(d.gain));
+		ss->setPropertyVariable("index", String(index));
+
+		r.setPseudoClassState(state, true);
+		r.setRenderPseudoElements(false); // we'll handle that with a better text area...
+		r.setRenderTextWithBackground(false);
+
+		auto renderText = [&](PseudoElementType et)
+		{
+			auto ps = PseudoState(state).withElement(et);
+			auto t = ss->getText({}, ps);
+
+			if(!t.isEmpty())
+			{
+				auto tb = ss->getLocalBoundsFromText(t, ps);
+				tb = ss->getBounds(tb, ps);
+				auto pos = tb.getTopLeft();
+				tb = handleBounds.withSizeKeepingCentre(tb.getWidth(), tb.getHeight());
+				tb = tb.translated(pos.getX(), pos.getY());
+				tb = tb.constrainedWithin(o.getLocalBounds().toFloat());
+				r.drawBackground(g, tb, ss, et);
+				r.renderText(g, tb, t, ss, et);
+			}
+			else if(et == PseudoElementType::None)
+			{
+				r.drawBackground(g, handleBounds, ss, et);
+			}
+		};
+
+		renderText(PseudoElementType::None);
+		renderText(PseudoElementType::Before);
+		renderText(PseudoElementType::After);
+		
+		return;
+	}
+
+	FilterDragOverlay::LookAndFeelMethods::drawFilterDragHandle(g, o, index, handleBounds, d);
+}
+
 Rectangle<float> ScriptingObjects::ScriptedLookAndFeel::CSSLaf::getTextLabelPopupArea(simple_css::StyleSheet::Ptr ss,
-	Rectangle<float> fullBounds, const String& text)
+                                                                                      Rectangle<float> fullBounds, const String& text)
 {
 	auto area = ss->getLocalBoundsFromText(text);
 	auto j = ss->getJustification({});
@@ -3252,8 +3454,144 @@ bool ScriptingObjects::ScriptedLookAndFeel::CSSLaf::drawValueLabel(Graphics& g, 
 	return false;
 }
 
+void ScriptingObjects::ScriptedLookAndFeel::CSSLaf::drawKeyboardBackground(Graphics& g, Component* c, int width,
+	int height)
+{
+	using namespace simple_css;
+
+	Selector s(SelectorType::Class, ".keyboard");
+
+	if(auto ss = root.css.getWithAllStates(c, s))
+	{
+		Renderer r(c, root.stateWatcher);
+
+		r.drawBackground(g, {0.0f, 0.0f, (float)width, (float)height}, ss);
+	}
+	else
+	{
+		LookAndFeelBase::drawKeyboardBackground(g, c, width, height);
+	}
+}
+
+void ScriptingObjects::ScriptedLookAndFeel::CSSLaf::drawWhiteNote(CustomKeyboardState* state, Component* c,
+	int midiNoteNumber, Graphics& g, int x, int y, int w, int h, bool isDown, bool isOver, const Colour& lineColour,
+	const Colour& textColour)
+{
+	using namespace simple_css;
+
+	Selector s(SelectorType::Class, ".whitekey");
+
+	if(auto ss = root.css.getWithAllStates(c, s))
+	{
+		Renderer r(c, root.stateWatcher, midiNoteNumber);
+		int ps = 0;
+
+		if(isOver)
+			ps |= (int)PseudoClassType::Hover;
+
+		if(isDown)
+			ps |= (int)PseudoClassType::Active;
+
+		auto first = midiNoteNumber == state->getLowestKeyToDisplay();
+
+		if(first)
+			ps |= (int)PseudoClassType::First;
+
+		Rectangle<float> area(x, y, w, h);
+
+		simple_css::Animator::ScopedComponentSetter st({c, midiNoteNumber, area.toNearestInt()});
+
+		auto kc = state->getColourForSingleKey(midiNoteNumber);
+		auto cString = kc.isTransparent() ? String("#00000000") : (String("#") + kc.toDisplayString(true));
+		static const Identifier keyColour("keyColour");
+		ss->setPropertyVariable(keyColour, cString);
+
+		r.setPseudoClassState(ps, true);
+		
+		root.stateWatcher.checkChanges({c, midiNoteNumber, area.toNearestInt()}, ss, ps);
+
+		g.saveState();
+		r.drawBackground(g, area, ss);
+
+		if(midiNoteNumber % 12 == 0)
+		{
+			auto n = MidiMessage::getMidiNoteName(midiNoteNumber, false, true, 3);
+			r.renderText(g, area, n, ss);
+		}
+		g.restoreState();
+	}
+	else
+	{
+		LookAndFeelBase::drawWhiteNote(state, c, midiNoteNumber, g, x, y, w, h, isDown, isOver, lineColour, textColour);
+	}
+}
+
+void ScriptingObjects::ScriptedLookAndFeel::CSSLaf::drawBlackNote(CustomKeyboardState* state, Component* c,
+	int midiNoteNumber, Graphics& g, int x, int y, int w, int h, bool isDown, bool isOver, const Colour& noteFillColour)
+{
+	using namespace simple_css;
+
+	Selector s(SelectorType::Class, ".blackkey");
+
+	if(auto ss = root.css.getWithAllStates(c, s))
+	{
+		Renderer r(c, root.stateWatcher, midiNoteNumber);
+		int ps = 0;
+
+		if(isOver)
+			ps |= (int)PseudoClassType::Hover;
+
+		if(isDown)
+			ps |= (int)PseudoClassType::Active;
+
+		auto first = midiNoteNumber == state->getLowestKeyToDisplay();
+
+		if(first)
+			ps |= (int)PseudoClassType::First;
+
+		Rectangle<float> area(x, y, w, h);
+
+		simple_css::Animator::RenderTarget rt(c, midiNoteNumber, area.toNearestInt());
+		simple_css::Animator::ScopedComponentSetter st(rt);
+
+		auto kc = state->getColourForSingleKey(midiNoteNumber);
+		auto cString = kc.isTransparent() ? String("transparent") : (String("#") + kc.toDisplayString(true));
+		static const Identifier keyColour("keyColour");
+		ss->setPropertyVariable(keyColour, cString);
+
+		r.setPseudoClassState(ps, true);
+		root.stateWatcher.checkChanges(rt, ss, ps);
+
+		g.saveState();
+		r.drawBackground(g, area.expanded(10.0f), ss);
+		g.restoreState();
+	}
+	else
+	{
+		LookAndFeelBase::drawBlackNote(state, c, midiNoteNumber, g, x, y, w, h, isDown, isOver, noteFillColour);
+	}
+}
+
+void ScriptingObjects::ScriptedLookAndFeel::CSSLaf::drawFilterBackground(Graphics& g, FilterGraph& fg)
+{
+	using namespace simple_css;
+
+	if(auto ss = root.css.getForComponent(&fg))
+	{
+		Renderer r(&fg, root.stateWatcher);
+								
+		auto currentState = Renderer::getPseudoClassFromComponent(&fg);
+		root.stateWatcher.checkChanges(&fg, ss, currentState);
+		r.drawBackground(g, fg.getLocalBounds().toFloat(), ss);
+
+		return;
+	}
+
+	FilterGraph::LookAndFeelMethods::drawFilterBackground(g, fg);
+}
+
 void ScriptingObjects::ScriptedLookAndFeel::CSSLaf::drawTableValueLabel(Graphics& g, TableEditor& te, Font f,
-	const String& text, Rectangle<int> textBox)
+                                                                        const String& text, Rectangle<int> textBox)
 {
 	if(!te.shouldDrawTableValueLabel())
 		return;
@@ -3518,7 +3856,7 @@ void ScriptingObjects::ScriptedLookAndFeel::CSSLaf::drawListItem(Graphics& g, Co
 
 		r.setPseudoClassState(state, true);
 
-		root.stateWatcher.checkChanges({ &column, i }, ss, state);
+		root.stateWatcher.checkChanges({ &column, i, position }, ss, state);
 
 		auto b = position.toFloat();
 
@@ -3548,7 +3886,9 @@ void ScriptingObjects::ScriptedLookAndFeel::CSSLaf::drawSearchBar(Graphics& g, C
 
 ScriptingObjects::ScriptedLookAndFeel::Laf::Laf(MainController* mc):
 	ControlledObject(mc)
-{}
+{
+	useRectangleClass = HISE_GET_PREPROCESSOR(mc, HISE_USE_SCRIPT_RECTANGLE_OBJECT);
+}
 
 ScriptingObjects::ScriptedLookAndFeel::Laf::~Laf()
 {}
@@ -3650,7 +3990,7 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawAlertBox(Graphics& g_, Aler
 	{
 		auto obj = new DynamicObject();
 
-		obj->setProperty("area", ApiHelpers::getVarRectangle(w.getLocalBounds().toFloat()));
+		obj->setProperty("area", ApiHelpers::getVarRectangle(useRectangleClass, w.getLocalBounds().toFloat()));
 		obj->setProperty("title", w.getName());
 
 		addParentFloatingTile(w, obj);
@@ -3699,10 +4039,10 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawFilterDragHandle(Graphics& 
 		auto obj = new DynamicObject();
 
 		writeId(obj, &o);
-		
-		obj->setProperty("area", ApiHelpers::getVarRectangle(o.getLocalBounds().toFloat()));
+
+		obj->setProperty("area", ApiHelpers::getVarRectangle(useRectangleClass, o.getLocalBounds().toFloat()));
 		obj->setProperty("index", index);
-		obj->setProperty("handle", ApiHelpers::getVarRectangle(handleBounds));
+		obj->setProperty("handle", ApiHelpers::getVarRectangle(useRectangleClass, handleBounds));
 		obj->setProperty("selected", d.selected);
 		obj->setProperty("enabled", d.enabled);
 		obj->setProperty("drag", d.dragging);
@@ -3735,7 +4075,7 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawFilterBackground(Graphics &
 
 		writeId(obj, &fg);
 
-		obj->setProperty("area", ApiHelpers::getVarRectangle(fg.getLocalBounds().toFloat()));
+		obj->setProperty("area", ApiHelpers::getVarRectangle(useRectangleClass, fg.getLocalBounds().toFloat()));
 
 		setColourOrBlack(obj, "bgColour", fg, FilterGraph::ColourIds::bgColour);
 		setColourOrBlack(obj, "itemColour1", fg, FilterGraph::ColourIds::lineColour);
@@ -3757,7 +4097,7 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawFilterPath(Graphics& g_, Fi
 		auto obj = new DynamicObject();
 
 		writeId(obj, &fg);
-		obj->setProperty("area", ApiHelpers::getVarRectangle(fg.getLocalBounds().toFloat()));
+		obj->setProperty("area", ApiHelpers::getVarRectangle(useRectangleClass, fg.getLocalBounds().toFloat()));
 
 		auto sp = new ScriptingObjects::PathObject(get()->getScriptProcessor());
 
@@ -3765,7 +4105,7 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawFilterPath(Graphics& g_, Fi
 		sp->getPath() = p;
 		obj->setProperty("path", keeper);
 
-		obj->setProperty("pathArea", ApiHelpers::getVarRectangle(p.getBounds()));
+		obj->setProperty("pathArea", ApiHelpers::getVarRectangle(useRectangleClass, p.getBounds()));
 
 		setColourOrBlack(obj, "bgColour", fg, FilterGraph::ColourIds::bgColour);
 		setColourOrBlack(obj, "itemColour1", fg, FilterGraph::ColourIds::fillColour);
@@ -3787,7 +4127,7 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawFilterGridLines(Graphics &g
 		auto obj = new DynamicObject();
 
 		writeId(obj, &fg);
-		obj->setProperty("area", ApiHelpers::getVarRectangle(fg.getLocalBounds().toFloat()));
+		obj->setProperty("area", ApiHelpers::getVarRectangle(useRectangleClass, fg.getLocalBounds().toFloat()));
 
 		auto sp = new ScriptingObjects::PathObject(get()->getScriptProcessor());
 
@@ -3816,7 +4156,7 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawOscilloscopeBackground(Grap
 
 		auto c = dynamic_cast<Component*>(&ac);
 		writeId(obj, c);
-		obj->setProperty("area", ApiHelpers::getVarRectangle(areaToFill));
+		obj->setProperty("area", ApiHelpers::getVarRectangle(useRectangleClass, areaToFill));
 
 		
 		setColourOrBlack(obj, "bgColour", *c, RingBufferComponentBase::ColourId::bgColour);
@@ -3837,14 +4177,14 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawOscilloscopePath(Graphics& 
 		auto obj = new DynamicObject();
 		auto c = dynamic_cast<Component*>(&ac);
 		writeId(obj, c);
-		obj->setProperty("area", ApiHelpers::getVarRectangle(c->getLocalBounds().toFloat()));
+		obj->setProperty("area", ApiHelpers::getVarRectangle(useRectangleClass, c->getLocalBounds().toFloat()));
 		auto sp = new ScriptingObjects::PathObject(get()->getScriptProcessor());
 		
 
 		var keeper(sp);
 		sp->getPath() = p;
 		obj->setProperty("path", keeper);
-		obj->setProperty("pathArea", ApiHelpers::getVarRectangle(p.getBounds()));
+		obj->setProperty("pathArea", ApiHelpers::getVarRectangle(useRectangleClass, p.getBounds()));
 
 		setColourOrBlack(obj, "bgColour", *c, RingBufferComponentBase::ColourId::bgColour);
 		setColourOrBlack(obj, "itemColour1", *c, RingBufferComponentBase::ColourId::fillColour);
@@ -3869,7 +4209,7 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawAnalyserGrid(Graphics& g_, 
 		auto obj = new DynamicObject();
 		auto c = dynamic_cast<Component*>(&ac);
 		writeId(obj, c);
-		obj->setProperty("area", ApiHelpers::getVarRectangle(c->getLocalBounds().toFloat()));
+		obj->setProperty("area", ApiHelpers::getVarRectangle(useRectangleClass, c->getLocalBounds().toFloat()));
 		auto sp = new ScriptingObjects::PathObject(get()->getScriptProcessor());
 
 		var keeper(sp);
@@ -3945,7 +4285,7 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawPopupMenuItem(Graphics& g_,
 	if (functionDefined("drawPopupMenuItem"))
 	{
 		auto obj = new DynamicObject();
-		obj->setProperty("area", ApiHelpers::getVarRectangle(area.toFloat()));
+		obj->setProperty("area", ApiHelpers::getVarRectangle(useRectangleClass, area.toFloat()));
 		obj->setProperty("isSeparator", isSeparator);
         obj->setProperty("isSectionHeader", false);
 		obj->setProperty("isActive", isActive);
@@ -3977,7 +4317,7 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawPopupMenuSectionHeader (Gra
     if (functionDefined("drawPopupMenuItem"))
     {
         auto obj = new DynamicObject();
-        obj->setProperty("area", ApiHelpers::getVarRectangle(area.toFloat()));
+        obj->setProperty("area", ApiHelpers::getVarRectangle(useRectangleClass, area.toFloat()));
         obj->setProperty("isSeparator", false);
         obj->setProperty("isSectionHeader", true);
         obj->setProperty("isActive", false);
@@ -4008,7 +4348,7 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawToggleButton(Graphics &g_, 
 		auto obj = new DynamicObject();
 
 		writeId(obj, &b);
-		obj->setProperty("area", ApiHelpers::getVarRectangle(b.getLocalBounds().toFloat()));
+		obj->setProperty("area", ApiHelpers::getVarRectangle(useRectangleClass, b.getLocalBounds().toFloat()));
 		obj->setProperty("enabled", b.isEnabled());
 		obj->setProperty("text", b.getButtonText());
 		obj->setProperty("over", isMouseOverButton);
@@ -4041,13 +4381,15 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawRotarySlider(Graphics &g_, 
 		writeId(obj, &s);
 		obj->setProperty("enabled", s.isEnabled());
 		obj->setProperty("text", s.getName());
-		obj->setProperty("area", ApiHelpers::getVarRectangle(s.getLocalBounds().toFloat()));
+		obj->setProperty("area", ApiHelpers::getVarRectangle(useRectangleClass, s.getLocalBounds().toFloat()));
 
 		obj->setProperty("valueAsText", s.getTextFromValue(s.getValue()));
 		obj->setProperty("value", s.getValue());
 
 		NormalisableRange<double> range = NormalisableRange<double>(s.getMinimum(), s.getMaximum(), s.getInterval(), s.getSkewFactor());
-		obj->setProperty("valueNormalized", range.convertTo0to1(s.getValue()));
+		auto normValue = range.convertTo0to1(s.getValue());
+		auto mv = ModulationDisplayValue::fromComponent(s, normValue);
+		mv.storeToJSON(obj);
 
 		obj->setProperty("valueSuffixString", s.getTextFromValue(s.getValue()));
 		obj->setProperty("suffix", s.getTextValueSuffix());
@@ -4077,7 +4419,7 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawLinearSlider(Graphics &g, i
 {
 	if (functionDefined("drawLinearSlider"))
 	{
-		auto obj = new DynamicObject();
+		DynamicObject* obj = new DynamicObject();
 
 		writeId(obj, &slider);
 		obj->setProperty("enabled", slider.isEnabled());
@@ -4085,12 +4427,13 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawLinearSlider(Graphics &g, i
 
 		auto parentPack = slider.findParentComponentOfClass<SliderPack>();
 
-		
+		NormalisableRange<double> range = NormalisableRange<double>(slider.getMinimum(), slider.getMaximum(), slider.getInterval(), slider.getSkewFactor());
+		auto normValue = range.convertTo0to1(slider.getValue());
+		auto mv = ModulationDisplayValue::fromComponent(slider, normValue);
+		mv.storeToJSON(obj);
 
-		obj->setProperty("area", ApiHelpers::getVarRectangle(slider.getLocalBounds().toFloat()));
-
+		obj->setProperty("area", ApiHelpers::getVarRectangle(useRectangleClass, slider.getLocalBounds().toFloat()));
 		obj->setProperty("valueAsText", slider.getTextFromValue(slider.getValue()));
-
 		obj->setProperty("valueSuffixString", slider.getTextFromValue(slider.getValue()));
 		obj->setProperty("suffix", slider.getTextValueSuffix());
 		obj->setProperty("skew", slider.getSkewFactor());
@@ -4101,9 +4444,6 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawLinearSlider(Graphics &g, i
 		obj->setProperty("min", slider.getMinimum());
 		obj->setProperty("max", slider.getMaximum());
 		obj->setProperty("value", slider.getValue());
-
-		NormalisableRange<double> range = NormalisableRange<double>(slider.getMinimum(), slider.getMaximum(), slider.getInterval(), slider.getSkewFactor());
-		obj->setProperty("valueNormalized", range.convertTo0to1(slider.getValue()));
 
 		// Range style slider
 		double minv = 0.0;
@@ -4168,7 +4508,7 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawComboBox(Graphics& g_, int 
 	{
 		auto obj = new DynamicObject();
 		writeId(obj, &cb);
-		obj->setProperty("area", ApiHelpers::getVarRectangle(cb.getLocalBounds().toFloat()));
+		obj->setProperty("area", ApiHelpers::getVarRectangle(useRectangleClass, cb.getLocalBounds().toFloat()));
 
 		auto text = cb.getText();
 
@@ -4228,7 +4568,7 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawButtonBackground(Graphics& 
 	{
 		auto obj = new DynamicObject();
 		writeId(obj, &button);
-		obj->setProperty("area", ApiHelpers::getVarRectangle(button.getLocalBounds().toFloat()));
+		obj->setProperty("area", ApiHelpers::getVarRectangle(useRectangleClass, button.getLocalBounds().toFloat()));
 		obj->setProperty("text", button.getButtonText());
 		obj->setProperty("enabled", button.isEnabled());
 		obj->setProperty("over", isMouseOverButton);
@@ -4258,7 +4598,7 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawNumberTag(Graphics& g_, Com
 		if (number != -1)
 		{
 			auto obj = new DynamicObject();
-			obj->setProperty("area", ApiHelpers::getVarRectangle(area.toFloat()));
+			obj->setProperty("area", ApiHelpers::getVarRectangle(useRectangleClass, area.toFloat()));
 			obj->setProperty("macroIndex", number - 1);
 
             setColourOrBlack(obj, "bgColour",    comp, HiseColourScheme::ComponentOutlineColourId);
@@ -4298,7 +4638,7 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawPresetBrowserBackground(Gra
 	if (functionDefined("drawPresetBrowserBackground"))
 	{
 		auto obj = new DynamicObject();
-		obj->setProperty("area", ApiHelpers::getVarRectangle(p->getLocalBounds().toFloat()));
+		obj->setProperty("area", ApiHelpers::getVarRectangle(useRectangleClass, p->getLocalBounds().toFloat()));
 		obj->setProperty("bgColour", backgroundColour.getARGB());
 		obj->setProperty("itemColour", highlightColour.getARGB());
 		obj->setProperty("itemColour2", modalBackgroundColour.getARGB());
@@ -4316,7 +4656,7 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawColumnBackground(Graphics& 
 	if (functionDefined("drawPresetBrowserColumnBackground"))
 	{
 		auto obj = new DynamicObject();
-		obj->setProperty("area", ApiHelpers::getVarRectangle(listArea.toFloat()));
+		obj->setProperty("area", ApiHelpers::getVarRectangle(useRectangleClass, listArea.toFloat()));
 		obj->setProperty("columnIndex", columnIndex);
 		obj->setProperty("text", emptyText);
 		obj->setProperty("bgColour", backgroundColour.getARGB());
@@ -4336,7 +4676,7 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawListItem(Graphics& g_, Comp
 	if (functionDefined("drawPresetBrowserListItem"))
 	{
 		auto obj = new DynamicObject();
-		obj->setProperty("area", ApiHelpers::getVarRectangle(position.toFloat()));
+		obj->setProperty("area", ApiHelpers::getVarRectangle(useRectangleClass, position.toFloat()));
 		obj->setProperty("columnIndex", columnIndex);
 		obj->setProperty("rowIndex", rowIndex);
 		obj->setProperty("text", itemName);
@@ -4359,7 +4699,7 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawSearchBar(Graphics& g_, Com
 	if (functionDefined("drawPresetBrowserSearchBar"))
 	{
 		auto obj = new DynamicObject();
-		obj->setProperty("area", ApiHelpers::getVarRectangle(area.toFloat()));
+		obj->setProperty("area", ApiHelpers::getVarRectangle(useRectangleClass, area.toFloat()));
 		obj->setProperty("bgColour", backgroundColour.getARGB());
 		obj->setProperty("itemColour", highlightColour.getARGB());
 		obj->setProperty("itemColour2", modalBackgroundColour.getARGB());
@@ -4395,7 +4735,7 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawTableBackground(Graphics& g
 		auto obj = new DynamicObject();
 
 		writeId(obj, &te);
-		obj->setProperty("area", ApiHelpers::getVarRectangle(area));
+		obj->setProperty("area", ApiHelpers::getVarRectangle(useRectangleClass, area));
 		obj->setProperty("id", te.getName());
 		obj->setProperty("position", rulerPosition);
 		obj->setProperty("enabled", te.isEnabled());
@@ -4427,7 +4767,7 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawTablePath(Graphics& g_, Tab
 		writeId(obj, &te);
 		obj->setProperty("path", var(sp));
 
-		obj->setProperty("area", ApiHelpers::getVarRectangle(area));
+		obj->setProperty("area", ApiHelpers::getVarRectangle(useRectangleClass, area));
 		obj->setProperty("lineThickness", lineThickness);
 		obj->setProperty("enabled", te.isEnabled());
 		
@@ -4452,7 +4792,7 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawTablePoint(Graphics& g_, Ta
 		auto obj = new DynamicObject();
 
 		writeId(obj, &te);
-		obj->setProperty("tablePoint", ApiHelpers::getVarRectangle(tablePoint));
+		obj->setProperty("tablePoint", ApiHelpers::getVarRectangle(useRectangleClass, tablePoint));
 		obj->setProperty("isEdge", isEdge);
 		obj->setProperty("hover", isHover);
 		obj->setProperty("clicked", isDragged);
@@ -4479,7 +4819,7 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawTableRuler(Graphics& g_, Ta
 		auto obj = new DynamicObject();
 
 		writeId(obj, &te);
-		obj->setProperty("area", ApiHelpers::getVarRectangle(area));
+		obj->setProperty("area", ApiHelpers::getVarRectangle(useRectangleClass, area));
 		obj->setProperty("position", rulerPosition);
 		obj->setProperty("lineThickness", lineThickness);
 		obj->setProperty("enabled", te.isEnabled());
@@ -4513,9 +4853,8 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawScrollbar(Graphics& g_, Scr
 		else
 			thumbArea = Rectangle<int>(x + thumbStartPosition, y, thumbSize, height).toFloat();
 
-		writeId(obj, &scrollbar);
-		obj->setProperty("area", ApiHelpers::getVarRectangle(fullArea));
-		obj->setProperty("handle", ApiHelpers::getVarRectangle(thumbArea));
+		obj->setProperty("area", ApiHelpers::getVarRectangle(useRectangleClass, fullArea));
+		obj->setProperty("handle", ApiHelpers::getVarRectangle(useRectangleClass, thumbArea));
 		obj->setProperty("vertical", isScrollbarVertical);
 		obj->setProperty("over", isMouseOver);
 		obj->setProperty("down", isMouseDown);
@@ -4540,7 +4879,7 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawAhdsrBackground(Graphics& g
 
 		writeId(obj, &graph);
 		obj->setProperty("enabled", graph.isEnabled());
-		obj->setProperty("area", ApiHelpers::getVarRectangle(graph.getBounds().toFloat()));
+		obj->setProperty("area", ApiHelpers::getVarRectangle(useRectangleClass, graph.getBounds().toFloat()));
 		
 		setColourOrBlack(obj, "bgColour", graph, AhdsrGraph::ColourIds::bgColour);
 		setColourOrBlack(obj, "itemColour", graph, AhdsrGraph::ColourIds::fillColour);
@@ -4573,7 +4912,7 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawAhdsrPathSection(Graphics& 
 		obj->setProperty("isActive", isActive);
 		obj->setProperty("path", keeper);
 		obj->setProperty("currentState", graph.getCurrentStateIndex());
-		obj->setProperty("area", ApiHelpers::getVarRectangle(s.getBounds().toFloat()));
+		obj->setProperty("area", ApiHelpers::getVarRectangle(useRectangleClass, s.getBounds().toFloat()));
 		
 		setColourOrBlack(obj, "bgColour", graph, AhdsrGraph::ColourIds::bgColour);
 		setColourOrBlack(obj, "itemColour", graph, AhdsrGraph::ColourIds::fillColour);
@@ -4596,7 +4935,7 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawAhdsrBallPosition(Graphics&
 		auto obj = new DynamicObject();
 
 		writeId(obj, &graph);
-		obj->setProperty("area", ApiHelpers::getVarRectangle(graph.getLocalBounds().toFloat()));
+		obj->setProperty("area", ApiHelpers::getVarRectangle(useRectangleClass, graph.getLocalBounds().toFloat()));
 		obj->setProperty("position", ApiHelpers::getVarFromPoint(pos));
 		obj->setProperty("currentState", graph.getCurrentStateIndex());
 		obj->setProperty("enabled", graph.isEnabled());
@@ -4622,7 +4961,7 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawMidiDropper(Graphics& g_, R
 	{
 		auto obj = new DynamicObject();
 		writeId(obj, &d);
-		obj->setProperty("area", ApiHelpers::getVarRectangle(area));
+		obj->setProperty("area", ApiHelpers::getVarRectangle(useRectangleClass, area));
 		obj->setProperty("hover", d.hover);
 		obj->setProperty("active", d.isActive());
 		obj->setProperty("externalDrag", d.externalDrag);
@@ -4646,7 +4985,7 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawHiseThumbnailBackground(Gra
 	{
 		auto obj = new DynamicObject();
 		writeId(obj, &th);
-		obj->setProperty("area", ApiHelpers::getVarRectangle(area.toFloat()));
+		obj->setProperty("area", ApiHelpers::getVarRectangle(useRectangleClass, area.toFloat()));
 		obj->setProperty("enabled", areaIsEnabled);
 
 		setColourOrBlack(obj, "bgColour", th, AudioDisplayComponent::ColourIds::bgColour);
@@ -4666,7 +5005,7 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawHiseThumbnailPath(Graphics&
 		auto obj = new DynamicObject();
 		auto area = path.getBounds();
 		writeId(obj, &th);
-		obj->setProperty("area", ApiHelpers::getVarRectangle(area));
+		obj->setProperty("area", ApiHelpers::getVarRectangle(useRectangleClass, area));
 		obj->setProperty("enabled", areaIsEnabled);
 
 		auto sp = new ScriptingObjects::PathObject(get()->getScriptProcessor());
@@ -4701,7 +5040,7 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawThumbnailRuler(Graphics& g_
 		auto obj = new DynamicObject();
 		auto area = th.getLocalBounds();
 		writeId(obj, &th);
-		obj->setProperty("area", ApiHelpers::getVarRectangle(area.toFloat()));
+		obj->setProperty("area", ApiHelpers::getVarRectangle(useRectangleClass, area.toFloat()));
 		
 		obj->setProperty("xPosition", xPosition);
 
@@ -4766,7 +5105,7 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawThumbnailRange(Graphics& g_
 	{
 		auto obj = new DynamicObject();
 		writeId(obj, &th);
-		obj->setProperty("area", ApiHelpers::getVarRectangle(area));
+		obj->setProperty("area", ApiHelpers::getVarRectangle(useRectangleClass, area));
 		obj->setProperty("rangeIndex", areaIndex);
 		obj->setProperty("rangeColour", c.getARGB());
 		obj->setProperty("enabled", areaEnabled);
@@ -4788,7 +5127,7 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawTextOverlay(Graphics& g_, H
 	{
 		auto obj = new DynamicObject();
 		writeId(obj, &th);
-		obj->setProperty("area", ApiHelpers::getVarRectangle(area));
+		obj->setProperty("area", ApiHelpers::getVarRectangle(useRectangleClass, area));
 		obj->setProperty("text", text);
 		
 		if (get()->callWithGraphics(g_, "drawThumbnailText", var(obj), &th))
@@ -4806,7 +5145,7 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawKeyboardBackground(Graphics
 
 		Rectangle<int> a(0, 0, width, height);
 
-		obj->setProperty("area", ApiHelpers::getVarRectangle(a.toFloat()));
+		obj->setProperty("area", ApiHelpers::getVarRectangle(useRectangleClass, a.toFloat()));
 
 		if (get()->callWithGraphics(g_, "drawKeyboardBackground", var(obj), c))
 			return;
@@ -4823,7 +5162,7 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawWhiteNote(CustomKeyboardSta
 
 		Rectangle<int> a(x, y, w, h);
 
-		obj->setProperty("area", ApiHelpers::getVarRectangle(a.toFloat()));
+		obj->setProperty("area", ApiHelpers::getVarRectangle(useRectangleClass, a.toFloat()));
 		obj->setProperty("noteNumber", midiNoteNumber);
 		obj->setProperty("hover", isOver);
 		obj->setProperty("down", isDown);
@@ -4844,7 +5183,7 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawBlackNote(CustomKeyboardSta
 
 		Rectangle<int> a(x, y, w, h);
 
-		obj->setProperty("area", ApiHelpers::getVarRectangle(a.toFloat()));
+		obj->setProperty("area", ApiHelpers::getVarRectangle(useRectangleClass, a.toFloat()));
 		obj->setProperty("noteNumber", midiNoteNumber);
 		obj->setProperty("hover", isOver);
 		obj->setProperty("down", isDown);
@@ -4874,7 +5213,7 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawSliderPackBackground(Graphi
 		obj->setProperty("numSliders", s.getNumSliders());
 		obj->setProperty("displayIndex", s.getData()->getNextIndexToDisplay());
 
-		obj->setProperty("area", ApiHelpers::getVarRectangle(s.getLocalBounds().toFloat()));
+		obj->setProperty("area", ApiHelpers::getVarRectangle(useRectangleClass, s.getLocalBounds().toFloat()));
 
 		if(get()->callWithGraphics(g_, "drawSliderPackBackground", var(obj), &s))
 			return;
@@ -4905,7 +5244,7 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawSliderPackFlashOverlay(Grap
 		sBounds.setY(0);
 		sBounds.setHeight(s.getHeight()); s.getValue(sliderIndex);
 
-		obj->setProperty("area", ApiHelpers::getVarRectangle(sBounds.toFloat()));
+		obj->setProperty("area", ApiHelpers::getVarRectangle(useRectangleClass, sBounds.toFloat()));
 
 		if (get()->callWithGraphics(g_, "drawSliderPackFlashOverlay", var(obj), &s))
 			return;
@@ -4958,7 +5297,7 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawSliderPackTextPopup(Graphic
 		obj->setProperty("index", index);
 		obj->setProperty("value", value);
 
-		obj->setProperty("area", ApiHelpers::getVarRectangle(s.getLocalBounds().toFloat()));
+		obj->setProperty("area", ApiHelpers::getVarRectangle(useRectangleClass, s.getLocalBounds().toFloat()));
 		
 		obj->setProperty("text", textToDraw);
 
@@ -4986,7 +5325,7 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawTableRowBackground(Graphics
 
 		Rectangle<int> a(0, 0, width, height);
 
-		obj->setProperty("area", ApiHelpers::getVarRectangle(a.toFloat()));
+		obj->setProperty("area", ApiHelpers::getVarRectangle(useRectangleClass, a.toFloat()));
 
 		if (get()->callWithGraphics(g_, "drawTableRowBackground", var(obj), nullptr))
 			return;
@@ -5008,14 +5347,14 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawTableCell(Graphics& g_, con
 
 		obj->setProperty("text", text);
 		obj->setProperty("rowIndex", rowNumber);
-		obj->setProperty("columnIndex", columnId - 1);
+		obj->setProperty("columnIndex", columnId);
 		obj->setProperty("selected", rowIsSelected);
 		obj->setProperty("clicked", cellIsClicked);
 		obj->setProperty("hover", cellIsHovered);
 
 		Rectangle<int> a(0, 0, width, height);
 
-		obj->setProperty("area", ApiHelpers::getVarRectangle(a.toFloat()));
+		obj->setProperty("area", ApiHelpers::getVarRectangle(useRectangleClass, a.toFloat()));
 
 		if (get()->callWithGraphics(g_, "drawTableCell", var(obj), nullptr))
 			return;
@@ -5038,7 +5377,7 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawTableHeaderBackground(Graph
 		obj->setProperty("textColour", d.textColour.getARGB());
 
 		auto a = h.getLocalBounds();
-		obj->setProperty("area", ApiHelpers::getVarRectangle(a.toFloat()));
+		obj->setProperty("area", ApiHelpers::getVarRectangle(useRectangleClass, a.toFloat()));
 
 		if (get()->callWithGraphics(g_, "drawTableHeaderBackground", var(obj), &h))
 			return;
@@ -5061,7 +5400,7 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawTableHeaderColumn(Graphics&
 		obj->setProperty("textColour", d.textColour.getARGB());
 
 		obj->setProperty("text", columnName);
-		obj->setProperty("columnIndex", columnId - 1);
+		obj->setProperty("columnIndex", columnId);
 		obj->setProperty("hover", isMouseOver);
 		obj->setProperty("down", isMouseDown);
 
@@ -5070,7 +5409,7 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawTableHeaderColumn(Graphics&
 
 		Rectangle<int> a(0, 0, width, height);
 
-		obj->setProperty("area", ApiHelpers::getVarRectangle(a.toFloat()));
+		obj->setProperty("area", ApiHelpers::getVarRectangle(useRectangleClass, a.toFloat()));
 
 		if (get()->callWithGraphics(g_, "drawTableHeaderColumn", var(obj), &h))
 			return;
@@ -5096,7 +5435,7 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawMatrixPeakMeter(Graphics& g
         }
 
 		writeId(obj, c);
-        obj->setProperty("area", ApiHelpers::getVarRectangle(c->getLocalBounds().toFloat()));
+        obj->setProperty("area", ApiHelpers::getVarRectangle(useRectangleClass, c->getLocalBounds().toFloat()));
         
         obj->setProperty("numChannels", numChannels);
         obj->setProperty("peaks", var(peaks));
@@ -5130,7 +5469,7 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawWavetableBackground(Graphic
 		auto obj = new DynamicObject();
 
 		writeId(obj, &wc);
-		obj->setProperty("area", ApiHelpers::getVarRectangle(wc.getLocalBounds().toFloat()));
+		obj->setProperty("area", ApiHelpers::getVarRectangle(useRectangleClass, wc.getLocalBounds().toFloat()));
 
 		obj->setProperty("isEmpty", isEmpty);
 		
@@ -5158,7 +5497,7 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawWavetablePath(Graphics& g_,
 		auto obj = new DynamicObject();
 
 		writeId(obj, &wc);
-		obj->setProperty("area", ApiHelpers::getVarRectangle(p.getBounds().toFloat()));
+		obj->setProperty("area", ApiHelpers::getVarRectangle(useRectangleClass, p.getBounds().toFloat()));
 
 		auto pat = new ScriptingObjects::PathObject(get()->getScriptProcessor());
 
@@ -5190,6 +5529,273 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawWavetablePath(Graphics& g_,
 	WaterfallComponent::LookAndFeelMethods::drawWavetablePath(g_, wc, p, tableIndex, isStereo, currentTableIndex, numTables);
 }
 
+HiSlider::HoverPopupLookandFeel::PositionData ScriptingObjects::ScriptedLookAndFeel::Laf::getModulatorDragData(
+	HiSlider& s, const StringArray& sourceList) const
+{
+	if (const_cast<Laf*>(this)->functionDefined("getModulatorDragData"))
+	{
+		if (auto l = const_cast<Laf*>(this)->get())
+		{
+			PositionData pd;
+			
+			var args = pd.toVar();
+
+			args.getDynamicObject()->setProperty("sliderBounds", ApiHelpers::getVarRectangle(useRectangleClass, s.getBoundsInParent().toFloat()));
+			args.getDynamicObject()->setProperty("parentBounds", ApiHelpers::getVarRectangle(useRectangleClass, s.getParentComponent()->getLocalBounds().toFloat()));
+
+			Array<var> sources;
+
+			for(const auto& s: sourceList)
+				sources.add(s);
+
+			args.getDynamicObject()->setProperty("connections", var(sources));
+
+			auto returnObj = l->callDefinedFunction("getModulatorDragData", &args, 1);
+			pd.fromVar(returnObj);
+			return pd;
+		}
+	}
+
+	return HoverPopupLookandFeel::getModulatorDragData(s, sourceList);
+}
+
+void ScriptingObjects::ScriptedLookAndFeel::Laf::drawModulationDragBackground(Graphics& g_, HiSlider& s, const DrawData& dd,
+	Rectangle<int> labelBounds)
+{
+	if (functionDefined("drawModulationDragBackground"))
+    {
+        auto obj = new DynamicObject();
+ 
+		writeId(obj, &s);
+        obj->setProperty("area", ApiHelpers::getVarRectangle(useRectangleClass, dd.bounds));
+		obj->setProperty("labelArea", ApiHelpers::getVarRectangle(useRectangleClass, labelBounds.toFloat()));
+
+		setColourOrBlack(obj, "bgColour", s, HiseColourScheme::ComponentOutlineColourId);
+		setColourOrBlack(obj, "itemColour", s, HiseColourScheme::ComponentFillTopColourId);
+		setColourOrBlack(obj, "itemColour2", s, HiseColourScheme::ComponentFillBottomColourId);
+		setColourOrBlack(obj, "textColour", s, HiseColourScheme::ComponentTextColourId);
+
+		obj->setProperty("min", dd.intensityRange.getStart());
+		obj->setProperty("max", dd.intensityRange.getEnd());
+		obj->setProperty("clicked", dd.isDown);
+		obj->setProperty("hover", dd.isHover);
+		obj->setProperty("targetName", dd.targetName);
+
+		if(dd.isHover)
+		{
+			jassert(dd.sourceIndex != -1);
+
+			obj->setProperty("hoverSourceName", dd.sourceName);
+			obj->setProperty("hoverSourceIndex", dd.sourceIndex);
+			obj->setProperty("hoverMode", (int)dd.targetMode);
+			obj->setProperty("hoverValugetIntere", dd.intensityValue);
+			obj->setProperty("hoverText", dd.labelText);
+		}
+
+        if (get()->callWithGraphics(g_, "drawModulationDragBackground", var(obj), s.currentHoverPopup.get()))
+            return;
+    }
+
+	HoverPopupLookandFeel::drawModulationDragBackground(g_, s, dd, labelBounds);
+}
+
+void ScriptingObjects::ScriptedLookAndFeel::Laf::drawModulationDragger(Graphics& g_, HiSlider& s, const DrawData& dd)
+{
+	if (functionDefined("drawModulationDragBackground"))
+    {
+        auto obj = new DynamicObject();
+ 
+		writeId(obj, &s);
+        obj->setProperty("area", ApiHelpers::getVarRectangle(useRectangleClass, dd.bounds));
+
+		setColourOrBlack(obj, "bgColour", s, HiseColourScheme::ComponentOutlineColourId);
+		setColourOrBlack(obj, "itemColour", s, HiseColourScheme::ComponentFillTopColourId);
+		setColourOrBlack(obj, "itemColour2", s, HiseColourScheme::ComponentFillBottomColourId);
+		setColourOrBlack(obj, "textColour", s, HiseColourScheme::ComponentTextColourId);
+
+		obj->setProperty("min", dd.intensityRange.getStart());
+		obj->setProperty("max", dd.intensityRange.getEnd());
+		obj->setProperty("value", dd.intensityValue);
+
+		obj->setProperty("clicked", dd.isDown);
+		obj->setProperty("hover", dd.isHover);
+		obj->setProperty("targetName", dd.targetName);
+		obj->setProperty("sourceName", dd.sourceName);
+		obj->setProperty("sourceIndex", dd.sourceIndex);
+		obj->setProperty("mode", (int)dd.targetMode);
+
+        if (get()->callWithGraphics(g_, "drawModulationDragger", var(obj), s.currentHoverPopup.get()))
+            return;
+    }
+
+	HoverPopupLookandFeel::drawModulationDragger(g_, s, dd);
+}
+
+void ScriptingObjects::ScriptedLookAndFeel::Laf::drawFlexAhdsrBackground(Graphics& g_,
+	flex_ahdsr_base::FlexAhdsrGraph& graph)
+{
+	if (functionDefined("drawFlexAhdsrBackground"))
+    {
+        auto obj = new DynamicObject();
+ 
+		writeId(obj, &graph);
+        obj->setProperty("area", ApiHelpers::getVarRectangle(useRectangleClass, graph.getLocalBounds().toFloat()));
+
+		setColourOrBlack(obj, "bgColour", graph, RingBufferComponentBase::ColourId::bgColour);
+		setColourOrBlack(obj, "itemColour", graph, RingBufferComponentBase::ColourId::fillColour);
+		setColourOrBlack(obj, "itemColour2", graph, RingBufferComponentBase::ColourId::lineColour);
+		setColourOrBlack(obj, "textColour", graph, HiseColourScheme::ColourIds::ComponentTextColourId);
+		
+        if (get()->callWithGraphics(g_, "drawFlexAhdsrBackground", var(obj), &graph))
+            return;
+    }
+
+	flex_ahdsr_base::FlexAhdsrGraph::LookAndFeelMethods::drawFlexAhdsrBackground(g_, graph);
+}
+
+void ScriptingObjects::ScriptedLookAndFeel::Laf::drawFlexAhdsrCurvePoint(Graphics& g_,
+	flex_ahdsr_base::FlexAhdsrGraph& graph, flex_ahdsr_base::State s, Point<float> curvePoint, bool hover, bool down)
+{
+	if (functionDefined("drawFlexAhdsrCurvePoint"))
+    {
+        auto obj = new DynamicObject();
+ 
+		writeId(obj, &graph);
+        obj->setProperty("area", ApiHelpers::getVarRectangle(useRectangleClass, graph.getLocalBounds().toFloat()));
+
+		setColourOrBlack(obj, "bgColour", graph, RingBufferComponentBase::ColourId::bgColour);
+		setColourOrBlack(obj, "itemColour", graph, RingBufferComponentBase::ColourId::fillColour);
+		setColourOrBlack(obj, "itemColour2", graph, RingBufferComponentBase::ColourId::lineColour);
+		setColourOrBlack(obj, "textColour", graph, HiseColourScheme::ColourIds::ComponentTextColourId);
+
+		obj->setProperty("state", (int)s);
+		obj->setProperty("curvePoint", ApiHelpers::getVarFromPoint(curvePoint));
+		obj->setProperty("hover", hover);
+		obj->setProperty("down", down);
+
+        if (get()->callWithGraphics(g_, "drawFlexAhdsrCurvePoint", var(obj), &graph))
+            return;
+    }
+
+	flex_ahdsr_base::FlexAhdsrGraph::LookAndFeelMethods::drawFlexAhdsrCurvePoint(g_, graph, s, curvePoint, hover, down);
+}
+
+void ScriptingObjects::ScriptedLookAndFeel::Laf::drawFlexAhdsrFullPath(Graphics& g_,
+	flex_ahdsr_base::FlexAhdsrGraph& graph)
+{
+	if (functionDefined("drawFlexAhdsrFullPath"))
+    {
+        auto obj = new DynamicObject();
+ 
+		writeId(obj, &graph);
+        obj->setProperty("area", ApiHelpers::getVarRectangle(useRectangleClass, graph.getLocalBounds().toFloat()));
+		obj->setProperty("pathArea", ApiHelpers::getVarRectangle(useRectangleClass, graph.getLocalBounds().toFloat().reduced(10)));
+
+		setColourOrBlack(obj, "bgColour", graph, RingBufferComponentBase::ColourId::bgColour);
+		setColourOrBlack(obj, "itemColour", graph, RingBufferComponentBase::ColourId::fillColour);
+		setColourOrBlack(obj, "itemColour2", graph, RingBufferComponentBase::ColourId::lineColour);
+		setColourOrBlack(obj, "textColour", graph, HiseColourScheme::ColourIds::ComponentTextColourId);
+
+		auto sp = new ScriptingObjects::PathObject(get()->getScriptProcessor());
+
+		var keeper(sp);
+		sp->getPath() = graph.fullPath;
+		obj->setProperty("path", keeper);
+
+        if (get()->callWithGraphics(g_, "drawFlexAhdsrFullPath", var(obj), &graph))
+            return;
+    }
+
+	flex_ahdsr_base::FlexAhdsrGraph::LookAndFeelMethods::drawFlexAhdsrFullPath(g_, graph);
+}
+
+void ScriptingObjects::ScriptedLookAndFeel::Laf::drawFlexAhdsrPosition(Graphics& g_,
+	flex_ahdsr_base::FlexAhdsrGraph& graph, flex_ahdsr_base::State s, Point<float> pointOnPath)
+{
+	if (functionDefined("drawFlexAhdsrPosition"))
+    {
+        auto obj = new DynamicObject();
+ 
+		writeId(obj, &graph);
+        obj->setProperty("area", ApiHelpers::getVarRectangle(useRectangleClass, graph.getLocalBounds().toFloat()));
+
+		setColourOrBlack(obj, "bgColour", graph, RingBufferComponentBase::ColourId::bgColour);
+		setColourOrBlack(obj, "itemColour", graph, RingBufferComponentBase::ColourId::fillColour);
+		setColourOrBlack(obj, "itemColour2", graph, RingBufferComponentBase::ColourId::lineColour);
+		setColourOrBlack(obj, "textColour", graph, HiseColourScheme::ColourIds::ComponentTextColourId);
+
+		obj->setProperty("state", (int)s);
+		obj->setProperty("pointOnPath", ApiHelpers::getVarFromPoint(pointOnPath));
+
+		auto sp = new ScriptingObjects::PathObject(get()->getScriptProcessor());
+
+		var keeper(sp);
+		sp->getPath() = graph.fullPath;
+		obj->setProperty("path", keeper);
+
+        if (get()->callWithGraphics(g_, "drawFlexAhdsrPosition", var(obj), &graph))
+            return;
+    }
+
+	flex_ahdsr_base::FlexAhdsrGraph::LookAndFeelMethods::drawFlexAhdsrPosition(g_, graph, s, pointOnPath);
+}
+
+void ScriptingObjects::ScriptedLookAndFeel::Laf::drawFlexAhdsrSegment(Graphics& g_,
+	flex_ahdsr_base::FlexAhdsrGraph& graph, flex_ahdsr_base::State s, const Path& segment, bool hover, bool active)
+{
+	if (functionDefined("drawFlexAhdsrSegment"))
+    {
+        auto obj = new DynamicObject();
+ 
+		writeId(obj, &graph);
+        obj->setProperty("area", ApiHelpers::getVarRectangle(useRectangleClass, graph.getLocalBounds().toFloat()));
+
+		setColourOrBlack(obj, "bgColour", graph, RingBufferComponentBase::ColourId::bgColour);
+		setColourOrBlack(obj, "itemColour", graph, RingBufferComponentBase::ColourId::fillColour);
+		setColourOrBlack(obj, "itemColour2", graph, RingBufferComponentBase::ColourId::lineColour);
+		setColourOrBlack(obj, "textColour", graph, HiseColourScheme::ColourIds::ComponentTextColourId);
+
+		obj->setProperty("state", (int)s);
+		obj->setProperty("hover", hover);
+		obj->setProperty("active", active);
+
+		auto sp = new ScriptingObjects::PathObject(get()->getScriptProcessor());
+
+		var keeper(sp);
+		sp->getPath() = segment;
+		obj->setProperty("path", keeper);
+
+        if (get()->callWithGraphics(g_, "drawFlexAhdsrSegment", var(obj), &graph))
+            return;
+    }
+
+	flex_ahdsr_base::FlexAhdsrGraph::LookAndFeelMethods::drawFlexAhdsrSegment(g_, graph, s, segment, hover, active);
+}
+
+void ScriptingObjects::ScriptedLookAndFeel::Laf::drawFlexAhdsrText(Graphics& g_, flex_ahdsr_base::FlexAhdsrGraph& graph,
+	const String& text)
+{
+	if (functionDefined("drawFlexAhdsrText"))
+    {
+        auto obj = new DynamicObject();
+ 
+		writeId(obj, &graph);
+        obj->setProperty("area", ApiHelpers::getVarRectangle(useRectangleClass, graph.getLocalBounds().toFloat()));
+
+		setColourOrBlack(obj, "bgColour", graph, RingBufferComponentBase::ColourId::bgColour);
+		setColourOrBlack(obj, "itemColour", graph, RingBufferComponentBase::ColourId::fillColour);
+		setColourOrBlack(obj, "itemColour2", graph, RingBufferComponentBase::ColourId::lineColour);
+		setColourOrBlack(obj, "textColour", graph, HiseColourScheme::ColourIds::ComponentTextColourId);
+
+		obj->setProperty("text", text);
+
+        if (get()->callWithGraphics(g_, "drawFlexAhdsrText", var(obj), &graph))
+            return;
+    }
+
+	flex_ahdsr_base::FlexAhdsrGraph::LookAndFeelMethods::drawFlexAhdsrText(g_, graph, text);
+}
+
 juce::Image ScriptingObjects::ScriptedLookAndFeel::Laf::createIcon(PresetHandler::IconType type)
 {
 	auto img = MessageWithIcon::LookAndFeelMethods::createIcon(type);
@@ -5210,7 +5816,7 @@ juce::Image ScriptingObjects::ScriptedLookAndFeel::Laf::createIcon(PresetHandler
 		}
 
 		obj->setProperty("type", s);
-		obj->setProperty("area", ApiHelpers::getVarRectangle({ 0.0f, 0.0f, (float)img.getWidth(), (float)img.getHeight() }));
+		obj->setProperty("area", ApiHelpers::getVarRectangle(useRectangleClass, { 0.0f, 0.0f, (float)img.getWidth(), (float)img.getHeight() }));
 
 		Image img2(Image::ARGB, img.getWidth(), img.getHeight(), true);
 		Graphics g(img2);
@@ -5233,7 +5839,7 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawTag(Graphics& g_, Component
 	if (functionDefined("drawPresetBrowserTag"))
 	{
 		auto obj = new DynamicObject();
-		obj->setProperty("area", ApiHelpers::getVarRectangle(position.toFloat()));
+		obj->setProperty("area", ApiHelpers::getVarRectangle(useRectangleClass, position.toFloat()));
 		obj->setProperty("text", name);
 		obj->setProperty("hover", hover);
 		obj->setProperty("blinking", blinking);
@@ -5256,8 +5862,8 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawModalOverlay(Graphics& g_, 
 	if (auto l = get())
 	{
 		auto obj = new DynamicObject();
-		obj->setProperty("area", ApiHelpers::getVarRectangle(area.toFloat()));
-		obj->setProperty("labelArea", ApiHelpers::getVarRectangle(labelArea.toFloat()));
+		obj->setProperty("area", ApiHelpers::getVarRectangle(useRectangleClass, area.toFloat()));
+		obj->setProperty("labelArea", ApiHelpers::getVarRectangle(useRectangleClass, labelArea.toFloat()));
 		obj->setProperty("title", title);
 		obj->setProperty("text", command);
 		obj->setProperty("bgColour", backgroundColour.getARGB());

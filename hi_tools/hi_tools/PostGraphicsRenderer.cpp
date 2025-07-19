@@ -36,7 +36,7 @@
 #if USE_IPP
 #include <ipp.h>
 
-#if IPP_VERSION_MAJOR >= 2021 && IPP_VERSION_MINOR >= 10
+#if (IPP_VERSION_MAJOR >= 2021 && IPP_VERSION_MINOR >= 10) || IPP_VERSION_MAJOR >= 2022
 #include <ipp/ippcv.h>
 #else
 #include <ippcv.h>
@@ -82,7 +82,7 @@ void PostGraphicsRenderer::Data::createPathImage(int width, int height)
 
 bool PostGraphicsRenderer::Data::initGaussianBlur(int kernelSize, float sigma, int width, int height)
 {
-#if USE_IPP && JUCE_WINDOWS
+#if USE_IPP
 	auto thisNumPixels = width * height;
 
 	if (thisNumPixels != numPixels || kernelSize != lastKernelSize)

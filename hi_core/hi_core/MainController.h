@@ -443,7 +443,7 @@ public:
 		
 		MainController *mc;
 		
-		int macroControllerNumbers[HISE_NUM_MACROS];
+		int macroControllerNumbers[HISE_NUM_MAX_MACROS];
 
 		ModulatorSynthChain *macroChain;
 		int macroIndexForCurrentLearnMode;
@@ -607,7 +607,8 @@ public:
 	*	all registered UserPresetHandler::Listener objects when the loading has finished
 	*	so you can update your UI (or whatever).
 	*/
-	class UserPresetHandler: public Dispatchable
+	class UserPresetHandler: public Dispatchable,
+						     public AudioProcessorListener
 	{
 	public:
 
@@ -664,11 +665,14 @@ public:
 			bool isConnectedToMidi() const;
 			bool isConnectedToComponent() const;
 
+			ValueToTextConverter vtc;
 			const int index;
 			String id;
+			String groupName;
 			float lastValue = 0.0f;
 			bool allowMidi = true;
 			bool allowHost = true;
+			float defaultParameterValue = 0.0f;
 			NormalisableRange<float> range;
 			Result r;
 			var args[2];
@@ -861,6 +865,8 @@ public:
 
 			virtual var saveCustomUserPreset(const String& presetName) { return {}; }
 
+			virtual void onParameterGesture(bool startGesture, int parameterIndex) {}
+
 		private:
 
 			JUCE_DECLARE_WEAK_REFERENCEABLE(Listener);
@@ -878,7 +884,28 @@ public:
 		void loadUserPresetFromValueTree(const ValueTree& v, const File& oldFile, const File& newFile, bool useUndoManagerIfEnabled=true);
 		void loadUserPreset(const File& f, bool useUndoManagerIfEnabled=true);
 
-		
+		void audioProcessorChanged(AudioProcessor*, const ChangeDetails&) override {}
+        
+
+		void audioProcessorParameterChanged(AudioProcessor*, int, float) override {};
+
+		void audioProcessorParameterChangeGestureBegin(AudioProcessor* processor, int parameterIndex) override
+		{
+			jassert(processor == dynamic_cast<AudioProcessor*>(mc));
+			ignoreUnused(processor);
+
+			for(auto l: listeners)
+				l->onParameterGesture(true, parameterIndex);
+		}
+
+		void audioProcessorParameterChangeGestureEnd(AudioProcessor* processor, int parameterIndex) override
+		{
+			jassert(processor == dynamic_cast<AudioProcessor*>(mc));
+			ignoreUnused(processor);
+
+			for(auto l: listeners)
+				l->onParameterGesture(false, parameterIndex);
+		}
 
 		struct DefaultPresetManager: public ControlledObject
 		{
@@ -937,6 +964,21 @@ public:
 		CustomAutomationData::Ptr getCustomAutomationData(const Identifier& id) const;
 
 		CustomAutomationData::Ptr getCustomAutomationData(int index) const;
+
+		StringArray pluginParameterGroups;
+
+		Result checkPluginParameterGroupName(const String& possibleName) const
+		{
+			if(pluginParameterGroups.contains(possibleName) || possibleName.isEmpty())
+				return Result::ok();
+
+			return Result::fail(possibleName + " is not a valid group name");
+		}
+
+		void setPluginParameterGroups(const StringArray& newGroups)
+		{
+			pluginParameterGroups = newGroups;
+		}
 
 		int getCustomAutomationIndex(const Identifier& id) const;
 
@@ -1034,8 +1076,6 @@ public:
 		MainController* mc;
 		bool useUndoForPresetLoads = false;
 
-		
-
 		struct CustomStateManager : public UserPresetStateManager
 		{
 			CustomStateManager(UserPresetHandler& parent_);
@@ -1063,7 +1103,6 @@ public:
 
 		CustomAutomationData::List customAutomationData;
 
-		
 
     private:
 
@@ -1477,7 +1516,8 @@ public:
 
 	void notifyShutdownToRegisteredObjects();
 
-	SampleManager &getSampleManager() noexcept {return *sampleManager; };
+	SampleManager &getSampleManager() noexcept {return *sampleManager; }
+	
 	const SampleManager &getSampleManager() const noexcept { return *sampleManager; };
 
 	MacroManager &getMacroManager() noexcept {return macroManager;};
@@ -1531,6 +1571,15 @@ public:
 	ProjectDocDatabaseHolder* getProjectDocHolder();
 	
 	void initProjectDocsWithURL(const String& projectDocURL);
+
+#if USE_BACKEND
+	void clearExtraDefinitionCache()
+	{
+		cachedPreprocessors.clear();
+		preprocessor = nullptr;
+	}
+	int getExtraDefinitionsValue(const String& extraDefinition, int defaultValue) const;
+#endif
 
 	GlobalHiseLookAndFeel& getGlobalLookAndFeel() const { return *mainLookAndFeel; }
 
@@ -1705,7 +1754,7 @@ public:
 
 	int getPreviewBufferSize() const;
 
-    void connectToRuntimeTargets(scriptnode::OpaqueNode& opaqueNode, bool shouldAdd);
+    void connectToGlobalRuntimeTargets(scriptnode::OpaqueNode& opaqueNode, bool shouldAdd);
     
 	void setKeyboardCoulour(int keyNumber, Colour colour);
 
@@ -1720,6 +1769,10 @@ public:
 	void rebuildVoiceLimits();
 
 	void timerCallback() override;
+
+	bool forceSaveAsPluginState = false;
+
+	void savePluginState(MemoryBlock& destData, int currentlyLoadedProgram);
 
 #if USE_BACKEND
 
@@ -1774,9 +1827,13 @@ public:
 	DebugSession::ProfileDataSource::Ptr getProfileDataSourceForLock(LockHelpers::Type t, bool useRealLock, bool getWaitSource) const
 	{
 #if HISE_INCLUDE_PROFILING_TOOLKIT
+
+		useRealLock &= getDebugSession().isRecordingMultithread();
+
+		if(!useRealLock)
+			return nullptr;
+
 		auto idx = (int)t;
-		idx *= (int)getDebugSession().isRecordingMultithread();
-		idx *= (int)useRealLock;
 		idx += ((int)getWaitSource * (int)LockHelpers::Type::numLockTypes);
 		return lockProfile.getSource(idx);
 #else
@@ -2126,6 +2183,9 @@ private:
 	
 	void processMidiOutBuffer(MidiBuffer& mb, int numSamples);
 
+#if USE_BACKEND
+	mutable juce::HashMap<String, int> cachedPreprocessors;
+#endif
 
 #if HISE_INCLUDE_RLOTTIE
 	ScopedPointer<RLottieManager> rLottieManager;

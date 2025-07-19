@@ -48,11 +48,13 @@ struct DebugSession::ProfileDataSource::ViewComponents::Viewer: public Component
 		return (showTimeline ? (LabelMargin + TopBarHeight) : 0) + BreadcrumbHeight + LabelMargin + FirstItemOffset;
 	}
 
-	Viewer(ProfileInfoBase* info, DebugSession& dh);
+	Viewer(ProfileInfoBase* info, DebugSession& dh, bool multiMode);
+
+	const bool multiMode;
 
 	double getTotalLength() const override
 	{
-		return rootItem->getBounds(0.0f, showTimeline, 1.0f, currentIndex).getWidth();
+		return rootItem->getBounds(0.0f, showTimeline, 1.0f, 0, currentIndex).getWidth();
 	}
 
 	void applyPosition(const Rectangle<int>& screenBoundsOfTooltipClient, Rectangle<int>& t) override;
@@ -80,8 +82,11 @@ struct DebugSession::ProfileDataSource::ViewComponents::Viewer: public Component
 	{
 		domainContext = context;
 		currentDomain = newDomain;
+		resized();
 		repaint();
 	}
+
+	void onRunIndexUpdate(int currentRunIndex) override;
 
 	void mouseDown(const MouseEvent& e) override;
 
@@ -104,22 +109,14 @@ struct DebugSession::ProfileDataSource::ViewComponents::Viewer: public Component
 	void zoomToItem(ViewItem::Ptr ptr);
 	void setArrowNavigation(const ViewItem* ptr, Rectangle<float> area);
 
+    void mouseMagnify(const MouseEvent& e, float sf) override;
 
-
-    void mouseMagnify(const MouseEvent& e, float sf) override
-    {
-        hangleMouseMagnify(e, sf);
-    }
-    
 	void mouseMove(const MouseEvent& e) override;
 	void mouseUp(const MouseEvent& e) override;
 	void mouseDoubleClick(const MouseEvent& e) override;
-	void mouseWheelMove(const MouseEvent& event, const MouseWheelDetails& wheel) override
-	{
-		handleMouseWheelEvent(event, wheel);
-	}
+	void mouseWheelMove(const MouseEvent& event, const MouseWheelDetails& wheel) override;
 
-    VoiceBitMap<32> getTypeFilter();
+	VoiceBitMap<32> getTypeFilter();
 	UndoManager* getUndoManager() override;
 
 	void navigateInternal(ViewItem::Ptr newDisplayRoot);
@@ -127,10 +124,7 @@ struct DebugSession::ProfileDataSource::ViewComponents::Viewer: public Component
 	bool keyPressed(const KeyPress& k) override;
 	void paint(Graphics& g) override;
 
-	Rectangle<int> getViewportPosition() const
-	{
-		return { 0, getTimelineOffsetY(showTimeline), getWidth(), maxDepth * (ItemHeight + ItemMargin)};
-	}
+	Rectangle<int> getViewportPosition() const;
 
 	String getTextForDistance(float dragWidth) const
 	{
@@ -138,6 +132,7 @@ struct DebugSession::ProfileDataSource::ViewComponents::Viewer: public Component
 	}
 
 	void resized() override;
+	void updateRowScrollbar();
 
 	StringArray getAutocompleteItems(const Identifier& id) override
 	{
@@ -150,8 +145,11 @@ struct DebugSession::ProfileDataSource::ViewComponents::Viewer: public Component
 
 	void onSearchUpdate(const String& s, bool zoomToFirst) override;
 
+	bool onWASDMovement(WASDKeyListener::MovementType t, double delta) override;
+
 private:
 
+	double rowPositionDouble = 0.0;
     bool activeViewer = true;
 	bool foldAll = false;
 	Rectangle<int> menuBar;
@@ -179,6 +177,8 @@ private:
 	ViewItem::Ptr rootItem;
 	ScopedPointer<Component> timeline;
 	ScopedPointer<Component> breadcrumbs;
+
+	ScrollBar rowScrollBar;
 
 	std::vector<std::pair<ViewItem::Ptr, ViewItem::Ptr>> tracks;
 	
@@ -214,87 +214,7 @@ private:
 
 	std::map<ViewItem*, Rectangle<float>> arrowNavigations;
 
-    bool drawTracks = false;
-
 	JUCE_DECLARE_WEAK_REFERENCEABLE(Viewer);
-};
-
-struct DebugSession::ProfileDataSource::ViewComponents::MultiViewer: public Component,
-																	 public BaseWithManagerConnection
-{
-	SET_GENERIC_PANEL_ID("ProfilerViewer");
-
-	MultiViewer(DebugSession& s):
-	  session(s)
-	{
-		session.recordingFlushBroadcaster.addListener(*this, onFlush, false);
-	}
-
-	void paint(Graphics& g) override
-	{
-		g.fillAll(Colour(0xFF1D1D1D));
-	}
-
-	static void onFlush(MultiViewer& m, ProfileDataSource::ProfileInfoBase::Ptr p);
-
-	void resized() override;
-
-	struct TabButton: public Component
-	{
-		TabButton(const String& name_);
-
-		void paint(Graphics& g) override;
-
-		void mouseDown(const MouseEvent& e) override
-		{
-			findParentComponentOfClass<MultiViewer>()->setCurrentTab(this);
-		}
-
-		void resized() override
-		{
-			auto b = getLocalBounds();
-			closeButton.setBounds(b.removeFromRight(getHeight()).reduced(2));
-		}
-
-		void setActive(bool shouldBeActive)
-		{
-			active = shouldBeActive;
-			repaint();
-		}
-
-		bool active = false;
-		Manager::Factory factory;
-		Font f;
-
-		HiseShapeButton closeButton;
-		String name;
-	};
-
-    void mouseDown(const MouseEvent& e) override;
-    
-	void onNavigation(BaseWithManagerConnection* source, ViewItem::Ptr r, ViewItem::Ptr cr);
-
-	void setCurrentTab(TabButton* b);
-
-	void removeTab(TabButton* b, NotificationType s=sendNotificationAsync);
-
-	int currentTabIndex = 0;
-	DebugSession& session;
-	OwnedArray<TabButton> tabButtons;
-	OwnedArray<Viewer> currentViewers;
-
-	JUCE_DECLARE_WEAK_REFERENCEABLE(MultiViewer);
-};
-
-struct DebugSession::ProfileDataSource::ViewComponents::SingleThreadPopup: public Component
-{
-	SingleThreadPopup(DebugSession& s, DebugInformationBase::Ptr root);
-
-	void resized() override;
-
-	ScopedPointer<Manager> manager;
-	ScopedPointer<Viewer> viewer;
-	ScopedPointer<StatisticsComponent> statistics;
 };
 
 }

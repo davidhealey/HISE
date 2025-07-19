@@ -193,20 +193,6 @@ void ProcessorWithScriptingContent::controlCallback(ScriptingApi::Content::Scrip
 	Processor* thisAsProcessor = dynamic_cast<Processor*>(this);
 
 	auto sp = getScriptingContent()->contentProfile.profile(component->pSetAttribute);
-	
-#if USE_FRONTEND
-    
-    if (component->isAutomatable() &&
-        component->getScriptObjectProperty(ScriptingApi::Content::ScriptComponent::Properties::isPluginParameter) &&
-        getMainController_()->getPluginParameterUpdateState())
-    {
-        float newValue = (float)controllerValue;
-        FloatSanitizers::sanitizeFloatNumber(newValue);
-        
-        dynamic_cast<PluginParameterAudioProcessor*>(getMainController_())->setScriptedPluginParameter(component->getName(), newValue);
-    }
-    
-#endif
 
     if (component->isConnectedToMacroControll())
     {
@@ -261,7 +247,7 @@ void ProcessorWithScriptingContent::controlCallback(ScriptingApi::Content::Scrip
 	}
 	else if (auto callback = component->getCustomControlCallback())
 	{
-		if (MessageManager::getInstance()->isThisTheMessageThread())
+		if (MessageManager::getInstance()->isThisTheMessageThread() || component->shouldDeferControlCallback())
 		{
 			auto f = [component, controllerValue](JavascriptProcessor* p)
 			{
@@ -286,15 +272,6 @@ void ProcessorWithScriptingContent::controlCallback(ScriptingApi::Content::Scrip
 	}
 	else
 	{
-		if (auto modulationData = component->getModulationData())
-		{
-			if (modulationData->valueCallback)
-			{
-				modulationData->valueCallback((float)controllerValue);
-				return;
-			}
-		}
-
 		int callbackIndex = getControlCallbackIndex();
 
 		getMainController_()->getDebugLogger().logParameterChange(thisAsJavascriptProcessor, component, controllerValue);
@@ -1422,7 +1399,7 @@ JavascriptProcessor::SnippetResult JavascriptProcessor::compileInternal()
 	const static Identifier onInit("onInit");
 
 #if HISE_INCLUDE_PROFILING_TOOLKIT
-	auto enableProfiling = dynamic_cast<Processor*>(this)->getMainController()->getDebugSession().shouldProfileInitialisation();
+	auto enableProfiling = dynamic_cast<Processor*>(this)->getMainController()->getDebugSession().getTriggerType() == DebugSession::TriggerType::Compilation;
 	scriptEngine->setEnableOnInitProfiling(enableProfiling);
 #endif
 
@@ -1555,7 +1532,7 @@ void JavascriptProcessor::compileScript(const ResultFunction& rf /*= ResultFunct
 
 #if HISE_INCLUDE_PROFILING_TOOLKIT
     auto& ds = dynamic_cast<Processor*>(this)->getMainController()->getDebugSession();
-	if(ds.shouldProfileInitialisation() && !ds.isRecordingMultithread())
+	if(ds.getTriggerType() == DebugSession::TriggerType::Compilation && !ds.isRecordingMultithread())
 	{
 		ds.startRecording(10000.0, this);
 		stopAfterCompilation = true;
@@ -2625,8 +2602,7 @@ void JavascriptThreadPool::addJob(Task::Type t, JavascriptProcessor* p, const Ta
 	}
 	case MainController::KillStateHandler::TargetThread::AudioThread:
 	{
-		// Nope...
-		jassertfalse;
+		pushToQueue(t, p, f);
 		break;
 	}
     default:

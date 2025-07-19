@@ -97,6 +97,9 @@ public:
 	void addError(NodeBase* n, Error e, const String& errorMessage = {});
 
 	void removeError(NodeBase* n, Error::ErrorCode errorToRemove=Error::numErrorCodes);
+	bool canBeAutofixed(NodeBase* node, Error error);
+
+	void autofix(NodeBase* node);
 
 	static String getErrorMessage(Error e);
 
@@ -105,6 +108,8 @@ public:
 	LambdaBroadcaster<NodeBase*, Error> errorBroadcaster;
 
 private:
+
+	bool autofixInternal(NodeBase* n, Error::ErrorCode code);
 
 	String customErrorMessage;
 	Array<Item> items;
@@ -199,14 +204,16 @@ public:
 
 		DspNetwork* getActiveNetwork() const;
 
-		void connectRuntimeTargets(MainController* mc) override;
-		void disconnectRuntimeTargets(MainController* mc) override;
+		void connectRuntimeTargets(Processor* p) override;
+		void disconnectRuntimeTargets(Processor* p) override;
 
 		ExternalDataHolder* getExternalDataHolder();
 
 		void setExternalDataHolderToUse(ExternalDataHolder* newHolder);
 
 		void setVoiceKillerToUse(snex::Types::VoiceResetter* vk_);
+
+		virtual ModulatorChain::ExtraModulatorRuntimeTargetSource* getExtraModulationHandler() { return nullptr; }
 
 		SimpleReadWriteLock& getNetworkLock();
 
@@ -242,7 +249,9 @@ public:
 	DspNetwork(ProcessorWithScriptingContent* p, ValueTree data, bool isPolyphonic, ExternalDataHolder* dataHolder=nullptr);
 	~DspNetwork();
 
-    /** The faust manager will handle the IDE editing features by sending out compilation and selection messages to its registered listeners. */
+	
+
+	/** The faust manager will handle the IDE editing features by sending out compilation and selection messages to its registered listeners. */
     struct FaustManager
     {
         struct FaustListener
@@ -515,11 +524,7 @@ public:
 	/** Undo the last action. */
 	bool undo();
 
-	void checkValid() const
-	{
-		if (parentHolder == nullptr)
-			reportScriptError("Parent of DSP Network is deleted");
-	}
+	void checkValid() const;
 
 	bool isBeingDebugged() const;
 
@@ -553,10 +558,9 @@ public:
 
     bool isInitialised() const noexcept { return initialised; };
 
-	bool isForwardingControlsToParameters() const
-	{
-		return forwardControls;
-	}
+	bool isForwardingControlsToParameters() const;
+
+	bool checkAllowCompilationFlag(NodeBase* n, bool requiredValue);
 
 	PrepareSpecs getCurrentSpecs() const { return currentSpecs; }
 
@@ -705,22 +709,52 @@ public:
 
     bool isSignalDisplayEnabled() const { return signalDisplayEnabled; }
     
-    void setSignalDisplayEnabled(bool shouldBeEnabled)
-    {
-        signalDisplayEnabled = shouldBeEnabled;
-    }
-    
+    void setSignalDisplayEnabled(bool shouldBeEnabled);
+
 	String getNonExistentId(String id, StringArray& usedIds) const;
 
-	
+	const modulation::ParameterProperties& getParameterProperties() const noexcept { return dynamicParameterProperties.data; }
 
 private:
+
+	struct DynamicParameterModulationProperties
+	{
+		DynamicParameterModulationProperties(DspNetwork& parent_):
+		  parent(parent_)
+		{}
+
+		void shutdown()
+		{
+			shutdownCalled = true;
+			data.reset();
+			propertyListener.shutdown();
+			blockSizeListener.shutdown();
+			connectionListener.shutdown();
+		}
+
+		void init();
+
+		void refreshConnections();
+
+		void refreshProcessSpecs();
+
+		bool shutdownCalled = false;
+		DspNetwork& parent;
+		scriptnode::modulation::ParameterProperties data;
+		valuetree::RecursivePropertyListener propertyListener;
+		valuetree::PropertyListener blockSizeListener;
+		valuetree::RecursiveTypedChildListener connectionListener;
+	} dynamicParameterProperties;
 
 	String initialId;
 
 	void checkId(const Identifier& id, const var& newValue);
 
+	void updateRootParameters(const ValueTree& v, bool wasAdded);
+
 	valuetree::PropertyListener idGuard;
+
+	valuetree::ChildListener rootParameterListener;
 
     bool signalDisplayEnabled = false;
     

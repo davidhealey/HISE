@@ -56,15 +56,7 @@ public:
         using List = ReferenceCountedArray<InplaceDebugValue>;
         using Ptr = ReferenceCountedObjectPtr<InplaceDebugValue>;
         
-        void init()
-        {
-	        if(!initialised)
-	        {
-		        location = CodeDocument::Position(*location.getOwner(), originalLineNumber, 99);
-                location.setPositionMaintained(true);
-                initialised = true;
-	        }
-        }
+        void init();
 
         int originalLineNumber = -1;
         bool initialised = false;
@@ -97,6 +89,8 @@ public:
     virtual void toggleCommentForLine(TextEditor* editor, bool shouldBeCommented);
 
     bool hashIsPreprocessor = true;
+
+    static String beautify(const String& input);
 };
 
 struct XmlLanguageManager: public LanguageManager

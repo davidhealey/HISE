@@ -905,7 +905,9 @@ var HiseJavascriptEngine::RootObject::FunctionCall::invokeFunction(const Scope& 
 			if (o->hasMethod(dot->child)) // allow an overridden DynamicObject::invokeMethod to accept a method call.
 				return o->invokeMethod(dot->child, args);
 
-	location.throwError("This expression is not a function!"); return var();
+	auto& locToUse = object != nullptr ? object->location : location;
+
+	locToUse.throwError("This expression is not a function!"); return var();
 }
 
 

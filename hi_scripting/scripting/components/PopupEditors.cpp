@@ -175,8 +175,8 @@ PopupIncludeEditor::PopupIncludeEditor(JavascriptProcessor* s, const Identifier 
 	{
 		if(errorMessage.isNotEmpty())
 		{
-			auto m = errorMessage.upToFirstOccurrenceOf("{", false, false);
-			auto encodedState = errorMessage.fromFirstOccurrenceOf("{", false, false).upToFirstOccurrenceOf("}", false, false);
+			auto m = errorMessage.upToFirstOccurrenceOf("{{", false, false);
+			auto encodedState = errorMessage.fromFirstOccurrenceOf("{{", false, false).upToFirstOccurrenceOf("}}", false, false);
 			auto pId = HiseJavascriptEngine::RootObject::CodeLocation::Helpers::getProcessorId(encodedState);
 
 			DebugableObject::Location loc;
@@ -639,12 +639,23 @@ void PopupIncludeEditor::compileInternal()
 			Component::callRecursive<ScriptContentComponent>(top, [&](ScriptContentComponent* c)
 			{
 				c->css.updateIsolatedCollection(fileName, css);
+				c->css.clearCache();
 
 				using BD = ScriptingApi::Content::ScriptMultipageDialog::Backdrop;
 
-				Component::callRecursive<BD>(c, [&](BD* mp)
+				Component::callRecursive<Component>(c, [&](Component* child)
 				{
-					mp->create(getEditor()->editor.getDocument().getAllContent());
+					if(auto bd = dynamic_cast<BD*>(c))
+					{
+						bd->create(getEditor()->editor.getDocument().getAllContent());
+					}
+					else if(auto fb = dynamic_cast<simple_css::FlexboxComponent*>(child))
+					{
+						fb->setCSS(c->css);
+					}
+
+					child->resized();
+					child->repaint();
 					return false;
 				});
 

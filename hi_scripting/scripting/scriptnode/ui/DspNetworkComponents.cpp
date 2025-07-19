@@ -1298,7 +1298,7 @@ void DspNetworkGraph::paintOverChildren(Graphics& g)
 
 				if (auto rn = r->getAsReceiveNode())
 				{
-					if (&sn->cable == rn->source)
+					if (sn->getCable() == *rn->getSourceCablePtr())
 					{
 						auto start = getCircle(s, false);
 						auto end = getCircle(r, false);
@@ -1931,6 +1931,16 @@ bool DspNetworkGraph::Actions::toggleCpuProfiling(DspNetworkGraph& g)
 
 	if(b)
 	{
+		Component::SafePointer<DspNetworkGraph> sg(&g);
+		auto delay = g.network->getScriptProcessor()->getMainController_()->getDebugSession().getOptions().millisecondsToRecord;
+		Timer::callAfterDelay(delay, [sg]()
+		{
+			if(sg.getComponent() && sg->network->getCpuProfileFlag())
+			{
+				toggleCpuProfiling(*sg);
+			}
+		});
+
 		auto jp = dynamic_cast<JavascriptProcessor*>(g.network->getScriptProcessor());
 		g.network->getScriptProcessor()->getMainController_()->getDebugSession().clearData(jp);
 

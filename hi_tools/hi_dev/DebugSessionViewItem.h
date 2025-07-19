@@ -62,6 +62,7 @@ struct DebugSession::ProfileDataSource::ViewComponents::ViewItem: public Referen
 		TimeDomain domain = TimeDomain::Absolute;
 		double domainContext = 0.0;
 		bool drawChildren = true;
+		Range<int> depthRange;
 		Component* componentToDrawOn = nullptr;
 		Range<double> displayRange;
 	};
@@ -89,9 +90,9 @@ struct DebugSession::ProfileDataSource::ViewComponents::ViewItem: public Referen
 	void addRun(double first, ProfileInfo* p, int runIndex);
 
 	/** Returns the rectangle for the given run (or average if index=-1). */
-	Rectangle<float> getBounds(float transpose, bool showTimeline, float scaleFactor, int index) const;
+	Rectangle<float> getBounds(float transpose, bool showTimeline, float scaleFactor, int topItemDepth, int index) const;
 	void getNames(StringArray& names);
-	ViewItem* isHovered(const MouseEvent& e, float transpose, bool showTimeline, float scaleFactor, int currentIndex);
+	ViewItem* isHovered(const MouseEvent& e, float transpose, bool showTimeline, float scaleFactor, int topItemDepth, int currentIndex);
 	void paintItem(Graphics& g, Rectangle<float> thisBounds, const DrawContext& ctx);
 	bool shouldBeDisplayed(const DrawContext& ctx) const;
 	void draw(Graphics& g, const DrawContext& ctx);

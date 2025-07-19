@@ -81,6 +81,16 @@ struct SimpleRingBuffer: public ComplexDataUIBase,
 	{
 		using Ptr = ReferenceCountedObjectPtr<PropertyObject>;
 
+		struct ScopedPathProfiler
+		{
+			ScopedPathProfiler(const PropertyObject& po);
+
+			~ScopedPathProfiler();
+
+			const PropertyObject& obj;
+			bool running = false;
+		};
+
 		PropertyObject(WriterBase* b);;
 
 		virtual int getClassIndex() const;
@@ -99,6 +109,8 @@ struct SimpleRingBuffer: public ComplexDataUIBase,
 
 		virtual void initialiseRingBuffer(SimpleRingBuffer* b);
 
+		virtual void onGlobalUpdaterInit(SimpleRingBuffer* b, PooledUIUpdater* updater);;
+
 		virtual var getProperty(const Identifier& id) const;
 
 		virtual void setProperty(const Identifier& id, const var& newValue);
@@ -113,35 +125,25 @@ struct SimpleRingBuffer: public ComplexDataUIBase,
 
 		template <typename T> T* getTypedBase() { return dynamic_cast<T*>(writerBase.get()); }
 
-		void setPropertyInternal(const String& c, var nv)
-		{
-			for(auto& p: properties)
-			{
-				if(p.first == c)
-				{
-					p.second = nv;
-					return;
-				}
-			}
+		void setPropertyInternal(const String& c, var nv);
 
-			properties.add({ c, nv });
-		}
+		var getPropertyInternal(const String& c, var defaultValue=var()) const;
 
-		var getPropertyInternal(const String& c, var defaultValue=var()) const
-		{
-			for(const auto& p: properties)
-			{
-				if(p.first == c)
-					return p.second;
-			}
+		void openTrackEvent();
 
-			return defaultValue;
-		}
+		/** Override this for display buffers that might contain a state (eg. flex ahdsr display) */
+		virtual String exportAsBase64() const { return {}; }
+
+		/** Override this for display buffers that might contain a state (eg. flex ahdsr display) */
+		virtual void restoreFromBase64(const String& b64) { };
 
 	protected:
 
 		WeakReference<WriterBase> writerBase;
 		WeakReference<SimpleRingBuffer> buffer;
+
+		mutable hise::DebugSession::ProfileDataSource::Ptr pathSource;
+		int currentTrackEvent = 0;
 	};
 
 	using Ptr = ReferenceCountedObjectPtr<SimpleRingBuffer>;
@@ -149,6 +151,16 @@ struct SimpleRingBuffer: public ComplexDataUIBase,
 	SimpleRingBuffer();
 
 	bool fromBase64String(const String& b64) override;
+
+	void setGlobalUIUpdater(PooledUIUpdater* updater) override
+	{
+		ComplexDataUIBase::setGlobalUIUpdater(updater);
+
+		if(auto obj = getPropertyObject())
+		{
+			obj->onGlobalUpdaterInit(this, updater);
+		}
+	}
 
 	void setRingBufferSize(int numChannels, int numSamples, bool acquireLock=true);
 
@@ -375,8 +387,16 @@ struct ModPlotter : public Component,
 	
 	void refresh() override;
 
+	void setUseFixRange(Range<float> r)
+	{
+		startRange = r;
+		useFixRange = true;
+		hasNegativeValues = r.getStart() < 0.0f;
+	}
+
 	bool hasNegativeValues = false;
 	Range<float> startRange = { 0.0f, 1.0f };
+	bool useFixRange = false;
 
 	Path p;
 
@@ -384,6 +404,259 @@ struct ModPlotter : public Component,
 
 	JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(ModPlotter);
 };
+
+struct flex_ahdsr_base: public SimpleRingBuffer::WriterBase
+						
+{
+	enum class SpecialParameters
+	{
+		Attack,
+		Hold,
+		Decay,
+		Sustain,
+		Release,
+		Mode,
+		AttackLevel,
+		AttackCurve,
+		DecayCurve,
+		ReleaseCurve,
+		numParameters
+	};
+
+	enum class Mode
+	{
+		Trigger = 0,
+		Note,
+		Loop
+	};
+
+	enum class ParameterType
+	{
+		Curve = 0,
+		Time,
+		Level,
+		numTypes
+	};
+
+	enum class State
+	{
+		IDLE = 0,
+		ATTACK,
+		HOLD,
+		DECAY,
+		SUSTAIN,
+		RELEASE,
+		DONE
+	};
+
+
+	static constexpr int NumUIValues = (int)SpecialParameters::numParameters; // position + currentState
+	static constexpr int NumStates = (int)State::DONE;
+	
+	struct DragHandlerBase
+	{
+		virtual ~DragHandlerBase() {};
+		virtual bool handleAdditionalDrag(int parameterIndex, double value) { return false; };
+	};
+
+	struct Helpers
+	{
+		static double getTimeSkew() { return 0.2; }
+		static double getReleasePoint() { return 0.66; }
+
+		static int getAttributeIndex(State s, ParameterType t);
+
+		static String getLabel(State s, ParameterType t, float* uiValues);
+
+		static double toNorm(State s, ParameterType t, double value);
+		static double fromNorm(State s, ParameterType t, double value);
+
+		static float getYAt(const Path& p, float xPos)
+		{
+			PathFlatteningIterator i (p, {});
+
+		    while (i.next())
+		    {
+				Range<float> lr(i.x1, i.x2);
+
+				if(lr.contains(xPos) && !i.closesSubPath) // ignore the closing line...
+				{
+					float alpha = (xPos - lr.getStart()) / lr.getLength();
+					return Interpolator::interpolateLinear(i.y1, i.y2, alpha);
+				}
+		    }
+
+			return -1.0f;
+		}
+	};
+
+	
+
+	virtual ~flex_ahdsr_base() {};
+
+	class FlexAhdsrGraph: public RingBufferComponentBase,
+						  public Component
+	{
+	public:
+
+		static constexpr int Margin = 10;
+
+		FlexAhdsrGraph()
+		{
+			setColour(RingBufferComponentBase::ColourId::bgColour, Colours::black.withAlpha(0.6f));
+			setColour(RingBufferComponentBase::ColourId::fillColour, Colours::white.withAlpha(0.2f));
+			setColour(RingBufferComponentBase::ColourId::lineColour, Colours::white);
+			setColour(HiseColourScheme::ColourIds::ComponentTextColourId, Colours::white);
+
+			setSpecialLookAndFeel(new DefaultLookAndFeel(), true);
+			refresh();
+		};
+
+		struct LookAndFeelMethods
+		{
+			virtual ~LookAndFeelMethods() {};
+
+			virtual void drawFlexAhdsrBackground(Graphics& g, FlexAhdsrGraph& graph);
+			virtual void drawFlexAhdsrSegment(Graphics& g, FlexAhdsrGraph& graph, State s, const Path& segment, bool hover, bool active);
+			virtual void drawFlexAhdsrFullPath(Graphics& g, FlexAhdsrGraph& graph);
+			virtual void drawFlexAhdsrCurvePoint(Graphics& g, FlexAhdsrGraph& graph, State s, Point<float> curvePoint, bool hover, bool down);
+			virtual void drawFlexAhdsrPosition(Graphics& g, FlexAhdsrGraph& graph, State s, Point<float> pointOnPath);
+			virtual void drawFlexAhdsrText(Graphics& g, FlexAhdsrGraph& graph, const String& text);
+		};
+
+		struct DefaultLookAndFeel : public RingBufferComponentBase::LookAndFeelMethods,
+			public LookAndFeelMethods,
+			public LookAndFeel_V3
+		{
+			
+		};
+
+		void onComplexDataEvent(ComplexDataUIUpdaterBase::EventType t, var data) override
+		{
+			if(t == ComplexDataUIUpdaterBase::EventType::DisplayIndex)
+			{
+				auto displayValue = (float)data;
+
+				positionWithinState = std::fmod(displayValue, 1.0f);
+				currentPlayState = (State)(int)displayValue;
+				SafeAsyncCall::repaint(this);
+				return;
+			}
+
+			RingBufferComponentBase::onComplexDataEvent(t, data);
+
+			if(t == ComplexDataUIUpdaterBase::EventType::ContentChange ||
+			   t == ComplexDataUIUpdaterBase::EventType::ContentRedirected)
+			{
+				refresh();
+			}
+		}
+
+		void paint(Graphics& g) override;
+
+		void refresh() override;
+
+		void resized() override;
+
+		void mouseDown(const MouseEvent& e) override;
+		void mouseDrag(const MouseEvent& e) override;
+		void mouseMove(const MouseEvent& e) override;
+		void mouseExit(const MouseEvent& e) override;
+
+		Path fullPath;
+		float values[NumUIValues];
+
+		std::vector<Rectangle<float>> boxes;
+		std::vector<Rectangle<float>> hitboxes;
+		std::vector<Point<float>> curvePoints;
+		std::vector<Path> segments;
+
+		Point<float> sustainPoint;
+
+		State currentHoverState = State::DONE;
+		State currentPlayState = State::IDLE;
+		ParameterType currentHoverMode = ParameterType::numTypes;
+		float downValue = 0.0f;
+		float positionWithinState = 0.0f;
+	};
+
+	struct Properties : public SimpleRingBuffer::PropertyObject
+	{
+
+
+		static constexpr int PropertyIndex = 2003;
+
+		int getClassIndex() const override { return PropertyIndex; }
+
+		Properties(SimpleRingBuffer::WriterBase* b) :
+			PropertyObject(b),
+			base(getTypedBase<flex_ahdsr_base>())
+		{}
+
+		RingBufferComponentBase* createComponent();
+
+		bool validateInt(const Identifier& id, int& v) const override;
+
+		Path createPath(Range<int> sampleRange, Range<float> valueRange, Rectangle<float> targetBounds, double) const override;
+
+		void transformReadBuffer(AudioSampleBuffer& b) override;
+
+		void restoreFromBase64(const String& b64) override
+		{
+			if(b64.isNotEmpty() && base != nullptr)
+			{
+				MemoryBlock mb;
+				mb.fromBase64Encoding(b64);
+
+				MemoryInputStream mis(mb, false);
+
+				for(int i = 0; i < NumUIValues; i++)
+				{
+					if(i == (int)SpecialParameters::Mode)
+						continue;
+
+					auto v = mis.readFloat();
+					FloatSanitizers::sanitizeFloatNumber(v);
+					base->handleUIDrag(i, (double)v);
+				}
+			}
+		}
+
+		String exportAsBase64() const override
+		{
+			if(base != nullptr)
+			{
+				float buffer[NumUIValues];
+				base->refreshUI(buffer);
+
+				MemoryOutputStream mos;
+
+				for(int i = 0; i < NumUIValues; i++)
+				{
+					if(i == (int)SpecialParameters::Mode)
+						continue;
+
+					mos.writeFloat(buffer[i]);
+				}
+
+				mos.flush();
+				return mos.getMemoryBlock().toBase64Encoding();
+			}
+
+			return {};
+		}
+
+		WeakReference<flex_ahdsr_base> base;
+	};
+
+	virtual void refreshUI(float* bufferData) = 0;
+
+	virtual void handleUIDrag(int parameterIndex, double attributeValue) = 0;
+
+	JUCE_DECLARE_WEAK_REFERENCEABLE(flex_ahdsr_base);
+};
+
+
 
 class AhdsrGraph : public RingBufferComponentBase,
 	public Component
@@ -448,10 +721,7 @@ public:
 
 	void onComplexDataEvent(ComplexDataUIUpdaterBase::EventType e, var newValue) override;
 
-	void resized() override
-	{
-		rebuildGraph();
-	}
+	void resized() override;
 
 	void refresh() override;
 

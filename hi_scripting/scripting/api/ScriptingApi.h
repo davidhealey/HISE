@@ -319,6 +319,13 @@ public:
 		/** Returns the downsampling factor for the modulation signal (default is 8). */
 		double getControlRateDownsamplingFactor() const;
 
+		/** Uses one of the inbuilt text converters to prettify a numeric value. */
+		String getTextForValue(double value, String converterMode)
+		{
+			auto vtc = ValueToTextConverter::createForMode(converterMode);
+			return vtc.getTextForValue(value);
+		}
+
 		/** Iterates the given sub-directory of the Samples folder and returns a list with all references to audio files. */
 		var getSampleFilesFromDirectory(const String& relativePathFromSampleFolder, bool recursive);
 
@@ -372,7 +379,10 @@ public:
 
         /** Creates a BX Licenser object (requires the proprietary SDK). */
         var createBXLicenser();
-        
+
+		/** Creates a NKS manager object (requires the proprietary SDK). */
+		var createNKSManager(); 
+
 		/** Creates a reference to the DSP network of another script processor. */
 		var getDspNetworkReference(String processorId, String id);
 
@@ -592,8 +602,8 @@ public:
 		/** Allows access to the data of the host (playing status, timeline, etc...). */
 		DynamicObject *getPlayHead();
 
-		/** Checks if the given CC number is used for parameter automation and returns the index of the control. */
-		int isControllerUsedByAutomation(int controllerNumber);
+		/** Checks if the given CC number (single number) or channel / CC number (JS Array: [channel, CC]) is used for parameter automation and returns the index of the control. */
+		int isControllerUsedByAutomation(var controllerNumber);
 
 		/** Creates a MIDI List object. */
     ScriptingObjects::MidiList *createMidiList();
@@ -1275,6 +1285,9 @@ public:
 		/** Creates a reference to the routing matrix of the given processor. */
 		ScriptRoutingMatrix* getRoutingMatrix(const String& processorId);
 
+		/** Creates a object to control the wavetable synthesiser features. */
+		ScriptingObjects::ScriptWavetableController* getWavetableController(const String& processorId);
+
 		/** Returns the index of the Modulator in the chain with the supplied chainId */
 		int getModulatorIndex(int chainId, const String &id) const;
 
@@ -1709,6 +1722,7 @@ private:
 			Downloads,
 			Applications,
 			Temp,
+			Music,
 			numSpecialLocations
 		};
 
@@ -1765,9 +1779,13 @@ private:
 
 		ProcessorWithScriptingContent* p;
 
+		static File getFileFromVar(const var& fileObjectDirectoryConstantOrAbsolutePath, MainController* mc);
+
 	private:
 
 		void browseInternally(File startFolder, bool forSaving, bool isDirectory, String wildcard, var callback);
+
+		static File getFileStatic(SpecialLocations l, MainController* mc);
 
 		File getFile(SpecialLocations l);
 
@@ -1808,7 +1826,7 @@ private:
         bool isLocked(int thread) const;
 
 		/** Starts a profiling session and calls the finishCallback when ready. */
-        void startProfiling(double millisecondsToProfile, var finishCallback);
+        void startProfiling(var options, var finishCallback);
 
         /** Returns the name of the given string (for debugging purposes only!). */
 		String toString(int thread) const;

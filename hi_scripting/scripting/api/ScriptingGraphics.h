@@ -63,8 +63,174 @@ private:
 	JUCE_DECLARE_WEAK_REFERENCEABLE(ScreenshotListener);
 };
 
+
+
 namespace ScriptingObjects
 {
+	
+
+	class ScriptRectangle: public RectangleDynamicObject,
+						   public AssignableObject,
+						   public AssignableDotObject
+	{
+	public:
+
+		ScriptRectangle(Rectangle<double> d={}):
+		  RectangleDynamicObject(d)
+		{}
+
+		ScriptRectangle(const var& rectArray):
+		  RectangleDynamicObject(ApiHelpers::getRectangleFromVar(rectArray, nullptr).toDouble())
+		{}
+
+		/** Override this method and assign the new value to the given id. */
+		bool assign(const Identifier& id, const var& newValue) override
+		{
+			setProperty(id, newValue);
+			return hasProperty(id);
+		}
+
+		void assign(const int index, var newValue) override
+		{
+			static const std::array<Identifier, 4> ids = { "x", "y", "width", "height" };
+
+			if(isPositiveAndBelow(index, 4))
+				assign(ids[index], newValue);
+		}
+
+		var getAssignedValue(int index) const override
+		{
+			double values[4] = { rectangle.getX(), rectangle.getY(), rectangle.getWidth(), rectangle.getHeight() };
+
+			if(isPositiveAndBelow(index, 4))
+				return values[index];
+
+			return var();
+		}
+
+		int getCachedIndex(const var &indexExpression) const override { return (int)indexExpression; }
+
+		var getDotProperty(const Identifier& id) const override
+		{
+			return getProperty(id);
+		}
+
+		Ptr clone() override
+		{
+			return new ScriptRectangle(this->rectangle);
+		}
+
+		Identifier getObjectName() const override { RETURN_STATIC_IDENTIFIER("Rectangle"); }
+		String getDebugValue() const override { return toString(); };
+		bool isAutocompleteable() const override { return true; }
+
+		
+
+		// API Methods =====
+
+		/** Removes a strip from the top of this rectangle, reducing this rectangle by the specified amount and returning the section that was removed. */
+		void removeFromTop(double numToRemove) { jassertfalse; }
+
+		/** Removes a strip from the left of this rectangle, reducing this rectangle by the specified amount and returning the section that was removed. */
+		void removeFromLeft(double numToRemove) { jassertfalse; }
+
+		/** Removes a strip from the right of this rectangle, reducing this rectangle by the specified amount and returning the section that was removed.*/
+		void removeFromRight(double numToRemove) { jassertfalse; }
+
+		/** Removes a strip from the bottom of this rectangle, reducing this rectangle by the specified amount and returning the section that was removed. */
+		void removeFromBottom(double numToRemove) { jassertfalse; }
+
+		/** Returns a rectangle which has the same size and y-position as this one, but with a different x-position. */
+		void withX(double newX) { jassertfalse; }
+
+		/** Returns a rectangle which has the same size and x-position as this one, but with a different y-position. */
+		void withY(double newY) { jassertfalse; }
+
+		/** Returns a new rectangle with a different x position, but the same right-hand edge as this one. */
+		void withLeft(double newLeft) { jassertfalse; }
+
+		/** Returns a new rectangle with a different right-hand edge position, but the same left-hand edge as this one. */
+		void withRight(double newRight) { jassertfalse; }
+
+		/** Returns a new rectangle with a different bottom edge position, but the same top edge as this one. */
+		void withBottom(double newBottom) { jassertfalse; }
+
+		/** Returns a rectangle which has the same size and x-position as this one, but whose bottom edge has the given position. */
+		void withBottomY(double newBottomY) { jassertfalse; }
+
+		/** Returns a rectangle which has the same position and height as this one, but with a different width. */
+		void withWidth(double newWidth) { jassertfalse; }
+
+		/** Returns a rectangle which has the same position and width as this one, but with a different height. */
+		void withHeight(double newHeight) { jassertfalse; }
+
+		/** Returns a rectangle with the same size as this one, but a new centre position. */
+		void withCentre(double newWidth, double newHeight) { jassertfalse; }
+
+		/** Returns a rectangle with the same top-left position as this one, but a new size. */
+		void withSize(double newWidth, double newHeight) { jassertfalse; }
+
+		/** Returns a rectangle with the same centre position as this one, but a new size. */
+		void withSizeKeepingCentre(double newWidth, double newHeight) { jassertfalse; }
+
+		/** Returns a rectangle with the position and size being scaled by the given factors. */
+		void scaled(double factorX, double optionalFactorY) { jassertfalse; }
+
+		/** Returns a rectangle which is the same as this one moved by a given amount. */
+		void translated(double deltaX, double deltaY) { jassertfalse; }
+
+		/** Changes the position of the rectangle's top-left corner (leaving its size unchanged). */
+		void setPosition(double x, double y) { jassertfalse; }
+
+		/** Changes the rectangle's size, leaving the position of its top-left corner unchanged. */
+		void setSize(double width, double height) { jassertfalse; }
+
+		/** Changes the position of the rectangle's centre (leaving its size unchanged). */
+		void setCentre(double centerX, double centerY) { jassertfalse; }
+
+		/** Tries to fit this rectangle within a target area, returning the result. */
+		void constrainedWithin(var targetArea) { jassertfalse; }
+
+		/** Returns true if this other rectangle is completely inside this one. */
+		void contains(var otherRectOrPoint) { jassertfalse; }
+
+		/** Returns the smallest rectangle that contains both this one and the one passed-in. */
+		void getUnion(var otherRect) { jassertfalse; }
+
+		/** Returns the intersection of both rectangles (the largest rectangle that fits into both rectangles. */
+		void getIntersection(var otherRect) { jassertfalse ; }
+
+	    /** Returns a version of this rectangle with the given amount removed from its left-hand edge. */
+	    void withTrimmedLeft (double amountToRemove) const noexcept { jassertfalse; }
+
+	    /** Returns a version of this rectangle with the given amount removed from its right-hand edge. */
+	    void withTrimmedRight (double amountToRemove) const noexcept { jassertfalse; }
+
+	    /** Returns a version of this rectangle with the given amount removed from its top edge. */
+	    void withTrimmedTop (double amountToRemove) const noexcept { jassertfalse; }
+
+	    /** Returns a version of this rectangle with the given amount removed from its bottom edge. */
+	    void withTrimmedBottom (double amountToRemove) const noexcept { jassertfalse; }
+
+		/** Returns true if any part of another rectangle overlaps this one. */
+		void intersects(var otherRect) { jassertfalse; }
+
+		/** Returns true if the rectangle's width or height are zero or less. */
+		void isEmpty() { jassertfalse; }
+
+		/** Returns a rectangle that is smaller than this one by a given amount. */
+		void reduced(double x, double optionalY) { jassertfalse; }
+
+		/** Returns a rectangle that is larger than this one by a given amount. */
+		void expanded(double x, double optionalY) { jassertfalse;  }
+
+		/** Returns the biggest rectangle that fits in this rectangle using the aspect ratio of the other rectangle. */
+		void withAspectRatioLike(var otherRect) { jassertfalse; }
+
+		/** Returns a standard JS array with the position [x, y, w, h]. */
+		void toArray() const { jassertfalse; }
+	};
+
 	class ScriptShader : public ConstScriptingObject,
 						 public ScreenshotListener
 	{
@@ -328,6 +494,9 @@ namespace ScriptingObjects
 		/** Creates a version of this path where all sharp corners have been replaced by curves.*/
 		void roundCorners(var radius);
 
+		/** Returns the y coordinate of the first intersection at the given X position or undefined if no match. */
+		var getYAt(float xPos);
+		
 		/** Returns the point where a line ([x1, y1], [x2, y2]) intersects the path when appropriate. Returns false otherwise. */
 		var getIntersection(var start, var end, bool keepSectionOutsidePath);
 
@@ -339,6 +508,9 @@ namespace ScriptingObjects
 
 		/** Returns the area ([x, y, width, height]) that the path is occupying with the scale factor applied. */
 		var getBounds(var scaleFactor);
+
+		/** Sets a (minimal) bounding box for the path. */
+		void setBounds(var boundingBox);
 
 		/** Returns the length of the path. */
 		var getLength();
@@ -364,6 +536,8 @@ namespace ScriptingObjects
 		const Path& getPath() const { return p; }
 
 	private:
+
+		bool useRectangleClass = false;
 
 		Path p;
 
@@ -545,8 +719,11 @@ namespace ScriptingObjects
 		/** Draws a drop shadow around a rectangle. */
 		void drawDropShadow(var area, var colour, int radius);
 
-		/** Draws a drop shadow from a path. */
+		/** Draws a drop shadow from a path using melatonin blur. */
 		void drawDropShadowFromPath(var path, var area, var colour, int radius, var offset);
+
+		/** Draws an inner shadow for the given path using melatonin blur. */
+		void drawInnerShadowFromPath(var path, var area, var colour, int radius, var offset);
 
 		/** Draws a triangle rotated by the angle in radians. */
 		void drawTriangle(var area, float angle, float lineThickness);
@@ -619,6 +796,8 @@ namespace ScriptingObjects
 
 			virtual ScriptedLookAndFeel* get() = 0;
 
+			virtual simple_css::StyleSheetLookAndFeel* getStyleSheetLookAndFeel() { return nullptr; }
+
 #if HISE_INCLUDE_PROFILING_TOOLKIT
 			void onProfileEnableChange() override
 			{
@@ -643,12 +822,14 @@ namespace ScriptingObjects
 			public FilterDragOverlay::LookAndFeelMethods,
 			public RingBufferComponentBase::LookAndFeelMethods,
 			public AhdsrGraph::LookAndFeelMethods,
+			public flex_ahdsr_base::FlexAhdsrGraph::LookAndFeelMethods,
 			public MidiFileDragAndDropper::LookAndFeelMethods,
 			public SliderPack::LookAndFeelMethods,
 			public CustomKeyboardLookAndFeelBase,
 			public ScriptTableListModel::LookAndFeelMethods,
             public MatrixPeakMeter::LookAndFeelMethods,
-			public WaterfallComponent::LookAndFeelMethods
+			public WaterfallComponent::LookAndFeelMethods,
+			public HiSlider::HoverPopupLookandFeel
 		{
 			Laf(MainController* mc);
 
@@ -753,7 +934,6 @@ namespace ScriptingObjects
             void getIdealPopupMenuItemSize(const String &text, bool isSeparator, int standardMenuItemHeight, int &idealWidth, int &idealHeight) override;
             
 			void drawFilterDragHandle(Graphics& g, FilterDragOverlay& o, int index, Rectangle<float> handleBounds, const FilterDragOverlay::DragData& d) override;
-
 			void drawFilterBackground(Graphics &g, FilterGraph& fg) override;
 			void drawFilterPath(Graphics& g, FilterGraph& fg, const Path& p) override;
 			void drawFilterGridLines(Graphics &g, FilterGraph& fg, const Path& gridPath) override;
@@ -768,6 +948,17 @@ namespace ScriptingObjects
 			void drawWavetableBackground(Graphics& g, WaterfallComponent& wc, bool isEmpty) override;
 			void drawWavetablePath(Graphics& g, WaterfallComponent& wc, const Path& p, int tableIndex, bool isStereo, int currentTableIndex, int numTables) override;
 
+			PositionData getModulatorDragData(HiSlider& s, const StringArray& sourceList) const override;
+			void drawModulationDragBackground(Graphics& g, HiSlider& s, const DrawData& dd, Rectangle<int> labelBounds) override;
+			void drawModulationDragger(Graphics& g, HiSlider& s, const DrawData& dd) override;
+
+			void drawFlexAhdsrBackground(Graphics& g, flex_ahdsr_base::FlexAhdsrGraph& graph) override;
+			void drawFlexAhdsrCurvePoint(Graphics& g, flex_ahdsr_base::FlexAhdsrGraph& graph, flex_ahdsr_base::State s, Point<float> curvePoint, bool hover, bool down) override;
+			void drawFlexAhdsrFullPath(Graphics& g, flex_ahdsr_base::FlexAhdsrGraph& graph) override;
+			void drawFlexAhdsrPosition(Graphics& g, flex_ahdsr_base::FlexAhdsrGraph& graph, flex_ahdsr_base::State s, Point<float> pointOnPath) override;
+			void drawFlexAhdsrSegment(Graphics& g, flex_ahdsr_base::FlexAhdsrGraph& graph, flex_ahdsr_base::State s, const Path& segment, bool hover, bool active) override;
+			void drawFlexAhdsrText(Graphics& g, flex_ahdsr_base::FlexAhdsrGraph& graph, const String& text) override;
+
 			Image createIcon(PresetHandler::IconType type) override;
 
 			bool functionDefined(const String& s);
@@ -780,6 +971,8 @@ namespace ScriptingObjects
 
 			static bool writeId(DynamicObject* obj, Component* c);
 
+			bool useRectangleClass = false;
+
 			JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(Laf);
 			JUCE_DECLARE_WEAK_REFERENCEABLE(Laf);
 		};
@@ -788,12 +981,32 @@ namespace ScriptingObjects
 					   public SliderPack::LookAndFeelMethods,
 					   public TableEditor::LookAndFeelMethods,
 					   public HiseAudioThumbnail::LookAndFeelMethods,
+					   public CustomKeyboardState::LookAndFeelBase,	
 					   public PresetBrowserLookAndFeelMethods,
-					   public LafBase
+					   public FilterGraph::LookAndFeelMethods,
+					   public FilterDragOverlay::LookAndFeelMethods,
+					   public LafBase,
+                       public simple_css::StyleSheet::Collection::DataProvider
 		{
 			CSSLaf(ScriptedLookAndFeel* parent_, ScriptContentComponent* content, Component* c, const ValueTree& dataTree, const ValueTree& additionalPropertyTree);;
 
 			ScriptedLookAndFeel* get() override;
+
+            Font loadFont(const String& fontName, const String& url) override;
+            
+            
+            String importStyleSheet(const String& url) override
+            {
+                return {};
+            }
+            
+            Image loadImage(const String& imageURL) override
+            {
+                jassertfalse;
+                return {};
+            }
+
+			simple_css::StyleSheetLookAndFeel* getStyleSheetLookAndFeel() override { return this; }
 
 			void updateMultipageDialog(multipage::Dialog& mp);
 
@@ -841,6 +1054,15 @@ namespace ScriptingObjects
 
 			Rectangle<float> getValueLabelSize(Component& valuePopup, Component& attachedComponent, const String& text);
 			bool drawValueLabel(Graphics& g, Component& valuePopup, Component& attachedComponent, const String& text, bool useAlignment=true);
+
+			void drawKeyboardBackground(Graphics &g, Component* c, int width, int height) override;
+			void drawWhiteNote(CustomKeyboardState* state, Component* c, int midiNoteNumber, Graphics &g, int x, int y, int w, int h, bool isDown, bool isOver, const Colour &lineColour, const Colour &textColour) override;
+			void drawBlackNote(CustomKeyboardState* state, Component* c, int midiNoteNumber, Graphics &g, int x, int y, int w, int h, bool isDown, bool isOver, const Colour &noteFillColour) override;
+
+			void drawFilterBackground(Graphics& g, FilterGraph& fg) override;
+			void drawFilterPath(Graphics& g, FilterGraph& fg, const Path& p) override;
+			void drawFilterGridLines(Graphics& g, FilterGraph& fg, const Path& gridPath) override;
+			void drawFilterDragHandle(Graphics& g, FilterDragOverlay& o, int index, Rectangle<float> handleBounds, const FilterDragOverlay::DragData& d) override;
 
 		private:
 
@@ -1025,6 +1247,23 @@ namespace ScriptingObjects
 				CALL_LAF(drawTableHeaderColumn, g, th, columnName, columnId, width, height, isMouseOver, isMouseDown, columnFlags);
 			}
 
+			void drawFilterDragHandle(Graphics& g, FilterDragOverlay& o, int index, Rectangle<float> handleBounds, const FilterDragOverlay::DragData& d) override
+			{
+				CALL_LAF(drawFilterDragHandle, g, o, index, handleBounds, d);
+			}
+			void drawFilterBackground(Graphics &g, FilterGraph& fg) override
+			{
+				CALL_LAF(drawFilterBackground, g, fg);
+			}
+			void drawFilterPath(Graphics& g, FilterGraph& fg, const Path& p) override
+			{
+				CALL_LAF(drawFilterPath,g, fg, p);
+			}
+			void drawFilterGridLines(Graphics &g, FilterGraph& fg, const Path& gridPath) override
+			{
+				CALL_LAF(drawFilterGridLines, g, fg, gridPath);
+			}
+
 			void drawScrollbar (Graphics& g, ScrollBar& scrollbar,
 		                                int x, int y, int width, int height,
 		                                bool isScrollbarVertical,
@@ -1034,6 +1273,21 @@ namespace ScriptingObjects
 		                                bool isMouseDown) override
 			{
 				CALL_LAF(drawScrollbar, g, scrollbar, x, y, width, height, isScrollbarVertical, thumbStartPosition, thumbSize, isMouseOver, isMouseDown);
+			}
+
+			void drawKeyboardBackground(Graphics &g, Component* c, int width, int height) override
+			{
+				CALL_LAF(drawKeyboardBackground, g, c, width, height);
+			}
+
+			void drawWhiteNote(CustomKeyboardState* state, Component* c, int midiNoteNumber, Graphics &g, int x, int y, int w, int h, bool isDown, bool isOver, const Colour &lineColour, const Colour &textColour) override
+			{
+				CALL_LAF(drawWhiteNote, state, c, midiNoteNumber, g, x, y, w, h, isDown, isOver, lineColour, textColour);
+			}
+
+			void drawBlackNote(CustomKeyboardState* state, Component* c, int midiNoteNumber, Graphics &g, int x, int y, int w, int h, bool isDown, bool isOver, const Colour &noteFillColour) override
+			{
+				CALL_LAF(drawBlackNote, state, c, midiNoteNumber, g, x, y, w, h, isDown, isOver, noteFillColour);
 			}
 
 			// CSS only methods, just forward to the style sheet LAF...
@@ -1123,6 +1377,8 @@ namespace ScriptingObjects
 			{
 				return css.getMinimumScrollbarThumbSize(sb);
 			}
+
+			simple_css::StyleSheetLookAndFeel* getStyleSheetLookAndFeel() override { return &css; }
 
 		private:
 

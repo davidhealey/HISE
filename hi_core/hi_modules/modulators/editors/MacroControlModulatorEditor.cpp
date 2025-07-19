@@ -64,7 +64,10 @@ MacroControlModulatorEditorBody::MacroControlModulatorEditorBody (ProcessorEdito
     macroSelector->setTextWhenNoChoicesAvailable (TRANS("(no choices)"));
     macroSelector->addItem (TRANS("Not connected"), 1);
 
-	for (int i = 0; i < HISE_NUM_MACROS; i++)
+    auto mc = p->getProcessor()->getMainController();
+	auto numMacros = HISE_GET_PREPROCESSOR(mc, HISE_NUM_MACROS);
+
+	for (int i = 0; i < numMacros; i++)
 		macroSelector->addItem("Macro " + String(i + 1), i + 2);
 
     macroSelector->addListener (this);
@@ -77,7 +80,7 @@ MacroControlModulatorEditorBody::MacroControlModulatorEditorBody (ProcessorEdito
 	getProcessor()->getMainController()->skin(*useTableButton);
 
 	smoothingSlider->setup(getProcessor(), MacroModulator::SmoothTime, "Smoothing");
-    smoothingSlider->setMode(HiSlider::Time, 0.0, 1000.0, 100.0);
+    smoothingSlider->setMode(HiSlider::Time, NormalisableRange(0.0, 1000.0).withCentreSkew(100.0));
 
     ProcessorHelpers::connectTableEditor(*valueTable, getProcessor());
     

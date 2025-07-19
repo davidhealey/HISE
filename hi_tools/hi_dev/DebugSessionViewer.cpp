@@ -108,7 +108,7 @@ struct DebugSession::ProfileDataSource::ViewComponents::Viewer::BreadcrumbCompon
 	void paint(Graphics& g) override
 	{
 		if(findParentComponentOfClass<MultiViewer>() != nullptr)
-			g.fillAll(Colours::white.withAlpha(0.2f));
+			g.fillAll(Colours::white.withAlpha(JUCE_LIVE_CONSTANT_OFF(0.1f)));
 
 		g.setColour(Colours::white.withAlpha(0.2f));
 
@@ -187,8 +187,6 @@ struct DebugSession::ProfileDataSource::ViewComponents::Viewer::TimelineComponen
 		for(int i = 1; i < dataPoints.getNumRectangles(); i++)
 			graph.lineTo(dataPoints.getRectangle(i).getCentre());
 
-		auto b = getLocalBounds().toFloat().reduced(6.0f);
-
 		Path ns;
 
 		selection.clear();
@@ -231,12 +229,18 @@ struct DebugSession::ProfileDataSource::ViewComponents::Viewer::TimelineComponen
 			}
 		}
 
-		if(parent.currentIndex == idx)
-			parent.currentIndex = -1;
-		else
-			parent.currentIndex = idx;
+		auto m = parent.getManager();
 
-		parent.updateIndexToShow();
+		auto currentRunIndex = m->runIndex;
+
+		if(currentRunIndex == idx)
+			currentRunIndex = -1;
+		else
+			currentRunIndex = idx;
+
+		m->setCurrentRunIndex(currentRunIndex);
+
+		
 		rebuild();
 	}
 	void resized() override
@@ -263,11 +267,13 @@ struct DebugSession::ProfileDataSource::ViewComponents::Viewer::TimelineComponen
 	RectangleList<float> dataPoints;
 };
 
-DebugSession::ProfileDataSource::ViewComponents::Viewer::Viewer(ProfileInfoBase* info, DebugSession& dh):
+DebugSession::ProfileDataSource::ViewComponents::Viewer::Viewer(ProfileInfoBase* info, DebugSession& dh, bool multiMode_):
 	timeline(new TimelineComponent(*this)),
 	breadcrumbs(new BreadcrumbComponent(*this)),
 	peakButton("peak", nullptr, factory),
-	session(dh)
+	session(dh),
+	multiMode(multiMode_),
+	rowScrollBar(true) 
 {
 	setOpaque(true);
 	setName("Profiler Timeline");
@@ -278,14 +284,21 @@ DebugSession::ProfileDataSource::ViewComponents::Viewer::Viewer(ProfileInfoBase*
 	addAndMakeVisible(timeline);
 
 	addAndMakeVisible(peakButton);
+	addAndMakeVisible(rowScrollBar);
+
 	
+
 	peakButton.onClick = BIND_MEMBER_FUNCTION_0(Viewer::refreshPeakButton);
 	peakButton.setToggleModeWithColourChange(true);
+	peakButton.setTooltip("Toggle between the run with the longest duration and the averaged runtime");
 
 	auto r = ViewItem::createFromProfileInfo(info);
-	
+
+	getFader().addScrollBarToAnimate(rowScrollBar);
+	rowScrollBar.setSingleStepSize(1.0);
+	rowScrollBar.addListener(this);
 	setRootItems(r, r);
-	setSize(DefaultWidth, getTimelineOffsetY(showTimeline) + maxDepth * (ItemHeight + ItemMargin) + ScrollbarHeight + MenuBarHeight);
+	setSize(DefaultWidth, getTimelineOffsetY(showTimeline) + jmin(12, maxDepth) * (ItemHeight + ItemMargin) + ScrollbarHeight + MenuBarHeight);
 }
 
 
@@ -296,7 +309,7 @@ void DebugSession::ProfileDataSource::ViewComponents::Viewer::applyPosition(
 	{
 		auto tr = getZoomTranspose();
 		auto s = getZoomScale();
-		auto tBounds = tt->getBounds(tr, showTimeline, s, currentIndex);
+		auto tBounds = tt->getBounds(tr, showTimeline, s, (int)rowScrollBar.getCurrentRangeStart(), currentIndex);
 
 		if(tBounds.getWidth() > t.getWidth())
 			t.setSize(0, 0);
@@ -339,6 +352,8 @@ void DebugSession::ProfileDataSource::ViewComponents::Viewer::refreshPeakButton(
 		return;
 	}
 
+	auto thisIndex = currentIndex;
+
 	if(peakButton.getToggleState())
 	{
 		double maxLength = 0.0;
@@ -349,7 +364,7 @@ void DebugSession::ProfileDataSource::ViewComponents::Viewer::refreshPeakButton(
 			if(r.length > maxLength)
 			{
 				maxLength = r.length;
-				currentIndex = idx;
+				thisIndex = idx;
 			}
 
 			idx++;
@@ -357,12 +372,16 @@ void DebugSession::ProfileDataSource::ViewComponents::Viewer::refreshPeakButton(
 	}
 	else
 	{
-		currentIndex = -1;
+		thisIndex = -1;
 	}
 
-		
-	updateIndexToShow();
-	dynamic_cast<TimelineComponent*>(timeline.get())->rebuild();
+	if(auto m = getManager())
+		getManager()->setCurrentRunIndex(thisIndex);
+	else
+	{
+		currentIndex = thisIndex;
+		dynamic_cast<TimelineComponent*>(timeline.get())->rebuild();
+	}
 }
 
 void DebugSession::ProfileDataSource::ViewComponents::Viewer::updateAdjacentItems(const MouseEvent& e)
@@ -417,7 +436,7 @@ getHoverItem(const MouseEvent& e)
 {
 	auto t = getZoomTranspose();
 
-	if(auto m = rootItem->isHovered(e, t, showTimeline, scaleFactor * zoomFactor, currentIndex))
+	if(auto m = rootItem->isHovered(e, t, showTimeline, scaleFactor * zoomFactor, (int)rowScrollBar.getCurrentRangeStart(), currentIndex))
 		return m;
 
 	return nullptr;
@@ -429,11 +448,13 @@ void DebugSession::ProfileDataSource::ViewComponents::Viewer::setTimeDomain(Time
 
 	switch (newDomain)
 	{
-	case TimeDomain::Absolute:
+    case TimeDomain::Undefined:
+        break;
+    case TimeDomain::Absolute:
 		newDomainContext = 0.0;
 		break;
 	case TimeDomain::Relative:
-		newDomainContext = (double)rootItem->getBounds(0.0, showTimeline, 1.0, currentIndex).getWidth();
+		newDomainContext = (double)rootItem->getBounds(0.0, showTimeline, 1.0, 0, currentIndex).getWidth();
 		break;
 	case TimeDomain::CpuUsage:
 
@@ -463,11 +484,32 @@ void DebugSession::ProfileDataSource::ViewComponents::Viewer::toggleTypeFilter(S
 	//statistics->updateSearchTerm();
 }
 
+void DebugSession::ProfileDataSource::ViewComponents::Viewer::onRunIndexUpdate(int currentRunIndex)
+{
+	currentIndex = currentRunIndex;
+	updateIndexToShow();
+	dynamic_cast<TimelineComponent*>(timeline.get())->rebuild();
+
+	if(currentDomain == TimeDomain::Relative)
+	{
+		if(auto m = getManager())
+		{
+			// force the update
+			m->currentDomain = TimeDomain::Undefined;
+
+			// Refresh the relative timeline
+			setTimeDomain(currentDomain);
+		}
+	}
+}
+
 void DebugSession::ProfileDataSource::ViewComponents::Viewer::mouseDown(const MouseEvent& e)
 {
+	mouseMove(e);
+
 	if(e.mods.isLeftButtonDown())
 	{
-		if(currentlyHoveredItem != nullptr && currentlyHoveredItem != rootItem && e.mods.isCommandDown())
+		if(currentlyHoveredItem != nullptr && currentlyHoveredItem != rootItem.get() && e.mods.isCommandDown())
 		{
 			navigate(currentlyHoveredItem, true);
 			return;
@@ -488,11 +530,13 @@ void DebugSession::ProfileDataSource::ViewComponents::Viewer::mouseDown(const Mo
 		{
 			auto tr = getZoomTranspose();
 			auto s = getZoomScale();
-			auto tBounds = currentlyHoveredItem->getBounds(tr, showTimeline, s, currentIndex).toNearestInt().getIntersection(getLocalBounds());
+			auto tBounds = currentlyHoveredItem->getBounds(tr, showTimeline, s, (int)rowScrollBar.getCurrentRangeStart(), currentIndex).toNearestInt().getIntersection(getLocalBounds());
 
 			std::unique_ptr<Component> c;
 			c.reset(new ItemPopup(this, currentlyHoveredItem));
 
+			currentlyHoveredItem = nullptr;
+			
 			if(auto t = TopLevelWindowWithOptionalOpenGL::findRoot(this))
 			{
 				auto b = t->getLocalArea(this, getLocalBounds().getIntersection(tBounds.toNearestInt()));
@@ -507,26 +551,15 @@ void DebugSession::ProfileDataSource::ViewComponents::Viewer::mouseDown(const Mo
 			m.setLookAndFeel(&plaf);
 
 			constexpr int TimeDomainOffset = 400;
-			constexpr int FilterOffset = 800;
 
 			m.addItem(1, "Fold all", true, foldAll);
-			m.addItem(2, "Use equidistance", true, rootItem->useEquiDistance);
-			m.addItem(3, "Draw tracks", true, drawTracks);
+			m.addItem(2, "Enable event flow mode", true, rootItem->useEquiDistance);
 
 			m.addSectionHeader("Select Time domain");
 			m.addItem(TimeDomainOffset + (int)TimeDomain::Absolute, "Absolute", true, currentDomain == TimeDomain::Absolute);
 			m.addItem(TimeDomainOffset + (int)TimeDomain::Relative, "Relative", true, currentDomain == TimeDomain::Relative);
 			m.addItem(TimeDomainOffset + (int)TimeDomain::CpuUsage, "Audio Buffer CPU %", true, currentDomain == TimeDomain::CpuUsage);
 			m.addItem(TimeDomainOffset + (int)TimeDomain::FPS60, "Frametime @ 60FPS", true, currentDomain == TimeDomain::FPS60);
-
-			m.addSectionHeader("Filter by type");
-
-			auto mg = getManager();
-
-			for(int i = 1; i < (int)SourceType::numSourceTypes; i++)
-			{
-				m.addItem(FilterOffset + i, getSourceTypeName((SourceType)i), true, !mg->typeFilters[i]);
-			}
 
 			auto r = m.show();
 
@@ -544,34 +577,22 @@ void DebugSession::ProfileDataSource::ViewComponents::Viewer::mouseDown(const Mo
 					return false;
 				});
 
-				maxDepth = rootItem->getMaxDepth(1, getTypeFilter());
+				updateRowScrollbar();
 				resized();
 			}
 			if(r == 2)
 			{
-				rootItem->setUseEquiDistance(!rootItem->useEquiDistance, getTypeFilter());
-				updateIndexToShow();
+				auto nr = rootItem;
+				nr->setUseEquiDistance(!rootItem->useEquiDistance, getTypeFilter());
+				rootItem = nullptr;
+				navigateInternal(nr);
 			}
-			if(r == 3)
-			{
-				drawTracks = !drawTracks;
-                
-                rootItem->setUseEquiDistance(drawTracks, getTypeFilter());
-                updateIndexToShow();
-                
-				repaint();
-			}
-
-			if(r >= FilterOffset)
-			{
-				auto thisFilter = r - FilterOffset;
-				toggleTypeFilter((SourceType)thisFilter);
-					
-			}
-			else if(r >= TimeDomainOffset)
+			if(r >= TimeDomainOffset)
 			{
 				setTimeDomain((TimeDomain)(r - TimeDomainOffset));
 			}
+
+			return;
 		}
 	}
 
@@ -624,7 +645,7 @@ Viewer::getStatistics()
 
 void DebugSession::ProfileDataSource::ViewComponents::Viewer::zoomToItem(ViewItem::Ptr ptr)
 {
-	auto b = ptr->getBounds(0.0f, false, 1.0, currentIndex);
+	auto b = ptr->getBounds(0.0f, false, 1.0, (int)rowScrollBar.getCurrentRangeStart(), currentIndex);
 
 	NormalisableRange<double> nr(getScaledZoomRange());
 
@@ -660,10 +681,18 @@ void DebugSession::ProfileDataSource::ViewComponents::Viewer::setArrowNavigation
 	arrowNavigations[const_cast<ViewItem*>(ptr)] = area;
 }
 
+void DebugSession::ProfileDataSource::ViewComponents::Viewer::mouseMagnify(const MouseEvent& e, float sf)
+{
+	hangleMouseMagnify(e, sf);
+}
+
 void DebugSession::ProfileDataSource::ViewComponents::Viewer::mouseMove(const MouseEvent& e)
 {
 	currentNavigationItem = nullptr;
 	currentlyHoveredItem = getHoverItem(e);
+
+	if(currentlyHoveredItem != nullptr && currentlyHoveredItem->name == "Profile root")
+		currentlyHoveredItem = nullptr;
 
 	if(currentlyHoveredItem == nullptr)
 	{
@@ -696,17 +725,28 @@ VoiceBitMap<32> DebugSession::ProfileDataSource::ViewComponents::Viewer::getType
 
 void DebugSession::ProfileDataSource::ViewComponents::Viewer::mouseDoubleClick(const MouseEvent& e)
 {
+	if(e.mods.isRightButtonDown())
+		return;
+
 	if(currentlyHoveredItem != nullptr)
 	{
 		if(auto nd = rootItem->toggleFold(currentlyHoveredItem, getTypeFilter()))
-			maxDepth = nd;
-
+		{
+			updateRowScrollbar();
+		}
+			
 		resized();
 	}
 	else
 	{
 		handleMouseEvent(e, MouseEventType::MouseDoubleClick);
 	}
+}
+
+void DebugSession::ProfileDataSource::ViewComponents::Viewer::mouseWheelMove(const MouseEvent& event,
+	const MouseWheelDetails& wheel)
+{
+	handleMouseWheelEvent(event, wheel);
 }
 
 UndoManager* DebugSession::ProfileDataSource::ViewComponents::Viewer::getUndoManager()
@@ -724,8 +764,11 @@ void DebugSession::ProfileDataSource::ViewComponents::Viewer::navigateInternal(V
 		currentlyHoveredItem = nullptr;
 		rootItem = newDisplayRoot;
 		rootItem->setAsRoot();
-        
-        breadcrumbs->setVisible(rootItem != originalRoot);
+
+		if(!multiMode)
+			breadcrumbs->setVisible(rootItem != originalRoot);
+		else
+			breadcrumbs->setVisible(true);
 
 		rootItem->callAllRecursive([](ViewItem& vi)
 		{
@@ -734,7 +777,7 @@ void DebugSession::ProfileDataSource::ViewComponents::Viewer::navigateInternal(V
 		});
 
 		refreshPeakButton();
-		maxDepth = rootItem->getMaxDepth(1, getTypeFilter());
+		updateRowScrollbar();
 		originalRoot->updateSearch({});
 
 		allRanges.clear();
@@ -821,7 +864,11 @@ void DebugSession::ProfileDataSource::ViewComponents::Viewer::paint(Graphics& g)
 	ctx.componentToDrawOn = this;
 	ctx.displayRange = getScaledZoomRange();
 
-	if(drawTracks)
+	auto r = rowScrollBar.getCurrentRange();
+
+	ctx.depthRange = { (int)r.getStart(), (int)r.getEnd() + 1 };
+
+	if(rootItem->useEquiDistance)
 	{
 		for(const auto& t: tracks)
 		{
@@ -837,6 +884,11 @@ void DebugSession::ProfileDataSource::ViewComponents::Viewer::paint(Graphics& g)
 		Helpers::drawLabel(g, l);
 }
 
+Rectangle<int> DebugSession::ProfileDataSource::ViewComponents::Viewer::getViewportPosition() const
+{
+	return { 0, getTimelineOffsetY(showTimeline), getWidth(), maxDepth * (ItemHeight + ItemMargin)};
+}
+
 void DebugSession::ProfileDataSource::ViewComponents::Viewer::resized()
 {
 	initManager();
@@ -844,22 +896,13 @@ void DebugSession::ProfileDataSource::ViewComponents::Viewer::resized()
 
 	auto b = getLocalBounds();
 
-	auto statisticsHeight = b.getHeight();
-	statisticsHeight -= getTimelineOffsetY(showTimeline);
-	statisticsHeight -= maxDepth * (ItemHeight + ItemMargin);
-	statisticsHeight -= MenuBarHeight;
-	statisticsHeight -= LabelMargin;
-
 	if(!getBounds().isEmpty() && totalLength > 0)
 	{
-		menuBar = b.removeFromBottom(MenuBarHeight);
-		auto copy = menuBar;
-
 		int ButtonMargin = 4;
 
 		if(showTimeline)
 		{
-			labels.push_back({b.removeFromTop(LabelMargin).toFloat(), "Performance graph of runs"});
+			labels.push_back({b.removeFromTop(LabelMargin).toFloat(), "Run performance"});
 			auto timelineBounds = b.removeFromTop(TopBarHeight);
 			peakButton.setBounds(timelineBounds.removeFromRight(timelineBounds.getHeight()).reduced(ButtonMargin * 2));
 			timeline->setBounds(timelineBounds);
@@ -868,28 +911,38 @@ void DebugSession::ProfileDataSource::ViewComponents::Viewer::resized()
 
 		String t = "Timeline";
 
-#if 0
-		auto p = rootItem.get();
-		StringArray parentNames;
-
-		while(p != nullptr)
+		switch(currentDomain)
 		{
-			parentNames.add(p->name);
-			p = p->parent;
+		case TimeDomain::Absolute: t << " (Absolute)";
+			break;
+		case TimeDomain::Relative: t << " (Relative)";
+			break;
+		case TimeDomain::CpuUsage: t << " (Audio Buffer CPU %)";
+			break;
+		case TimeDomain::FPS60: t << " (Frametime @ 60FPS)";
+			break;
+		default: ;
 		}
-
-		for(int i = parentNames.size()-1; i >= 0; i--)
-			t << parentNames[i] << " > ";
-
-		t = t.upToLastOccurrenceOf(" > ", false, false);
-#endif
 
 		breadcrumbs->setBounds(b.removeFromTop(BreadcrumbHeight));
 
 		labels.push_back({b.removeFromTop(LabelMargin).toFloat(), t});
 
+		auto numRowsToDisplay = b.getHeight() / (ItemHeight + ItemMargin);
+
+		rowScrollBar.setCurrentRange(rowScrollBar.getCurrentRangeStart(), (double)numRowsToDisplay, sendNotificationAsync);
+
 		onResize(b);
+
+		rowScrollBar.setVisible(true);
+		rowScrollBar.setBounds(b.removeFromRight(12));
 	}
+}
+
+void DebugSession::ProfileDataSource::ViewComponents::Viewer::updateRowScrollbar()
+{
+	maxDepth = rootItem->getMaxDepth(1, getTypeFilter());
+	rowScrollBar.setRangeLimits(0.0, (double)(maxDepth + 1), sendNotificationAsync);
 }
 
 void DebugSession::ProfileDataSource::ViewComponents::Viewer::onSearchUpdate(const String& s, bool zoomToFirst)
@@ -897,8 +950,7 @@ void DebugSession::ProfileDataSource::ViewComponents::Viewer::onSearchUpdate(con
 	repaint();
 
 	auto m = rootItem->updateSearch(s);
-
-	maxDepth = rootItem->getMaxDepth(1, getManager()->typeFilters);
+	updateRowScrollbar();
 
 	if(rootItem->useEquiDistance)
 	{
@@ -909,7 +961,7 @@ void DebugSession::ProfileDataSource::ViewComponents::Viewer::onSearchUpdate(con
 
 		rootItem->callAllRecursive([&](ViewItem& p)
 		{
-			auto b = p.getBounds(0.0f, showTimeline, 1.0f, currentIndex);
+			auto b = p.getBounds(0.0f, showTimeline, 1.0f, (int)rowScrollBar.getCurrentRangeStart(), currentIndex);
 			allRanges[p.depth].push_back({&p, { b.getX(), b.getRight() }});
 			return false;
 		});
@@ -920,6 +972,28 @@ void DebugSession::ProfileDataSource::ViewComponents::Viewer::onSearchUpdate(con
 
 	if(zoomToFirst && m != nullptr)
 		zoomToItem(m);
+}
+
+bool DebugSession::ProfileDataSource::ViewComponents::Viewer::onWASDMovement(WASDKeyListener::MovementType t,
+	double delta)
+{
+	if(AbstractZoomableView::onWASDMovement(t, delta))
+		return true;
+
+	if(t == WASDKeyListener::MovementType::Vertical)
+	{
+		auto before = roundToInt(rowPositionDouble);
+		rowPositionDouble += delta * JUCE_LIVE_CONSTANT_OFF(0.25);
+		auto after = roundToInt(rowPositionDouble);
+
+		if(before != after)
+		{
+			auto delta = before - after;
+			rowScrollBar.moveScrollbarInSteps(delta, sendNotificationSync);
+		}
+	}
+
+	return true;
 }
 
 bool DebugSession::ProfileDataSource::ViewComponents::Viewer::navigate(ViewItem::Ptr newRoot, bool useUndoManager)
@@ -950,7 +1024,8 @@ bool DebugSession::ProfileDataSource::ViewComponents::Viewer::navigate(ViewItem:
 		rootItem->setAsRoot();
 		
 		refreshPeakButton();
-		maxDepth = rootItem->getMaxDepth(1);
+
+		updateRowScrollbar();
 		originalRoot->updateSearch({});
 
 		allRanges.clear();
@@ -980,204 +1055,4 @@ bool DebugSession::ProfileDataSource::ViewComponents::Viewer::navigate(ViewItem:
 
 
 
-void DebugSession::ProfileDataSource::ViewComponents::MultiViewer::onFlush(MultiViewer& m,
-	ProfileDataSource::ProfileInfoBase::Ptr p)
-{
-	if(p != nullptr)
-	{
-		m.tabButtons.add(new TabButton("funky"));
-		m.addAndMakeVisible(m.tabButtons.getLast());
-
-		auto v = dynamic_cast<Viewer*>(p->createComponent());
-
-		m.currentViewers.add(v);
-		m.addAndMakeVisible(v);
-
-		if(auto mm = m.getManager())
-		{
-			mm->setActiveViewer(v);
-		}
-	}
-}
-
-void DebugSession::ProfileDataSource::ViewComponents::MultiViewer::resized()
-{
-	auto b = getLocalBounds();
-
-	if(b.isEmpty())
-		return;
-
-	if(currentViewers.size() == 1)
-	{
-		for(auto tb: tabButtons)
-			tb->setVisible(false);
-		currentViewers[0]->setVisible(true);
-		currentViewers[0]->setBounds(b);
-		return;
-	}
-
-	auto tabRow = b.removeFromTop(20);
-
-	for(auto tb: tabButtons)
-	{
-		tb->setVisible(true);
-		tb->setBounds(tabRow.removeFromLeft(tb->getWidth()));
-	}
-		
-
-	int idx = 0;
-
-	for(auto v: currentViewers)
-	{
-		auto visible = idx++ == currentTabIndex;
-		v->setVisible(visible);
-
-		if(visible)
-			v->setBounds(b);
-	}
-}
-
-DebugSession::ProfileDataSource::ViewComponents::MultiViewer::TabButton::TabButton(const String& name_):
-	name(name_),
-	closeButton("delete", nullptr, factory),
-	f(GLOBAL_BOLD_FONT())
-{
-	auto w = f.getStringWidthFloat(name) + 30.0f;
-	setSize(w, 20);
-	addAndMakeVisible(closeButton);
-
-			
-	closeButton.onClick = [this](){ findParentComponentOfClass<MultiViewer>()->removeTab(this); };
-}
-
-void DebugSession::ProfileDataSource::ViewComponents::MultiViewer::TabButton::paint(Graphics& g)
-{
-	auto b = getLocalBounds().toFloat();
-
-	b.removeFromRight(2.0f);
-
-	g.setColour(Colours::white.withAlpha(active ? 0.2f : 0.05f));
-
-	Path p;
-	p.addRoundedRectangle(b.getX(), b.getY(), b.getWidth(), b.getHeight(), 3.0, 3.0, true, true, false, false);
-
-	g.fillPath(p);
-
-	g.setFont(f);
-	b.removeFromLeft(5.0f);
-	g.setColour(Colours::white.withAlpha(active ? 0.8f : 0.4f));
-	g.drawText(name, b, Justification::left);
-}
-
-void DebugSession::ProfileDataSource::ViewComponents::MultiViewer::onNavigation(BaseWithManagerConnection* source,
-                                                                                ViewItem::Ptr r, ViewItem::Ptr cr)
-{
-	if(auto d = dynamic_cast<Viewer*>(source))
-	{
-		currentTabIndex = currentViewers.indexOf(d);
-
-		int idx = 0;
-		for(auto b : tabButtons)
-			b->setActive(idx++ == currentTabIndex);
-
-		resized();
-	}
-}
-
-void DebugSession::ProfileDataSource::ViewComponents::MultiViewer::setCurrentTab(TabButton* b)
-{
-	auto idx = tabButtons.indexOf(b);
-
-	if(idx != currentTabIndex)
-	{
-		if(auto m = getManager())
-			m->setActiveViewer(currentViewers[idx]);
-	}
-}
-
-void DebugSession::ProfileDataSource::ViewComponents::MultiViewer::mouseDown(const MouseEvent& e)
-{
-    if(e.mods.isRightButtonDown())
-    {
-        PopupLookAndFeel plaf;
-        PopupMenu m;
-        m.setLookAndFeel(&plaf);
-        
-        m.addItem(1, "Close all tabs");
-        m.addItem(2, "Close all but this");
-
-        auto r = m.show();
-        
-        if(r == 1)
-        {
-            while(!tabButtons.isEmpty())
-                removeTab(tabButtons.getFirst(), sendNotificationSync);
-        }
-        if(r == 2)
-        {
-            for(int i = 0; i < tabButtons.size(); i++)
-            {
-                if(!tabButtons[i]->active)
-                {
-                    removeTab(tabButtons[i--], sendNotificationSync);
-                }
-            }
-        }
-        
-    }
-}
-
-void DebugSession::ProfileDataSource::ViewComponents::MultiViewer::removeTab(TabButton* b, NotificationType s)
-{
-	auto indexToRemove = tabButtons.indexOf(b);
-
-	auto f = [indexToRemove, this]()
-	{
-		auto m = getManager();
-		
-
-		tabButtons.remove(indexToRemove);
-		currentViewers.remove(indexToRemove);
-
-		currentTabIndex = currentViewers.indexOf(m->currentViewer.get());
-
-		if(currentTabIndex == -1)
-		{
-			currentTabIndex = currentViewers.size()-1;
-			m->setActiveViewer(currentViewers.getLast());
-		}
-
-		resized();
-	};
-
-    if(s == sendNotificationAsync)
-        MessageManager::callAsync(f);
-    else
-        f();
-}
-
-DebugSession::ProfileDataSource::ViewComponents::SingleThreadPopup::SingleThreadPopup(DebugSession& s,
-	DebugInformationBase::Ptr root)
-{
-	setName("Profiler");
-
-	addAndMakeVisible(manager = new Manager(s));
-	manager->setPopupMode(true);
-	addAndMakeVisible(viewer = new Viewer(dynamic_cast<ProfileInfoBase*>(root.get()), s));
-	addAndMakeVisible(statistics = new StatisticsComponent(s));
-	statistics->initManager();
-	manager->setActiveViewer(viewer.get());
-		
-	viewer->setTimeDomain(viewer->originalRoot->getPreferredDomain());
-
-	setSize(DefaultWidth, viewer->getHeight() + MultiViewerMenuBarHeight + 200);
-}
-
-void DebugSession::ProfileDataSource::ViewComponents::SingleThreadPopup::resized()
-{
-	auto b = getLocalBounds();
-	statistics->setBounds(b.removeFromBottom(200));
-	manager->setBounds(b.removeFromTop(MultiViewerMenuBarHeight));
-	viewer->setBounds(b);
-}
 }

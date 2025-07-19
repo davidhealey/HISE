@@ -160,7 +160,7 @@ void TextEditor::setNewTokenCollectionForAllChildren(Component* any, const Ident
 
 	Component::callRecursive<TextEditor>(top, [&](TextEditor* t)
 	{
-		if(t->languageManager->getLanguageId() == languageId && newCollection != nullptr)
+		if(t->languageManager != nullptr && t->languageManager->getLanguageId() == languageId && newCollection != nullptr)
 		{
 			t->tokenCollection = newCollection;
 			newCollection->addListener(t);
@@ -223,8 +223,6 @@ void TextEditor::setError(const String& errorMessage)
 		currentError = nullptr;
 	else
 		currentError = new Error(document, errorMessage, false);
-
-	//addAndMakeVisible(autofixButton = new AutofixComponent(*this, *currentError));
 
 	repaint();
 }
@@ -333,6 +331,27 @@ bool TextEditor::gotoDefinition(Selection s1)
 	}
 
 	return false;
+}
+
+void TextEditor::tokenListWasRebuild()
+{
+    if(tokenCollection->getTokens().isEmpty())
+        return;
+
+#if 0
+	SafeAsyncCall::call<TextEditor>(*this, [](TextEditor& te)
+	{
+		if(te.currentError != nullptr)
+		{
+			te.autofixButton = new AutofixComponent(te, *te.currentError);
+
+			if(!te.autofixButton->calculateFix())
+				te.autofixButton = nullptr;
+			else
+				te.addAndMakeVisible(te.autofixButton);
+		}
+	});
+#endif
 }
 
 TextEditor::Action::Action(TextEditor* te, List nl, Ptr ncp):
@@ -600,7 +619,7 @@ void TextEditor::InplaceDebugValueComponent::updatePosition()
 
 	vf = document.getFont().withHeight(document.getFontHeight() * parent.viewScaleFactor * 0.7f);
 	
-	auto w = vf.getStringWidthFloat(value->value) + 20.0f;
+	auto w = b.getWidth() * value->value.length() + 20.0f;
 
 	if(!p.isEmpty())
 		w += b.getHeight();
@@ -788,6 +807,147 @@ bool TextEditor::nav(ModifierKeys mods, TextDocument::Target target, TextDocumen
 	translateToEnsureCaretIsVisible();
 	updateSelections();
 	return true;
+}
+
+TextEditor::AutofixComponent::AutofixComponent(mcl::TextEditor& editor_, const Error& error): editor(editor_)
+{
+
+	icon.loadPathFromData(EditorIcons::autofixIcon, SIZE_OF_PATH(EditorIcons::autofixIcon));
+	errorMessage = error.errorMessage;
+
+	Selection el(error.start.getLineNumber(), 0, error.start.getLineNumber()+1, 0);
+
+	errorLine = editor.getTextDocument().getSelectionContent(el).trim();
+
+	// Position the component based on the error's area
+	updatePosition();
+
+	// Listen to CodeDocument for text changes
+	codeDoc = &editor.getDocument();
+	codeDoc->addListener(this);
+
+	setRepaintsOnMouseActivity(true);
+}
+
+void TextEditor::AutofixComponent::paint(juce::Graphics& g)
+{
+	juce::Colour baseColour(Colour(HISE_ERROR_COLOUR));
+	juce::Colour hoverColour(baseColour.brighter(0.1f));
+	juce::Colour clickedColour(hoverColour.darker(0.1f));
+
+	if (isMouseButtonDown()) {
+		g.setGradientFill(juce::ColourGradient(clickedColour, 0.0f, 0.0f,
+		                                       baseColour, 0.0f, getHeight(), false));
+	} else if (isMouseOverOrDragging()) {
+		g.setGradientFill(juce::ColourGradient(hoverColour, 0.0f, 0.0f,
+		                                       baseColour, 0.0f, getHeight(), false));
+	} else {
+		g.setGradientFill(juce::ColourGradient(baseColour, 0.0f, 0.0f,
+		                                       baseColour.darker(0.1f), 0.0f, getHeight(), false));
+	}
+
+	g.fillRoundedRectangle(getLocalBounds().toFloat(), (float)getHeight() * 0.5f);
+
+	g.setColour(Colours::white.withAlpha(0.1f));
+	g.drawRoundedRectangle(getLocalBounds().toFloat().reduced(1.0f), (float)getHeight() * 0.5f - 2.0f, 1.0f);
+
+	g.setColour(Colours::white.withAlpha(0.8f));
+	g.fillPath(icon);
+	g.setFont(GLOBAL_BOLD_FONT().withHeight((float)getHeight() * 0.55f));
+	auto b = getLocalBounds().toFloat();
+	b.removeFromLeft(b.getHeight());
+	g.drawText("Fix", b, Justification::centred);
+}
+
+void TextEditor::AutofixComponent::resized()
+{
+	PathFactory::scalePath(icon, getLocalBounds().toFloat().removeFromLeft(getHeight()).reduced(getHeight() / 6.0f));
+}
+
+void TextEditor::AutofixComponent::mouseEnter(const MouseEvent& e)
+{
+	setTooltip(fixMessage);
+}
+
+void TextEditor::AutofixComponent::mouseDown(const MouseEvent& e)
+{
+	if(!calculateFix())
+		return;
+
+	if(correctLine.isNotEmpty())
+	{
+		auto pc = getParentComponent();
+
+		editor.getTextDocument().setSelection(0, sel, false);
+		editor.insert(correctLine);
+		
+		KeyPress compileKey(KeyPress::F5Key);
+
+		while(pc != nullptr)
+		{
+			if(pc->keyPressed(compileKey))
+			{
+				break;
+			}
+
+			pc = pc->getParentComponent();
+		}
+
+	}
+}
+
+bool TextEditor::AutofixComponent::calculateFix()
+{
+	auto errorMessage = editor.currentError->errorMessage;
+
+	if(errorMessage.contains("when expecting ';'"))
+	{
+		sel = editor.currentError->getSelection();
+		editor.getTextDocument().navigate(sel.head, TextDocument::Target::nonwhitespace, TextDocument::Direction::backwardCol);
+		sel.tail = sel.head;
+		correctLine = ";\n";
+		return true;
+	}
+
+	auto tokens = editor.tokenCollection->getTokens();
+
+	SimpleDocumentTokenProvider doc(editor.getDocument());
+	doc.addTokens (tokens);
+	
+	sel = editor.currentError->getSelection();
+	errorLine = editor.getTextDocument().getSelectionContent(sel);
+
+	auto currentNamespace = getCurrentNamespaceId();
+
+	StringArray existingTokens;
+
+	for(auto t: tokens)
+	{
+		auto tk = t->tokenContent.upToFirstOccurrenceOf("(", false, false);
+
+		if(currentNamespace.isNotEmpty() && tk.startsWith(currentNamespace))
+			tk = tk.fromFirstOccurrenceOf(currentNamespace + ".", false, false);
+
+        if(!errorLine.endsWith(tk))
+            existingTokens.addIfNotAlreadyThere(tk);
+	}
+
+	correctLine = FuzzySearcher::suggestCorrection(errorLine, existingTokens, 0.3);
+
+	
+
+	
+
+	if(correctLine.isNotEmpty())
+	{
+		fixMessage = "Replace `" + errorLine + "` with `" + correctLine + "`";
+
+		auto m = correctLine.compare(errorLine);
+
+		return m != 0;
+	}
+
+	return false;
 }
 
 TextEditor::Error::Error(TextDocument& doc_, const String& e, bool isWarning_):
@@ -1554,97 +1714,62 @@ void mcl::TextEditor::scaleView (float scaleFactorMultiplier, float verticalCent
 	
 }
 
-void TextEditor::AutofixComponent::launchHTTPRequest()
+void TextEditor::AutofixComponent::updatePosition()
 {
-#if 0
-	auto tokens = editor.tokenCollection->getTokens();
 
-	StringArray existingTokens;
-
-	for(auto t: tokens)
+	if(editor.currentError != nullptr)
 	{
-		existingTokens.addIfNotAlreadyThere(t->tokenContent);
-#if 0
-		auto tt = StringArray::fromTokens(t->tokenContent, ".", "");
+		auto& document = editor.getTextDocument();
+		auto line = editor.currentError->start.getLineNumber();
+		auto col = 10000;
+		auto b = document.getBoundsOnRow(line, {col, col+1}, GlyphArrangementArray::ReturnBeyondLastCharacter).getRectangle(0);
+		b = b.translated(document.getCharacterRectangle().getWidth() * 1.0f, 0.0f);
+		auto area = b.withWidth(50).transformed(editor.transform);
+		setBounds(area.toNearestInt());
+	}
+}
 
-		for(auto& t_: tt)
-			existingTokens.addIfNotAlreadyThere(t_.upToFirstOccurrenceOf("(", false, false));
-#endif
+String TextEditor::AutofixComponent::getCurrentNamespaceId() const
+{
+	auto currentRange = editor.getTextDocument().getFoldableLineRangeHolder().getRangeContainingLine(sel.head.x);
+
+	while(currentRange != nullptr)
+	{
+		auto line = editor.getDocument().getLine(currentRange->getLineRange().getStart()).trim();
+
+		if(line.startsWith("namespace"))
+		{
+			auto ptr = line.begin() + sizeof("namespace");
+			auto end = line.end();
+
+			while(ptr != end)
+			{
+				if(CharacterFunctions::isWhitespace(*ptr))
+					ptr++;
+				else
+					break;
+			}
+
+			auto idStart = ptr;
+
+			while(ptr != end)
+			{
+				if(CharacterFunctions::isLetterOrDigit(*ptr))
+					ptr++;
+				else
+					break;
+			}
+
+			auto idEnd = ptr;
+			auto id = String(idStart, idEnd).trim();
+
+			return id;
+		}
+
+		currentRange = currentRange->parent;
 	}
 
-	auto et = existingTokens.joinIntoString(";");
-
-	et = "";
-
-	String json(R"({
-    "model": "qwen2.5-coder-32b-instruct",
-     "messages": [
-      { "role": "system", "content": "You are a coding assistant that helps developers writing scripts for HISE. The prompt of the user will be: 
-                                      1. $Tokens: a list of available variable names and functions, separated by a semicolon
-									  2. $Code: the line of code that contains a compilation error
-									  3. $Error: the HISE console output error message. 
-									  Your task is to return the corrected line of code without any formatting or explanation. If you detect a spelling error, try to use the provided list of available variable names and functions." },
-      { "role": "user", "content": "$Tokens:
-    %TOKENS%
-    $Code:
-    %CODE%
-	$Error: 
-    %ERROR%" }
-    ],
-    "temperature": 0.1,
-    "max_tokens": -1,
-    "stream": false
-  })");
-
-	json = json.replace("%TOKENS%", et.replace("\"", "\\\""));
-	json = json.replace("%CODE%", errorLine.replace("\"", "\\\""));
-	json = json.replace("%ERROR%", errorMessage.replace("\"", "\\\""));
-
-	WeakReference<mcl::TextEditor> safeParent(&editor);
-
-	auto v = JSON::parse(json);
-	json = JSON::toString(v, true);
-
-	auto sel = editor.currentError->getSelection().horizontallyMaximized(editor.getTextDocument());
-
-	editor.getTextDocument().navigate(sel.head, TextDocument::Target::firstnonwhitespaceAfterLineBreak, TextDocument::Direction::forwardCol);
-
-	errorLine = editor.getTextDocument().getSelectionContent(sel);
-
-	button.setButtonText("Fixing...");
-
-	
-
-	Thread::launch([json, safeParent, sel]()
-	{
-		URL u("http://localhost:1234/api/v0/chat/completions/");
-
-		auto header = "Content-Type: application/json";
-		u = u.withPOSTData(json);
-
-		int status;
-
-		auto stream = u.createInputStream(true, nullptr, nullptr, header, 0, nullptr, &status);
-		auto response = stream->readEntireStreamAsString();
-
-		auto x = JSON::parse(response);
-		auto correction = x["choices"][0]["message"]["content"].toString();
-
-		correction = correction.replace("```javascript", "");
-		correction = correction.replace("```", "");
-		correction = correction.trim();
-		
-		if(safeParent != nullptr)
-		{
-			SafeAsyncCall::call<TextEditor>(*safeParent, [correction, sel](TextEditor& t)
-			{
-				t.getTextDocument().setSelection(0, sel, false);
-				t.insert(correction);
-				t.clearWarningsAndErrors();
-			});
-		}
-	});
-#endif
+	return {};
 }
 
 void mcl::TextEditor::updateViewTransform()
@@ -1656,6 +1781,9 @@ void mcl::TextEditor::updateViewTransform()
 		translation.x = thisGutterWidth;
 
 	closeAutocomplete(true, {}, {});
+
+	if(autofixButton != nullptr)
+		autofixButton->updatePosition();
 
 	transform = AffineTransform::scale(viewScaleFactor).translated(translation.x, translation.y);
 	highlight.setViewTransform(transform);
@@ -2449,6 +2577,8 @@ void TextEditor::initKeyPresses(Component* root)
     
     TopLevelWindowWithKeyMappings::addShortcut(root, category, TextEditorShortcuts::comment_line, "Toggle comment for line",
         KeyPress('#', ModifierKeys::commandModifier, 0));
+
+	TopLevelWindowWithKeyMappings::addShortcut(root, category, TextEditorShortcuts::beautify, "Beautify selection", KeyPress('b', ModifierKeys::commandModifier, 0));
 }
 
 struct TextEditor::DeactivatedRange
@@ -3068,7 +3198,49 @@ bool mcl::TextEditor::keyPressed (const KeyPress& key)
         
         return true;
     }
-    
+
+	if(keyMatchesId(key, TextEditorShortcuts::beautify))
+	{
+		auto s = document.getSelection(0);
+
+		Selection previous;
+		bool usePrevious = false;
+
+		if(s.isSingular())
+		{
+			usePrevious = true;
+			previous = s;
+			if(auto r = document.getFoldableLineRangeHolder().getRangeContainingLine(s.head.x))
+			{
+				auto lr = r->getLineRange();
+
+				if(lr.getLength() > 50)
+				{
+					for(auto c: r->children)
+					{
+						auto cr = c->getLineRange();
+						if(cr.contains(s.head.x))
+						{
+							lr = cr;
+							break;
+						}
+					}
+				}
+
+				s = Selection(lr.getStart(), 0, lr.getEnd(), 0);
+			}
+
+			document.setSelection(0, s, true);
+		}
+
+		auto beautified = LanguageManager::beautify(document.getSelectionContent(s));
+		insert(beautified);
+
+		if(usePrevious)
+			document.setSelection(0, previous, true);
+		return true;
+	}
+
 	if (keyMatchesId(key, TextEditorShortcuts::comment_line)) // "Cmd + #"
 	{
 		bool anythingCommented = false;

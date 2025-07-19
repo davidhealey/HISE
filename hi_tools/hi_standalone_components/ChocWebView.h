@@ -415,7 +415,9 @@ private:
 	float lastScaleFactor = 1.0f;
 
 	WebViewData::Ptr data;
+#if !JUCE_LINUX
 	ScopedPointer<choc::ui::WebView> webView;
+#endif
 	ScopedPointer<NativeUIBase> content;
 
 	JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(WebViewWrapper);
