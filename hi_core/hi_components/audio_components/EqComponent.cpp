@@ -1158,7 +1158,7 @@ void FilterDragOverlay::FilterDragComponent::mouseDrag(const MouseEvent& e)
 		parent.setEqAttribute(CurveEq::BandParameter::Q, index, qRange.convertFrom0to1(newValue));
 
 		broadcasterValue->setProperty("Q", qRange.convertFrom0to1(newValue));
-		parent.eq->sendBroadcasterMessage("QChanged", broadcasterValue);
+		parent.filterStats->sendBroadcasterMessage("QChanged", broadcasterValue);
 
 		return;
 	}
@@ -1195,15 +1195,15 @@ void FilterDragOverlay::FilterDragComponent::mouseDrag(const MouseEvent& e)
 	const double freq = jlimit<double>(20.0, 20000.0, (double)parent.filterGraph.xToFreq((float)x));
 	parent.setEqAttribute(CurveEq::BandParameter::Freq, index, freq);
 	broadcasterValue->setProperty("Frequency", freq);
-	broadcasterValue->setProperty("Gain", gain);	
-	parent.eq->sendBroadcasterMessage("BandMoved", broadcasterValue);
-
+	
 	if(yp == CurveEq::BandParameter::Gain)
 	{
 		const double gain = parent.filterGraph.yToGain((float)y, parent.gainRange);
 		parent.setEqAttribute(CurveEq::BandParameter::Gain, index, gain);
+		broadcasterValue->setProperty("Gain", gain);	
 	}
 
+	parent.filterStats->sendBroadcasterMessage("BandMoved", broadcasterValue);
 	parent.repaint();
 }
 
@@ -1231,7 +1231,7 @@ void FilterDragOverlay::FilterDragComponent::mouseWheelMove(const MouseEvent &e,
 
 		parent.setEqAttribute(CurveEq::BandParameter::Q, index, q);
 		broadcasterValue->setProperty("Q", q);
-		parent.eq->sendBroadcasterMessage("QChanged", broadcasterValue);
+		parent.filterStats->sendBroadcasterMessage("QChanged", broadcasterValue);
 	}
 	else
 	{
@@ -1286,7 +1286,7 @@ void FilterDragOverlay::FilterDragComponent::mouseEnter(const MouseEvent& e)
 	auto* broadcasterValue = new DynamicObject();
 	broadcasterValue->setProperty("Index", index);
 	broadcasterValue->setProperty("Over", true);
-	parent.eq->sendBroadcasterMessage("MouseOver", broadcasterValue);
+	parent.filterStats->sendBroadcasterMessage("MouseOver", broadcasterValue);
 	
 	parent.repaint();
 }
@@ -1298,7 +1298,7 @@ void FilterDragOverlay::FilterDragComponent::mouseExit(const MouseEvent& e)
 	auto* broadcasterValue = new DynamicObject();
 	broadcasterValue->setProperty("Index", index);
 	broadcasterValue->setProperty("Over", false);
-	parent.eq->sendBroadcasterMessage("MouseOver", broadcasterValue);
+	parent.filterStats->sendBroadcasterMessage("MouseOver", broadcasterValue);
 	
 	parent.repaint();
 }
