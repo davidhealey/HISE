@@ -232,7 +232,7 @@ public:
 		SimpleMarkdownDisplay& parent;
 	};
 
-	SimpleMarkdownDisplay();
+	SimpleMarkdownDisplay(const String& name=String());
 
 	void setText(const String& text);
 
@@ -251,6 +251,8 @@ public:
 	InternalComp canvas;
     
     ScrollbarFader sf;
+
+	JUCE_DECLARE_WEAK_REFERENCEABLE(MarkdownRenderer);
 };
 
 class MarkdownPreview : public Component,

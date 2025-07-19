@@ -270,7 +270,8 @@ struct HiseJavascriptEngine::RootObject::ExpressionTreeBuilder : private TokenIt
 {
 	ExpressionTreeBuilder(const String code, const String externalFile, HiseJavascriptPreprocessor::Ptr preprocessor_) :
 		TokenIterator(code, externalFile),
-		preprocessor(preprocessor_)
+		preprocessor(preprocessor_),
+	    currentErrorLocation(nullptr)
 	{
 #if ENABLE_SCRIPTING_BREAKPOINTS
 		if (externalFile.isNotEmpty())
@@ -545,7 +546,20 @@ private:
 		return currentNamespace;
 	}
 
-	void throwError(const String& err) const  { location.throwError(err); }
+	void throwError(const String& err) const
+	{
+		if(currentErrorLocation.getAddress() != nullptr)
+		{
+			auto copy = location;
+			copy.location = currentErrorLocation;
+			copy.throwError(err);
+		}
+		else
+		{
+			location.throwError(err);
+		}
+		
+	}
 
 	template <typename OpType>
 	Expression* parseInPlaceOpExpression(ExpPtr& lhs)
@@ -1920,8 +1934,28 @@ private:
 		return matchCloseParen(s.release());
 	}
 
+	struct ScopedErrorLocation
+	{
+		ScopedErrorLocation(ExpressionTreeBuilder& tb):
+		  parent(tb)
+		{
+			parent.currentErrorLocation = parent.location.location;
+		}
+
+		~ScopedErrorLocation()
+		{
+			parent.currentErrorLocation = {};
+		}
+
+		ExpressionTreeBuilder& parent;
+	};
+
+	String::CharPointerType currentErrorLocation;
+
 	Expression* parseApiExpression()
 	{
+		ScopedErrorLocation loc(*this);
+
 		const Identifier apiId = parseIdentifier();
 		const int apiIndex = hiseSpecialData->apiIds.indexOf(apiId);
 		ApiClass *apiClass = hiseSpecialData->apiClasses.getUnchecked(apiIndex).get();
@@ -1972,25 +2006,32 @@ private:
 		s->functionName = functionName.toString();
 #endif
 
-		match(TokenTypes::openParen);
-
-		int numActualArguments = 0;
-
-		while (currentType != TokenTypes::closeParen)
+		if(matchIf(TokenTypes::openParen))
 		{
-			if (numActualArguments < numArgs)
+			int numActualArguments = 0;
+
+			while (currentType != TokenTypes::closeParen)
 			{
-				s->argumentList[numActualArguments++] = parseExpression();
+				if (numActualArguments < numArgs)
+				{
+					s->argumentList[numActualArguments++] = parseExpression();
 
-				if (currentType != TokenTypes::closeParen)
-					match(TokenTypes::comma);
+					if (currentType != TokenTypes::closeParen)
+						match(TokenTypes::comma);
+				}
+				else throwError("Too many arguments in API call " + prettyName + "(). Expected: " + String(numArgs));
 			}
-			else throwError("Too many arguments in API call " + prettyName + "(). Expected: " + String(numArgs));
+
+			if (numArgs != numActualArguments) throwError("Call to " + prettyName + "(): argument number mismatch : " + String(numActualArguments) + " (Expected : " + String(numArgs) + ")");
+
+			return matchCloseParen(s.release());
 		}
-
-		if (numArgs != numActualArguments) throwError("Call to " + prettyName + "(): argument number mismatch : " + String(numActualArguments) + " (Expected : " + String(numArgs) + ")");
-
-		return matchCloseParen(s.release());
+		else
+		{
+			ApiCall::DynamicCall call(location, apiClass, numArgs, functionIndex);
+			
+			return new LiteralValue(location, var(call));
+		}
 	}
 
 	Expression* parseConstExpression(JavascriptNamespace* ns=nullptr)
@@ -2249,7 +2290,9 @@ private:
 						}
 					}
 
-					return parseSuffixes(new UnqualifiedName(location, parseIdentifier(), false));
+					auto loc = location;
+
+					return parseSuffixes(new UnqualifiedName(loc, parseIdentifier(), false));
 				}
 			}
 		}

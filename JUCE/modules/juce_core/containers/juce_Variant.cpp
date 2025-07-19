@@ -33,7 +33,8 @@ namespace juce
 		varMarker_Int64 = 6,
 		varMarker_Array = 7,
 		varMarker_Binary = 8,
-		varMarker_Undefined = 9
+		varMarker_Undefined = 9,
+		varMarker_Object = 10,
 	};
 
 	//==============================================================================
@@ -343,10 +344,15 @@ namespace juce
 			return otherType.toObject(otherData) == data.objectValue;
 		}
 
-		static void objectWriteToStream(const ValueUnion&, OutputStream& output)
+		static void objectWriteToStream(const ValueUnion& obj, OutputStream& output)
 		{
-			jassertfalse; // Can't write an object to a stream!
-			output.writeCompressedInt(0);
+			MemoryOutputStream mos;
+			dynamic_cast<ObjectWithJSONConverter*>(obj.objectValue)->writeToStream(mos);
+			mos.flush();
+
+			output.writeCompressedInt((int)mos.getDataSize());
+			output.writeByte(varMarker_Object);
+			output << mos;
 		}
 
 		constexpr explicit VariantType(ObjectTag) noexcept
@@ -381,29 +387,17 @@ namespace juce
 			return otherType.toObject(otherData) == data.objectValue;
 		}
 
-		static var bufferClone(const var& original)
-		{
-			if(original.isBuffer())
-			{
-				// This is ugly, the VariantBuffer::clone() method
-				// does not cause the internal type to switch to buffer
-				// so you get a var::instanceObject type
-				auto ptr = original.getDynamicObject()->clone();
-				var dyn(ptr.get());
-				return var((VariantBuffer*)dyn.getObject());
-			}
-			
-			if (DynamicObject* d = original.getDynamicObject())
-				return d->clone().get();
+		static var bufferClone(const var& original);
 
-			jassertfalse; // can only clone DynamicObjects!
-			return var();
-		}
-
-		static void bufferWriteToStream(const ValueUnion&, OutputStream& output)
+		static void bufferWriteToStream(const ValueUnion& v, OutputStream& output)
 		{
-			jassertfalse; // Can't write an object to a stream!
-			output.writeCompressedInt(0);
+			MemoryOutputStream mos;
+			dynamic_cast<ObjectWithJSONConverter*>(v.objectValue)->writeToStream(mos);
+			mos.flush();
+
+			output.writeCompressedInt((int)mos.getDataSize());
+			output.writeByte(varMarker_Object);
+			output << mos;
 		}
 
 		constexpr explicit VariantType(BufferTag) noexcept
@@ -545,8 +539,7 @@ namespace juce
 			writeToStream(methodWriteToStream) {}
 	};
 
-
-
+	
 
 
 	struct var::Instance
@@ -581,8 +574,6 @@ namespace juce
 	//==============================================================================
 	var::var() noexcept : type(&Instance::attributesVoid) {}
 	var::var(const VariantType& t) noexcept : type(&t) {}
-
-
 
 	var::~var() noexcept { type->cleanUp(value); }
 
@@ -981,6 +972,23 @@ namespace juce
 
 				return v;
 			}
+			case varMarker_Object:
+			{
+				auto obj = ObjectWithJSONConverter::createFromMarker(input);
+				jassert(obj.first != 0 && obj.second != nullptr);
+
+				auto refObj = dynamic_cast<ReferenceCountedObject*>(obj.second);
+
+				jassert(refObj != nullptr);
+				jassert(refObj->getReferenceCount() == 0);
+
+				var x(refObj);
+
+				if(obj.first == 3) // uggo to the max, this is the stream marker for the VariantBuffer...
+					x.type = &Instance::attributesBuffer;
+
+				return x;
+			}
 
 			default:
 				input.skipNextBytes(numBytes - 1); break;
@@ -988,6 +996,19 @@ namespace juce
 		}
 
 		return {};
+	}
+
+	var var::VariantType::bufferClone(const var& original)
+	{
+		var x;
+
+		if (DynamicObject* d = original.getDynamicObject())
+			x = d->clone().get();
+
+		if(original.isBuffer())
+			x.type = &Instance::attributesBuffer;
+
+		return x;
 	}
 
 	var::NativeFunctionArgs::NativeFunctionArgs(const var& t, const var* args, int numArgs) noexcept

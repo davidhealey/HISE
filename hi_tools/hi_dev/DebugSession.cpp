@@ -35,7 +35,7 @@ namespace hise { using namespace juce;
 DebugSession::DebugSession(PooledUIUpdater* updater):
 	PooledUIUpdater::SimpleTimer(updater, true)
 {
-	
+	setEnableProfiling("Processing profile data");
 }
 
 DebugSession::~DebugSession()
@@ -287,6 +287,9 @@ Component* DebugSession::ItemBase::createComponent(bool forceJSON)
 {
 	auto data = getVariantCopy();
 
+	if(!forceJSON && RectViewer::wantsRectangleViewer(data))
+		return new RectViewer(getTextForName(), data);
+
 	if(!forceJSON && BufferViewer::isArrayOrBuffer(getVariantCopy()))
 		return new BufferViewer(this, p);
 
@@ -342,7 +345,15 @@ String DebugSession::ProfileDataSource::ViewComponents::Helpers::getDuration(flo
 
 	if(domain == TimeDomain::Absolute)
 	{
-		m << String(w) << "ms";
+		if(w < 0.005)
+		{
+			
+			m << String(w * 1000.0, 3) << " " << String::charToString(181) << "s";
+		}
+		else
+		{
+			m << String(w, 3) << " ms";
+		}
 	}
 	if(domain == TimeDomain::Relative)
 	{
@@ -351,10 +362,10 @@ String DebugSession::ProfileDataSource::ViewComponents::Helpers::getDuration(flo
 	}
 	if(domain == TimeDomain::FPS60)
 	{
-		w *= 0.001;
+		w *= 0.001f;
 		w = jmax(0.0001f, w);
-		auto frameTime = 1.0 / w;
-		m << String(frameTime, 1) << "FPS";
+		auto frameTime = 1.0f / w;
+		m << String(frameTime, 1) << " FPS";
 	}
 	if(domain == TimeDomain::CpuUsage)
 	{
@@ -969,7 +980,7 @@ Component* DebugSession::ProfileDataSource::ProfileInfoBase::createPopupComponen
 
 Component* DebugSession::ProfileDataSource::ProfileInfoBase::createComponent()
 {
-	return new ViewComponents::Viewer(this, d);
+	return new ViewComponents::Viewer(this, d, true);
 }
 
 void DebugSession::ProfileDataSource::ProfileInfoBase::addChild(ProfileInfoBase::Ptr p)
@@ -1065,7 +1076,11 @@ void DebugSession::startRecording(double milliSeconds, ApiProviderBase::Holder* 
 	if(nextState.load() == RecordingState::Idle)
 	{
 		nextState.store(RecordingState::Armed);
-		recordingDelta = milliSeconds;
+		recordingDelta = currentOptions.millisecondsToRecord;// milliSeconds;
+
+		if(currentOptions.trigger != TriggerType::Manual)
+			recordingDelta = 20000.0;
+
 		recordHolder = h;
 
 		if(MessageManager::getInstanceWithoutCreating()->currentThreadHasLockedMessageManager())
@@ -1109,6 +1124,19 @@ void DebugSession::checkAudioThreadRecorders()
 {
 	for(auto r: audioThreadRecorders)
 		r->checkRecording();
+}
+
+void DebugSession::checkMouseClickProfiler(bool isDown)
+{
+	if(currentOptions.trigger == TriggerType::MouseClick)
+	{
+		if(isDown)
+			startRecording(-1.0, this);
+		else
+		{
+			recordingDelta = 100.0;
+		}
+	}
 }
 
 int DebugSession::openTrackEvent()
@@ -1216,6 +1244,11 @@ void DebugSession::timerCallback()
 	
 	if(nextState == RecordingState::Armed)
 	{
+		for(auto& tv: multithreadedEventQueue)
+		{
+			tv->stack.clear();
+		}
+
 		if(isEventQueueEmpty())
 		{
 			ScopedLock sl(recordingLock);
@@ -1303,7 +1336,7 @@ void DebugSession::timerCallback()
 
 		for(auto& q: multithreadedEventQueue)
 		{
-			for(int i = q->stack.size() - 1; i >= 0; i--)
+			for(int i = (int)q->stack.size() - 1; i >= 0; i--)
 				q->queue.push({q->stack[i]->data.source.get(), recordingStart, false});
 		}
 
@@ -1312,6 +1345,11 @@ void DebugSession::timerCallback()
 			for(auto& r: flushedRoots)
 			{
 				auto tr = r.second->data.source->threadRoot;
+
+				auto addThread = std::find(currentOptions.threadFilter.begin(), currentOptions.threadFilter.end(), tr) != currentOptions.threadFilter.end();
+
+				if(!addThread)
+					continue;
 
 				if(tr != ThreadIdentifier::Type::Undefined && !r.second->children.isEmpty())
 				{
@@ -1425,8 +1463,6 @@ void DebugSession::processEventQueue()
 				}
 				else
 				{
-					auto isScript = t->thread.type == ThreadIdentifier::Type::ScriptingThread;
-
 					if(!t->stack.empty())
 					{
 						auto ni = t->stack.back();
@@ -1514,12 +1550,15 @@ bool DebugSession::isEventQueueEmpty()
 
 var DebugSession::Session::getVariantCopy() const
 {
-	Array<var> d;
+	DynamicObject::Ptr no = new DynamicObject();
 
 	for(auto g: valueGroup)
-		d.add(g->getVariantCopy());
-
-	return var(d);
+	{
+		no->setProperty(g->label, g->getVariantCopy());
+	}
+		
+	
+	return var(no.get());
 }
 
 int DebugSession::Session::ValueGroup::getNumChildElements() const
@@ -1543,11 +1582,31 @@ DebugInformationBase::Ptr DebugSession::Session::ValueGroup::getChildElement(int
 
 var DebugSession::Session::ValueGroup::getVariantCopy() const
 {
-	Array<var> data;
+	if(dataItems.size() == 1)
+		return dataItems.getFirst()->data;
 
-	for(auto d: dataItems)
-		data.add(d->data);
+	auto sameLabels = true;
 
-	return var(data);
+	for(int i = 1; i < dataItems.size(); i++)
+		sameLabels &= dataItems[i]->label == dataItems[0]->label;
+
+	if(sameLabels)
+	{
+		Array<var> data;
+
+		for(auto d: dataItems)
+			data.add(d->data);
+
+		return var(data);
+	}
+	else
+	{
+		auto no = new DynamicObject();
+
+		for(auto d: dataItems)
+			no->setProperty(d->label, d->data);
+
+		return var(no);
+	}
 }
 } // namespace hise

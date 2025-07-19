@@ -41,6 +41,8 @@
  * - coallascate selection & assign button
  */
 
+#include "hi_core/hi_core/PresetHandler.h"
+
 namespace hise {
 using namespace juce;
 
@@ -138,13 +140,7 @@ ComponentWithGroupManagerConnection::ComponentWithGroupManagerConnection(Modulat
 	sampler(s)
 {}
 
-String ComponentWithGroupManagerConnection::getSampleFilename(const ModulatorSamplerSound* s, bool withExtension)
-{
-	auto fn = s->getPropertyAsString(SampleIds::FileName);
-	PoolReference ref(getMainController(), fn, ProjectHandler::Samples);
-	auto file = ref.getFile();
-	return withExtension ? file.getFileName() : file.getFileNameWithoutExtension();
-}
+
 
 
 void ComplexGroupManagerComponent::Helpers::drawSelection(Graphics& g, Rectangle<int> bounds)
@@ -198,7 +194,7 @@ Colour ComplexGroupManagerComponent::Helpers::getLayerColour(const ValueTree& v)
 ComplexGroupManagerComponent::LayerComponent::LayerComponent(ComponentWithGroupManagerConnection& parent, const ValueTree& d_, LogicType lt):
 	ComponentWithGroupManagerConnection(parent.getSampler()),
 	type(lt),
-	clearButton("delete", nullptr, f),
+	clearButton("more", nullptr, f),
 	data(d_)
 {
 	p = Helpers::getPath(type);
@@ -209,9 +205,106 @@ ComplexGroupManagerComponent::LayerComponent::LayerComponent(ComponentWithGroupM
 
 	clearButton.onClick = [this]()
 	{
+		PopupLookAndFeel plaf;
+		PopupMenu m;
+
 		
-		findParentComponentOfClass<Content>()->removeLayer(data);
+		m.addItem(1, "Change layer ID");
+		m.addItem(2, "Change layer groups");
+		m.addSeparator();
+		m.addItem(3, "Purgable", true, this->data[groupIds::purgable]);
+		m.addItem(4, "Ignorable", true, this->data[groupIds::ignorable]);
+		m.addItem(5, "Cacheable", true, this->data[groupIds::cached]);
+		m.addSeparator();
+		m.addItem(6, "Reset all sample group values");
+		m.addItem(7, "Delete layer");
+
+		auto before = data.createCopy();
+
+		auto r = m.show();
+
+		bool rebuild = r == 1 || r == 2 || r == 4;
+		
+		// deleting / modifying the last layer will not invalidate the bitmasks so this should be fine
+		rebuild &= data.getParent().indexOf(data) != (data.getParent().getNumChildren() - 1);
+
+		if(rebuild)
+		{
+			if(PresetHandler::showYesNoWindow("Confirm layer change", "Changing this property of this layer will invalidate the bitmask of every sample.  \n> Press OK to reset the layer assignments of all currently mapped samples."))
+			{
+				ModulatorSampler::SoundIterator iter(getSampler());
+
+				while(auto s = iter.getNextSound())
+					s->setBitmask(0);
+			}
+			else
+			{
+				return;
+			}
+		}
+
+		try
+		{
+			if(r == 1)
+			{
+				auto id = Helpers::getId(data).toString();
+				auto newId = PresetHandler::getCustomName(id, "Enter a new name for this layer.  \n> This ID is used to access the layer through the scripting API so changing this might break the connection!");
+
+				if(newId != id)
+					data.setProperty(groupIds::id, newId, getUndoManager());
+
+				repaint();
+			}
+			if(r == 6)
+			{
+				ModulatorSampler::SoundIterator iter(getSampler());
+
+				Array<Identifier> ids = { Helpers::getId(data) };
+
+				while(auto s = iter.getNextSound())
+				{
+					getComplexGroupManager()->clearSampleId(s, ids, true);
+				}
+			}
+			if(r == 7)
+			{
+				findParentComponentOfClass<Content>()->removeLayer(data);
+			}
+			if(r == 2)
+			{
+				auto tokens = this->data[groupIds::tokens].toString();
+				auto newTokens = PresetHandler::getCustomName(tokens, "Enter a comma separated list of group tokens");
+
+				if(newTokens.isNotEmpty() && newTokens != tokens)
+				{
+					data.setProperty(groupIds::tokens, newTokens, getUndoManager());
+				}
+			}
+			if(r == 3)
+			{
+				this->data.setProperty(groupIds::purgable, !(bool)data[groupIds::purgable], getUndoManager());
+			}
+			if(r == 4)
+			{
+				this->data.setProperty(groupIds::ignorable, !(bool)data[groupIds::ignorable], getUndoManager());
+			}
+			if(r == 5)
+			{
+				this->data.setProperty(groupIds::cached, !(bool)data[groupIds::cached], getUndoManager());
+			}
+		}
+		catch(Result& r)
+		{
+			PresetHandler::showMessageWindow("Error at changing property", r.getErrorMessage(), PresetHandler::IconType::Error);
+			data.copyPropertiesAndChildrenFrom(before, getUndoManager());
+
+		}
 	};
+
+	foldListener.setCallback(data, { PropertyIds::Folded }, valuetree::AsyncMode::Asynchronously, [this](const Identifier& id, const var& newValue)
+	{
+		findParentComponentOfClass<Content>()->updateSize();
+	});
 
 	addAndMakeVisible(clearButton);
 }
@@ -247,11 +340,21 @@ void ComplexGroupManagerComponent::LayerComponent::paint(Graphics& g)
 		
 	g.fillRect(topBar.reduced(3));
 
-	if(typeName.isNotEmpty())
+	auto textToShow = typeName;
+
+	if(data.getType() == groupIds::Layer)
+	{
+		auto id = Helpers::getId(data);
+
+		if(!id.isNull())
+			textToShow = id.toString();
+	}
+
+	if(textToShow.isNotEmpty())
 	{
 		g.setColour(Colours::white);
 		g.setFont(GLOBAL_BOLD_FONT());
-		g.drawText(typeName, topBar, Justification::centred);
+		g.drawText(textToShow, topBar, Justification::centred);
 	}
 
 	drawLabelsAndRulers(g);
@@ -279,46 +382,41 @@ void ComplexGroupManagerComponent::LayerComponent::updateHeight(int newHeight)
 
 ComplexGroupManagerComponent::LogicTypeComponent::Parser::Parser(ComponentWithGroupManagerConnection& parent,
 	const ValueTree& v):
-	FileTokenSelector(parent, Helpers::getTokens(v), v[groupIds::ignorable])
+	FileTokenSelector(parent, Helpers::getTokens(v), v[groupIds::ignorable], false)
 {}
 
 ComplexGroupManagerComponent::LogicTypeComponent::LogicTypeComponent(ComponentWithGroupManagerConnection& parent, const ValueTree& d):
 	LayerComponent(parent, d, Helpers::getLogicType(d)),
-	items(Helpers::getTokens(d)),
-	countButton("count", this, f),
-	parseButton("parse", this, f),
+	items(Helpers::getTokens(d, getSampler())),
 	lockButton("lock", this, f),
 	midiButton("midi", this, f),
 	parser(parent, d)
 {
-	addAndMakeVisible(countButton);
-	addAndMakeVisible(parseButton);
 	addAndMakeVisible(lockButton);
 	addAndMakeVisible(midiButton);
 
-	addAndMakeVisible(unassignedLabel);
-	addAndMakeVisible(ignoreLabel);
+	//addAndMakeVisible(unassignedLabel);
+	//addAndMakeVisible(ignoreLabel);
 
-	unassignedLabel.setLookAndFeel(&laf);
-	ignoreLabel.setLookAndFeel(&laf);
+	//unassignedLabel.setLookAndFeel(&laf);
+	//ignoreLabel.setLookAndFeel(&laf);
 
-	unassignedLabel.setEditable(false, false);
-	ignoreLabel.setEditable(false, false);
+	//unassignedLabel.setEditable(false, false);
+	//ignoreLabel.setEditable(false, false);
 
-	unassignedLabel.setText("Unassigned", dontSendNotification);
-	ignoreLabel.setText("Unassigned", dontSendNotification);
+	//unassignedLabel.setText("Unassigned", dontSendNotification);
+	//unassignedLabel.setTooltip("The number of samples that are not assigned on this layer");
+	//ignoreLabel.setText("Ignored", dontSendNotification);
+	//ignoreLabel.setTooltip("The number of samples that are ignored by this layer");
 
-	countButton.setTooltip("Show the number of samples that are assigned / unassigned to this layer.");
-	parseButton.setTooltip("Assign / unassign the selected samples to this layer based on their filename tokens.");
+	
 	lockButton.setTooltip("Lock the current state of this layer regardless of the MIDI input.");
 	midiButton.setTooltip("Make the UI display follow the last active state of this layer");
 
 	lockButton.setToggleModeWithColourChange(true);
 	midiButton.setToggleModeWithColourChange(true);
-	countButton.setToggleModeWithColourChange(true);
-	parseButton.setToggleModeWithColourChange(true);
 	
-	addAndMakeVisible(parser);
+	addChildComponent(parser);
 
 	typeName << " (" << String(items.size()) << " " << Helpers::getItemName(type, items) << ")";
 
@@ -334,10 +432,7 @@ ComplexGroupManagerComponent::LogicTypeComponent::LogicTypeComponent(ComponentWi
 
 void ComplexGroupManagerComponent::LogicTypeComponent::buttonClicked(Button* b)
 {
-	if(b == &countButton)
-		showSelectors(b->getToggleState());
-	if(b == &parseButton)
-		updateHeight(getHeightToUse());
+	
 	if(b == &lockButton)
 	{
 		auto idx = Helpers::getLayerIndex(data);
@@ -346,10 +441,21 @@ void ComplexGroupManagerComponent::LogicTypeComponent::buttonClicked(Button* b)
 	
 }
 
-ComplexGroupManagerComponent::LogicTypeComponent::BodyBase::ButtonBase::ButtonBase()
+ComplexGroupManagerComponent::LogicTypeComponent::BodyBase::ButtonBase::ButtonBase(const ValueTree& v, uint8 layerIndex_):
+  layerIndex(layerIndex_)
 {
 	setRepaintsOnMouseActivity(true);
-	setTooltip("Click to show only samples from this group.");
+
+	if(layerIndex == 0)
+		setTooltip("Click to show all samples that are not assigned to this group");
+	else if(layerIndex == ComplexGroupManager::IgnoreFlag)
+		setTooltip("Click to show all samples that are ignored by this group");
+	else
+	{
+		auto groupName = Helpers::getTokens(v)[layerIndex-1];
+		setTooltip("Click to show only samples from the group " + groupName);
+	}
+		
 }
 
 bool ComplexGroupManagerComponent::LogicTypeComponent::BodyBase::ButtonBase::isDisplayed() const
@@ -410,8 +516,9 @@ void ComplexGroupManagerComponent::LogicTypeComponent::BodyBase::ButtonBase::set
 	repaint();
 }
 
-ComplexGroupManagerComponent::LogicTypeComponent::BodyBase::KeyswitchButton::KeyswitchButton(const String& n,
+ComplexGroupManagerComponent::LogicTypeComponent::BodyBase::KeyswitchButton::KeyswitchButton(const ValueTree& layerData, uint8 layerIndex_, const String& n,
                                                                                              bool addPowerButton):
+	ButtonBase(layerData, layerIndex_),
 	name(n)
 {
 	if(addPowerButton)
@@ -461,36 +568,6 @@ void ComplexGroupManagerComponent::LogicTypeComponent::BodyBase::KeyswitchButton
 	g.drawText(name, b, Justification::centred);
 }
 
-ComplexGroupManagerComponent::LogicTypeComponent::BodyBase::SelectionTag::SelectionTag(LogicTypeComponent& parent,
-	Component* other, uint8 specialValue):
-	layerIndex(Helpers::getLayerIndex(parent.data)),
-	target(other),
-	layerValue(specialValue)
-{
-	setMouseCursor(MouseCursor::PointingHandCursor);
-	target->addComponentListener(this);
-	refreshNumSamples();
-	setRepaintsOnMouseActivity(true);
-
-	auto t = target->findParentComponentOfClass<ComplexGroupManagerComponent>();
-
-	String msg;
-
-	if(layerValue == 0)
-	{
-		msg << "Select all samples that are not assigned to any group within the " ;
-	}
-	else
-	{
-		msg << "Select all samples that are ignored by the ";
-	}
-
-	msg << t->getComplexGroupManager()->getLayerId(layerIndex);
-	msg << " layer";
-	
-	setTooltip(msg);
-}
-
 ComplexGroupManagerComponent::LogicTypeComponent::BodyBase::SelectionTag::SelectionTag(ButtonBase* attachedButton,
                                                                                        uint8 layerIndex_, uint8 layerValue_):
 	target(attachedButton),
@@ -500,17 +577,37 @@ ComplexGroupManagerComponent::LogicTypeComponent::BodyBase::SelectionTag::Select
 	setMouseCursor(MouseCursor::PointingHandCursor);
 	attachedButton->addComponentListener(this);
 	refreshNumSamples();
+	setRepaintsOnMouseActivity(true);
 
 	auto t = target->findParentComponentOfClass<ComplexGroupManagerComponent>();
 
+
 	String msg;
-	msg << "Select all samples that are assigned to ";
-	msg << t->getComplexGroupManager()->getLayerValueAsToken(layerIndex, layerValue);
+
+	if(layerValue == 0)
+	{
+		msg << "Select all samples that are not assigned to any group within the " ;
+		msg << t->getComplexGroupManager()->getLayerId(layerIndex);
+		msg << " layer";
+	}
+	else if (layerValue == ComplexGroupManager::IgnoreFlag)
+	{
+		msg << "Select all samples that are ignored by the ";
+		msg << t->getComplexGroupManager()->getLayerId(layerIndex);
+		msg << " layer";
+	}
+	else
+	{
+		msg << "Select all samples that are assigned to ";
+		msg << t->getComplexGroupManager()->getLayerValueAsToken(layerIndex, layerValue);
+	}
+
 	setTooltip(msg);
 }
 
 void ComplexGroupManagerComponent::LogicTypeComponent::BodyBase::SelectionTag::mouseDown(const MouseEvent& e)
 {
+	active = true;
 	findParentComponentOfClass<ComplexGroupManagerComponent>()->addSelectionFilter({layerIndex, layerValue}, e.mods);
 }
 
@@ -558,7 +655,7 @@ ComplexGroupManagerComponent::LogicTypeComponent::BodyBase::SelectionTag::~Selec
 
 void ComplexGroupManagerComponent::LogicTypeComponent::BodyBase::SelectionTag::paint(Graphics& g)
 {
-	auto active = findParentComponentOfClass<ComplexGroupManagerComponent>()->isFilterSelected({layerIndex, layerValue});
+	//auto active = findParentComponentOfClass<ComplexGroupManagerComponent>()->isFilterSelected({layerIndex, layerValue});
 
 	auto b = getLocalBounds().toFloat().reduced(1.0f);
 
@@ -597,26 +694,45 @@ ComplexGroupManagerComponent::LogicTypeComponent::BodyBase::BodyBase(LogicTypeCo
 	ComponentWithGroupManagerConnection(parent.getSampler()),
 	lt(parent.type),
 	tokens(parent.items),
-	data(parent.data)
+	data(parent.data),
+	unassignedButton(new UnassignedButton(parent.data)),
+	ignoreButton(new IgnoreButton(parent.data)),
+	updater(*this)
 {
+	parent.getSampler()->getSampleMap()->addListener(this);
+
+	addChildComponent(unassignedButton);
+	addChildComponent(ignoreButton);
+
 	getComplexGroupManager()->lockBroadcaster.addListener(*this, onLockUpdate);
 }
 
 void ComplexGroupManagerComponent::LogicTypeComponent::BodyBase::showSelectors(bool shouldShow)
 {
-	auto showSelectors = selectors.size() == buttons.size();
+	auto showSelectors = selectors.size() > 0;
+
+
 
 	if(shouldShow != showSelectors)
 	{
+		showSelectors = shouldShow;
+
 		selectors.clear();
 
 		if(shouldShow)
 		{
 			auto layerIndex = Helpers::getLayerIndex(data);
+
+			if(unassignedButton->isVisible())
+				addAndMakeVisible(selectors.add(new SelectionTag(unassignedButton, layerIndex, 0)));
+
 			uint8 layerValue = 1;
-						
+
 			for(auto b: buttons)
 				addAndMakeVisible(selectors.add(new SelectionTag(b, layerIndex, layerValue++)));
+
+			if(ignoreButton->isVisible())
+				addAndMakeVisible(selectors.add(new SelectionTag(ignoreButton, layerIndex, ComplexGroupManager::IgnoreFlag)));
 		}
 	}
 	else
@@ -707,7 +823,13 @@ void ComplexGroupManagerComponent::LogicTypeComponent::BodyBase::paint(Graphics&
 		f.scalePath(p, pb);
 		g.setColour(Colours::white.withAlpha(0.4f));
 		g.fillPath(p);
+	}
 
+	if(buttons.isEmpty())
+	{
+		g.setColour(Colours::white.withAlpha(0.4f));
+		g.setFont(GLOBAL_BOLD_FONT());
+		g.drawText("No groups in this layer", getLocalBounds().toFloat().reduced(5.0f), Justification::centredTop);
 	}
 }
 
@@ -879,37 +1001,70 @@ void ComplexGroupManagerComponent::LogicTypeComponent::SampleCountComponent::pai
 }
 #endif
 
-ComplexGroupManagerComponent::FileTokenSelector::FileTokenSelector(ComponentWithGroupManagerConnection& parent, const StringArray& layerTokens_, bool showIgnoreButton):
+ComplexGroupManagerComponent::FileTokenSelector::FileTokenSelector(ComponentWithGroupManagerConnection& parent, const StringArray& layerTokens_, bool showIgnoreButton, bool addMode_):
 	ComponentWithGroupManagerConnection(parent.getSampler()),
 	layerTokens(layerTokens_),
-	ignoreButton("ignore", nullptr, f)
+	applyButton("apply", nullptr, f),
+	ignoreable(showIgnoreButton),
+	addMode(addMode_)
 {
-	addAndMakeVisible(ignoreButton);
-	
-	ignoreButton.setTooltip("Set the ignore flag for this layer");
-	ignoreButton.setToggleModeWithColourChange(true);
-	ignoreButton.setVisible(showIgnoreButton);
+	addAndMakeVisible(applyButton);
 
-	modeSelector.addItemList({ "File tokens", "Set to group"}, 1);
-	addAndMakeVisible(modeSelector);
-
-	modeSelector.setLookAndFeel(&laf);
-
-	ignoreButton.onClick = [this]()
+	applyButton.onClick = [this]()
 	{
-		setActiveToken(ignoreButton.getToggleState() ? ComplexGroupManager::IgnoreFlag : -1);
+		this->performAction();
 	};
+
+
+	if(addMode)
+	{
+		currentAction = Action::ParseFileToken;
+
+	}
+	else
+	{
+		modeSelector.setUseCustomPopup(true);
+		rebuildComboBox();
+		addAndMakeVisible(modeSelector);
+		modeSelector.setLookAndFeel(&laf);
+		modeSelector.setSelectedItemIndex(0, dontSendNotification);
+	}
 
 	modeSelector.onChange = [this]()
 	{
-		updateSelection(currentSampleName);
+		currentAction = (Action)modeSelector.getSelectedItemIndex();
+		updateSelection(currentFileTokens);
 	};
 
 	updateSelection({});
+	
+	getSampleEditHandler()->selectionBroadcaster.addListener(*this, [](FileTokenSelector& s, ModulatorSamplerSound::Ptr fs, int)
+	{
+		auto fileTokens = Helpers::getFileTokens(fs.get());
+
+		s.updateSelection(fileTokens);
+	});
+
+}
+
+void ComplexGroupManagerComponent::FileTokenSelector::checkApplyState()
+{
+	auto enabled = currentAction != Action::DoNothing;
+
+	enabled &= getSampleEditHandler()->getNumSelected() > 0;
+	applyButton.setEnabled(enabled);
+
+	applyButton.setAlpha(enabled ? 1.0 : 0.4f);
+
+	for(auto t: tokens)
+	{
+		t->setEnabled(enabled);
+		t->setAlpha(enabled ? 1.0 : 0.4f);
+	}
 }
 
 void ComplexGroupManagerComponent::SelectorLookAndFeel::drawComboBox(Graphics& g, int i, int i1, bool isButtonDown,
-	int buttonX, int buttonY, int buttonW, int buttonH, ComboBox& cb)
+                                                                     int buttonX, int buttonY, int buttonW, int buttonH, ComboBox& cb)
 {
 	auto b = cb.getLocalBounds();
 
@@ -1008,34 +1163,70 @@ void ComplexGroupManagerComponent::FileTokenSelector::FileToken::setActive(bool 
 	repaint();
 }
 
-void ComplexGroupManagerComponent::FileTokenSelector::setActiveToken(int idx)
+void ComplexGroupManagerComponent::FileTokenSelector::rebuildComboBox()
 {
-	for(auto t: tokens)
-	{
-		if(useFileTokens())
-		{
-			auto isOk = layerTokens.contains(t->token) || layerTokens.isEmpty();
+	checkApplyState();
 
-			if(idx == ComplexGroupManager::IgnoreFlag)
-				t->setActive(false, isOk);
-			else if(idx == -1 && layerTokens.contains(t->token))
-				t->setActive(true, isOk);
-			else if (idx != -1 && tokens.indexOf(t) == idx)
-				t->setActive(true, isOk);
-			else
-				t->setActive(false, isOk);
-		}
-		else
+	auto idx = jmax(0, modeSelector.getSelectedItemIndex());
+	modeSelector.clear(dontSendNotification);
+
+	canUseFileTokens = false;
+
+	auto validNames = getValidTokens();
+
+	for(int i = 0; i < currentFileTokens.size(); i++)
+	{
+		auto match = validNames.contains(currentFileTokens[i]);
+
+		if(match && currentAction == Action::ParseFileToken)
 		{
-			if(idx == ComplexGroupManager::IgnoreFlag)
-				t->setActive(false, true);
-			else
-				t->setActive(idx == tokens.indexOf(t), true);
+			setActiveToken(i);
 		}
-		
+
+		canUseFileTokens |= match;
 	}
 
-	ignoreButton.setToggleStateAndUpdateIcon(idx == ComplexGroupManager::IgnoreFlag);
+	auto getDisabledString = [](const String& s, bool enabled)
+	{
+		return enabled ? s.replace("~", "") : s;
+	};
+
+	modeSelector.addItemList({ "Skip", getDisabledString("~~Parse file token~~", canUseFileTokens), "Set fix group", getDisabledString("~~Set ignore flag~~", ignoreable), "Unassign"}, 1);
+	modeSelector.rebuildPopupMenu();
+	modeSelector.setSelectedItemIndex(idx, dontSendNotification);
+	repaint();
+}
+
+void ComplexGroupManagerComponent::FileTokenSelector::setActiveToken(int idx)
+{
+	switch(currentAction)
+	{
+	case Action::ParseFileToken:
+	{
+		auto vnames = getValidTokens();
+
+		for(auto t: tokens)
+			t->setActive(idx == tokens.indexOf(t), vnames.contains(t->token));
+
+		break;
+	}
+	case Action::SetToFixGroup:
+
+		for(auto t: tokens)
+			t->setActive(idx == tokens.indexOf(t), true);
+		
+		break;
+	case Action::DoNothing:
+	case Action::SetIgnoreFlag:
+	case Action::Unassign:
+	case Action::numActions:
+	default: ;
+
+		for(auto t: tokens)
+			t->setActive(false, true);
+	
+		break;
+	}
 
 	ok = false;
 
@@ -1044,7 +1235,7 @@ void ComplexGroupManagerComponent::FileTokenSelector::setActiveToken(int idx)
 		ok |= (t->active && t->ok);
 	}
 
-	ok |= ignoreButton.getToggleState();
+	ok |= idx == ComplexGroupManager::IgnoreFlag;
 
 	if(onTokenChange)
 		onTokenChange(idx);
@@ -1052,48 +1243,48 @@ void ComplexGroupManagerComponent::FileTokenSelector::setActiveToken(int idx)
 	repaint();
 }
 
-void ComplexGroupManagerComponent::FileTokenSelector::updateSelection(const String& firstSample)
+void ComplexGroupManagerComponent::FileTokenSelector::updateSelection(const StringArray& fileTokens)
 {
-	currentSampleName = firstSample;
-
 	tokens.clear();
+	delimiters.clear();
 
-	auto fileTokens = StringArray::fromTokens(firstSample.upToLastOccurrenceOf(".", false, false), delimiter, "");
+	currentFileTokens = fileTokens;
 
-	auto canUseFileTokens = layerTokens.isEmpty();
-
-	for(int i = 0; i < fileTokens.size(); i++)
+	switch(currentAction)
 	{
-		canUseFileTokens |= layerTokens.contains(fileTokens[i]);
-	}
-
-	if(layerTokens.isEmpty())
-		modeSelector.setSelectedId(1, dontSendNotification);
-	else if(!canUseFileTokens)
-		modeSelector.setSelectedId(2, dontSendNotification);
-
-	modeSelector.setEnabled(!layerTokens.isEmpty());
-
-	if(useFileTokens())
+	case Action::DoNothing:
+		setActiveToken(-2);
+		break;
+	case Action::ParseFileToken:
 	{
-		for(auto t: fileTokens)
+		for(auto t: currentFileTokens)
+		{
 			addAndMakeVisible(tokens.add(new FileToken(t)));
+			tokens.getLast()->setTooltip(addMode ? "Create the layer groups from this token" : "Parse the layer value from this file token.");
+		}
+
+		break;
 	}
-	else
-	{
+	case Action::SetToFixGroup:
 		for(auto t: layerTokens)
+		{
 			addAndMakeVisible(tokens.add(new FileToken(t)));
+			tokens.getLast()->setTooltip("Parse the layer value from this file token.");
+		}
+			
+		break;
+	case Action::SetIgnoreFlag:
+		setActiveToken(ComplexGroupManager::IgnoreFlag);
+		break;
+	case Action::Unassign:
+		setActiveToken(-1);
+		break;
+	case Action::numActions:
+		break;
+	default: ;
 	}
 
-	for(auto t: tokens)
-	{
-		if(useFileTokens())
-			t->setTooltip("Parse the layer value from this file token.");
-		else
-			t->setTooltip("Set all selected samples to this layer value.");
-	}
-
-	setActiveToken();
+	rebuildComboBox();
 	resized();
 }
 
@@ -1108,15 +1299,18 @@ void ComplexGroupManagerComponent::FileTokenSelector::paint(Graphics& g)
 	g.setColour(Colours::white.withAlpha(0.2f));
 	g.setFont(GLOBAL_MONOSPACE_FONT());
 
-	for(auto t: delimiters)
+	if(!tokens.isEmpty())
 	{
-		if(useFileTokens() && t == delimiters.getLast())
+		for(auto t: delimiters)
 		{
-			g.drawText(".wav", t.reduced(5, 0).withWidth(200), Justification::left);
-		}
-		else
-		{
-			g.drawText(useFileTokens() ? "_" : "||", t, Justification::centred);
+			if(useFileTokens() && t == delimiters.getLast())
+			{
+				g.drawText(".wav", t.reduced(5, 0).withWidth(200), Justification::left);
+			}
+			else
+			{
+				g.drawText(useFileTokens() ? "_" : "||", t, Justification::centred);
+			}
 		}
 	}
 }
@@ -1130,6 +1324,10 @@ void ComplexGroupManagerComponent::FileTokenSelector::resized()
 
 	modeSelector.setBounds(tokenLabel.toNearestInt());
 
+	if(addMode)
+		applyButton.setVisible(false);
+	else
+		applyButton.setBounds(tokenArea.removeFromRight(tokenArea.getHeight()).reduced(4));
 
 	SimpleFlexbox fb;
 	fb.padding = 30;
@@ -1142,12 +1340,6 @@ void ComplexGroupManagerComponent::FileTokenSelector::resized()
 		componentsToPosition.add(t);
 	}
 
-	if(ignoreButton.isVisible())
-	{
-		ignoreButton.setSize(LogicTypeComponent::TopBarHeight, LogicTypeComponent::TopBarHeight);
-		componentsToPosition.add(&ignoreButton);
-	}
-
 	auto pos = fb.createBoundsListFromComponents(componentsToPosition);
 
 	static constexpr int TokenMargin = 30;
@@ -1156,53 +1348,29 @@ void ComplexGroupManagerComponent::FileTokenSelector::resized()
 	{
 		height = h;
 
-		
-
 		fb.applyBoundsListToComponents(componentsToPosition, pos);
 
-		delimiters.clear();
-
-		for(auto p: tokens)
-		{
-			delimiters.add(p->getBoundsInParent().withX(p->getRight()).withWidth(TokenMargin).toFloat());
-		}
+		
 
 		if(getHeightToUse() != getHeight())
 		{
-			findParentComponentOfClass<Content>()->updateSize();
+			if(auto c = findParentComponentOfClass<Content>())
+				c->updateSize();
 		}
 	}
 
-#if 0
-	static constexpr int TokenMargin = 30;
-
-	int w = 0;
-
-	for(auto t: tokens)
-		w += t->getBestWidth() + TokenMargin;
-
-	w += tokenArea.getHeight();
-				
-	tokenArea = tokenArea.withSizeKeepingCentre(w, tokenArea.getHeight());
-
 	delimiters.clear();
 
-	for(auto t: tokens)
+	for(auto p: tokens)
 	{
-		t->setBounds(tokenArea.removeFromLeft(t->getBestWidth()));
-		auto ma = tokenArea.removeFromLeft(TokenMargin).toFloat();
-
-		if(!ma.isEmpty())
-			delimiters.add(ma);
+		delimiters.add(p->getBoundsInParent().withX(p->getRight()).withWidth(TokenMargin).toFloat());
 	}
 
-	ignoreButton.setBounds(tokenArea.reduced(4));
-#endif
 }
 
 bool ComplexGroupManagerComponent::FileTokenSelector::useFileTokens() const
 {
-	return modeSelector.getSelectedId() == 1;
+	return currentAction == Action::ParseFileToken;
 }
 
 int ComplexGroupManagerComponent::FileTokenSelector::getHeightToUse() const
@@ -1212,14 +1380,18 @@ int ComplexGroupManagerComponent::FileTokenSelector::getHeightToUse() const
 
 uint8 ComplexGroupManagerComponent::FileTokenSelector::getCurrentTokenValue(const String& filename) const
 {
-	if(ignoreButton.getToggleState())
+	if(currentAction == Action::SetIgnoreFlag)
 		return ComplexGroupManager::IgnoreFlag;
 
 	if(ok)
 	{
+		int tokenIndex = 0;
+
 		if(useFileTokens())
 		{
-			auto thisTokens = StringArray::fromTokens(filename.upToLastOccurrenceOf(".", false, false), delimiter, "");
+			auto thisTokens = Helpers::getFileTokens(filename);
+
+			auto validTokens = getValidTokens();
 
 			for(auto t: tokens)
 			{
@@ -1227,10 +1399,15 @@ uint8 ComplexGroupManagerComponent::FileTokenSelector::getCurrentTokenValue(cons
 				{
 					auto idx = tokens.indexOf(t);
 					auto thisValue = thisTokens[idx];
-					auto tokenIndex = layerTokens.indexOf(thisValue);
+					tokenIndex = validTokens.indexOf(thisValue);
 
-					if(tokenIndex != -1)
-						return tokenIndex + 1;
+					if(legatoMode)
+					{
+						// note names are 128 - 255 so we need to wrap them to the original index
+						tokenIndex %= 128;
+					}
+
+					break;
 				}
 			}
 		}
@@ -1240,11 +1417,25 @@ uint8 ComplexGroupManagerComponent::FileTokenSelector::getCurrentTokenValue(cons
 			{
 				if(t->active)
 				{
-					auto idx = tokens.indexOf(t);
-					return idx + 1;
+					tokenIndex = tokens.indexOf(t);
+					break;
 				}
 			}
 		}
+
+		if(legatoMode)
+		{
+			// now we need to fetch the key range to calculate the group layer
+			ValueTree v(groupIds::Layer);
+			v.setProperty(groupIds::type, "Legato", nullptr);
+			auto kr = ComplexGroupManager::Helpers::getKeyRange(v, getSampler());
+
+			auto startNote = kr.getFirstSetBit();
+			tokenIndex -= startNote;
+		}
+
+		tokenIndex += 1; // one-based!
+		return tokenIndex;
 	}
 
 	return 0;
@@ -1252,7 +1443,7 @@ uint8 ComplexGroupManagerComponent::FileTokenSelector::getCurrentTokenValue(cons
 
 uint8 ComplexGroupManagerComponent::FileTokenSelector::getSelectedTokenIndex() const
 {
-	if(ignoreButton.getToggleState())
+	if(currentAction == Action::SetIgnoreFlag)
 		return ComplexGroupManager::IgnoreFlag;
 
 	for(auto b: tokens)
@@ -1266,13 +1457,19 @@ uint8 ComplexGroupManagerComponent::FileTokenSelector::getSelectedTokenIndex() c
 
 int ComplexGroupManagerComponent::LogicTypeComponent::getHeightToUse() const
 {
-	auto h = TopBarHeight + 2 * BodyMargin;
+	auto h = TopBarHeight;
+
+	if(data[PropertyIds::Folded])
+		return h;
 
 	if(body != nullptr)
 		h += body->getHeightToUse();
 
-	if(parseButton.getToggleState())
+	if(parser.isVisible())
+	{
 		h += parser.getHeightToUse();
+		h += BodyMargin;
+	}
 
 	return h;
 }
@@ -1289,30 +1486,30 @@ void ComplexGroupManagerComponent::LogicTypeComponent::resized()
 	auto b = getLocalBounds();
 
 	auto topBar = b.removeFromTop(TopBarHeight);
-			
-	countButton.setBounds(topBar.removeFromLeft(topBar.getHeight()).reduced(4));
-	parseButton.setBounds(topBar.removeFromLeft(topBar.getHeight()).reduced(4));
-	lockButton.setBounds(topBar.removeFromLeft(topBar.getHeight()).reduced(4));
-	midiButton.setBounds(topBar.removeFromLeft(topBar.getHeight()).reduced(4));
 
-	b = b.reduced(BodyMargin);
+	clearButton.setBounds(topBar.removeFromRight(topBar.getHeight()).reduced(4));
+	lockButton.setBounds(topBar.removeFromRight(topBar.getHeight()).reduced(4));
+	midiButton.setBounds(topBar.removeFromRight(topBar.getHeight()).reduced(4));
+
+	b = b.reduced(BodyMargin, 0);
 
 	auto bb = b.removeFromTop(body->getHeightToUse());
 
-	auto leftArea = bb.removeFromLeft(PaddingLeft);
+	//ignoreLabel.setBounds(leftArea.removeFromBottom(AddComponent::LabelHeight));
+	//unassignedLabel.setBounds(leftArea.removeFromTop(AddComponent::LabelHeight));
 
-	ignoreLabel.setBounds(leftArea.removeFromBottom(AddComponent::LabelHeight));
-	unassignedLabel.setBounds(leftArea.removeFromTop(AddComponent::LabelHeight));
-
-	PathFactory::scalePath(p, leftArea.withSizeKeepingCentre(PaddingLeft, PaddingLeft).reduced(15).toFloat());
+	PathFactory::scalePath(p, topBar.removeFromLeft(topBar.getHeight()).reduced(6.0f).toFloat());
 
 	body->setBounds(bb);
 	body->resized();
 
-	parser.setVisible(parseButton.getToggleState());
-
-	if(parseButton.getToggleState())
-		parser.setBounds(b.removeFromTop(parser.getHeightToUse()));
+	if(auto pc = findParentComponentOfClass<ComplexGroupManagerComponent>())
+	{
+		auto visible = pc->parseButton.getToggleState();
+		parser.setVisible(visible);
+		if(visible)
+			parser.setBounds(b.removeFromTop(parser.getHeightToUse()));
+	}
 
 	updateSampleCounters();
 }
@@ -1326,6 +1523,30 @@ void ComplexGroupManagerComponent::LogicTypeComponent::updateSampleCounters()
 	});
 }
 
+void ComplexGroupManagerComponent::LogicTypeComponent::showSelectors(bool shouldShow)
+{
+	selectors.clear();
+
+	//ignoreLabel.setVisible(shouldShow && data[groupIds::ignorable]);
+	//unassignedLabel.setVisible(shouldShow);
+
+	if(shouldShow)
+	{
+		//if(ignoreLabel.isVisible())
+			//selectors.add(new BodyBase::SelectionTag(*this, &ignoreLabel, ComplexGroupManager::IgnoreFlag));
+
+				
+		//selectors.add(new BodyBase::SelectionTag(*this, &unassignedLabel, 0));
+
+		
+				
+		for(auto s: selectors)
+			addAndMakeVisible(s);
+	}
+
+	body->showSelectors(shouldShow);
+}
+
 void ComplexGroupManagerComponent::LogicTypeComponent::onPlaystateUpdate(LogicTypeComponent& l, uint8 value)
 {
 	l.body->onPlaystateUpdate(value);
@@ -1334,6 +1555,9 @@ void ComplexGroupManagerComponent::LogicTypeComponent::onPlaystateUpdate(LogicTy
 void ComplexGroupManagerComponent::LogicTypeComponent::paint(Graphics& g)
 {
 	LayerComponent::paint(g);
+
+	g.setColour(Colours::white.withAlpha(0.7f));
+	g.fillPath(p);
 }
 
 
@@ -1341,7 +1565,7 @@ void ComplexGroupManagerComponent::LogicTypeComponent::paint(Graphics& g)
 struct ComplexGroupManagerComponent::AddComponent::LogicTypeSelector: public Component,
 																      public ComponentWithGroupManagerConnection
 {
-	static constexpr int IconWidth = 60;
+	static constexpr int IconWidth = 50;
 	static constexpr int LogicTypeSelectorHeight = 2 * IconWidth + 2 * BodyMargin + 2 * TopBarHeight;
 	
 	void paint(Graphics& g) override
@@ -1355,7 +1579,9 @@ struct ComplexGroupManagerComponent::AddComponent::LogicTypeSelector: public Com
 			auto n = Helpers::getLogicTypeName(lt);
 			auto p = Helpers::getPath(lt);
 
-			auto a = areas[i].toFloat();
+			auto a = areas[i].toFloat().expanded(4, 0);
+
+			a.removeFromBottom(-BodyMargin);
 
 			float alpha = 0.0f;
 
@@ -1428,16 +1654,16 @@ struct ComplexGroupManagerComponent::AddComponent::LogicTypeSelector: public Com
 		SimpleFlexbox fb;
 
 		fb.justification = Justification::centredTop;
-		fb.padding = BodyMargin;
+		fb.padding = 10;
 
 		areas.clear();
 
 		auto numTypes = (int)(LogicType::numLogicTypes) - 1;
 
 		for(int i = 0; i < numTypes; i++)
-			areas.push_back({ 0, 0, IconWidth, IconWidth + TopBarHeight });
+			areas.push_back({ 0, 0, IconWidth, IconWidth + 10 });
 
-		if(auto h = fb.apply(areas, getLocalBounds().reduced(BodyMargin + PaddingLeft, BodyMargin)))
+		if(auto h = fb.apply(areas, getLocalBounds().reduced(BodyMargin, BodyMargin)))
 		{
 			height = h;
 
@@ -1450,6 +1676,8 @@ struct ComplexGroupManagerComponent::AddComponent::LogicTypeSelector: public Com
 		}
 	}
 
+	
+
 	std::function<void(LogicType)> onTypeSelection;
 
 	LogicType currentType = LogicType::RoundRobin;
@@ -1459,18 +1687,18 @@ struct ComplexGroupManagerComponent::AddComponent::LogicTypeSelector: public Com
 
 ComplexGroupManagerComponent::AddComponent::AddComponent(ComponentWithGroupManagerConnection& parent, const ValueTree& d):
 	LayerComponent(parent, d, LogicType::numLogicTypes),
-	addButton("add", this, f),
-	moreButton("more", this, f),
+	//addButton("add", this, f),
+	//moreButton("more", this, f),
 	okButton("Add new layer"),
-	tokenSelector(parent, {}, false)
+	tokenSelector(parent, {}, false, true)
 {
 	typeName = {};
 
-	addAndMakeVisible(addButton);
+	//addAndMakeVisible(addButton);
 
-	addButton.setToggleModeWithColourChange(true);
+	//addButton.setToggleModeWithColourChange(true);
 
-	addAndMakeVisible(moreButton);
+	//addAndMakeVisible(moreButton);
 
 	addAndMakeVisible(okButton);
 	okButton.setLookAndFeel(&alaf);
@@ -1478,9 +1706,7 @@ ComplexGroupManagerComponent::AddComponent::AddComponent(ComponentWithGroupManag
 
 	addAndMakeVisible(tokenSelector);
 
-	
-
-	addEditor(groupIds::type, "The layer mode. There are multiple predefined layer types with common use cases which can be combined.", "LogicTypeSelector");
+	addEditor(groupIds::type, "The layer mode. These layers come with a predefined behaviour and can be combined in order to create a complex group logic.", "LogicTypeSelector");
 	
 	auto tokenEditor = dynamic_cast<TextEditor*>(addEditor(groupIds::tokens, "A comma separated list of tokens that will be used to determine the amount of groups in this layer.  \n> If you select some samples, you can choose the file name token and it will automatically fill out the tokens based on the sample selection.", "TextEditor"));
 
@@ -1495,20 +1721,33 @@ ComplexGroupManagerComponent::AddComponent::AddComponent(ComponentWithGroupManag
 	
 	setSize(200, TopBarHeight);
 
-	addButton.setTooltip("Add a new layer");
+	//addButton.setTooltip("Add a new layer");
 	clearButton.setTooltip("Remove all layers");
-	moreButton.setTooltip("Manage layer setup");
+	//moreButton.setTooltip("Manage layer setup");
 
 	layerListener.setCallback(data, valuetree::AsyncMode::Asynchronously, BIND_MEMBER_FUNCTION_2(AddComponent::layerAddOrRemoved));
 
+	groupRebuildListener.setCallback(data, { groupIds::tokens, groupIds::ignorable, groupIds::purgable }, valuetree::AsyncMode::Asynchronously, BIND_MEMBER_FUNCTION_2(AddComponent::rebuildLayers));
+
 	tokenSelector.onTokenChange = [this, tokenEditor](uint8 idx)
 	{
+		auto lt = dynamic_cast<LogicTypeSelector*>(this->getEditor(groupIds::type));
+
+		auto isLegato = lt->currentType == ComplexGroupManager::LogicType::LegatoInterval;
+
+		// Do not update the token in the editor when in legato mode...
+		if(isLegato)
+		{
+			tokenEditor->setText("", true);
+			return;
+		}
+			
+
 		StringArray allTokens;
 
 		for(auto s: *getSampleEditHandler())
 		{
-			auto filename = getSampleFilename(s.get(), false);
-			auto fileTokens = StringArray::fromTokens(filename, tokenSelector.delimiter, "");
+			auto fileTokens = Helpers::getFileTokens(s.get(), tokenSelector.delimiter);
 			auto tokenValue = fileTokens[idx].trim();
 			allTokens.addIfNotAlreadyThere(tokenValue);
 		}
@@ -1517,15 +1756,6 @@ ComplexGroupManagerComponent::AddComponent::AddComponent(ComponentWithGroupManag
 		tokenEditor->setText(allTokens.joinIntoString(", "), true);
 	};
 
-	getSampleEditHandler()->allSelectionBroadcaster.addListener(*this, [](AddComponent& a, int numSelected)
-	{
-		String filename;
-
-		if(auto s = a.getSampleEditHandler()->getMainSelection())
-			filename = a.getSampleFilename(s.get());
-
-		a.setSampleForTokenSelector(filename);
-	});
 }
 
 ComplexGroupManagerComponent::AddComponent::~AddComponent()
@@ -1555,6 +1785,7 @@ ComplexGroupManagerComponent::LogicTypeComponent* ComplexGroupManagerComponent::
 		break;
 	case LogicType::LegatoInterval:
 		nc->setBody(new LegatoBody(*nc));
+		nc->parser.legatoMode = true;
 		break;
 	case LogicType::ReleaseTrigger: break;
 	case LogicType::Choke:
@@ -1569,8 +1800,6 @@ ComplexGroupManagerComponent::LogicTypeComponent* ComplexGroupManagerComponent::
 
 void ComplexGroupManagerComponent::AddComponent::addNewLayer()
 {
-	auto c = findParentComponentOfClass<Content>();
-
 	auto tokens = StringArray::fromTokens(getEditorValue(groupIds::tokens).toString(), ",", "");
 	tokens.trim();
 	tokens.removeDuplicates(false);
@@ -1591,9 +1820,6 @@ void ComplexGroupManagerComponent::AddComponent::addNewLayer()
 
 	ids.addArray(getSpecialIds());
 
-	
-		
-
 	for(auto id: ids)
 	{
 		if(getEditor(id) != nullptr)
@@ -1607,8 +1833,18 @@ void ComplexGroupManagerComponent::AddComponent::addNewLayer()
 	}
 
 	
-	getUndoManager()->beginNewTransaction();
-	data.addChild(l, -1, getUndoManager());
+
+	try
+	{
+		tokens = Helpers::getTokens(l, getSampler());
+		getUndoManager()->beginNewTransaction();
+		data.addChild(l, -1, getUndoManager());
+	}
+	catch(Result& r)
+	{
+		PresetHandler::showMessageWindow("Error at creating layer", r.getErrorMessage(), PresetHandler::IconType::Error);
+		data.removeChild(l, getUndoManager());
+	}
 
 	if(tokenSelector.isVisible())
 	{
@@ -1622,7 +1858,7 @@ void ComplexGroupManagerComponent::AddComponent::addNewLayer()
 
 			for(auto s: *getSampleEditHandler())
 			{
-				auto filename = getSampleFilename(s.get());
+				String filename = Helpers::getSampleFilename(s.get());
 
 				auto idxToUse = tokenSelector.getCurrentTokenValue(filename);
 
@@ -1634,6 +1870,7 @@ void ComplexGroupManagerComponent::AddComponent::addNewLayer()
 
 void ComplexGroupManagerComponent::AddComponent::buttonClicked(Button* b)
 {
+#if 0
 	if(b == &addButton)
 	{
 		auto shouldShow = b->getToggleState();
@@ -1642,6 +1879,7 @@ void ComplexGroupManagerComponent::AddComponent::buttonClicked(Button* b)
 		if(shouldShow != show)
 			updateHeight(getHeightToUse());
 	}
+
 	if(b == &moreButton)
 	{
 		PopupLookAndFeel plaf;
@@ -1695,6 +1933,7 @@ void ComplexGroupManagerComponent::AddComponent::buttonClicked(Button* b)
 
 		
 	}
+#endif
 	if(b == &okButton)
 	{
 		if(b == &okButton)
@@ -1709,11 +1948,21 @@ void ComplexGroupManagerComponent::AddComponent::paint(Graphics& g)
 {
 	LayerComponent::paint(g);
 	
-	if(!tokenSelector.isVisible())
+	if(!tokenSelector.isVisible() || tokenSelector.tokens.isEmpty())
 	{
 		auto b = tokenSelector.getBoundsInParent().toFloat();
 		Helpers::drawLabel(g, b, "Select samples to create a token list", Justification::centred);
 	}
+}
+
+void ComplexGroupManagerComponent::AddComponent::rebuildLayers(const ValueTree& v, const Identifier& id)
+{
+	auto p = findParentComponentOfClass<Content>();
+	p->layerComponents.clear();
+
+	for(auto c: data)
+		layerAddOrRemoved(c, true);
+	
 }
 
 void ComplexGroupManagerComponent::AddComponent::layerAddOrRemoved(const ValueTree& v, bool wasAdded)
@@ -1733,8 +1982,8 @@ void ComplexGroupManagerComponent::AddComponent::layerAddOrRemoved(const ValueTr
 		dynamic_cast<TextEditor*>(getEditor(groupIds::tokens))->setText("", dontSendNotification);
 		dynamic_cast<TextEditor*>(getEditor(groupIds::id))->setText("", dontSendNotification);
 		
-		if(addButton.getToggleState())
-			addButton.triggerClick(sendNotificationSync);
+		//if(addButton.getToggleState())
+//			addButton.triggerClick(sendNotificationSync);
 
 		c->updateSize();
 	}
@@ -1756,11 +2005,7 @@ void ComplexGroupManagerComponent::AddComponent::layerAddOrRemoved(const ValueTr
 		parent->rebuildSampleCounters();
 }
 
-void ComplexGroupManagerComponent::AddComponent::setSampleForTokenSelector(const String& filename)
-{
-	tokenSelector.updateSelection(filename);
-	tokenSelector.setVisible(filename.isNotEmpty());
-}
+
 
 void ComplexGroupManagerComponent::AddComponent::resized()
 {
@@ -1776,12 +2021,13 @@ void ComplexGroupManagerComponent::AddComponent::resized()
 	b.removeFromLeft(BodyMargin);
 	b.removeFromRight(BodyMargin);
 
-	moreButton.setBounds(top.removeFromLeft(top.getHeight()).reduced(ButtonMargin));
-	addButton.setBounds(top.withSizeKeepingCentre(top.getHeight(), top.getHeight()).reduced(ButtonMargin));
+	//moreButton.setBounds(top.removeFromLeft(top.getHeight()).reduced(ButtonMargin));
+	//addButton.setBounds(top.withSizeKeepingCentre(top.getHeight(), top.getHeight()).reduced(ButtonMargin));
+	clearButton.setVisible(false);
 	clearButton.setBounds(top.removeFromRight(top.getHeight()).reduced(ButtonMargin));
 	top.removeFromRight(2 * top.getHeight());
 
-	auto showBody = addButton.getToggleState();
+	auto showBody = true;
 
 	if(showBody)
 	{
@@ -1789,7 +2035,7 @@ void ComplexGroupManagerComponent::AddComponent::resized()
 		okButton.setBounds(b.removeFromBottom(TopBarHeight));
 		addRuler(b.removeFromBottom(BodyMargin).reduced(BodyMargin, 0));
 
-		b.removeFromTop(BodyMargin).reduced(BodyMargin, 0);
+		
 
 		addLabel(b.removeFromTop(LabelHeight), "Layer Type:");
 		getEditor(groupIds::type)->setBounds(b.removeFromTop(getGroupComponent(groupIds::type)->getHeightToUse()));
@@ -1798,22 +2044,17 @@ void ComplexGroupManagerComponent::AddComponent::resized()
 		auto textEditorArea = b.removeFromTop(LabelHeight + 28);
 
 		auto idArea = textEditorArea.removeFromLeft(150);
+
 		textEditorArea.removeFromLeft(BodyMargin);
-		auto tokenArea = textEditorArea;
+
+		auto flagArea = textEditorArea;
 
 		addLabel(idArea.removeFromTop(LabelHeight), "Layer ID:");
-		addLabel(tokenArea.removeFromTop(LabelHeight), "Token values:");
-		
-		getEditor(groupIds::id)->setBounds(idArea.removeFromTop(28));
-		getEditor(groupIds::tokens)->setBounds(tokenArea.removeFromTop(28));
 
-		tokenSelector.setBounds(b.removeFromTop(tokenSelector.getHeightToUse()));
-		addRuler(b.removeFromTop(BodyMargin).reduced(BodyMargin, 0));
+		getEditor(groupIds::id)->setBounds(idArea.removeFromTop(28));
 
 		{
-			auto flagArea = b.removeFromTop(flagHeight);
-
-			addLabel(flagArea.removeFromLeft(PaddingLeft), "Layer flags:");
+			addLabel(flagArea.removeFromTop(LabelHeight), "Layer flags:");
 
 			std::vector<Rectangle<int>> flagButtons;
 
@@ -1836,33 +2077,29 @@ void ComplexGroupManagerComponent::AddComponent::resized()
 			}
 		}
 
+		auto delta = flagHeight - 28;
+
+		if(delta > 0)
 		{
-
-			auto specialComponents = getSpecialComponents();
-
-			if(!specialComponents.isEmpty())
-			{
-				addRuler(b.removeFromTop(BodyMargin));
-
-				addLabel(b.removeFromTop(LabelHeight), "Special Properties:");
-
-				b.removeFromTop(BodyMargin);
-
-				auto specialBounds = b.removeFromTop(specialHeight);
-
-				SimpleFlexbox fb;
-
-				auto pos = fb.createBoundsListFromComponents(specialComponents);
-				if(auto h = fb.apply(pos, specialBounds))
-				{
-					specialHeight = h;
-					fb.applyBoundsListToComponents(specialComponents, pos);
-
-					if(getHeight() != getHeightToUse())
-						findParentComponentOfClass<Content>()->updateSize();
-				}
-			}
+			b.removeFromTop(delta);
 		}
+
+
+		addRuler(b.removeFromTop(BodyMargin).reduced(BodyMargin, 0));
+
+		auto tokenArea = b.removeFromTop(LabelHeight + 28);
+		addLabel(tokenArea.removeFromTop(LabelHeight), "Layer Groups:");
+		getEditor(groupIds::tokens)->setBounds(tokenArea.removeFromTop(28));
+		
+		
+		tokenSelector.setBounds(b.removeFromTop(tokenSelector.getHeightToUse()));
+		
+
+		
+
+		
+
+		
 	}
 
 	for(auto e: editors)
@@ -1879,20 +2116,22 @@ int ComplexGroupManagerComponent::AddComponent::getHeightToUse() const
 {
 	int bodyHeight = TopBarHeight;
 
-	if(addButton.getToggleState())
-	{
-		bodyHeight += BodyMargin;
-		bodyHeight += LabelHeight + getGroupComponent(groupIds::type)->getHeightToUse() + BodyMargin;
-		bodyHeight += LabelHeight + getEditor(groupIds::tokens)->getHeight() + BodyMargin;
-		bodyHeight += tokenSelector.getHeightToUse() + BodyMargin;
-		bodyHeight += flagHeight;
+	getGroupComponent(groupIds::type)->resizeWithoutRecursion();
 
-		if(specialHeight != 0)
-			bodyHeight += 2 * BodyMargin + LabelHeight + specialHeight;
+	bodyHeight += BodyMargin;
+	bodyHeight += LabelHeight + getGroupComponent(groupIds::type)->getHeightToUse() + BodyMargin;
+	bodyHeight += LabelHeight + getEditor(groupIds::tokens)->getHeight() + BodyMargin;
 
-		bodyHeight += TopBarHeight;
-		bodyHeight += BodyMargin;
-	}
+	bodyHeight += LabelHeight + jmax(flagHeight, 28) + BodyMargin;
+
+	bodyHeight += tokenSelector.getHeightToUse() + BodyMargin;
+	
+
+	if(specialHeight != 0)
+		bodyHeight += 2 * BodyMargin + LabelHeight + specialHeight;
+
+	bodyHeight += TopBarHeight;
+	bodyHeight += BodyMargin;
 
 	return bodyHeight;
 }
@@ -1902,6 +2141,25 @@ void ComplexGroupManagerComponent::AddComponent::addSpecialComponents(LogicType 
 	auto newId = Helpers::getNextFreeId(nt, getComplexGroupManager()->getDataTree()).toString();
 	dynamic_cast<TextEditor*>(getEditor(groupIds::id))->setText(newId, dontSendNotification);
 
+	auto defaultCacheValue = ComplexGroupManager::Helpers::getDefaultValue(nt, ComplexGroupManager::Flags::FlagCached);
+	auto defaultPurgeValue = ComplexGroupManager::Helpers::getDefaultValue(nt, ComplexGroupManager::Flags::FlagPurgable);
+	auto defaultIgnoreValue = ComplexGroupManager::Helpers::getDefaultValue(nt, ComplexGroupManager::Flags::FlagIgnorable);
+
+	if(defaultPurgeValue != -1)
+		dynamic_cast<HiseShapeButton*>(getEditor(groupIds::purgable))->setToggleStateAndUpdateIcon((bool)defaultPurgeValue, true);
+
+	if(defaultIgnoreValue != -1)
+		dynamic_cast<HiseShapeButton*>(getEditor(groupIds::ignorable))->setToggleStateAndUpdateIcon((bool)defaultIgnoreValue, true);
+
+	if(defaultCacheValue != -1)
+		dynamic_cast<HiseShapeButton*>(getEditor(groupIds::cached))->setToggleStateAndUpdateIcon((bool)defaultCacheValue, true);
+
+	tokenSelector.legatoMode = nt == ComplexGroupManager::LogicType::LegatoInterval;
+	tokenSelector.rebuildComboBox();
+
+	getEditor(groupIds::tokens)->setEnabled(!tokenSelector.legatoMode);
+
+#if 0
 
 	auto list = getSpecialComponents();
 
@@ -1946,7 +2204,9 @@ void ComplexGroupManagerComponent::AddComponent::addSpecialComponents(LogicType 
 
 		kc->setTextWhenNothingSelected("Key layout");
 		kc->addItemList({ "White keys", "Chromatic"}, 1);
+
 		
+
 		break;
 	}
 	case LogicType::Undefined: break;
@@ -1980,14 +2240,20 @@ void ComplexGroupManagerComponent::AddComponent::addSpecialComponents(LogicType 
 	SimpleFlexbox fb;
 
 	auto pos = fb.createBoundsListFromComponents(list);
+#endif
 
-	specialHeight = fb.apply(pos, getLocalBounds());
+	specialHeight = 0; // fb.apply(pos, getLocalBounds());
+
+
 
 	resized();
 }
 
 Array<Component::SafePointer<Component>> ComplexGroupManagerComponent::AddComponent::getSpecialComponents() const
 {
+	return {};
+
+#if 0
 	auto specialIds = getSpecialIds();
 	Array<Component::SafePointer<Component>> list;
 
@@ -1998,6 +2264,7 @@ Array<Component::SafePointer<Component>> ComplexGroupManagerComponent::AddCompon
 	}
 
 	return list;
+#endif
 }
 
 Component* ComplexGroupManagerComponent::AddComponent::addEditor(const Identifier& propertyId, const String& helpText,
@@ -2115,9 +2382,7 @@ ComplexGroupManagerComponent::ParseToolbar::ParseToolbar(ComponentWithGroupManag
 	addAndMakeVisible(resetButton);
 	addAndMakeVisible(console);
 
-	
-	
-	clearButton.setTooltip("Reset the layers for the selection");
+	applyButton.setTooltip("Assign all layers that are not set to \"Skip\"");
 
 	console.setReadOnly(true);
 	console.setLineNumbersShown(false);
@@ -2140,34 +2405,11 @@ void ComplexGroupManagerComponent::ParseToolbar::buttonClicked(Button* b)
 
 		for(auto l: p->content.layerComponents)
 		{
-			if(l->parseButton.getToggleState() && l->parser.ok)
+			if(l->parser.isVisible() && l->parser.ok)
 			{
-				auto id = Helpers::getId(l->data);
-				
-				for(auto s: *getSampleEditHandler())
-				{
-					Array<std::pair<Identifier, uint8>> values;
-
-					auto filename = getSampleFilename(s.get());
-					auto v = l->parser.getCurrentTokenValue(filename);
-
-					values.add({ id, v});
-
-					String msg;
-
-					if(v == ComplexGroupManager::IgnoreFlag)
-					{
-						msg << filename << ": " << id << " > IGNORE_FLAG (0xFF)";
-					}
-					else
-					{
-						msg << filename << ": " << id << " > " << l->parser.layerTokens[v-1];
-					}
-					
-					logToConsole(msg);
-
-					getComplexGroupManager()->setSampleId(s.get(), values, true);
-				}
+				auto msg = l->parser.performAction();
+				msg << "\n";
+				logToConsole(msg);
 			}
 		}
 	}
@@ -2179,22 +2421,15 @@ void ComplexGroupManagerComponent::ParseToolbar::buttonClicked(Button* b)
 
 		for(auto l: p->content.layerComponents)
 		{
-			if(l->parseButton.getToggleState())
+			if(l->parser.isVisible())
 			{
+				
 				layersToClear.add(Helpers::getId(l->data));
 				logToConsole("\tReset layer " + layersToClear.getLast());
 			}
 		}
 
-		for(auto s: *getSampleEditHandler())
-		{
-			getComplexGroupManager()->clearSampleId(s.get(), layersToClear, true);
-			auto filename = getSampleFilename(s.get());
-
-			String msg;
-			msg << "Cleared " << filename;
-			logToConsole(msg);
-		}
+		
 	}
 }
 
@@ -2204,7 +2439,7 @@ void ComplexGroupManagerComponent::ParseToolbar::paint(Graphics& g)
 
 	auto b = getLocalBounds().removeFromTop(TopBarHeight);
 
-	Helpers::drawLabel(g, b.toFloat(), "Assign samples to layers", Justification::centred);
+	Helpers::drawLabel(g, b.toFloat(), "Batch processor", Justification::centred);
 
 	b.removeFromLeft(TopBarHeight);
 	b.removeFromRight(TopBarHeight);
@@ -2222,8 +2457,13 @@ void ComplexGroupManagerComponent::ParseToolbar::resized()
 	applyButton.setBounds(b.removeFromLeft(b.getHeight()).reduced(5));
 }
 
+int ComplexGroupManagerComponent::ParseToolbar::getHeightToUse() const
+{
+	return ConsoleHeight + TopBarHeight + 2 * BodyMargin;
+}
+
 void ComplexGroupManagerComponent::ParseToolbar::setLayersToParse(const Array<LogicTypeComponent*>& layers,
-	int numSamples)
+                                                                  int numSamples)
 {
 	msg = "";
 	msg << "Assign " << String(numSamples) << " samples to layer";
@@ -2261,8 +2501,8 @@ ComplexGroupManagerComponent::Content::Content(ComponentWithGroupManagerConnecti
   addComponent(parent, d),
   parseToolbar(parent, d)
 {
-	addAndMakeVisible(addComponent);
-	addAndMakeVisible(parseToolbar);
+	addChildComponent(addComponent);
+	addChildComponent(parseToolbar);
 	updateSize();
 }
 
@@ -2276,16 +2516,16 @@ void ComplexGroupManagerComponent::Content::updateSize()
 	{
 		height += l->getHeightToUse() + ItemMargin;
 
-		if(l->parseButton.getToggleState())
+		if(l->parser.isVisible())
 			lp.add(l);
 	}
 
 	parseToolbar.setLayersToParse(lp, getSampleEditHandler()->getNumSelected());
-	addComponent.setVisible(!parseToolbar.isVisible());
+	//addComponent.setVisible(!parseToolbar.isVisible());
 	
 	if(parseToolbar.isVisible())
 		height += parseToolbar.getHeightToUse();
-	else
+	else if (addComponent.isVisible())
 		height += addComponent.getHeightToUse();
 
 	setSize(getWidth(), height);
@@ -2356,8 +2596,138 @@ void ComplexGroupManagerComponent::Logger::anythingChanged(CallbackType cb)
 ComplexGroupManagerComponent::ComplexGroupManagerComponent(ModulatorSampler* s):
 	ComponentWithGroupManagerConnection(s),
 	SamplerSubEditor(s->getSampleEditHandler()),
-	content(*this, getComplexGroupManager()->getDataTree())
+	content(*this, getComplexGroupManager()->getDataTree()),
+	editButton("edit", nullptr, f),
+	moreButton("more", nullptr, f),
+    parseButton("parse", nullptr, f),
+	tagButton("count", nullptr, f) 
 {
+	editButton.onClick = [this]()
+	{
+		content.addComponent.setVisible(editButton.getToggleState());
+		content.updateSize();
+		this->repaint();
+	};
+
+	moreButton.onClick = [this]()
+	{
+		PopupLookAndFeel plaf;
+		PopupMenu m;
+		m.setLookAndFeel(&plaf);
+
+		m.addItem(1, "Export as Base64");
+		m.addItem(2, "Import from Base64");
+
+		m.addSeparator();
+
+		m.addItem(3, "Export as JSON");
+		m.addItem(4, "Import from JSON");
+
+		m.addSeparator();
+
+		m.addItem(5, "Reset all samples");
+		m.addItem(6, "Rebuild cache");
+		m.addItem(7, "Remove all layers");
+
+		if(auto r = m.show())
+		{
+			if(r == 1)
+			{
+				zstd::ZDefaultCompressor comp;
+				MemoryBlock mb;
+				comp.compress(content.data, mb);
+				auto b64 = mb.toBase64Encoding();
+				SystemClipboard::copyTextToClipboard(b64);
+			}
+			if(r == 2)
+			{
+				
+				MemoryBlock mb;
+				auto b64 = SystemClipboard::getTextFromClipboard();
+				if(mb.fromBase64Encoding(b64))
+				{
+					ValueTree v;
+					zstd::ZDefaultCompressor comp;
+					comp.expand(mb, v);
+
+					ComplexGroupManager::ScopedUpdateDelayer sds(*getComplexGroupManager());
+
+					getUndoManager()->beginNewTransaction();
+					content.data.removeAllChildren(getUndoManager());
+
+					for(auto c: v)
+						content.data.addChild(c.createCopy(), -1, getUndoManager());
+				}
+			}
+			if(r == 5)
+			{
+				if(PresetHandler::showYesNoWindow("Confirm reset", "Do you want to clear the bitmask for all samples?"))
+				{
+					ModulatorSampler::SoundIterator iter(getSampler());
+
+					while(auto s = iter.getNextSound())
+						s->setBitmask(0);
+				}
+			}
+			if(r == 6)
+			{
+				getComplexGroupManager()->rebuildGroups();
+			}
+			if(r == 7)
+			{
+				if(PresetHandler::showYesNoWindow("Confirm reset", "Do you want to remove all layers?"))
+				{
+					ComplexGroupManager::ScopedUpdateDelayer sds(*getComplexGroupManager());
+
+					getUndoManager()->beginNewTransaction();
+					content.data.removeAllChildren(getUndoManager());
+				}
+			}
+		}
+	};
+
+	tagButton.onClick = [this]()
+	{
+		auto on = tagButton.getToggleState();
+		Component::callRecursive<LogicTypeComponent>(&content, [on](LogicTypeComponent* lt)
+		{
+			lt->showSelectors(on);
+			return false;
+		});
+	};
+
+	parseButton.onClick = [this]()
+	{
+		auto on = parseButton.getToggleState();
+
+		if(on)
+		{
+			editButton.setToggleState(false, sendNotification);
+			tagButton.setToggleState(true, sendNotification);
+		}
+
+		Component::callRecursive<LogicTypeComponent>(&content, [on](LogicTypeComponent* lt)
+		{
+			lt->parser.setVisible(on);
+			return false;
+		});
+
+		content.updateSize();
+	};
+	
+
+	tagButton.setTooltip("Show / hide the number of samples that are assigned / unassigned to each layer group.");
+	parseButton.setTooltip("Show / hide the tools that can be used to assign the current sample selection to layer groups.");
+
+	addAndMakeVisible(editButton);
+	addAndMakeVisible(moreButton);
+	addAndMakeVisible(tagButton);
+	addAndMakeVisible(parseButton);
+
+	editButton.setToggleModeWithColourChange(true);
+	tagButton.setToggleModeWithColourChange(true);
+	parseButton.setToggleModeWithColourChange(true);
+
 	s->getSampleMap()->addListener(this);
 
 	addAndMakeVisible(viewport);
@@ -2375,24 +2745,23 @@ ComplexGroupManagerComponent::~ComplexGroupManagerComponent()
 void ComplexGroupManagerComponent::resized()
 {
 	auto b = getLocalBounds();
+
+	auto topBar = b.removeFromTop(24);
+
+	b.removeFromTop(viewport.getScrollBarThickness());
+
+	editButton.setBounds(topBar.removeFromLeft(topBar.getHeight()).reduced(3));
+	parseButton.setBounds(topBar.removeFromLeft(topBar.getHeight()).reduced(3));
+	tagButton.setBounds(topBar.removeFromLeft(topBar.getHeight()).reduced(3));
+	moreButton.setBounds(topBar.removeFromRight(topBar.getHeight()).reduced(3));
+
 	b.removeFromLeft(viewport.getScrollBarThickness());
 	viewport.setBounds(b);
 	content.setSize(viewport.getWidth() - viewport.getScrollBarThickness(), content.getHeight());
 }
 
 void ComplexGroupManagerComponent::soundsSelected(int numSelected)
-{
-	if(auto sound = getSampleEditHandler()->getMainSelection())
-	{
-		auto filename = getSampleFilename(sound.get());
-
-		callRecursive<LogicTypeComponent::Parser>(this, [filename](LogicTypeComponent::Parser* p)
-		{
-			p->updateSelection(filename);
-			return false;
-		});
-	}
-}
+{}
 
 void ComplexGroupManagerComponent::samplePropertyWasChanged(ModulatorSamplerSound* s, const Identifier& id,
 	const var& newValue)
@@ -2407,16 +2776,25 @@ void ComplexGroupManagerComponent::paint(Graphics& g)
 {
 	g.fillAll(Colour(0xFF262626));
 
-	if(content.addComponent.addButton.getToggleState())
+	auto b = getLocalBounds();
+
+	
+
+	if(editButton.getToggleState())
 	{
-		GlobalHiseLookAndFeel::draw1PixelGrid(g, this, getLocalBounds());
+		GlobalHiseLookAndFeel::draw1PixelGrid(g, this, b);
 	}
+
+	g.setColour(Colour(0xFF262626));
+	auto tb = b.removeFromTop(24);
+	g.fillRect(tb);
+	GlobalHiseLookAndFeel::drawFake3D(g, tb);
 
 	if(content.layerComponents.isEmpty())
 	{
 		g.setColour(Colour(0x33FFFFFF));
 		g.setFont(GLOBAL_FONT());
-		g.drawText("Click + to add logic layers", getLocalBounds().toFloat(), Justification::centred);
+		g.drawText("Click on the pen button to add logic layers", getLocalBounds().toFloat(), Justification::centred);
 	}
 }
 
@@ -2471,9 +2849,9 @@ void ComplexGroupManagerComponent::setDisplayFilter(uint8 layerIndex, uint8 valu
 
 void ComplexGroupManagerComponent::rebuildSampleCounters()
 {
-	callRecursive<LogicTypeComponent>(this, [](LogicTypeComponent* cb)
+	callRecursive<LogicTypeComponent>(this, [this](LogicTypeComponent* cb)
 	{
-		cb->showSelectors(cb->countButton.getToggleState());
+		cb->showSelectors(tagButton.getToggleState());
 		return false;
 	});
 }
@@ -2483,41 +2861,6 @@ void ComplexGroupManagerComponent::addSelectionFilter(const std::pair<uint8, uin
 {
 	auto add = mods.isShiftDown() || mods.isCommandDown();
 
-#if 0
-	auto idx = filter.first;
-	auto f = filter.second;
-
-	if(getComplexGroupManager()->getDataTree().getNumChildren() != currentSelection.size())
-	{
-		currentSelection.clear();
-
-		for(auto c: getComplexGroupManager()->getDataTree())
-			currentSelection.add({});
-	}
-
-	if(isPositiveAndBelow(idx, currentSelection.size()))
-	{
-		auto& list = currentSelection.getReference(idx);
-
-		if(add)
-		{
-			if(list.contains(f))
-				list.removeAllInstancesOf(f);
-			else
-				list.add(f);
-		}
-		else
-		{
-			if(list.contains(f))
-				list.clear();	
-			else
-			{
-				list.clear();
-				list.add(f);
-			}
-		}
-	}
-#endif
 
 	if(!add)
 	{
@@ -2618,6 +2961,8 @@ void ComplexGroupManagerComponent::rebuildSelection()
 
 		for(auto s: newSelection)
 			selection.addToSelection(dynamic_cast<ModulatorSamplerSound*>(s));
+
+		getSampleEditHandler()->setMainSelectionToLast();
 	}
 
 	using Count = LogicTypeComponent::BodyBase::SelectionTag;

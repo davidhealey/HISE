@@ -449,13 +449,35 @@ HiseModuleDatabase::ScreenshotProvider::~ScreenshotProvider()
 	
 }
 
-juce::Image HiseModuleDatabase::ScreenshotProvider::getImage(const MarkdownLink& url, float )
+juce::Image HiseModuleDatabase::ScreenshotProvider::getImage(const MarkdownLink& url, float width)
 {
 	auto urlString = url.toString(MarkdownLink::UrlFull);
 
 	if (urlString.contains("module_screenshot_"))
 	{
 		auto pId = urlString.fromFirstOccurrenceOf("module_screenshot_", false, false).upToFirstOccurrenceOf(".png", false, false);
+
+
+		auto rootDir = parent->getHolder()->getDatabaseRootDirectory();
+
+		if(rootDir.isDirectory())
+		{
+ 			auto snDir = rootDir.getChildFile("images/override/modules/");
+
+			if(snDir.isDirectory())
+			{
+				auto of = snDir.getChildFile(pId).withFileExtension(".png");
+
+				if(of.existsAsFile())
+				{
+					auto img = ImageFileFormat::loadFrom(of);
+
+					updateWidthFromURL(url, width);
+					return resizeImageToFit(img, width);
+				}
+			}
+		}
+
 
 		MarkdownLink imageURL(url.getRoot(), pId);
 		imageURL.setType(MarkdownLink::Type::Image);

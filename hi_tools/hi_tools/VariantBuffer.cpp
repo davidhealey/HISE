@@ -36,6 +36,8 @@ namespace juce { using namespace hise;
 VariantBuffer::VariantBuffer(float *externalData, int size_) :
 size((externalData != nullptr) ? size_ : 0)
 {
+	registerStreamCreator(this);
+
 	if (externalData != nullptr)
 	{
 		float *data[1] = { externalData };
@@ -47,6 +49,8 @@ size((externalData != nullptr) ? size_ : 0)
 
 VariantBuffer::VariantBuffer(VariantBuffer *otherBuffer, int offset /*= 0*/, int numSamples /*= -1*/)
 {
+	registerStreamCreator(this);
+
 	referToOtherBuffer(otherBuffer, offset, numSamples);
 	addMethods();
 }
@@ -55,6 +59,8 @@ VariantBuffer::VariantBuffer(int samples) :
 size(samples),
 buffer()
 {
+	registerStreamCreator(this);
+
 	if (samples > 0)
 	{
 		buffer.setSize(1, jmax<int>(0, samples));
@@ -282,6 +288,84 @@ void VariantBuffer::addMethods()
 	});
 #endif
 
+	setMethod("applyMedianFilter", [](const var::NativeFunctionArgs& n)
+	{
+		if (auto bf = n.thisObject.getBuffer())
+		{
+			if(n.numArguments > 0)
+			{
+				auto windowSize = (int)n.arguments[0];
+				MedianFilter mf(windowSize);
+				mf.prepare(bf->size);
+				VariantBuffer::Ptr filteredValues = new VariantBuffer(bf->size);
+				mf.apply(bf->buffer.getReadPointer(0), filteredValues->buffer.getWritePointer(0), bf->size);
+				return var(filteredValues.get());
+			}
+		}
+
+		return var();
+	});
+
+	setMethod("decompose", [](const var::NativeFunctionArgs& n)
+	{
+		if (auto bf = n.thisObject.getBuffer())
+		{
+			auto sr = 44100.0;
+
+			if (n.numArguments > 0)
+				sr = (double)n.arguments[0];
+
+			SiTraNoConverter::ConfigData cd;
+
+			if(n.numArguments > 1)
+				cd = SiTraNoConverter::ConfigData(n.arguments[1]);
+
+			SiTraNoConverter converter(sr, cd);
+
+			converter.process(bf->buffer);
+
+			Array<var> rv;
+
+			VariantBuffer::Ptr sine = new VariantBuffer(bf->size);
+			const auto& sb = converter.getSignalComponent(SiTraNoConverter::SignalComponent::Sinusoidal);
+			sine->buffer.copyFrom(0, 0, sb, 0, 0, bf->size);
+
+			rv.add(sine.get());
+
+			VariantBuffer::Ptr noise = new VariantBuffer(bf->size);
+			const auto& nb = converter.getSignalComponent(SiTraNoConverter::SignalComponent::Noise);
+			noise->buffer.copyFrom(0, 0, nb, 0, 0, bf->size);
+
+			rv.add(noise.get());
+
+			if(cd.calculateTransients)
+			{
+				VariantBuffer::Ptr trans = new VariantBuffer(bf->size);
+				const auto& tb = converter.getSignalComponent(SiTraNoConverter::SignalComponent::Transient);
+				trans->buffer.copyFrom(0, 0, tb, 0, 0, bf->size);
+				rv.add(trans.get());
+			}
+
+			const auto& noiseGrains = converter.getNoiseGrains();
+
+			Array<var> ng;
+
+			for(const auto& gb: noiseGrains)
+			{
+				VariantBuffer::Ptr p = new VariantBuffer(gb.getNumSamples());
+				FloatVectorOperations::copy(p->buffer.getWritePointer(0), gb.getReadPointer(0), gb.getNumSamples());
+
+				ng.add(var(p.get()));
+			}
+
+			rv.add(ng);
+
+			return var(rv);
+		}
+
+		return var();
+	});
+
 	setMethod("indexOfPeak", [](const var::NativeFunctionArgs& n)
 	{
 		if (auto bf = n.thisObject.getBuffer())
@@ -464,6 +548,111 @@ void VariantBuffer::addMethods()
 		}
 			
 		return var(range);
+	});
+
+	setMethod("getNextZeroCrossing", [](const var::NativeFunctionArgs& n)
+	{
+		VariantBuffer::Ptr bf = n.thisObject.getBuffer();
+
+		if(n.numArguments > 0)
+		{
+			auto idx = (int)n.arguments[0];
+			auto ptr = bf->buffer.getReadPointer(0);
+
+			for(int i = idx; i < (bf->size-1); i++)
+			{
+				if(ptr[i] < 0.0f && ptr[i+1] > 0.0f)
+				{
+					return i;
+				}
+			}
+		}
+
+		return -1;
+	});
+
+	setMethod("getSlice", [](const var::NativeFunctionArgs& n)
+	{
+		VariantBuffer::Ptr bf = n.thisObject.getBuffer();
+
+		int offset = 0;
+		int numSamples = bf->size;
+
+		if(n.numArguments > 0)
+		{
+			offset = jmin(numSamples, (int)n.arguments[0]);
+			numSamples -= offset;
+		}
+		
+		if(n.numArguments > 1)
+			numSamples = jmin(numSamples, (int)n.arguments[1]);
+			
+		auto ptr = bf->buffer.getWritePointer(0, offset);
+		
+		return var(new VariantBuffer(ptr, numSamples));
+	});
+
+	setMethod("resample", [](const var::NativeFunctionArgs& n)
+	{
+		VariantBuffer::Ptr bf = n.thisObject.getBuffer();
+
+		double ratio = 1.0;
+
+		if(n.numArguments > 0)
+			ratio = jlimit(0.01, 1000.0, (double)n.arguments[0]);
+
+
+		const StringArray interpolatorTypes = {
+		"WindowedSinc",  
+		"Lagrange",      
+		"CatmullRom",    
+		"Linear",
+		"ZeroOrderHold"
+		};
+
+		String quality = "Linear";
+
+		if(n.numArguments > 1)
+		{
+			quality = n.arguments[1].toString();
+		}
+
+		bool wrapAround = false;
+
+		if(n.numArguments > 2)
+			wrapAround = (bool)n.arguments[2];
+
+		auto idx = interpolatorTypes.indexOf(quality);
+
+		if(idx == -1)
+		{
+			String available;
+
+			for(auto s: interpolatorTypes)
+				available << s << ", ";
+
+			throw String("unsupported interpolation type: " + quality + ", available: " + available);
+		}
+
+		auto numSamplesForOutput = roundToInt(bf->size / ratio);
+
+		VariantBuffer::Ptr output = new VariantBuffer(numSamplesForOutput);
+
+		auto in = bf->buffer.getReadPointer(0);
+		auto out = output->buffer.getWritePointer(0);
+		int numIn = bf->size;
+		auto numOut = numSamplesForOutput;
+
+		switch(idx)
+		{
+		case 0: juce::Interpolators::WindowedSinc().process(ratio, in, out, numOut, numIn, wrapAround); break;
+		case 1: juce::Interpolators::Lagrange().process(ratio, in, out, numOut, numIn, wrapAround); break;
+		case 2: juce::Interpolators::CatmullRom().process(ratio, in, out, numOut, numIn, wrapAround); break;
+		case 3: juce::Interpolators::Linear().process(ratio, in, out, numOut, numIn, wrapAround); break;
+		case 4: juce::Interpolators::ZeroOrderHold().process(ratio, in, out, numOut, numIn, wrapAround); break;
+		}
+		
+		return var(output.get());
 	});
 }
 

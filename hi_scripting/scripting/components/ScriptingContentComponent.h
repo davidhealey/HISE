@@ -178,7 +178,9 @@ public:
 #endif
 
 #if HISE_INCLUDE_PROFILING_TOOLKIT
-		const_cast<Processor*>(dynamic_cast<const Processor*>(getScriptProcessor()))->getMainController()->getDebugSession().initUIThread();
+		if(auto sp = const_cast<Processor*>(dynamic_cast<const Processor*>(getScriptProcessor())))
+			sp->getMainController()->getDebugSession().initUIThread();
+
 		Profiler sp(*this);
 #endif
 		Component::paintComponentAndChildren(g);
@@ -315,6 +317,8 @@ public:
 
 	void setHeatmap(DebugInformationBase::Ptr p, const std::map<int, double>* map);
 
+	simple_css::StyleSheet::Collection::DataProvider* createDataProvider() override;
+
 private:
 
 	std::vector<std::pair<Rectangle<int>, float>> heatmap;
@@ -368,6 +372,8 @@ private:
 		var dragData;
 		WeakCallbackHolder paintRoutine;
 		WeakCallbackHolder dragCallback;
+
+		JUCE_DECLARE_WEAK_REFERENCEABLE(ComponentDragInfo);
 	};
 
 	ScopedPointer<ComponentDragInfo> currentDragInfo;

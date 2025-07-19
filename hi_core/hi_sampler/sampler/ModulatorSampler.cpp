@@ -1462,10 +1462,12 @@ void ModulatorSampler::noteOff(const HiseEvent &m)
 
 void ModulatorSampler::preHiseEventCallback(HiseEvent &m)
 {
+	if(soundCollector != nullptr)
+		soundCollector->preHiseEventCallback(m);
+
 	if (m.isNoteOnOrOff())
 	{
-		if(soundCollector != nullptr)
-			soundCollector->preHiseEventCallback(m);
+		
 
 		if (m.isNoteOn())
 		{
@@ -1555,7 +1557,8 @@ float* ModulatorSampler::calculateCrossfadeModulationValuesForVoice(int voiceInd
 	}
 	else
 	{
-		groupIndex = (int)(group - 1);
+		// already zero based, just take the value and convert it to an int
+		groupIndex = (int)(group);
 
 		// If we have set multiple groups to be active manually
 		// we want to use only as much tables as there are active groups...

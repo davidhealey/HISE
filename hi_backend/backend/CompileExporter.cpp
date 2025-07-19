@@ -163,6 +163,9 @@ int CompileExporter::forcedVSTVersion = 0;
 
 void CompileExporter::printErrorMessage(const String& title, const String &message)
 {
+    if(errorFunction)
+        errorFunction(message);
+        
 	if (shouldBeSilent())
 	{
 		std::cout << "ERROR: " << title << std::endl;
@@ -454,6 +457,11 @@ int CompileExporter::getBuildOptionPart(const String& argument)
 	return 0;
 }
 
+void CompileExporter::setExportUsingCI(bool shouldUseCIMode)
+{
+	useCIMode = shouldUseCIMode;
+}
+
 CompileExporter::BuildOption CompileExporter::getBuildOptionFromCommandLine(StringArray &args)
 {
 	Array<int> buildParts;
@@ -504,31 +512,11 @@ CompileExporter::ErrorCodes CompileExporter::exportInternal(TargetTypes type, Bu
 	if (!useIpp) useIpp = data.getSetting(HiseSettings::Compiler::UseIPP);
 	
 	if (!legacyCpuSupport) legacyCpuSupport = data.getSetting(HiseSettings::Compiler::LegacyCPUSupport);
-	    
-	if (!hisePath.isDirectory())
-	{
-		if (isUsingCIMode())
-		{
-			auto appPath = File::getSpecialLocation(File::currentApplicationFile).getParentDirectory();
 
-			while (!appPath.isRoot() && !appPath.getChildFile("hi_core").isDirectory())
-			{
-				appPath = appPath.getParentDirectory();
-			}
+	auto ok = setupHisePath();
 
-			if (!appPath.isRoot())
-				hisePath = appPath;
-		}
-		else
-		{
-			hisePath = data.getSetting(HiseSettings::Compiler::HisePath);
-		}
-	}
-	
-	if (!hisePath.isDirectory()) 
-		return ErrorCodes::HISEPathNotSpecified;
-
-
+	if(ok != ErrorCodes::OK)
+		return ok;
 
 	String buildCommit(PREVIOUS_HISE_COMMIT);
 
@@ -824,6 +812,36 @@ CompileExporter::ErrorCodes CompileExporter::exportInternal(TargetTypes type, Bu
 	return ErrorCodes::UserAbort;
 }
 
+CompileExporter::ErrorCodes CompileExporter::setupHisePath()
+{
+	const auto& data = dynamic_cast<GlobalSettingManager*>(chainToExport->getMainController())->getSettingsObject();
+
+	if (!hisePath.isDirectory())
+	{
+		if (isUsingCIMode())
+		{
+			auto appPath = File::getSpecialLocation(File::currentApplicationFile).getParentDirectory();
+
+			while (!appPath.isRoot() && !appPath.getChildFile("hi_core").isDirectory())
+			{
+				appPath = appPath.getParentDirectory();
+			}
+
+			if (!appPath.isRoot())
+				hisePath = appPath;
+		}
+		else
+		{
+			hisePath = data.getSetting(HiseSettings::Compiler::HisePath);
+		}
+	}
+		
+	if (!hisePath.isDirectory()) 
+		return ErrorCodes::HISEPathNotSpecified;
+
+	return ErrorCodes::OK;
+}
+
 String checkSampleReferences(ModulatorSynthChain* chainToExport)
 {
 	{
@@ -898,6 +916,14 @@ bool CompileExporter::checkSanity(TargetTypes type, BuildOption option)
 
     const bool frontWasFound = chainToExport->hasDefinedFrontInterface();
 
+#if !USE_IPP
+	if(useIpp)
+	{
+		printErrorMessage("IPP setting mismatch", "You cannot compile a plugin with IPP if you have not compiled HISE with IPP.  \n> Turn off the `UseIpp` setting in the Compiler settings of HISE and retry.");
+		return false;
+	}
+#endif
+
 	if (!frontWasFound)
 	{
 		printErrorMessage("No Interface found.", "You have to add at least one script processor and call Synth.addToFront(true).");
@@ -953,14 +979,14 @@ bool CompileExporter::checkSanity(TargetTypes type, BuildOption option)
         printErrorMessage("Illegal Company code", "The Company Code must have this structure: 'Abcd'");
         return false;
     }
-    
-	const File hiseDirectory = GET_SETTING(HiseSettings::Compiler::HisePath);
 
-    if(!hiseDirectory.isDirectory() || !hiseDirectory.getChildFile("hi_core/").isDirectory())
-    {
-        printErrorMessage("HISE path is not valid", "You need to set the correct path to the HISE SDK at File -> Settings -> Compiler Settings");
-        return false;
-    };
+	auto ok = setupHisePath();
+
+	if(ok != ErrorCodes::OK)
+	{
+		printErrorMessage("HISE path is not valid", "You need to set the correct path to the HISE SDK at File -> Settings -> Compiler Settings");
+		return false;
+	}
 
 	File splashScreenFile = handler->getSubDirectory(ProjectHandler::SubDirectories::Images).getChildFile("SplashScreen.png");
 	File splashScreeniPhoneFile = handler->getSubDirectory(ProjectHandler::SubDirectories::Images).getChildFile("SplashScreeniPhone.png");
@@ -983,7 +1009,7 @@ bool CompileExporter::checkSanity(TargetTypes type, BuildOption option)
 
     if(BuildOptionHelpers::isVST(option))
     {
-        const File vstSDKDirectory = hiseDirectory.getChildFile("tools/SDK/VST3 SDK/public.sdk/");
+        const File vstSDKDirectory = hisePath.getChildFile("tools/SDK/VST3 SDK/public.sdk/");
         
         if(!vstSDKDirectory.isDirectory())
         {
@@ -995,7 +1021,7 @@ bool CompileExporter::checkSanity(TargetTypes type, BuildOption option)
 #if JUCE_WINDOWS
     if(BuildOptionHelpers::isStandalone(option))
     {
-        const File asioSDK = hiseDirectory.getChildFile("tools/SDK/ASIOSDK2.3/common");
+        const File asioSDK = hisePath.getChildFile("tools/SDK/ASIOSDK2.3/common");
         
         if(!asioSDK.isDirectory())
         {
@@ -1008,7 +1034,7 @@ bool CompileExporter::checkSanity(TargetTypes type, BuildOption option)
 #if !JUCE_LINUX
     if(BuildOptionHelpers::isAAX(option))
     {
-        const File aaxSDK = hiseDirectory.getChildFile("tools/SDK/AAX/Libs");
+        const File aaxSDK = hisePath.getChildFile("tools/SDK/AAX/Libs");
         
         if(!aaxSDK.isDirectory())
         {
@@ -1910,19 +1936,17 @@ void CompileExporter::ProjectTemplateHelpers::handleCompilerInfo(CompileExporter
     
     REPLACE_WILDCARD_WITH_STRING("%FAUST_HEADER_PATH%", headerPath);
     
-    REPLACE_WILDCARD_WITH_STRING("%USE_IPP%", exporter->useIpp ? "1" : "0");
-
     REPLACE_WILDCARD_WITH_STRING("%IPP_1A%", exporter->useIpp ? "Static_Library" : String());
 		REPLACE_WILDCARD_WITH_STRING("%UAC_LEVEL%", exporter->dataObject.getSetting(HiseSettings::Project::AdminPermissions) ? "/MANIFESTUAC:level='requireAdministrator'" : String());
     
     REPLACE_WILDCARD_WITH_STRING("%LEGACY_CPU_SUPPORT%", exporter->legacyCpuSupport ? "1" : "0");
     
     auto s = exporter->dataObject.getTemporaryDefinitionsAsString();
-    
-    REPLACE_WILDCARD_WITH_STRING("%EXTRA_DEFINES_LINUX%", exporter->dataObject.getSetting(HiseSettings::Project::ExtraDefinitionsLinux).toString() + s);
-	REPLACE_WILDCARD_WITH_STRING("%EXTRA_DEFINES_WIN%", exporter->dataObject.getSetting(HiseSettings::Project::ExtraDefinitionsWindows).toString() + s);
-	REPLACE_WILDCARD_WITH_STRING("%EXTRA_DEFINES_OSX%", exporter->dataObject.getSetting(HiseSettings::Project::ExtraDefinitionsOSX).toString() + s);
-	REPLACE_WILDCARD_WITH_STRING("%EXTRA_DEFINES_IOS%", exporter->dataObject.getSetting(HiseSettings::Project::ExtraDefinitionsIOS).toString());
+
+		REPLACE_WILDCARD_WITH_STRING("%EXTRA_DEFINES_LINUX%", exporter->dataObject.getSetting(HiseSettings::Project::ExtraDefinitionsLinux).toString() + (exporter->useIpp ? "\r\nUSE_IPP=1" : String()) + s);
+		REPLACE_WILDCARD_WITH_STRING("%EXTRA_DEFINES_WIN%", exporter->dataObject.getSetting(HiseSettings::Project::ExtraDefinitionsWindows).toString() + s);
+		REPLACE_WILDCARD_WITH_STRING("%EXTRA_DEFINES_OSX%", exporter->dataObject.getSetting(HiseSettings::Project::ExtraDefinitionsOSX).toString() + s);
+		REPLACE_WILDCARD_WITH_STRING("%EXTRA_DEFINES_IOS%", exporter->dataObject.getSetting(HiseSettings::Project::ExtraDefinitionsIOS).toString());
 
 #if JUCE_WINDOWS
     const auto useGlobalAppFolder = (bool)exporter->dataObject.getSetting(HiseSettings::Project::UseGlobalAppDataFolderWindows);
@@ -1955,26 +1979,33 @@ void CompileExporter::ProjectTemplateHelpers::handleCompilerInfo(CompileExporter
     if(macOSVersion >= SystemStats::MacOS_14)
         copyPlugin = false;
 #endif
-    
+		
 	REPLACE_WILDCARD_WITH_STRING("%COPY_PLUGIN%", copyPlugin ? "1" : "0");
+	
+	// Handling FFTW on Windows/Linux and IPP on Linux - neither needed on MacOS
+	bool useFFTW = false;
 
-#if JUCE_MAC
-	REPLACE_WILDCARD_WITH_STRING("%IPP_COMPILER_FLAGS%", exporter->useIpp ? "/opt/intel/ipp/lib/libippi.a  /opt/intel/ipp/lib/libipps.a /opt/intel/ipp/lib/libippvm.a /opt/intel/ipp/lib/libippcore.a" : String());
-	REPLACE_WILDCARD_WITH_STRING("%IPP_HEADER%", exporter->useIpp ? "/opt/intel/ipp/include" : String());
-	REPLACE_WILDCARD_WITH_STRING("%IPP_LIBRARY%", exporter->useIpp ? "/opt/intel/ipp/lib" : String());
-#endif
+	#if JUCE_LINUX
+		useFFTW = !exporter->useIpp && exporter->dataObject.getSetting(HiseSettings::Project::ExtraDefinitionsLinux).toString().contains("AUDIOFFT_FFTW3=1");
+	#elif JUCE_WINDOWS
+		useFFTW = !exporter->useIpp && exporter->dataObject.getSetting(HiseSettings::Project::ExtraDefinitionsWindows).toString().contains("AUDIOFFT_FFTW3=1");
+	#endif
 
-#if JUCE_LINUX
-	REPLACE_WILDCARD_WITH_STRING("%IPP_COMPILER_FLAGS%", exporter->useIpp ? "/opt/intel/ipp/lib/intel64/libippi.a  /opt/intel/ipp/lib/intel64/libipps.a /opt/intel/ipp/lib/intel64/libippvm.a /opt/intel/ipp/lib/intel64/libippcore.a" : String());
-	REPLACE_WILDCARD_WITH_STRING("%IPP_HEADER%", exporter->useIpp ? "/opt/intel/ipp/include" : String());
-	REPLACE_WILDCARD_WITH_STRING("%IPP_LIBRARY%", exporter->useIpp ? "/opt/intel/ipp/lib" : String());
-#endif
+	REPLACE_WILDCARD_WITH_STRING("%USE_STATIC_FFTW%", useFFTW ? "enabled" : "disabled");
 
-#if !JUCE_MAC && !JUCE_LINUX
-	REPLACE_WILDCARD_WITH_STRING("%IPP_COMPILER_FLAGS%", String());
-	REPLACE_WILDCARD_WITH_STRING("%IPP_HEADER%", String());
-	REPLACE_WILDCARD_WITH_STRING("%IPP_LIBRARY%", String());
-#endif
+	#if JUCE_WINDOWS
+		const File fftwPath = exporter->hisePath.getChildFile("tools/fftw");
+		
+		REPLACE_WILDCARD_WITH_STRING("%FFT_HEADER_PATH%", useFFTW ? fftwPath.getFullPathName() : String());
+		REPLACE_WILDCARD_WITH_STRING("%FFT_LINKER_FLAGS%", useFFTW ? fftwPath.getFullPathName() + "/windows/fftw3f.lib" : String());
+	#elif JUCE_LINUX
+	
+		if (exporter->useIpp)
+			REPLACE_WILDCARD_WITH_STRING("%FFT_LINKER_FLAGS%", "-lippcore -lippvm -lipps -lippi -lippcv");
+		else
+			REPLACE_WILDCARD_WITH_STRING("%FFT_LINKER_FLAGS%", useFFTW ? "-lfftw3f" : String());
+
+	#endif
 
 	const auto includePerfetto = (bool)exporter->dataObject.getSetting(HiseSettings::Project::CompileWithPerfetto);
 
@@ -2328,15 +2359,6 @@ File CompileExporter::getProjucerProjectFile()
 	return GET_PROJECT_HANDLER(chainToExport).getSubDirectory(ProjectHandler::SubDirectories::Binaries).getChildFile("AutogeneratedProject.jucer");
 }
 
-
-
-
-
-
-
-
-
-
 #undef REPLACE_WILDCARD
 
 //==============================================================================
@@ -2577,7 +2599,7 @@ void CompileExporter::BatchFileCreator::createBatchFile(CompileExporter* exporte
 	
 	if (!exporter->rawMode && BuildOptionHelpers::is64Bit(buildOption))
 	{
-		ADD_LINE("echo > Compiling 64bit " << projectType << " %project% ...");
+		ADD_LINE("echo Compiling 64bit " << projectType << " %project% ...");
 		ADD_LINE("set Platform=X64");
 		ADD_LINE("%msbuild% \"%build_path%\\Builds\\" << vsFolder << "\\%project%.sln\" %vs_args%");
 		

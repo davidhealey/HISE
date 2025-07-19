@@ -1133,6 +1133,7 @@ AbstractZoomableView::WASDKeyListener::WASDKeyListener(Component& c):
 
 	delta[0].setValueAndRampTime(0.0, 60.0, 0.12);
 	delta[1].setValueAndRampTime(0.0, 60.0, 0.12);
+	delta[2].setValueAndRampTime(0.0, 60.0, 0.12);
 }
 
 AbstractZoomableView::WASDKeyListener::~WASDKeyListener()
@@ -1142,69 +1143,66 @@ AbstractZoomableView::WASDKeyListener::~WASDKeyListener()
 
 bool AbstractZoomableView::WASDKeyListener::keyPressed(const KeyPress& key, Component* originatingComponent)
 {
-	return false;
+	return isDirection(key.getKeyCode());
 }
 
-void AbstractZoomableView::WASDKeyListener::setShiftMultiplier(double horizontalFactor, double verticalFactor)
+void AbstractZoomableView::WASDKeyListener::setShiftMultiplier(double horizontalFactor, double verticalFactor, double zoomFactor)
 {
 	shiftMultipliers[0] = horizontalFactor;
 	shiftMultipliers[1] = verticalFactor;
+	shiftMultipliers[2] = zoomFactor;
 }
 
 void AbstractZoomableView::WASDKeyListener::timerCallback()
 {
 	auto mods = ComponentPeer::getCurrentModifiersRealtime();
 
-	double thisDelta[2] = { 0.0, 0.0 };
+	double thisDelta[NumMovementTypes] = { 0.0, 0.0, 0.0 };
 
 	for(auto s: state)
 	{
 		if(s.second)
 		{
-			auto horizontal = isHorizontal(s.first);
+			auto idx = (int)getMovementType(s.first);
 
-			thisDelta[horizontal] = (float)getDelta(s.first);
+			thisDelta[idx] = (float)getDelta(s.first);
 
 			if(mods.isShiftDown())
-				thisDelta[horizontal] *= shiftMultipliers[(int)horizontal];
+				thisDelta[idx] *= shiftMultipliers[idx];
 		}
 	}
 
 	delta[0].setTargetValue(thisDelta[0]);
 	delta[1].setTargetValue(thisDelta[1]);
+	delta[2].setTargetValue(thisDelta[2]);
 
-
-	if(!onDirection)
+	if(!onMovement)
 		return;
 
-	bool movement = std::abs(delta[0].getTargetValue()) > 0.5 || std::abs(delta[1].getTargetValue()) > 0.5;
+	bool movement = std::abs(delta[0].getTargetValue()) > 0.5 || 
+		            std::abs(delta[1].getTargetValue()) > 0.5 ||
+					std::abs(delta[2].getTargetValue()) > 0.5;
 
-	if(auto x = delta[0].getNextValue())
+	if(auto x = delta[(int)MovementType::Horizontal].getNextValue())
 	{
-		onDirection(false, x);
+		onMovement(MovementType::Horizontal, x);
 		movement |= std::abs(x) > 0.0005;
 	}
 				
-	if(auto y = delta[1].getNextValue())
+	if(auto y = delta[(int)MovementType::Vertical].getNextValue())
 	{
-		onDirection(true, y);
+		onMovement(MovementType::Vertical, y);
 		movement |= std::abs(y) > 0.0005;
+	}
+
+	if(auto z = delta[(int)MovementType::Zoom].getNextValue())
+	{
+		onMovement(MovementType::Zoom, z);
+		movement |= std::abs(z) > 0.0005;
 	}
 				
 	if(!movement)
 		stopTimer();
-}
-
-void AbstractZoomableView::WASDKeyListener::handlePressedKey(Direction d)
-{
-	switch(d)
-	{
-	case Direction::Up: DBG("UP"); break;
-	case Direction::Down: DBG("DOWN"); break;
-	case Direction::Left: DBG("LEFT"); break;
-	case Direction::Right: DBG("RIGHT"); break;
-	default: ;
-	}
 }
 
 bool AbstractZoomableView::WASDKeyListener::keyStateChanged(bool isKeyDown, Component* originatingComponent)
@@ -1213,11 +1211,19 @@ bool AbstractZoomableView::WASDKeyListener::keyStateChanged(bool isKeyDown, Comp
 	state[Direction::Up] = KeyPress::isKeyCurrentlyDown((int)Direction::Up);
 	state[Direction::Down] = KeyPress::isKeyCurrentlyDown((int)Direction::Down);
 	state[Direction::Right] = KeyPress::isKeyCurrentlyDown((int)Direction::Right);
+	state[Direction::In] = KeyPress::isKeyCurrentlyDown((int)Direction::In);
+	state[Direction::Out] = KeyPress::isKeyCurrentlyDown((int)Direction::Out);
 
 	if(state[Direction::Left] && state[Direction::Right])
 	{
 		state[Direction::Left] = false;
 		state[Direction::Right] = false;
+	}
+
+	if(state[Direction::In] && state[Direction::Out])
+	{
+		state[Direction::In] = false;
+		state[Direction::Out] = false;
 	}
 
 	if(state[Direction::Up] && state[Direction::Down])
@@ -1233,8 +1239,8 @@ bool AbstractZoomableView::WASDKeyListener::keyStateChanged(bool isKeyDown, Comp
 
 	if(somePressed && !isTimerRunning())
 		startTimer(15);
-			
-	return false;
+
+	return somePressed;
 }
 
 AbstractZoomableView::DragZoomAction::DragZoomAction(AbstractZoomableView& parent_, Range<double> newRange_,
@@ -1314,33 +1320,7 @@ void AbstractZoomableView::setAsParentComponent(Component* p)
 	scrollbar.addListener(this);
 	animator.addListener(this);
 
-	wasd->onDirection = [this](bool isHorizontal, float delta)
-	{
-		if(isHorizontal)
-		{
-			auto p = scrollbar.getCurrentRangeStart();
-
-			auto l = scrollbar.getCurrentRange().getLength();
-			auto d = l * delta;
-			d *= JUCE_LIVE_CONSTANT_OFF(0.02);
-
-			p = jlimit(0.0, 1.0 - l, p + d);
-			scrollbar.setCurrentRangeStart(p, sendNotificationSync);
-		}
-		else
-		{
-			auto dx = 1.0 + delta * JUCE_LIVE_CONSTANT_OFF(0.1);
-
-			auto z = zoomFactor * dx;
-
-			auto pos = asComponent->getWidth() / 2;
-
-			if(asComponent->isMouseOver(true))
-				pos = asComponent->getMouseXYRelative().getX();
-
-			changeZoom(z, pos);
-		}
-	};
+	wasd->onMovement = BIND_MEMBER_FUNCTION_2(AbstractZoomableView::onWASDMovement);
 
 	scrollbar.setRangeLimits({0.0, 1.0});
 	animator.setLimits({0.0, 1.0});
@@ -1403,59 +1383,94 @@ void AbstractZoomableView::drawBackgroundGrid(Graphics& g, Rectangle<int> viewpo
 	if(r.getLength() == 0.0)
 		return;
 
-	auto l_r = std::log10(r.getLength()) - 0.1;
-
-	auto l = std::floor(l_r);
-
-	auto alpha = 1.0f - jlimit(0.0f, 1.0f, (float)(l_r - l));
-
-	auto delta = std::pow(10.0, l);
-	auto x = r.getStart();
-
-	if(x != 0.0)
-		x += (delta - std::fmod(r.getStart(), delta));
-
-	x -= delta;
-
 	NormalisableRange<double> nr(r);
-
 	auto y = viewportPosition.getY();
 	auto h = viewportPosition.getBottom();
 
-	g.setColour(Colours::black.withAlpha(0.02f));
-	g.fillRect(viewportPosition);
-
-	g.setColour(Colours::white.withAlpha(0.3f));
 	g.setFont(GLOBAL_FONT());
 
-	auto smallDelta = delta * 0.1;
-
-	while(x <= r.getEnd() && delta != 0.0f)
+	if(useIntegerGrid)
 	{
-		if(nr.getRange().contains(x))
+		auto s = getScaledZoomRange();
+
+		int numElementsToShow = roundToInt(s.getLength()) - 1;
+
+		auto elementWidth = (double)viewportPosition.getWidth() / (s.getLength() - 1);
+
+		int numToSkip = 1;
+
+		while(elementWidth * (double)numToSkip < 50.0)
 		{
-			auto xpos = viewportPosition.getX() + roundToInt(nr.convertTo0to1(x) * (float)viewportPosition.getWidth());
+			numToSkip *= 10;
+		}
+
+		auto xOffset = viewportPosition.getX() - std::fmod(s.getStart(), (double)numToSkip) * elementWidth;
+
+		for(int i = 0; i <= (numElementsToShow + numToSkip); i += numToSkip)
+		{
+			auto xpos = xOffset + (double)(i * elementWidth);
+			
 			Rectangle<float> tb((float)xpos + 5.0f, (float)y, 100.0f, (float)FirstItemOffset);
-			auto label = getTextForDistance(x * totalLength);
+
+			auto idx = i + s.getStart() - std::fmod(s.getStart(), (double)numToSkip);
+
+			auto label = getTextForDistance(idx);
 			g.setColour(Colours::white.withAlpha(0.3f));
 			g.drawText(label, tb, Justification::centredLeft);
 			g.drawVerticalLine(xpos, y, h);
 		}
+	}
+	else
+	{
+		auto l_r = std::log10(r.getLength()) - 0.1;
 
-		g.setColour(Colours::white.withAlpha(alpha * 0.25f));
+		auto l = std::floor(l_r);
 
-		for(int i = 1; i < 10; i++)
+		auto alpha = 1.0f - jlimit(0.0f, 1.0f, (float)(l_r - l));
+
+		auto delta = std::pow(10.0, l);
+		auto x = r.getStart();
+
+		if(x != 0.0)
+			x += (delta - std::fmod(r.getStart(), delta));
+
+		x -= delta;
+
+		g.setColour(Colours::black.withAlpha(0.02f));
+		g.fillRect(viewportPosition);
+
+		g.setColour(Colours::white.withAlpha(0.3f));
+		
+
+		auto smallDelta = delta * 0.1;
+
+		while(x <= r.getEnd() && delta != 0.0f)
 		{
-			auto x2 = x + smallDelta * (float)i;
-
-			if(nr.getRange().contains(x2))
+			if(nr.getRange().contains(x))
 			{
-				x2 = nr.convertTo0to1(x2);
-				g.drawVerticalLine(viewportPosition.getX() + roundToInt(x2 * (float)viewportPosition.getWidth()), y + (float)FirstItemOffset - 2.0f, h);
+				auto xpos = viewportPosition.getX() + roundToInt(nr.convertTo0to1(x) * (float)viewportPosition.getWidth());
+				Rectangle<float> tb((float)xpos + 5.0f, (float)y, 100.0f, (float)FirstItemOffset);
+				auto label = getTextForDistance(x * (totalLength));
+				g.setColour(Colours::white.withAlpha(0.3f));
+				g.drawText(label, tb, Justification::centredLeft);
+				g.drawVerticalLine(xpos, y, h);
 			}
-		}
 
-		x += delta;
+			g.setColour(Colours::white.withAlpha(alpha * 0.25f));
+
+			for(int i = 1; i < 10; i++)
+			{
+				auto x2 = x + smallDelta * (float)i;
+
+				if(nr.getRange().contains(x2))
+				{
+					x2 = nr.convertTo0to1(x2);
+					g.drawVerticalLine(viewportPosition.getX() + roundToInt(x2 * (float)viewportPosition.getWidth()), y + (float)FirstItemOffset - 2.0f, h);
+				}
+			}
+
+			x += delta;
+		}
 	}
 }
 
@@ -1499,6 +1514,11 @@ void AbstractZoomableView::handleMouseWheelEvent(const MouseEvent& e, const Mous
 		auto vr = scrollbar.getCurrentRange();
 		scrollbar.setCurrentRange (vr - increment, sendNotificationSync);
 	}
+}
+
+void AbstractZoomableView::hangleMouseMagnify(const MouseEvent& e, float scaleFactor)
+{
+	changeZoom(zoomFactor * (double)scaleFactor, e.getPosition().x);
 }
 
 bool AbstractZoomableView::handleMouseEvent(const MouseEvent& e, MouseEventType t)
@@ -1634,6 +1654,38 @@ void AbstractZoomableView::updateMouseCursorForEvent(const MouseEvent& e)
 		asComponent->setMouseCursor(MouseCursor::CrosshairCursor);
 	else
 		asComponent->setMouseCursor(getTooltip().isNotEmpty() ? MouseCursor::PointingHandCursor : MouseCursor::NormalCursor);
+}
+
+bool AbstractZoomableView::onWASDMovement(WASDKeyListener::MovementType t, double delta)
+{
+	if(t == WASDKeyListener::MovementType::Horizontal)
+	{
+		auto p = scrollbar.getCurrentRangeStart();
+
+		auto l = scrollbar.getCurrentRange().getLength();
+		auto d = l * delta;
+		d *= JUCE_LIVE_CONSTANT_OFF(0.02);
+
+		p = jlimit(0.0, 1.0 - l, p + d);
+		scrollbar.setCurrentRangeStart(p, sendNotificationSync);
+		return true;
+	}
+	else if (t == WASDKeyListener::MovementType::Zoom)
+	{
+		auto dx = 1.0 + delta * JUCE_LIVE_CONSTANT_OFF(0.1);
+
+		auto z = zoomFactor * dx;
+
+		auto pos = asComponent->getWidth() / 2;
+
+		if(asComponent->isMouseOver(true))
+			pos = asComponent->getMouseXYRelative().getX();
+
+		changeZoom(z, pos);
+		return true;
+	}
+
+	return false;
 }
 
 float AbstractZoomableView::getZoomScale() const
@@ -1863,6 +1915,7 @@ struct ZoomableDataViewer: public AbstractZoomableView,
         Rectangle<float> fullBounds;
         Rectangle<float> legend;
         Range<double> dataRangeToShow;
+		NormalisableRange<float> valueRange;
     };
 
     enum class IndexDomain
@@ -1887,7 +1940,7 @@ struct ZoomableDataViewer: public AbstractZoomableView,
     {
         Colour getColour() const
         {
-            return Colour(label.hash()).withSaturation(0.5).withBrightness(0.7f).withAlpha(1.0f);
+            return Colour((uint32)label.hash()).withSaturation(0.5).withBrightness(0.7f).withAlpha(1.0f);
         }
 
         void draw(Graphics& g, DrawContext& ctx)
@@ -1906,7 +1959,7 @@ struct ZoomableDataViewer: public AbstractZoomableView,
             {
                 bool first = true;
 
-                float xDelta = ctx.fullBounds.getWidth() / (ctx.dataRangeToShow.getLength() - 1);
+                float xDelta = ctx.fullBounds.getWidth() / (thisRange.getLength() - 1);
 
                 if(xDelta < 0.25)
                 {
@@ -1922,8 +1975,8 @@ struct ZoomableDataViewer: public AbstractZoomableView,
 
                         auto range = FloatVectorOperations::findMinAndMax(data.get() + thisIndex, numThisTime);
 
-                        auto yMax = valueRange.convertTo0to1(range.getEnd());
-                        auto yMin = valueRange.convertTo0to1(range.getStart());
+                        auto yMax = ctx.valueRange.convertTo0to1(range.getEnd());
+                        auto yMin = ctx.valueRange.convertTo0to1(range.getStart());
 
                         auto y = ctx.fullBounds.getY() + (1.0f - yMax) * ctx.fullBounds.getHeight();
                         auto bottom = ctx.fullBounds.getY() + (1.0f - yMin) * ctx.fullBounds.getHeight();
@@ -1953,7 +2006,7 @@ struct ZoomableDataViewer: public AbstractZoomableView,
                         auto x = -1.0 *  (thisRange.getStart() - (double)i) * xDelta;
                         x += ctx.fullBounds.getX();
 
-                        auto y = 1.0f - valueRange.convertTo0to1(data[i]);
+                        auto y = 1.0f - ctx.valueRange.convertTo0to1(data[i]);
 
                         Point<float> pos { (float)x, ctx.fullBounds.getY() + y * ctx.fullBounds.getHeight() };
 
@@ -2001,6 +2054,7 @@ struct ZoomableDataViewer: public AbstractZoomableView,
 
     ZoomableDataViewer()
     {
+		useIntegerGrid = true;
         setOpaque(true);
         setAsParentComponent(this);
     }
@@ -2008,7 +2062,7 @@ struct ZoomableDataViewer: public AbstractZoomableView,
     UndoManager um;
     OwnedArray<Data> data;
 
-    double getTotalLength() const override { return (double)maxLength; }
+    double getTotalLength() const override { return (double)(maxLength); }
 
     UndoManager* getUndoManager() override { return &um; }
 
@@ -2016,6 +2070,9 @@ struct ZoomableDataViewer: public AbstractZoomableView,
 
     void paint(Graphics& g) override
     {
+		if(yRange.isEmpty())
+			return;
+
         DrawContext ctx;
         auto b = getLocalBounds().toFloat().reduced(10.0f);
         ctx.legend = b.removeFromTop(24.0f);
@@ -2028,6 +2085,7 @@ struct ZoomableDataViewer: public AbstractZoomableView,
         
         ctx.fullBounds = b;
         ctx.dataRangeToShow = getScaledZoomRange();
+		ctx.valueRange = yRange;
 
         for(auto d: data)
             d->draw(g, ctx);
@@ -2133,13 +2191,15 @@ struct ZoomableDataViewer: public AbstractZoomableView,
 
         std::vector<TooltipData> matches;
 
+		NormalisableRange<float> fullValueRange(yRange);
+
         for(auto d: data)
         {
             TooltipData nd;
             nd.d = d;
             auto v = d->data[index];
             nd.value = { index, v };
-            auto yPos = vp.getY() + roundToInt((1.0f - d->valueRange.convertTo0to1(v)) * (float)vp.getHeight());
+            auto yPos = vp.getY() + roundToInt((1.0f - fullValueRange.convertTo0to1(v)) * (float)vp.getHeight());
             nd.position = { x, yPos};
             matches.push_back(nd);
         }
@@ -2174,13 +2234,16 @@ struct ZoomableDataViewer: public AbstractZoomableView,
 
     String getTextForDistance(float width) const override
     {
-        return getXString(width, timeDomain, xRange);
+		if(useIntegerGrid)
+			return String(roundToInt(width));
+		else
+			return getXString(width, timeDomain, xRange);
     }
 
     void resized() override
     {
         auto b = getLocalBounds();
-        auto legend = b.removeFromTop(24);
+        b.removeFromTop(24);
         onResize(b);
     }
     
@@ -2312,6 +2375,169 @@ struct ZoomableDataViewer: public AbstractZoomableView,
     IndexDomain timeDomain = IndexDomain::Absolute;
 };
 
+RectViewer::RectViewer(const String& label, const var& data):
+	resizer(this, nullptr)
+{
+	setMouseCursor(MouseCursor::CrosshairCursor);
+
+	addAndMakeVisible(resizer);
+
+	callRecursive(data, label, [&](const String& label, const var& obj)
+	{
+		if(auto r = dynamic_cast<RectangleDynamicObject*>(obj.getDynamicObject()))
+		{
+			Item ni;
+			ni.label = label;
+			ni.rectangle = r->getRectangle();
+			ni.c = Colour((uint32)ni.label.hash()).withSaturation(0.5).withBrightness(0.7f).withAlpha(1.0f);
+
+			items.add(ni);
+		}
+		return false;
+	});
+
+	for(auto& i: items)
+	{
+		fullBounds = fullBounds.getUnion(i.rectangle);
+	}
+
+	auto w = fullBounds.getWidth() + jmax(0.0, -1.0 * fullBounds.getX());
+	auto h = fullBounds.getHeight() + jmax(0.0, -1.0 * fullBounds.getY());
+
+	setSize(jlimit(200, 800, (int)w),
+		    jlimit(200, 800, (int)h));
+}
+
+void RectViewer::mouseMove(const MouseEvent& e)
+{
+	auto lb = getLocalBounds().toFloat();
+
+	auto t = AffineTransform::translation(jmax(0.0, -1.0 * fullBounds.getX()), jmax(0.0, -1.0 * fullBounds.getY()));
+
+	auto w = fullBounds.getWidth() + jmax(fullBounds.getX(), 0.0);
+	auto h = fullBounds.getHeight() + jmax(fullBounds.getY(), 0.0);
+
+	t = t.followedBy(AffineTransform::scale(lb.getWidth() / w, lb.getHeight() / h));
+
+	int idx = 0;
+	hoveredIndexes.clear();
+
+	for(const auto& i: items)
+	{
+		if(i.rectangle.transformedBy(t).contains(e.getPosition().toDouble()))
+		{
+			hoveredIndexes.add(idx);
+		}
+
+		idx++;
+	}
+
+	repaint();
+}
+
+void RectViewer::paint(Graphics& g)
+{
+	auto lb = getLocalBounds().toFloat();
+
+	auto t = AffineTransform::translation(jmax(0.0, -1.0 * fullBounds.getX()), jmax(0.0, -1.0 * fullBounds.getY()));
+
+	auto w = fullBounds.getWidth() + jmax(fullBounds.getX(), 0.0);
+	auto h = fullBounds.getHeight() + jmax(fullBounds.getY(), 0.0);
+
+	t = t.followedBy(AffineTransform::scale(lb.getWidth() / w, lb.getHeight() / h));
+
+	auto f = GLOBAL_MONOSPACE_FONT();
+
+	Array<Rectangle<float>> textBounds;
+
+	int idx = 0;
+
+	for(const auto& i: items)
+	{
+		auto r = i.rectangle.toFloat().transformed(t);
+		g.setColour(i.c.withAlpha(hoveredIndexes.contains(idx) ? 1.0f : 0.7f));
+		g.setFont(f);
+
+		auto tb = r.withSizeKeepingCentre(f.getStringWidthFloat(i.label) + 10.0f, 20.f).constrainedWithin(lb);
+
+		for(const auto& e: textBounds)
+		{
+			if(e.intersects(tb))
+				tb = tb.translated(0.0f, 20.0f).constrainedWithin(lb);
+		}
+
+		textBounds.add(tb);
+
+		g.drawText(i.label, tb, Justification::centred);
+		g.setColour(i.c.withAlpha(hoveredIndexes.contains(idx++) ? 0.1f : 0.05f));
+		g.fillRect(r);
+		g.setColour(i.c.withAlpha(0.3f));
+		g.drawRect(r, 1.0f);
+	}
+
+	if(!currentDragRectangle.isEmpty())
+	{
+		auto r = currentDragRectangle.toFloat().transformedBy(t.inverted()).toString();
+
+		auto tb = currentDragRectangle.toFloat().withSizeKeepingCentre(f.getStringWidthFloat(r) + 10.0f, 20.0f).constrainedWithin(lb);
+
+		for(auto e: textBounds)
+		{
+			if(e.intersects(tb))
+				tb = tb.translated(0.0f, 20.0f).constrainedWithin(lb);
+		}
+
+		auto c = Colour(SIGNAL_COLOUR);
+
+		g.setColour(c.withAlpha(0.1f));
+		g.fillRect(currentDragRectangle);
+		g.setColour(c);
+		g.drawRect(currentDragRectangle, 1);
+		g.drawText(r, tb, Justification::centred);
+	}
+}
+
+bool RectViewer::callRecursive(const var& v, const String& label,
+	const std::function<bool(const String&, const var&)>& f)
+{
+
+	if(f(label, v))
+		return true;
+
+	if(v.isArray())
+	{
+		int idx = 0;
+
+		for(const auto& i: *v.getArray())
+		{
+			auto thisLabel = label + "[" + String(idx++) + "]";	
+
+			if(callRecursive(i, thisLabel, f))
+				return true;
+		}
+	}
+	else if (auto dyn = v.getDynamicObject())
+	{
+		for(const auto& p: dyn->getProperties())
+		{
+			auto thisLabel = label + "." + p.name.toString();	
+
+			if(callRecursive(p.value, thisLabel, f))
+				return true;
+		}
+	}
+
+	return false;
+}
+
+bool RectViewer::wantsRectangleViewer(const var& v)
+{
+	return callRecursive(v, {}, [](const String&, const var& obj)
+	{
+		return dynamic_cast<RectangleDynamicObject*>(obj.getObject()) != nullptr;
+	});
+}
+
 BufferViewer::BufferViewer(DebugInformationBase* info, ApiProviderBase::Holder* holder_):
     ApiComponentBase(holder_),
     Component("Graph Viewer: " + info->getCodeToInsert()),
@@ -2367,6 +2593,15 @@ void BufferViewer::removeSizeOneArrays(var& dataToReduce)
                 removeSizeOneArrays(v);
         }
     }
+
+	if(auto obj = dataToReduce.getDynamicObject())
+	{
+		DynamicObject::Ptr keepAlive(obj);
+
+		if(obj->getProperties().size() == 1)
+			dataToReduce = obj->getProperties().getValueAt(0);
+		
+	}
 }
 
 void BufferViewer::setFromDebugInformation(DebugInformationBase* info)
@@ -2385,11 +2620,6 @@ void BufferViewer::setFromDebugInformation(DebugInformationBase* info)
 
 std::string BufferViewer::btoa(const void* data, size_t numBytes)
 {
-    auto isBase64 = [](uint8 c)
-    {
-        return (std::isalnum(c) || (c == '+') || (c == '/'));
-    };
-
     static const std::string b64Characters =
         "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
         "abcdefghijklmnopqrstuvwxyz"
@@ -2459,7 +2689,14 @@ bool BufferViewer::isArrayOrBuffer(const var& v, bool numbersAreOK)
         return true;
     if(auto obj = v.getDynamicObject())
     {
-        return false;
+		auto isArray = true;
+
+		for(const auto& nv: obj->getProperties())
+		{
+			isArray &= isArrayOrBuffer(nv.value, false);
+		}
+
+        return isArray;
     }
     if(v.isInt() || v.isDouble() || v.isInt64() || v.isBool())
         return numbersAreOK;
@@ -2511,7 +2748,7 @@ void BufferViewer::timerCallback()
             createCode(0, codeToInsert, dataToShow);
         }
 
-        if(dataToShow.isArray())
+        else if(dataToShow.isArray())
         {
             auto numElements = dataToShow.size();
 
@@ -2539,6 +2776,15 @@ void BufferViewer::timerCallback()
                     createCode(0, codeToInsert, dataToShow);
             }
         }
+		else if(auto obj = dataToShow.getDynamicObject())
+		{
+			int idx = 0;
+			for(const auto& nv: obj->getProperties())
+            {
+                createCode(idx, labels[idx], nv.value);
+                idx++;
+            }
+		}
         dirty = false;
     }
 }

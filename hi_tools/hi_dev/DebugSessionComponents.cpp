@@ -34,206 +34,11 @@
 
 namespace hise { using namespace juce;
 
-Component* DebugSession::createMultiViewer()
-{
-	return new ProfileDataSource::ViewComponents::MultiViewer(*this);
-}
+
 
 bool DebugSession::isRecordingMultithread() const
 {
 	return nextState.load() != RecordingState::Idle;
-}
-
-bool DebugSession::shouldProfileInitialisation() const
-{
-	return profileInitialisation;
-}
-
-void DebugSession::setProfileInitialisation(bool shouldProfileInit)
-{
-	profileInitialisation = shouldProfileInit;
-}
-
-struct DebugSession::ProfileDataSource::ViewComponents::Manager::SearchBar: public Component,
-                                                                            public TextEditor::Listener
-{
-	SearchBar():
-	  clearButton("clear", nullptr, f)
-	{
-		
-		addAndMakeVisible(editor);
-		addAndMakeVisible(clearButton);
-		clearButton.setVisible(false);
-		clearButton.onClick = [this](){ editor.setText({}, sendNotificationSync); };
-		clearButton.setColours(Colours::black.withAlpha(0.3f), Colours::black.withAlpha(0.5f), Colours::black.withAlpha(0.7f));
-		editor.setTextToShowWhenEmpty("Search timeline...", Colours::black.withAlpha(0.4f));
-		editor.setEscapeAndReturnKeysConsumed(true);
-		editor.setSelectAllWhenFocused(true);
-		GlobalHiseLookAndFeel::setTextEditorColours(editor);
-		searchIcon = f.createPath("search");
-		editor.setSelectAllWhenFocused(true);
-		editor.addListener(this);
-	}
-
-	void textEditorTextChanged(TextEditor& te) override
-	{
-		findParentComponentOfClass<Manager>()->setSearchTerm(te.getText(), false);
-		clearButton.setVisible(!te.isEmpty());
-	}
-
-	void textEditorEscapeKeyPressed(TextEditor& te) override
-	{
-		te.setText({}, dontSendNotification);
-		clearButton.setVisible(false);
-	}
-
-	void textEditorReturnKeyPressed(TextEditor& te) override
-	{
-		auto m = findParentComponentOfClass<Manager>();
-		m->setSearchTerm(te.getText(), true);
-		clearButton.setVisible(!te.isEmpty());
-	}
-
-	void paint(Graphics& g) override
-	{
-		g.setColour(Colours::white.withAlpha(0.4f));
-		g.fillPath(searchIcon);
-	}
-
-	void resized()
-	{
-		auto b = getLocalBounds();
-		PathFactory::scalePath(searchIcon, b.removeFromLeft(b.getHeight()).reduced(4).toFloat());
-		editor.setBounds(b.reduced(1));
-		clearButton.setBounds(b.removeFromRight(b.getHeight()).reduced(5));
-	}
-
-	Factory f;
-	Path searchIcon;
-	TextEditor editor;
-	HiseShapeButton clearButton;
-	
-};
-
-struct DebugSession::ProfileDataSource::ViewComponents::Manager::NavigationAction: public UndoableAction
-{
-	NavigationAction(Manager& v, BaseWithManagerConnection* source_, ViewItem::Ptr old, ViewItem::Ptr n):
-	  parent(v),
-	  source(source_),
-	  oldRoot(old),
-	  newRoot(n)
-	{};
-
-	bool perform() override
-	{
-		if(newRoot != nullptr)
-			return parent.navigate(source, newRoot, false);
-
-		return false;
-	}
-
-	bool undo() override
-	{
-		if(newRoot != nullptr)
-			return parent.navigate(source, oldRoot, false);
-
-		return false;
-	}
-
-	WeakReference<BaseWithManagerConnection> source;
-	Manager& parent;
-	ViewItem::Ptr oldRoot;
-	ViewItem::Ptr newRoot;
-};
-
-struct DebugSession::ProfileDataSource::ViewComponents::Manager::UndoableTotalRootChange: public UndoableAction
-{
-	UndoableTotalRootChange(BaseWithManagerConnection* source_, Manager& p, ViewItem::Ptr newRoot_):
-	  UndoableAction(),
-	  parent(p),
-	  source(source_),
-	  oldRoot(p.totalRoot),
-	  newRoot(newRoot_)
-	{}
-
-	bool perform() override
-	{
-		return parent.setNewRoot(source, newRoot.get(), false);
-	}
-
-	bool undo() override
-	{
-		return parent.setNewRoot(source, oldRoot.get(), false);
-	}
-
-	Manager& parent;
-	WeakReference<BaseWithManagerConnection> source;
-	ViewItem::Ptr newRoot;
-	ViewItem::Ptr oldRoot;
-};
-
-bool DebugSession::ProfileDataSource::ViewComponents::Manager::setNewRoot(BaseWithManagerConnection* source,
-	ViewItem::Ptr newRoot, bool useUndoManager)
-{
-	if(newRoot != totalRoot)
-	{
-		if(useUndoManager)
-		{
-			um.beginNewTransaction();
-			um.perform(new UndoableTotalRootChange(source, *this, newRoot));
-		}
-		else
-		{
-			totalRoot = newRoot;
-			currentRoot = totalRoot;
-			sendRootChangeMessage(source);
-		}
-	}
-
-	return true;
-}
-
-bool DebugSession::ProfileDataSource::ViewComponents::Manager::navigate(BaseWithManagerConnection* source,
-                                                                        ViewItem::Ptr newTarget, bool useUndoManager)
-{
-	if(newTarget != currentRoot)
-	{
-		if(useUndoManager)
-		{
-			um.beginNewTransaction();
-			um.perform(new NavigationAction(*this, source, currentRoot, newTarget));
-		}
-		else
-		{
-			currentRoot = newTarget;
-			sendRootChangeMessage(source);
-				
-		}
-	}
-
-	return true;
-}
-
-void DebugSession::ProfileDataSource::ViewComponents::Manager::sendRootChangeMessage(BaseWithManagerConnection* source)
-{
-	for(int i = 0; i < connectedComponents.size(); i++)
-	{
-		auto b = connectedComponents[i];
-		if(b != nullptr)
-			b->onNavigation(source, totalRoot, currentRoot);
-	}
-}
-
-void DebugSession::ProfileDataSource::ViewComponents::Manager::setActiveViewer(Viewer* newViewer)
-{
-	if(newViewer != currentViewer)
-	{
-		currentViewer = newViewer;
-		totalRoot = currentViewer->originalRoot;
-		currentRoot = currentViewer->rootItem;
-
-		sendRootChangeMessage(currentViewer.get());
-	}
 }
 
 String DebugSession::ProfileDataSource::ViewComponents::StatisticsComponent::getColumnName(int columnId)
@@ -254,8 +59,13 @@ String DebugSession::ProfileDataSource::ViewComponents::StatisticsComponent::get
 	return names[columnId-1];
 }
 
-DebugSession::ProfileDataSource::ViewComponents::StatisticsComponent::RowData::RowData(ViewItem& i, int index_)
+DebugSession::ProfileDataSource::ViewComponents::StatisticsComponent::RowData::RowData(ViewItem& i, int index_, int currentRunIndex_)
 {
+    currentRunIndex = currentRunIndex_;
+
+	if(currentRunIndex == -1)
+		runMultiplier = (int)i.runs.size();
+
 	auto thisLength = currentRunIndex == -1 ? i.avg.length : i.runs[currentRunIndex].length;;
 	auto n = i.name.upToFirstOccurrenceOf("[", false, false);
 
@@ -269,7 +79,6 @@ DebugSession::ProfileDataSource::ViewComponents::StatisticsComponent::RowData::R
 
 	auto exclusiveLength = thisLength - childLength;
 
-	currentRunIndex = currentRunIndex;
 	exclusiveTime = exclusiveLength;
 	name = n;
 	firstItem = &i;
@@ -310,7 +119,7 @@ void DebugSession::ProfileDataSource::ViewComponents::StatisticsComponent::RowDa
 	if(columnId == Thread)
 		t << ThreadIdentifier::getThreadName(threadType).replace("Thread", "");
 	if(columnId == Num)
-		t << String(occurrences) << "x";
+		t << String(occurrences * runMultiplier) << "x";
 	if(columnId == Source)
 		t << ProfileDataSource::getSourceTypeName(sourceType);
 	if(columnId == Duration)
@@ -332,7 +141,7 @@ DebugSession::ProfileDataSource::ViewComponents::StatisticsComponent::Statistics
 	addAndMakeVisible(table);
 
 	table.setClickingTogglesRowSelection(true);
-	table.setMouseMoveSelectsRows(true);
+	
 
 	//table.setMultipleSelectionEnabled(true);
 	table.setModel(this);
@@ -356,18 +165,7 @@ DebugSession::ProfileDataSource::ViewComponents::StatisticsComponent::Statistics
 
 void DebugSession::ProfileDataSource::ViewComponents::StatisticsComponent::selectedRowsChanged(int lastSelected)
 {
-	currentSelection = lastSelected;
-
-	if(auto m = getManager())
-	{
-		String s;
-
-		if(auto r = sorted[currentSelection])
-			s = r->name;
-
-		ScopedValueSetter<bool> svs(ignoreSearch, true);
-		m->setSearchTerm(s, false);
-	}
+	
 }
 
 void DebugSession::ProfileDataSource::ViewComponents::StatisticsComponent::cellClicked(int rowNumber,
@@ -390,15 +188,28 @@ void DebugSession::ProfileDataSource::ViewComponents::StatisticsComponent::cellC
 					return;
 				}
 			}
+			else if(e.mods.isCommandDown() && m->currentViewer != nullptr)
+			{
+				getManager()->navigate(this, r->firstItem, true);
+			}
 			else
 			{
-				m->zoomToFirstMatch(r->firstItem);
+				if(rowNumber == currentSelection)
+				{
+					table.deselectRow(rowNumber);
+					currentSelection = -1;
+					ScopedValueSetter<bool> svs(ignoreSearch, true);
+					m->setSearchTerm({}, false);
+				}
+				else
+				{
+					currentSelection = rowNumber;
+					String s = r->name;
+					ScopedValueSetter<bool> svs(ignoreSearch, true);
+					m->setSearchTerm(s, false);
+				}
 			}
 		}
-
-		
-
-		
 	}
 }
 
@@ -410,16 +221,15 @@ void DebugSession::ProfileDataSource::ViewComponents::StatisticsComponent::cellD
 
 	if(auto r = sorted[rowNumber])
 	{
-		getManager()->navigate(this, r->firstItem, true);
-
-		//parent->navigate(r->firstItem, true);
+		if(auto m = getManager())
+			m->zoomToFirstMatch(r->firstItem);
 	}
 }
 
 int DebugSession::ProfileDataSource::ViewComponents::StatisticsComponent::compareElements(RowData* r1,
                                                                                           RowData* r2) const
 {
-	int result;
+    int result = 0;
 
 	switch(currentSortId)
 	{
@@ -481,6 +291,8 @@ void DebugSession::ProfileDataSource::ViewComponents::StatisticsComponent::updat
 
 	sorted.sort(*this);
 	table.updateContent();
+	table.repaint();
+
 	resized();
 }
 
@@ -509,15 +321,23 @@ bool DebugSession::ProfileDataSource::ViewComponents::StatisticsComponent::isCon
 { return currentRoot != nullptr; }
 
 void DebugSession::ProfileDataSource::ViewComponents::StatisticsComponent::setRootItem(ViewItem::Ptr newRoot,
-	int currentRunIndex)
+	int newRunIndex)
 {
-	if(currentRoot != newRoot)
+	if(currentRoot != newRoot || currentRunIndex != newRunIndex)
 	{
 		currentRoot = newRoot;
+		currentRunIndex = newRunIndex;
 
 		sorted.clear();
 		rows.clear();
 		int idx = 0;
+
+		if(currentRoot == nullptr)
+		{
+			updateSearchTerm();
+			return;
+		}
+			
 
 		newRoot->callAllRecursive([&](ViewItem& i)
 		{
@@ -527,7 +347,7 @@ void DebugSession::ProfileDataSource::ViewComponents::StatisticsComponent::setRo
 			if(skip)
 				return false;
 
-			RowData::Ptr nr = new RowData(i, idx);
+			RowData::Ptr nr = new RowData(i, idx, currentRunIndex);
 				
 			for(auto& ro: rows)
 			{
@@ -537,6 +357,7 @@ void DebugSession::ProfileDataSource::ViewComponents::StatisticsComponent::setRo
 					ro->totalTime += nr->totalTime;
 					ro->exclusiveTime += nr->exclusiveTime;
 					ro->currentRunIndex = nr->currentRunIndex;
+					ro->runMultiplier = nr->runMultiplier;
 					ro->peak = jmax(ro->peak, nr->peak);
 					return false;
 				}
@@ -657,13 +478,13 @@ DebugSession::ProfileDataSource::ViewComponents::ItemPopup::ItemPopup(Viewer* p,
 	{
 		if(auto pi = dynamic_cast<ProfileInfo*>(vi.infoItem.get()))
 		{
-			if(pi->data.trackSource != -1 && item != &vi)
+			if(pi->data.trackSource != -1 && item.get() != &vi)
 			{
 				bool found = false;
 
 				for(auto v: internalTracks)
 				{
-					if(v.first == &vi)
+					if(v.first.get() == &vi)
 					{
 						found = true;
 						break;
@@ -673,13 +494,13 @@ DebugSession::ProfileDataSource::ViewComponents::ItemPopup::ItemPopup(Viewer* p,
 				if(!found)
 					sources.add(&vi);
 			}
-			if(pi->data.trackTarget != -1 && item != &vi)
+			if(pi->data.trackTarget != -1 && item.get() != &vi)
 			{
 				bool found = false;
 
 				for(auto v: internalTracks)
 				{
-					if(v.second == &vi)
+					if(v.second.get() == &vi)
 					{
 						found = true;
 						break;
@@ -835,254 +656,5 @@ void DebugSession::ProfileDataSource::ViewComponents::ItemPopup::drawStatistics(
 	}
 }
 
-DebugSession::ProfileDataSource::ViewComponents::BaseWithManagerConnection::~BaseWithManagerConnection()
-{
-	if(auto m = currentManager.get())
-		m->connectedComponents.removeAllInstancesOf(this);
-}
 
-DebugSession::ProfileDataSource::ViewComponents::Manager* DebugSession::ProfileDataSource::ViewComponents::
-BaseWithManagerConnection::getManager()
-{
-	initManager();
-	return currentManager.get();
-}
-
-DebugSession::ProfileDataSource::ViewComponents::Manager* DebugSession::ProfileDataSource::ViewComponents::
-BaseWithManagerConnection::initManager()
-{
-	if(currentManager == nullptr)
-	{
-		currentManager = Manager::findManager(dynamic_cast<Component*>(this));
-
-		if(currentManager != nullptr)
-			currentManager->connectedComponents.addIfNotAlreadyThere(this);
-
-		return currentManager;
-	}
-
-	return nullptr;
-}
-
-Path DebugSession::ProfileDataSource::ViewComponents::Manager::Factory::createPath(const String& url) const
-{
-	Path p;
-
-	LOAD_EPATH_IF_URL("open", EditorIcons::openFile);
-	LOAD_EPATH_IF_URL("save", EditorIcons::saveFile);
-	LOAD_EPATH_IF_URL("delete", SampleMapIcons::deleteSamples);
-	LOAD_EPATH_IF_URL("init", HnodeIcons::jit);
-	LOAD_EPATH_IF_URL("trim", EditorIcons::scissorIcon);
-	LOAD_EPATH_IF_URL("undo", EditorIcons::backIcon);
-	LOAD_EPATH_IF_URL("redo", EditorIcons::forwardIcon);
-	LOAD_EPATH_IF_URL("home", MainToolbarIcons::home);
-	LOAD_EPATH_IF_URL("peak", EditorIcons::peakIcon);
-	LOAD_EPATH_IF_URL("favorite", EditorIcons::favoriteIcon);
-	LOAD_EPATH_IF_URL("search", EditorIcons::searchIcon);
-	LOAD_EPATH_IF_URL("clear", EditorIcons::clearTextEditorIcon);
-
-	if(url == "search")
-		p.applyTransform(AffineTransform::rotation(float_Pi));
-
-	if(url == "peak")
-		p.applyTransform(AffineTransform::scale(1.0f, 2.0f));
-
-	if (url == "record")
-		p.addEllipse({ 0.0f, 0.0f, 1.0f, 1.0f });
-
-	return p;
-}
-
-DebugSession::ProfileDataSource::ViewComponents::Manager* DebugSession::ProfileDataSource::ViewComponents::Manager::
-findManager(Component* c)
-{
-	Manager* m = nullptr;
-
-	while(c != nullptr)
-	{
-		Component::callRecursive<Manager>(c, [&](Manager* cm)
-		{
-			m = cm;
-			return true;
-		});
-
-		if(m != nullptr)
-			return m;
-
-		c = c->getParentComponent();
-	}
-
-	return m;
-}
-
-DebugSession::ProfileDataSource::ViewComponents::Manager::Manager(DebugSession& s):
-	session(s),
-	openButton("open", nullptr, f),
-	saveButton("save", nullptr, f),
-	recordButton("record", nullptr, f),
-	trimButton("trim", nullptr, f),
-	initButton("init", nullptr, f),
-	undoButton("undo", nullptr, f),
-	redoButton("redo", nullptr, f),
-	searchBar(new SearchBar()) 
-{
-	addAndMakeVisible(openButton);
-	addAndMakeVisible(saveButton);
-	addAndMakeVisible(recordButton);
-	addAndMakeVisible(initButton);
-	addAndMakeVisible(trimButton);
-	addAndMakeVisible(undoButton);
-	addAndMakeVisible(redoButton);
-	addAndMakeVisible(searchBar);
-
-    openButton.setTooltip("Import a profile session from the clipboard");
-    saveButton.setTooltip("Copy the current profiling session to the clipboard");
-    recordButton.setTooltip("Toggle the profiling recording session");
-    initButton.setTooltip("Enable automatic profiling of compilation / project load");
-    undoButton.setTooltip("Navigate back");
-    redoButton.setTooltip("Navigate forward");
-    trimButton.setTooltip("Copy the currently displayed range into a new profiling session");
-    
-	recordButton.onColour = Colour(HISE_ERROR_COLOUR);
-	recordButton.setToggleModeWithColourChange(true);
-
-	initButton.setToggleModeWithColourChange(true);
-
-	undoButton.onClick = [this](){ um.undo(); };
-	redoButton.onClick = [this](){ um.redo(); };
-
-	initButton.onClick = [this]()
-	{
-		this->session.setProfileInitialisation(initButton.getToggleState());
-	};
-
-	trimButton.onClick = [this]()
-	{
-		if(auto r = currentRoot)
-		{
-			if(currentViewer != nullptr)
-				currentViewer->trimToCurrentRange();
-		}
-	};
-
-	recordButton.onClick = [this]()
-	{
-		//new ProfiledComponent::RecordListener(session, this);
-
-		if(recordButton.getToggleState())
-			this->session.startRecording(20000, &this->session);
-		else
-			this->session.stopRecording();
-	};
-
-	saveButton.onClick = [this]()
-	{
-		if(auto r = currentRoot->infoItem)
-		{
-			SystemClipboard::copyTextToClipboard(r->toBase64());
-		}
-	};
-
-	openButton.onClick = [this]()
-	{
-		auto b64 = SystemClipboard::getTextFromClipboard();
-
-		if(b64.startsWith("HiseProfile"))
-		{
-			auto n = ProfileDataSource::MultiThreadSession::fromBase64(b64, session);
-			ProfileInfoBase::Ptr s = n.get();
-			session.recordingFlushBroadcaster.sendMessage(sendNotificationSync, s);
-		}
-	};
-
-	session.syncRecordingBroadcaster.addListener(*this, onRec, false);
-}
-
-void DebugSession::ProfileDataSource::ViewComponents::Manager::resized()
-{
-	auto menuBar = getLocalBounds();
-
-	searchBar->setBounds(menuBar.removeFromRight(300).reduced(5));
-
-	int ButtonMargin = 10;
-	undoButton.setBounds(menuBar.removeFromLeft(MultiViewerMenuBarHeight).reduced(ButtonMargin));
-	redoButton.setBounds(menuBar.removeFromLeft(MultiViewerMenuBarHeight).reduced(ButtonMargin));
-    menuBar.removeFromLeft(ButtonMargin);
-    initButton.setBounds(menuBar.removeFromLeft(MultiViewerMenuBarHeight).reduced(ButtonMargin));
-    recordButton.setBounds(menuBar.removeFromLeft(MultiViewerMenuBarHeight).reduced(ButtonMargin));
-	menuBar.removeFromLeft(ButtonMargin);
-	openButton.setBounds(menuBar.removeFromLeft(MultiViewerMenuBarHeight).reduced(ButtonMargin));
-	saveButton.setBounds(menuBar.removeFromLeft(MultiViewerMenuBarHeight).reduced(ButtonMargin));
-    trimButton.setBounds(menuBar.removeFromLeft(MultiViewerMenuBarHeight).reduced(ButtonMargin));
-}
-
-void DebugSession::ProfileDataSource::ViewComponents::Manager::setRecording(bool isRecording)
-{
-	recordButton.setToggleStateAndUpdateIcon(isRecording, true);
-}
-
-void DebugSession::ProfileDataSource::ViewComponents::Manager::setTimeDomain(TimeDomain newDomain,
-                                                                             double newDomainContext)
-{
-	if(currentDomain != newDomain)
-	{
-		currentDomain = newDomain;
-		domainContext = newDomainContext;
-
-		for(auto b: connectedComponents)
-		{
-			b->onTimeDomainUpdate(newDomain, newDomainContext);
-		}
-	}
-}
-
-void DebugSession::ProfileDataSource::ViewComponents::Manager::toggleTypeFilter(SourceType source)
-{
-	typeFilters.setBit((int)source, !typeFilters[(int)source]);
-
-	for(auto c: connectedComponents)
-	{
-		if(c != nullptr)
-			c->onSearchUpdate(lastSearch, false);
-	}
-}
-
-bool DebugSession::ProfileDataSource::ViewComponents::Manager::showSourceType(SourceType source) const
-{
-	return !typeFilters[(int)source];
-}
-
-void DebugSession::ProfileDataSource::ViewComponents::Manager::setPopupMode(bool usePopupMode)
-{
-	recordButton.setVisible(!usePopupMode);
-	trimButton.setVisible(!usePopupMode);
-	initButton.setVisible(!usePopupMode);
-}
-
-void DebugSession::ProfileDataSource::ViewComponents::Manager::onRec(Manager& m, bool isEnabled)
-{
-	SafeAsyncCall::call<Manager>(m, [isEnabled](Manager& m)
-	{
-		m.setRecording(isEnabled);
-	});
-}
-
-void DebugSession::ProfileDataSource::ViewComponents::Manager::setSearchTerm(const String& searchTerm, bool zoomToFirst)
-{
-	lastSearch = searchTerm;
-
-	for(auto b: connectedComponents)
-	{
-		if(b != nullptr)
-			b->onSearchUpdate(searchTerm, zoomToFirst);
-	}
-}
-
-void DebugSession::ProfileDataSource::ViewComponents::Manager::zoomToFirstMatch(ViewItem::Ptr itemToZoomTo)
-{
-	if(currentViewer != nullptr)
-	{
-		currentViewer->zoomToItem(itemToZoomTo);
-	}
-}
 } // namespace hise

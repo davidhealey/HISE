@@ -23,13 +23,77 @@
 namespace juce
 {
 
+#define JUCE_MAKE_STREAMABLE_OBJECT(streamMarker) static char getStreamMarker() { return streamMarker; };
+#define JUCE_WRITE_STREAMABLE_OBJECT_MARKERS(output) os.writeByte(getStreamMarker());
+
+
+/** This base class allows any (reference counted) object to be converted and printed as JSON string.
+ *
+ *  It also allows serialization of the object (if possible).
+ *
+ *  In order to use this interface class, subclass your class from this class and override the methods
+ *
+ *  - writeAsJSON
+ *  - writeToStream
+ *
+ *  Also use the JUCE_MAKE_STREAMABLE_OBJECT macro defined above to add a unique UUID to this object type
+ *  (search the codebase for all occurrences of this macro to find a free one.)
+ *
+ *  In the writeToStream method, use the JUCE_WRITE_STREAMABLE_OBJECT_MARKERS() macro to automatically write
+ *  the stream marker at the beginning of your writeToStreamMethod
+ *
+ *  Then you need to create a static function with the signature
+ *
+ *  static ObjectWithJSONConverter* createFromStream(InputStream& input);
+ *
+ *  that will create an object of your type. Note that the input stream is already moved beyond the type marker
+ *  and points directly to the beginning of the user data. */
 class JUCE_API  ObjectWithJSONConverter
 {
 public:
 
 	virtual ~ObjectWithJSONConverter() {};
 
+    /** Implement this and write a JSON representation of this object. This is mostly used for the trace() call
+     *  in order to create a textual representation of this object. */
     virtual void writeAsJSON (OutputStream&, int indentLevel, bool allOnOneLine, int maximumDecimalPlaces) = 0;
+
+    /** Overwrite this and write the stream marker with JUCE_WRITE_STREAMABLE_OBJECT_MARKERS as well as the data.
+     */
+    virtual void writeToStream(OutputStream& os) = 0;
+
+    static std::pair<char, ObjectWithJSONConverter*> createFromMarker(InputStream& os);
+
+     template <typename SubClass> static void registerStreamCreatorStatic()
+    {
+	    static_assert(std::is_base_of<ObjectWithJSONConverter, SubClass>(), "only call this from subclasses");
+
+        auto marker = SubClass::getStreamMarker();
+
+        for(int i = 0; i < 32; i++)
+        {
+            if(streamCreators[i].first == marker)
+                return;
+
+	        if(streamCreators[i].first == 0)
+	        {
+		        streamCreators[i] = { marker, SubClass::createFromStream};
+                return;
+	        }
+        }
+    }
+
+protected:
+
+    template <typename SubClass> void registerStreamCreator(SubClass* obj)
+    {
+        registerStreamCreatorStatic<SubClass>();
+    }
+
+private:
+
+    typedef ObjectWithJSONConverter*(*StreamCreatorFunctions)(InputStream&);
+    static std::array<std::pair<char, StreamCreatorFunctions>, 32> streamCreators;
 };
 
 // Small helper function that declares two lambdas, nl() and ind() based on the indentLevel and allInOneLine function
@@ -111,9 +175,9 @@ public:
     void clear();
 
     /** Returns the NamedValueSet that holds the object's properties. */
-    NamedValueSet& getProperties() noexcept     { return properties; }
+    NamedValueSet& getProperties() noexcept;
 
-	void swapProperties(NamedValueSet&& other);
+    void swapProperties(NamedValueSet&& other);
 
     /** Calls var::clone() on all the properties that this object contains. */
     void cloneAllProperties();
@@ -133,6 +197,12 @@ public:
         can stringify themselves appropriately.
     */
     void writeAsJSON (OutputStream&, int indentLevel, bool allOnOneLine, int maximumDecimalPlaces) override;
+
+    void writeToStream(OutputStream& os) override;
+
+    static ObjectWithJSONConverter* createFromStream(InputStream& os);
+
+    JUCE_MAKE_STREAMABLE_OBJECT(1);
 
 private:
     //==============================================================================

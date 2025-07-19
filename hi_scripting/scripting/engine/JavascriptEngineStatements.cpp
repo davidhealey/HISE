@@ -21,6 +21,7 @@ struct HiseJavascriptEngine::RootObject::ScopedBlockStatement: public Statement
 	{
 		auto id = location.externalFile;
 
+#if USE_BACKEND
 		if(id.isEmpty())
 		{
 			id = location.program.upToFirstOccurrenceOf("\n", false, false);
@@ -34,6 +35,7 @@ struct HiseJavascriptEngine::RootObject::ScopedBlockStatement: public Statement
 		{
 			id = File(id).getFileName();
 		}
+#endif
 
 		return Identifier(id);
 	}
@@ -244,10 +246,18 @@ struct HiseJavascriptEngine::RootObject::ScopedLocker: public HiseJavascriptEngi
 				DebugSession::ProfileDataSource::Profiler wp(mc->getProfileDataSourceForLock(lockType, true, true));
 				wp.startProfiling(&mc->getDebugSession());
 
-				auto& lock = LockHelpers::getLockChecked(mc, lockType);
-				lock.enter();
+				if(lockType == LockHelpers::Type::MessageLock)
+				{
+					mm = new MessageManagerLock();
+					wp.stopProfiling();
+				}
+				else
+				{
+					auto& lock = LockHelpers::getLockChecked(mc, lockType);
+					lock.enter();
+					wp.stopProfiling();
+				}
 
-				wp.stopProfiling();
 				DebugSession::ProfileDataSource::Profiler lp(mc->getProfileDataSourceForLock(lockType, true, false));
 				lp.startProfiling(&mc->getDebugSession());
 
@@ -268,8 +278,17 @@ struct HiseJavascriptEngine::RootObject::ScopedLocker: public HiseJavascriptEngi
 	{
 		if(holdsLock)
 		{
-			auto& lock = LockHelpers::getLockUnchecked(mc, lockType);
-			lock.exit();
+			if(lockType == LockHelpers::Type::MessageLock)
+			{
+				jassert(mm != nullptr);
+
+				mm = nullptr;
+			}
+			else
+			{
+				auto& lock = LockHelpers::getLockUnchecked(mc, lockType);
+				lock.exit();
+			}
 
 			DebugSession::ProfileDataSource::Profiler lp(mc->getProfileDataSourceForLock(lockType, true, false));
 			lp.stopProfiling(&mc->getDebugSession());
@@ -284,7 +303,7 @@ struct HiseJavascriptEngine::RootObject::ScopedLocker: public HiseJavascriptEngi
 		}
 	}
 
-	
+	mutable ScopedPointer<MessageManagerLock> mm;
 	mutable MainController* mc = nullptr;
 	const LockHelpers::Type lockType;
 

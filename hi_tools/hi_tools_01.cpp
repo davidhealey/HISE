@@ -62,6 +62,7 @@
 #include "hi_tools/CustomDataContainers.cpp"
 #include "hi_tools/HiseEventBuffer.cpp"
 
+#include "hi_tools/SiTraNoConverter.cpp"
 #include "hi_tools/MiscToolClasses.cpp"
 #include "hi_dispatch/hi_dispatch.cpp"
 
@@ -111,7 +112,7 @@
 #include "hi_tools/LorisManager.cpp"
 #endif
 
-
+#include "hi_tools/RectangleDynamicObject.cpp"
 
 #include "hi_standalone_components/SampleDisplayComponent.cpp"
 

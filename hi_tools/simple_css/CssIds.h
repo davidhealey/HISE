@@ -133,7 +133,8 @@ enum class PseudoClassType
 	Disabled = 64,
 	Hidden = 128,
 	Checked = 256,
-	All = 511
+	Empty = 512,
+	All = 1023
 };
 
 /** A list of pseudo elements. Currently there is only support for before & after (because most text-based pseudo elements like
@@ -143,6 +144,8 @@ enum class PseudoElementType
 	None = 0,
 	Before,
 	After,
+    Before2,
+    After2,
 	All
 };
 

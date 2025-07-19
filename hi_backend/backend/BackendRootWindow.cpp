@@ -519,6 +519,19 @@ BackendRootWindow::BackendRootWindow(AudioProcessor *ownerProcessor, var editorS
 			});
 		}
 	}, true);
+
+	getBackendProcessor()->pluginParameterRefreshBroadcaster.addListener(*this, [](BackendRootWindow& brw, bool)
+	{
+		Component::callRecursive<MacroControlledObject>(&brw, [](MacroControlledObject* c)
+		{
+			ScopedValueSetter<bool> svs(c->skipHostDisplayUpdate, true);
+			c->rebuildPluginParameterConnection();
+			return false;
+		});
+
+		auto details = AudioProcessorListener::ChangeDetails().withParameterInfoChanged(true);
+		brw.getBackendProcessor()->updateHostDisplay(details);
+	}, false);
 }
 
 
@@ -788,7 +801,7 @@ void BackendRootWindow::paint(Graphics& g)
 	g.fillAll(HiseColourScheme::getColour(HiseColourScheme::ColourIds::EditorBackgroundColourIdBright));
 
 	// call this here so that the UI thread is correctly initialised
-	getBackendProcessor()->getDebugSession().initUIThread();
+	PROFILE_ONLY(getBackendProcessor()->getDebugSession().initUIThread());
 
 }
 

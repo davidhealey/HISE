@@ -159,10 +159,7 @@ void ValueTreeApiHelpers::getColourAndCharForType(int type, char &c, Colour &col
 	}
 }
 
-void DebugableObjectBase::writeAsJSON(OutputStream& outputStream, int indentLevel, bool allOnOneLine, int maximumDecimalPlaces)
-{
-	outputStream.writeString(getDebugName() + " - " + getDebugValue());
-}
+	
 
 void ApiProviderBase::getColourAndLetterForType(int type, Colour& colour, char& letter)
 {
