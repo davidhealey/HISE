@@ -804,7 +804,7 @@ MatrixContent::Controller::ModulationDragger::ModulationDragger(const String& na
 	setRepaintsOnMouseActivity(true);
 	setText(name);
 	setTooltip("Drag on a knob / slider to modulate it with " + name);
-	auto id = String('#') + getName().toLowerCase();
+	auto id = String("#") + getName().toLowerCase().replace(" ", "_");
 	Helpers::writeSelectorsToProperties(*this, { ".dragger", id });
 	Helpers::setFallbackStyleSheet(*this, "width: auto; height: 24px;--dragPath:" + p64 + ";");
 	setMouseCursor(MouseCursor::PointingHandCursor);
