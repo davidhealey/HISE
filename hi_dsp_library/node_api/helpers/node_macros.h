@@ -107,6 +107,8 @@ constexpr const auto& getWrappedObject() const { return x; }
 	if constexpr(prototypes::check::initialise<ObjectType>::value) \
 		obj.initialise(n); }
 
+#define SN_DEFAULT_SET_EXTERNAL_DATA void setExternalData(const ExternalData& d, int index) { obj.setExternalData(d, index); }
+#define SN_DEFAULT_CONNECT_TO_RUNTIME_TARGET void connectToRuntimeTarget(bool add, const runtime_target::connection& c){ obj.connectToRuntimeTarget(add, c); };
 #define SN_DEFAULT_HANDLE_EVENT(ObjectType) void handleHiseEvent(HiseEvent& e) { obj.handleHiseEvent(e); }
 #define SN_DEFAULT_PROCESS(ObjectType) template <typename ProcessDataType> void process(ProcessDataType& d) { obj.process(d); }
 #define SN_DEFAULT_PREPARE(ObjectType) void prepare(PrepareSpecs ps) { \

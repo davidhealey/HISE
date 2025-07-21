@@ -1792,7 +1792,12 @@ template <class T> struct node : public scriptnode::data::base
 
 	void createExternalModulationInfo(OpaqueNode::ModulationProperties& info) const
 	{
-		info.template fromNode<node>();
+		if constexpr (prototypes::check::createExternalModulationInfo<T>::value)
+			obj.createExternalModulationInfo(info);
+		else
+		{
+			info.template fromNode<node>();
+		}
 	}
 
 	void createParameters(ParameterDataList& data)
@@ -1801,8 +1806,6 @@ template <class T> struct node : public scriptnode::data::base
 		obj.parameters.addToList(l);
 
 		auto peList = parameter::encoder::fromNode<node>();
-
-		
 
 		for (const parameter::pod& p : peList)
 		{

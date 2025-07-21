@@ -322,6 +322,8 @@ ModulatorChain::ModChainWithBuffer* HardcodedSwappableEffect::getModulationChain
 	{
 		if(auto mc = getModulationChains())
 		{
+			modIndex = getExtraModulationIndex(modIndex);
+
 			if(isPositiveAndBelow(modIndex, mc->size()))
 				return mc->begin() + modIndex;
 		}

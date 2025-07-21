@@ -2044,6 +2044,8 @@ runtime_target::connection ModulatorChain::ExtraModulatorRuntimeTargetSource::cr
 
 void ModulatorChain::ExtraModulatorRuntimeTargetSource::init(Collection& modChains, int offset)
 {
+	extraOffset = offset;
+
 	for(int i = offset; i < modChains.size(); i++)
 	{
 		auto& mb = modChains[i];

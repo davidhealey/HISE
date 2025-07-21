@@ -307,6 +307,11 @@ class HardcodedSynthesiser: public ModulatorSynth,
 	bool isVoiceResetActive() const override;
 	int getNumActiveVoices() const override;
 
+	int getExtraModulationIndex(int modulationSlotIndexWithoutOffset) const override
+	{
+		return modulationSlotIndexWithoutOffset + extraModSources.getExtraOffset();
+	}
+
 private:
 
 	ModulatorChain::ExtraModulatorRuntimeTargetSource extraModSources;
