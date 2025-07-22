@@ -237,7 +237,14 @@ struct FlexboxComponent: public Component,
 		}
 	};
 
-	struct SimpleTextDisplay: public Component
+	struct ComponentWithAutoTextSize
+	{
+		virtual ~ComponentWithAutoTextSize() {};
+		virtual String getTextToAutofit() const = 0;
+	};
+
+	struct SimpleTextDisplay: public Component,
+							  public ComponentWithAutoTextSize
 	{
 		SimpleTextDisplay(ElementType s_):
 		  s(s_)
@@ -245,6 +252,8 @@ struct FlexboxComponent: public Component,
 
 		const ElementType s;
 		String currentText;
+
+		String getTextToAutofit() const override { return currentText; }
 
 		void setText(const String& text);
 

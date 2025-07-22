@@ -1209,12 +1209,30 @@ struct HiSlider::HoverPopup: public Component,
 
 		start();
 
+		gc = ProcessorHelpers::getFirstProcessorWithType<GlobalModulatorContainer>(slider.getProcessor()->getMainController()->getMainSynthChain());
+
+		if(gc != nullptr)
+		{
+			gc->currentMatrixSourceBroadcaster.addListener(*this, [](HoverPopup& hp, int)
+			{
+				hp.keepAlive = false;
+				hp.clear();
+			}, false);
+		}
+
 		rebuild();
 	}
 
+	WeakReference<GlobalModulatorContainer> gc;
+
 	~HoverPopup()
 	{
-		jassert(!keepAlive);
+		if(gc != nullptr)
+		{
+			gc->currentMatrixSourceBroadcaster.removeListener(*this);
+		}
+
+		//jassert(!keepAlive);
 	}
 
 	bool hitTest(int x, int y) override
@@ -1641,6 +1659,8 @@ struct HiSlider::HoverPopup: public Component,
 
 	float sensitivity;
 	SliderStyle sliderStyle;
+
+	JUCE_DECLARE_WEAK_REFERENCEABLE(HoverPopup);
 };
 
 void HiSlider::showModHoverPopup(bool shouldShow, bool closeOnExit)

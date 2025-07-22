@@ -516,6 +516,8 @@ struct ScriptingObjects::ScriptModulationMatrix::Wrapper
 	API_METHOD_WRAPPER_0(ScriptModulationMatrix, getTargetList);
 	API_METHOD_WRAPPER_2(ScriptModulationMatrix, canConnect);
 	API_VOID_METHOD_WRAPPER_1(ScriptModulationMatrix, clearAllConnections);
+	API_VOID_METHOD_WRAPPER_1(ScriptModulationMatrix, setCurrentlySelectedSource);
+	API_VOID_METHOD_WRAPPER_1(ScriptModulationMatrix, setSourceSelectionCallback);
 };
 
 ScriptModulationMatrix::ScriptModulationMatrix(ProcessorWithScriptingContent* p, const String& cid) :
@@ -523,11 +525,10 @@ ScriptModulationMatrix::ScriptModulationMatrix(ProcessorWithScriptingContent* p,
 	ControlledObject(p->getMainController_()),
 	connectionCallback(p, nullptr, var(), 3),
 	editCallback(p, nullptr, var(), 1),
-	um(getMainController()->getControlUndoManager())
+	um(getMainController()->getControlUndoManager()),
+	sourceSelectionCallback(getScriptProcessor(), this, var(), 1)
 {
 	container = dynamic_cast<GlobalModulatorContainer*>(ProcessorHelpers::getFirstProcessorWithName(getMainController()->getMainSynthChain(), cid));
-
-	
 
 	if (container == nullptr)
 		reportScriptError(cid + " is not a global modulation container");
@@ -543,6 +544,9 @@ ScriptModulationMatrix::ScriptModulationMatrix(ProcessorWithScriptingContent* p,
 	ADD_API_METHOD_1(getComponent);
 	ADD_API_METHOD_2(canConnect);
 	ADD_API_METHOD_1(clearAllConnections);
+
+	ADD_API_METHOD_1(setCurrentlySelectedSource);
+	ADD_API_METHOD_1(setSourceSelectionCallback);
 
 	getScriptProcessor()->getMainController_()->getUserPresetHandler().addStateManager(this);
 
@@ -791,6 +795,38 @@ var ScriptModulationMatrix::getTargetList() const
 		l.add(t);
 
 	return var(l);
+}
+
+void ScriptModulationMatrix::setCurrentlySelectedSource(String sourceId)
+{
+	auto idx = sourceList.indexOf(sourceId);
+
+	if(idx != -1 && container != nullptr)
+	{
+		container->currentMatrixSourceBroadcaster.sendMessage(sendNotificationSync, idx);
+	}
+}
+
+void ScriptModulationMatrix::setSourceSelectionCallback(var newCallback)
+{
+	container->currentMatrixSourceBroadcaster.removeListener(*this);
+
+	if(HiseJavascriptEngine::isJavascriptFunction(newCallback))
+	{
+		sourceSelectionCallback = WeakCallbackHolder(getScriptProcessor(), this, newCallback, 1);
+		sourceSelectionCallback.incRefCount();
+		sourceSelectionCallback.setThisObject(this);
+
+		container->currentMatrixSourceBroadcaster.addListener(*this, [](ScriptModulationMatrix& m, int idx)
+		{
+			if(isPositiveAndBelow(idx, m.sourceList.size()))
+			{
+				auto sourceName = m.sourceList[idx];
+				m.sourceSelectionCallback.call1(sourceName);
+			}
+		});
+	}
+	
 }
 
 } // namespace ScriptingObjects

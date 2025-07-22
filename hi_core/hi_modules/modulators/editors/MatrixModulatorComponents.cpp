@@ -797,16 +797,15 @@ int MatrixBase::RowBase::getHeightToUse(int fullWidth)
 
 
 MatrixContent::Controller::ModulationDragger::ModulationDragger(const String& name):
-	SimpleTextDisplay(simple_css::ElementType::Panel),
 	p64("228.t0FYgMEQn4KjCwFMYIDQn4KjCwFMYIDQfI+oCwF..BCQ..DgCwFMYIDQvrQPCwFMYIDQPL3aCwFYgMEQPL3aCwFYgMEQXI1JCwFaGeDQXI1JCwFYelEQPS.xBwFl3sFQXI1JCwFnd+EQXI1JCwFnd+EQPL3aCwFylCGQPL3aCwFylCGQvrQPCwF.fEHQ..DgCwFylCGQfI+oCwFylCGQn4KjCwFnd+EQn4KjCwFnd+EQXwrrCwFl3sFQXwrrCwFYelEQH6m0CwFaGeDQXwrrCwFYgMEQXwrrCwFYgMEQn4KjCMVY")
 {
 	setName(name);
 	setRepaintsOnMouseActivity(true);
-	setText(name);
 	setTooltip("Drag on a knob / slider to modulate it with " + name);
 	auto id = String("#") + getName().toLowerCase().replace(" ", "_");
-	Helpers::writeSelectorsToProperties(*this, { ".dragger", id });
-	Helpers::setFallbackStyleSheet(*this, "width: auto; height: 24px;--dragPath:" + p64 + ";");
+	simple_css::FlexboxComponent::Helpers::setCustomType(*this, simple_css::Selector(simple_css::ElementType::Panel));
+	simple_css::FlexboxComponent::Helpers::writeSelectorsToProperties(*this, { ".dragger", id });
+	simple_css::FlexboxComponent::Helpers::setFallbackStyleSheet(*this, "width: auto; height: 24px;--dragPath:" + p64 + ";");
 	setMouseCursor(MouseCursor::PointingHandCursor);
 }
 
@@ -815,7 +814,11 @@ void MatrixContent::Controller::ModulationDragger::mouseDown(const MouseEvent& e
 	auto sourceIndex = findParentComponentOfClass<Controller>()->draggers.indexOf(this);
 
 	MatrixIds::Helpers::startDragging(this, sourceIndex);
-	
+
+	auto chain = findParentComponentOfClass<Controller>()->getMainController()->getMainSynthChain();
+
+	if(auto gc = ProcessorHelpers::getFirstProcessorWithType<GlobalModulatorContainer>(chain))
+		gc->currentMatrixSourceBroadcaster.sendMessage(sendNotificationSync, sourceIndex);
 }
 
 void MatrixContent::Controller::ModulationDragger::mouseUp(const MouseEvent& event)
@@ -871,6 +874,27 @@ MatrixContent::Controller::Controller(MainController* mc, Component& p):
 			draggers.add(nd);
 			addFlexItem(*nd);
 		}
+
+		gc->currentMatrixSourceBroadcaster.addListener(*this, [](Controller& c, int index)
+		{
+			int idx = 0;
+
+			for(auto& d: c.draggers)
+			{
+				d->currentlySelected = index == idx++;
+				d->repaint();
+			};
+		});
+	}
+}
+
+MatrixContent::Controller::~Controller()
+{
+	auto chain = getMainController()->getMainSynthChain();
+
+	if(auto gc = ProcessorHelpers::getFirstProcessorWithType<GlobalModulatorContainer>(chain))
+	{
+		gc->currentMatrixSourceBroadcaster.removeListener(*this);
 	}
 }
 
