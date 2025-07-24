@@ -741,7 +741,7 @@ float HardcodedEnvelopeModulator::getAttribute(int index) const
 float HardcodedEnvelopeModulator::getDefaultValue(int index) const
 {
 	if (index < getParameterOffset())
-		return EnvelopeModulator::getAttribute(index);
+		return EnvelopeModulator::getDefaultValue(index);
 	else
 	{
 		index -= getParameterOffset();

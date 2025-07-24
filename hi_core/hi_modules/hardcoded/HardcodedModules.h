@@ -293,6 +293,9 @@ class HardcodedSynthesiser: public ModulatorSynth,
 	// parameter methods
 	float getAttribute(int parameterIndex) const override;
 	void setInternalAttribute(int parameterIndex, float newValue) override;
+	float getDefaultValue(int parameterIndex) const override { return getAttribute(parameterIndex); }
+
+	int getParameterOffset() const override { return ModulatorSynth::SpecialParameters::numParameters; }
 
 	// extra mod methods
 	void connectToRuntimeTargets(scriptnode::OpaqueNode& opaqueNode, bool shouldAdd) override;

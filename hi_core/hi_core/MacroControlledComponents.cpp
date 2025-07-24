@@ -269,7 +269,7 @@ void MacroControlledObject::enableMidiLearnWithPopup()
 
 	if (modulationData != nullptr)
 	{
-		modulationData->addToPopupMenu(m);
+		modulationData->addToPopupMenu(this, m);
 	}
 
 	NormalisableRange<double> rangeWithSkew = getRange();
@@ -281,7 +281,7 @@ void MacroControlledObject::enableMidiLearnWithPopup()
 
     auto result = PopupLookAndFeel::showAtComponent(m, dynamic_cast<Component*>(this), false);
 
-	if(modulationData != nullptr && modulationData->onPopupMenuResult(result))
+	if(modulationData != nullptr && modulationData->onPopupMenuResult(this, result))
 	{
 		return;
 	}

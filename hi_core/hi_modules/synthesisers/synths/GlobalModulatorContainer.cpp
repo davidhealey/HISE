@@ -273,7 +273,7 @@ struct GlobalContainerMatrixModulationPopupData: public MacroControlledObject::M
 		MatrixIds::Helpers::fillModSourceList(gc->getMainController(), sources);
 	};
 
-	void addToPopupMenu(PopupMenu& m) override
+	void addToPopupMenu(MacroControlledObject* parent, PopupMenu& m) override
 	{
 		m.addSeparator();
 		m.addSectionHeader("Modulation for " + targetId);
@@ -296,10 +296,13 @@ struct GlobalContainerMatrixModulationPopupData: public MacroControlledObject::M
 
 		idx = 0;
 
+		assignedSources.clear();
+
 		for(auto s: sources)
 		{
 			if(isAssigned(s))
 			{
+				assignedSources.add(s);
 				m.addItem(MenuOffset + RemoveOffset + idx++, "Remove " + s);
 				anyEnabled = true;
 			}
@@ -318,7 +321,7 @@ struct GlobalContainerMatrixModulationPopupData: public MacroControlledObject::M
 	}
 
 	/** Override this method and perform the result if matching and return true if consumed. */
-	bool onPopupMenuResult(int result) override
+	bool onPopupMenuResult(MacroControlledObject* parent, int result) override
 	{
 		if(result >= MenuOffset)
 		{
@@ -332,15 +335,27 @@ struct GlobalContainerMatrixModulationPopupData: public MacroControlledObject::M
 			else if(result >= RemoveOffset)
 			{
 				result -= RemoveOffset;
-				MatrixIds::Helpers::removeConnection(data, getMainController()->getControlUndoManager(), targetId, result);
+
+				auto sourceIndex = sources.indexOf(assignedSources[result]);
+				MatrixIds::Helpers::removeConnection(data, getMainController()->getControlUndoManager(), targetId, sourceIndex);
+
+				if(auto s = dynamic_cast<HiSlider*>(parent))
+				{
+					s->showModHoverPopup(false, true);
+				}
 			}
 			else if (result >= AssignOffset)
 			{
 				result -= AssignOffset;
 				MatrixIds::Helpers::addConnection(data, getMainController(), targetId, result);
-				
+
+				if(auto s = dynamic_cast<HiSlider*>(parent))
+				{
+					// refresh the hover popup by closing & reopening it
+					s->showModHoverPopup(false, true);
+					s->showModHoverPopup(true, true);
+				}
 			}
-			
 
 			return true;
 		}
@@ -366,6 +381,7 @@ private:
 	WeakReference<GlobalModulatorContainer> gc;
 	ValueTree data;
 	StringArray sources;
+	StringArray assignedSources;
 };
 
 MacroControlledObject::ModulationPopupData::Ptr GlobalModulatorContainer::createMatrixModulationPopupData(Processor* p,
