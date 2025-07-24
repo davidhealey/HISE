@@ -1542,7 +1542,8 @@ public:
 
 	void setPitchMultiplier(double newMultiplier)
 	{
-		auto pitchMultiplier = jlimit(0.001, 100.0, newMultiplier);
+		auto pitchMultiplier = newMultiplier;
+		//auto pitchMultiplier = jlimit(0.001, 100.0, newMultiplier);
 
 		for (auto& d : voiceData)
 			d.multiplier = pitchMultiplier;

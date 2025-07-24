@@ -293,6 +293,9 @@ class HardcodedSynthesiser: public ModulatorSynth,
 	// parameter methods
 	float getAttribute(int parameterIndex) const override;
 	void setInternalAttribute(int parameterIndex, float newValue) override;
+	float getDefaultValue(int parameterIndex) const override { return getAttribute(parameterIndex); }
+
+	int getParameterOffset() const override { return ModulatorSynth::SpecialParameters::numParameters; }
 
 	// extra mod methods
 	void connectToRuntimeTargets(scriptnode::OpaqueNode& opaqueNode, bool shouldAdd) override;
@@ -306,6 +309,11 @@ class HardcodedSynthesiser: public ModulatorSynth,
 	void onVoiceReset(bool allVoices, int voiceIndex) override;
 	bool isVoiceResetActive() const override;
 	int getNumActiveVoices() const override;
+
+	int getExtraModulationIndex(int modulationSlotIndexWithoutOffset) const override
+	{
+		return modulationSlotIndexWithoutOffset + extraModSources.getExtraOffset();
+	}
 
 private:
 

@@ -122,6 +122,11 @@ public:
 	bool hasHardcodedTail() const;
     var getParameterProperties() const override;
 
+	virtual int getExtraModulationIndex(int modulationSlotIndexWithoutOffset) const
+	{
+		return modulationSlotIndexWithoutOffset;
+	}
+
 	void setupChannelData(float** data, AudioSampleBuffer& b, int startSample)
 	{
 		for (int i = 0; i < numChannelsToRender; i++)

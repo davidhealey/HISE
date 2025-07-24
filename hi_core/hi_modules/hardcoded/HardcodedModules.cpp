@@ -52,7 +52,7 @@ HardcodedMasterFX::HardcodedMasterFX(MainController* mc, const String& uid) :
 
 	finaliseModChains();
 
-	extraMods.init(modChains);
+	extraMods.init(modChains, 0);
 
 	getMatrix().setNumAllowedConnections(NUM_MAX_CHANNELS);
 	connectionChanged();
@@ -320,7 +320,7 @@ HardcodedPolyphonicFX::HardcodedPolyphonicFX(MainController *mc, const String &u
 
 	finaliseModChains();
 
-	extraModSources.init(modChains);
+	extraModSources.init(modChains, 0);
 	
 	getMatrix().setNumAllowedConnections(NUM_MAX_CHANNELS);
 	getMatrix().init();
@@ -741,7 +741,7 @@ float HardcodedEnvelopeModulator::getAttribute(int index) const
 float HardcodedEnvelopeModulator::getDefaultValue(int index) const
 {
 	if (index < getParameterOffset())
-		return EnvelopeModulator::getAttribute(index);
+		return EnvelopeModulator::getDefaultValue(index);
 	else
 	{
 		index -= getParameterOffset();

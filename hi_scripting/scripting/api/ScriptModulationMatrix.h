@@ -268,6 +268,12 @@ struct ScriptModulationMatrix : public ConstScriptingObject,
 	/** Return a list of all targets. */
 	var getTargetList() const;
 
+	/** Sets the currently selected source. */
+	void setCurrentlySelectedSource(String sourceId);
+
+	/** Attaches a callback to be notified whenever a new modulation source is selected. */
+	void setSourceSelectionCallback(var sourceSelectionCallback);
+
 	// =============================================================================================
 
 private:
@@ -305,6 +311,7 @@ private:
 
 	WeakCallbackHolder connectionCallback;
 	WeakCallbackHolder editCallback;
+	WeakCallbackHolder sourceSelectionCallback;
 
 	valuetree::ChildListener connectionListener;
 

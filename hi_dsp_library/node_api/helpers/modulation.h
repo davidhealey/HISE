@@ -157,6 +157,19 @@ struct ParameterProperties
 	// Clears the state of this object. */
 	void reset();
 
+	using ConnectionList = std::vector<std::pair<int, ParameterMode>>;
+
+	void fromConnectionList(const ConnectionList& c)
+	{
+		reset();
+
+		for(const auto& con: c)
+		{
+			setModulationMode(con.first, con.second);
+			setConnected(con.first, true);
+		}
+	}
+
 	void fromValueTree(const ValueTree& v);
 	bool isUsed(int modulationIndex) const;
 

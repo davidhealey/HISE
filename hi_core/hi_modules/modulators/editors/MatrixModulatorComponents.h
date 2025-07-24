@@ -356,7 +356,8 @@ struct MatrixContent: public MatrixBase
 					   public ControlledObject,
 					   public Button::Listener
 	{
-		struct ModulationDragger: public SimpleTextDisplay,
+		struct ModulationDragger: public Component,
+								  public FlexboxComponent::ComponentWithAutoTextSize,
 		                          public SettableTooltipClient
 		{
 			ModulationDragger(const String& name);
@@ -364,11 +365,41 @@ struct MatrixContent: public MatrixBase
 			void mouseDown(const MouseEvent& e) override;
 			void mouseUp(const MouseEvent& event) override;
 
+			void paint(Graphics& g) override
+			{
+				using namespace simple_css;
+
+				if(auto root = findParentComponentOfClass<CSSRootComponent>())
+				{
+					if(auto ss = root->css.getForComponent(this))
+					{
+						Renderer r(this, root->stateWatcher);
+
+						auto state = r.getPseudoClassFromComponent(this);
+
+						if(currentlySelected)
+							state |= (int)PseudoClassType::Checked;
+
+						r.setPseudoClassState(state, true);
+
+						auto tb = getLocalBounds().toFloat();
+						root->stateWatcher.checkChanges(this, ss, state);
+						r.drawBackground(g, tb, ss);
+						r.renderText(g, tb.reduced(2.0f, 0.0f), getName(), ss);
+					}
+				}
+			}
+
+			String getTextToAutofit() const override { return getName(); }
+
 			String p64;
 			Path p;
+			bool currentlySelected = false;
 		};
 
 		Controller(MainController* mc, Component& p);
+
+		~Controller();
 
 		int getHeightToUse(int w);
 		void setValueTree(const ValueTree& data_, const String& targetId_, UndoManager* um_);
@@ -386,6 +417,8 @@ struct MatrixContent: public MatrixBase
 		UndoManager* um;
 		TextButton addButton, removeButton, clearButton;
 		OwnedArray<ModulationDragger> draggers;
+
+		JUCE_DECLARE_WEAK_REFERENCEABLE(Controller);
 	};
 
 	MatrixContent(MainController* mc, const String& targetId_, bool useViewport_);

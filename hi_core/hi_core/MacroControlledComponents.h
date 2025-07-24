@@ -275,10 +275,10 @@ public:
 		operator bool() const noexcept;
 
 		/** Override this method and populate the popup menu for the given target. */
-		virtual void addToPopupMenu(PopupMenu& m) = 0;
+		virtual void addToPopupMenu(MacroControlledObject* parentComponent, PopupMenu& m) = 0;
 
 		/** Override this method and perform the result if matching and return true if consumed. */
-		virtual bool onPopupMenuResult(int result) = 0;
+		virtual bool onPopupMenuResult(MacroControlledObject* parentComponent, int result) = 0;
 
 		String targetId;
 		

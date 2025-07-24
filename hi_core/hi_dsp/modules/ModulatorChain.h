@@ -907,7 +907,11 @@ public:
 			return nullptr;
 		}
 
+		int getExtraOffset() const { return extraOffset; }
+
 	private:
+
+		int extraOffset = 0;
 
 		template <typename RD> void handleModulation(const RD& rd, int startSample)
 		{

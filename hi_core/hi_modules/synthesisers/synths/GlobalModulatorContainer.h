@@ -660,6 +660,8 @@ public:
 	StringArray customEditCallbacks;
 	LambdaBroadcaster<int, String> editCallbackHandler;
 
+	LambdaBroadcaster<int> currentMatrixSourceBroadcaster;
+
 private:
 
 	int lastBlockSize = 0;
