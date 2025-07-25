@@ -2970,7 +2970,12 @@ void ScriptingObjects::ScriptingModulator::setMatrixProperties(var matrixData)
 {
 	if(auto mm = dynamic_cast<MatrixModulator*>(mod.get()))
 	{
-		mm->setMatrixProperties(matrixData);
+		if(auto gc = ProcessorHelpers::getFirstProcessorWithType<GlobalModulatorContainer>(mm->getMainController()->getMainSynthChain()))
+		{
+			auto rd = MatrixIds::Helpers::Properties::RangeData::fromJSON(matrixData);
+			gc->matrixProperties.rangeData[mm->getMatrixTargetId()] = rd;
+			gc->matrixProperties.propertyUpdateBroadcaster.sendMessage(sendNotificationSync, &gc->matrixProperties, mm->getMatrixTargetId());
+		}
 	}
 }
 

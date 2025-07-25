@@ -818,7 +818,11 @@ void MatrixContent::Controller::ModulationDragger::mouseDown(const MouseEvent& e
 	auto chain = findParentComponentOfClass<Controller>()->getMainController()->getMainSynthChain();
 
 	if(auto gc = ProcessorHelpers::getFirstProcessorWithType<GlobalModulatorContainer>(chain))
-		gc->currentMatrixSourceBroadcaster.sendMessage(sendNotificationSync, sourceIndex);
+	{
+		if(gc->matrixProperties.selectableSources)
+			gc->currentMatrixSourceBroadcaster.sendMessage(sendNotificationSync, sourceIndex);
+	}
+		
 }
 
 void MatrixContent::Controller::ModulationDragger::mouseUp(const MouseEvent& event)

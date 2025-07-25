@@ -518,6 +518,8 @@ struct ScriptingObjects::ScriptModulationMatrix::Wrapper
 	API_VOID_METHOD_WRAPPER_1(ScriptModulationMatrix, clearAllConnections);
 	API_VOID_METHOD_WRAPPER_1(ScriptModulationMatrix, setCurrentlySelectedSource);
 	API_VOID_METHOD_WRAPPER_1(ScriptModulationMatrix, setSourceSelectionCallback);
+	API_VOID_METHOD_WRAPPER_1(ScriptModulationMatrix, setMatrixModulationProperties);
+	API_METHOD_WRAPPER_0(ScriptModulationMatrix, getMatrixModulationProperties);
 };
 
 ScriptModulationMatrix::ScriptModulationMatrix(ProcessorWithScriptingContent* p, const String& cid) :
@@ -547,6 +549,9 @@ ScriptModulationMatrix::ScriptModulationMatrix(ProcessorWithScriptingContent* p,
 
 	ADD_API_METHOD_1(setCurrentlySelectedSource);
 	ADD_API_METHOD_1(setSourceSelectionCallback);
+
+	ADD_API_METHOD_1(setMatrixModulationProperties);
+	ADD_API_METHOD_0(getMatrixModulationProperties);
 
 	getScriptProcessor()->getMainController_()->getUserPresetHandler().addStateManager(this);
 
@@ -803,6 +808,9 @@ void ScriptModulationMatrix::setCurrentlySelectedSource(String sourceId)
 
 	if(idx != -1 && container != nullptr)
 	{
+		if(!container->matrixProperties.selectableSources)
+			reportScriptError("Selectable sources are disabled");
+
 		container->currentMatrixSourceBroadcaster.sendMessage(sendNotificationSync, idx);
 	}
 }
@@ -813,6 +821,9 @@ void ScriptModulationMatrix::setSourceSelectionCallback(var newCallback)
 
 	if(HiseJavascriptEngine::isJavascriptFunction(newCallback))
 	{
+		if(!container->matrixProperties.selectableSources)
+			reportScriptError("Selectable sources are disabled");
+
 		sourceSelectionCallback = WeakCallbackHolder(getScriptProcessor(), this, newCallback, 1);
 		sourceSelectionCallback.incRefCount();
 		sourceSelectionCallback.setThisObject(this);
@@ -827,6 +838,47 @@ void ScriptModulationMatrix::setSourceSelectionCallback(var newCallback)
 		});
 	}
 	
+}
+
+void ScriptModulationMatrix::setMatrixModulationProperties(var newProperties)
+{
+	container->matrixProperties.fromJSON(newProperties);
+
+	for(const auto& iv: container->matrixProperties.initValues)
+	{
+		if(iv.second.intensity != 0.0 && !iv.second)
+		{
+			reportScriptError(iv.first + " init value has no Mode property defined");
+		}
+	}
+}
+
+bool ScriptModulationMatrix::setConnectionProperty(String sourceId, String targetId, String propertyId, var value)
+{
+	auto sourceIndex = sourceList.indexOf(sourceId);
+
+	if(sourceIndex != -1)
+	{
+		auto c = MatrixIds::Helpers::getConnection(container->getMatrixModulatorData(), sourceIndex, targetId);
+
+		if(c.isValid())
+		{
+			Identifier id(propertyId);
+
+			if(MatrixIds::Helpers::getWatchableIds().contains(id))
+			{
+				c.setProperty(id, value, getScriptProcessor()->getMainController_()->getControlUndoManager());
+				return true;
+			}
+		}
+	}
+
+	return false;
+}
+
+var ScriptModulationMatrix::getMatrixModulationProperties() const
+{
+	return container->getMatrixModulationProperties();
 }
 
 } // namespace ScriptingObjects

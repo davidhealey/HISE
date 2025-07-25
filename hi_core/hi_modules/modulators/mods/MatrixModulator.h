@@ -93,32 +93,35 @@ public:
 
 	String getModulationTargetId(int parameterIndex) const override;
 
-	void setMatrixProperties(const var& matrixData)
+	void setRangeData(const MatrixIds::Helpers::Properties::RangeData& rd)
 	{
-		auto set = RangeHelpers::IdSet::ScriptComponents;
-
-		auto ip = RangeHelpers::getDoubleRange(matrixData[MatrixIds::InputRange], set);
-		auto op = RangeHelpers::getDoubleRange(matrixData[MatrixIds::OutputRange], set);
-		auto m  = matrixData[MatrixIds::TextConverter].toString();
-		auto mz = (bool)matrixData[MatrixIds::UseMidPositionAsZero];
+		rangeData = rd;
 
 		auto ri = getRangeData(true);
 		auto ro = getRangeData(false);
 
-		RangeHelpers::storeDoubleRange(ri, ip, nullptr, set);
-		RangeHelpers::storeDoubleRange(ro, op, nullptr, set);
+		rangeData.writeToValueTrees(ri, ro);
 
-		ri.setProperty(MatrixIds::TextConverter, m, nullptr);
-		ro.setProperty(MatrixIds::UseMidPositionAsZero, mz, nullptr);
+		if(getMode() == Modulation::PitchMode)
+		{
+			setIsBipolar(false);
+			setIntensity(1.0);
+		}
+
+		if(getMode() == Modulation::PanMode)
+		{
+			setIsBipolar(true);
+			setIntensity(1.0);
+		}
 	}
 
 	MatrixIds::Helpers::IntensityTextConverter::ConstructData getIntensityTextConstructData()
 	{
 		MatrixIds::Helpers::IntensityTextConverter::ConstructData cd;
 		cd.p = this;
-		cd.inputRange = inputRange.rng;
+		cd.inputRange = rangeData.inputRange.rng;
 		cd.parameterIndex = SpecialParameters::Value;
-		cd.prettifierMode = vtcMode;
+		cd.prettifierMode = rangeData.converter;
 		return cd;
 	}
 
@@ -190,10 +193,8 @@ private:
 
 	ValueTree valueRangeData;
 
-	String vtcMode;
-	bool useMidPositionAsZero = false;
-	scriptnode::InvertableParameterRange inputRange;
-	scriptnode::InvertableParameterRange outputRange;
+	bool rangeRecursiveChecker = false;
+	MatrixIds::Helpers::Properties::RangeData rangeData;
 
 	bool hasScaleEnvelopes = false;
 	uint8 active[NUM_POLYPHONIC_VOICES];

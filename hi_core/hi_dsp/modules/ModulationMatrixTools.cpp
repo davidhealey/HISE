@@ -36,6 +36,292 @@ namespace hise { using namespace juce;
 
 namespace MatrixIds
 {
+
+
+var Helpers::Properties::RangeData::toJSON() const
+{
+	if(rangePreset.isNotEmpty())
+	{
+		return var(rangePreset);
+	}
+
+	DynamicObject::Ptr obj = new DynamicObject();
+
+	var i(new DynamicObject());
+	var o(new DynamicObject());
+
+	scriptnode::RangeHelpers::storeDoubleRange(i, inputRange, IDSET);
+	scriptnode::RangeHelpers::storeDoubleRange(o, outputRange, IDSET);
+
+	obj->setProperty(InputRange, i);
+	obj->setProperty(OutputRange, o);
+	obj->setProperty("mode", converter);
+	obj->setProperty(UseMidPositionAsZero, useMidPositionAsZero);
+
+	return var(obj.get());
+}
+
+Helpers::Properties::RangeData Helpers::Properties::RangeData::fromValueTrees(const ValueTree& ri, const ValueTree& ro)
+{
+	RangeData rd;
+
+	rd.inputRange = scriptnode::RangeHelpers::getDoubleRange(ri, IDSET);
+	rd.outputRange = scriptnode::RangeHelpers::getDoubleRange(ro, IDSET);
+	rd.useMidPositionAsZero = (bool)ro[UseMidPositionAsZero];
+	rd.converter = ri[TextConverter].toString();
+	return rd;
+}
+
+void Helpers::Properties::RangeData::writeToValueTrees(ValueTree& ri, ValueTree& ro)
+{
+	scriptnode::RangeHelpers::storeDoubleRange(ri, inputRange, nullptr, IDSET);
+	scriptnode::RangeHelpers::storeDoubleRange(ro, outputRange, nullptr, IDSET);
+	ri.setProperty(TextConverter, converter, nullptr);
+	ro.setProperty(UseMidPositionAsZero, useMidPositionAsZero, nullptr);
+}
+
+Helpers::Properties::RangeData Helpers::Properties::RangeData::fromJSON(const var& jsonOrPresetName)
+{
+	if(jsonOrPresetName.isString())
+	{
+		auto idx = getRangePresetNames().indexOf(jsonOrPresetName.toString());
+
+		if(isPositiveAndBelow(idx, (int)RangePresets::numPresets))
+		{
+			return getRangePreset((RangePresets)idx);
+		}
+	}
+
+	RangeData rd;
+	auto obj = jsonOrPresetName;
+
+	rd.useMidPositionAsZero = obj.getProperty(UseMidPositionAsZero, false);
+	rd.converter = obj.getProperty("mode", "");
+
+	rd.inputRange = scriptnode::RangeHelpers::getDoubleRange(obj.getProperty(InputRange, {}), IDSET);
+	rd.outputRange = scriptnode::RangeHelpers::getDoubleRange(obj.getProperty(OutputRange, {}), IDSET);
+
+	return rd;
+}
+
+std::pair<bool, Helpers::Properties::RangeData> Helpers::Properties::getRangeData(const String& targetId) const
+{
+	if(rangeData.find(targetId) != rangeData.end())
+		return { true, rangeData.at(targetId) };
+
+	return { false, {} };
+}
+
+Helpers::Properties::DefaultInitValue Helpers::Properties::getConvertedIntensityValue(const String& targetId) const
+{
+	if(initValues.find(targetId) != initValues.end())
+	{
+		auto dv = initValues.at(targetId);
+
+		if(dv && dv.defaultMode != scriptnode::modulation::TargetMode::Gain)
+		{
+			if(rangeData.find(targetId) != rangeData.end())
+			{
+				auto rd = rangeData.at(targetId);
+
+				if(!dv.isNormalised)
+					dv.intensity = (float)rd.inputRange.convertTo0to1((double)dv.intensity, false);
+
+				if(rd.useMidPositionAsZero)
+				{
+					dv.intensity -= 0.5f;
+					dv.intensity *= 2.0f;
+				}
+			}
+		}
+
+		return dv;
+	}
+
+	return {};
+}
+
+void Helpers::Properties::sendChangeMessage(const String& targetId)
+{
+	propertyUpdateBroadcaster.sendMessage(sendNotificationSync, this, targetId);
+}
+
+void Helpers::Properties::fromJSON(const var& obj)
+{
+	selectableSources = obj.getProperty(SelectableSources, true);
+	initValues.clear();
+	rangeData.clear();
+
+	static const StringArray modeNames = {
+		"Scale",
+		"Unipolar",
+		"Bipolar"
+	};
+
+	if(auto o = obj[DefaultInitValues].getDynamicObject())
+	{
+		for(auto& nv: o->getProperties())
+		{
+			using TM = scriptnode::modulation::TargetMode;
+			DefaultInitValue v;
+			v.intensity = nv.value.getProperty(Intensity, 0.0);
+
+			v.isNormalised = nv.value.getProperty(IsNormalized, true);
+
+			auto idx = modeNames.indexOf(nv.value[Mode].toString());
+			v.defaultMode = idx != -1 ? (TM)(int)idx : TM::Raw;
+
+			initValues[nv.name.toString()] = v;
+		}
+	}
+	if(auto o = obj[RangeProperties].getDynamicObject())
+	{
+		for(const auto& nv: o->getProperties())
+		{
+			rangeData[nv.name.toString()] = RangeData::fromJSON(nv.value);
+		}
+	}
+
+	sendChangeMessage({});
+}
+
+var Helpers::Properties::toJSON(const MainController* mc) const
+{
+	using TM = scriptnode::modulation::TargetMode;
+	DynamicObject::Ptr obj = new DynamicObject();
+
+	static const StringArray modeNames = {
+		"Scale",
+		"Unipolar",
+		"Bipolar"
+	};
+
+	StringArray targetList;
+
+	fillModTargetList(mc, targetList, TargetType::All);
+
+	obj->setProperty(SelectableSources, selectableSources);
+
+	DynamicObject::Ptr iv = new DynamicObject();
+	DynamicObject::Ptr rv = new DynamicObject();
+
+	for(const auto& t: targetList)
+	{
+		DefaultInitValue dv;
+
+		if(initValues.find(t) != initValues.end())
+		{
+			dv = initValues.at(t);
+		}
+
+		DynamicObject::Ptr item = new DynamicObject();
+		item->setProperty(Intensity, dv.intensity);
+
+		item->setProperty(IsNormalized, dv.isNormalised);
+
+		if(dv.defaultMode != TM::Raw)
+			item->setProperty(Mode, modeNames[(int)dv.defaultMode]);
+
+		iv->setProperty(t, var(item.get()));
+
+		if(rangeData.find(t) != rangeData.end())
+		{
+			rv->setProperty(t, rangeData.at(t).toJSON());
+		}
+	}
+
+	obj->setProperty(DefaultInitValues, iv.get());
+	obj->setProperty(RangeProperties, rv.get());
+
+	return var(obj.get());
+}
+
+StringArray Helpers::getRangePresetNames()
+{
+	static const StringArray names = {
+		"NormalizedPercentage",
+		"Gain0dB",
+		"Gain6dB",
+		"Pitch1Octave",
+		"Pitch2Octaves",
+		"Pitch1Semitone",
+		"FilterFreq",
+		"FilterFreqLog",
+		"Stereo",
+	};
+
+	return names;
+}
+
+Helpers::Properties::RangeData Helpers::getRangePreset(RangePresets p)
+{
+	Properties::RangeData rd;
+
+	switch(p)
+	{
+	case RangePresets::NormalizedPercentage:
+		rd.inputRange = { 0.0, 1.0};
+		rd.outputRange = { 0.0, 1.0};
+		rd.converter = "NormalizedPercentage";
+		break;
+	case RangePresets::Gain0dB:
+		rd.inputRange = { -100.0, 0.0};
+		rd.inputRange.setSkewForCentre(-6.0);
+		rd.outputRange = { 0.0, 1.0};
+		rd.converter = "Decibel";
+		break;
+	case RangePresets::Gain6dB:
+		rd.inputRange = { -100.0, 6.0};
+		rd.inputRange.setSkewForCentre(0.0);
+		rd.outputRange = { 0.0, 2.0};
+		rd.converter = "Decibel";
+		break;
+	case RangePresets::Pitch1Octave:
+		rd.inputRange = { -12.0, 12.0};
+		rd.inputRange.rng.interval = 1.0;
+		rd.outputRange = { -1.0, 1.0};
+		rd.converter = "Semitones";
+		rd.useMidPositionAsZero = true;
+		break;
+	case RangePresets::Pitch2Octaves:
+		rd.inputRange = { -24.0, 24.0};
+		rd.inputRange.rng.interval = 1.0;
+		rd.outputRange = { -2.0, 2.0};
+		rd.converter = "Semitones";
+		rd.useMidPositionAsZero = true;
+		break;
+	case RangePresets::Pitch1Semitone:
+		rd.inputRange = { -1.0, 1.0};
+		rd.inputRange.rng.interval = 0.01;
+		rd.outputRange = { -1.0 / 12.0, 1.0 / 12.0};
+		rd.converter = "Semitones";
+		rd.useMidPositionAsZero = true;
+		break;
+	case RangePresets::FilterFreq:
+		rd.inputRange = { 20.0, 20000.0};
+		rd.outputRange = { 0.0, 1.0};
+		rd.converter = "Frequency";
+		break;
+	case RangePresets::FilterFreqLog:
+		rd.inputRange = { 20.0, 20000.0};
+		rd.inputRange.rng.skew = 0.2998514912584123; // use 2khz as center point
+		rd.outputRange = { 0.0, 1.0};
+		rd.outputRange.rng.skew = 0.2998514912584123;
+		rd.converter = "Frequency";
+		break;
+	case RangePresets::Stereo:
+		rd.inputRange = { -100.0, 100.0};
+		rd.outputRange = { 0.0, 1.0 };
+		rd.converter = "Pan";
+		rd.useMidPositionAsZero = true;
+	case RangePresets::numPresets:
+		break;
+	default: ;
+	}
+
+	return rd;
+}
+
 ValueTree Helpers::addConnection(ValueTree& v, MainController* mc, const String& targetId, int sourceIndex)
 {
 	jassert(v.getType() == MatrixData);
@@ -48,35 +334,44 @@ ValueTree Helpers::addConnection(ValueTree& v, MainController* mc, const String&
 			return existing;
 	}
 
+	Properties::DefaultInitValue iv;
+
+	
+
 	auto um = mc->getControlUndoManager();
 
-	float defaultValue = 0.0f;
-	int defaultMode = 1;
 
-	if(auto mod = dynamic_cast<Modulation*>(ProcessorHelpers::getFirstProcessorWithName(mc->getMainSynthChain(), targetId)))
+	if(auto gc = ProcessorHelpers::getFirstProcessorWithType<GlobalModulatorContainer>(mc->getMainSynthChain()))
 	{
-		auto m = mod->getMode();
-
-		switch(m)
-		{
-		case Modulation::GainMode:
-		case Modulation::GlobalMode:
-			defaultValue = 1.0f;
-			defaultMode = 0;
-			break;
-		case Modulation::PitchMode:
-		case Modulation::PanMode:
-		case Modulation::OffsetMode:
-		case Modulation::CombinedMode:
-			defaultValue = 0.0f;
-			defaultMode = 2;
-			break;
-		case Modulation::numModes:
-			break;
-		default: ;
-		}
+		iv = gc->matrixProperties.getConvertedIntensityValue(targetId);
 	}
 
+	if(!iv)
+	{
+		if(auto mod = dynamic_cast<Modulation*>(ProcessorHelpers::getFirstProcessorWithName(mc->getMainSynthChain(), targetId)))
+		{
+			auto m = mod->getMode();
+
+			switch(m)
+			{
+			case Modulation::GainMode:
+			case Modulation::GlobalMode:
+				iv.intensity = 1.0f;
+				iv.defaultMode = modulation::TargetMode::Gain;
+				break;
+			case Modulation::PitchMode:
+			case Modulation::PanMode:
+			case Modulation::OffsetMode:
+			case Modulation::CombinedMode:
+				iv.intensity = 0.0f;
+				iv.defaultMode = modulation::TargetMode::Bipolar;
+				break;
+			case Modulation::numModes:
+				break;
+			default: ;
+			}
+		}
+	}
 
 	if(sourceIndex != -1)
 	{
@@ -84,9 +379,9 @@ ValueTree Helpers::addConnection(ValueTree& v, MainController* mc, const String&
 		{
 			if(matchesTarget(c, targetId) && (int)c[SourceIndex] == -1)
 			{
-				c.setProperty(Mode, defaultMode, um);
+				c.setProperty(Mode, (int)iv.defaultMode, um);
 				c.setProperty(SourceIndex, sourceIndex, um);
-				c.setProperty(Intensity, defaultValue, um);
+				c.setProperty(Intensity, iv.intensity, um);
 				c.setProperty(AuxIndex, -1.0, um);
 				c.setProperty(AuxIntensity, 0.0, um);
 				c.setProperty(Inverted, false, um);
@@ -99,9 +394,9 @@ ValueTree Helpers::addConnection(ValueTree& v, MainController* mc, const String&
 	ValueTree nd(Connection);
 
 	nd.setProperty(TargetId, targetId, nullptr);
-	nd.setProperty(Mode, defaultMode, nullptr);
+	nd.setProperty(Mode, (int)iv.defaultMode, nullptr);
 	nd.setProperty(SourceIndex, sourceIndex, nullptr);
-	nd.setProperty(Intensity, defaultValue, nullptr);
+	nd.setProperty(Intensity, iv.intensity, nullptr);
 	nd.setProperty(AuxIndex, -1.0, nullptr);
 	nd.setProperty(AuxIntensity, 0.0, nullptr);
 	nd.setProperty(Inverted, false, nullptr);
@@ -173,6 +468,19 @@ bool Helpers::matchesTarget(const ValueTree& data, const String& targetId)
 	return data[TargetId].toString() == targetId;
 }
 
+ValueTree Helpers::getConnection(const ValueTree& matrixData, int sourceIndex, const String& targetId)
+{
+	jassert(matrixData.getType() == MatrixData);
+
+	for(auto c: matrixData)
+	{
+		if(matchesTarget(c, targetId) && (int)c[SourceIndex] == sourceIndex)
+			return c;
+	}
+
+	return {};
+}
+
 void Helpers::fillModSourceList(const MainController* mc, StringArray& items)
 {
 	if(auto container = ProcessorHelpers::getFirstProcessorWithType<GlobalModulatorContainer>(mc->getMainSynthChain()))
@@ -226,6 +534,37 @@ void Helpers::fillModTargetList(const MainController* mc, StringArray& items, Ta
 	{
 		items.remove(noConnectionIdx);
 		items.insert(0, "No connection");
+	}
+}
+
+int Helpers::getModulationSourceDragIndex(const var& data)
+{
+	if(data["Type"].toString() == "ModulationDrag")
+		return (int)data[MatrixIds::SourceIndex];
+
+	return -1;
+}
+
+void Helpers::updateDragState(HiSlider* s, DragTargetType state)
+{
+	if(s->isUsingModulatedRing())
+	{
+		s->getProperties().set("modulationDragState", (int)state);
+		s->repaint();
+	}
+}
+
+void Helpers::repaintMatrixSlidersOnDrag(Component* c, const var& data, DragTargetType state)
+{
+	auto idx = getModulationSourceDragIndex(data);
+
+	if(idx != -1)
+	{
+		Component::callRecursive<HiSlider>(c, [&](HiSlider* s)
+		{
+			updateDragState(s, state);
+			return false;
+		});
 	}
 }
 
