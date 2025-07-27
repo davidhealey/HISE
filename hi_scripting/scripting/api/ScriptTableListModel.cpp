@@ -1258,8 +1258,10 @@ void ScriptTableListModel::TableRepainter::repaintIfCellChange(const MouseEvent&
 		{
 			auto c = t.getComponent()->getCellPosition(i + 1, s.y, true);
 
+#if 0
 			if (c.isEmpty())
 				break;
+#endif
 
 			if (c.contains(pos))
 			{
