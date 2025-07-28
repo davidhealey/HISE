@@ -183,33 +183,11 @@ MatrixModulatorBody::MatrixModulatorBody(ProcessorEditor* parent):
 
 		m.addSectionHeader("Load range preset");
 
-		enum class Presets
-		{
-			NormalizedPercentage,
-			Gain0dB,
-			Gain6dB,
-			Pitch1Octave,
-			Pitch2Octaves,
-			Pitch1Semitone,
-			FilterFreq,
-			FilterFreqLog,
-			Stereo,
-			numPresets
-		};
+		using Presets = MatrixIds::Helpers::RangePresets;
 
-		static const StringArray names = {
-			"NormalizedPercentage",
-			"Gain +0dB",
-			"Gain +6dB",
-			"Pitch +-1 Octave",
-			"Pitch +-2 Octaves",
-			"Pitch +-1 Semitone",
-			"FilterFreq",
-			"FilterFreq Logarithmic",
-			"Stereo"
-		};
+		auto names = MatrixIds::Helpers::getRangePresetNames();
 
-		std::array<bool, (int)Presets::numPresets> allowed = {
+		std::array<bool, (int)MatrixIds::Helpers::RangePresets::numPresets> allowed = {
 			true,
 			true,
 			true,
@@ -239,7 +217,6 @@ MatrixModulatorBody::MatrixModulatorBody(ProcessorEditor* parent):
 			allowed[(int)Presets::Pitch1Semitone] = false;
 		}
 		
-
 		for(int i = 0; i < (int)Presets::numPresets; i++)
 		{
 			m.addItem(1 + i, names[i], allowed[i], false);
@@ -247,98 +224,21 @@ MatrixModulatorBody::MatrixModulatorBody(ProcessorEditor* parent):
 
 		if(auto r = m.show())
 		{
-			auto p = (Presets)(r - 1);
+			auto pr = (Presets)(r - 1);
 
-			InvertableParameterRange inp, out;
-			String converter;
-			bool useMidPositionAsZero = false;
-
-			switch(p)
-			{
-			case Presets::NormalizedPercentage:
-				inp = { 0.0, 1.0};
-				out = { 0.0, 1.0};
-				converter = "NormalizedPercentage";
-				break;
-			case Presets::Gain0dB:
-				inp = { -100.0, 0.0};
-				inp.setSkewForCentre(-6.0);
-				out = { 0.0, 1.0};
-				converter = "Decibel";
-				break;
-			case Presets::Gain6dB:
-				inp = { -100.0, 6.0};
-				inp.setSkewForCentre(0.0);
-				out = { 0.0, 2.0};
-				converter = "Decibel";
-				break;
-			case Presets::Pitch1Octave:
-				inp = { -12.0, 12.0};
-				inp.rng.interval = 1.0;
-				out = { -1.0, 1.0};
-				converter = "Semitones";
-				useMidPositionAsZero = true;
-				break;
-			case Presets::Pitch2Octaves:
-				inp = { -24.0, 24.0};
-				inp.rng.interval = 1.0;
-				out = { -2.0, 2.0};
-				converter = "Semitones";
-				useMidPositionAsZero = true;
-				break;
-			case Presets::Pitch1Semitone:
-				inp = { -1.0, 1.0};
-				inp.rng.interval = 0.01;
-				out = { -1.0 / 12.0, 1.0 / 12.0};
-				converter = "Semitones";
-				useMidPositionAsZero = true;
-				break;
-			case Presets::FilterFreq:
-				inp = { 20.0, 20000.0};
-				out = { 0.0, 1.0};
-				converter = "Frequency";
-				break;
-			case Presets::FilterFreqLog:
-				inp = { 20.0, 20000.0};
-				inp.rng.skew = 0.2998514912584123; // use 2khz as center point
-				out = { 0.0, 1.0};
-				out.rng.skew = 0.2998514912584123;
-				converter = "Frequency";
-				break;
-			case Presets::Stereo:
-				inp = { -100.0, 100.0};
-				out = { 0.0, 1.0 };
-				converter = "Pan";
-				useMidPositionAsZero = true;
-			case Presets::numPresets:
-				break;
-			default: ;
-			}
-
-			
+			auto rd = MatrixIds::Helpers::getRangePreset(pr);
 
 			auto um = getMainController()->getControlUndoManager();
 			auto set = RangeHelpers::IdSet::ScriptComponents;
 
-			auto ir = mod->getRangeData(true);
-			auto outr = mod->getRangeData(false);
-
-			RangeHelpers::storeDoubleRange(ir, inp, um, set);
-			RangeHelpers::storeDoubleRange(outr, out, um, set);
-			ir.setProperty(MatrixIds::TextConverter, converter, um);
-			outr.setProperty(MatrixIds::UseMidPositionAsZero, useMidPositionAsZero, um);
-
-			if(mod->getMode() == Modulation::PitchMode)
+			if(auto gc = ProcessorHelpers::getFirstProcessorWithType<GlobalModulatorContainer>(getMainController()->getMainSynthChain()))
 			{
-				mod->setIsBipolar(false);
-				mod->setIntensity(1.0);
-			}
+				auto targetId = dynamic_cast<MatrixModulator*>(getProcessor())->getMatrixTargetId();
 
-			if(mod->getMode() == Modulation::PanMode)
-			{
-				mod->setIsBipolar(true);
-				mod->setIntensity(1.0);
+				gc->matrixProperties.rangeData[targetId] = rd;
+				gc->matrixProperties.sendChangeMessage(targetId);
 			}
+			
 		}
 	};
 
@@ -364,13 +264,13 @@ MatrixModulatorBody::MatrixModulatorBody(ProcessorEditor* parent):
 
 	controller.setCSS(css);
 
-	inputRangeListener.setCallback(inputRangeEditor.data, MatrixModulator::getRangeIds(true), valuetree::AsyncMode::Synchronously,
+	inputRangeListener.setCallback(inputRangeEditor.data, MatrixModulator::getRangeIds(true), valuetree::AsyncMode::Asynchronously,
 	                               [this](const Identifier& id, const var& newValue)
 	                               {
 		                               updateRangeProperty(true, id.toString(), newValue);
 	                               });
 
-	outputRangeListener.setCallback(outputRangeEditor.data, MatrixModulator::getRangeIds(false), valuetree::AsyncMode::Synchronously,
+	outputRangeListener.setCallback(outputRangeEditor.data, MatrixModulator::getRangeIds(false), valuetree::AsyncMode::Asynchronously,
 	                                [this](const Identifier& id, const var& newValue)
 	                                {
 		                                updateRangeProperty(false, id.toString(), newValue);
@@ -439,9 +339,9 @@ void MatrixModulatorBody::updateValueSlider()
 {
 	auto mm = dynamic_cast<MatrixModulator*>(getProcessor());
 
-	auto vtc = ValueToTextConverter::createForMode(mm->vtcMode);
+	auto vtc = ValueToTextConverter::createForMode(mm->rangeData.converter);
 
-	valueSlider.setNormalisableRange(mm->inputRange.rng);
+	valueSlider.setNormalisableRange(mm->rangeData.inputRange.rng);
 	valueSlider.valueFromTextFunction = vtc;
 	valueSlider.textFromValueFunction = vtc;
 	valueSlider.updateText();

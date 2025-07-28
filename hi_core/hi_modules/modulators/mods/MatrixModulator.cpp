@@ -242,14 +242,14 @@ void MatrixModulator::setValueRange(bool isInputRange, scriptnode::InvertablePar
 {
 	if(isInputRange)
 	{
-		inputRange = nr;
-		inputRange.checkIfIdentity();
+		rangeData.inputRange = nr;
+		rangeData.inputRange.checkIfIdentity();
 	}
 	else
 	{
 		nr.rng.interval = 0.0;
-		outputRange = nr;
-		outputRange.checkIfIdentity();
+		rangeData.outputRange = nr;
+		rangeData.outputRange.checkIfIdentity();
 	}
 
 	setValueInternal(inputValue);
@@ -258,21 +258,20 @@ void MatrixModulator::setValueRange(bool isInputRange, scriptnode::InvertablePar
 void MatrixModulator::setValueInternal(float valueWithinInputRange)
 {
 	inputValue = valueWithinInputRange;
-	auto norm = inputRange.convertTo0to1(valueWithinInputRange, false);
+	auto norm = rangeData.inputRange.convertTo0to1(valueWithinInputRange, false);
 	baseValue.set(norm);
 
 	if(auto parentModChain = dynamic_cast<ModulatorChain*>(getParentProcessor(false, false)))
 	{
 		if(isBypassed())
 		{
-			auto norm = inputRange.convertTo0to1(inputValue, false);
-			auto iv = outputRange.convertFrom0to1(norm, false);
+			auto norm =  rangeData.inputRange.convertTo0to1(inputValue, false);
+			auto iv =  rangeData.outputRange.convertFrom0to1(norm, false);
 
 			if(getMode() == Modulation::PitchMode)
 				iv *= 12.0;
 
 			parentModChain->setInitialValue(iv);
-			
 		}
 		else
 		{
@@ -289,21 +288,20 @@ MatrixModulator::MatrixModulator(MainController* mc, const String& id, int voice
   EnvelopeModulator(mc, id, voiceAmount, m),
   Modulation(m),
   polyHandler(voiceAmount > 1),
-  vtcMode("NormalizedPercentage"),
-  inputRange({0.0, 1.0, 0.0}),
+  
   valueRangeData(MatrixIds::ValueRange)
 {
 	switch(m)
 	{
 	case GainMode:
 	case CombinedMode:
-		outputRange = { 0.0, 1.0, 0.0 };
+		rangeData.outputRange = { 0.0, 1.0, 0.0 };
 		break;
 	case PitchMode:
 	case PanMode:
 	case GlobalMode:
 	case OffsetMode:
-		outputRange = { -1.0, 1.0, 0.0 };
+		rangeData.outputRange = { -1.0, 1.0, 0.0 };
 		break;
 	case numModes:
 		jassertfalse;
@@ -311,15 +309,15 @@ MatrixModulator::MatrixModulator(MainController* mc, const String& id, int voice
 	default: ;
 	}
 
-	outputRange.checkIfIdentity();
+	rangeData.outputRange.checkIfIdentity();
 
 	{
 		auto set = scriptnode::RangeHelpers::IdSet::ScriptComponents;
 		ValueTree ir(MatrixIds::InputRange);
 		ValueTree outr(MatrixIds::OutputRange);
 
-		RangeHelpers::storeDoubleRange(ir, inputRange, nullptr, set);
-		RangeHelpers::storeDoubleRange(outr, outputRange, nullptr, set);
+		RangeHelpers::storeDoubleRange(ir, rangeData.inputRange, nullptr, set);
+		RangeHelpers::storeDoubleRange(outr, rangeData.outputRange, nullptr, set);
 
 		ir.setProperty(MatrixIds::TextConverter, "NormalizedPercentage", nullptr);
 		outr.setProperty(MatrixIds::UseMidPositionAsZero, false, nullptr);
@@ -466,11 +464,17 @@ void MatrixModulator::restoreFromValueTree(const ValueTree& v)
 	auto ri = vr.getChildWithName(MatrixIds::InputRange);
 	auto ro = vr.getChildWithName(MatrixIds::OutputRange);
 
+	setRangeData(MatrixIds::Helpers::Properties::RangeData::fromValueTrees(ri, ro));
+
+#if 0
+	rangeData.fromValueTrees(ri, ro);
+
 	if(ri.isValid())
 		getRangeData(true).copyPropertiesFrom(ri, nullptr);
 		
 	if(ro.isValid())
 		getRangeData(false).copyPropertiesFrom(ro, nullptr);
+#endif
 }
 
 ValueTree MatrixModulator::exportAsValueTree() const
@@ -607,10 +611,10 @@ void MatrixModulator::calculateBlock(int startSample, int numSamples)
 			al->process(pd);
 	}
 
-	if(outputRange.isNonDefault())
+	if(rangeData.outputRange.isNonDefault())
 	{
-		Range<float> r((float)outputRange.rng.start, (float)outputRange.rng.end);
-		ModBufferExpansion::applySkewFactor(ptr, numSamples, r, (float)outputRange.rng.skew);
+		Range<float> r((float)rangeData.outputRange.rng.start, (float)rangeData.outputRange.rng.end);
+		ModBufferExpansion::applySkewFactor(ptr, numSamples, r, (float)rangeData.outputRange.rng.skew);
 	}
 }
 
@@ -713,7 +717,7 @@ void MatrixModulator::onMatrixChange(const ValueTree& v, bool wasAdded)
 		if(wasAdded)
 		{
 			items.add(new Item(v, getMainController()->getControlUndoManager()));
-			items.getLast()->mod.setZeroPosition((double)useMidPositionAsZero);
+			items.getLast()->mod.setZeroPosition((double)rangeData.useMidPositionAsZero);
 			items.getLast()->displayBuffer->setGlobalUIUpdater(getMainController()->getGlobalUIUpdater());
 			items.getLast()->prepare(getSampleRate(), getLargestBlockSize(), polyHandler);
 		}
@@ -818,6 +822,24 @@ void MatrixModulator::init()
 		                        { MatrixIds::SourceIndex, MatrixIds::Mode },
 		                        valuetree::AsyncMode::Synchronously,
 		                        BIND_MEMBER_FUNCTION_2(MatrixModulator::onModeChange));
+
+		container->matrixProperties.propertyUpdateBroadcaster.addListener(*this, [](MatrixModulator& mm, MatrixIds::Helpers::Properties* p, const String& changedTarget)
+		{
+			if(mm.rangeRecursiveChecker)
+				return;
+
+			auto targetId = mm.getMatrixTargetId();
+
+			if(changedTarget.isEmpty() || targetId == changedTarget)
+			{
+				auto tr = p->getRangeData(targetId);
+
+				if(tr.first)
+				{
+					mm.setRangeData(tr.second);
+				}
+			}
+		});
 	}
 }
 
@@ -829,7 +851,7 @@ void MatrixModulator::onRangeUpdate(const Identifier& id, const var& newValue, b
 	if(isInputRange)
 	{
 		if(id == MatrixIds::TextConverter)
-			vtcMode = newValue.toString();
+			rangeData.converter = newValue.toString();
 		else
 			setValueRange(true, r);
 	}
@@ -837,16 +859,24 @@ void MatrixModulator::onRangeUpdate(const Identifier& id, const var& newValue, b
 	{
 		if(id == MatrixIds::UseMidPositionAsZero)
 		{
-			useMidPositionAsZero = (bool)newValue;
+			rangeData.useMidPositionAsZero = (bool)newValue;
 
 			for(auto a: items)
 			{
-				a->mod.setZeroPosition((double)useMidPositionAsZero);
+				a->mod.setZeroPosition((double)rangeData.useMidPositionAsZero);
 			}
 		}
 			
 		else
 			setValueRange(false, r);
+	}
+
+	if(container != nullptr && !rangeRecursiveChecker)
+	{
+		container->matrixProperties.rangeData[getMatrixTargetId()] = rangeData;
+
+		ScopedValueSetter<bool> svs(rangeRecursiveChecker, true);
+		container->matrixProperties.sendChangeMessage(getMatrixTargetId());
 	}
 }
 

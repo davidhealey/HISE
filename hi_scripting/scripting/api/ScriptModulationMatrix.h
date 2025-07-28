@@ -274,6 +274,15 @@ struct ScriptModulationMatrix : public ConstScriptingObject,
 	/** Attaches a callback to be notified whenever a new modulation source is selected. */
 	void setSourceSelectionCallback(var sourceSelectionCallback);
 
+	/** Sets the global properties for the matrix modulation system. */
+	void setMatrixModulationProperties(var newProperties);
+
+	/** Sets the property of a modulation connection (with undo). */
+	bool setConnectionProperty(String sourceId, String targetId, String propertyId, var value);
+
+	/** Returns a JSON object with the current matrix modulation properties. */
+	var getMatrixModulationProperties() const;
+
 	// =============================================================================================
 
 private:

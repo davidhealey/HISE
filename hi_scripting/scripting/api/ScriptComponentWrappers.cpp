@@ -642,7 +642,7 @@ void ScriptCreatedComponentWrappers::SliderWrapper::updateSliderRange(ScriptingA
 		debugError(dynamic_cast<Processor*>(sc->getScriptProcessor()), "Slider min/max value exceeds upper limit!");
 	}
 
-	if (min >= max || stepsize <= 0.0 || min < -MaxValue || max > MaxValue)
+	if (min >= max || stepsize < 0.0 || min < -MaxValue || max > MaxValue)
 	{
 		s->setMode(HiSlider::Mode::Linear, {0.0, 1.0});
 		s->setEnabled(false);

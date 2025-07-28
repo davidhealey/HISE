@@ -48,12 +48,17 @@ DECLARE_ID(AuxIntensity);
 DECLARE_ID(Inverted);
 DECLARE_ID(MatrixData);
 
+DECLARE_ID(IsNormalized);
 DECLARE_ID(ValueRange);
 DECLARE_ID(IsModulator);
 DECLARE_ID(InputRange);
 DECLARE_ID(OutputRange);
 DECLARE_ID(TextConverter);
 DECLARE_ID(UseMidPositionAsZero);
+
+DECLARE_ID(DefaultInitValues);
+DECLARE_ID(SelectableSources);
+DECLARE_ID(RangeProperties);
 
 struct Helpers
 {
@@ -71,6 +76,78 @@ struct Helpers
 		Hover
 	};
 
+	enum class RangePresets
+	{
+		NormalizedPercentage,
+		Gain0dB,
+		Gain6dB,
+		Pitch1Octave,
+		Pitch2Octaves,
+		Pitch1Semitone,
+		FilterFreq,
+		FilterFreqLog,
+		Stereo,
+		numPresets
+	};
+
+	struct Properties
+	{
+		Properties()
+		{
+			propertyUpdateBroadcaster.sendMessage(dontSendNotification, this, "");
+		}
+
+		struct DefaultInitValue
+		{
+			float intensity = 0.0f;
+			scriptnode::modulation::TargetMode defaultMode = scriptnode::modulation::TargetMode::Raw;
+			bool isNormalised = true;
+
+			operator bool() const { return defaultMode != scriptnode::modulation::TargetMode::Raw; }
+		};
+
+		struct RangeData
+		{
+			static constexpr scriptnode::RangeHelpers::IdSet IDSET = scriptnode::RangeHelpers::IdSet::ScriptComponents;
+
+			RangeData():
+			  converter("NormalizedPercentage"),
+			  inputRange({0.0, 1.0, 0.0}),
+			  outputRange({0.0, 1.0, 0.0})
+			{
+				inputRange.checkIfIdentity();
+				outputRange.checkIfIdentity();
+			}
+
+			var toJSON() const;
+			static RangeData fromValueTrees(const ValueTree& ri, const ValueTree& ro);
+			void writeToValueTrees(ValueTree& ri, ValueTree& ro);
+			static RangeData fromJSON(const var& jsonOrPresetName);
+
+			String rangePreset;
+			String converter;
+			bool useMidPositionAsZero = false;
+			scriptnode::InvertableParameterRange inputRange;
+			scriptnode::InvertableParameterRange outputRange;
+		};
+
+		void sendChangeMessage(const String& targetId);
+		void fromJSON(const var& obj);
+		var toJSON(const MainController* mc) const;
+
+		std::pair<bool, RangeData> getRangeData(const String& targetId) const;
+		DefaultInitValue getConvertedIntensityValue(const String& targetId) const;
+
+		std::map<String, DefaultInitValue> initValues;
+		std::map<String, RangeData> rangeData;
+		bool selectableSources = true;
+
+		LambdaBroadcaster<Properties*, String> propertyUpdateBroadcaster;
+	};
+
+	static StringArray getRangePresetNames();
+	static Properties::RangeData getRangePreset(RangePresets p);
+
 	static Array<Identifier> getWatchableIds() { return { SourceIndex, TargetId, Mode, Inverted, Intensity, AuxIndex, AuxIntensity }; };
 	static ValueTree addConnection(ValueTree& v, MainController* um, const String& targetId, int sourceIndex=-1);
 	static ValueTree getMatrixDataFromGlobalContainer(MainController* mc);
@@ -79,52 +156,14 @@ struct Helpers
 	static bool removeAllConnections(ValueTree& data, UndoManager* um, const String& targetId);
 	static bool matchesTarget(const ValueTree& data, const String& targetId);
 
-	static ValueTree getConnection(const ValueTree& matrixData, int sourceIndex, const String& targetId)
-	{
-		jassert(matrixData.getType() == MatrixData);
-
-		for(auto c: matrixData)
-		{
-			if(matchesTarget(c, targetId) && (int)c[SourceIndex] == sourceIndex)
-				return c;
-		}
-
-		return {};
-	}
+	static ValueTree getConnection(const ValueTree& matrixData, int sourceIndex, const String& targetId);
 
 	static void fillModSourceList(const MainController* mc, StringArray& items);
 	static void fillModTargetList(const MainController* mc, StringArray& items, TargetType t);
 
-	static int getModulationSourceDragIndex(const var& data)
-	{
-		if(data["Type"].toString() == "ModulationDrag")
-			return (int)data[MatrixIds::SourceIndex];
-
-		return -1;
-	}
-
-	static void updateDragState(HiSlider* s, DragTargetType state)
-	{
-		if(s->isUsingModulatedRing())
-		{
-			s->getProperties().set("modulationDragState", (int)state);
-			s->repaint();
-		}
-	}
-
-	static void repaintMatrixSlidersOnDrag(Component* c, const var& data, DragTargetType state)
-	{
-		auto idx = getModulationSourceDragIndex(data);
-
-		if(idx != -1)
-		{
-			Component::callRecursive<HiSlider>(c, [&](HiSlider* s)
-			{
-				updateDragState(s, state);
-				return false;
-			});
-		}
-	}
+	static int getModulationSourceDragIndex(const var& data);
+	static void updateDragState(HiSlider* s, DragTargetType state);
+	static void repaintMatrixSlidersOnDrag(Component* c, const var& data, DragTargetType state);
 
 	static void startDragging(Component* c, int sourceIndex);
 	static void stopDragging(Component* c);

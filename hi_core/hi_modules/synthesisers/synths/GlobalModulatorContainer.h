@@ -641,6 +641,11 @@ public:
     void sendVoiceStartCableValue(Modulator* m, const HiseEvent& e);
 
 	ValueTree getMatrixModulatorData() const { return runtimeSource.matrixData; }
+
+	MatrixIds::Helpers::Properties matrixProperties;
+
+	var getMatrixModulationProperties() const { return matrixProperties.toJSON(getMainController()); }
+
 	runtime_target::connection getMatrixModulatorConnection() const { return runtimeSource.createConnection(); }
 
 	void handleRetriggeredNote(ModulatorSynthVoice *voice) override

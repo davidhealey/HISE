@@ -2262,6 +2262,7 @@ StringArray ScriptingApi::Content::ScriptSlider::getOptionsFor(const Identifier 
 		sa.add("Range");
 		break;
 	case Properties::stepSize:
+		sa.add("0.0");
 		sa.add("0.01");
 		sa.add("0.1");
 		sa.add("1.0");
