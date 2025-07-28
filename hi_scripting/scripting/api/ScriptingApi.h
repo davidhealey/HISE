@@ -1757,6 +1757,12 @@ private:
 		/** Opens a file browser to choose a directory. */
 		void browseForDirectory(var startFolder, var callback);
 
+		/** Opens a file browser to select multiple directories. */
+		void browseForMultipleDirectories(var startFolder, var callback);
+
+		/** Opens a file browser to select multiple files (to open). */
+		void browseForMultipleFiles(var startFolder, String wildcard, var callback);
+
 		/** Returns a unique machine ID that can be used to identify the computer. */
 		String getSystemId();
 		
@@ -1783,7 +1789,7 @@ private:
 
 	private:
 
-		void browseInternally(File startFolder, bool forSaving, bool isDirectory, String wildcard, var callback);
+		void browseInternally(File startFolder, bool forSaving, bool isDirectory, String wildcard, var callback, bool multiple);
 
 		static File getFileStatic(SpecialLocations l, MainController* mc);
 

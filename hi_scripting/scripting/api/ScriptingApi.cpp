@@ -7247,6 +7247,10 @@ struct ScriptingApi::FileSystem::Wrapper
     API_METHOD_WRAPPER_0(FileSystem, findFileSystemRoots);
     API_METHOD_WRAPPER_2(FileSystem, decryptWithRSA);
 	API_VOID_METHOD_WRAPPER_0(FileSystem, loadExampleAssets);
+
+	API_VOID_METHOD_WRAPPER_2(FileSystem, browseForMultipleDirectories);
+	API_VOID_METHOD_WRAPPER_3(FileSystem, browseForMultipleFiles);
+
 };
 
 ScriptingApi::FileSystem::FileSystem(ProcessorWithScriptingContent* pwsc):
@@ -7281,6 +7285,8 @@ ScriptingApi::FileSystem::FileSystem(ProcessorWithScriptingContent* pwsc):
     ADD_API_METHOD_2(decryptWithRSA);
     ADD_API_METHOD_0(findFileSystemRoots);
 	ADD_API_METHOD_0(loadExampleAssets);
+	ADD_API_METHOD_2(browseForMultipleDirectories);
+	ADD_API_METHOD_3(browseForMultipleFiles);
 }
 
 ScriptingApi::FileSystem::~FileSystem()
@@ -7368,7 +7374,7 @@ void ScriptingApi::FileSystem::browse(var startFolder, bool forSaving, String wi
 	else if (auto sf = dynamic_cast<ScriptingObjects::ScriptFile*>(startFolder.getObject()))
 		f = sf->f;
 
-	browseInternally(f, forSaving, false, wildcard, callback);
+	browseInternally(f, forSaving, false, wildcard, callback, false);
 }
 
 void ScriptingApi::FileSystem::browseForDirectory(var startFolder, var callback)
@@ -7380,7 +7386,19 @@ void ScriptingApi::FileSystem::browseForDirectory(var startFolder, var callback)
 	else if (auto sf = dynamic_cast<ScriptingObjects::ScriptFile*>(startFolder.getObject()))
 		f = sf->f;
 
-	browseInternally(f, false, true, "", callback);
+	browseInternally(f, false, true, "", callback, false);
+}
+
+void ScriptingApi::FileSystem::browseForMultipleDirectories(var startFolder, var callback)
+{
+	auto f = getFileFromVar(startFolder, getScriptProcessor()->getMainController_());
+	browseInternally(f, false, true, "", callback, true);
+}
+
+void ScriptingApi::FileSystem::browseForMultipleFiles(var startFolder, String wildcard, var callback)
+{
+	auto f = getFileFromVar(startFolder, getScriptProcessor()->getMainController_());
+	browseInternally(f, false, false, wildcard, callback, true);
 }
 
 String ScriptingApi::FileSystem::getSystemId()
@@ -7437,7 +7455,7 @@ File ScriptingApi::FileSystem::getFileFromVar(const var& fileObjectDirectoryCons
 	return File();
 }
 
-void ScriptingApi::FileSystem::browseInternally(File f, bool forSaving, bool isDirectory, String wildcard, var callback)
+void ScriptingApi::FileSystem::browseInternally(File f, bool forSaving, bool isDirectory, String wildcard, var callback, bool multiple)
 {
 	static bool fileChooserIsOpen = false;
 
@@ -7452,7 +7470,7 @@ void ScriptingApi::FileSystem::browseInternally(File f, bool forSaving, bool isD
 	wc.setHighPriority();
 	wc.incRefCount();
 
-	auto cb = [forSaving, f, wildcard, isDirectory, wc, p_]() mutable
+	auto cb = [forSaving, f, wildcard, isDirectory, wc, p_, multiple]() mutable
 	{
 		String title;
 
@@ -7467,15 +7485,51 @@ void ScriptingApi::FileSystem::browseInternally(File f, bool forSaving, bool isD
 
 		if (isDirectory)
 		{
-			if (fc.browseForDirectory())
-				a = var(new ScriptingObjects::ScriptFile(p_, fc.getResult()));
+			if(multiple)
+			{
+				if(fc.browseForMultipleDirectories())
+				{
+					Array<var> fileList;
+
+					for(auto& f: fc.getResults())
+					{
+						if(f.isDirectory())
+							fileList.add(new ScriptingObjects::ScriptFile(p_, f));
+					}
+
+					a = var(fileList);
+				}
+			}
+			else
+			{
+				if (fc.browseForDirectory())
+					a = var(new ScriptingObjects::ScriptFile(p_, fc.getResult()));
+			}
 		}
 		else
 		{
-			if (forSaving && fc.browseForFileToSave(true))
-				a = var(new ScriptingObjects::ScriptFile(p_, fc.getResult()));
-			if (!forSaving && fc.browseForFileToOpen())
-				a = var(new ScriptingObjects::ScriptFile(p_, fc.getResult()));
+			if(multiple && !forSaving)
+			{
+				if(fc.browseForMultipleFilesToOpen())
+				{
+					Array<var> fileList;
+
+					for(const auto& f: fc.getResults())
+					{
+						fileList.add(new ScriptingObjects::ScriptFile(p_, f));
+					}
+
+					a = var(fileList);
+				}
+			}
+			else
+			{
+				if (forSaving && fc.browseForFileToSave(true))
+					a = var(new ScriptingObjects::ScriptFile(p_, fc.getResult()));
+				if (!forSaving && fc.browseForFileToOpen())
+					a = var(new ScriptingObjects::ScriptFile(p_, fc.getResult()));
+			}
+			
 		}
 
 		if (a.isObject())
