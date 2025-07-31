@@ -274,6 +274,9 @@ struct ScriptModulationMatrix : public ConstScriptingObject,
 	/** Attaches a callback to be notified whenever a new modulation source is selected. */
 	void setSourceSelectionCallback(var sourceSelectionCallback);
 
+	/** Attaches a callback to be notified wheneve a modulation connection is being dragged. */
+	void setDragCallback(var newDragCallback);
+
 	/** Sets the global properties for the matrix modulation system. */
 	void setMatrixModulationProperties(var newProperties);
 
@@ -321,6 +324,7 @@ private:
 	WeakCallbackHolder connectionCallback;
 	WeakCallbackHolder editCallback;
 	WeakCallbackHolder sourceSelectionCallback;
+	WeakCallbackHolder dragCallback;
 
 	valuetree::ChildListener connectionListener;
 
