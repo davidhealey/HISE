@@ -71,7 +71,11 @@ enum class TargetMode // this defines how the modulation signal is applied insid
 	Aux      // Only applies the intensity to the signal
 };
 
-static constexpr int NumMaxModulationSources = 16;
+// The maximum number of modulators that can be fetched as source signal
+static constexpr int NumMaxModulationSources = HISE_NUM_MODULATORS_PER_CHAIN;
+
+// The maximum number of modulation slots that a single module can have
+static constexpr int NumMaxModulationSlots = 16;
 
 /** Subclass all classes that provide modulation signals from this. */
 struct Host
