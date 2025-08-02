@@ -595,6 +595,16 @@ void Helpers::stopDragging(Component* c)
 		dragInfo->setProperty(MatrixIds::SourceIndex, 0);
 		var di(dragInfo.get());
 		repaintMatrixSlidersOnDrag(rc, di, DragTargetType::Inactive);
+
+		if(auto co = c->findParentComponentOfClass<ControlledObject>())
+		{
+			auto chain = co->getMainController()->getMainSynthChain();
+
+			if(auto gc = ProcessorHelpers::getFirstProcessorWithType<GlobalModulatorContainer>(chain))
+			{
+				gc->sendDragMessage(-1, "", GlobalModulatorContainer::DragAction::DragEnd);
+			}
+		}
 	}
 }
 

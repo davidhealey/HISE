@@ -1063,12 +1063,40 @@ void HiSlider::ModUpdater::setUpdateFunction(const ModulationDisplayValue::Query
 bool HiSlider::ModUpdater::canBeDropped(const var& info) const
 {
 	auto typeMatches = info["Type"] == "ModulationDrag";
-	return typeMatches;
+
+	if(typeMatches)
+	{
+		auto sourceIndex = (int)info[MatrixIds::SourceIndex];
+		auto chain = parent.getProcessor()->getMainController()->getMainSynthChain();
+
+		if(auto gc = ProcessorHelpers::getFirstProcessorWithType<GlobalModulatorContainer>(chain))
+		{
+			auto md = gc->getMatrixModulatorData();
+			auto targetId = parent.getProcessor()->getModulationTargetId(parent.getParameter());
+			auto con = MatrixIds::Helpers::getConnection(md, sourceIndex, targetId);
+
+			auto a = !con.isValid() ? GlobalModulatorContainer::DragAction::Hover :
+								      GlobalModulatorContainer::DragAction::DisabledHover;
+
+			gc->sendDragMessage(sourceIndex, targetId, a);
+			return !con.isValid();
+		}
+	}
+
+	return false;
 }
 
 void HiSlider::ModUpdater::onDrop(const var& info)
 {
 	auto sourceIndex = (int)info["SourceIndex"];
+	auto chain = parent.getProcessor()->getMainController()->getMainSynthChain();
+
+	if(auto gc = ProcessorHelpers::getFirstProcessorWithType<GlobalModulatorContainer>(chain))
+	{
+		auto targetId = parent.getProcessor()->getModulationTargetId(parent.getParameter());
+		gc->sendDragMessage(sourceIndex, targetId, GlobalModulatorContainer::DragAction::Drop);
+	}
+
 	parent.getProcessor()->onModulationDrop(parent.getParameter(), sourceIndex);
 }
 

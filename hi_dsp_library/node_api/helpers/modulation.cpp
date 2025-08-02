@@ -93,7 +93,7 @@ void ParameterProperties::reset()
 
 void ParameterProperties::setConnected(int parameterIndex, bool isConnected)
 {
-	if(isPositiveAndBelow(parameterIndex, NumMaxModulationSources))
+	if(isPositiveAndBelow(parameterIndex, NumMaxModulationSlots))
 	{
 		auto mi = getModulationChainIndex(parameterIndex);
 
@@ -107,7 +107,7 @@ void ParameterProperties::setConnected(int parameterIndex, bool isConnected)
 
 void ParameterProperties::setModulationMode(int parameterIndex, ParameterMode m)
 {
-	if(isPositiveAndBelow(parameterIndex, NumMaxModulationSources))
+	if(isPositiveAndBelow(parameterIndex, NumMaxModulationSlots))
 	{
 		if(m != ParameterMode::Disabled)
 		{
@@ -142,7 +142,7 @@ void ParameterProperties::fromValueTree(const ValueTree& v)
 	{
 		auto idx = pTree.indexOf(c);
 
-		if(isPositiveAndBelow(idx, NumMaxModulationSources))
+		if(isPositiveAndBelow(idx, NumMaxModulationSlots))
 		{
 			auto n = c[PropertyIds::ExternalModulation];
 			auto isConnected = c.getChildWithName(PropertyIds::Connections).getNumChildren() > 0;
@@ -178,9 +178,9 @@ void ParameterProperties::writeToStream(OutputStream& output) const
 {
 	output.writeByte(58);
 	output.writeCompressedInt(modulationBlocksize);
-	static_assert(sizeof(std::array<ParameterMode, NumMaxModulationSources>) == 16, "not 16 byte");
-	output.write(modulationModes.data(), NumMaxModulationSources);
-	output.write(modulationConnectState.data(), NumMaxModulationSources);
+	static_assert(sizeof(std::array<ParameterMode, NumMaxModulationSlots>) == 16, "not 16 byte");
+	output.write(modulationModes.data(), NumMaxModulationSlots);
+	output.write(modulationConnectState.data(), NumMaxModulationSlots);
 }
 
 void ParameterProperties::readFromStream(InputStream& input)
@@ -191,12 +191,12 @@ void ParameterProperties::readFromStream(InputStream& input)
 	{
 		reset();
 		modulationBlocksize = input.readCompressedInt();
-		ParameterMode modes[NumMaxModulationSources];
-		input.read(modes, NumMaxModulationSources);
-		char bf[NumMaxModulationSources];
-		input.read(bf, NumMaxModulationSources);
+		ParameterMode modes[NumMaxModulationSlots];
+		input.read(modes, NumMaxModulationSlots);
+		char bf[NumMaxModulationSlots];
+		input.read(bf, NumMaxModulationSlots);
 			
-		for(int pi = 0; pi < NumMaxModulationSources; pi++)
+		for(int pi = 0; pi < NumMaxModulationSlots; pi++)
 		{
 			setModulationMode(pi, modes[pi]);
 			auto mi = getModulationChainIndex(pi);
@@ -222,7 +222,7 @@ int ParameterProperties::getParameterIndex(int modulationIndex) const
 
 int ParameterProperties::getModulationChainIndex(int parameterIndex) const
 {
-	if(isPositiveAndBelow(parameterIndex, NumMaxModulationSources) && numUsedModulationSlots > 0)
+	if(isPositiveAndBelow(parameterIndex, NumMaxModulationSlots) && numUsedModulationSlots > 0)
 	{
 		auto mIndex = (int)parameterToModulation[parameterIndex];
 

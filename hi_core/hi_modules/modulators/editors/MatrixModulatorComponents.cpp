@@ -819,6 +819,8 @@ void MatrixContent::Controller::ModulationDragger::mouseDown(const MouseEvent& e
 
 	if(auto gc = ProcessorHelpers::getFirstProcessorWithType<GlobalModulatorContainer>(chain))
 	{
+		gc->sendDragMessage(sourceIndex, "", GlobalModulatorContainer::DragAction::DragStart);
+
 		if(gc->matrixProperties.selectableSources)
 			gc->currentMatrixSourceBroadcaster.sendMessage(sendNotificationSync, sourceIndex);
 	}

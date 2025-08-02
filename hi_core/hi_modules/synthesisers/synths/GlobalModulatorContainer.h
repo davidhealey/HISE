@@ -667,6 +667,23 @@ public:
 
 	LambdaBroadcaster<int> currentMatrixSourceBroadcaster;
 
+	enum class DragAction
+	{
+		DragEnd,
+		DragStart,
+		Drop,
+		Hover,
+		DisabledHover,
+		numDragActions
+	};
+
+	void sendDragMessage(int sourceIndex, const String& targetId, DragAction eventType)
+	{
+		dragBroadcaster.sendMessage(sendNotificationAsync, sourceIndex, targetId, eventType);
+	}
+
+	LambdaBroadcaster<int, String, DragAction> dragBroadcaster;
+
 private:
 
 	int lastBlockSize = 0;

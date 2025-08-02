@@ -139,6 +139,8 @@ GlobalModulatorContainer::GlobalModulatorContainer(MainController *mc, const Str
 	gainChain->setTableValueConverter(f);
 
 	gainChain->getHandler()->addListener(this);
+
+	dragBroadcaster.setEnableQueue(true);
 }
 
 GlobalModulatorContainer::~GlobalModulatorContainer()
