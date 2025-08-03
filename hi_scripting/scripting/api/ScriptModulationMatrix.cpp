@@ -517,6 +517,8 @@ struct ScriptingObjects::ScriptModulationMatrix::Wrapper
 	API_METHOD_WRAPPER_2(ScriptModulationMatrix, canConnect);
 	API_VOID_METHOD_WRAPPER_1(ScriptModulationMatrix, clearAllConnections);
 	API_VOID_METHOD_WRAPPER_1(ScriptModulationMatrix, setCurrentlySelectedSource);
+	API_VOID_METHOD_WRAPPER_4(ScriptModulationMatrix, setConnectionProperty);
+	API_METHOD_WRAPPER_3(ScriptModulationMatrix, getConnectionProperty);
 	API_VOID_METHOD_WRAPPER_1(ScriptModulationMatrix, setSourceSelectionCallback);
 	API_VOID_METHOD_WRAPPER_1(ScriptModulationMatrix, setMatrixModulationProperties);
 	API_METHOD_WRAPPER_0(ScriptModulationMatrix, getMatrixModulationProperties);
@@ -555,6 +557,9 @@ ScriptModulationMatrix::ScriptModulationMatrix(ProcessorWithScriptingContent* p,
 
 	ADD_API_METHOD_1(setMatrixModulationProperties);
 	ADD_API_METHOD_0(getMatrixModulationProperties);
+
+	ADD_API_METHOD_3(getConnectionProperty);
+	ADD_API_METHOD_4(setConnectionProperty);
 
 	getScriptProcessor()->getMainController_()->getUserPresetHandler().addStateManager(this);
 
@@ -886,6 +891,28 @@ void ScriptModulationMatrix::setMatrixModulationProperties(var newProperties)
 			reportScriptError(iv.first + " init value has no Mode property defined");
 		}
 	}
+}
+
+var ScriptModulationMatrix::getConnectionProperty(String sourceId, String targetId, String propertyId)
+{
+	auto sourceIndex = sourceList.indexOf(sourceId);
+
+	if(sourceIndex != -1)
+	{
+		auto c = MatrixIds::Helpers::getConnection(container->getMatrixModulatorData(), sourceIndex, targetId);
+
+		if(c.isValid())
+		{
+			Identifier id(propertyId);
+
+			if(MatrixIds::Helpers::getWatchableIds().contains(id))
+			{
+				return c[id];
+			}
+		}
+	}
+
+	return {};
 }
 
 bool ScriptModulationMatrix::setConnectionProperty(String sourceId, String targetId, String propertyId, var value)

@@ -357,7 +357,7 @@ struct MatrixContent: public MatrixBase
 					   public Button::Listener
 	{
 		struct ModulationDragger: public Component,
-								  public FlexboxComponent::ComponentWithAutoTextSize,
+								  public simple_css::ComponentWithAutoTextSize,
 		                          public SettableTooltipClient
 		{
 			ModulationDragger(const String& name);
