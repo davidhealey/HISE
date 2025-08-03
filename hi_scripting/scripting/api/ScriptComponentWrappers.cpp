@@ -3158,7 +3158,7 @@ float ScriptedControlAudioParameter::getValue() const
 
 void ScriptedControlAudioParameter::setValue(float newValue)
 {
-	if(recursive || shouldSkipHostUpdate())
+	if(recursive)
 		return;
 
 	ScopedValueSetter<bool> svs(sendToHost, false);
