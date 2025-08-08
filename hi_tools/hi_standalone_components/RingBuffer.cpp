@@ -1905,6 +1905,11 @@ void FFTDisplayBase::drawSpectrum(Graphics& g)
 {
 	auto laf = getSpecialLookAndFeel<LookAndFeelMethods>(dynamic_cast<Component*>(this));
 
+	DefaultLookAndFeel dlaf;
+
+	if(laf == nullptr)
+		laf = &dlaf;
+
 	auto targetBounds = dynamic_cast<Component*>(this)->getLocalBounds().toFloat();
 	laf->drawOscilloscopeBackground(g, *this, targetBounds);
 

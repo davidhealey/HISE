@@ -293,7 +293,7 @@ class HardcodedSynthesiser: public ModulatorSynth,
 	// parameter methods
 	float getAttribute(int parameterIndex) const override;
 	void setInternalAttribute(int parameterIndex, float newValue) override;
-	float getDefaultValue(int parameterIndex) const override { return getAttribute(parameterIndex); }
+	float getDefaultValue(int parameterIndex) const override;
 
 	int getParameterOffset() const override { return ModulatorSynth::SpecialParameters::numParameters; }
 

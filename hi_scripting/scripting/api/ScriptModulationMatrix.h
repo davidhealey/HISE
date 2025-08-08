@@ -282,7 +282,10 @@ struct ScriptModulationMatrix : public ConstScriptingObject,
 
 	/** Sets the property of a modulation connection (with undo). */
 	bool setConnectionProperty(String sourceId, String targetId, String propertyId, var value);
-
+	
+	/** Returns the property of a modulation connection. */
+	var getConnectionProperty(String sourceId, String targetId, String propertyId);
+	
 	/** Returns a JSON object with the current matrix modulation properties. */
 	var getMatrixModulationProperties() const;
 

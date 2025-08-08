@@ -1106,7 +1106,22 @@ void ScriptingApi::Content::ScriptComponent::AsyncControlCallbackSender::handleA
 {
 	if (parent != nullptr)
 	{
-		p->controlCallback(parent, parent->getValue());
+		auto v = parent->getValue();
+
+		if(v.isDouble() || v.isInt() || v.isInt64() || v.isBool())
+		{
+			auto value = (float)v;
+			FloatSanitizers::sanitizeFloatNumber(value);
+
+			if(cachedParameterIndex == -1)
+				cachedParameterIndex = p->getScriptingContent()->getComponentIndex(parent);
+
+			dynamic_cast<Processor*>(p)->setAttribute(cachedParameterIndex, value, dispatch::sendNotificationSync);
+		}
+		else
+		{
+			p->controlCallback(parent, v);
+		}
 
 		if (auto sp = dynamic_cast<ScriptPanel*>(parent))
 			sp->repaint();

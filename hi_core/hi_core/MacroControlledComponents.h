@@ -184,8 +184,6 @@ struct HisePluginParameterBase: public ControlledObject,
 		FloatSanitizers::sanitizeFloatNumber(v);
 		v = getNormalisableRange().convertTo0to1(v);
 
-		setIgnoreNextHostUpdate(false);
-
 		if(v != parameterValueToSend)
 		{
 			parameterValueToSend = v;
@@ -232,20 +230,12 @@ struct HisePluginParameterBase: public ControlledObject,
 		return typed;
 	}
 
-	// This will temporarily suspend the internal updating of plugin parameters until the next
-	// update callback is processed to avoid host parameter notifications from the change gesture
-	// callbacks to reset the internal value before it can be processed.
-	void setIgnoreNextHostUpdate(bool shouldSkip) { skipHostUpdate = shouldSkip;}
-
-	bool shouldSkipHostUpdate() const { return skipHostUpdate; }
-
 protected:
 
 	bool sendToHost = true;
 
 private:
 
-	bool skipHostUpdate = false;
 	bool cleanupCalled = false;
 
 	JUCE_DECLARE_WEAK_REFERENCEABLE(HisePluginParameterBase);

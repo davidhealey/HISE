@@ -820,6 +820,7 @@ public:
 
 		private:
 
+			int cachedParameterIndex = -1;
 			bool changePending = false;
 
             void handleAsyncUpdate();

@@ -2636,7 +2636,7 @@ FlexItem StyleSheet::getFlexItem(Component* c, Rectangle<float> fullArea) const
 			item.height = h;
 		}
 	}
-	if(auto st = dynamic_cast<FlexboxComponent::ComponentWithAutoTextSize*>(c))
+	if(auto st = dynamic_cast<ComponentWithAutoTextSize*>(c))
 	{
 		auto b = getLocalBoundsFromText(st->getTextToAutofit());
 
