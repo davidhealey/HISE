@@ -2532,9 +2532,11 @@ void ScriptingObjects::ScriptedLookAndFeel::setStyleSheetInternal(const String& 
 	if(!ok.wasOk())
 		reportScriptError(ok.getErrorMessage());
 
+	auto newCollection = p.getCSSValues();
 	SimpleReadWriteLock::ScopedWriteLock sl(getMainController()->getJavascriptThreadPool().getLookAndFeelRenderLock());
+
 	graphics.clear();
-	css = p.getCSSValues();
+	css = newCollection;
 }
 
 void ScriptingObjects::ScriptedLookAndFeel::setStyleSheet(const String& fileName)
@@ -2793,24 +2795,29 @@ var ScriptingObjects::ScriptedLookAndFeel::callDefinedFunction(const Identifier&
 
 	if (HiseJavascriptEngine::isJavascriptFunction(f))
 	{
-		SimpleReadWriteLock::ScopedReadLock sl(getScriptProcessor()->getMainController_()->getJavascriptThreadPool().getLookAndFeelRenderLock());
+		int counter = 0;
 
-		var thisObject(this);
-		var::NativeFunctionArgs arg(thisObject, args, numArgs);
-		auto engine = dynamic_cast<JavascriptProcessor*>(getScriptProcessor())->getScriptEngine();
-		Result r = Result::ok();
+		if(auto sl = SimpleReadWriteLock::ScopedTryReadLock(getScriptProcessor()->getMainController_()->getJavascriptThreadPool().getLookAndFeelRenderLock()))
+		{
+			SimpleReadWriteLock::ScopedReadLock sl2(getScriptProcessor()->getMainController_()->getJavascriptThreadPool().getLookAndFeelRenderLock());
 
-		try
-		{
-			return engine->callExternalFunctionRaw(f, arg);
-		}
-		catch (String& errorMessage)
-		{
-			debugToConsole(dynamic_cast<Processor*>(getScriptProcessor()), errorMessage);
-		}
-		catch (HiseJavascriptEngine::RootObject::Error&)
-		{
+			var thisObject(this);
+			var::NativeFunctionArgs arg(thisObject, args, numArgs);
+			auto engine = dynamic_cast<JavascriptProcessor*>(getScriptProcessor())->getScriptEngine();
+			Result r = Result::ok();
 
+			try
+			{
+				return engine->callExternalFunctionRaw(f, arg);
+			}
+			catch (String& errorMessage)
+			{
+				debugToConsole(dynamic_cast<Processor*>(getScriptProcessor()), errorMessage);
+			}
+			catch (HiseJavascriptEngine::RootObject::Error&)
+			{
+
+			}
 		}
 	}
 
