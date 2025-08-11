@@ -170,6 +170,13 @@ public:
     int getNumInternalChains() const override { return 0; };
     int getNumChildProcessors() const override { return 0; };
 
+	StringArray getIllegalParameterIds() const override
+	{
+		auto sa = HardcodedSwappableEffect::getIllegalParameterIds();
+		sa.add("Intensity");
+		return sa;
+	}
+
     void setInternalAttribute(int index, float newValue) override;
     ValueTree exportAsValueTree() const override;
     void restoreFromValueTree(const ValueTree& v) override;
@@ -206,6 +213,15 @@ public:
 	// ValueTree methods
     ValueTree exportAsValueTree() const override;
 	void restoreFromValueTree(const ValueTree& v) override;
+
+	StringArray getIllegalParameterIds() const override
+	{
+		auto sa = HardcodedSwappableEffect::getIllegalParameterIds();
+		sa.add("Intensity");
+		sa.add("Monophonic");
+		sa.add("Retrigger");
+		return sa;
+	}
 
 	// Attribute methods
 	int getParameterOffset() const override;
@@ -272,6 +288,17 @@ class HardcodedSynthesiser: public ModulatorSynth,
 	HardcodedSynthesiser(MainController* mc, const String& id, int numVoices);
 	~HardcodedSynthesiser() override;
 
+	StringArray getIllegalParameterIds() const override
+	{
+		auto sa = HardcodedSwappableEffect::getIllegalParameterIds();
+		sa.add("Gain");
+		sa.add("Balance");
+		sa.add("VoiceLimit");
+		sa.add("KillFadeTime");
+		sa.add("IconColour");
+		return sa;
+	}
+
 	ProcessorEditorBody *createEditor(ProcessorEditor *parentEditor)  override;
 
 	void connectionChanged() override;
@@ -295,7 +322,7 @@ class HardcodedSynthesiser: public ModulatorSynth,
 	void setInternalAttribute(int parameterIndex, float newValue) override;
 	float getDefaultValue(int parameterIndex) const override;
 
-	int getParameterOffset() const override { return ModulatorSynth::SpecialParameters::numParameters; }
+	int getParameterOffset() const override { return ModulatorSynth::Parameters::numModulatorSynthParameters; }
 
 	// extra mod methods
 	void connectToRuntimeTargets(scriptnode::OpaqueNode& opaqueNode, bool shouldAdd) override;

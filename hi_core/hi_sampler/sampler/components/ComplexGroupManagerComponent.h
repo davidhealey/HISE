@@ -90,6 +90,21 @@ struct ComponentWithGroupManagerConnection: public ControlledObject
 
 	virtual int getHeightToUse() const = 0;
 
+	void setBoundsWithoutRecursion(Rectangle<int> newBounds)
+	{
+		if(!recursive)
+		{
+			ScopedValueSetter<bool> svs(recursive, true);
+
+			auto asComponent = dynamic_cast<Component*>(this);
+
+			if(asComponent->getBoundsInParent() == newBounds)
+				asComponent->resized();
+			else
+				dynamic_cast<Component*>(this)->setBounds(newBounds);
+		}
+	}
+
 	void resizeWithoutRecursion()
 	{
 		if(!recursive)
@@ -390,16 +405,40 @@ public:
 				  ButtonBase(layerData, 0),
 				  f(GLOBAL_BOLD_FONT())
 				{
+					setMouseCursor(MouseCursor::PointingHandCursor);
 					p = fa.createPath("unassigned");
 					setSize(getWidthToUse(), ButtonHeight);
-					
+					setInterceptsMouseClicks(true, true);
+					setRepaintsOnMouseActivity(true);
+					setTooltip("There are unassigned samples which will not be played back when a note is pressed. Click to open the parser tool");
 				}
 
 				int getWidthToUse() const override { return ButtonHeight + f.getStringWidth("Unassigned") + 10; }
 
+				void mouseDown(const MouseEvent& e) override
+				{
+					PresetHandler::showMessageWindow("Unassigned samples", "Any sample that is not assigned to a group (or has the ignore flag set for this layer) will be skipped when starting a voice at a note on.  \n> Press OK, then assign any unassigned sample to any of the groups in this layer. Note that you can use the green tag selectors to quickly select all samples of a layer.");
+
+					if(auto c = findParentComponentOfClass<ComplexGroupManagerComponent>())
+					{
+						c->parseButton.setToggleState(true, sendNotificationSync);
+						c->parseButton.setToggleStateAndUpdateIcon(true, true);
+						c->tagButton.setToggleState(true, sendNotificationSync);
+						c->tagButton.setToggleStateAndUpdateIcon(true, true);
+					}
+				}
+
 				void paint(Graphics& g) override
 				{
-					g.setColour(Colours::white.withAlpha(0.5f));
+					float alpha = 0.5f;
+
+					if(isMouseOverOrDragging())
+						alpha += 0.1f;
+
+					if(isMouseButtonDown())
+						alpha += 0.3f;
+
+					g.setColour(Colours::white.withAlpha(alpha));
 
 					g.setFont(f);
 					auto tb = getLocalBounds().toFloat();
@@ -872,6 +911,8 @@ public:
 
 	void setDisplayFilter(uint8 layerIndex, uint8 value);
 
+	void onLayerAddRemove(const ValueTree& v, bool added);
+
 private:
 
 	Factory f;
@@ -885,12 +926,16 @@ private:
 	bool isFilterSelected(const std::pair<uint8, uint8>& f) const;
 	void rebuildSelection();
 
+	ValueTree layerRoot;
+	valuetree::ChildListener layerListener;
+
 	ScrollbarFader sf;
 	Viewport viewport;
 	Content content;
 	ScopedPointer<Logger> logger;
 
 	HiseShapeButton editButton, moreButton, tagButton, parseButton;
+	MarkdownHelpButton helpStateButton;
 
 	JUCE_DECLARE_WEAK_REFERENCEABLE(ComplexGroupManagerComponent);
 };

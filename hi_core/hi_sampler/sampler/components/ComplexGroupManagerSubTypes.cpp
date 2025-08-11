@@ -66,25 +66,34 @@ struct ComplexGroupManagerComponent::LayerComponent::KeyboardComponent: public C
 	void rebuildKeyboard()
 	{
 		mappedKeys = ComplexGroupManager::Helpers::getKeyRange(data, getSampler());
+		groupNoteMap.clear();
 
-		auto low = mappedKeys.getFirstSetBit();
-		auto high = (int)mappedKeys.getHighestSetBit();
-
-		auto lowOctave = low - (low % 12);
-		auto highOctave = high - (high % 12) + 12;
-
-		octaveRange = { lowOctave / 12, highOctave / 12};
-		noteRange = { low, high };
-
-		if(octaveRange.getLength() == 1)
-			octaveRange.setLength(2);
-
-		uint8 layerValue = 1;
-
-		for(int i = 0; i < 128; i++)
+		if(mappedKeys.isEmpty())
 		{
-			if(mappedKeys[i])
-				groupNoteMap[layerValue++] = i;
+			octaveRange = {};
+			noteRange = {};
+		}
+		else
+		{
+			auto low = mappedKeys.getFirstSetBit();
+			auto high = (int)mappedKeys.getHighestSetBit();
+
+			auto lowOctave = low - (low % 12);
+			auto highOctave = high - (high % 12) + 12;
+
+			octaveRange = { lowOctave / 12, highOctave / 12};
+			noteRange = { low, high };
+
+			if(octaveRange.getLength() == 1)
+				octaveRange.setLength(2);
+
+			uint8 layerValue = 1;
+
+			for(int i = 0; i < 128; i++)
+			{
+				if(mappedKeys[i])
+					groupNoteMap[layerValue++] = i;
+			}
 		}
 
 		repaint();
@@ -93,12 +102,19 @@ struct ComplexGroupManagerComponent::LayerComponent::KeyboardComponent: public C
 	std::map<uint8, int> groupNoteMap;
 
 	VoiceBitMap<128> playedNotes;
+	bool learnActive = false;
 
 	int getHeightToUse() const override { return KeyboardHeight; }
 
-
 	static void onNote(KeyboardComponent& k, int note, int velo)
 	{
+		if(k.learnActive)
+		{
+			k.data.setProperty(SampleIds::LoKey, note, k.getUndoManager());
+			k.learnActive = false;
+			return;
+		}
+
 		k.playedNotes.setBit(note, velo != 0);
 		k.repaint();
 	}
@@ -109,6 +125,15 @@ struct ComplexGroupManagerComponent::LayerComponent::KeyboardComponent: public C
 		k.repaint();
 	}
 
+	int getNoteNumber(int position) const
+	{
+		auto numOctavesToShow = octaveRange.getLength();
+		auto b = getLocalBounds().toFloat();
+		auto keyWidth = b.getWidth() / (float)(numOctavesToShow * 12) + 1;
+
+		return roundToInt((float)position / (float)keyWidth) + octaveRange.getStart() * 12;
+	}
+
 	void showPopupMenu(int position)
 	{
 		if(popupMenuHandler != nullptr)
@@ -116,11 +141,7 @@ struct ComplexGroupManagerComponent::LayerComponent::KeyboardComponent: public C
 			PopupLookAndFeel plaf;
 			PopupMenu m;
 
-			auto numOctavesToShow = octaveRange.getLength();
-			auto b = getLocalBounds().toFloat();
-			auto keyWidth = b.getWidth() / (float)(numOctavesToShow * 12) + 1;
-
-			auto noteNumber = roundToInt((float)position / (float)keyWidth) + octaveRange.getStart() * 12;
+			auto noteNumber = getNoteNumber(position);
 
 			popupMenuHandler->fillPopupMenu(m, noteNumber);
 
@@ -133,19 +154,57 @@ struct ComplexGroupManagerComponent::LayerComponent::KeyboardComponent: public C
 
 	void mouseDown(const MouseEvent& e) override
 	{
-		if(e.mods.isRightButtonDown())
+		auto position = e.getPosition().x;
+
+		if(e.mods.isRightButtonDown() || mappedKeys.isEmpty())
 		{
-			showPopupMenu(e.getPosition().x);
+			showPopupMenu(position);
+		}
+		else
+		{
+			auto noteNumber = getNoteNumber(position);
+
+			if(auto cg = findParentComponentOfClass<ComponentWithGroupManagerConnection>())
+			{
+				currentlyPlayedNote = noteNumber;
+				auto& ks = cg->getSampler()->getMainController()->getKeyboardState();
+				ks.noteOn(1, currentlyPlayedNote, 1.0);
+			}
 		}
 	}
 
+	void mouseUp(const MouseEvent& e) override
+	{
+		if(currentlyPlayedNote != -1)
+		{
+			if(auto cg = findParentComponentOfClass<ComponentWithGroupManagerConnection>())
+			{
+				auto& ks = cg->getSampler()->getMainController()->getKeyboardState();
+				ks.noteOff(1, currentlyPlayedNote, 0.0f);
+				currentlyPlayedNote = -1;
+			}
+		}
+	}
+
+	int currentlyPlayedNote = -1;
+
 	void paint(Graphics& g) override
 	{
-		auto numOctavesToShow = octaveRange.getLength();
-
 		auto b = getLocalBounds().toFloat();
 
+		
+
+		if(mappedKeys.isEmpty())
+		{
+			String m;
+			m << "No key range assigned. Click to setup the MIDI note range for this layer";
+			g.setColour(Colours::white.withAlpha(0.4f));
+			g.setFont(GLOBAL_BOLD_FONT());
+			g.drawText(m, b, Justification::centred);
+		}
+
 		auto top = b.removeFromTop(18);
+		auto numOctavesToShow = octaveRange.getLength();
 
 		auto keyWidth = b.getWidth() / (float)(numOctavesToShow * 12);
 
@@ -231,6 +290,8 @@ struct ComplexGroupManagerComponent::LayerComponent::KeyboardComponent: public C
 	ValueTree data;
 
 	WeakReference<PopupMenuHandler> popupMenuHandler;
+
+	bool initialised = false;
 
 	JUCE_DECLARE_WEAK_REFERENCEABLE(KeyboardComponent);
 };
@@ -344,6 +405,8 @@ struct ComplexGroupManagerComponent::KeyswitchBody: public LogicTypeComponent::B
 
 		for(auto t: tokens)
 			addAndMakeVisible(buttons.add(new KeyswitchButton(parent.data, layerValue++, t, parent.data[groupIds::purgable])));
+
+		keyboard.rebuildKeyboard();
 	}
 
 	int getHeightToUse() const override
@@ -380,6 +443,7 @@ struct ComplexGroupManagerComponent::KeyswitchBody: public LogicTypeComponent::B
 
 		m.addSubMenu("Set keyswitch start note", sub);
 
+		m.addItem(2, "Set keyswitch start note to next played MIDI note", true, keyboard.learnActive);
 		m.addItem(1, "Use white keys", true, !(bool)data[groupIds::isChromatic]);
 	}
 
@@ -388,6 +452,10 @@ struct ComplexGroupManagerComponent::KeyswitchBody: public LogicTypeComponent::B
 		if(result == 1)
 		{
 			data.setProperty(groupIds::isChromatic, !(bool)data[groupIds::isChromatic], getUndoManager());
+		}
+		else if (result == 2)
+		{
+			keyboard.learnActive = !keyboard.learnActive;
 		}
 		else
 		{

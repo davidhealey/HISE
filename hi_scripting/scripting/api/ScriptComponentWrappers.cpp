@@ -245,11 +245,9 @@ struct ScriptCreatedComponentWrapper::AdditionalMouseCallback: public MouseListe
 	{
         auto mc = scriptComponent->getScriptProcessor()->getMainController_();
 
-        SimpleReadWriteLock::ScopedTryReadLock  sl(mc->getJavascriptThreadPool().getLookAndFeelRenderLock());
-        
-        if(sl)
-        {
-            LockHelpers::SafeLock sl(mc, LockHelpers::Type::ScriptLock);
+        if(auto sl = SimpleReadWriteLock::ScopedTryReadLock(mc->getJavascriptThreadPool().getLookAndFeelRenderLock()))
+		{
+            LockHelpers::SafeLock sl2(mc, LockHelpers::Type::ScriptLock);
 
             if (data.listener != nullptr)
             {
