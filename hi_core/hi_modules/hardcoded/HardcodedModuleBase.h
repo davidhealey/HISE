@@ -75,6 +75,8 @@ public:
 	bool swap(HotswappableProcessor* other) override;
 	bool isPolyphonic() const { return polyHandler.isEnabled(); }
 
+	virtual StringArray getIllegalParameterIds() const;
+
 	virtual int getParameterOffset() const { return 0; }
 
     String getCurrentEffectId() const override { return currentEffect; }
