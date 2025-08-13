@@ -497,14 +497,17 @@ bool HardcodedSwappableEffect::setEffect(const String& factoryId, bool /*unused*
             channelCountMatches = checkHardcodedChannelCount();
 		}		
 
-		if(getParameterOffset() == 0)
-		{
-			asProcessor().parameterNames.clear();
-		}
-		else
-		{
-			asProcessor().parameterNames.removeRange(getParameterOffset(), INT_MAX);
-		}
+        Array<Identifier> offsetParameters;
+        
+        for(int i = 0; i < getParameterOffset(); i++)
+        {
+            offsetParameters.add(asProcessor().parameterNames[i]);
+        }
+        
+        asProcessor().parameterNames.clear();
+        
+        if(!offsetParameters.isEmpty())
+            asProcessor().parameterNames.addArray(offsetParameters);
 
 		auto illegalIds = getIllegalParameterIds();
 
