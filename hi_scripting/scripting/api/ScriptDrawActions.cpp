@@ -641,7 +641,8 @@ namespace ScriptedDrawActions
 		drawDropShadowFromPath(const Path& p_, Rectangle<float> a, Colour colour, int radius, Point<int> offset) :
 			p(p_)
 		{
-			PathFactory::scalePath(p, a);
+            p.scaleToFit(a.getX(), a.getY(), a.getWidth(), a.getHeight(), false);
+            
 			shadow.setColor(colour);
 			shadow.setRadius(radius);
 			shadow.setOffset(offset);
