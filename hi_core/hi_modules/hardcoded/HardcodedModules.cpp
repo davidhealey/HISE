@@ -1125,6 +1125,7 @@ void HardcodedSynthesiser::connectToRuntimeTargets(scriptnode::OpaqueNode& opaqu
 
 ModulationDisplayValue::QueryFunction::Ptr HardcodedSynthesiser::getModulationQueryFunction(int parameterIndex) const
 {
+	parameterIndex -= getParameterOffset();
 	return extraModSources.getModulationQueryFunction(modProperties, parameterIndex);
 }
 
