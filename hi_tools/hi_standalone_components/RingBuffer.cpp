@@ -661,7 +661,8 @@ int flex_ahdsr_base::Helpers::getAttributeIndex(State s, ParameterType t)
 		{
 		case State::ATTACK: return (int)SpecialParameters::Attack;
 		case State::HOLD: return (int)SpecialParameters::Hold;
-		case State::DECAY: return (int)SpecialParameters::Decay;
+		case State::DECAY:
+		case State::SUSTAIN: return (int)SpecialParameters::Decay;
 		case State::RELEASE: return (int)SpecialParameters::Release;
 		}
 	}
@@ -671,6 +672,7 @@ int flex_ahdsr_base::Helpers::getAttributeIndex(State s, ParameterType t)
 		{
 		case State::ATTACK:
 		case State::HOLD:    return (int)SpecialParameters::AttackLevel;
+		case State::DECAY:
 		case State::SUSTAIN: return (int)SpecialParameters::Sustain;
 		}
 	}
@@ -757,6 +759,18 @@ void flex_ahdsr_base::FlexAhdsrGraph::LookAndFeelMethods::drawFlexAhdsrFullPath(
 {
 	g.setColour(graph.findColour(RingBufferComponentBase::lineColour));
 	g.strokePath(graph.fullPath, PathStrokeType(2.0));
+}
+
+void flex_ahdsr_base::FlexAhdsrGraph::LookAndFeelMethods::drawFlexAhdsrDragPoint(Graphics& g, FlexAhdsrGraph& graph, State s,
+	Point<float> dragPoint, bool hover, bool down)
+{
+	g.setColour(graph.findColour(RingBufferComponentBase::lineColour));
+	auto margin = hover ? 10.0f : 7.0f;
+
+	if(down)
+		margin -= 1.0f;
+
+	g.drawRect(dragPoint.x-margin*0.5f, dragPoint.y-margin*0.5f, margin, margin);
 }
 
 void flex_ahdsr_base::FlexAhdsrGraph::LookAndFeelMethods::drawFlexAhdsrCurvePoint(Graphics& g, FlexAhdsrGraph& graph, State s,
@@ -858,7 +872,31 @@ void flex_ahdsr_base::FlexAhdsrGraph::paint(Graphics& g)
 			s++;
 		}
 
-		auto text = Helpers::getLabel(currentHoverState, currentHoverMode, values);
+		s = 0;
+
+		for(const auto& p: dragPoints)
+		{
+			if(!p.isOrigin())
+			{
+				auto st = (State)s;
+				auto hover = currentHoverMode != ParameterType::Curve && currentHoverState == st;
+				laf->drawFlexAhdsrDragPoint(g, *this, st, p, hover, down);
+			}
+
+			s++;
+		}
+
+		auto pt = currentHoverMode;
+
+		if(pt == ParameterType::TimeLevel)
+		{
+			if(currentHoverState == State::SUSTAIN)
+				pt = ParameterType::Level;
+			else
+				pt = ParameterType::Time;
+		}
+
+		auto text = Helpers::getLabel(currentHoverState, pt, values);
 		laf->drawFlexAhdsrText(g, *this, text);
 	}
 	else
@@ -879,7 +917,7 @@ void flex_ahdsr_base::FlexAhdsrGraph::refresh()
 		FloatVectorOperations::copy(values, rb->getReadBuffer().getReadPointer(0), NumUIValues);
 
 		std::vector<Rectangle<float>> newBoxes;
-
+		std::vector<Point<float>> newDragPoints;
 		
 
 		auto fullWidth = area.getWidth();
@@ -964,6 +1002,24 @@ void flex_ahdsr_base::FlexAhdsrGraph::refresh()
 			}
 
 			newSegments.push_back(ns);
+		}
+
+		if(!useOneDimensionalDrag)
+		{
+			newDragPoints.push_back({}); // no idle drag
+			newDragPoints.push_back(newHitBoxes[(int)State::ATTACK].getTopRight());
+			newDragPoints.push_back(newHitBoxes[(int)State::HOLD].getTopRight());
+			newDragPoints.push_back(newHitBoxes[(int)State::SUSTAIN].getTopLeft().translated(0, -Margin));
+			
+			newDragPoints.push_back({}); // no sustain drag
+			newDragPoints.push_back(newHitBoxes[(int)State::RELEASE].getBottomRight().translated(-Margin, 0));
+
+			newDragPoints[(int)State::DECAY].setY(area.getHeight() - getHeight(State::SUSTAIN) + Margin);
+
+			for(auto& s: newHitBoxes)
+				s.setTop(area.getY());
+
+			newHitBoxes.back().setRight(area.getRight());
 		}
 
 		Path newPath;
@@ -1064,6 +1120,7 @@ void flex_ahdsr_base::FlexAhdsrGraph::refresh()
 
 
 		std::vector<Point<float>> newCurvePoints;
+		
 
 		int idx = 0;	
 		for(const auto& nb: newBoxes)
@@ -1106,6 +1163,7 @@ void flex_ahdsr_base::FlexAhdsrGraph::refresh()
 		std::swap(newBoxes, boxes);
 		std::swap(newHitBoxes, hitboxes);
 		std::swap(newCurvePoints, curvePoints);
+		std::swap(newDragPoints, dragPoints);
 		std::swap(fullPath, newPath);
 		
 		repaint();
@@ -1119,30 +1177,39 @@ void flex_ahdsr_base::FlexAhdsrGraph::resized()
 
 void flex_ahdsr_base::FlexAhdsrGraph::mouseDown(const MouseEvent& e)
 {
-	auto pIndex = Helpers::getAttributeIndex(currentHoverState, currentHoverMode);
+	if(currentHoverMode == ParameterType::TimeLevel)
+	{
+		auto xIndex = Helpers::getAttributeIndex(currentHoverState, ParameterType::Time);
+		auto x = (float)Helpers::toNorm(currentHoverState, ParameterType::Time, values[xIndex]);
+		auto yIndex = Helpers::getAttributeIndex(currentHoverState, ParameterType::Level);
+		auto y = (float)Helpers::toNorm(currentHoverState, ParameterType::Level, values[yIndex]);
 
-	if(pIndex != -1)
-		downValue = Helpers::toNorm(currentHoverState, currentHoverMode, values[pIndex]);
+		downValue = { x, y };
+	}
+	else
+	{
+		auto pIndex = Helpers::getAttributeIndex(currentHoverState, currentHoverMode);
+		auto v = (float)Helpers::toNorm(currentHoverState, currentHoverMode, values[pIndex]);
+
+		if(currentHoverMode == ParameterType::Level)
+			downValue = { 0.0f, v };
+		else
+			downValue = { v, 0.0f };
+	}
 }
+
+
 
 void flex_ahdsr_base::FlexAhdsrGraph::mouseDrag(const MouseEvent& e)
 {
-	auto isX = currentHoverMode == ParameterType::Time;
-	auto delta = isX ? (0.8f * (float)e.getDistanceFromDragStartX() / (float)getWidth()) : (-1.0f * (float)e.getDistanceFromDragStartY() / (float)getHeight());
-
-	if(currentHoverMode == ParameterType::Curve && currentHoverState == State::ATTACK)
-		delta *= -1.0f;
-
-	auto newValue = jlimit(0.0f, 1.0f, downValue + delta);
-	auto pIndex = Helpers::getAttributeIndex(currentHoverState, currentHoverMode);
-
-	if(pIndex != -1)
+	if(currentHoverMode == ParameterType::TimeLevel)
 	{
-		if(auto b = dynamic_cast<flex_ahdsr_base*>(rb->getCurrentWriter()))
-		{
-			newValue = Helpers::fromNorm(currentHoverState, currentHoverMode, newValue);
-			b->handleUIDrag(pIndex, newValue);
-		}
+		handleDrag(e, ParameterType::Time);
+		handleDrag(e, ParameterType::Level);
+	}
+	else
+	{
+		handleDrag(e, currentHoverMode);
 	}
 }
 
@@ -1171,19 +1238,29 @@ void flex_ahdsr_base::FlexAhdsrGraph::mouseMove(const MouseEvent& e)
 			else if(currentHoverState == State::SUSTAIN)
 				isTime = false;
 						
-			auto dx = curvePoints[i].x - (float)e.getPosition().x;
-			auto dy = curvePoints[i].y - (float)e.getPosition().y;
+			auto dx = (float)e.getPosition().x - curvePoints[i].x;
+			auto dy = (float)e.getPosition().y - curvePoints[i].y;
 			auto cd = std::sqrt(dx*dx + dy*dy);
-			auto curveHover = cd < 20.0;
+			auto curveHover = cd < curveTolerance;
 						
 			if(curveHover)
 				currentHoverMode = ParameterType::Curve;
 			else
 			{
-				if(isTime)
-					currentHoverMode = ParameterType::Time;
+				if(useOneDimensionalDrag)
+				{
+					if(isTime)
+						currentHoverMode = ParameterType::Time;
+					else
+						currentHoverMode = ParameterType::Level;
+				}
 				else
-					currentHoverMode = ParameterType::Level;
+				{
+					currentHoverMode = ParameterType::TimeLevel;
+
+					if(currentHoverState == State::DECAY && dx < 0.0)
+						currentHoverState = State::HOLD;
+				}
 			}
 					
 			break;
@@ -1204,6 +1281,9 @@ void flex_ahdsr_base::FlexAhdsrGraph::mouseMove(const MouseEvent& e)
 		break;
 	case ParameterType::Level:
 		mc = MouseCursor::UpDownResizeCursor;
+		break;
+	case ParameterType::TimeLevel:
+		mc = MouseCursor::NormalCursor;
 		break;
 	}
 
