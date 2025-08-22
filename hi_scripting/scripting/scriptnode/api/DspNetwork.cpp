@@ -68,6 +68,8 @@ DspNetwork::DspNetwork(hise::ProcessorWithScriptingContent* p, ValueTree data_, 
 {
 	jassert(data.getType() == PropertyIds::Network);
 
+	auto mc = getMainController();
+	tempoSyncer.ppqFunction = [mc](int ts){ return mc->getMasterClock().getPPQPos(ts); };
 	tempoSyncer.publicModValue = &networkModValue;
 
 	auto mc_ = p->getMainController_();

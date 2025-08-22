@@ -910,43 +910,67 @@ public:
             syncer = ps.voiceIndex->getTempoSyncer();
             syncer->registerItem(this);
         }
+
+		clockState.prepare(ps);
 	}
 
 	SN_EMPTY_INITIALISE;
-	SN_EMPTY_HANDLE_EVENT;
+
+	int lastVoiceIndex = 0;
+
+	void handleHiseEvent(const HiseEvent& e)
+	{
+		if(isPolyphonic() && e.isNoteOn())
+		{
+			auto& s = clockState.get();
+			lastVoiceIndex = clockState.getVoiceIndexForData(s);
+
+			s.offset = syncer->getCurrentPPQPosition(e.getTimeStamp());
+			s.uptime = 0.0;
+		}
+	}
 	
     void reset()
     {
-        
-        clockState.inactive[(int)InactiveMode::LastValue] = 0.0;
+        for(auto& s: clockState)
+	        s.inactive[(int)InactiveMode::LastValue] = 0.0;
     }
     
 	void onTransportChange(bool isPlaying_, double ppqPosition) override
 	{
-		clockState.isPlaying = isPlaying_;
-        
-		if (clockState.isPlaying)
+		for(auto& s: clockState)
 		{
-            onResync(ppqPosition);
-            clockState.uptime = 0.0;
+			s.isPlaying = isPlaying_;
+        
+			if (s.isPlaying)
+			{
+	            onResync(ppqPosition);
+	            s.uptime = 0.0;
+			}
 		}
+		
 	}
 
     void onResync(double ppqPosition) override
     {
-        clockState.offset = ppqPosition;
-        clockState.uptime = 0.0;
+		for(auto& s: clockState)
+		{
+			s.offset = ppqPosition;
+			s.uptime = 0.0;
+		}
     }
     
 	void tempoChanged(double newTempo) override
 	{
 		bpm = newTempo;
-        clockState.recalculate(bpm, sr);
+
+		for(auto& s: clockState)
+			s.recalculate(bpm, sr);
 	}
 
 	bool handleModulation(double& v)
 	{
-        v = clockState.getModValue();
+        v = clockState.get().getModValue();
         return true;
 	}
 
@@ -961,31 +985,44 @@ public:
 	template <typename ProcessDataType> void process(ProcessDataType& d)
 	{
         auto ptr = d[0].begin();
-        
+
+		auto& s = clockState.get();
+
         for(int i = 0; i < d.getNumSamples(); i++)
         {
-            ptr[i] += clockState.tick() * addToSignalGain;
+            ptr[i] += s.tick() * addToSignalGain;
         }
-    
-        this->updateBuffer(clockState.getModValue(), d.getNumSamples());
+
+		if(clockState.getVoiceIndexForData(s) == lastVoiceIndex)
+			this->updateBuffer(s.getModValue(), d.getNumSamples());
 	}
 
 	template <typename FrameType> void processFrame(FrameType& d)
 	{
-        d[0] += clockState.tick() * addToSignalGain;
-        this->updateBuffer(clockState.getModValue(), 1);
+		auto& s = clockState.get();
+        d[0] += s.tick() * addToSignalGain;
+
+		if(clockState.getVoiceIndexForData(s) == lastVoiceIndex)
+			this->updateBuffer(s.getModValue(), 1);
 	}
 
 	void setTempo(double newTempo)
 	{
-        clockState.t = (TempoSyncer::Tempo)(int)newTempo;
-        clockState.recalculate(bpm, sr);
+		for(auto& s: clockState)
+		{
+			s.t = (TempoSyncer::Tempo)(int)newTempo;
+			s.recalculate(bpm, sr);
+		}
+        
 	}
 
 	void setMultiplier(double newMultiplier)
 	{
-		clockState.multiplier = newMultiplier;
-        clockState.recalculate(bpm, sr);
+		for(auto& s: clockState)
+		{
+			s.multiplier = newMultiplier;
+			s.recalculate(bpm, sr);
+		}
 	}
 
 	void setAddToSignal(double newValue)
@@ -995,12 +1032,14 @@ public:
 
 	void setUpdateMode(double newBehaviour)
 	{
-		clockState.continuous = newBehaviour < 0.5;
+		for(auto& s: clockState)
+			s.continuous = newBehaviour < 0.5;
 	}
 
 	void setInactive(double newInactiveMode)
 	{
-		clockState.inactiveIndex = jlimit<int>(0, 2, (int)newInactiveMode);
+		for(auto& s: clockState)
+			s.inactiveIndex = jlimit<int>(0, 2, (int)newInactiveMode);
 	}
 
 	DEFINE_PARAMETERS
@@ -1076,6 +1115,8 @@ public:
         
         float tick()
         {
+			recalcIfDirty();
+
             if(!isPlaying)
                 return inactive[inactiveIndex];
                 
@@ -1114,16 +1155,34 @@ public:
         {
             factor = 1.0 / ((double)TempoSyncer::getTempoFactor(t) * multiplier);
         }
-        
-        void recalculate(double bpm, double sr)
+
+		void recalcIfDirty()
+        {
+	        if(dirtyValues[1] != 0.0)
+	        {
+				recalculateInternal(dirtyValues[0], dirtyValues[1]);
+		        dirtyValues = { 0.0, 0.0 };
+	        }
+        }
+
+		
+
+		void recalculate(double bpm, double sr)
+		{
+			dirtyValues = { bpm, sr };
+		}
+
+        void recalculateInternal(double bpm, double sr)
         {
             auto quarterInSamples = (double)TempoSyncer::getTempoInSamples(bpm, sr, TempoSyncer::Quarter);
             deltaPerSample = 1.0 / quarterInSamples;
             recalculateFactor();
         }
+
+		std::array<double, 2> dirtyValues;
     };
     
-    State clockState;
+    PolyData<State, NV> clockState;
 };
 
 

@@ -300,6 +300,7 @@ HardcodedSwappableEffect::HardcodedSwappableEffect(MainController* mc, bool isPo
 	polyHandler(isPolyphonic),
 	mc_(mc)
 {
+	tempoSyncer.ppqFunction = [mc](int ts){ return mc->getMasterClock().getPPQPos(ts); };
 	tempoSyncer.publicModValue = &modValue;
 	polyHandler.setTempoSyncer(&tempoSyncer);
 	mc->addTempoListener(&tempoSyncer);
