@@ -86,6 +86,13 @@ public:
 	{
 	public:
 
+		enum class FlexPanelIds
+		{
+			UseOneDimensionDrag = PanelWithProcessorConnection::SpecialPanelIds::numSpecialPanelIds,
+			CurvePointTolerance,
+			numFlexPanelIds
+		};
+
 		SET_PANEL_NAME("FlexAHDSRGraph");
 
 		Panel(FloatingTile* parent);
@@ -100,6 +107,47 @@ public:
 					indexList.add(String("DisplayBuffer #" + (i+1)));
 			}
 		};
+
+		var toDynamicObject() const override
+		{
+			auto v = PanelWithProcessorConnection::toDynamicObject();
+
+			auto c = getContent<flex_ahdsr_base::FlexAhdsrGraph>();
+
+			storePropertyInObject(v, (int)FlexPanelIds::CurvePointTolerance, c != nullptr ? var(c->curveTolerance) : var());
+			storePropertyInObject(v, (int)FlexPanelIds::UseOneDimensionDrag, c != nullptr ? var(c->useOneDimensionalDrag) : var());
+
+			return v;
+		}
+		void fromDynamicObject(const var& object) override
+		{
+			PanelWithProcessorConnection::fromDynamicObject(object);
+
+			if(auto c = getContent<flex_ahdsr_base::FlexAhdsrGraph>())
+			{
+				c->curveTolerance = (float)getPropertyWithDefault(object, (int)FlexPanelIds::CurvePointTolerance);
+				c->useOneDimensionalDrag = (bool)getPropertyWithDefault(object, (int)FlexPanelIds::UseOneDimensionDrag);
+			}
+		}
+		int getNumDefaultableProperties() const override { return (int)FlexPanelIds::numFlexPanelIds; }
+
+		Identifier getDefaultablePropertyId(int index) const override
+		{
+			if(index < PanelWithProcessorConnection::SpecialPanelIds::numSpecialPanelIds)
+				return PanelWithProcessorConnection::getDefaultablePropertyId(index);
+
+			RETURN_DEFAULT_PROPERTY_ID(index, FlexPanelIds::CurvePointTolerance, "CurvePointTolerance");
+			RETURN_DEFAULT_PROPERTY_ID(index, FlexPanelIds::UseOneDimensionDrag, "UseOneDimensionDrag");
+		}
+
+		var getDefaultProperty(int index) const override
+		{
+			if (index < (int)SpecialPanelIds::numSpecialPanelIds)
+				return PanelWithProcessorConnection::getDefaultProperty(index);
+
+			RETURN_DEFAULT_PROPERTY(index, FlexPanelIds::CurvePointTolerance, 20);
+			RETURN_DEFAULT_PROPERTY(index, FlexPanelIds::UseOneDimensionDrag, true);
+		}
 
 		Identifier getProcessorTypeId() const override { return FlexAhdsrEnvelope::getClassType(); }
 		Component* createContentComponent(int /*index*/) override;

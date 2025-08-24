@@ -277,6 +277,25 @@ public:
 
 	template <typename PD> void process(PD& data)
 	{
+		if constexpr (PD::hasCompileTimeSize())
+		{
+			if(data.getNumSamples() == 1)
+			{
+				constexpr static int NumChannels = PD::getNumFixedChannels();
+
+				span<float, NumChannels> frameData;
+
+				if(config.shouldProcessSignal())
+				{
+					for(int i = 0; i < NumChannels; i++)
+						frameData[i] = data.getRawChannelPointers()[i][0];
+				}
+
+				this->processFrame(frameData);
+				return;
+			}
+		}
+
 		if(ok)
 		{
 			jassert(signal);
@@ -364,7 +383,7 @@ public:
 					if(sr == SignalRatio::ControlRate)
 						uptimeDelta = data.getNumSamples();
 					else // sr == SignalRatio::AudioRate
-						uptimeDelta = data.getNumSamples() / HISE_CONTROL_RATE_DOWNSAMPLING_FACTOR;
+						uptimeDelta = jmax(1, data.getNumSamples() / HISE_CONTROL_RATE_DOWNSAMPLING_FACTOR);
 
 					v = signal[s.uptime];
 

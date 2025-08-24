@@ -300,6 +300,7 @@ HardcodedSwappableEffect::HardcodedSwappableEffect(MainController* mc, bool isPo
 	polyHandler(isPolyphonic),
 	mc_(mc)
 {
+	tempoSyncer.ppqFunction = [mc](int ts){ return mc->getMasterClock().getPPQPos(ts); };
 	tempoSyncer.publicModValue = &modValue;
 	polyHandler.setTempoSyncer(&tempoSyncer);
 	mc->addTempoListener(&tempoSyncer);
@@ -497,14 +498,17 @@ bool HardcodedSwappableEffect::setEffect(const String& factoryId, bool /*unused*
             channelCountMatches = checkHardcodedChannelCount();
 		}		
 
-		if(getParameterOffset() == 0)
-		{
-			asProcessor().parameterNames.clear();
-		}
-		else
-		{
-			asProcessor().parameterNames.removeRange(getParameterOffset(), INT_MAX);
-		}
+        Array<Identifier> offsetParameters;
+        
+        for(int i = 0; i < getParameterOffset(); i++)
+        {
+            offsetParameters.add(asProcessor().parameterNames[i]);
+        }
+        
+        asProcessor().parameterNames.clear();
+        
+        if(!offsetParameters.isEmpty())
+            asProcessor().parameterNames.addArray(offsetParameters);
 
 		auto illegalIds = getIllegalParameterIds();
 

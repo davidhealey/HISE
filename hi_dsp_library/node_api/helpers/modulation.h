@@ -170,7 +170,7 @@ struct ParameterProperties
 		for(const auto& con: c)
 		{
 			setModulationMode(con.first, con.second);
-			setConnected(con.first, true);
+			setConnected(con.first, false);
 		}
 	}
 

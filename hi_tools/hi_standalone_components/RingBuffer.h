@@ -435,6 +435,7 @@ struct flex_ahdsr_base: public SimpleRingBuffer::WriterBase
 		Curve = 0,
 		Time,
 		Level,
+		TimeLevel,
 		numTypes
 	};
 
@@ -519,6 +520,7 @@ struct flex_ahdsr_base: public SimpleRingBuffer::WriterBase
 			virtual void drawFlexAhdsrBackground(Graphics& g, FlexAhdsrGraph& graph);
 			virtual void drawFlexAhdsrSegment(Graphics& g, FlexAhdsrGraph& graph, State s, const Path& segment, bool hover, bool active);
 			virtual void drawFlexAhdsrFullPath(Graphics& g, FlexAhdsrGraph& graph);
+			virtual void drawFlexAhdsrDragPoint(Graphics& g, FlexAhdsrGraph& graph, State s, Point<float> dragPoint, bool hover, bool down);
 			virtual void drawFlexAhdsrCurvePoint(Graphics& g, FlexAhdsrGraph& graph, State s, Point<float> curvePoint, bool hover, bool down);
 			virtual void drawFlexAhdsrPosition(Graphics& g, FlexAhdsrGraph& graph, State s, Point<float> pointOnPath);
 			virtual void drawFlexAhdsrText(Graphics& g, FlexAhdsrGraph& graph, const String& text);
@@ -563,12 +565,40 @@ struct flex_ahdsr_base: public SimpleRingBuffer::WriterBase
 		void mouseMove(const MouseEvent& e) override;
 		void mouseExit(const MouseEvent& e) override;
 
+		void handleDrag(const MouseEvent& e, ParameterType pt)
+		{
+			auto isX = pt == ParameterType::Time;
+			auto delta = isX ? (0.8f * (float)e.getDistanceFromDragStartX() / (float)getWidth()) : (-1.0f * (float)e.getDistanceFromDragStartY() / (float)getHeight());
+
+			if(currentHoverMode == ParameterType::TimeLevel && isX)
+				delta *= 5.0f;
+
+			if(pt == ParameterType::Curve && currentHoverState == State::ATTACK)
+				delta *= -1.0f;
+
+			auto newValue = jlimit(0.0f, 1.0f, ((isX || pt == ParameterType::Curve) ? downValue.getX() : downValue.getY()) + delta);
+			auto pIndex = Helpers::getAttributeIndex(currentHoverState, pt);
+
+			if(pIndex != -1)
+			{
+				if(auto b = dynamic_cast<flex_ahdsr_base*>(rb->getCurrentWriter()))
+				{
+					newValue = Helpers::fromNorm(currentHoverState, pt, newValue);
+					b->handleUIDrag(pIndex, newValue);
+				}
+			}
+		}
+
+		bool useOneDimensionalDrag = false;
+		float curveTolerance = 20.0f;
+
 		Path fullPath;
 		float values[NumUIValues];
 
 		std::vector<Rectangle<float>> boxes;
 		std::vector<Rectangle<float>> hitboxes;
 		std::vector<Point<float>> curvePoints;
+		std::vector<Point<float>> dragPoints;
 		std::vector<Path> segments;
 
 		Point<float> sustainPoint;
@@ -576,14 +606,12 @@ struct flex_ahdsr_base: public SimpleRingBuffer::WriterBase
 		State currentHoverState = State::DONE;
 		State currentPlayState = State::IDLE;
 		ParameterType currentHoverMode = ParameterType::numTypes;
-		float downValue = 0.0f;
+		Point<float> downValue = {};
 		float positionWithinState = 0.0f;
 	};
 
 	struct Properties : public SimpleRingBuffer::PropertyObject
 	{
-
-
 		static constexpr int PropertyIndex = 2003;
 
 		int getClassIndex() const override { return PropertyIndex; }
