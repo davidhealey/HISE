@@ -636,7 +636,7 @@ void PresetBrowser::expansionPackLoaded(Expansion* currentExpansion)
 {
 	refreshColumnUpdatesAfterExpansionSwitch = true;
 
-	if(expansionColumn != nullptr && currentExpansion != nullptr)
+	if(currentExpansion != nullptr)
 		selectionChanged(-1, -1, currentExpansion->getRootFolder(), false);
 	else
 		selectionChanged(-1, -1, File(), false);
