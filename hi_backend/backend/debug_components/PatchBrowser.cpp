@@ -1161,17 +1161,17 @@ void PatchBrowser::ModuleDragTarget::itemDropped(const SourceDetails& dragSource
 		return;
 	}
 
-	Chain *c = dynamic_cast<Chain*>(getProcessor());
+	auto targetProcessor = getProcessor();
+
+	
+
+	Chain *c = dynamic_cast<Chain*>(targetProcessor);
+
+	auto isFirstTarget = c != nullptr;
 
 	auto p = dynamic_cast<ModuleDragTarget*>(dragSourceDetails.sourceComponent.get())->getProcessor();
 
 	auto oldChain = dynamic_cast<Chain*>(p->getParentProcessor(false));
-
-	if(p->getParentProcessor(false) == getProcessor())
-	{
-		resetDragState();
-		return;
-	}
 
 	if(c == nullptr)
 		c = dynamic_cast<Chain*>(getProcessor()->getParentProcessor(false));
@@ -1181,27 +1181,44 @@ void PatchBrowser::ModuleDragTarget::itemDropped(const SourceDetails& dragSource
 		Identifier type = Identifier(dragSourceDetails.description.toString().upToFirstOccurrenceOf("::", false, true));
 		String name = dragSourceDetails.description.toString().fromLastOccurrenceOf("::", false, true);
 
-		int index = -1;
+		Processor* sibling = nullptr;
 
-		for(int i = 0; i < c->getHandler()->getNumProcessors(); i++)
+		if(isFirstTarget && c->getHandler()->getNumProcessors() > 0)
 		{
-			if(c->getHandler()->getProcessor(i) == p)
+			sibling = c->getHandler()->getProcessor(0);
+		}
+		else
+		{
+			int index = -1;
+			int selfDelta = 0;
+
+			for(int i = 0; i < c->getHandler()->getNumProcessors(); i++)
 			{
-				index = i;
-				break;
+				//if(c->getHandler()->getProcessor(i) == p)
+					//selfDelta -= 1;
+
+				if(c->getHandler()->getProcessor(i) == targetProcessor)
+				{
+					index = i + selfDelta + 1;
+					break;
+				}
 			}
+
+			if(isPositiveAndBelow(index, c->getHandler()->getNumProcessors()))
+				sibling = c->getHandler()->getProcessor(index);
+		}
+
+		if(p == sibling)
+		{
+			resetDragState();
+			return;
 		}
 
 		p->getMainController()->allNotesOff();
 
-		auto sibling = index == -1 ? nullptr : c->getHandler()->getProcessor(index);
-
 		oldChain->getHandler()->remove(p, false);
 
 		c->getHandler()->add(p, sibling);
-
-		//if(index != -1)
-		//	c->getHandler()->moveProcessor(p, -1);
 
 		auto root = p->getMainController()->getMainSynthChain();
 		root->prepareToPlay(root->getSampleRate(), root->getLargestBlockSize());
