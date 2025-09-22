@@ -561,15 +561,18 @@ WebViewData::OpaqueResourceType WebViewData::fetch(const std::string& path)
 	return {};
 };
 
-WebViewWrapper::WebViewWrapper(WebViewData::Ptr d) :
+WebViewWrapper::WebViewWrapper(WebViewData::Ptr d, bool init) :
 	data(d)
 {
 	data->registerWebView(this);
 
-	SafeAsyncCall::callAsyncIfNotOnMessageThread<WebViewWrapper>(*this, [](WebViewWrapper& wv)
+	if(init)
 	{
-		wv.refresh();
-	});
+		SafeAsyncCall::callAsyncIfNotOnMessageThread<WebViewWrapper>(*this, [](WebViewWrapper& wv)
+		{
+			wv.refresh();
+		});
+	}
 }
 
 WebViewWrapper::~WebViewWrapper()

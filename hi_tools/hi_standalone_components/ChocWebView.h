@@ -406,7 +406,7 @@ using NativeUIBase = juce::XEmbedComponent;
 #define resizeToFitCrossPlatform resized
 #endif
 
-	WebViewWrapper(WebViewData::Ptr data);
+	WebViewWrapper(WebViewData::Ptr data, bool init=true);
 
 	~WebViewWrapper();
 
