@@ -228,8 +228,10 @@ juce::Path Helpers::FFT::createPath(Range<int> sampleRange, Range<float> valueRa
 	lPath.preallocateSpace(5 * size-1);
 
 	Array<Point<float>> dataPoints;
+	Array<Point<float>> compacted;
 
 	dataPoints.ensureStorageAllocated(size);
+	compacted.ensureStorageAllocated(size);
 
 	for(int i = 0; i < size; i++)
 	{
@@ -247,32 +249,39 @@ juce::Path Helpers::FFT::createPath(Range<int> sampleRange, Range<float> valueRa
 	auto lastRealIndex = 0;
 
 	
-
 	for(int i = 0; i < dataPoints.size(); i++)
 	{
 		auto x = dataPoints[i].getX();
 
 		if(x == 0.0f && dataPoints[i+1].getX() == 0.0f)
 		{
-			dataPoints.remove(i--);
+			//dataPoints.remove(i--);
 			continue;
 		}
 		
 		if(x - lastX < JUCE_LIVE_CONSTANT_OFF(2))
 		{
 			auto thisY = dataPoints[i].getY();
-			auto lastRealY = dataPoints[lastRealIndex].getY();
-			dataPoints.getReference(lastRealIndex).setY(jmin(thisY, lastRealY)); // jmin because of pixel domain
-			dataPoints.remove(i--);
+			auto lastRealY = compacted.getLast().getY();
+
+			compacted.getReference(lastRealIndex).setY(jmin(thisY, lastRealY)); // jmin because of pixel domain
+			//dataPoints.remove(i--);
 		}
 		else
 		{
 			lastX = x;
-			lastRealIndex = i;
+			lastRealIndex = compacted.size();
+			compacted.add(dataPoints[i]);
 		}
 	}
 
+	compacted.swapWith(dataPoints);
+	compacted.clearQuick();
+
 	auto tolerance = JUCE_LIVE_CONSTANT_OFF(0.4f);
+
+	compacted.add(dataPoints[0]);
+	Array<int> pointsToUse;
 
 	for(int i = 1; i < dataPoints.size() -2; i++)
 	{
@@ -280,32 +289,26 @@ juce::Path Helpers::FFT::createPath(Range<int> sampleRange, Range<float> valueRa
 		auto current = dataPoints[i];
 
 		if(current.getY() == targetBounds.getBottom())
+		{
+			compacted.add(current);
 			continue;
-
+		}
+		
 		auto next = dataPoints[i+1];
-
 		auto midY = (prev.getY() + next.getY()) * 0.5f;
-
 		auto deltaMax = jmax(1.0f, hmath::abs(prev.getY() - next.getY()));
-		 
 		auto deltaY = hmath::abs(current.getY() - midY);
-
 		auto deltaNorm = deltaY / deltaMax;
 
-		if(deltaNorm < tolerance)
+		if(deltaNorm > tolerance && current.getX() < targetBounds.getRight())
 		{
-			dataPoints.remove(i--);
+			compacted.add(dataPoints[i]);
 		}
+			
 	}
 
+	compacted.swapWith(dataPoints);
 
-	for(int i = dataPoints.size() - 1; i >= 0.0; i--)
-	{
-		if(dataPoints[i].getX() > targetBounds.getRight())
-			dataPoints.remove(i);
-		else
-			break;
-	}
 
 	if(dataPoints.isEmpty())
 	{
@@ -316,13 +319,15 @@ juce::Path Helpers::FFT::createPath(Range<int> sampleRange, Range<float> valueRa
 		lPath.startNewSubPath(targetBounds.getX(), targetBounds.getBottom());
 		lPath.lineTo(dataPoints[0]);
 
-		for(int i = 1; i < dataPoints.size() - 1; i++)
+		auto lastIndex = dataPoints.size() - 1;
+
+		for(int i = 1; i < lastIndex; i++)
 		{
 			auto prev = dataPoints[i-1];
 			auto current = dataPoints[i];
 			auto deltaX = current.getX() - prev.getX();
 			auto deltaY = current.getY() - prev.getY();
-			auto useCubic = hmath::abs(deltaY) > JUCE_LIVE_CONSTANT_OFF(10);
+			auto useCubic = (i < lastIndex / 2) && hmath::abs(deltaY) > JUCE_LIVE_CONSTANT_OFF(10);
 
 			if(useCubic)
 				lPath.cubicTo(prev.translated(deltaX / 3.0f, 0.0f), current.translated(deltaX / -3.0f, 0.0f), current);
