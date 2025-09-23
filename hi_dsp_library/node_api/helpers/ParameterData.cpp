@@ -1082,7 +1082,7 @@ bool PageInfo::hasPageData(const ValueTree& pTree)
 {
 	jassert(pTree.getType() == PropertyIds::Parameters);
 
-	for (auto& p : pTree)
+	for (const auto& p : pTree)
 	{
 		if (p[PropertyIds::Page].toString().isNotEmpty())
 			return true;
