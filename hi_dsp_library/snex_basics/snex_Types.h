@@ -1057,7 +1057,7 @@ template <typename T, int NumVoices> struct PolyData
 		ScopedVoiceSetter(PolyData& p_, bool forceAll):
 		  p(p_)
 		{
-			if constexpr (p.isPolyphonic())
+			if constexpr (PolyData::isPolyphonic())
 			{
 				p.currentRenderVoice = p.begin();
 				prevForceAll = p.forceAll;
@@ -1067,7 +1067,7 @@ template <typename T, int NumVoices> struct PolyData
 
 		~ScopedVoiceSetter()
 		{
-			if constexpr (p.isPolyphonic())
+			if constexpr (PolyData::isPolyphonic())
 			{
 				p.currentRenderVoice = nullptr;
 				p.forceAll = prevForceAll;

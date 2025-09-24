@@ -93,7 +93,7 @@ struct base_wrapper<T, I, true> : T::ObjectType::VoiceSetter
 {
 	using WT = typename T::ObjectType;
 
-	base_wrapper(typename T& obj, bool forceAll) :
+	base_wrapper(T& obj, bool forceAll) :
 		WT::VoiceSetter(obj.getObject(), forceAll)
 	{}
 };
