@@ -89,13 +89,21 @@ template <typename T, std::size_t I, bool Has = has_voice_setter<T>::value>
 struct base_wrapper; 
 
 template <typename T, std::size_t I>
-struct base_wrapper<T, I, true> : T::ObjectType::VoiceSetter
+struct base_wrapper<T, I, true>
 {
 	using WT = typename T::ObjectType;
+    using VS = typename WT::VoiceSetter;
 
 	base_wrapper(T& obj, bool forceAll) :
-		WT::VoiceSetter(obj.getObject(), forceAll)
+        vs(obj.getObject(), forceAll)
 	{}
+    
+    explicit operator bool() const
+    {
+        return static_cast<bool>(vs);
+    }
+    
+    VS vs;
 };
 
 template <typename T, std::size_t I>

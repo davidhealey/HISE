@@ -1730,7 +1730,7 @@ template <class T> struct node : public scriptnode::data::base
 
 	void process(FixBlockType& d)
 	{
-		if (auto sv = T::ObjectType::VoiceSetter(obj.getObject(), false))
+		if (auto sv = typename T::ObjectType::VoiceSetter(obj.getObject(), false))
 			obj.process(d);
 	}
 
