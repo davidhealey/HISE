@@ -571,12 +571,12 @@ void StreamingSamplerSound::setLoopCrossfade(int newCrossfadeLength)
 
 void StreamingSamplerSound::setSampleEnd(int newSampleEnd)
 {
+	if (sampleEnd == INT_MAX)
+		fileReader.setMonolithSampleLength(newSampleEnd);
+
 	if (sampleEnd != newSampleEnd &&
 		(!loopEnabled || (loopEnabled && loopEnd < newSampleEnd)))
 	{
-		if(sampleEnd == INT_MAX)
-			fileReader.setMonolithSampleLength(newSampleEnd);
-
 		sampleEnd = newSampleEnd;
 		lengthChanged();
 
