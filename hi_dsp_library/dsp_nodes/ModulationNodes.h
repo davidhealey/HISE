@@ -1000,6 +1000,8 @@ template <int NV> struct matrix_mod:
 
 	float zeroDelta = 0.0f;;
 
+	double getLastModValue() const { return mv.getModValue(); }
+
 private:
 
 	int lastVoiceIndex = -1;
