@@ -10250,6 +10250,7 @@ ScriptingObjects::ScriptErrorHandler::ScriptErrorHandler(ProcessorWithScriptingC
 	callback(p, this, var(), 2)
 {
 	addConstant("AppDataDirectoryNotFound", (int)OverlayMessageBroadcaster::AppDataDirectoryNotFound);
+#if HISE_INCLUDE_UNLOCKER_OVERLAY
 	addConstant("LicenseNotFound", (int)OverlayMessageBroadcaster::LicenseNotFound);
 	addConstant("ProductNotMatching", (int)OverlayMessageBroadcaster::ProductNotMatching);
 	addConstant("UserNameNotMatching", (int)OverlayMessageBroadcaster::UserNameNotMatching);
@@ -10257,6 +10258,7 @@ ScriptingObjects::ScriptErrorHandler::ScriptErrorHandler(ProcessorWithScriptingC
 	addConstant("MachineNumbersNotMatching", (int)OverlayMessageBroadcaster::MachineNumbersNotMatching);
 	addConstant("LicenseExpired", (int)OverlayMessageBroadcaster::LicenseExpired);
 	addConstant("LicenseInvalid", (int)OverlayMessageBroadcaster::LicenseInvalid);
+#endif
 	addConstant("CriticalCustomErrorMessage", (int)OverlayMessageBroadcaster::CriticalCustomErrorMessage);
 	addConstant("SamplesNotInstalled", (int)OverlayMessageBroadcaster::SamplesNotInstalled);
 	addConstant("SamplesNotFound", (int)OverlayMessageBroadcaster::SamplesNotFound);

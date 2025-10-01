@@ -2721,6 +2721,7 @@ struct ScriptingApi::Settings::Wrapper
 	API_METHOD_WRAPPER_1(Settings, isMidiChannelEnabled);
 	API_METHOD_WRAPPER_0(Settings, getUserDesktopSize);
 	API_METHOD_WRAPPER_0(Settings, isOpenGLEnabled);
+	API_METHOD_WRAPPER_1(Settings, isIppEnabled);
 	API_VOID_METHOD_WRAPPER_1(Settings, setEnableOpenGL);
 	API_VOID_METHOD_WRAPPER_1(Settings, setEnableDebugMode);
 	API_VOID_METHOD_WRAPPER_0(Settings, startPerfettoTracing);
@@ -2753,6 +2754,7 @@ ScriptingApi::Settings::Settings(ProcessorWithScriptingContent* s) :
 	ADD_API_METHOD_0(getAvailableBufferSizes);
 	ADD_API_METHOD_0(getCurrentBufferSize);
 	ADD_API_METHOD_1(setBufferSize);
+	ADD_API_METHOD_1(isIppEnabled);
 	ADD_API_METHOD_0(getAvailableSampleRates);
 	ADD_API_METHOD_0(getCurrentSampleRate);
 	ADD_API_METHOD_1(setSampleRate);
@@ -3102,6 +3104,20 @@ bool ScriptingApi::Settings::isMidiChannelEnabled(int index)
 		return channelFilterData->areAllChannelsEnabled();
 	else 
 		return channelFilterData->isChannelEnabled(index - 1);
+}
+
+bool ScriptingApi::Settings::isIppEnabled(bool returnTrueIfMacOS)
+{
+#if JUCE_WINDOWS
+#if USE_IPP
+	return true;
+#else
+	return false;
+#endif
+#else
+	return returnTrueIfMacOS;
+#endif
+
 }
 
 struct DynamicArrayComparator

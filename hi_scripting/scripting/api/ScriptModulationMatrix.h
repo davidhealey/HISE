@@ -57,6 +57,12 @@ struct ScriptingApi::Content::ScriptSlider::MultiMatrixModulatorConnection: publ
 		{
 			auto mvf = m->getModulationQueryFunction(MatrixModulator::SpecialParameters::Value);
 			auto componentIndex = s.getScriptProcessor()->getScriptingContent()->getComponentIndex(&s);
+
+			// if this happens, the component wasn't added yet.
+			if(componentIndex == -1)
+				componentIndex = s.getScriptProcessor()->getScriptingContent()->getNumComponents();
+
+
 			s.getScriptProcessor()->setModulationDisplayQueryFunction(componentIndex, m, mvf);
 			uint16 indexes[1] = { (uint16)componentIndex };
 			addToProcessor(dynamic_cast<Processor*>(s.getScriptProcessor()), indexes, 1, dispatch::sendNotificationSync);
@@ -244,7 +250,10 @@ struct ScriptModulationMatrix : public ConstScriptingObject,
 	/** Get the component reference for the given modulation target ID. */
 	var getComponent(String targetId);
 
-	/** Checks whether the modulation connection can be made. */
+    /** Returns a JSON object with the visualisation data for the given modulation target. */
+    var getModulationDisplayData(String targetId);
+
+    /** Checks whether the modulation connection can be made. */
 	bool canConnect(String source, String target);
 
 	/** Creates a Base64 string of all connections. */
@@ -293,7 +302,18 @@ struct ScriptModulationMatrix : public ConstScriptingObject,
 
 private:
 
-	void callSuspended(const std::function<void(ScriptModulationMatrix&)>& f)
+	struct QueryObject
+	{
+	    ReferenceCountedObject* slider;
+		WeakReference<Processor> p;
+		ModulationDisplayValue::QueryFunction::Ptr qf;
+	};
+
+    std::map<String, QueryObject> queryFunctions;
+    
+    var getModulationDataFromQueryFunction(const QueryObject& p);
+
+    void callSuspended(const std::function<void(ScriptModulationMatrix&)>& f)
 	{
 		auto safeThis = WeakReference<ScriptModulationMatrix>(this);
 		auto pf = [safeThis, f](Processor* p)
