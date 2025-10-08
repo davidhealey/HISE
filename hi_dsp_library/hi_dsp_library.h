@@ -239,6 +239,10 @@ Set this to 1 if you want to embed the libraries created with this module into y
 #include "dsp_library/HiseLibraryHeader.h"
 #endif
 
+
+#include "node_api/helpers/UIUpdater.h"
+
+
 namespace hise {
 	namespace HelperFunctions
 	{

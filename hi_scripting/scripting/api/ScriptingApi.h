@@ -326,6 +326,13 @@ public:
 			return vtc.getTextForValue(value);
 		}
 
+		/** Uses one of the inbuilt text converts to parse a text string to a numeric value. */
+		double getValueForText(String text, String convertedMode)
+		{
+			auto vtc = ValueToTextConverter::createForMode(convertedMode);
+			return vtc.getValueForText(text);
+		}
+
 		/** Iterates the given sub-directory of the Samples folder and returns a list with all references to audio files. */
 		var getSampleFilesFromDirectory(const String& relativePathFromSampleFolder, bool recursive);
 
