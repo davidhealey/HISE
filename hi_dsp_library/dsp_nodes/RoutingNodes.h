@@ -1169,7 +1169,7 @@ public runtime_target::indexable_target<IndexType, runtime_target::RuntimeTarget
     
     ~global_cable()
 	{
-		disconnect();	
+		this->disconnect();	
 	};
     
     static constexpr bool isPolyphonic() { return false; }
