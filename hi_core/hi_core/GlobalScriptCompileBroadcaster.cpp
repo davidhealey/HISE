@@ -226,15 +226,14 @@ void GlobalScriptCompileBroadcaster::saveAllExternalFiles()
 	{		
 		auto ef = getExternalScriptFile(i);
 
-		if (!ef->getFile().exists())
-		{
-				removeIncludedFile(i);
-				continue;
-		}
-
 		if(ef->getResourceType() == ExternalScriptFile::ResourceType::EmbeddedInSnippet)
 		{
 			debugToConsole(dynamic_cast<MainController*>(this)->getMainSynthChain(), "Skip writing embedded file " + ef->getFile().getFileName() + " to disk...");
+			continue;
+		}
+		else if (!ef->getFile().exists())
+		{
+			removeIncludedFile(i);
 			continue;
 		}
 			
