@@ -449,6 +449,7 @@ URL URL::getChildURL (const String& subPath) const
 {
     URL u (*this);
     URLHelpers::concatenatePaths (u.url, subPath);
+    u.init();
     return u;
 }
 
