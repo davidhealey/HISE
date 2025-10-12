@@ -1123,8 +1123,17 @@ namespace ScriptingObjects
 
 		void clear();
 
+		/** Returns the audio file's current range in the form [start, end]. */
+		var getRange();
+
+		/** Returns the length of the original audio file in samples. */
+		var getTotalLengthInSamples();
+
 		/** Sets a new sample range. */
 		void setRange(int min, int max);
+		
+		/** Returns the current loop range in the form [start, end]. */
+		var getLoopRange(bool subtractStart);
 
 		/** Loads an audio file from the given reference. */
 		void loadFile(const String& filePath);
@@ -2432,11 +2441,20 @@ namespace ScriptingObjects
 		/** Returns the filename (including wildcard) for the currently loaded file. */
 		String getFilename(); 
 
-		/** Returns the samplerange in the form [start, end]. */
+		/** Returns the sample range start. */
 		var getSampleStart();
 
+		/** Returns the current loop range in the form [start, end]. */
+		var getLoopRange(bool subtractStart);
+		
 		/** Returns the length of the current sample selection in samples. */
 		int getSampleLength() const;
+
+		/** Returns the current sample range in the form [start, end]. */
+		var getSampleRange();
+
+		/** Returns the total sample length in samples. */
+		var getTotalLengthInSamples();
 
 		/** Sets the length of the current sample selection in samples. */
 		void setSampleRange(int startSample, int endSample);
