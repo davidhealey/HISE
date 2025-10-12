@@ -1597,7 +1597,10 @@ struct ScriptingObjects::ScriptAudioFile::Wrapper
 	API_VOID_METHOD_WRAPPER_1(ScriptAudioFile, loadFile);
 	API_METHOD_WRAPPER_0(ScriptAudioFile, getContent);
 	API_VOID_METHOD_WRAPPER_0(ScriptAudioFile, update);
+	API_METHOD_WRAPPER_0(ScriptAudioFile, getRange);
+	API_METHOD_WRAPPER_0(ScriptAudioFile, getTotalLengthInSamples);
 	API_VOID_METHOD_WRAPPER_2(ScriptAudioFile, setRange);
+	API_METHOD_WRAPPER_1(ScriptAudioFile, getLoopRange);
 	API_VOID_METHOD_WRAPPER_3(ScriptAudioFile, loadBuffer);
 	API_METHOD_WRAPPER_0(ScriptAudioFile, getNumSamples);
 	API_METHOD_WRAPPER_0(ScriptAudioFile, getSampleRate);
@@ -1611,7 +1614,10 @@ struct ScriptingObjects::ScriptAudioFile::Wrapper
 ScriptingObjects::ScriptAudioFile::ScriptAudioFile(ProcessorWithScriptingContent* pwsc, int index_, ExternalDataHolder* otherHolder) :
 	ScriptComplexDataReferenceBase(pwsc, index_, snex::ExternalData::DataType::AudioFile, otherHolder)
 {
+	ADD_API_METHOD_0(getRange);
+	ADD_API_METHOD_0(getTotalLengthInSamples);
 	ADD_API_METHOD_2(setRange);
+	ADD_API_METHOD_1(getLoopRange);
 	ADD_API_METHOD_1(loadFile);
 	ADD_API_METHOD_0(getContent);
 	ADD_API_METHOD_0(update);
@@ -1656,6 +1662,45 @@ void ScriptingObjects::ScriptAudioFile::setRange(int min, int max)
 
 		buffer->setRange({ min, max });
 	}
+}
+
+var ScriptingObjects::ScriptAudioFile::getRange()
+{	
+	if (auto buffer = getBuffer())
+	{
+		auto range = buffer->getCurrentRange();
+		Array<var> result;
+		result.add(range.getStart());
+		result.add(range.getEnd());
+		return result;
+	}	
+	
+	return var();
+}
+
+var ScriptingObjects::ScriptAudioFile::getTotalLengthInSamples()
+{
+	if (auto buffer = getBuffer())
+	{
+		auto range = buffer->getTotalRange();
+		return range.getEnd();
+	}	
+	
+	return var();
+}
+
+var ScriptingObjects::ScriptAudioFile::getLoopRange(bool subtractStart)
+{
+	if (auto buffer = getBuffer())
+	{
+		auto range = buffer->getLoopRange(subtractStart);
+		Array<var> result;
+		result.add(range.getStart());
+		result.add(range.getEnd());
+		return result;
+	}	
+	
+	return var();
 }
 
 void ScriptingObjects::ScriptAudioFile::loadBuffer(var bufferData, double sampleRate, var loopRange)
@@ -4716,6 +4761,9 @@ struct ScriptingObjects::ScriptingAudioSampleProcessor::Wrapper
 	API_METHOD_WRAPPER_0(ScriptingAudioSampleProcessor, isBypassed);
 	API_METHOD_WRAPPER_0(ScriptingAudioSampleProcessor, getSampleLength);
 	API_VOID_METHOD_WRAPPER_2(ScriptingAudioSampleProcessor, setSampleRange);
+	API_METHOD_WRAPPER_0(ScriptingAudioSampleProcessor, getSampleRange);
+	API_METHOD_WRAPPER_0(ScriptingAudioSampleProcessor, getTotalLengthInSamples);
+	API_METHOD_WRAPPER_1(ScriptingAudioSampleProcessor, getLoopRange);
 	API_VOID_METHOD_WRAPPER_1(ScriptingAudioSampleProcessor, setFile);
 	API_METHOD_WRAPPER_1(ScriptingAudioSampleProcessor, getAudioFile);
 	API_METHOD_WRAPPER_0(ScriptingAudioSampleProcessor, getFilename);
@@ -4750,6 +4798,9 @@ audioSampleProcessor(dynamic_cast<Processor*>(sampleProcessor))
 	ADD_API_METHOD_0(isBypassed);
 	ADD_API_METHOD_0(getSampleLength);
 	ADD_API_METHOD_2(setSampleRange);
+	ADD_API_METHOD_0(getSampleRange);
+	ADD_API_METHOD_0(getTotalLengthInSamples);
+	ADD_API_METHOD_1(getLoopRange);
 	ADD_API_METHOD_1(setFile);
 	ADD_API_METHOD_1(getAudioFile);
 	ADD_API_METHOD_0(getFilename);
@@ -4868,10 +4919,67 @@ var ScriptingObjects::ScriptingAudioSampleProcessor::getSampleStart()
 	return 0;
 }
 
+var ScriptingObjects::ScriptingAudioSampleProcessor::getSampleRange()
+{
+	if (!checkValidObject())
+		return var();
+	
+	if (auto* p = dynamic_cast<ProcessorWithExternalData*>(audioSampleProcessor.get()))
+	{
+			if (auto* af = p->getAudioFile(0))
+			{
+					auto range = af->getCurrentRange();
+					Array<var> result;
+					result.add(range.getStart());
+					result.add(range.getEnd());
+					return result;
+			}
+	}
+
+	return var();
+}
+
+var ScriptingObjects::ScriptingAudioSampleProcessor::getTotalLengthInSamples()
+{
+	if (!checkValidObject())
+		return var();
+	
+	if (auto* p = dynamic_cast<ProcessorWithExternalData*>(audioSampleProcessor.get()))
+	{
+			if (auto* af = p->getAudioFile(0))
+			{
+					auto range = af->getTotalRange();
+					return range.getEnd();
+			}
+	}
+
+	return var();
+}
+
 void ScriptingObjects::ScriptingAudioSampleProcessor::setSampleRange(int start, int end)
 {
 	if (checkValidObject())
-        return dynamic_cast<ProcessorWithExternalData*>(audioSampleProcessor.get())->getAudioFile(0)->setRange(Range<int>(start, end));
+		return dynamic_cast<ProcessorWithExternalData*>(audioSampleProcessor.get())->getAudioFile(0)->setRange(Range<int>(start, end));
+}
+
+var ScriptingObjects::ScriptingAudioSampleProcessor::getLoopRange(bool subtractStart)
+{
+	if (!checkValidObject())
+		return var();
+	
+	if (auto* p = dynamic_cast<ProcessorWithExternalData*>(audioSampleProcessor.get()))
+	{
+			if (auto* af = p->getAudioFile(0))
+			{
+					auto range = af->getLoopRange(subtractStart);
+					Array<var> result;
+					result.add(range.getStart());
+					result.add(range.getEnd());
+					return result;
+			}
+	}
+
+	return var();
 }
 
 var ScriptingObjects::ScriptingAudioSampleProcessor::getAudioFile(int slotIndex)
