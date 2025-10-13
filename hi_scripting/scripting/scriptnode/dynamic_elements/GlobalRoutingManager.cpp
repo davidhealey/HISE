@@ -1712,6 +1712,9 @@ void GlobalRoutingManager::Cable::addTarget(CableTargetBase* n)
 	SimpleReadWriteLock::ScopedWriteLock sl(lock);
 	targets.addIfNotAlreadyThere(n);
 	n->sendValue(lastValue);
+
+	if(lastData.getSize() > 0)
+		n->sendData(lastData.getData(), lastData.getSize());
 }
 
 void GlobalRoutingManager::Cable::removeTarget(CableTargetBase* n)
@@ -1722,6 +1725,8 @@ void GlobalRoutingManager::Cable::removeTarget(CableTargetBase* n)
 
 void GlobalRoutingManager::Cable::sendData(CableTargetBase* source, void* data, size_t numBytes)
 {
+	lastData.replaceAll(data, numBytes);
+
 	for (auto t : targets)
 	{
 		if (t == source)
