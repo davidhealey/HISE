@@ -306,6 +306,12 @@ public:
 	/** This includes every external script, compresses it and returns a base64 encoded string that can be shared without further dependencies. */
 	static ValueTree collectAllScriptFiles(ModulatorSynthChain *synthChainToExport);
 
+	void checkOnFocusGain()
+	{
+		if(reloader != nullptr)
+			reloader->timerCallback();
+	}
+
 private:
 
 	struct ExternalReloader: public Timer

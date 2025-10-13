@@ -158,6 +158,7 @@ DECLARE_ID(EnableOptimizations);
 DECLARE_ID(EnableDebugMode);
 DECLARE_ID(WarnIfUndefinedParameters);
 DECLARE_ID(SaveConnectedFilesOnCompile);
+DECLARE_ID(RecompileOnFileChange);
 DECLARE_ID(EnableMousePositioning);
 
 Array<Identifier> getAllIds();
