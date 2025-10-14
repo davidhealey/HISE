@@ -1194,7 +1194,7 @@ var HiseSettings::Data::getDefaultSetting(const Identifier& id) const
 	else if (id == Project::ReadOnlyFactoryPresets) return "No";
     else if (id == Project::ForceStereoOutput)      return "No";
 		else if (id == Project::AdminPermissions) return "No";
-	else if (id == Project::VST3Support)			return "No";
+	else if (id == Project::VST3Support)			return "Yes";
 	else if (id == Project::UseRawFrontend)			return "No";
 	else if (id == Project::CompileWithPerfetto)	return "No";
 	else if (id == Compiler::ExportSetup)			return "No";
