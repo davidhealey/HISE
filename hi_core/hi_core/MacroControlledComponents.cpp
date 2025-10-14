@@ -2525,6 +2525,11 @@ void HiToggleButton::buttonClicked(Button *b)
 
 		sendPluginParameterUpdate |= connectedPluginParameter == nullptr & wasMacro;
 		
+		if(connectedPluginParameter != nullptr)
+		{
+			connectedPluginParameter->setSendToHost(useMacrosAsParameter || getMacroIndex() == -1);
+		}
+
 		if(sendPluginParameterUpdate && !skipHostDisplayUpdate)
 		{
 			auto details = AudioProcessorListener::ChangeDetails().withParameterInfoChanged(true);

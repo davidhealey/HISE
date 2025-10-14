@@ -230,6 +230,11 @@ struct HisePluginParameterBase: public ControlledObject,
 		return typed;
 	}
 
+	void setSendToHost(bool shouldSendToHost)
+	{
+		sendToHost = shouldSendToHost;
+	}
+
 protected:
 
 	bool sendToHost = true;
