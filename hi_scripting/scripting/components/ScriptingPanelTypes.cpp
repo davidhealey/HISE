@@ -269,14 +269,14 @@ void CodeEditorPanel::fillIndexList(StringArray& indexList)
 			indexList.add(p->getSnippet(i)->getCallbackName().toString());
 		}
 
-    auto scriptRoot = getMainController()->getActiveFileHandler()->getSubDirectory(FileHandlerBase::SubDirectories::Scripts);
+		auto scriptRoot = getMainController()->getCurrentFileHandler().getSubDirectory(FileHandlerBase::SubDirectories::Scripts);
 		
 		String globalScriptPath = dynamic_cast<const GlobalSettingManager*>(getMainController())->getSettingsObject().getSetting(HiseSettings::Scripting::GlobalScriptPath);
 		String globalScriptFolder = File(globalScriptPath).getFileName() + "/";
 
 		for (int i = 0; i < p->getNumWatchedFiles(); i++)
 		{
-      auto f = p->getWatchedFile(i);
+			auto f = p->getWatchedFile(i);
 			auto path = f.getRelativePathFrom(scriptRoot);
 
 			if (path.contains(globalScriptFolder))
