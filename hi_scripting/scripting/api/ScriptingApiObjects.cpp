@@ -1468,7 +1468,8 @@ void ScriptingObjects::ScriptDownloadObject::start()
         URL::DownloadTaskOptions options;
         options.listener = this;
         options.timeoutMs = HISE_SCRIPT_SERVER_TIMEOUT;
-        
+		options.extraHeaders = extraHeaders;
+		
 		download = downloadURL.downloadToFile(targetFile, options).release();
 
 		data->setProperty("numTotal", 0);
