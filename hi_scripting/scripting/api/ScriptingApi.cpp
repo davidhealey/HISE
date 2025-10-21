@@ -1520,6 +1520,7 @@ void ScriptingApi::Engine::addModuleStateToUserPreset(var moduleId)
 
 	auto childList = ProcessorHelpers::getListOfAllProcessors<Processor>(p);
 
+#if 0
 	for (auto c : childList)
 	{
 		if (c == p)
@@ -1531,6 +1532,7 @@ void ScriptingApi::Engine::addModuleStateToUserPreset(var moduleId)
 			return;
 		}
 	}
+#endif
 
 	bool wasRemoved = false;
 

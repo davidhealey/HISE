@@ -166,19 +166,22 @@ void Processor::restoreFromValueTree(const ValueTree &previouslyExportedProcesso
 		if( !c->restoreChain(childProcessors)) return;
 	}
 
-	for(int i = 0; i < getNumChildProcessors(); i++)
-	{
-		Processor *p = getChildProcessor(i);
+    if(!skipRestoreChildProcessors)
+    {
+        for(int i = 0; i < getNumChildProcessors(); i++)
+        {
+            Processor *p = getChildProcessor(i);
 
-		for (int j = 0; j < childProcessors.getNumChildren(); j++)
-		{
-			if (childProcessors.getChild(j).getProperty("ID") == p->getId())
-			{
-				p->restoreFromValueTree(childProcessors.getChild(j));
-				break;
-			}
-		}	
-	}
+            for (int j = 0; j < childProcessors.getNumChildren(); j++)
+            {
+                if (childProcessors.getChild(j).getProperty("ID") == p->getId())
+                {
+                    p->restoreFromValueTree(childProcessors.getChild(j));
+                    break;
+                }
+            }
+        }
+    }
 }
 
 ProcessorDocumentation* Processor::createDocumentation() const
