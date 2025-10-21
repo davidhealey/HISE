@@ -1127,6 +1127,11 @@ template <int NV> struct NeuralNode: public NodeBase
     {
         NodeBase::prepare(ps);
 
+		
+
+#if USE_BACKEND
+		obj.warmup = getRootNetwork()->getMainController()->getExtraDefinitionsValue("HISE_NEURAL_NETWORK_WARMUP_TIME", 0);
+#endif
         obj.prepare(ps);
     }
     

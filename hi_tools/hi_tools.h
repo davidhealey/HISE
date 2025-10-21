@@ -104,6 +104,10 @@ END_JUCE_MODULE_DECLARATION
 #define HISE_INCLUDE_RT_NEURAL 1
 #endif
 
+#ifndef HISE_NEURAL_NETWORK_WARMUP_TIME
+#define HISE_NEURAL_NETWORK_WARMUP_TIME 0
+#endif
+
 /** Config: HISE_USE_EXTENDED_TEMPO_VALUES
 
 If this is true, the tempo mode will contain lower values than 1/1. This allows eg. the LFO to run slower, however it 

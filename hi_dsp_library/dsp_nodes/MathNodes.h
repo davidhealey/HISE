@@ -797,6 +797,7 @@ template <int NV, class ExpressionClass> using expr = OpNode<expression_base<Exp
 
 #if HISE_INCLUDE_RT_NEURAL
 
+
 /** TODO:
  * - Parameters
  * - ProcessingModes
@@ -818,6 +819,11 @@ public:
     neural():
       polyphonic_base(getStaticId(), false)
     {};
+
+    ~neural()
+    {
+        this->disconnect();
+    }
     
     void prepare(PrepareSpecs ps)
     {
@@ -863,7 +869,10 @@ public:
             for(auto v: voiceIndexOffsets)
             {
                 for(int c = 0; c < lastSpecs.numChannels; c++)
+                {
                     currentNetwork->reset(v + c);
+                    currentNetwork->warmup(v + c, warmup);
+                }
             }
         }
     }
@@ -921,6 +930,8 @@ public:
         return thisNetwork.get();
     }
     
+    int warmup = HISE_NEURAL_NETWORK_WARMUP_TIME;
+
     NeuralNetwork::Ptr thisNetwork;
     
     PrepareSpecs lastSpecs;
