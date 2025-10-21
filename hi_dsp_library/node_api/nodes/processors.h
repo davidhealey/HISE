@@ -1633,7 +1633,7 @@ template <typename T> struct illegal_poly: public scriptnode::data::base,
 
 	static Identifier getStaticId() { return T::getStaticId(); }
 
-	static constexpr bool isPolyphonic() { return true; }
+	static constexpr bool isPolyphonic() { return false; }
 
 	void prepare(PrepareSpecs ps)
 	{

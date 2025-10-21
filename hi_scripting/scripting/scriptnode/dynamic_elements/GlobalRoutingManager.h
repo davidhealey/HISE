@@ -206,7 +206,14 @@ struct GlobalRoutingManager: public ReferenceCountedObject
             
             if(Add)
             {
-                return rt.runtimeTargets.addIfNotAlreadyThere(tt);
+                auto ok = rt.runtimeTargets.addIfNotAlreadyThere(tt);
+
+				if(ok && c->lastData.getSize() > 0)
+				{
+					tt->onData(c->lastData.getData(), c->lastData.getSize());
+				}
+
+				return ok;
             }
             else
                 return rt.runtimeTargets.removeAllInstancesOf(tt) != 0;
@@ -238,6 +245,7 @@ struct GlobalRoutingManager: public ReferenceCountedObject
         void sendValue(CableTargetBase* source, double v);
 		double getLastValue() const { return lastValue; }
 
+		MemoryBlock lastData;
 		double lastValue = 0.0;
 		CableTargetBase::List targets;
         

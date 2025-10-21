@@ -779,10 +779,15 @@ void PopupIncludeEditor::addEditor(CodeDocument& d, bool isJavascript)
 		auto& tp = mc->getJavascriptThreadPool();
 		tp.addSleepListener(this);
 
-		getEditor()->editor.onFocusChange = [mc, asComponent](bool isFocused, Component::FocusChangeType t)
+		auto jp_ = jp;
+
+		getEditor()->editor.onFocusChange = [mc, asComponent, jp_](bool isFocused, Component::FocusChangeType t)
 		{
 			if (isFocused)
+			{
+				jp_->checkOnFocusGain();
 				mc->setLastActiveEditor(CommonEditorFunctions::as(asComponent), CommonEditorFunctions::getCaretPos(asComponent));
+			}
 		};
         
         getEditor()->editor.setGotoFunction(BIND_MEMBER_FUNCTION_2(::hise::PopupIncludeEditor::jumpToFromShortcut));

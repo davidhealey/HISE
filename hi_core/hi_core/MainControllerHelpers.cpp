@@ -983,7 +983,7 @@ bool MidiControllerAutomationHandler::handleControllerMessage(const HiseEvent& e
 					}
 					else
 					{
-						a.processor->setAttribute(a.attribute, snappedValue, sendNotificationAsync);
+						a.processor->setAttribute(a.attribute, snappedValue, sendNotificationSync);
 					}
 
 					a.lastValue = snappedValue;

@@ -130,12 +130,11 @@ public:
 
 	Result getResult() const;
 
-	void reloadIfChanged()
+	bool reloadIfChanged()
 	{
 #if USE_BACKEND
-
 		if(resourceType == ResourceType::EmbeddedInSnippet)
-			return;
+			return false;
 
 		auto thisLast = getFile().getLastModificationTime();
 
@@ -144,8 +143,11 @@ public:
 			getFileDocument().replaceAllContent(getFile().loadFileAsString());
             getFileDocument().setSavePoint();
 			lastEditTime = thisLast;
+			return true;
 		}
 #endif
+
+		return false;
 	}
 
 	void saveFile()

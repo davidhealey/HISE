@@ -83,6 +83,7 @@ namespace HnodeIcons
 	DECLARE_DATA(testIcon, 442);
 	DECLARE_DATA(exportIcon, 366);
 	DECLARE_DATA(mapIcon, 142);
+	DECLARE_DATA(wrapIcon, 500);
 	DECLARE_DATA(loopIcon, 286);
 	DECLARE_DATA(jit, 59);
 	DECLARE_DATA(freezeIcon, 280);

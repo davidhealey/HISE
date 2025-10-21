@@ -704,6 +704,35 @@ int NeuralNetwork::getNumOutputs() const
 	return currentModels.getFirst()->getNumOutputs();
 }
 
+void NeuralNetwork::warmup(int networkIndex/*=-1*/, int warmupSize/*=2048*/)
+{
+	if(warmupSize == 0)
+		return;
+
+	SimpleReadWriteLock::ScopedReadLock sl(lock);
+
+	if (networkIndex == -1)
+	{
+		for (auto m : currentModels)
+		{
+			for(int i = 0; i < warmupSize; i++)
+			{
+				float s = 0.0f;
+				m->process(&s, &s);
+			}
+		}
+			
+	}
+	else if (auto cm = currentModels[networkIndex])
+	{
+		for (int i = 0; i < warmupSize; i++)
+		{
+			float s = 0.0f;
+			cm->process(&s, &s);
+		}
+	}
+}
+
 void NeuralNetwork::reset(int networkIndex)
 {
 	SimpleReadWriteLock::ScopedReadLock sl(lock);

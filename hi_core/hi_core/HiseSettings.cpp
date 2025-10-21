@@ -169,6 +169,7 @@ Array<juce::Identifier> HiseSettings::Scripting::getAllIds()
 	ids.add(CodeFontSize);
 	ids.add(EnableDebugMode);
 	ids.add(SaveConnectedFilesOnCompile);
+	ids.add(RecompileOnFileChange);
 	ids.add(EnableMousePositioning);
     ids.add(WarnIfUndefinedParameters);
 
@@ -631,6 +632,10 @@ Array<juce::Identifier> HiseSettings::SnexWorkbench::getAllIds()
 		D("If this is enabled, it will save a connected script file everytime the script is compiled. By default this is disabled, but if you want to apply changes to a connected script file, you will have to enable this setting");
 		P_();
 
+		P(HiseSettings::Scripting::RecompileOnFileChange);
+		D("If this is enabled, HISE will recompile all scripts as soon as it detects a change made with an external text editor.");
+		P_();
+
 		P(HiseSettings::ExpansionSettings::UUID);
 		D("A unique Identifier that will be used when this project is exported as full instrument expansion");
 		P_();
@@ -969,6 +974,7 @@ juce::StringArray HiseSettings::Data::getOptionsFor(const Identifier& id)
 		id == SnexWorkbench::PlayOnRecompile ||
 		id == SnexWorkbench::AddFade ||
 		id == Other::ShowWelcomeScreen ||
+		id == Scripting::RecompileOnFileChange ||
 		id == Scripting::SaveConnectedFilesOnCompile ||
         id == Scripting::WarnIfUndefinedParameters ||
 		id == Scripting::EnableMousePositioning)
@@ -1188,7 +1194,7 @@ var HiseSettings::Data::getDefaultSetting(const Identifier& id) const
 	else if (id == Project::ReadOnlyFactoryPresets) return "No";
     else if (id == Project::ForceStereoOutput)      return "No";
 		else if (id == Project::AdminPermissions) return "No";
-	else if (id == Project::VST3Support)			return "No";
+	else if (id == Project::VST3Support)			return "Yes";
 	else if (id == Project::UseRawFrontend)			return "No";
 	else if (id == Project::CompileWithPerfetto)	return "No";
 	else if (id == Compiler::ExportSetup)			return "No";

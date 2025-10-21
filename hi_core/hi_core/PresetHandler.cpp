@@ -3466,6 +3466,8 @@ void ModuleStateManager::restoreFromValueTree(const ValueTree &v)
 		if (p != nullptr)
 		{
 			auto mcopy = m.createCopy();
+            
+            Processor::ScopedChildSkipper scs(*p);
 			
 			for (auto ms : modules)
 			{

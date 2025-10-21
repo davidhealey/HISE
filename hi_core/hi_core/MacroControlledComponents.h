@@ -199,6 +199,9 @@ struct HisePluginParameterBase: public ControlledObject,
 		auto t = mc->getKillStateHandler().getCurrentThread();
 		auto defer = mc->getDeferNotifyHostFlag() || t != MainController::KillStateHandler::TargetThread::MessageThread;
 
+		if(!getMainController()->getPluginParameterUpdateState())
+			return;
+
 		if(defer)
 			triggerAsyncUpdate();
 		else
@@ -228,6 +231,11 @@ struct HisePluginParameterBase: public ControlledObject,
 		auto typed = dynamic_cast<juce::AudioProcessorParameter*>(this);
 		jassert(typed != nullptr);
 		return typed;
+	}
+
+	void setSendToHost(bool shouldSendToHost)
+	{
+		sendToHost = shouldSendToHost;
 	}
 
 protected:

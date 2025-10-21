@@ -159,10 +159,10 @@ void compare_editor::paint (Graphics& g)
 
     g.drawText(w, l.getUnion(r), Justification::centred);
 
-    g.fillEllipse(l.reduced(3.0f + 5.0f * (1.0 - lastData.leftValue)));
-    g.fillEllipse(r.reduced(3.0f + 5.0f * (1.0 - lastData.rightValue)));
+    g.fillEllipse(l.reduced(3.0f + 5.0f * jlimit(0.0, 1.0, 1.0 - lastData.leftValue)));
+    g.fillEllipse(r.reduced(3.0f + 5.0f * jlimit(0.0, 1.0, 1.0 - lastData.rightValue)));
 
-	g.fillEllipse(m.reduced(3.0f + 5.0f * (1.0 - lastData.getValue())));
+	g.fillEllipse(m.reduced(3.0f + 5.0f * jlimit(0.0, 1.0, 1.0 - lastData.getValue())));
 }
 
 void compare_editor::timerCallback ()

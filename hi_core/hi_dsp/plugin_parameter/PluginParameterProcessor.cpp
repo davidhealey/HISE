@@ -100,6 +100,8 @@ struct CustomAutomationParameter : public juce::AudioProcessorParameterWithID,
 		if (recursive)
 			return;
 
+		ScopedValueSetter<bool> svs(sendToHost, false);
+
 		newValue = data->range.convertFrom0to1(newValue);
 		data->call(newValue, dispatch::DispatchType::sendNotificationSync);
 	}
@@ -383,7 +385,9 @@ struct MacroPluginParameter: public juce::HostedAudioProcessorParameter,
 		if (recursive)
 			return;
 
-		ScopedValueSetter<bool> svs(recursive, true);
+		ScopedValueSetter<bool> svs(sendToHost, false);
+
+		ScopedValueSetter<bool> svs2(recursive, true);
 		md->setValue(newValue * 127.0);
 	}
 
