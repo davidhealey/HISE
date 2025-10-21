@@ -199,6 +199,9 @@ struct HisePluginParameterBase: public ControlledObject,
 		auto t = mc->getKillStateHandler().getCurrentThread();
 		auto defer = mc->getDeferNotifyHostFlag() || t != MainController::KillStateHandler::TargetThread::MessageThread;
 
+		if(!getMainController()->getPluginParameterUpdateState())
+			return;
+
 		if(defer)
 			triggerAsyncUpdate();
 		else
