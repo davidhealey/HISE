@@ -1147,7 +1147,7 @@ template <int NV> struct NeuralNode: public NodeBase
 		
 
 #if USE_BACKEND && HISE_INCLUDE_RT_NEURAL
-		obj.warmup = getRootNetwork()->getMainController()->getExtraDefinitionsValue("HISE_NEURAL_NETWORK_WARMUP_TIME", 0);
+		obj.getWrappedObject().warmup = getRootNetwork()->getMainController()->getExtraDefinitionsValue("HISE_NEURAL_NETWORK_WARMUP_TIME", 0);
 #endif
         obj.prepare(ps);
     }
@@ -1194,12 +1194,12 @@ template <int NV> struct NeuralNode: public NodeBase
         auto lower = text.toLowerCase();
 
         auto& neuralObj = obj.getWrappedObject();
-        auto freq = NeuralType::HpfFrequency::Off;
+        auto freq = HpfFrequency::Off;
 
         if(lower == "1 hz" || lower == "1hz" || lower == "1")
-            freq = NeuralType::HpfFrequency::Hz1;
+            freq = HpfFrequency::Hz1;
         else if(lower == "5 hz" || lower == "5hz" || lower == "5")
-            freq = NeuralType::HpfFrequency::Hz5;
+            freq = HpfFrequency::Hz5;
 
         neuralObj.setHpfFrequency(freq);
 #else

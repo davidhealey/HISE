@@ -39,6 +39,13 @@ namespace scriptnode {
 using namespace juce;
 using namespace hise;
 
+enum class HpfFrequency
+{
+	Dynamic = -1,
+	Off = 0,
+	Hz1 = 1,
+	Hz5 = 5
+};
 
 namespace math
 {
@@ -800,18 +807,11 @@ template <int NV, class ExpressionClass> using expr = OpNode<expression_base<Exp
 
 #if HISE_INCLUDE_RT_NEURAL
 
-enum class HpfFrequency
-{
-    Off = 0,
-    Hz1,
-    Hz5
-};
-
 /** TODO:
  * - Parameters
  * - ProcessingModes
  */
-template <int NV, typename IndexType> struct neural:
+template <int NV, typename IndexType, HpfFrequency FixHpfType=HpfFrequency::Dynamic> struct neural:
 public runtime_target::indexable_target<IndexType, runtime_target::RuntimeTarget::NeuralNetwork, hise::NeuralNetwork*>,
 public polyphonic_base
 {
@@ -836,12 +836,15 @@ public:
 
     void setHpfFrequency(HpfFrequency newFrequency)
     {
-        if(hpfFrequency == newFrequency)
-            return;
+        if(FixHpfType == HpfFrequency::Dynamic)
+        {
+			if (hpfFrequency == newFrequency)
+				return;
 
-        hpfFrequency = newFrequency;
-        clearFilterState();
-        updateHpfCoefficients(lastSpecs.sampleRate);
+			hpfFrequency = newFrequency;
+			clearFilterState();
+			updateHpfCoefficients(lastSpecs.sampleRate);
+        }
     }
 
     void createParameters(ParameterDataList&)
@@ -860,6 +863,8 @@ public:
         
         if(originalNetwork != nullptr)
         {
+            initialisedCorrectly = true;
+
             auto numClones = NV;
 
             if(originalNetwork->context.shouldCloneChannels())
@@ -875,6 +880,17 @@ public:
             {
                 v = idx;
                 idx += ps.numChannels;
+            }
+        }
+        else if (FixHpfType != HpfFrequency::Dynamic)
+        {
+            if(!initialisedCorrectly)
+            {
+				scriptnode::Error e;
+				e.error = scriptnode::Error::NoNeuralNetwork;
+				e.expected = this->index.getIndex();
+				e.actual = 0;
+				throw e;
             }
         }
 
@@ -918,6 +934,14 @@ public:
 
     SN_EMPTY_HANDLE_EVENT;
     
+    bool shouldUseHpf() const
+    {
+        if constexpr (FixHpfType == HpfFrequency::Off)
+            return false;
+
+        return hpfFrequency > HpfFrequency::Off;
+    }
+
     template <typename PD> void process(PD& data)
     {
         auto currentNetwork = getCurrentNetwork();
@@ -925,7 +949,7 @@ public:
         if(currentNetwork != nullptr && getNumExpectedNetworks() == currentNetwork->getNumNetworks())
         {
             auto offset = voiceIndexOffsets.get();
-            const bool useHpf = hpfFrequency != HpfFrequency::Off;
+            const bool useHpf = shouldUseHpf();
             auto* state = useHpf ? &filterState.get() : nullptr;
 
             int c = 0;
@@ -959,7 +983,7 @@ public:
         if(currentNetwork != nullptr && data.size() == currentNetwork->getNumNetworks())
         {
             auto offset = voiceIndexOffsets.get();
-            const bool useHpf = hpfFrequency != HpfFrequency::Off;
+            const bool useHpf = shouldUseHpf();
             auto* state = useHpf ? &filterState.get() : nullptr;
 
             int c = 0;
@@ -986,14 +1010,18 @@ public:
         return thisNetwork.get();
     }
 
+    int warmup = HISE_NEURAL_NETWORK_WARMUP_TIME;
+
 private:
+
+    bool initialisedCorrectly = false;
 
     static constexpr int maxFilterChannels = 4;
     using FilterStateArray = std::array<float, maxFilterChannels * 4>;
 
     void updateHpfCoefficients(double sampleRate)
     {
-        if(sampleRate <= 0.0 || hpfFrequency == HpfFrequency::Off)
+        if(sampleRate <= 0.0 || hpfFrequency <= HpfFrequency::Off)
         {
             setBypassCoefficients();
             return;
@@ -1049,21 +1077,19 @@ private:
 
         return output;
     }
-    
-    int warmup = HISE_NEURAL_NETWORK_WARMUP_TIME;
 
     NeuralNetwork::Ptr thisNetwork;
     PrepareSpecs lastSpecs;
     PolyData<int, NV> voiceIndexOffsets;
     PolyData<FilterStateArray, NV> filterState;
-    HpfFrequency hpfFrequency = HpfFrequency::Off;
+    HpfFrequency hpfFrequency = FixHpfType;
     float b0 = 1.0f, b1 = 0.0f, b2 = 0.0f;
     float a1 = 0.0f, a2 = 0.0f;
 };
 
 #else
 
-template <int NV, typename IndexType> struct neural: public polyphonic_base
+template <int NV, typename IndexType, HpfFrequency Unused=HpfFrequency::Dynamic> struct neural: public polyphonic_base
 {
 	SN_NODE_ID("neural");
     

@@ -2287,6 +2287,8 @@ String ScriptnodeExceptionHandler::getErrorMessage(Error e)
 	case Error::CompileFail:	s << "Compilation error** at Line " << e.expected << ", Column " << e.actual; return s;
 	case Error::UncompiledThirdPartyNode: s << "Uncompiled Third Party Node. Export the DLL and restart HISE to load this node."; return s;
 	case Error::UnscaledModRangeMismatch: s << "Unscaled mod range mismatch.  \n> Copy range to source"; return s;
+	case Error::NoNeuralNetwork: s << "No neural network found with hash `" << String(e.expected) << "`"; return s;
+	case Error::NoGlobalCable: s << "No global cable found with hash `" << String(e.expected) << "`"; return s;
 	default:
 		break;
 	}

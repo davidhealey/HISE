@@ -57,18 +57,21 @@ namespace indexers
 /** Used by a connected node that can't change the connection. */
 template <int HashIndex> struct fix_hash
 {
+    static constexpr bool mustBeConnected() { return true; }
     static constexpr int getIndex() { return HashIndex; }
 };
 
 /** Used by unconnected nodes. */
 struct none
 {
+    static constexpr bool mustBeConnected() { return true; }
     static constexpr int getIndex() { return -1; }
 };
 
 /** Used by a connected node that can change the connection. */
 struct dynamic
 {
+    static constexpr bool mustBeConnected() { return false; }
     int getIndex() const { return currentHash; }
     int currentHash = -1;
 };
