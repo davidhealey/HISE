@@ -94,6 +94,8 @@ struct Error: public ErrorC
         UnscaledModRangeMismatch,
         UncompiledThirdPartyNode,
         NoGlobalManager,
+        NoGlobalCable,
+        NoNeuralNetwork,
         numErrorCodes
     };
     

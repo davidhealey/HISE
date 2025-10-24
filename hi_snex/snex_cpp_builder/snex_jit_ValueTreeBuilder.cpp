@@ -527,6 +527,22 @@ Node::Ptr ValueTreeBuilder::parseRuntimeTargetNode(Node::Ptr u)
 			jassertfalse;
 		}
 
+		auto factoryPath = ValueTreeIterator::getNodeFactoryPath(u->nodeTree);
+
+		if(factoryPath.toString() == "math::neural")
+		{
+			auto fixHpfValue = ValueTreeIterator::getNodeProperty(u->nodeTree, PropertyIds::HpfFreq).toString();
+			std::map<String, String> hpfMap;
+			hpfMap[""] = "HpfFrequency::Off";
+			hpfMap["Off"] = "HpfFrequency::Off";
+			hpfMap["1 Hz"] = "HpfFrequency::Hz1";
+			hpfMap["5 Hz"] = "HpfFrequency::Hz5";
+
+			auto v = hpfMap[fixHpfValue];
+
+			*u << v;
+		}
+
 		if(CustomNodeProperties::nodeHasProperty(u->nodeTree, PropertyIds::NeedsModConfig))
 		{
 			auto cid = getNodeId(u->nodeTree).getIdentifier().toString();
