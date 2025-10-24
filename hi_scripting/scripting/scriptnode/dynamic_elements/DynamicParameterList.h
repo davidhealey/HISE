@@ -97,6 +97,15 @@ namespace parameter
 			targets[P]->p.call(v);
 		}
 
+		void callWithRuntimeIndex(int index, double v)
+		{
+			if(isPositiveAndBelow(index, getNumParameters()))
+			{
+				lastValues.set(index, v);
+				targets[index]->p.call(v);
+			}
+		}
+
 		bool deferUpdate = false;
 
 		ValueTree switchTree;

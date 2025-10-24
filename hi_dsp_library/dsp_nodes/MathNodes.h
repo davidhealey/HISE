@@ -1107,6 +1107,7 @@ template <int NV, typename IndexType, HpfFrequency Unused=HpfFrequency::Dynamic>
     SN_EMPTY_PREPARE;
     SN_EMPTY_PROCESS;
     SN_EMPTY_PROCESS_FRAME;
+    SN_EMPTY_CREATE_PARAM;
 };
 
 #endif

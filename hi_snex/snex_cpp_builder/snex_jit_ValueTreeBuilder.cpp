@@ -2592,13 +2592,25 @@ void ValueTreeBuilder::RootContainerBuilder::addParameterConnections()
 
 		for (auto containerWithParameter : pList)
 		{
+			String prefix = containerWithParameter->nodeTree[PropertyIds::ID].toString();
+
+			prefix = snex::cppgen::StringHelpers::makeValidCppName(prefix);
+
+			if(containerWithParameter == root)
+				prefix = "";
+
 			for (auto p : containerWithParameter->nodeTree.getChildWithName(PropertyIds::Parameters))
 			{
 				String def;
 
 				PooledStackVariable::Ptr c = getChildNodeAsStackVariable(containerWithParameter->nodeTree);
 				
-				auto pId = p[PropertyIds::ID].toString();
+				String pId;
+
+				if(prefix.isNotEmpty())
+					pId << prefix << "_";
+
+				pId << StringHelpers::makeValidCppName(p[PropertyIds::ID].toString());
 				pId << "_p";
 
 				StackVariable pv(parent, pId, TypeInfo(Types::ID::Dynamic, false, true));
