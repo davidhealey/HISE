@@ -70,9 +70,15 @@ struct FloatSanitizers
 			auto san = [](FloatType& v)
 			{
 				if constexpr(std::is_same<double, FloatType>())
-					FloatSanitizers::sanitizeDoubleNumber(v);
+				{
+					auto v2 = (double)v;
+					FloatSanitizers::sanitizeDoubleNumber(v2);
+				}
 				else
-					FloatSanitizers::sanitizeFloatNumber(v);
+				{
+					auto v2 = (float)v;
+					FloatSanitizers::sanitizeFloatNumber(v2);
+				}
 			};
 
 			beginTest("Testing single method");

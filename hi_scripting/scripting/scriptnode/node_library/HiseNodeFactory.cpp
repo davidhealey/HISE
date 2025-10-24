@@ -1129,7 +1129,7 @@ template <int NV> struct NeuralNode: public NodeBase
 
 		
 
-#if USE_BACKEND
+#if USE_BACKEND && HISE_INCLUDE_RT_NEURAL
 		obj.warmup = getRootNetwork()->getMainController()->getExtraDefinitionsValue("HISE_NEURAL_NETWORK_WARMUP_TIME", 0);
 #endif
         obj.prepare(ps);
