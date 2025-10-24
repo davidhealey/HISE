@@ -304,7 +304,23 @@ namespace control
 			return new branch_editor(t, updater);
 		}
 
-		
+		void onNumParametersChange(const Identifier& id, const var& newValue)
+		{
+			if(auto h = findParentComponentOfClass<NodeComponent>())
+			{
+				auto numParameters = (int)newValue;
+
+				if(numParameters > 1)
+				{
+					auto pn = h->node.get();
+					auto indexParameter = pn->getParameterFromName("Index");
+					indexParameter->setRangeProperty(PropertyIds::MaxValue.toString(), numParameters - 1);
+				}
+			}
+		}
+
+		bool updaterInitialised = false;
+		valuetree::PropertyListener numParametersUpdater;
 
 		void timerCallback() override 
 		{
@@ -312,9 +328,17 @@ namespace control
 			{
 				auto pn = findParentComponentOfClass<NodeComponent>()->node.get();
 
+
 				if (pn->getValueTree().getChildWithName(PropertyIds::SwitchTargets).getNumChildren() == 0)
 				{
 					pn->setNodeProperty(PropertyIds::NumParameters, 8);
+				}
+
+				if(!updaterInitialised)
+				{
+					auto npt = pn->getPropertyTree().getChildWithProperty(PropertyIds::ID, PropertyIds::NumParameters.toString());
+					numParametersUpdater.setCallback(npt, { PropertyIds::Value }, valuetree::AsyncMode::Asynchronously, VT_BIND_PROPERTY_LISTENER(onNumParametersChange));
+					updaterInitialised = true;
 				}
 			}
 
@@ -357,7 +381,7 @@ namespace control
 		void resized() override
 		{
 			auto b = getLocalBounds();
-			top = b.removeFromTop(10);
+			top = b.removeFromBottom(10);
 			dragRow.setBounds(b);
 		}
 
