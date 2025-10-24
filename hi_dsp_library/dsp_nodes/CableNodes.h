@@ -1670,7 +1670,7 @@ namespace control
 	{
 		branch_base(const Identifier& id):
 		  mothernode(),
-		  parameter_node_base<ParameterClass>(id),
+		  pimpl::parameter_node_base<ParameterClass>(id),
 		  no_processing()
 		{}
 		virtual ~branch_base() = default;
