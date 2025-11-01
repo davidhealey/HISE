@@ -1681,14 +1681,14 @@ namespace control
 	};
 
 	template <int NV, typename ParameterClass> 
-	struct branch : public branch_base<ParameterClass>,
+	struct branch_cable : public branch_base<ParameterClass>,
 					public polyphonic_base
 	{
-		SN_NODE_ID("branch");
-		SN_GET_SELF_AS_OBJECT(branch);
+		SN_NODE_ID("branch_cable");
+		SN_GET_SELF_AS_OBJECT(branch_cable);
 		SN_DESCRIPTION("Send the incoming value to a single output");
 
-		branch():
+		branch_cable():
 		  branch_base<ParameterClass>(getStaticId()),
 		  polyphonic_base(getStaticId(), false)
 		{}
@@ -1750,17 +1750,17 @@ namespace control
 				setValue(v);
 		}
 
-		SN_FORWARD_PARAMETER_TO_MEMBER(branch);
+		SN_FORWARD_PARAMETER_TO_MEMBER(branch_cable);
 
 		void createParameters(ParameterDataList& data)
 		{
 			{
-				DEFINE_PARAMETERDATA(branch, Value);
+				DEFINE_PARAMETERDATA(branch_cable, Value);
 				p.setRange({ 0.0, 1.0 });
 				data.add(std::move(p));
 			}
 			{
-				DEFINE_PARAMETERDATA(branch, Index);
+				DEFINE_PARAMETERDATA(branch_cable, Index);
 				p.setRange({ 0.0, 7.0, 1.0 });
 				p.setDefaultValue(0.0);
 				data.add(std::move(p));

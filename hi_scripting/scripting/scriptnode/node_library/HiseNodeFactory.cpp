@@ -1353,7 +1353,7 @@ namespace control
 
         registerNoProcessNode<dynamic_pack_resizer, data::ui::sliderpack_editor>();
         
-		registerPolyNoProcessNode<branch<1, parameter::dynamic_list>, branch<NUM_POLYPHONIC_VOICES, parameter::dynamic_list>, branch_editor>()
+		registerPolyNoProcessNode<branch_cable<1, parameter::dynamic_list>, branch_cable<NUM_POLYPHONIC_VOICES, parameter::dynamic_list>, branch_editor>()
 
         ;
         
