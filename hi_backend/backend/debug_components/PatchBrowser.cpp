@@ -949,7 +949,7 @@ idUpdater(p->getMainController()->getRootDispatcher(), *this, BIND_MEMBER_FUNCTI
 
 	idLabel.setFont(GLOBAL_BOLD_FONT());
 	idLabel.setJustificationType(Justification::centredLeft);
-	idLabel.setText(getProcessor()->getId(), dontSendNotification);
+	idLabel.setText(ProcessorHelpers::getDisplayName(getProcessor()), dontSendNotification);
 	idLabel.addListener(this);
     
 	bypassed = getProcessor()->isBypassed();

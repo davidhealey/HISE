@@ -83,6 +83,9 @@ namespace hise { using namespace juce;
 	Modulation::Mode Modulation::getModeFromModProperties(const scriptnode::modulation::ParameterProperties& modProperties,
 		int parameterIndex)
 	{
+		if(parameterIndex == -1)
+			return Modulation::Mode::numModes;
+
 		using namespace scriptnode::modulation;
 
 		auto m = modProperties.getParameterMode(parameterIndex);

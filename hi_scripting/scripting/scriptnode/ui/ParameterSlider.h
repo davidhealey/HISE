@@ -429,7 +429,7 @@ private:
 			auto ctree = ptree.getChildWithName(PropertyIds::Connections);
 
 			modeListener.setCallback(ptree, 
-				{ PropertyIds::ExternalModulation },
+				{ PropertyIds::ExternalModulation, PropertyIds::ModColour },
 				valuetree::AsyncMode::Asynchronously,
 				[this](const Identifier&, const var&)
 			{
@@ -473,7 +473,7 @@ private:
 			externalModulationMode = pp.getParameterMode(parameterIndex);
 			icon = createPath(pp.getModulationModeNames()[(int)externalModulationMode]);
 
-			c = Colours::white.withAlpha(0.4f);
+			c = pp.getModulationColour(parameterIndex);// Colours::white.withAlpha(0.4f);
 
 			auto extraModFound = valuetree::Helpers::forEach(rootTree, [&](const ValueTree& v)
 			{

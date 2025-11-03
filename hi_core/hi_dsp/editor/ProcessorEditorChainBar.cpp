@@ -84,8 +84,8 @@ ProcessorEditorChainBar::ProcessorEditorChainBar (ProcessorEditor *p):
 			return;
 		}
 		
-		TextButton *t = new TextButton(childProcessor->getId());
-		t->setButtonText(childProcessor->getId());
+		TextButton *t = new TextButton(ProcessorHelpers::getDisplayName(childProcessor));
+
 		t->setConnectedEdges (Button::ConnectedOnLeft | Button::ConnectedOnRight);
 		t->addListener (this);
 		t->setColour (TextButton::buttonColourId, Colour (0x884b4b4b));
@@ -176,12 +176,16 @@ int ProcessorEditorChainBar::getActualHeight()
 #endif
 }
 
-String ProcessorEditorChainBar::getShortName(const String identifier) const
+String ProcessorEditorChainBar::getShortName(String identifier) const
 {
 	if(identifier == "GainModulation") return "Gain";
 	else if (identifier == "PitchModulation") return "Pitch";
 	else if (identifier == "Midi Processor") return "MIDI";
-	else return identifier;
+
+	if(identifier.endsWith("Mod"))
+		identifier = identifier.replace("Mod", "").trim();
+
+	return identifier;
 }
 
 
@@ -248,7 +252,8 @@ void ProcessorEditorChainBar::checkActiveChilds(int chainToCheck)
 
 	b->setColour(TextButton::ColourIds::buttonColourId, hasActiveChains ? Colour (0x55cccccc) : Colour (0x4c4b4b4b));
 
-	const String name = getShortName((getProcessor())->getChildProcessor(chainToCheck)->getId());
+	auto cp = getProcessor()->getChildProcessor(chainToCheck);
+	const String name = getShortName(ProcessorHelpers::getDisplayName(cp));
 
 	b->setButtonText(name);
 

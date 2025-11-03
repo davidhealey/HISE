@@ -1127,6 +1127,9 @@ public:
 
 	static int getParameterIndexFromProcessor(Processor* p, const Identifier& id);
 
+	static String getDisplayName(Processor* p);
+
+	static void changeDisplayName(Processor* p, const String& newText);
 };
 
 } // namespace hise

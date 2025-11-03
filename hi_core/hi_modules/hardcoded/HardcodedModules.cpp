@@ -119,15 +119,16 @@ void HardcodedMasterFX::connectionChanged()
 
 bool HardcodedMasterFX::setEffect(const String& newEffect, bool cond)
 {
-		
-
 	auto ok = HardcodedSwappableEffect::setEffect(newEffect, true);
 
 	if(ok)
 	{
 		extraMods.updateModulationProperties(modProperties, 
-		                                     BIND_MEMBER_FUNCTION_1(HardcodedSwappableEffect::getParameterInitData));
+			BIND_MEMBER_FUNCTION_1(HardcodedSwappableEffect::getParameterInitData));
 	}
+
+	extraMods.updateModulationChainIdAndColour(this, modProperties,
+		BIND_MEMBER_FUNCTION_1(HardcodedSwappableEffect::getOpaqueNodeParameterId));
 
 	return ok;
 }
@@ -538,7 +539,9 @@ bool HardcodedPolyphonicFX::isVoiceResetActive() const
 void HardcodedPolyphonicFX::onVoiceReset(bool allVoices, int voiceIndex)
 {
 	if (allVoices)
-		voiceStack.voiceNoteOns.clear();
+	{
+		getMainController()->allNotesOff();
+	}
 	else
 		voiceStack.reset(voiceIndex);
 }
@@ -551,8 +554,11 @@ bool HardcodedPolyphonicFX::setEffect(const String& effectName, bool cond)
 	{
 		jassert(opaqueNode != nullptr);
 		extraModSources.updateModulationProperties(modProperties, 
-		                                           BIND_MEMBER_FUNCTION_1(HardcodedSwappableEffect::getParameterInitData));
+			BIND_MEMBER_FUNCTION_1(HardcodedSwappableEffect::getParameterInitData));
 	}
+
+	extraModSources.updateModulationChainIdAndColour(this, modProperties,
+		BIND_MEMBER_FUNCTION_1(HardcodedSwappableEffect::getOpaqueNodeParameterId));
 
 	return ok;
 }
@@ -766,8 +772,7 @@ void HardcodedEnvelopeModulator::onVoiceReset(bool allVoices, int voiceIndex)
 {
 	if (allVoices)
 	{
-		for (int i = 0; i < polyManager.getVoiceAmount(); i++)
-			reset(i);
+		getMainController()->allNotesOff();
 	}
 	else
 		reset(voiceIndex);
@@ -1137,8 +1142,11 @@ bool HardcodedSynthesiser::setEffect(const String& effectName, bool cond)
 	{
 		jassert(opaqueNode != nullptr);
 		extraModSources.updateModulationProperties(modProperties, 
-		                                           BIND_MEMBER_FUNCTION_1(HardcodedSwappableEffect::getParameterInitData));
+			BIND_MEMBER_FUNCTION_1(HardcodedSwappableEffect::getParameterInitData));
 	}
+
+	extraModSources.updateModulationChainIdAndColour(this, modProperties,
+		BIND_MEMBER_FUNCTION_1(HardcodedSwappableEffect::getOpaqueNodeParameterId));
 
 	return ok;
 }
@@ -1147,8 +1155,7 @@ void HardcodedSynthesiser::onVoiceReset(bool allVoices, int voiceIndex)
 {
 	if (allVoices)
 	{
-		for(auto v: activeVoices)
-			v->resetVoice();
+		getMainController()->allNotesOff();
 	}
 	else
 	{

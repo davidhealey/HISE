@@ -734,6 +734,8 @@ private:
 
 		void init();
 
+		void refreshIdAndColours();
+
 		void refreshConnections();
 
 		void refreshProcessSpecs();
