@@ -1927,34 +1927,42 @@ public:
 template <int NV, typename IndexClass=runtime_target::indexers::fix_hash<1>> struct global_mod_gate : 
 	public mod_voice_checker_base<NV, IndexClass, runtime_target::RuntimeTarget::GlobalModulator>
 {
+    using Base = mod_voice_checker_base<NV, IndexClass, runtime_target::RuntimeTarget::GlobalModulator>;
+    
+    static constexpr int NumVoices = NV;
+    
 	SN_POLY_NODE_ID("global_mod_gate");
 	SN_DESCRIPTION("Sends a On-Off modulation signal while the global modulator is active.")
 	SN_GET_SELF_AS_OBJECT(global_mod_gate);
 
 	global_mod_gate() :
-		mod_voice_checker_base(getStaticId())
+		Base(getStaticId())
 	{}
 
 	void prepare(PrepareSpecs ps) override
 	{
-		mod_voice_checker_base::prepare(ps);
+		Base::prepare(ps);
 	}
 };
 
 template <int NV, typename IndexClass=modulation::config::ExtraIndexer> struct extra_mod_gate :
 	public mod_voice_checker_base<NV, IndexClass, runtime_target::RuntimeTarget::ExternalModulatorChain>
 {
+    static constexpr int NumVoices = NV;
+    
 	SN_POLY_NODE_ID("extra_mod_gate");
 	SN_DESCRIPTION("Sends a On-Off modulation signal while the extra modulator is active.");
 	SN_GET_SELF_AS_OBJECT(extra_mod_gate);
 
+    using Base = mod_voice_checker_base<NV, IndexClass, runtime_target::RuntimeTarget::ExternalModulatorChain>;
+    
 	extra_mod_gate() :
-		mod_voice_checker_base(getStaticId())
+      Base(getStaticId())
 	{}
 
 	void prepare(PrepareSpecs ps) override
 	{
-		mod_voice_checker_base::prepare(ps);
+		Base::prepare(ps);
 	}
 };
 
