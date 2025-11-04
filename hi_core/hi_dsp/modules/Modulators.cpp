@@ -1199,7 +1199,7 @@ void EnvelopeModulator::render(int voiceIndex, float* voiceBuffer, float* scratc
 		auto ownerSynth = static_cast<ModulatorSynth*>(getParentProcessor(true));
 		auto voice = static_cast<ModulatorSynthVoice*>(ownerSynth->getVoice(voiceIndex));
 
-		if(voice->isFirstRenderedVoice() || getVoiceAmount() == 1)
+		if(voice == nullptr || getVoiceAmount() == 1 || voice->isFirstRenderedVoice())
 		{
 			saveFirst = true;
 		}
