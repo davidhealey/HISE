@@ -48,6 +48,9 @@
 #endif
 
 #if !HISE_NO_GUI_TOOLS
+
+#include "hi_dev/TextDiff.cpp"
+
 #include "hi_dev/AdvancedCodeEditor.cpp"
 #include "hi_dev/ScriptWatchTable.cpp"
 #include "hi_dev/JavascriptTokeniserFunctions.h"
