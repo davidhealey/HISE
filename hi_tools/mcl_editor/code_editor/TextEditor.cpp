@@ -180,6 +180,7 @@ void TextEditor::setNewTokenCollectionForAllChildren(Component* any, const Ident
 void TextEditor::setReadOnly(bool shouldBeReadOnly)
 {
 	readOnly = shouldBeReadOnly;
+	caret.setVisible(!readOnly);
 }
 
 void TextEditor::setShowNavigation(bool shouldShowNavigation)
@@ -581,6 +582,22 @@ void TextEditor::setEnableAutocomplete(bool shouldBeEnabled)
 {
 	autocompleteEnabled = shouldBeEnabled;
 	currentAutoComplete = nullptr;
+}
+
+void TextEditor::setDiffLines(const std::map<int, LineDiff::ChangeType>& diffLineIndexes)
+{
+	difflines.clear();
+
+	for (const auto& a : diffLineIndexes)
+	{
+		auto t = a.second;
+
+		auto np = new DiffLine(CodeDocument::Position(getDocument(), a.first - 1, 0), t);
+		np->first.setPositionMaintained(true);
+		difflines.add(np);
+	}
+
+	repaint();
 }
 
 LanguageManager* TextEditor::getLanguageManager()
@@ -2155,6 +2172,40 @@ void mcl::TextEditor::paintOverChildren (Graphics& g)
         
         g.fillRect(titleArea.removeFromTop(10.0f));
     }
+
+	for (const auto df : difflines)
+	{
+		auto row = df->first.getLineNumber();
+
+		auto x = document.getBoundsOnRow(row, { 0, 1 }, GlyphArrangementArray::OutOfBoundsMode::ReturnLastCharacter).getRectangle(0);
+		x = x.withHeight(document.getRowHeight()).reduced(0.0f, 2.0f);
+		x = x.transformedBy(transform).withWidth(getWidth());
+
+		x = x.withX(0.0f);
+
+		Colour c;
+
+
+		switch (df->second)
+		{
+		case LineDiff::ChangeType::Added:
+			c = Colour(HISE_OK_COLOUR);
+
+			break;
+		case LineDiff::ChangeType::Modified:
+			c = Colour(HISE_WARNING_COLOUR);
+			break;
+		case LineDiff::ChangeType::Removed:
+			c = Colour(HISE_ERROR_COLOUR);
+			x = x.removeFromTop(5.0).translated(0.0f, -2.5f);
+			break;
+		}
+
+		g.setColour(c.withAlpha(0.05f));
+		g.fillRect(x);
+		g.setColour(c);
+		g.fillRect(x.removeFromLeft(3.0f));
+	}
 }
 
 void mcl::TextEditor::mouseDown (const MouseEvent& e)
@@ -2164,9 +2215,6 @@ void mcl::TextEditor::mouseDown (const MouseEvent& e)
 
     tokenSelection.clear();
     
-	if (readOnly)
-		return;
-
 	closeAutocomplete(true, {}, {});
 
 	for (auto ps : currentParameterSelection)
@@ -2185,7 +2233,7 @@ void mcl::TextEditor::mouseDown (const MouseEvent& e)
     {
         return;
     }
-    else if (e.mods.isRightButtonDown() || e.mods.isMiddleButtonDown())
+    else if (e.mods.isRightButtonDown() || e.mods.isMiddleButtonDown() && !readOnly)
     {
 		PopupLookAndFeel pplaf;
 		PopupMenu menu;
@@ -2379,14 +2427,12 @@ void mcl::TextEditor::mouseDown (const MouseEvent& e)
     selections.add (index);
     document.setSelections (selections, true);
 
-	grabKeyboardFocusAndActivateTokenBuilding();
+	if(!readOnly)
+		grabKeyboardFocusAndActivateTokenBuilding();
 }
 
 void mcl::TextEditor::mouseDrag (const MouseEvent& e)
 {
-	if (readOnly)
-		return;
-
 	if (e.mods.isX1ButtonDown())
 		return;
 
@@ -2433,9 +2479,6 @@ void mcl::TextEditor::mouseDrag (const MouseEvent& e)
 void mcl::TextEditor::mouseDoubleClick (const MouseEvent& e)
 {
 	if (e.mods.isX1ButtonDown() || e.mods.isX2ButtonDown())
-		return;
-
-	if (readOnly)
 		return;
 
     if (e.getNumberOfClicks() == 2)
@@ -2512,8 +2555,6 @@ void mcl::TextEditor::mouseDoubleClick (const MouseEvent& e)
 
 void mcl::TextEditor::mouseWheelMove(const MouseEvent& e, const MouseWheelDetails& d)
 {
-
-
 	if (e.mods.isCommandDown())
 	{
 		auto factor = 1.0f + (float)d.deltaY / 5.0f;
@@ -2634,6 +2675,16 @@ void TextEditor::setDeactivatedLines(const SparseSet<int>& lines)
 
 bool mcl::TextEditor::keyPressed (const KeyPress& key)
 {
+	if(readOnly)
+	{
+		// allowed actions: copy, select all.
+
+		if (key == KeyPress ('a', ModifierKeys::commandModifier, 0)) return expand (TextDocument::Target::document);
+		if (key == KeyPress('c', ModifierKeys::commandModifier, 0)) return copy();
+		return false;
+	}
+		
+
     autocompleteTimer.abortAutocomplete();
 
 	tooltipManager.clearDisplay();

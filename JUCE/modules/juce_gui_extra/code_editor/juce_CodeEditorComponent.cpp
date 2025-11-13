@@ -431,7 +431,7 @@ public:
         GlyphArrangement ga;
 
         for (int i = firstLineToDraw; i < lastLineToDraw; ++i)
-            ga.addFittedText (lineNumberFont, String (editor.firstLineOnScreen + i + 1),
+            ga.addFittedText (lineNumberFont, String (editor.firstLineOnScreen + i + 1 + editor.lineNumberOffset),
                               0, (float) (lineH * i), w, lineHeightFloat,
                               Justification::centredRight, 1, 0.2f);
 
