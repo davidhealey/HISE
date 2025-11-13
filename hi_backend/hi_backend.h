@@ -82,7 +82,8 @@ If true, then the patch browser will display global modulator connections.
 #include "backend/BackendRootWindow.h"
 #include "backend/CompileExporter.h"
 
-
+#include "backend/HiseAssetInstaller.h"
+#include "backend/HiseAssetManager.h"
 
 
 

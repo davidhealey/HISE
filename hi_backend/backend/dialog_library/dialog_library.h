@@ -551,7 +551,33 @@ struct ScriptModuleReplacer: public EncodedDialogBase
 	BackendRootWindow* bpe;
 };
 
+struct AssetInstallCreator: public EncodedDialogBase
+{
+	AssetInstallCreator(BackendRootWindow* bpe);
 
+	static var cleanupData(const var& obj, bool forLoading);
+
+	void bindCallbacks() override
+	{
+		MULTIPAGE_BIND_CPP(AssetInstallCreator, onPageLoad);
+		MULTIPAGE_BIND_CPP(AssetInstallCreator, onLoadSettings);
+		MULTIPAGE_BIND_CPP(AssetInstallCreator, onSubmit);
+		MULTIPAGE_BIND_CPP(AssetInstallCreator, onInfoType);
+		MULTIPAGE_BIND_CPP(AssetInstallCreator, onSimulateTestRun);
+
+	}
+
+	var onInfoType(const var::NativeFunctionArgs& args);
+	var onSubmit(const var::NativeFunctionArgs& args);
+	var onPageLoad(const var::NativeFunctionArgs& args);
+	var onLoadSettings(const var::NativeFunctionArgs& args);
+	var onSimulateTestRun(const var::NativeFunctionArgs& args);
+
+	File getPayloadFile() const
+	{
+		return getMainController()->getCurrentFileHandler().getRootFolder().getChildFile("package_install.json");
+	}
+};
 
 struct DebugSessionOptions: public EncodedDialogBase
 {

@@ -106,6 +106,7 @@ void BackendCommandTarget::getAllCommands(Array<CommandID>& commands)
 		MenuProjectLoad,
 		MenuFileBrowseExamples,
 		MenuFileCreateRecoveryXml,
+		MenuFileOpenAssetManager,
 		MenuProjectShowInFinder,
 		MenuFileShowHiseAppDataFolder,
 		MenuFileShowProjectAppDataFolder,
@@ -122,6 +123,7 @@ void BackendCommandTarget::getAllCommands(Array<CommandID>& commands)
 		MenuExportFileAsStandaloneApp,
 		MenuExportProjectAsExpansion,
 		MenuExportFileAsSnippet,
+		MenuExportCreateAssetPayload,
 		MenuExportSampleDataForInstaller,
 		MenuExportCompileFilesInPool,
 		MenuExportCompileNetworksAsDll,
@@ -377,8 +379,16 @@ void BackendCommandTarget::getCommandInfo(CommandID commandID, ApplicationComman
 		setCommandTarget(result, "Create recovery XML from Archive", true, false, 'x', false);
 		result.categoryName = "File";
 		break;
+	case MenuFileOpenAssetManager:
+		setCommandTarget(result, "Open HISE asset manager", true, false, 'x', false);
+		result.categoryName = "File";
+		break;
 	case MenuExportSampleDataForInstaller:
 		setCommandTarget(result, "Package sample monolith files", true, false, 'X', false);
+		result.categoryName = "Export";
+		break;
+	case MenuExportCreateAssetPayload:
+		setCommandTarget(result, "Create HISE store payload from current project", true, false, 'X', false);
 		result.categoryName = "Export";
 		break;
 	case MenuToolsWavetablesToMonolith:
@@ -692,6 +702,7 @@ bool BackendCommandTarget::perform(const InvocationInfo &info)
 	case MenuFileShowHiseAppDataFolder:		Actions::showAppDataFolder(bpe, false); return true;
 	case MenuFileBrowseExamples:		Actions::showExampleBrowser(bpe); return true;
 	case MenuFileCreateRecoveryXml:		Actions::createRecoveryXml(bpe); return true;
+	case MenuFileOpenAssetManager:		Actions::showHiseAssetManager(bpe); return true;
 	case MenuFileSettings:				Actions::showFileProjectSettings(bpe); return true;
 	case MenuExportCleanBuildDirectory:	Actions::cleanBuildDirectory(bpe); return true;
 	case MenuToolsCreateThirdPartyNode:	Actions::createThirdPartyNode(bpe); return true;
@@ -717,6 +728,7 @@ bool BackendCommandTarget::perform(const InvocationInfo &info)
 	case MenuExportRestoreToDefault:		Actions::restoreToDefault(bpe); return true;
 	case MenuExportCheckUnusedImages:	Actions::checkUnusedImages(bpe); return true;
 	case MenuExportSetupWizard:			Actions::setupExportWizard(bpe); return true;
+	case MenuExportCreateAssetPayload:	Actions::createAssetPayload(bpe); return true;
 	case MenuToolsShowDspNetworkDllInfo: Actions::showNetworkDllInfo(bpe); return true;
 	case MenuToolsForcePoolSearch:		Actions::toggleForcePoolSearch(bpe); updateCommands(); return true;
 	case MenuToolsConvertSampleMapToWavetableBanks:	Actions::convertSampleMapToWavetableBanks(bpe); return true;
@@ -951,6 +963,7 @@ PopupMenu BackendCommandTarget::getMenuForIndex(int topLevelMenuIndex, const Str
 
 			ADD_MENU_ITEM(MenuFileImportSnippet);
 			ADD_MENU_ITEM(MenuFileCreateRecoveryXml);
+			ADD_MENU_ITEM(MenuFileOpenAssetManager);
 
 	#if HISE_IOS
 	#else
@@ -1039,6 +1052,7 @@ PopupMenu BackendCommandTarget::getMenuForIndex(int topLevelMenuIndex, const Str
 
 			p.addSectionHeader("Export Tools");
 			
+			ADD_MENU_ITEM(MenuExportCreateAssetPayload);
 			ADD_MENU_ITEM(MenuExportSampleDataForInstaller);
 			
 			ADD_MENU_ITEM(MenuExportCompileFilesInPool);
@@ -3409,6 +3423,19 @@ void BackendCommandTarget::Actions::checkLatency(BackendRootWindow* bpe)
 	{
 		bpe->getBackendProcessor()->checkLatency();
 	}
+}
+
+void BackendCommandTarget::Actions::showHiseAssetManager(BackendRootWindow* bpe)
+{
+	auto b = new HiseAssetManager(bpe);
+	b->setModalBaseWindowComponent(bpe);
+	
+}
+
+void BackendCommandTarget::Actions::createAssetPayload(BackendRootWindow* bpe)
+{
+	auto b = new multipage::library::AssetInstallCreator(bpe);
+	bpe->setModalComponent(b);
 }
 
 #undef REPLACE_WILDCARD
