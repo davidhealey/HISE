@@ -152,6 +152,13 @@ public:
 
 		data.setProperty("ID", sampleMapId.toString(), nullptr);
     }
+
+	void setStoreComplexLayers(bool shouldStoreInSampleMap)
+	{
+		storeComplexLayers = shouldStoreInSampleMap;
+	}
+
+	bool storeComplexLayers = false;
     
 	void updateCrossfades(Identifier id, var newValue);
 	
@@ -290,20 +297,20 @@ private:
 
 		ValueTree d;
 
-		void valueTreePropertyChanged(ValueTree& /*treeWhosePropertyHasChanged*/,
+		void valueTreePropertyChanged(ValueTree& v,
 			const Identifier& /*property*/)
 		{
 			changed = true;
 		}
 
 		void valueTreeChildAdded(ValueTree& /*parentTree*/,
-			ValueTree& /*childWhichHasBeenAdded*/) override
+			ValueTree& v) override
 		{
 			changed = true;
 		}
 
 		void valueTreeChildRemoved(ValueTree& /*parentTree*/,
-			ValueTree& /*childWhichHasBeenRemoved*/,
+			ValueTree& v,
 			int /*indexFromWhichChildWasRemoved*/) override
 		{
 			changed = true;

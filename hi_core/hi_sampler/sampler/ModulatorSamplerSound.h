@@ -152,89 +152,19 @@ DECLARE_ID(NumQuarters);
 
 struct Helpers
 {
-	static Identifier getEnvelopeId(Modulation::Mode m)
-	{
-		switch (m)
-		{
-		case Modulation::Mode::GainMode:  return SampleIds::GainTable;
-		case Modulation::Mode::PitchMode: return SampleIds::PitchTable;
-		case Modulation::Mode::PanMode:   return SampleIds::LowPassTable;
-        default:                          return {};
-		}
-	}
-	static Modulation::Mode getEnvelopeType(const Identifier& id)
-	{
-		if (id == GainTable)
-			return Modulation::Mode::GainMode;
-		if (id == PitchTable)
-			return Modulation::Mode::PitchMode;
-		if (id == LowPassTable)
-			return Modulation::Mode::PanMode;
-        
-        return Modulation::Mode::numModes;
-	}
+	static Identifier getEnvelopeId(Modulation::Mode m);
 
-	static const Array<Identifier>& getMapIds()
-	{
-		static const Array<Identifier> ids = { Root , HiKey, LoKey,  HiVel,  LoVel,
-			RRGroup, LowerVelocityXFade,  UpperVelocityXFade };
+	static Modulation::Mode getEnvelopeType(const Identifier& id);
 
-		return ids;
-	}
+	static const Array<Identifier>& getMapIds();
 
-	static const Array<Identifier>& getAudioIds()
-	{
-		static const Array<Identifier> ids = { SampleStart,  SampleEnd,  SampleStartMod,  
-			LoopEnabled,  LoopStart,  LoopEnd,  LoopXFade, ReleaseStart };
+	static const Array<Identifier>& getAudioIds();
 
-		return ids;
-	}
+	static bool isMapProperty(const Identifier& id);
 
-	static bool isMapProperty(const Identifier& id)
-	{
-		return id == Root || id == HiKey || id == LoKey || id == HiVel || id == LoVel || id == RRGroup ||
-			   id == LowerVelocityXFade || id == UpperVelocityXFade;
-	}
+	static bool isAudioProperty(const Identifier& id);
 
-	static bool isAudioProperty(const Identifier& id)
-	{
-		return id == SampleStart || id == SampleEnd || id == SampleStartMod || id == LoopEnabled ||
-			id == LoopStart || id == LoopEnd || id == LoopXFade || id == ReleaseStart;
-	}
-
-	static Array<Identifier> getAllIds()
-	{
-		static const Array<Identifier> ids({
-			ID,
-			FileName,
-			Root,
-			HiKey,
-			LoKey,
-			LoVel,
-			HiVel,
-			RRGroup,
-			Volume,
-			Pan,
-			Normalized,
-			Pitch,
-			SampleStart,
-			SampleEnd,
-			SampleStartMod,
-			LoopStart,
-			LoopEnd,
-			LoopXFade,
-			LoopEnabled,
-			ReleaseStart,
-			LowerVelocityXFade,
-			UpperVelocityXFade,
-			SampleState,
-			Reversed,
-		    NumQuarters
-		});
-		
-		return ids;
-	}
-
+	static Array<Identifier> getAllIds();
 };
 
 const int numProperties = 25;

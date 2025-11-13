@@ -3815,6 +3815,7 @@ struct ScriptingApi::Sampler::Wrapper
 	API_METHOD_WRAPPER_2(Sampler, setAllowReleaseStart);
 	API_VOID_METHOD_WRAPPER_2(Sampler, setGUISelection);
 	API_VOID_METHOD_WRAPPER_1(Sampler, setSortByRRGroup);
+	API_METHOD_WRAPPER_0(Sampler, getComplexGroupManager);
 };
 
 
@@ -3877,6 +3878,7 @@ sampler(sampler_)
 	ADD_API_METHOD_0(getTimestretchOptions);
 	ADD_API_METHOD_0(getReleaseStartOptions);
 	ADD_API_METHOD_1(setReleaseStartOptions);
+	ADD_API_METHOD_0(getComplexGroupManager);
 
 	sampleIds = SampleIds::Helpers::getAllIds();
 
@@ -5207,6 +5209,15 @@ bool ScriptingApi::Sampler::clearSampleMap()
 
 	s->killAllVoicesAndCall(f);
 	return true;
+}
+
+juce::var ScriptingApi::Sampler::getComplexGroupManager()
+{
+	if(checkValidObject())
+		return new ScriptingObjects::ScriptingComplexGroupManager(getScriptProcessor(), dynamic_cast<ModulatorSampler*>(sampler.get()));
+
+	reportScriptError("No valid sampler");
+	RETURN_IF_NO_THROW(var());
 }
 
 juce::ValueTree ScriptingApi::Sampler::convertJSONListToValueTree(var jsonSampleList)

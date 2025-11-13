@@ -143,6 +143,90 @@ int ModulatorSamplerSound::getPropertyValueWithDefault(const Identifier& id) con
 	return (int)data.getProperty(id, 0);
 }
 
+Identifier SampleIds::Helpers::getEnvelopeId(Modulation::Mode m)
+{
+	switch (m)
+	{
+	case Modulation::Mode::GainMode:  return SampleIds::GainTable;
+	case Modulation::Mode::PitchMode: return SampleIds::PitchTable;
+	case Modulation::Mode::PanMode:   return SampleIds::LowPassTable;
+	default:                          return {};
+	}
+}
+
+Modulation::Mode SampleIds::Helpers::getEnvelopeType(const Identifier& id)
+{
+	if (id == GainTable)
+		return Modulation::Mode::GainMode;
+	if (id == PitchTable)
+		return Modulation::Mode::PitchMode;
+	if (id == LowPassTable)
+		return Modulation::Mode::PanMode;
+        
+	return Modulation::Mode::numModes;
+}
+
+const Array<Identifier>& SampleIds::Helpers::getMapIds()
+{
+	static const Array<Identifier> ids = { Root , HiKey, LoKey,  HiVel,  LoVel,
+		RRGroup, LowerVelocityXFade,  UpperVelocityXFade };
+
+	return ids;
+}
+
+const Array<Identifier>& SampleIds::Helpers::getAudioIds()
+{
+	static const Array<Identifier> ids = { SampleStart,  SampleEnd,  SampleStartMod,  
+		LoopEnabled,  LoopStart,  LoopEnd,  LoopXFade, ReleaseStart };
+
+	return ids;
+}
+
+bool SampleIds::Helpers::isMapProperty(const Identifier& id)
+{
+	return id == Root || id == HiKey || id == LoKey || id == HiVel || id == LoVel || id == RRGroup ||
+		id == LowerVelocityXFade || id == UpperVelocityXFade;
+}
+
+bool SampleIds::Helpers::isAudioProperty(const Identifier& id)
+{
+	return id == SampleStart || id == SampleEnd || id == SampleStartMod || id == LoopEnabled ||
+		id == LoopStart || id == LoopEnd || id == LoopXFade || id == ReleaseStart;
+}
+
+Array<Identifier> SampleIds::Helpers::getAllIds()
+{
+	static const Array<Identifier> ids({
+		ID,
+		FileName,
+		Root,
+		HiKey,
+		LoKey,
+		LoVel,
+		HiVel,
+		RRGroup,
+		Volume,
+		Pan,
+		Normalized,
+		Pitch,
+		SampleStart,
+		SampleEnd,
+		SampleStartMod,
+		LoopStart,
+		LoopEnd,
+		LoopXFade,
+		LoopEnabled,
+		ReleaseStart,
+		LowerVelocityXFade,
+		UpperVelocityXFade,
+		SampleState,
+		Reversed,
+		NumQuarters
+	});
+		
+	return ids;
+}
+
 ModulatorSamplerSound::ModulatorSamplerSound(SampleMap* parent, const ValueTree& d, HlacMonolithInfo* hmaf) :
 	ControlledObject(parent->getSampler()->getMainController()),
 	parentMap(parent),
@@ -885,7 +969,11 @@ void ModulatorSamplerSound::setSampleProperty(const Identifier& id, const var& n
 
 	if(id == SampleIds::RRGroup)
 	{
-		data.setProperty(id, (int64)newValue, useUndo ? undoManager : nullptr);
+		auto lv = (int64)data[id];
+		auto nv = (int64)newValue;
+
+		if(data.hasProperty(id) || lv != nv)
+			data.setProperty(id, (int64)newValue, useUndo ? undoManager : nullptr);
 	}
 	else
 	{
@@ -894,7 +982,11 @@ void ModulatorSamplerSound::setSampleProperty(const Identifier& id, const var& n
 		jassert(!newValue.isString());
 
 		auto v = getPropertyRange(id).clipValue((int)newValue);
-		data.setProperty(id, v, useUndo ? undoManager : nullptr);
+
+		auto lv = (int)data[id];
+
+		if(!data.hasProperty(id) || lv != v)
+			data.setProperty(id, v, useUndo ? undoManager : nullptr);
 	}
 }
 

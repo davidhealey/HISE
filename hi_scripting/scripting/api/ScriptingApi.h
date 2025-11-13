@@ -1065,6 +1065,9 @@ public:
 		/** Clears the current samplemap. */
 		bool clearSampleMap();
 
+		/** Returns an object that can be used to control the complex group management of this sampler. */
+		var getComplexGroupManager();
+
 		// ============================================================================================================
 
 		struct Wrapper;

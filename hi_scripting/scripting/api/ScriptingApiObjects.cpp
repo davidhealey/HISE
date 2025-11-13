@@ -10462,6 +10462,325 @@ ScriptingObjects::ScriptErrorHandler::~ScriptErrorHandler()
 
 
 
+struct ScriptingObjects::ScriptingComplexGroupManager::Wrapper
+{
+	API_VOID_METHOD_WRAPPER_3(ScriptingComplexGroupManager, setLayerProperty);
+	API_METHOD_WRAPPER_2(ScriptingComplexGroupManager, getLayerProperty);
+	API_METHOD_WRAPPER_1(ScriptingComplexGroupManager, getLayerIndex);
+	API_METHOD_WRAPPER_1(ScriptingComplexGroupManager, getNumGroupsInLayer);
+	API_VOID_METHOD_WRAPPER_2(ScriptingComplexGroupManager, setActiveGroup);
+	API_VOID_METHOD_WRAPPER_1(ScriptingComplexGroupManager, createNoteMap);
+	API_METHOD_WRAPPER_2(ScriptingComplexGroupManager, isNoteNumberMapped);
+	API_VOID_METHOD_WRAPPER_3(ScriptingComplexGroupManager, setEnableGainTracking);
+	API_METHOD_WRAPPER_3(ScriptingComplexGroupManager, getCurrentPeak);
+	API_VOID_METHOD_WRAPPER_2(ScriptingComplexGroupManager, registerGroupStartCallback);
+	API_VOID_METHOD_WRAPPER_3(ScriptingComplexGroupManager, delayGroupEvent);
+	API_VOID_METHOD_WRAPPER_4(ScriptingComplexGroupManager, fadeInGroupEvent);
+	API_VOID_METHOD_WRAPPER_3(ScriptingComplexGroupManager, setFixedGroupEventLength);
+	API_VOID_METHOD_WRAPPER_3(ScriptingComplexGroupManager, addGroupEventStartOffset);
+	API_VOID_METHOD_WRAPPER_3(ScriptingComplexGroupManager, fadeOutGroupEvent);
+	API_VOID_METHOD_WRAPPER_3(ScriptingComplexGroupManager, setGroupVolume);
+};
 
+ScriptingObjects::ScriptingComplexGroupManager::ScriptingComplexGroupManager(ProcessorWithScriptingContent* pwsc, ModulatorSampler* sampler_) :
+	ConstScriptingObject(pwsc, 1),
+	sampler(sampler_)
+{
+	addConstant("IgnoreFlag", (int)ComplexGroupManager::IgnoreFlag);
+
+	ADD_API_METHOD_2(getLayerProperty);
+	ADD_API_METHOD_3(setLayerProperty);
+	ADD_API_METHOD_1(getLayerIndex);
+	ADD_API_METHOD_1(getNumGroupsInLayer);
+	ADD_API_METHOD_2(setActiveGroup);
+	ADD_API_METHOD_1(createNoteMap);
+	ADD_API_METHOD_2(isNoteNumberMapped);
+	ADD_API_METHOD_3(setEnableGainTracking);
+	ADD_API_METHOD_3(getCurrentPeak);
+	ADD_API_METHOD_2(registerGroupStartCallback);
+
+	ADD_API_METHOD_3(delayGroupEvent);
+	ADD_API_METHOD_4(fadeInGroupEvent);
+	ADD_API_METHOD_3(setFixedGroupEventLength);
+	ADD_API_METHOD_3(addGroupEventStartOffset);
+	ADD_API_METHOD_3(fadeOutGroupEvent);
+	ADD_API_METHOD_3(setGroupVolume);
+}
+
+void ScriptingObjects::ScriptingComplexGroupManager::setLayerProperty(var layerIdOrIndex, String propertyId, var value)
+{
+	auto idx = getLayerIndexInternal(layerIdOrIndex);
+
+	if(idx != -1)
+	{
+		auto c = getManager()->getDataTree().getChild(idx);
+
+		if(!ComplexGroupManager::Helpers::isValidId(propertyId))
+			reportScriptError("Illegal property " + propertyId);
+
+		auto v = ComplexGroupManager::Helpers::convertFromJS(Identifier(propertyId), value);
+		c.setProperty(Identifier(propertyId), v, nullptr);
+	}
+}
+
+juce::var ScriptingObjects::ScriptingComplexGroupManager::getLayerProperty(var layerIdOrIndex, String propertyId)
+{
+	auto idx = getLayerIndexInternal(layerIdOrIndex);
+
+	if (idx != -1)
+	{
+		auto c = getManager()->getDataTree().getChild(idx);
+
+		if (!ComplexGroupManager::Helpers::isValidId(propertyId))
+			reportScriptError("Illegal property " + propertyId);
+
+		auto v = c[propertyId];
+		return ComplexGroupManager::Helpers::convertToJS(c, Identifier(propertyId), sampler.get());
+	}
+
+	RETURN_IF_NO_THROW(var());
+}
+
+int ScriptingObjects::ScriptingComplexGroupManager::getLayerIndex(String layerId) const
+{
+	return getLayerIndexInternal(layerId);
+}
+
+int ScriptingObjects::ScriptingComplexGroupManager::getNumGroupsInLayer(int layerIndex)
+{
+	if(auto gm = getManager())
+	{
+		return gm->getNumGroupsInLayer((uint8)layerIndex);
+	}
+
+	return 0;
+}
+
+void ScriptingObjects::ScriptingComplexGroupManager::setActiveGroup(int layerIndex, int groupIndex)
+{
+	if (groupIndex == ComplexGroupManager::IgnoreFlag)
+		reportScriptError("cannot use IgnoreFlag here");
+
+	auto gi = bumpGroupIndexFromZeroBased(groupIndex);
+
+	if(auto gm = getManager())
+	{
+		gm->applyFilter((uint8)layerIndex, gi, sendNotificationAsync);
+	}
+}
+
+void ScriptingObjects::ScriptingComplexGroupManager::createNoteMap(var layerIdOrIndex)
+{
+	auto index = getLayerIndexInternal(layerIdOrIndex);
+
+	if(index != -1)
+	{
+		ModulatorSampler::SoundIterator iter(sampler.get());
+
+		VoiceBitMap<128, uint32> nm;
+
+		while(auto s = iter.getNextSound())
+		{
+			auto lv = getManager()->getLayerValue(s->getBitmask(), (uint8)index);
+
+			if(lv != 0 && lv != ComplexGroupManager::IgnoreFlag)
+			{
+				auto nr = s->getNoteRange();
+				
+				for(int i = nr.getStart(); i < nr.getEnd(); i++)
+					nm.setBit(i, true);
+			}
+		}
+
+		noteMaps[(uint8)index] = nm;
+	}
+}
+
+bool ScriptingObjects::ScriptingComplexGroupManager::isNoteNumberMapped(int layerIndex, int noteNumber) const
+{
+	auto x = noteMaps.find((uint8)layerIndex);
+
+	if(x == noteMaps.end())
+		reportScriptError("You need to call createNoteMap() with the given layer index before using this method");
+
+	const auto& vm = x->second;
+
+	if(isPositiveAndBelow(noteNumber, 128))
+		return vm[noteNumber];
+
+	return false;	
+}
+
+void ScriptingObjects::ScriptingComplexGroupManager::setEnableGainTracking(var layerIdOrIndex, int groupIndex, bool shouldBeActive)
+{
+	if(groupIndex == ComplexGroupManager::IgnoreFlag)
+		reportScriptError("Can't use this function with the ignore flag");
+
+	auto gi = bumpGroupIndexFromZeroBased(groupIndex);
+
+	auto idx = getLayerIndexInternal(layerIdOrIndex);
+
+	if(idx != -1)
+	{
+		gainTrackingGroups.push_back({ idx, (uint8)(groupIndex+1) });
+
+		ModulatorSampler::SoundIterator iter(sampler.get());
+
+		auto gm = getManager();
+
+		while(auto s = iter.getNextSound())
+		{
+			auto lv = (int)gm->getLayerValue(s->getBitmask(), (uint8)idx);
+
+			if(lv == gi)
+			{
+				for (int i = 0; i < s->getNumMultiMicSamples(); i++)
+					s->getReferenceToSound(i)->setIsReleaseSample(shouldBeActive);
+			}
+		}
+	}
+}
+
+float ScriptingObjects::ScriptingComplexGroupManager::getCurrentPeak(int layerIndex, int groupIndex, int eventId)
+{
+	auto gm = getManager();
+
+	auto gi = bumpGroupIndexFromZeroBased(groupIndex);
+
+	bool found = false;
+
+	for(const auto& cv: gainTrackingGroups)
+		found |= cv.first == layerIndex && cv.second == gi;
+
+	if(!found)
+		reportScriptError("You must call setEnableGainTracking with a matching layer & group index");
+
+	for(auto av: sampler->activeVoices)
+	{
+		if(av->getCurrentHiseEvent().getEventId() == eventId)
+		{
+			auto sustainSample = static_cast<ModulatorSamplerSound*>(av->getCurrentlyPlayingSound().get());
+
+			auto bm = sustainSample->getBitmask();
+			auto lv = gm->getLayerValue(bm, (uint8)layerIndex);
+
+			if(lv == gi)
+				return (double)sustainSample->getReferenceToSound()->getCurrentReleasePeak();
+		}
+	}
+
+	return 0.0;
+}
+
+void ScriptingObjects::ScriptingComplexGroupManager::registerGroupStartCallback(var layerIdOrIndex, var callback)
+{
+	auto idx = getLayerIndexInternal(layerIdOrIndex);
+
+	if(auto obj = dynamic_cast<WeakCallbackHolder::CallableObject*>(callback.getObject()))
+	{
+		if(!obj->isRealtimeSafe())
+		{
+			reportScriptError("This function only works with callable objects that are realtime safe");
+		}
+
+		auto nc = new GroupCallback(*this, callback);
+		getManager()->setVoiceStartCallback(idx, nc);
+		groupCallbacks.add(nc);
+	}
+}
+
+void ScriptingObjects::ScriptingComplexGroupManager::delayGroupEvent(int layerIndex, int groupIndex, double delayInSamples)
+{
+	if(auto gm = getManager())
+	{
+		auto gi = bumpGroupIndexFromZeroBased(groupIndex);
+		gm->delayEventByFilter((uint8)layerIndex, gi, delayInSamples);
+	}
+}
+
+void ScriptingObjects::ScriptingComplexGroupManager::fadeInGroupEvent(int layerIndex, int groupIndex, double fadeInTimeMs, double targetGainDb)
+{
+	if(auto gm = getManager())
+	{
+		auto gi = bumpGroupIndexFromZeroBased(groupIndex);
+		auto targetGain = Decibels::decibelsToGain(targetGainDb);
+
+		gm->fadeInEventByFilter((uint8)layerIndex, gi, fadeInTimeMs * 0.001, targetGain);
+	}
+}
+
+void ScriptingObjects::ScriptingComplexGroupManager::setFixedGroupEventLength(int layerIndex, int groupIndex, double numSamplesToPlayBeforeFadeout)
+{
+	if(auto gm = getManager())
+	{
+		auto gi = bumpGroupIndexFromZeroBased(groupIndex);
+		gm->setFixedLengthByFilter(layerIndex, gi, numSamplesToPlayBeforeFadeout);
+	}
+}
+
+void ScriptingObjects::ScriptingComplexGroupManager::addGroupEventStartOffset(int layerIndex, int groupIndex, double startOffset)
+{
+	if(auto gm = getManager())
+	{
+		auto gi = bumpGroupIndexFromZeroBased(groupIndex);
+		gm->addStartOffsetByFilter(layerIndex, gi, startOffset);
+	}
+}
+
+void ScriptingObjects::ScriptingComplexGroupManager::fadeOutGroupEvent(int layerIndex, int groupIndex, double fadeOutTimeMs)
+{
+	if(auto gm = getManager())
+	{
+		auto gi = bumpGroupIndexFromZeroBased(groupIndex);
+
+		for(auto av: sampler->activeVoices)
+		{
+			auto s = static_cast<ModulatorSamplerSound*>(av->getCurrentlyPlayingSound().get());
+
+			auto bm = s->getBitmask();
+			auto lv = gm->getLayerValue(bm, (uint8)layerIndex);
+
+			if(lv == gi)
+				av->setVolumeFade(fadeOutTimeMs * 0.001, 0.0);
+		}
+	}
+}
+
+void ScriptingObjects::ScriptingComplexGroupManager::setGroupVolume(int layerIndex, int groupIndex, double gainFactor)
+{
+	if(auto gm = getManager())
+	{
+		auto gi = bumpGroupIndexFromZeroBased(groupIndex);
+		gm->setGroupVolume((uint8)layerIndex, gi, gainFactor);
+	}
+}
+
+hise::ComplexGroupManager* ScriptingObjects::ScriptingComplexGroupManager::getManager() const
+{
+	if (sampler == nullptr)
+		return nullptr;
+
+	return sampler->getComplexGroupManager();
+}
+
+int ScriptingObjects::ScriptingComplexGroupManager::getLayerIndexInternal(const var& layerIdOrString) const
+{
+	if (auto gm = getManager())
+	{
+		if (layerIdOrString.isString())
+			return gm->getLayerIndex(layerIdOrString.toString());
+
+		if (layerIdOrString.isInt() || layerIdOrString.isInt64())
+		{
+			auto idx = (int)layerIdOrString;
+
+			if (isPositiveAndBelow(idx, gm->getNumLayers()))
+				return idx;
+		}
+	}
+
+	reportScriptError("Illegal layer index " + layerIdOrString.toString());
+	RETURN_IF_NO_THROW(-1);
+}
 
 } // namespace hise

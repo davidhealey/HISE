@@ -624,15 +624,23 @@ public:
     
     void resized() override;
 
-	void updateInterface() override
-	{
-		if(!isPreloading)
-			refreshList();
-	}
+	void updateInterface() override;
 
 	void refreshPropertyForRow(int index, const Identifier& id);
 
+	void cellClicked(int rowNumber, int columnId, const MouseEvent&mouseEvent) override;
+
 private:
+
+	void onComplexIdUpdate(const ValueTree&, const Identifier&)
+	{
+		rebuildColumns();
+	}
+
+	Path ignorePath;
+	Path warningPath;
+
+	valuetree::RecursivePropertyListener complexIdListener;
 
 	SynthSoundWithBitmask::ValueWithFilter currentDisplayFilter;
 	BigInteger activeNotes;
@@ -647,7 +655,8 @@ private:
 	
 	bool internalSelection;
 
-    TableListBox table;     
+    TableListBox table;
+	ScrollbarFader sf;
     Font font;
 
 	SampleSelection sortedSoundList;

@@ -730,7 +730,7 @@ void StreamingSamplerSound::setReleaseStart(int newReleaseStart)
 
 void StreamingSamplerSound::rebuildReleaseStartBuffer()
 {
-	if(releaseStart > 0)
+	if(releaseStart > 0 || isReleaseSample)
 	{
 		if(releaseStartOptions == nullptr)
 			releaseStartOptions = new StreamingHelpers::ReleaseStartOptions();

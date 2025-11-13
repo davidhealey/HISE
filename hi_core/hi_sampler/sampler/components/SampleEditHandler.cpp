@@ -41,6 +41,7 @@ SampleEditHandler::SampleEditHandler(ModulatorSampler* sampler_) :
 	noteBroadcaster.setEnableQueue(true, NUM_POLYPHONIC_VOICES);
 	groupBroadcaster.enableLockFreeUpdate(sampler->getMainController()->getGlobalUIUpdater());
 	complexGroupBroadcaster.enableLockFreeUpdate(sampler->getMainController()->getGlobalUIUpdater());
+	complexGroupEventBroadcaster.setEnableQueue(true);
 	noteBroadcaster.addListener(*this, handleMidiSelection);
 
 	selectionBroadcaster.addListener(*this, updateMainSound);

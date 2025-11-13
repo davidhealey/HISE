@@ -304,6 +304,7 @@ public:
 			double startOffset = 0.0;
 			double fadeInTimeSeconds = 0.0;
 			double fixedLengthSamples = 0.0;
+			double targetVolume = 1.0;
 
 			operator bool() const noexcept { return !m.isEmpty() && sound != nullptr; }
 
@@ -317,7 +318,7 @@ public:
 
 		virtual SpecialStart getSpecialSoundStart(const HiseEvent& m, ModulatorSynthSound* sound) const { return {}; }
 
-		virtual void preHiseEventCallback(const HiseEvent& e) {};
+		virtual void preHiseEventCallback(HiseEvent& e) {};
 
 		/** Override this method and return the amount of samples that the given sampler sound started by the given event should be predelayed. */
 		virtual int getPredelayForVoice(const ModulatorSynthVoice* voice) const { return 0; }

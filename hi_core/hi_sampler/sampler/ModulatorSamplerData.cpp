@@ -154,6 +154,14 @@ void SampleMap::clear(NotificationType n)
 	{
 		sampler->sendOtherChangeMessage(dispatch::library::ProcessorChangeEvent::Custom);
 		getCurrentSamplePool()->sendChangeMessage();
+
+		if (storeComplexLayers)
+		{
+			if(auto g = sampler->getComplexGroupManager())
+			{
+				g->getDataTree().removeAllChildren(nullptr);
+			}
+		}
 	}
 
 	if (n != dontSendNotification)
@@ -528,7 +536,7 @@ void SampleMap::valueTreeChildAdded(ValueTree& parentTree, ValueTree& childWhich
 {
 	static const Identifier sa("sample");
 
-	if (parentTree.getType() == sa)
+	if (parentTree.getType() == sa || childWhichHasBeenAdded.getType() == groupIds::Layers)
 	{
 		return;
 	}
@@ -605,6 +613,9 @@ void SampleMap::sendSampleAddedMessage()
 
 void SampleMap::valueTreeChildRemoved(ValueTree& /*parentTree*/, ValueTree& child, int /*indexFromWhichChildWasRemoved*/)
 {
+	if(child.getType() == groupIds::Layers)
+		return;
+
 	auto f = [child](Processor* s)
 	{
 		auto sampler = static_cast<ModulatorSampler*>(s);
@@ -756,7 +767,28 @@ bool SampleMap::save(const File& fileToUse)
 
 	}
 
-	auto xml = data.createXml();
+	std::unique_ptr<XmlElement> xml;
+
+	auto c = data.getChildWithName(groupIds::Layers);
+
+	if(c.isValid())
+		data.removeChild(c, nullptr);
+
+	if (storeComplexLayers)
+	{
+		auto copy = data.createCopy();
+
+		copy.addChild(sampler->getComplexGroupManager()->getDataTree().createCopy(), -1, nullptr);
+		xml = copy.createXml();
+	}
+	else
+	{
+		
+
+		xml = data.createXml();
+
+	}
+
 	f.replaceWithText(xml->createDocument(""));
 
 	PoolReference ref(getSampler()->getMainController(), f.getFullPathName(), FileHandlerBase::SubDirectories::SampleMaps);
@@ -822,6 +854,29 @@ void SampleMap::setNewValueTree(const ValueTree& v)
 
 	sampler->deleteAllSounds();
 	notifier.sendSampleAmountChangeMessage(sendNotificationAsync);
+
+	auto layers = v.getChildWithName(groupIds::Layers);
+
+	if(storeComplexLayers || layers.isValid());
+	{
+		storeComplexLayers = true;
+		
+		sampler->setUseComplexGroupManager(layers.isValid());
+
+		if(auto g = sampler->getComplexGroupManager())
+		{
+			ComplexGroupManager::ScopedUpdateDelayer sds(*g);
+
+			g->getDataTree().removeAllChildren(nullptr);
+
+			for(auto c: layers)
+				g->getDataTree().addChild(c.createCopy(), -1, nullptr);
+
+#if USE_BACKEND
+			sampler->getSampleEditHandler()->complexGroupBroadcaster.sendMessage(sendNotificationAsync, {});
+#endif
+		}
+	}
 
 	data = v;
 	data.addListener(this);

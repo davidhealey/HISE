@@ -99,6 +99,8 @@ void ModulatorSamplerVoice::startNote(int midiNoteNumber,
     
 	velocityXFadeValue = currentlyPlayingSamplerSound->getGainValueForVelocityXFade((int)(velocity * 127.0f));
 	
+	firstInVoice = true;
+
 	if (playFromPurger != nullptr && 
 		currentlyPlayingSamplerSound->hasUnpurgedButUnloadedSounds())
 	{
@@ -416,7 +418,9 @@ float ModulatorSamplerVoice::getConstantGroupModulationValue() const noexcept
 const float * ModulatorSamplerVoice::getGroupModulationValues(int startSample, int numSamples)
 {
 	auto m = currentlyPlayingSamplerSound->getBitmask();
-	return sampler->calculateGroupModulationValuesForVoice(getCurrentHiseEvent(), voiceIndex, startSample, numSamples, m);
+	auto fv = firstInVoice;
+	firstInVoice = false;
+	return sampler->calculateGroupModulationValuesForVoice(getCurrentHiseEvent(), voiceIndex, startSample, numSamples, m, fv);
 }
 
 
@@ -427,6 +431,7 @@ void ModulatorSamplerVoice::resetVoice()
 		sampler->resetNoteDisplay(this->getCurrentlyPlayingNote() + getTransposeAmount());
 	}
 	
+	firstInVoice = true;
 	wrappedVoice.resetVoice();
 
 	ModulatorSynthVoice::resetVoice();
