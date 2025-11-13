@@ -1167,7 +1167,12 @@ void SampleEditHandler::SampleEditingActions::automapUsingMetadata(ModulatorSamp
 				if (id == SampleIds::FileName)
 					continue;
 
-				sounds[i]->setSampleProperty(id, metadata[id], true);
+				auto v = (int)metadata[id];
+
+				if(id == SampleIds::LoopEnd)
+					v++;
+
+				sounds[i]->setSampleProperty(id, v, true);
 			}
 		}
 	}
