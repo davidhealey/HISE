@@ -2596,6 +2596,7 @@ Array<Identifier> ScriptingObjects::ScriptedLookAndFeel::getAllFunctionNames()
 		"drawTableBackground",
 		"drawTablePath",
 		"drawTablePoint",
+		"drawTableMidPoint",
 		"drawTableRuler",
 		"drawScrollbar",
 		"drawMidiDropper",
@@ -3199,6 +3200,17 @@ void ScriptingObjects::ScriptedLookAndFeel::CSSLaf::drawFilterDragHandle(Graphic
 	FilterDragOverlay::LookAndFeelMethods::drawFilterDragHandle(g, o, index, handleBounds, d);
 }
 
+void ScriptingObjects::ScriptedLookAndFeel::CSSLaf::setCSSColourOrBlack(simple_css::StyleSheet::Ptr ss, const Identifier& id, Component& c, int colourId)
+{
+	if (c.isColourSpecified(colourId))
+	{
+		auto hex = "0x" + c.findColour(colourId).toDisplayString(true);
+		ss->setPropertyVariable(id, hex);
+	}
+	else
+		ss->setPropertyVariable(id, "transparent");
+}
+
 Rectangle<float> ScriptingObjects::ScriptedLookAndFeel::CSSLaf::getTextLabelPopupArea(simple_css::StyleSheet::Ptr ss,
                                                                                       Rectangle<float> fullBounds, const String& text)
 {
@@ -3371,8 +3383,14 @@ void ScriptingObjects::ScriptedLookAndFeel::CSSLaf::drawTablePath(Graphics& g, T
 		auto currentState = Renderer::getPseudoClassFromComponent(&te);
 		root.stateWatcher.checkChanges(&te, ss, currentState);
 
-		setPathAsVariable(ss, p, "tablePath");
-		r.drawBackground(g, te.getLocalBounds().toFloat(), ss);
+		auto tb = te.getLocalBounds().toFloat();
+
+		auto copy = p;
+		copy.startNewSubPath(tb.getTopLeft());
+		copy.startNewSubPath(tb.getBottomRight());
+
+		setPathAsVariable(ss, copy, "tablePath");
+		r.drawBackground(g, tb, ss);
 
 		return;
 	}
@@ -3397,6 +3415,10 @@ void ScriptingObjects::ScriptedLookAndFeel::CSSLaf::drawTablePoint(Graphics& g, 
 		if(isDragged)
 			state |= (int)PseudoClassType::Active;
 
+		setCSSColourOrBlack(ss, "bgColour", te, TableEditor::ColourIds::bgColour);
+		setCSSColourOrBlack(ss, "itemColour", te, TableEditor::ColourIds::fillColour);
+		setCSSColourOrBlack(ss, "itemColour2", te, TableEditor::ColourIds::lineColour);
+		setCSSColourOrBlack(ss, "textColour", te, TableEditor::ColourIds::rulerColour);
 
 		r.setPseudoClassState(state, true);
 					
@@ -3405,6 +3427,36 @@ void ScriptingObjects::ScriptedLookAndFeel::CSSLaf::drawTablePoint(Graphics& g, 
 	}
 
 	TableEditor::LookAndFeelMethods::drawTablePoint(g, te, tablePoint, isEdge, isHover, isDragged);
+}
+
+void ScriptingObjects::ScriptedLookAndFeel::CSSLaf::drawTableMidPoint(Graphics& g, TableEditor& te, Rectangle<float> midPoint, bool isHover, bool isDragged)
+{
+	using namespace simple_css;
+
+	if (auto ss = root.css.getWithAllStates(&te, Selector(SelectorType::Class, ".tablemidpoint")))
+	{
+		Renderer r(&te, root.stateWatcher);
+
+		int state = 0;
+
+		if (isHover)
+			state |= (int)PseudoClassType::Hover;
+
+		if (isDragged)
+			state |= (int)PseudoClassType::Active;
+
+		setCSSColourOrBlack(ss, "bgColour", te, TableEditor::ColourIds::bgColour);
+		setCSSColourOrBlack(ss, "itemColour", te, TableEditor::ColourIds::fillColour);
+		setCSSColourOrBlack(ss, "itemColour2", te, TableEditor::ColourIds::lineColour);
+		setCSSColourOrBlack(ss, "textColour", te, TableEditor::ColourIds::rulerColour);
+
+		r.setPseudoClassState(state, true);
+
+		r.drawBackground(g, midPoint, ss);
+		return;
+	}
+
+	TableEditor::LookAndFeelMethods::drawTableMidPoint(g, te, midPoint, isHover, isDragged);
 }
 
 bool ScriptingObjects::ScriptedLookAndFeel::CSSLaf::drawPlayhead(Graphics& g, Component& c, double position,
@@ -3417,6 +3469,12 @@ bool ScriptingObjects::ScriptedLookAndFeel::CSSLaf::drawPlayhead(Graphics& g, Co
 		Renderer r(&c, root.stateWatcher);
 
 		ss->setPropertyVariable("playhead", String(position, 4));
+
+		setCSSColourOrBlack(ss, "bgColour", c, TableEditor::ColourIds::bgColour);
+		setCSSColourOrBlack(ss, "itemColour", c, TableEditor::ColourIds::fillColour);
+		setCSSColourOrBlack(ss, "itemColour2", c, TableEditor::ColourIds::lineColour);
+		setCSSColourOrBlack(ss, "textColour", c, TableEditor::ColourIds::rulerColour);
+
 		r.drawBackground(g, area, ss);
 
 		return true;
@@ -4829,6 +4887,32 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawTablePoint(Graphics& g_, Ta
 	}
 
 	TableEditor::LookAndFeelMethods::drawTablePoint(g_, te, tablePoint, isEdge, isHover, isDragged);
+}
+
+void ScriptingObjects::ScriptedLookAndFeel::Laf::drawTableMidPoint(Graphics& g_, TableEditor& te, Rectangle<float> midPoint, bool isHover, bool isDragged)
+{
+	if (functionDefined("drawTableMidPoint"))
+	{
+		auto obj = new DynamicObject();
+
+		writeId(obj, &te);
+		obj->setProperty("midPoint", ApiHelpers::getVarRectangle(useRectangleClass, midPoint));
+		obj->setProperty("hover", isHover);
+		obj->setProperty("clicked", isDragged);
+		obj->setProperty("enabled", te.isEnabled());
+
+		setColourOrBlack(obj, "bgColour", te, TableEditor::ColourIds::bgColour);
+		setColourOrBlack(obj, "itemColour", te, TableEditor::ColourIds::fillColour);
+		setColourOrBlack(obj, "itemColour2", te, TableEditor::ColourIds::lineColour);
+		setColourOrBlack(obj, "textColour", te, TableEditor::ColourIds::rulerColour);
+
+		addParentFloatingTile(te, obj);
+
+		if (get()->callWithGraphics(g_, "drawTableMidPoint", var(obj), &te))
+			return;
+	}
+
+	TableEditor::LookAndFeelMethods::drawTableMidPoint(g_, te, midPoint, isHover, isDragged);
 }
 
 void ScriptingObjects::ScriptedLookAndFeel::Laf::drawTableRuler(Graphics& g_, TableEditor& te, Rectangle<float> area, float lineThickness, double rulerPosition)
