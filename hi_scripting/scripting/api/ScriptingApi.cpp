@@ -5851,7 +5851,7 @@ void ScriptingApi::Synth::setMacroControl(int macroIndex, float newValue)
 {
 	if(ModulatorSynthChain *chain = dynamic_cast<ModulatorSynthChain*>(owner))
 	{
-		if(macroIndex > 0 && macroIndex < 8)
+		if(macroIndex > 0 && macroIndex < 9)
 		{
 			chain->setMacroControl(macroIndex - 1, newValue, sendNotification);
 		}
