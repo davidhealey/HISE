@@ -1300,6 +1300,25 @@ int ProcessorHelpers::getParameterIndexFromProcessor(Processor* p, const Identif
 	return -1;
 }
 
+String ProcessorHelpers::getDisplayName(Processor* p)
+{
+	if (auto mc = dynamic_cast<ModulatorChain*>(p))
+		return mc->getDisplayName();
+
+	return p->getId();
+}
+
+void ProcessorHelpers::changeDisplayName(Processor* p, const String& newText)
+{
+	if (auto mc = dynamic_cast<ModulatorChain*>(p))
+		return mc->setDisplayName(newText);
+
+	if (p->getId() != newText)
+	{
+		p->setId(newText, sendNotification);
+	}
+}
+
 void AudioSampleProcessor::setLoadedFile(const String &fileName, bool loadThisFile/*=false*/, bool forceReload/*=false*/)
 {
 	getBuffer().fromBase64String(fileName);

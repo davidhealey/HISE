@@ -1496,6 +1496,13 @@ void DspNetwork::Holder::unload()
     manager.setCurrentWorkbench(nullptr, false);
     networks.clear();
     setActiveNetwork(nullptr);
+
+	if(auto extra = dynamic_cast<JavascriptProcessor*>(this)->getExtraModulationHandler())
+	{
+		extra->updateModulationProperties({}, {});
+		extra->updateModulationChainIdAndColour(dynamic_cast<Processor*>(this), {}, [](int) { return String(); });
+	}
+
 #endif
 }
 
@@ -2382,13 +2389,21 @@ void DspNetwork::DynamicParameterModulationProperties::refreshConnections()
 
 void DspNetwork::DynamicParameterModulationProperties::init()
 {
-	propertyListener.setCallback(parent.data, { PropertyIds::ExternalModulation }, valuetree::AsyncMode::Synchronously, 
+	propertyListener.setCallback(parent.data, { PropertyIds::ExternalModulation, PropertyIds::ID, PropertyIds::ModColour }, valuetree::AsyncMode::Synchronously, 
 	[this](const ValueTree& v, const Identifier& id)
 	{
-		refreshConnections();
+		if(id == PropertyIds::ModColour || id == PropertyIds::ID)
+		{
+			refreshIdAndColours();
+		}
+		else
+		{
+			refreshConnections();
+		}
 	});
 
 	refreshConnections();
+	refreshIdAndColours();
 
 	blockSizeListener.setCallback(parent.data, { PropertyIds::ModulationBlockSize}, valuetree::AsyncMode::Synchronously, 
 		[this](const Identifier&, const var& newValue)
@@ -2410,6 +2425,21 @@ void DspNetwork::DynamicParameterModulationProperties::init()
 			refreshConnections();
 		}
 	});
+}
+
+void DspNetwork::DynamicParameterModulationProperties::refreshIdAndColours()
+{
+	auto parentProcessor = dynamic_cast<Processor*>(parent.getScriptProcessor());
+
+	if (auto extra = parent.getParentHolder()->getExtraModulationHandler())
+	{
+		auto pTree = parent.getRootNode()->getParameterTree();
+
+		extra->updateModulationChainIdAndColour(parentProcessor, data, [pTree](int pIndex)
+		{
+			return pTree.getChild(pIndex)[PropertyIds::ID].toString();
+		});
+	}
 }
 
 DspNetwork::AnonymousNodeCloner::AnonymousNodeCloner(DspNetwork& p, NodeBase::Holder* other):

@@ -1913,11 +1913,13 @@ int ValueTreeIterator::getFixRuntimeHash(const ValueTree &nodeTree)
         auto c = getNodeProperty(nodeTree, PropertyIds::Connection).toString();
         return c.hashCode();
     }
-	if(path == NamespacedIdentifier::fromString("core::global_mod"))
+	if(path == NamespacedIdentifier::fromString("core::global_mod") ||
+	   path == NamespacedIdentifier::fromString("envelope::global_mod_gate"))
 	{
 		return 1;
 	}
-	if(path == NamespacedIdentifier::fromString("core::extra_mod"))
+	if(path == NamespacedIdentifier::fromString("core::extra_mod") ||
+	   path == NamespacedIdentifier::fromString("envelope::extra_mod_gate"))
 	{
 		return modulation::config::CustomOffset;
 #if 0
@@ -2592,13 +2594,25 @@ void ValueTreeBuilder::RootContainerBuilder::addParameterConnections()
 
 		for (auto containerWithParameter : pList)
 		{
+			String prefix = containerWithParameter->nodeTree[PropertyIds::ID].toString();
+
+			prefix = snex::cppgen::StringHelpers::makeValidCppName(prefix);
+
+			if(containerWithParameter == root)
+				prefix = "";
+
 			for (auto p : containerWithParameter->nodeTree.getChildWithName(PropertyIds::Parameters))
 			{
 				String def;
 
 				PooledStackVariable::Ptr c = getChildNodeAsStackVariable(containerWithParameter->nodeTree);
 				
-				auto pId = p[PropertyIds::ID].toString();
+				String pId;
+
+				if(prefix.isNotEmpty())
+					pId << prefix << "_";
+
+				pId << StringHelpers::makeValidCppName(p[PropertyIds::ID].toString());
 				pId << "_p";
 
 				StackVariable pv(parent, pId, TypeInfo(Types::ID::Dynamic, false, true));

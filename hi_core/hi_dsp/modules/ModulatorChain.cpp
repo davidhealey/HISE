@@ -905,7 +905,8 @@ void ModulatorChain::ModChainWithBuffer::calculateMonophonicModulationValues(int
 		}
 		else
 		{
-			jassert(c->getMode() == Mode::CombinedMode);
+			jassert(c->getMode() == Mode::CombinedMode ||
+					c->getMode() == Mode::GainMode);
 			FloatVectorOperations::fill(modBuffer.monoValues + startSample_cr, 1.0f, numSamples_cr);
 		}
 	}
@@ -1013,6 +1014,22 @@ void ModulatorChain::ModChainWithBuffer::calculateModulationValuesForCurrentVoic
 				if (useMonophonicData)
 				{
 					applyMonophonicValuesToVoiceInternal(voiceData + startSample_cr, monoData + startSample_cr, numSamples_cr);
+				}
+			}
+
+			if(c->checkRelease)
+			{
+				auto active = c->isPlaying(voiceIndex);
+
+				if(!active)
+				{
+					auto eventId = c->eventIdToVoiceIndexMap[voiceIndex];
+
+					if (isPositiveAndBelow(eventId, NUM_POLYPHONIC_VOICES))
+					{
+						c->eventIdToVoiceIndexMap[voiceIndex] = -1;
+						c->runtimeTargetSource.resetFlag[eventId] = scriptnode::modulation::ClearState::Reset;
+					}
 				}
 			}
 
@@ -1213,6 +1230,9 @@ ModulatorChain::ModulatorChain(MainController *mc, const String &uid, int numVoi
 	isVoiceStartChain(false),
 	runtimeTargetSource(*this)
 {
+	for(auto& s: eventIdToVoiceIndexMap)
+		s = -1;
+
 	activeVoices.setRange(0, numVoices, false);
 
 	setMode(m, dontSendNotification);
@@ -1328,6 +1348,14 @@ void ModulatorChain::reset(int voiceIndex)
 void ModulatorChain::handleHiseEvent(const HiseEvent &m)
 {
 	jassert(shouldBeProcessedAtAll());
+
+	
+
+	if(m.isNoteOn())
+	{
+		jassert(unsavedEventId == -1);
+		unsavedEventId = m.getEventId() % NUM_POLYPHONIC_VOICES;
+	}
 
 	EnvelopeModulator::handleHiseEvent(m);
 
@@ -1450,6 +1478,11 @@ float ModulatorChain::startVoice(int voiceIndex)
 {
 	jassert(hasVoiceModulators());
 
+	eventIdToVoiceIndexMap[voiceIndex] = unsavedEventId;
+	runtimeTargetSource.resetFlag[unsavedEventId] = scriptnode::modulation::ClearState::Playing;
+
+	unsavedEventId = -1;
+	
 	activeVoices.setBit(voiceIndex, true);
 
 	polyManager.setLastStartedVoice(voiceIndex);
@@ -2112,7 +2145,103 @@ bool ModulatorChain::ExtraModulatorRuntimeTargetSource::addConnection(bool shoul
 	return true;
 }
 
+void ModulatorChain::ExtraModulatorRuntimeTargetSource::updateModulationChainIdAndColour(Processor* parentProcessor, const scriptnode::modulation::ParameterProperties& data, const std::function<String(int)>& parameterIdFunction)
+{
+#if USE_BACKEND
+	auto numExtra = getNumExtraMods();
+	auto numUsed = data.getNumUsed(numExtra);
 
+	for (int i = 0; i < numExtra; i++)
+	{
+		auto pIndex = data.getParameterIndex(i);
+		auto modChain = getModulatorChain(i);
+
+		String newId;
+		Colour newColour;
+
+		if (pIndex != -1 && i < numUsed)
+		{
+			newId = parameterIdFunction(pIndex);
+
+			if(!newId.isEmpty())
+				newId += " Mod";
+			else
+				newId = "Extra " + String(i+1);
+
+			newColour = data.getModulationColour(pIndex);
+		}
+		else
+		{
+			newId = "Extra " + String(i + 1);
+			newColour = HiseModulationColours().getColour(HiseModulationColours::ColourId::ExtraMod);
+		}
+
+		auto prevId = modChain->getId();
+
+		if (prevId != newId)
+			modChain->setDisplayName(newId);
+
+		if(modChain->getColour() != newColour)
+			modChain->setColour(newColour);
+	}
+#endif
+}
+
+void ModulatorChain::ExtraModulatorRuntimeTargetSource::updateModulationProperties(const ParameterProperties& pp, const ParameterInitData::QueryFunction& pf)
+{
+	int idx = 0;
+
+	for (auto& mb : extraMods)
+	{
+		auto isUsed = pp.isUsed(idx);
+
+		auto parent = mb->getChain()->getParentProcessor();
+		auto parameterIndex = pp.getParameterIndex(idx);
+		auto mode = Modulation::getModeFromModProperties(pp, parameterIndex);
+
+		if (auto ms = dynamic_cast<ModulatorSynth*>(parent))
+		{
+			mb->getChain()->checkRelease = (mode == Modulation::Mode::GainMode);
+		}
+
+		mb->getChain()->setBypassed(!isUsed);
+		mb->setForceProcessing(isUsed);
+
+		if (isUsed)
+		{
+			if (parameterIndex != -1)
+			{
+				auto zp = mode == Modulation::Mode::PanMode ? 0.5f : 0.0f;
+				mb->getChain()->setZeroPosition(zp);
+
+				// For some reason we'll force the CombinedMode....
+				auto modeToUse = mb->getChain()->checkRelease ? Modulation::Mode::GainMode :
+																Modulation::Mode::CombinedMode;
+
+				
+
+				mb->getChain()->setMode(modeToUse, sendNotificationAsync);
+
+				auto pd = pf(parameterIndex);
+
+				auto initialValue = pd.ir.convertTo0to1(pd.initValue, false);
+				mb->getChain()->setInitialValue(initialValue);
+
+				mb->getChain()->setTableValueConverter([pd](float v)
+					{
+						v = pd.ir.convertFrom0to1(v, false);
+
+						if (pd.vtc.active)
+							return pd.vtc.getTextForValue(v);
+						else
+							return String(v);
+					});
+			}
+		}
+
+		idx++;
+	}
+}
 
 
 bool ModulatorChain::onIntensityDrag(bool isMouseDown, float delta)

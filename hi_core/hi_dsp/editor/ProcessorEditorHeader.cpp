@@ -187,7 +187,7 @@ ProcessorEditorHeader::ProcessorEditorHeader(ProcessorEditor *p) :
 
 	balanceSlider->addListener(this);
 
-	this->idLabel->setText(getProcessor()->getId(), dontSendNotification);
+	this->idLabel->setText(ProcessorHelpers::getDisplayName(getProcessor()), dontSendNotification);
 	this->typeLabel->setText(getProcessor()->getName(), dontSendNotification);
 	
 	
@@ -998,7 +998,8 @@ void ProcessorEditorHeader::createProcessorFromPopup(Processor *insertBeforeSibl
 
 void ProcessorEditorHeader::updateIdAndColour(dispatch::library::Processor* p)
 {
-	NEW_PROCESSOR_DISPATCH(idLabel->setText(p->getOwner<hise::Processor>().getId(), dontSendNotification));
+	auto n = ProcessorHelpers::getDisplayName(&p->getOwner<hise::Processor>());
+	NEW_PROCESSOR_DISPATCH(idLabel->setText(n, dontSendNotification));
 	repaint();
 	// skip colour, it's a icon colour (ideally the modulator synth should be a listener that updates the icon colour itself)
 };
@@ -1165,8 +1166,8 @@ void ProcessorEditorHeader::labelTextChanged(Label *l)
 {
 	if (l == idLabel)
 	{
-		getEditor()->getProcessor()->setId(l->getText(), sendNotification);
-        
+		ProcessorHelpers::changeDisplayName(getEditor()->getProcessor(), l->getText());
+		
 		auto root = GET_BACKEND_ROOT_WINDOW(this);
 
 		if(auto keyboard = root->getKeyboard())

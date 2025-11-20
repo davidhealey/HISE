@@ -448,6 +448,17 @@ public:
 
 	ModulatorChain::ExtraModulatorRuntimeTargetSource::ParameterInitData getParameterInitData(int pIndex);
 
+	String getOpaqueNodeParameterId(int opaqueNodeParameterIndex) const
+	{
+		if (opaqueNode != nullptr)
+		{
+			if (auto p = opaqueNode->getParameter(opaqueNodeParameterIndex))
+				return p->info.getId();
+		}
+
+		return "";
+	}
+
 protected:
 
 	ModulatorChain* getPitchChain()

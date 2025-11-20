@@ -49,6 +49,14 @@ enum class SourceType
 	Envelope
 };
 
+enum class ClearState : uint8
+{
+	Playing,
+	PendingReset1, // Leave one buffer through to avoid glitches at fast release times
+	PendingReset2, // Leave another buffer through to avoid glitches at fast release times
+	Reset
+};
+
 // These are the available modulation modes that can be used to define how a given parameter
 // should be modulated
 enum class ParameterMode: uint8
@@ -101,6 +109,8 @@ struct EventData
 	const float*  signal        = nullptr;              // a pointer to the start of the modulation signal
 	float         constantValue = 0.0f;			        // the constant modulation value if no dynamic signal is available
 	const int*    thisBlockSize = nullptr;		        // the (current) size of the modulation signal array
+	ClearState*	  resetFlag     = nullptr;				// the voice state for envelope modulation signals
+
 };
 
 
@@ -134,6 +144,15 @@ struct SignalSource
 	int numSamples_cr = 0;
 };
 
+struct ConnectionInfo
+{
+	using List = std::vector<ConnectionInfo>;
+
+	int connectedParameterIndex;
+	ParameterMode modulationMode;
+	HiseModulationColours::ColourId modColour = HiseModulationColours::ColourId::ExtraMod;
+};
+
 /** This pod structure will hold the information and properties on how the parameters of the Opaque node
  *  are exposed to the modulation system in HISE.
  */
@@ -161,18 +180,9 @@ struct ParameterProperties
 	// Clears the state of this object. */
 	void reset();
 
-	using ConnectionList = std::vector<std::pair<int, ParameterMode>>;
+	using ConnectionList = ConnectionInfo::List;
 
-	void fromConnectionList(const ConnectionList& c)
-	{
-		reset();
-
-		for(const auto& con: c)
-		{
-			setModulationMode(con.first, con.second);
-			setConnected(con.first, false);
-		}
-	}
+	void fromConnectionList(const ConnectionList& c);
 
 	void fromValueTree(const ValueTree& v);
 	bool isUsed(int modulationIndex) const;
@@ -204,13 +214,11 @@ struct ParameterProperties
 
 	bool isAnyConnected() const noexcept { return anyConnected; }
 
-	ParameterMode getParameterMode(int parameterIndex) const noexcept
-	{
-		if(isPositiveAndBelow(parameterIndex, NumMaxModulationSources))
-			return modulationModes[parameterIndex];
+	ParameterMode getParameterMode(int parameterIndex) const noexcept;
 
-		return ParameterMode::Disabled;
-	}
+	void setColour(int parameterIndex, HiseModulationColours::ColourId newColour);
+
+	Colour getModulationColour(int parameterIndex) const;
 
 private:
 
@@ -218,7 +226,6 @@ private:
 
 	/** Sets the connected flag for the given parameterIndex. */
 	void setConnected(int parameterIndex, bool isConnected);
-
 
 	void setModulationMode(int parameterIndex, ParameterMode m);
 
@@ -228,6 +235,7 @@ private:
 	std::array<char, NumMaxModulationSources> parameterToModulation;    
 	std::array<char, NumMaxModulationSources> modulationToParameter;
 	std::array<char, NumMaxModulationSources> modulationConnectState;
+	std::array<char, NumMaxModulationSources> modulationColours;
 
 	bool anyConnected = false;
 	char numUsedModulationSlots = 0;

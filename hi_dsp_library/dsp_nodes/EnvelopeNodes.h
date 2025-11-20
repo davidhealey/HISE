@@ -1809,6 +1809,162 @@ template <int NV> struct silent_killer: public voice_manager_base,
 	double threshold;
 };
 
+template <int NV, typename IndexClass, runtime_target::RuntimeTarget TargetType> struct mod_voice_checker_base:
+	public polyphonic_base,
+	public runtime_target::indexable_target<IndexClass, TargetType, modulation::SignalSource>
+{
+	static constexpr int NumVoices = NV;
+
+	mod_voice_checker_base(const Identifier& id) :
+		polyphonic_base(id, false)
+	{
+		cppgen::CustomNodeProperties::addNodeIdManually(id, PropertyIds::IsFixRuntimeTarget);
+	};
+
+	~mod_voice_checker_base()
+	{
+		this->disconnect();
+	}
+
+	SN_EMPTY_RESET;
+	SN_EMPTY_INITIALISE;
+
+	void onConnectionChange() override {}
+
+	void onValue(modulation::SignalSource currentModSignals) override
+	{
+		signal = currentModSignals;
+	}
+
+	void handleHiseEvent(const HiseEvent& e)
+	{
+		if(e.isNoteOn())
+		{
+			auto& s = state.get();
+			s.eventData = signal.getEventData(index, e, NumVoices > 1);
+			s.voiceIndex = e.getEventId() % NumVoices;
+			mv.setModValue(1.0);
+		}
+	}
+
+	template <typename PD> void process(PD&)
+	{
+		check();
+	}
+
+	bool handleModulation(double& v)
+	{
+		return mv.getChangedValue(v);
+	}
+
+	template <typename FD> void processFrame(FD& )
+	{
+		check();
+	}
+
+	void check()
+	{
+		if(!state.get().isPlaying())
+			mv.setModValue(0.0);
+	}
+
+	virtual void prepare(PrepareSpecs ps)
+	{
+		state.prepare(ps);
+	}
+
+	void setIndex(double newValue)
+	{
+		this->index = jlimit(-1, modulation::NumMaxModulationSources, roundToInt(newValue));
+	}
+
+	template <int P> void setParameter(double v)
+	{
+		if (P == 0)
+			setIndex(v);
+	}
+
+	SN_FORWARD_PARAMETER_TO_MEMBER(mod_voice_checker_base);
+
+	void createParameters(ParameterDataList& data)
+	{
+		{
+			parameter::data d("Index", { 0.0, 16.0, 1.0 });
+			d.callback = parameter::inner<mod_voice_checker_base, 0>(*this);
+			d.setDefaultValue(1.0f);
+			data.add(d);
+		}
+	}
+
+	struct Data
+	{
+		bool isPlaying() const
+		{
+			if(eventData.resetFlag != nullptr)
+			{
+				return eventData.resetFlag[voiceIndex] != modulation::ClearState::Reset;
+			}
+
+			return true;
+		}
+
+		modulation::EventData eventData;
+		int voiceIndex;
+	};
+
+	ModValue mv;
+
+	PolyData<Data, NumVoices> state;
+
+	modulation::SignalSource signal;
+	int index;
+
+public:
+
+	SN_VOICE_SETTER(mod_voice_checker_base, state);
+};
+
+template <int NV, typename IndexClass=runtime_target::indexers::fix_hash<1>> struct global_mod_gate : 
+	public mod_voice_checker_base<NV, IndexClass, runtime_target::RuntimeTarget::GlobalModulator>
+{
+    using Base = mod_voice_checker_base<NV, IndexClass, runtime_target::RuntimeTarget::GlobalModulator>;
+    
+    static constexpr int NumVoices = NV;
+    
+	SN_POLY_NODE_ID("global_mod_gate");
+	SN_DESCRIPTION("Sends a On-Off modulation signal while the global modulator is active.")
+	SN_GET_SELF_AS_OBJECT(global_mod_gate);
+
+	global_mod_gate() :
+		Base(getStaticId())
+	{}
+
+	void prepare(PrepareSpecs ps) override
+	{
+		Base::prepare(ps);
+	}
+};
+
+template <int NV, typename IndexClass=modulation::config::ExtraIndexer> struct extra_mod_gate :
+	public mod_voice_checker_base<NV, IndexClass, runtime_target::RuntimeTarget::ExternalModulatorChain>
+{
+    static constexpr int NumVoices = NV;
+    
+	SN_POLY_NODE_ID("extra_mod_gate");
+	SN_DESCRIPTION("Sends a On-Off modulation signal while the extra modulator is active.");
+	SN_GET_SELF_AS_OBJECT(extra_mod_gate);
+
+    using Base = mod_voice_checker_base<NV, IndexClass, runtime_target::RuntimeTarget::ExternalModulatorChain>;
+    
+	extra_mod_gate() :
+      Base(getStaticId())
+	{}
+
+	void prepare(PrepareSpecs ps) override
+	{
+		Base::prepare(ps);
+	}
+};
 
 struct voice_manager: public voice_manager_base
 {

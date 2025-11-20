@@ -86,9 +86,24 @@ template <class... Elements> struct advanced_tuple
 		return std::get<Index>(elements);
 	}
 
+	// call a lambda with a runtime index.
+	template <typename F> bool callLambdaWithRuntimeIndex(int index, F&& f)
+	{
+		return callWithRuntimeIndexImpl(index, std::forward<F>(f), getIndexSequence());
+	}
+
 protected:
 
 	std::tuple<Elements...> elements;
+
+private:
+	template <typename F, std::size_t... Is>
+	bool callWithRuntimeIndexImpl(int index, F&& f, std::index_sequence<Is...>)
+	{
+		return ((index == static_cast<int>(Is) ?
+			(std::forward<F>(f)(std::get<Is>(elements)), true)
+			: false) || ...);
+	}
 };
 
 /**@internal. */
@@ -642,6 +657,15 @@ template <class... Parameters> struct list: public advanced_tuple<Parameters...>
 		if constexpr (P <= getNumParameters())
 		{
 			getParameter<P>().call(v);
+		}
+	}
+
+	void callWithRuntimeIndex(int index, double v)
+	{
+		if (isPositiveAndBelow(index, getNumParameters()))
+		{
+			auto ok = this->callLambdaWithRuntimeIndex(index, [v](auto& x) { x.call(v); });
+			jassert(ok);
 		}
 	}
 

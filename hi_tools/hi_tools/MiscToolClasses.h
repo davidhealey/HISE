@@ -3053,4 +3053,133 @@ struct ValueToTextConverter
 	String suffix;
 };
 
+struct HiseModulationColours
+{
+	enum class ColourId : char
+	{
+		ExtraMod = 0,
+		Midi,
+		Gain,
+		Pitch,
+		FX,
+		Wavetable,
+		Samplestart,
+		GroupFade,
+		GroupDetune,
+		GroupSpread,
+		numColourIds
+	};
+
+	static ColourId getFromVar(const var& value)
+	{
+		if(value.isVoid() || value.isUndefined())
+			return ColourId::ExtraMod;
+
+		auto idx = (int)value;
+
+		if(isPositiveAndBelow(idx, (int)ColourId::numColourIds))
+			return (ColourId)(int)idx;
+
+		return ColourId::ExtraMod;
+	}
+
+	struct Selector: public PropertyComponent
+	{
+		Selector(ValueTree& d, const Identifier& id, UndoManager* um):
+		  PropertyComponent(id.toString()),
+		  value(d.getPropertyAsValue(id, um, false))
+		{}
+
+		void mouseMove(const MouseEvent& e) override
+		{
+			auto bounds = getLookAndFeel().getPropertyComponentContentPosition (*this);
+
+			auto normX = (float)(e.getPosition().getX() - bounds.getX()) / (float)bounds.getWidth();
+
+			if(normX < 0.0f || normX > 1.0f)
+			{
+				hoverId = ColourId::numColourIds;
+			}
+			else
+			{
+				auto x = normX * (float)((int)ColourId::numColourIds);
+				hoverId = (ColourId)(int)(x);
+			}
+			
+			repaint();
+		}
+
+		void mouseDown(const MouseEvent& e) override
+		{
+			value.setValue((int)hoverId);
+			repaint();
+		}
+
+		void refresh() override { repaint(); }
+
+		void paint(Graphics& g) override
+		{
+			PropertyComponent::paint(g);
+
+			HiseModulationColours data;
+
+			auto numColours = (int)ColourId::numColourIds;
+			auto b = getLookAndFeel().getPropertyComponentContentPosition (*this).toFloat();
+			auto w = b.getWidth() / (float)numColours;
+
+			auto current = getFromVar(value.getValue());
+
+			for(int i = 0; i < numColours; i++)
+			{
+				auto a = b.removeFromLeft(w).reduced(1);
+				auto active = (ColourId)i == current;
+
+				float alpha = 0.5f;
+
+				if((ColourId)i == hoverId)
+					alpha += 0.2f;
+
+				if(active)
+					alpha += 0.3f;
+
+				g.setColour(data.getColour((ColourId)i).withAlpha(alpha));
+
+				g.fillRoundedRectangle(a, 3.0f);
+
+				if(active)
+				{
+					g.setColour(Colours::white.withAlpha(0.7f));
+					g.drawRoundedRectangle(a.reduced(1.0f), 3.0f, 2.0f);
+				}
+			}
+		}
+		
+		Value value;
+		ColourId hoverId = ColourId::numColourIds;
+	};
+
+	HiseModulationColours()
+	{
+		data[(int)ColourId::ExtraMod] = Colours::grey;
+		data[(int)ColourId::Midi] = Colour(0xFFC65638);
+		data[(int)ColourId::Gain] = Colour(0xffbe952c);
+		data[(int)ColourId::Pitch] = Colour(0xff7559a4);
+		data[(int)ColourId::FX] = Colour(0xff3a6666);
+		data[(int)ColourId::Wavetable] = Colour(0xFF4D54B3);
+		data[(int)ColourId::Samplestart] = Colour(0xFF5E8127);
+		data[(int)ColourId::GroupFade] = Colour(0xFF884B29);
+		data[(int)ColourId::GroupDetune] = Colour(0xFF880022);
+		data[(int)ColourId::GroupSpread] = Colour(0xFF22AA88);
+	}
+
+	Colour getColour(ColourId id) const
+	{
+		return data[(int)id];
+	}
+
+private:
+
+	std::array<Colour, (int)ColourId::numColourIds> data;
+};
+
 }

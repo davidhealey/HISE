@@ -157,6 +157,7 @@ DECLARE_ID(SuspendOnSilence);
 DECLARE_ID(TextToValueConverter);
 DECLARE_ID(ModulationBlockSize);
 DECLARE_ID(ExternalModulation);
+DECLARE_ID(ModColour);
 
 struct Helpers
 {
@@ -212,6 +213,7 @@ struct Helpers
 		returnIfDefault(TextToValueConverter, "Undefined");
 		returnIfDefault(ModulationBlockSize, 0);
 		returnIfDefault(ExternalModulation, "Disabled");
+		returnIfDefault(ModColour, (int)HiseModulationColours::ColourId::ExtraMod);
 
         return {};
 	}

@@ -612,6 +612,8 @@ bool HardcodedSwappableEffect::setEffect(const String& factoryId, bool /*unused*
 	ScopedPointer<OpaqueNode> newNode;
 	listeners.clear();
 
+	modProperties.reset();
+
 	if (idx != -1)
 	{
 		currentEffect = factoryId;

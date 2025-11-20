@@ -50,7 +50,7 @@ public:
 	int getActualHeight();;
 
 	/** This shortens the ModulatorChain ids ("GainModulation" -> "Gain" etc.) for nicer display. */
-	String getShortName(const String identifier) const;
+	String getShortName(String identifier) const;
 
     /** Checks if the hidden Chain contains childs and paints it red if yes. */
 	void checkActiveChilds(int chainToCheck);

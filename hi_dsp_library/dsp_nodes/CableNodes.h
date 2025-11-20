@@ -1663,7 +1663,119 @@ namespace control
 		JUCE_DECLARE_WEAK_REFERENCEABLE(clone_forward);
 	};
 
-	
+	template <typename ParameterClass> 
+	struct branch_base: public mothernode,
+						public pimpl::parameter_node_base<ParameterClass>,
+						public pimpl::no_processing
+	{
+		branch_base(const Identifier& id):
+		  mothernode(),
+		  pimpl::parameter_node_base<ParameterClass>(id),
+		  no_processing()
+		{}
+		virtual ~branch_base() = default;
+
+		virtual int getUIIndex() const = 0;
+
+		JUCE_DECLARE_WEAK_REFERENCEABLE(branch_base);
+	};
+
+	template <int NV, typename ParameterClass> 
+	struct branch_cable : public branch_base<ParameterClass>,
+					public polyphonic_base
+	{
+		SN_NODE_ID("branch_cable");
+		SN_GET_SELF_AS_OBJECT(branch_cable);
+		SN_DESCRIPTION("Send the incoming value to a single output");
+
+		branch_cable():
+		  branch_base<ParameterClass>(getStaticId()),
+		  polyphonic_base(getStaticId(), false)
+		{}
+
+		enum class Parameters
+		{
+			Index,
+			Value
+		};
+
+		void initialise(NodeBase* n) override
+		{
+			this->getParameter().initialise(n);
+		}
+
+		int getUIIndex() const override { return state.getFirst().index; }
+
+		void setValue(double newValue)
+		{
+			int index;
+
+			for(auto& s: state)
+			{
+				index = s.index;
+				s.value = newValue;
+			}
+
+			if(isPositiveAndBelow(index, this->getParameter().getNumParameters()))
+			{
+				this->getParameter().callWithRuntimeIndex(index, newValue);
+			}
+		}
+
+		void setIndex(double newIndex)
+		{
+			auto ni = roundToInt(newIndex);
+
+			double valueToSend;
+
+			for(auto& s: state)
+			{
+				s.index = ni;
+				valueToSend = s.value;
+			}
+
+			setValue(valueToSend);
+		}
+
+		void prepare(PrepareSpecs ps)
+		{
+			state.prepare(ps);
+		}
+
+		template <int P> void setParameter(double v)
+		{
+			if constexpr (P == 0)
+				setIndex(v);
+			if constexpr (P == 1)
+				setValue(v);
+		}
+
+		SN_FORWARD_PARAMETER_TO_MEMBER(branch_cable);
+
+		void createParameters(ParameterDataList& data)
+		{
+			{
+				DEFINE_PARAMETERDATA(branch_cable, Value);
+				p.setRange({ 0.0, 1.0 });
+				data.add(std::move(p));
+			}
+			{
+				DEFINE_PARAMETERDATA(branch_cable, Index);
+				p.setRange({ 0.0, 7.0, 1.0 });
+				p.setDefaultValue(0.0);
+				data.add(std::move(p));
+			}
+		}
+
+		struct Data
+		{
+			double value = 0.0;
+			int index = 0;
+		};
+
+		PolyData<Data, NV> state;
+	};
+
 	template <typename ParameterClass, typename FaderClass> struct xfader: public pimpl::parameter_node_base<ParameterClass>,
 																		   public control::pimpl::templated_mode,
 																		   public pimpl::no_processing

@@ -175,6 +175,7 @@ public:
 		RuntimeData d;
 		d.type = scriptnode::modulation::SourceType::TimeVariant;
 		d.thisBlockSize = &typed->thisBlockSize;
+		d.resetFlag = nullptr;
 		d.signal = (float*)typed->getReadPointer(0);
 		d.constantValue = 0.0f;
 		return d;
@@ -227,13 +228,7 @@ class EnvelopeData : public GlobalModulatorDataBase<EnvelopeModulator>
 {
 public:
 
-	enum class ClearState: uint8
-	{
-		Playing,
-		PendingReset1, // Leave one buffer through to avoid glitches at fast release times
-		PendingReset2, // Leave another buffer through to avoid glitches at fast release times
-		Reset
-	};
+	using ClearState = scriptnode::modulation::ClearState;
 
 	EnvelopeData(Modulator* mod, int samplesPerBlock) :
 		GlobalModulatorDataBase(mod),
@@ -329,11 +324,13 @@ public:
 			auto rt = typed->getRuntimePointer(e, 0);
 			d.thisBlockSize = rt.first;
 			d.signal = rt.second;
+			d.resetFlag = typed->isClear;
 		}
 		else
 		{
 			d.signal = typed->getMonoReadBuffer();
 			d.thisBlockSize = &typed->monoBlockSize;
+			d.resetFlag = nullptr;
 		}
 	
 		return d;

@@ -1353,6 +1353,8 @@ namespace control
 
         registerNoProcessNode<dynamic_pack_resizer, data::ui::sliderpack_editor>();
         
+		registerPolyNoProcessNode<branch_cable<1, parameter::dynamic_list>, branch_cable<NUM_POLYPHONIC_VOICES, parameter::dynamic_list>, branch_editor>()
+
         ;
         
         registerNoProcessNode<wrap::data<pack2_writer, data::dynamic::sliderpack>, data::ui::sliderpack_editor_without_mod>();
@@ -1916,6 +1918,12 @@ Factory::Factory(DspNetwork* network) :
 						false>();
 
 	registerNode<voice_manager, voice_manager_base::editor>();
+
+	using gi = runtime_target::indexers::fix_hash<1>;
+	using ei = modulation::config::ExtraIndexer;
+	using ph = parameter::dynamic_base_holder;
+	registerPolyModNode<global_mod_gate<1, gi>, global_mod_gate<NUM_POLYPHONIC_VOICES, gi>, ModulationSourceBaseComponent>();
+	registerPolyModNode<extra_mod_gate<1, ei>, extra_mod_gate<NUM_POLYPHONIC_VOICES, ei>, ModulationSourceBaseComponent>();
 
 	registerPolyNode<silent_killer<1>, silent_killer<NUM_POLYPHONIC_VOICES>, voice_manager_base::editor>();
 }

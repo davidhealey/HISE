@@ -816,6 +816,7 @@ void PropertyHelpers::addMissingIdsForEditor(ValueTree& data, UndoManager* undoM
 		if(isRootParameter)
 		{
 			ids.add(PropertyIds::ExternalModulation);
+			ids.add(PropertyIds::ModColour);
 			ids.add(PropertyIds::Page);
 			ids.add(PropertyIds::SubGroup);
 		}
@@ -839,6 +840,9 @@ juce::PropertyComponent* PropertyHelpers::createPropertyComponent(ProcessorWithS
 
 	if (id == NodeColour)
 		return new ColourSelectorPropertyComponent(d, id, um);
+
+	if(id == ModColour)
+		return new HiseModulationColours::Selector(d, id, um);
 
 	if (id == MinValue || id == MaxValue || id == Value || id == DefaultValue)
 		return new SliderWithLimit(d, id, um);

@@ -4296,7 +4296,7 @@ void ScriptBroadcaster::attachToComplexData(String dataTypeAndEvent, var moduleI
             type = t;
     });
     
-    bool isDisplay = eventType == "Display";
+    bool isDisplay = eventType == "Display" || eventType == "DisplayIndex";
     
     if (defaultValues.size() != 3)
     {
