@@ -935,6 +935,8 @@ void DspNetworkCompileExporter::createProjucerFile()
 	REPLACE_WILDCARD_WITH_STRING("%HISE_INCLUDE_FAUST%", includeFaust ? "enabled" : "disabled");
 
     
+	ProjectTemplateHelpers::handleAdditionalStaticLibs(this, templateProject, "");
+
     String headerPath;
     
     if (includeFaust)

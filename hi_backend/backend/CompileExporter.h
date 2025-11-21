@@ -325,6 +325,7 @@ protected:
 		static void handleCompanyInfo(CompileExporter* exporter, String& templateProject);
 		static void handleVisualStudioVersion(const HiseSettings::Data& dataObject, String& templateProject);
 		static void handleAdditionalSourceCode(CompileExporter* exporter, String &templateProject, BuildOption option);
+		static void handleAdditionalStaticLibs(CompileExporter* exporter, String& templateProject, const String& previousLibPath);
 		static void handleCopyProtectionInfo(CompileExporter* exporter, String &templateProject, BuildOption option);
 		static String getTargetFamilyString(BuildOption option);
 		static String getPluginChannelAmount(ModulatorSynthChain* chain);

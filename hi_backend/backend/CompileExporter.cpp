@@ -2244,24 +2244,7 @@ void CompileExporter::ProjectTemplateHelpers::handleAdditionalSourceCode(Compile
         REPLACE_WILDCARD_WITH_STRING("%BEATPORT_LIB_MACOS%", "");
     }
 
-#if JUCE_MAC
-    const String additionalStaticLibs = exporter->GET_SETTING(HiseSettings::Project::OSXStaticLibs);
-    templateProject = templateProject.replace("%OSX_STATIC_LIBS%", additionalStaticLibs);
-#else
-
-	auto additionalStaticLibFolder = exporter->GET_SETTING(HiseSettings::Project::WindowsStaticLibFolder);
-	
-	if (additionalStaticLibFolder.isNotEmpty())
-	{
-		REPLACE_WILDCARD_WITH_STRING("%WIN_STATIC_LIB_FOLDER_D64%", beatportLibPath + additionalStaticLibFolder + "/Debug_x64");
-		REPLACE_WILDCARD_WITH_STRING("%WIN_STATIC_LIB_FOLDER_R64%", beatportLibPath + additionalStaticLibFolder + "/Release_x64");
-	}
-	else
-	{
-		REPLACE_WILDCARD_WITH_STRING("%WIN_STATIC_LIB_FOLDER_D64%", beatportLibPath);
-		REPLACE_WILDCARD_WITH_STRING("%WIN_STATIC_LIB_FOLDER_R64%", beatportLibPath);
-	}
-#endif
+	handleAdditionalStaticLibs(exporter, templateProject, beatportLibPath);
     
 	if (additionalSourceFiles.size() != 0)
 	{
@@ -2297,6 +2280,74 @@ void CompileExporter::ProjectTemplateHelpers::handleAdditionalSourceCode(Compile
     {
         templateProject = templateProject.replace("%ADDITIONAL_FILES%", "");
     }
+}
+
+void CompileExporter::ProjectTemplateHelpers::handleAdditionalStaticLibs(CompileExporter* exporter, String& templateProject, const String& previousLibPath)
+{
+	auto chainToExport = exporter->chainToExport;
+
+	File additionalSourceCodeDirectory = GET_PROJECT_HANDLER(chainToExport).getSubDirectory(ProjectHandler::SubDirectories::AdditionalSourceCode);
+
+#if JUCE_MAC
+	const String additionalStaticLibs = exporter->GET_SETTING(HiseSettings::Project::OSXStaticLibs);
+	templateProject = templateProject.replace("%OSX_STATIC_LIBS%", additionalStaticLibs);
+#else
+
+	auto additionalStaticLibFolder = exporter->GET_SETTING(HiseSettings::Project::WindowsStaticLibFolder);
+
+	if (additionalStaticLibFolder.isNotEmpty())
+	{
+		if (additionalStaticLibFolder.contains("%ADDITIONAL_SOURCE_CODE%"))
+			additionalStaticLibFolder = additionalStaticLibFolder.replace("%ADDITIONAL_SOURCE_CODE%", additionalSourceCodeDirectory.getFullPathName());
+
+		additionalStaticLibFolder = additionalStaticLibFolder.replace("\\", "/");
+
+		auto debugFolder = File(additionalStaticLibFolder).getChildFile("Debug_x64");
+		auto releaseFolder = File(additionalStaticLibFolder).getChildFile("Release_x64");
+
+		Array<File> debugLibraries = debugFolder.findChildFiles(File::findFiles, false, "*.lib");
+		Array<File> releaseLibraries = debugFolder.findChildFiles(File::findFiles, false, "*.lib");
+
+		if (debugLibraries.size() == releaseLibraries.size())
+		{
+			StringArray debugLibs, releaseLibs;
+
+			for (int i = 0; i < debugLibraries.size(); i++)
+			{
+				debugLibs.add(debugLibraries[i].getFileName());
+				releaseLibs.add(releaseLibraries[i].getFileName());
+			}
+
+			debugLibs.sort(true);
+			releaseLibs.sort(true);
+
+			String debugLibString = "";
+
+			for (int i = 0; i < debugLibs.size(); i++)
+			{
+				if (debugLibs[i] != releaseLibs[i])
+				{
+					debugToConsole(chainToExport, "!Debug / Release library mismatch: " + debugLibs[i]);
+				}
+				else
+				{
+					debugToConsole(chainToExport, "Added static library " + debugLibs[i]);
+					debugLibString << "&#10;" << debugLibs[i];
+				}
+			}
+
+			REPLACE_WILDCARD_WITH_STRING("%WIN_STATIC_LIBS%", debugLibString);
+		}
+
+		REPLACE_WILDCARD_WITH_STRING("%WIN_STATIC_LIB_FOLDER_D64%", previousLibPath + ";" + debugFolder.getFullPathName());
+		REPLACE_WILDCARD_WITH_STRING("%WIN_STATIC_LIB_FOLDER_R64%", previousLibPath + ";" + releaseFolder.getFullPathName());
+	}
+	else
+	{
+		REPLACE_WILDCARD_WITH_STRING("%WIN_STATIC_LIB_FOLDER_D64%", previousLibPath);
+		REPLACE_WILDCARD_WITH_STRING("%WIN_STATIC_LIB_FOLDER_R64%", previousLibPath);
+	}
+#endif
 }
 
 void CompileExporter::ProjectTemplateHelpers::handleCopyProtectionInfo(CompileExporter* exporter, String &templateProject, BuildOption option)
