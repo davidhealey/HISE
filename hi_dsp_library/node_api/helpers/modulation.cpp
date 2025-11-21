@@ -74,6 +74,8 @@ ParameterProperties::ParameterProperties()
 
 void ParameterProperties::reset()
 {
+	modulationBlocksize = 0;
+
 	for(auto& m: modulationModes)
 		m = ParameterMode::Disabled;
 
@@ -101,7 +103,7 @@ void ParameterProperties::fromConnectionList(const ConnectionList& c)
 	for (const auto& con : c)
 	{
 		setModulationMode(con.connectedParameterIndex, con.modulationMode);
-		setConnected(con.connectedParameterIndex, false);
+		setConnected(con.connectedParameterIndex, con.connectionMode == ConnectionMode::Parameter);
 		setColour(con.connectedParameterIndex, con.modColour);
 	}
 }
@@ -145,7 +147,8 @@ void ParameterProperties::fromValueTree(const ValueTree& v)
 	modulationBlocksize = (int)v.getProperty(PropertyIds::ModulationBlockSize, 0);
 
 	if(modulationBlocksize != 0)
-		modulationBlocksize = jlimit(8, 1024, nextPowerOfTwo(modulationBlocksize));
+		setModulationBlockSize(modulationBlocksize);
+		
 
 	reset();
 
@@ -282,6 +285,11 @@ void ParameterProperties::setColour(int parameterIndex, HiseModulationColours::C
 		if (modulationModes[parameterIndex] != ParameterMode::Disabled)
 			modulationColours[mi] = (char)newColour;
 	}
+}
+
+void ParameterProperties::setModulationBlockSize(int newBlockSize)
+{
+	modulationBlocksize = jlimit(8, 1024, nextPowerOfTwo(newBlockSize));
 }
 
 juce::Colour ParameterProperties::getModulationColour(int parameterIndex) const

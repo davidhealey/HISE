@@ -774,10 +774,9 @@ bool SampleMap::save(const File& fileToUse)
 	if(c.isValid())
 		data.removeChild(c, nullptr);
 
-	if (storeComplexLayers)
+	if (storeComplexLayers && sampler->getComplexGroupManager() != nullptr)
 	{
 		auto copy = data.createCopy();
-
 		copy.addChild(sampler->getComplexGroupManager()->getDataTree().createCopy(), -1, nullptr);
 		xml = copy.createXml();
 	}
