@@ -2338,6 +2338,11 @@ void CompileExporter::ProjectTemplateHelpers::handleAdditionalStaticLibs(Compile
 
 			REPLACE_WILDCARD_WITH_STRING("%WIN_STATIC_LIBS%", debugLibString);
 		}
+		else
+		{
+			debugToConsole(chainToExport, "!Debug / Release library mismatch");
+			REPLACE_WILDCARD_WITH_STRING("%WIN_STATIC_LIBS%", "");
+		}
 
 		REPLACE_WILDCARD_WITH_STRING("%WIN_STATIC_LIB_FOLDER_D64%", previousLibPath + ";" + debugFolder.getFullPathName());
 		REPLACE_WILDCARD_WITH_STRING("%WIN_STATIC_LIB_FOLDER_R64%", previousLibPath + ";" + releaseFolder.getFullPathName());
@@ -2346,6 +2351,8 @@ void CompileExporter::ProjectTemplateHelpers::handleAdditionalStaticLibs(Compile
 	{
 		REPLACE_WILDCARD_WITH_STRING("%WIN_STATIC_LIB_FOLDER_D64%", previousLibPath);
 		REPLACE_WILDCARD_WITH_STRING("%WIN_STATIC_LIB_FOLDER_R64%", previousLibPath);
+
+		REPLACE_WILDCARD_WITH_STRING("%WIN_STATIC_LIBS%", "");
 	}
 #endif
 }
