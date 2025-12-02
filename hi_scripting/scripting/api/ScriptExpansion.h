@@ -272,9 +272,9 @@ public:
 		return h.getCredentials().isObject();
 	}
 
-	String getEncryptionKey() const
+	String getEncryptionKey(const String& expansionId) const
 	{
-		return getMainController()->getExpansionHandler().getEncryptionKey();
+		return getMainController()->getExpansionHandler().getEncryptionKey(expansionId);
 	}
 
 	void expansionPackLoaded(Expansion* currentExpansion) override;
@@ -356,7 +356,7 @@ public:
 	Result initialise() override;
 	juce::BlowFish* createBlowfish();
 
-	static BlowFish* createBlowfish(MainController* mc);
+	static BlowFish* createBlowfishStatic(MainController* mc, const Identifier& expId);
 	static bool encryptIntermediateFile(MainController* mc, const File& f, File expansionRoot=File());
 
 	void extractUserPresetsIfEmpty(ValueTree encryptedTree, bool forceExtraction = false);
@@ -619,6 +619,15 @@ struct ScriptUnlocker : public juce::OnlineUnlockStatus,
 		/** Checks if the string contains the given substring. */
 		bool contains(String otherString);
 
+		/** Reloads the expansion list if the unlocker manages expansions. */
+		bool loadExpansionList();
+
+		/** Unlocks the given expansion IDs in HISE. */
+		bool unlockExpansionList(const var& expansionIdList);
+
+		/** Writes the expansion license key data to the location. */
+		var writeExpansionKeyFile(const String& keyData);
+
 		WeakCallbackHolder pcheck;
 		WeakCallbackHolder mcheck;
 
@@ -651,7 +660,9 @@ struct ScriptUnlocker : public juce::OnlineUnlockStatus,
 
 	String registeredMachineId;
 
-	
+	File getExpansionListFile();
+
+	var getExpansionList();
 
 	JUCE_DECLARE_WEAK_REFERENCEABLE(ScriptUnlocker);
 };

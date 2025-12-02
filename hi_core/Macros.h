@@ -180,7 +180,7 @@ namespace hise { using namespace juce;
 
 #if USE_BACKEND
 // Fetches the preprocessor value from the extra definitions	
-#define HISE_GET_PREPROCESSOR(mc, x) mc->getExtraDefinitionsValue(#x, x);
+#define HISE_GET_PREPROCESSOR(mc, x) mc->getExtraDefinitionsValue(#x, x)
 // If this fails, then the extra definition preprocessor is different from the value that HISE was compiled with...
 #define ASSERT_EXTRA_DEFINITION_MATCH(mc, x) jassert(mc->getExtraDefinitionsValue(#x, x) == x);
 #else

@@ -113,6 +113,9 @@ public:
 
 		static String getExpansionTypeName(ExpansionType e);
 
+		static String getExpansionSpecificKey(MainController* mc, const File& expansionFolder);
+
+		static Identifier getExpansionSlug(const String& expansionName);
 	};
 
 	virtual Result encodeExpansion();
@@ -150,6 +153,8 @@ public:
 	String getWildcard() const;
 
 	ValueTree getPropertyValueTree();
+
+	Identifier getEncryptionKeyId() const;
 
 protected:
 
@@ -368,7 +373,7 @@ public:
 
 	double getTotalProgress() const;
 
-	String getEncryptionKey() const;
+	String getEncryptionKey(const Identifier& expansionName) const;
 
 	bool isEnabled() const noexcept;;
 
@@ -408,6 +413,12 @@ public:
 #endif
 	
 	Array<InitialisationError> initialisationErrors;
+
+	
+
+#if USE_BACKEND
+	Identifier addEncryptionKeyForExpansionToBeEncoded(Expansion* e, const String& expansionSpecificKey);
+#endif
 
 private:
 

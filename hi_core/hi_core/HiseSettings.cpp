@@ -395,7 +395,8 @@ Array<juce::Identifier> HiseSettings::SnexWorkbench::getAllIds()
 		D("- Script-encrypted expansions");
 		D("- Full expansions that contain the entire instrument");
 		D("- Custom expansions that uses a custom C++ class");
-		D("> If you use a custom expansion, you will need to implement `ExpansionHandler::createCustomExpansion()` in your project's C++ code");
+		D("If you use a custom expansion, you will need to implement `ExpansionHandler::createCustomExpansion()` in your project's C++ code");
+		D("> Note that you need to restart HISE for this setting to take effect.");
 		P_();
 
 		P(HiseSettings::Project::EncryptionKey);
