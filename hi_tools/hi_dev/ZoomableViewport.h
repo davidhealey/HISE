@@ -386,6 +386,8 @@ struct ZoomableViewport : public Component,
 
 		virtual void zoomChanged(float newScalingFactor) = 0;
 
+		virtual void positionChanged(Point<int> newTopLeft) {};
+
 		JUCE_DECLARE_WEAK_REFERENCEABLE(ZoomListener);
 	};
 
@@ -415,6 +417,13 @@ struct ZoomableViewport : public Component,
 		scroller.checkFunction = checkFunction;
 	}
 
+	void setSuspendWASD(bool shouldBeSuspended)
+	{
+		scroller.suspended = shouldBeSuspended;
+		scroller.currentVelocity = {};
+		scroller.currentDelta = {};
+	}
+
 private:
 
 	struct WASDScroller: public juce::Timer
@@ -436,6 +445,8 @@ private:
 		std::function<bool(Component*)> checkFunction;
         Point<float> currentVelocity;
         Point<float> currentDelta;
+
+		bool suspended = false;
         
     } scroller;
 
