@@ -112,7 +112,7 @@ template <typename ParameterClass> struct xy :
 {
 	SN_NODE_ID("xy");
 	SN_GET_SELF_AS_OBJECT(xy);
-	SN_PARAMETER_NODE_CONSTRUCTOR(xy, ParameterClass);
+	SN_PARAMETER_NOSIGNAL_CONSTRUCTOR(xy, ParameterClass);
 	
 
 	enum class Parameters

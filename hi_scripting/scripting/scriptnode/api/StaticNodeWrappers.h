@@ -595,6 +595,8 @@ struct InterpretedCableNode : public ModulationSourceNode,
 		mn->init<T, AddDataOffsetToUIPtr>();
 		mn->extraComponentFunction = ComponentType::createExtraComponent;
 
+		jassert(cppgen::CustomNodeProperties::nodeHasProperty(T::getStaticId().toString(), PropertyIds::OutsideSignalPath));
+
 		return mn;
 	};
 
@@ -812,7 +814,6 @@ public:
 
 	template <class MonoT, class PolyT, class ComponentType = ModulationSourcePlotter, bool AddDataOffsetToUIPtr = true> void registerPolyNoProcessNode()
 	{
-		
 		registerPolyNode<MonoT, PolyT, ComponentType, InterpretedCableNode, AddDataOffsetToUIPtr, false>();
 	}
 

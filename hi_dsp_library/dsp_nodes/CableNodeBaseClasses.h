@@ -107,6 +107,11 @@ struct no_parameter
 /** Use this baseclass for nodes that do not process the signal. */
 struct no_processing
 {
+	no_processing(const Identifier& id)
+	{
+		cppgen::CustomNodeProperties::addNodeIdManually(id, PropertyIds::OutsideSignalPath);
+	}
+
 	virtual ~no_processing() {};
 
 	static constexpr bool isPolyphonic() { return false; };

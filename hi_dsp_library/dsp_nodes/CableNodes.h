@@ -49,7 +49,7 @@ namespace control
 		SN_NODE_ID("cable_pack");
 		SN_GET_SELF_AS_OBJECT(cable_pack);
 		SN_ADD_SET_VALUE(cable_pack);
-		SN_PARAMETER_NODE_CONSTRUCTOR(cable_pack, ParameterClass);
+		SN_PARAMETER_NOSIGNAL_CONSTRUCTOR(cable_pack, ParameterClass);
 		SN_DESCRIPTION("Uses a slider pack to modify a modulation signal");
 
 		void setExternalData(const ExternalData& d, int index) override
@@ -98,7 +98,7 @@ namespace control
 		SN_NODE_ID("sliderbank");
 		SN_GET_SELF_AS_OBJECT(sliderbank);
 		SN_ADD_SET_VALUE(sliderbank);
-		SN_PARAMETER_NODE_CONSTRUCTOR(sliderbank, ParameterClass);
+		SN_PARAMETER_NOSIGNAL_CONSTRUCTOR(sliderbank, ParameterClass);
 		SN_DESCRIPTION("Scale a value with a slider pack and send it to multiple targets");
 
 		void initialise(NodeBase* n)
@@ -214,6 +214,7 @@ namespace control
 
 		file_analyser() :
 			templated_mode(getStaticId(), "file_analysers"),
+			pimpl::no_processing(getStaticId()),
 			pimpl::parameter_node_base<ParameterClass>(getStaticId()),
 			no_mod_normalisation(getStaticId(), {})
 		{};
@@ -277,6 +278,7 @@ namespace control
 		input_toggle() :
 			pimpl::parameter_node_base<ParameterClass>(getStaticId()),
 			pimpl::no_mod_normalisation(getStaticId(), {"Value1", "Value2" }),
+			pimpl::no_processing(getStaticId()),
 		    polyphonic_base(getStaticId(), false)
 		{};
 
@@ -409,6 +411,11 @@ namespace control
 	{
 	public:
 
+		clock_base(const Identifier& id)
+		{
+			cppgen::CustomNodeProperties::addNodeIdManually(id, PropertyIds::OutsideSignalPath);
+		}
+
 		virtual ~clock_base()
 		{
 			if (tempoSyncer != nullptr)
@@ -440,6 +447,10 @@ namespace control
 	class tempo_sync_base: public clock_base
 	{
 	public:
+
+		tempo_sync_base(const Identifier& id):
+		  clock_base(id)
+		{};
 
 		virtual ~tempo_sync_base() {};
 
@@ -477,6 +488,7 @@ namespace control
 		SN_PARAMETER_MEMBER_FUNCTION;
 
 		tempo_sync() :
+			tempo_sync_base(getStaticId()),
 			polyphonic_base(getStaticId()),
 			no_mod_normalisation(getStaticId(), {})
 		{};
@@ -602,6 +614,10 @@ namespace control
 
 		SN_EMPTY_CREATE_PARAM;
 
+		transport_base(const Identifier& id):
+		  clock_base(id)
+		{};
+
 		static constexpr int NumVoices = NV;
 
 		void prepare(PrepareSpecs ps)
@@ -635,6 +651,7 @@ namespace control
 	public:
 
 		transport():
+		  transport_base(getStaticId()),
 		  polyphonic_base(getStaticId(), false)
 		{};
 
@@ -658,6 +675,7 @@ namespace control
         static constexpr int NumVoices = NV;
         
 		ppq():
+		  transport_base(getStaticId()),
 		  polyphonic_base(getStaticId(), false)
 		{
 			loopLengthQuarters = TempoSyncer::getTempoFactor(TempoSyncer::Tempo::Quarter);
@@ -737,6 +755,10 @@ namespace control
     {
         static Identifier getStaticId() { return Identifier("pack" + String(NumValues) + "_writer"); };
         
+		pack_writer():
+		  no_processing(getStaticId())
+		{};
+
         SN_GET_SELF_AS_OBJECT(pack_writer);
         
         SN_DESCRIPTION("Writes the values from the parameter sliders into a slider pack");
@@ -799,6 +821,10 @@ namespace control
         
         SN_DESCRIPTION("Dynamically resizes a slider pack");
         
+		pack_resizer():
+		  no_processing(getStaticId())
+		{};
+
         template <int P> void setParameter(double v)
         {
             if(auto sp = dynamic_cast<SliderPackData*>(this->externalData.obj))
@@ -832,7 +858,7 @@ namespace control
 	{
 		SN_NODE_ID("resetter");
 		SN_GET_SELF_AS_OBJECT(resetter);
-		SN_PARAMETER_NODE_CONSTRUCTOR(resetter, ParameterClass);
+		SN_PARAMETER_NOSIGNAL_CONSTRUCTOR(resetter, ParameterClass);
 		SN_DESCRIPTION("Sends an inverted impulse (0,1) to reset gate-like parameters");
 
 		template <int P> void setParameter(double v)
@@ -941,7 +967,7 @@ namespace control
 
 		SN_NODE_ID("midi_cc");
 		SN_GET_SELF_AS_OBJECT(midi_cc);
-		SN_PARAMETER_NODE_CONSTRUCTOR(midi_cc, ParameterClass);
+		SN_PARAMETER_NOSIGNAL_CONSTRUCTOR(midi_cc, ParameterClass);
 		SN_DESCRIPTION("sends a MIDI cc value");
 
 		void createParameters(ParameterDataList& data)
@@ -966,9 +992,7 @@ namespace control
 			}
 		}
 
-		void prepare(PrepareSpecs ps)
-		{
-		}
+		SN_EMPTY_PREPARE;
 
 		void handleHiseEvent(HiseEvent& e)
 		{
@@ -1051,6 +1075,7 @@ namespace control
 		
 		cable_expr() : 
 			pimpl::parameter_node_base<ParameterClass>(getStaticId()),
+			no_processing(getStaticId()),
 			no_mod_normalisation(getStaticId(), { "Value" })
 		{};
 
@@ -1079,6 +1104,7 @@ namespace control
 		SN_ADD_SET_VALUE(voice_bang);
 
 		voice_bang() :
+			no_processing(getStaticId()),
 			pimpl::parameter_node_base<ParameterClass>(getStaticId())
 		{};
 
@@ -1123,6 +1149,7 @@ namespace control
 		SN_ADD_SET_VALUE(normaliser);
 
 		normaliser() :
+			no_processing(getStaticId()),
 			pimpl::parameter_node_base<ParameterClass>(getStaticId())
 		{};
 
@@ -1146,6 +1173,7 @@ namespace control
 
 		unscaler() :
 			pimpl::parameter_node_base<ParameterClass>(getStaticId()),
+			pimpl::no_processing(getStaticId()),
 		    pimpl::no_mod_normalisation(getStaticId(), { "Value" }) 
 		{};
 
@@ -1168,7 +1196,8 @@ namespace control
 		SN_ADD_SET_VALUE(locked_mod);
 
 		locked_mod() :
-			pimpl::parameter_node_base<ParameterClass>(getStaticId())
+			pimpl::parameter_node_base<ParameterClass>(getStaticId()),
+			pimpl::no_processing(getStaticId())
 		{};
 
 		void setValue(double input)
@@ -1190,6 +1219,7 @@ namespace control
 
 		locked_mod_unscaled() :
 			pimpl::parameter_node_base<ParameterClass>(getStaticId()),
+			pimpl::no_processing(getStaticId()),
 		    pimpl::no_mod_normalisation(getStaticId(), { "Value" }) 
 		{};
 
@@ -1220,6 +1250,7 @@ namespace control
 		converter() :
 			pimpl::templated_mode(getStaticId(), "conversion_logic"),
 			pimpl::no_mod_normalisation(getStaticId(), { "Value" }),
+			pimpl::no_processing(getStaticId()),
 			pimpl::parameter_node_base<ParameterClass>(getStaticId())
 		{};
 
@@ -1265,7 +1296,8 @@ namespace control
         SN_ADD_SET_VALUE(random);
 
 		random() :
-			pimpl::parameter_node_base<ParameterClass>(getStaticId())
+			pimpl::parameter_node_base<ParameterClass>(getStaticId()),
+			pimpl::no_processing(getStaticId())
 		{};
 
         void setValue(double)
@@ -1286,7 +1318,7 @@ namespace control
 		SN_DESCRIPTION("Modify a modulation signal using a lookup table");
 
 		SN_ADD_SET_VALUE(cable_table);
-		SN_PARAMETER_NODE_CONSTRUCTOR(cable_table, ParameterClass);
+		SN_PARAMETER_NOSIGNAL_CONSTRUCTOR(cable_table, ParameterClass);
 
 		void setExternalData(const ExternalData& d, int index) override
 		{
@@ -1343,6 +1375,7 @@ namespace control
 		SN_DESCRIPTION("control cloned parameters with a slider pack");
 		
         clone_pack() : 
+			pimpl::no_processing(getStaticId()),
 			pimpl::parameter_node_base<ParameterType>(getStaticId())
 		{
 			cppgen::CustomNodeProperties::setPropertyForObject(*this, PropertyIds::IsCloneCableNode);
@@ -1450,6 +1483,7 @@ namespace control
 
 		clone_cable():
             control::pimpl::parameter_node_base<ParameterType>(getStaticId()),
+			control::pimpl::no_processing(getStaticId()),
             control::pimpl::templated_mode(getStaticId(), "duplilogic")
 		{
 			cppgen::CustomNodeProperties::setPropertyForObject(*this, PropertyIds::IsCloneCableNode);
@@ -1581,7 +1615,8 @@ namespace control
 		static constexpr bool isPolyphonic()  { return false; }
 
 		clone_forward():
-            control::pimpl::parameter_node_base<ParameterType>(getStaticId())
+            control::pimpl::parameter_node_base<ParameterType>(getStaticId()),
+			control::pimpl::no_processing(getStaticId())
 		{
 			cppgen::CustomNodeProperties::setPropertyForObject(*this, PropertyIds::IsCloneCableNode);
 
@@ -1671,7 +1706,7 @@ namespace control
 		branch_base(const Identifier& id):
 		  mothernode(),
 		  pimpl::parameter_node_base<ParameterClass>(id),
-		  no_processing()
+		  no_processing(id)
 		{}
 		virtual ~branch_base() = default;
 
@@ -1782,7 +1817,7 @@ namespace control
 	{
 		SN_NODE_ID("xfader");
 		SN_GET_SELF_AS_OBJECT(xfader);
-		SN_TEMPLATED_MODE_PARAMETER_NODE_CONSTRUCTOR(xfader, ParameterClass, "faders");
+		SN_TEMPLATED_MODE_PARAMETER_NOSIGNAL_CONSTRUCTOR(xfader, ParameterClass, "faders");
 		SN_DESCRIPTION("Apply a crossfade to multiple outputs");
 
 		SN_ADD_SET_VALUE(xfader);
@@ -2605,6 +2640,7 @@ namespace control
 		
 		multi_parameter() :
 			polyphonic_base(getStaticId(), false),
+			control::pimpl::no_processing(getStaticId()),
 			control::pimpl::parameter_node_base<ParameterType>(getStaticId()) 
 		{};
 

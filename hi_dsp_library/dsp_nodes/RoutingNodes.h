@@ -370,6 +370,7 @@ struct public_mod
 
 	public_mod()
 	{
+		cppgen::CustomNodeProperties::setPropertyForObject(*this, PropertyIds::OutsideSignalPath);
 		cppgen::CustomNodeProperties::setPropertyForObject(*this, PropertyIds::IsPublicMod);
 	}
 

@@ -57,6 +57,15 @@ END_JUCE_MODULE_DECLARATION
 #include "../JUCE/modules/juce_dsp/juce_dsp.h"
 
 
+/** Config: HISE_INCLUDE_SCRIPTNODE_DATABASE
+
+Set this to 1 to include the big base 64 database dump. 
+*/
+#ifndef HISE_INCLUDE_SCRIPTNODE_DATABASE
+#define HISE_INCLUDE_SCRIPTNODE_DATABASE 0
+#endif
+
+
 /** Config: HI_EXPORT_AS_PROJECT_DLL
 
 	Set this to 1 if you compile the project's networks as dll.
@@ -122,6 +131,9 @@ Set this to 1 if you want to embed the libraries created with this module into y
 
 // Include the basic structures from SNEX
 
+#if HISE_INCLUDE_SCRIPTNODE_DATABASE
+#include "dsp_library/ScriptnodeDataBase.h"
+#endif
 
 #include "node_api/helpers/node_macros.h"
 

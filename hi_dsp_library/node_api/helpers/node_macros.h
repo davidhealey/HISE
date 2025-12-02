@@ -91,8 +91,15 @@ constexpr const auto& getWrappedObject() const { return x; }
 /** Use this macro to pass the static ID to the base constructor of the parameter_node class that will define the IsControlNode property to avoid the wrap::mod wrapper. */
 #define SN_PARAMETER_NODE_CONSTRUCTOR(ClassId, ParameterId) ClassId() : control::pimpl::parameter_node_base<ParameterId>(getStaticId()) {};
 
+#define SN_PARAMETER_NOSIGNAL_CONSTRUCTOR(ClassId, ParameterId) ClassId() : control::pimpl::parameter_node_base<ParameterId>(getStaticId()), control::pimpl::no_processing(getStaticId()) {};
+
 #define SN_TEMPLATED_MODE_PARAMETER_NODE_CONSTRUCTOR(ClassId, ParameterId, namespaceId) ClassId(): \
 	control::pimpl::parameter_node_base<ParameterId>(getStaticId()),\
+    control::pimpl::templated_mode(getStaticId(), namespaceId) {};
+
+#define SN_TEMPLATED_MODE_PARAMETER_NOSIGNAL_CONSTRUCTOR(ClassId, ParameterId, namespaceId) ClassId(): \
+	control::pimpl::parameter_node_base<ParameterId>(getStaticId()),\
+	control::pimpl::no_processing(getStaticId()), \
     control::pimpl::templated_mode(getStaticId(), namespaceId) {};
 
 #define SN_SELF_AWARE_WRAPPER(x, ObjectClass) SN_GET_SELF_OBJECT(*this); SN_GET_WRAPPED_OBJECT(this->obj.getWrappedObject()); using ObjectType = x; using WrappedObjectType = typename ObjectClass::WrappedObjectType; SN_REGISTER_CALLBACK(ObjectClass);

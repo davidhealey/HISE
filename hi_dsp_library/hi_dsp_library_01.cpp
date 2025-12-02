@@ -98,6 +98,10 @@
 #include "dsp_nodes/ConvolutionNode.cpp"
 #include "dsp_nodes/DynamicsNode.cpp"
 
+#if HISE_INCLUDE_SCRIPTNODE_DATABASE
+#include "dsp_library/ScriptnodeDataBase.cpp"
+#endif
+
 namespace hise
 {
 	using namespace juce;

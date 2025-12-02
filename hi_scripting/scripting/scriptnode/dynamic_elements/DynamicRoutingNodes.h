@@ -446,7 +446,6 @@ namespace routing
 struct local_cable_base :
 	public mothernode,
 	public control::pimpl::parameter_node_base<parameter::dynamic_base_holder>,
-
 	public control::pimpl::no_processing
 {
 	struct Manager: public ReferenceCountedObject
@@ -537,6 +536,7 @@ struct local_cable_base :
 
 	local_cable_base(const Identifier& id):
 	  control::pimpl::parameter_node_base<scriptnode::parameter::dynamic_base_holder>(id),
+	  control::pimpl::no_processing(id),
 	  currentId(PropertyIds::LocalId, {})
 	{
 		

@@ -1972,6 +1972,11 @@ struct voice_manager: public voice_manager_base
 	SN_GET_SELF_AS_OBJECT(voice_manager);
 	SN_DESCRIPTION("Sends a voice reset message when `Value < 0.5`");
 
+	voice_manager()
+	{
+		cppgen::CustomNodeProperties::addNodeIdManually(getStaticId(), PropertyIds::OutsideSignalPath);
+	}
+
 	static constexpr bool isPolyphonic() { return false; }
 
 	SN_EMPTY_HANDLE_EVENT;

@@ -263,6 +263,16 @@ void DspNetwork::createAllNodesOnce()
 	if (cppgen::CustomNodeProperties::isInitialised())
 		return;
 
+#if HISE_INCLUDE_SCRIPTNODE_DATABASE
+	NodeDatabase database;
+
+	database.setProjectDataFolder(BackendDllManager::getSubFolder(getMainController(), BackendDllManager::FolderSubType::ThirdParty));
+
+	auto numUncompressed = database.getNumBytesUncompressed();
+	database.clear();
+
+#endif
+
 	for (auto f : nodeFactories)
 	{
 		auto isProjectFactory = f->getId() == Identifier("project");
@@ -277,13 +287,114 @@ void DspNetwork::createAllNodesOnce()
 			ScopedPointer<NodeBase::Holder> s = new NodeBase::Holder();
 
 			currentNodeHolder = s;
-			create(id, "unused");
+			var n = create(id, id.fromFirstOccurrenceOf(".", false, false));
+
+#if HISE_INCLUDE_SCRIPTNODE_DATABASE
+			if(auto node = dynamic_cast<NodeBase*>(n.getObject()))
+			{
+				NodeDatabase::Item item(node->getValueTree());
+
+				item.nodeTree = node->getValueTree();
+				item.description = node->getNodeDescription();
+
+				cppgen::CustomNodeProperties::writeAllProperties(item.nodeTree, item.properties);
+				//item.properties->setProperty(PropertyIds::OutsideSignalPath, dynamic_cast<InterpretedCableNode*>(node) != nullptr);
+				
+				database.addItem(id, std::move(item));
+			}
+#endif
+
 			exceptionHandler.removeError(nullptr);
 			currentNodeHolder = nullptr;
 
 			s = nullptr;
 		}
 	}
+
+#if HISE_INCLUDE_SCRIPTNODE_DATABASE
+	MemoryOutputStream mos;
+	database.writeToStream(mos);
+	mos.flush();
+	
+	if(mos.getDataSize() != numUncompressed)
+	{
+		zstd::ZDefaultCompressor comp;
+		juce::MemoryBlock compressed;
+		comp.compress(mos.getMemoryBlock(), compressed);
+
+		using namespace snex::cppgen;
+
+		
+		
+
+		auto hisePath = File(GET_HISE_SETTING(getMainController()->getMainSynthChain(), HiseSettings::Compiler::HisePath).toString());
+
+		
+
+		{
+			auto headerFile = hisePath.getChildFile("hi_dsp_library/dsp_library/ScriptnodeDataBase.h");
+			Base header(Base::OutputType::AddTabs);
+			header << "#pragma once";
+
+			Namespace nh(header, "ScriptnodeDataBase", false);
+			
+			String hl1 = "static constexpr int scriptnode_database_datSize = " + String(compressed.getSize()) << ";";
+			String hl2 = "extern const char* scriptnode_database_dat;";
+
+			header << hl1;
+			header << hl2;
+
+			nh.flushIfNot();
+
+			auto hc = header.toString();
+			headerFile.replaceWithText(hc);
+		}
+
+		{
+			auto classname = "ScriptnodeDataBase";
+			auto name = "scriptnode_database_dat";
+			
+			
+			MemoryOutputStream cppStream;
+
+			static int tempNum = 0;
+
+			cppStream << "#include " << String("ScriptnodeDataBase.h").quoted() << "\r\n";
+
+			cppStream << "static const unsigned char temp" << ++tempNum << "[] = {";
+
+			size_t i = 0;
+			const uint8* const data = (const uint8*)compressed.getData();
+
+			while (i < compressed.getSize() - 1)
+			{
+				if ((i % 40) != 39)
+					cppStream << (int)data[i] << ",";
+				else
+					cppStream << (int)data[i] << ",\r\n  ";
+
+				++i;
+			}
+
+			cppStream << (int)data[i] << ",0,0};\r\n";
+
+			cppStream << "const char* " << classname << "::" << name
+				<< " = (const char*) temp" << tempNum << ";\r\n\r\n";
+
+			cppStream.flush();
+
+			auto bc = cppStream.toString();
+
+			DBG(bc);
+
+			auto bodyFile = hisePath.getChildFile("hi_dsp_library/dsp_library/ScriptnodeDataBase.cpp");
+			bodyFile.replaceWithText(bc);
+		}
+
+	}
+	
+#endif
+
 
 #if USE_BACKEND
 
@@ -292,8 +403,12 @@ void DspNetwork::createAllNodesOnce()
 
     // Now check whether the compiled nodes should be rendered with a template
     // argument for their voice count
-    auto fileList = BackendDllManager::getNetworkFiles(getScriptProcessor()->getMainController_(), false);
+    auto fileList = BackendDllManager::getNetworkFiles(getScriptProcessor()->getMainController_(), true);
     
+#if HISE_INCLUDE_SCRIPTNODE_DATABASE
+	std::map<String, NodeDatabase::Item> projectItems;
+#endif
+
     for(auto f: fileList)
     {
         using namespace snex::cppgen;
@@ -301,7 +416,8 @@ void DspNetwork::createAllNodesOnce()
         if(auto xml = XmlDocument::parse(f))
         {
             auto v = ValueTree::fromXml(*xml);
-            
+            auto id = f.getFileNameWithoutExtension();
+
             auto isPoly = ValueTreeIterator::forEach(v, [](ValueTree& v)
             {
                 if(v.getType() == PropertyIds::Node)
@@ -314,15 +430,29 @@ void DspNetwork::createAllNodesOnce()
                 
                 return false;
             });
-            
+
             if(isPoly)
             {
-                CustomNodeProperties::addNodeIdManually(f.getFileNameWithoutExtension(), PropertyIds::IsPolyphonic);
+                CustomNodeProperties::addNodeIdManually(id, PropertyIds::IsPolyphonic);
             }
+
+#if HISE_INCLUDE_SCRIPTNODE_DATABASE
+			scriptnode::NodeDatabase::Item pi;
+			pi.nodeTree = v;
+			pi.description = "Custom node";
+			cppgen::CustomNodeProperties::writeAllProperties(id, pi.properties);
+			projectItems[id] = pi;		
+#endif
         }
     }
     
-    
+#if HISE_INCLUDE_SCRIPTNODE_DATABASE
+	{
+		auto datFile = BackendDllManager::getSubFolder(getMainController(), BackendDllManager::FolderSubType::ThirdParty);
+		database.writeProjectData(projectItems, datFile);
+	}
+#endif
+	
     
 #endif
     
