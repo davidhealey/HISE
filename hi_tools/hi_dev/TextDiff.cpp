@@ -81,7 +81,7 @@ struct DiffHelpers
 		for (int i = 0; i < numElements; i++)
 			d[i] = ptr[i];
 
-		return std::move(d);
+        return d;
 	}
 
 	static LineDiff::Line makeDiffLine(const LineInfo& element, const MapType& map)
@@ -89,8 +89,8 @@ struct DiffHelpers
 		LineDiff::Line d;
 
 		size_t hash = element.first;
-		d.oldLine = element.second.beforeIdx;
-		d.newLine = element.second.afterIdx;
+		d.oldLine = (int)element.second.beforeIdx;
+		d.newLine = (int)element.second.afterIdx;
 
 		switch (element.second.type)
 		{
@@ -262,7 +262,8 @@ LineDiff::HashedDiff::HashedDiff(const String& patch)
 	DiffHelpers::Parser p(patch, &hashmap);
 
 	ah = p.getPrevSequence();
-	bh = DiffHelpers::DiffType::uniPatchStatic(ah, p.getUnihunk());
+    auto h = p.getUnihunk();
+	bh = DiffHelpers::DiffType::uniPatchStatic(ah, h);
 }
 
 LineDiff::HashedDiff::HashedDiff(const StringArray& A, const StringArray& B)
@@ -282,7 +283,8 @@ LineDiff::HashedDiff::HashedDiff(const StringArray& A, const std::vector<Change>
 
 	DiffHelpers::Parser p(patches, &hashmap);
 
-	bh = DiffHelpers::DiffType::uniPatchStatic(ah, p.getUnihunk());
+    auto h = p.getUnihunk();
+	bh = DiffHelpers::DiffType::uniPatchStatic(ah, h);
 }
 
 juce::StringArray LineDiff::HashedDiff::getPatchReport() const
@@ -321,7 +323,7 @@ void LineDiff::HashedDiff::merge(StringArray& C)
 	auto merged = diff3.getMergedSequence();
 
 	StringArray M;
-	M.ensureStorageAllocated(merged.size());
+	M.ensureStorageAllocated((int)merged.size());
 
 	for (auto& h : merged)
 	{

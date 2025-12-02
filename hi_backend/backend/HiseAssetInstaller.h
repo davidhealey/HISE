@@ -130,7 +130,7 @@ struct HiseAssetInstaller: public ControlledObject
 		{
 			if(obj.hasProperty("owner"))
 			{
-				m = Mode::StoreDownload,
+                m = Mode::StoreDownload;
 				packageName = obj["name"].toString();
 				vendor = obj["owner"]["username"].toString();
 				localFolder = File();
@@ -189,7 +189,7 @@ struct HiseAssetInstaller: public ControlledObject
 			}
 		}
 
-		UninstallInfo() = default;
+        UninstallInfo() {};
 		UninstallInfo(const UninstallInfo& other) = default;
 		UninstallInfo& operator=(const UninstallInfo& other) = default;
 
@@ -245,7 +245,7 @@ struct HiseAssetInstaller: public ControlledObject
 			numErrorTypes
 		};
 
-		Error() = default;
+        Error() {};
 
 		ErrorType what = ErrorType::OK;
 		File file;
@@ -287,7 +287,7 @@ struct HiseAssetInstaller: public ControlledObject
 
 	bool install(const UninstallInfo& infoToUse);
 
-	bool uninstall(const Error& seekToError={});
+	bool uninstall(const Error& seekToError=Error());
 
 	bool hasLocalChanges();
 

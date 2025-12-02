@@ -104,7 +104,7 @@ struct DiffViewer: public Component,
 
 	DiffViewer(const File& rootDirectory);
 
-	void updateReport(LineDiff::HashedDiff::Ptr reportToReplace, String& newContent)
+	void updateReport(LineDiff::HashedDiff::Ptr reportToReplace, String newContent)
 	{
 		for (int i = 0; i < diffs.size(); i++)
 		{

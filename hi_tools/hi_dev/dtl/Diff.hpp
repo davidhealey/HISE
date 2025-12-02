@@ -178,7 +178,7 @@ namespace dtl {
         
         sequence uniPatch(const sequence& seq)
         {
-            return uniPatchStatic(seq, unihunks);
+            return uniPatchStatic(seq, uniHunks);
         }
 
         /**
@@ -226,33 +226,6 @@ namespace dtl {
                 shunk.clear();
             }
             
-            sequence patchedSeq(seqLst.begin(), seqLst.end());
-            return patchedSeq;
-        }
-        
-        /**
-         * patching with Shortest Edit Script (SES)
-         */
-        static sequence patch (const sequence& seq) {
-            sesElemVec    sesSeq = ses.getSequence();
-            elemList      seqLst(seq.begin(), seq.end());
-            elemList_iter lstIt  = seqLst.begin();
-            for (sesElemVec_iter sesIt=sesSeq.begin();sesIt!=sesSeq.end();++sesIt) {
-                switch (sesIt->second.type) {
-                case SES_ADD :
-                    seqLst.insert(lstIt, sesIt->first);
-                    break;
-                case SES_DELETE :
-                    lstIt = seqLst.erase(lstIt);
-                    break;
-                case SES_COMMON :
-                    ++lstIt;
-                    break;
-                default :
-                    // no through
-                    break;
-                }
-            }
             sequence patchedSeq(seqLst.begin(), seqLst.end());
             return patchedSeq;
         }

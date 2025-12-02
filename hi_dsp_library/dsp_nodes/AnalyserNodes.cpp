@@ -1,4 +1,4 @@
-﻿/*  ===========================================================================
+/*  ===========================================================================
 *
 *   This file is part of HISE.
 *   Copyright 2016 Christoph Hart
@@ -289,7 +289,6 @@ juce::Path Helpers::FFT::createPath(Range<int> sampleRange, Range<float> valueRa
 	dataPoints.ensureStorageAllocated(size);
 
 	auto lastX = -1000.0f;
-	auto lastRealIndex = 0;
 
 	float cubicX = -1.0f;
 

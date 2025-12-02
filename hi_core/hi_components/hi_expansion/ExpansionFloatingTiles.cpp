@@ -409,7 +409,7 @@ public:
 
 		auto mc = getMainController();
 
-		auto key = mc->getExpansionHandler().getEncryptionKey();
+        auto key = mc->getExpansionHandler().getEncryptionKey({});
 		if (key.isEmpty())
 			key = "undefined";
 

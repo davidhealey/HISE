@@ -1781,7 +1781,7 @@ String ComplexGroupManager::Helpers::getStringFromMatrix(const std::vector<uint8
 			s << 'X';
 		else if (isPositiveAndBelow(c, 10))
 		{
-			const char st[1] = { c + '0' };
+			const char st[2] = { (char)c, '0' };
 			s << String(st, 1);
 		}
 			

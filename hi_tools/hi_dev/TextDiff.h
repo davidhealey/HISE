@@ -74,9 +74,6 @@ struct LineDiff
 
 			for (const auto& c : changes)
 			{
-				auto it = c.lines.begin();
-				auto end = c.lines.end();
-
 				int currentLine = -1;
 
 				for (const auto& l : c.lines)

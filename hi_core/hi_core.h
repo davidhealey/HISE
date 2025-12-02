@@ -151,7 +151,10 @@ If true, then the copy protection will be used
 #define USE_COPY_PROTECTION 0
 #endif
 
-/** Config: Enable this is if you want to prefilter the list of available expansions with the script unlocker. */
+/** Config: HISE_USE_UNLOCKER_FOR_EXPANSIONS
+ 
+ Enable this is if you want to prefilter the list of available expansions with the script unlocker.
+*/
 #ifndef HISE_USE_UNLOCKER_FOR_EXPANSIONS
 #define HISE_USE_UNLOCKER_FOR_EXPANSIONS 0
 #endif

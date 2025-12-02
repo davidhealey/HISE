@@ -651,7 +651,7 @@ namespace control
 	public:
 
 		transport():
-		  transport_base(getStaticId()),
+		  transport_base<bool, NV>(getStaticId()),
 		  polyphonic_base(getStaticId(), false)
 		{};
 
@@ -675,7 +675,7 @@ namespace control
         static constexpr int NumVoices = NV;
         
 		ppq():
-		  transport_base(getStaticId()),
+		  transport_base<double, NV>(getStaticId()),
 		  polyphonic_base(getStaticId(), false)
 		{
 			loopLengthQuarters = TempoSyncer::getTempoFactor(TempoSyncer::Tempo::Quarter);
