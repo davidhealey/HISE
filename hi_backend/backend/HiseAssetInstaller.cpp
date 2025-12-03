@@ -126,6 +126,31 @@ hise::HiseAssetInstaller::UndoableInstallAction::List HiseAssetInstaller::create
 		installActions.add(new PreprocessorInstallAction(getMainController(), preprocessorValues, targetDefinitions, sourceDefinitions));
 	}
 
+	Array<Identifier> portableSettingIds = {
+		HiseSettings::Project::OSXStaticLibs,
+		HiseSettings::Project::WindowsStaticLibFolder,
+	};
+
+	DynamicObject::Ptr portableSettingValues;
+
+	for(const auto& id: portableSettingIds)
+	{
+		auto v = sourceInfo[id];
+
+		if(v.isNotEmpty())
+		{
+			if(portableSettingValues == nullptr)
+				portableSettingValues = new DynamicObject();
+
+			portableSettingValues->setProperty(id, v);
+		}
+	}
+
+	if(portableSettingValues != nullptr)
+	{
+		installActions.add(new ProjectSettingInstallAction(getMainController(), portableSettingValues));
+	}
+	
 	auto list = getFileList();
 	auto rootFolder = getMainController()->getCurrentFileHandler().getRootFolder();
 
@@ -202,6 +227,8 @@ hise::HiseAssetInstaller::UndoableInstallAction::List HiseAssetInstaller::fromIn
 				installLog.add(new PreprocessorInstallAction(getMainController(), step));
 			if (type == FileInstallAction::getStaticId())
 				installLog.add(new FileInstallAction(getMainController(), step));
+			if(type == ProjectSettingInstallAction::getStaticId())
+				installLog.add(new ProjectSettingInstallAction(getMainController(), step));
 		}
 	}
 
@@ -461,6 +488,9 @@ bool HiseAssetInstaller::matchesFile(const File& f) const
 
 	if (f.getParentDirectory() == getSourceRootFolder())
 		valid = true;
+
+	if(f.getParentDirectory().getRelativePathFrom(getSourceRootFolder()).contains("Binaries"))
+		return false;
 
 	for (auto& v : validSubdirectories)
 	{

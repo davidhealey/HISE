@@ -324,6 +324,119 @@ private:
 
 	UninstallInfo uninstallInfo;
 
+	struct ProjectSettingInstallAction: public UndoableInstallAction
+	{
+		static Identifier getStaticId() { RETURN_STATIC_IDENTIFIER("ProjectSetting"); }
+
+		ProjectSettingInstallAction(MainController* mc, DynamicObject::Ptr newValues_):
+		  UndoableInstallAction(mc),
+		  newValues(newValues_),
+		  oldValues(new DynamicObject())
+		{
+			auto root = getMainController()->getCurrentFileHandler().getRootFolder();
+			auto projectInfo = root.getChildFile("project_info.xml");
+
+			if (auto xml = XmlDocument::parse(projectInfo))
+			{
+				for (const auto& nv : newValues->getProperties())
+				{
+					if(auto c = xml->getChildByName(nv.name.toString()))
+						oldValues->setProperty(nv.name, c->getStringAttribute("value"));
+					else
+						oldValues->setProperty(nv.name, var(""));
+				}
+			}
+			else
+			{
+				for(auto& nv: newValues->getProperties())
+					oldValues->setProperty(nv.name, var(""));
+			}
+		}
+
+		ProjectSettingInstallAction(MainController* mc, const var& changes):
+		  UndoableInstallAction(mc),
+		  oldValues(changes["oldValues"].getDynamicObject()),
+		  newValues(changes["newValues"].getDynamicObject())
+		{}
+
+		bool matchesError(const Error& e) const override { return false; }
+
+		bool applyChanges(bool shouldUndo)
+		{
+			auto root = getMainController()->getCurrentFileHandler().getRootFolder();
+
+			auto projectInfo = root.getChildFile("project_info.xml");
+			
+			auto xml = XmlDocument::parse(projectInfo);
+
+			if (xml == nullptr)
+				xml.reset(new XmlElement("ProjectSettings"));
+
+			auto obj = shouldUndo ? oldValues : newValues;
+
+			for(const auto& nv: obj->getProperties())
+			{
+				auto c = xml->getChildByName(nv.name.toString());
+
+				if(c == nullptr)
+				{
+					c = new XmlElement(nv.name.toString());
+					xml->addChildElement(c);
+				}
+
+				c->setAttribute("value", nv.value.toString());
+			}
+
+			auto ok = projectInfo.replaceWithText(xml->createDocument(""));
+
+			dynamic_cast<GlobalSettingManager*>(getMainController())->getSettingsObject().refreshProjectData();
+
+			return true;
+		}
+
+		
+
+		bool perform() override
+		{
+			return applyChanges(false);
+		}
+
+		bool undo() override
+		{
+			return applyChanges(true);
+		}
+
+		String toString(bool getUndoDescription) const override
+		{
+			auto obj = getUndoDescription ? oldValues : newValues;
+
+			String msg;
+
+			for(const auto& nv: obj->getProperties())
+				msg << "> Set " << nv.name << ": " << nv.value.toString() << "\n";
+
+			return msg;
+		}
+
+		var toJSON() const override 
+		{
+			DynamicObject::Ptr no = new DynamicObject();
+
+			no->setProperty("Type", getStaticId().toString());
+
+			auto ov = oldValues->clone();
+			auto nv = newValues->clone();
+
+			no->setProperty("oldValues", var(ov.get()));
+			no->setProperty("newValues", var(nv.get()));
+
+			return var(no.get());
+
+		}
+
+		DynamicObject::Ptr oldValues, newValues;
+	};
+
 	struct PreprocessorInstallAction : public UndoableInstallAction
 	{
 		using PreprocessorMap = std::map<Identifier, std::map<String, String>>;
@@ -334,12 +447,9 @@ private:
 
 		PreprocessorInstallAction(MainController* mc, const var& changes);
 
-		bool matchesError(const Error& e) const override 
-		{ 
-			return false; 
-		}
-
 		String toString(bool getUndoDescription) const override;
+
+		bool matchesError(const Error& e) const override { return false; }
 
 		bool applyChanges(int valueIndex)
 		{
@@ -403,7 +513,6 @@ private:
 		bool perform() override
 		{
 			return applyChanges(1);
-			
 		}
 
 		bool undo() override
