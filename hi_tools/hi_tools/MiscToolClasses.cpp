@@ -3886,6 +3886,9 @@ ValueToTextConverter ValueToTextConverter::fromString(const String& converterStr
 
 	if(converterString.isNotEmpty())
 	{
+		if(getAvailableTextConverterModes().contains(converterString))
+			return createForMode(converterString);
+
 #if HI_ZSTD_INCLUDED
 			zstd::ZDefaultCompressor comp;
 

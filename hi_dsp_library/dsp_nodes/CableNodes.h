@@ -349,6 +349,7 @@ namespace control
 			{
 				DEFINE_PARAMETERDATA(input_toggle, Input);
 				p.setRange({ 0.0, 1.0, 1.0, 1.0 });
+				p.setParameterValueNames({ "Input 1", "Input 2"});
 				p.setDefaultValue(0.0);
 				data.add(std::move(p));
 			}
@@ -531,12 +532,14 @@ namespace control
 			{
 				DEFINE_PARAMETERDATA(tempo_sync, Enabled);
 				p.setRange({ 0.0, 1.0, 1.0 });
+				p.setParameterValueNames({ "Off", "On"});
 				p.setDefaultValue(0.0);
 				data.add(std::move(p));
 			}
 			{
 				DEFINE_PARAMETERDATA(tempo_sync, UnsyncedTime);
 				p.setRange({ 0.0, 1000.0, 0.1 });
+				p.info.textConverter = parameter::pod::Time;
 				p.setDefaultValue(200.0);
 				data.add(std::move(p));
 			}
@@ -2847,12 +2850,14 @@ namespace control
 			{
 				DEFINE_PARAMETERDATA(smoothed_parameter_pimpl, SmoothingTime);
 				p.setRange({ 0.1, 1000.0, 0.1 });
+				p.info.textConverter = parameter::pod::Time;
 				p.setDefaultValue(100.0);
 				data.add(std::move(p));
 			}
 			{
 				DEFINE_PARAMETERDATA(smoothed_parameter_pimpl, Enabled);
 				p.setRange({ 0.0, 1.0, 1.0 });
+				p.setParameterValueNames({ "Off", "On" });
 				p.setDefaultValue(1.0);
 				data.add(std::move(p));
 			}

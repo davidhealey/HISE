@@ -153,6 +153,7 @@ void FilterNodeBase<FilterType, NV>::createParameters(ParameterDataList& paramet
 		DEFINE_PARAMETERDATA(FilterNodeBase, Gain);
 		p.setRange({ -18, 18 });
 		p.setSkewForCentre(0.0);
+		p.info.textConverter = parameter::pod::Decibel;
 		p.setDefaultValue(0.0);
 		parameters.add(std::move(p));
 	}

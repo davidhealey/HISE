@@ -213,6 +213,7 @@ void updown_comp::createParameters(ParameterDataList& data)
 		parameter::data p("LowThreshold", { -100.0, 0.0 });
 		registerCallback<(int)Parameters::LowThreshold>(p);
 		p.setSkewForCentre(-18.0);
+		p.info.textConverter = parameter::pod::Decibel;
 		p.setDefaultValue(-100.0);
 		data.add(std::move(p));
 	}
@@ -228,6 +229,7 @@ void updown_comp::createParameters(ParameterDataList& data)
 		parameter::data p("HighThreshold", { -100.0, 0.0 });
 		registerCallback<(int)Parameters::HighThreshold>(p);
 		p.setSkewForCentre(-6.0);
+		p.info.textConverter = parameter::pod::Decibel;
 		p.setDefaultValue(0.0);
 		data.add(std::move(p));
 	}
@@ -249,6 +251,7 @@ void updown_comp::createParameters(ParameterDataList& data)
 		// Create a parameter like this
 		parameter::data p("Attack", { 0.0, 1000.0 });
 		registerCallback<(int)Parameters::Attack>(p);
+		p.info.textConverter = parameter::pod::Time;
 		p.setSkewForCentre(50.0);
 		p.setDefaultValue(50.0);
 		data.add(std::move(p));
@@ -257,6 +260,7 @@ void updown_comp::createParameters(ParameterDataList& data)
 		// Create a parameter like this
 		parameter::data p("Release", { 0.0, 1000.0 });
 		registerCallback<(int)Parameters::Release>(p);
+		p.info.textConverter = parameter::pod::Time;
 		p.setSkewForCentre(50.0);
 		p.setDefaultValue(50.0);
 		data.add(std::move(p));

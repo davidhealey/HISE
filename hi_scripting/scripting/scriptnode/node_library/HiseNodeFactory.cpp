@@ -1434,13 +1434,14 @@ namespace dynamic
 			addAndMakeVisible(modValue);
 			addAndMakeVisible(activeValue);
 
-			modValue.textFunction = getAxis;
-			activeValue.textFunction = getAxis;
+			modValue.textFunction = BIND_MEMBER_FUNCTION_1(envelope_display_base::getAxis);
+			activeValue.textFunction = BIND_MEMBER_FUNCTION_1(envelope_display_base::getAxis);
 		};
 
-		static String getAxis(int index)
+		String getAxis(int index)
 		{
-			return index == 0 ? "CV" : "GT";
+			auto id = getObject()->getId();
+			return cppgen::CustomNodeProperties::getModOutputs(id)[index];
 		}
 
 		Dragger modValue, activeValue;

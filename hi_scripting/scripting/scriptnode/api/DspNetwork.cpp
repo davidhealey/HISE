@@ -297,6 +297,18 @@ void DspNetwork::createAllNodesOnce()
 				item.nodeTree = node->getValueTree();
 				item.description = node->getNodeDescription();
 
+				for(int i = 0; i < node->getNumParameters(); i++)
+				{
+					auto p = node->getParameterFromIndex(i);
+
+					if(!p->valueNames.isEmpty())
+					{
+						auto vtc = ValueToTextConverter::createForOptions(p->valueNames);
+						p->data.setProperty(PropertyIds::TextToValueConverter, vtc.toString(), nullptr);
+					}
+				}
+
+
 				cppgen::CustomNodeProperties::writeAllProperties(item.nodeTree, item.properties);
 				//item.properties->setProperty(PropertyIds::OutsideSignalPath, dynamic_cast<InterpretedCableNode*>(node) != nullptr);
 				
@@ -439,6 +451,7 @@ void DspNetwork::createAllNodesOnce()
 #if HISE_INCLUDE_SCRIPTNODE_DATABASE
 			scriptnode::NodeDatabase::Item pi;
 			pi.nodeTree = v;
+			pi.properties = new DynamicObject();
 			pi.description = "Custom node";
 			cppgen::CustomNodeProperties::writeAllProperties(id, pi.properties);
 			projectItems[id] = pi;		

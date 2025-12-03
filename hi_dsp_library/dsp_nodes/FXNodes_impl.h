@@ -200,6 +200,7 @@ void phase_delay<V>::createParameters(ParameterDataList& data)
 		DEFINE_PARAMETERDATA(phase_delay, Frequency);
 		p.setRange({ 20.0, 20000.0, 0.1 });
 		p.setSkewForCentre(1000.0);
+		p.info.textConverter = parameter::pod::Frequency;
 		p.setDefaultValue(400.0);
 		data.add(std::move(p));
 	}

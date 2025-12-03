@@ -360,6 +360,7 @@ public:
 		{
 			DEFINE_PARAMETERDATA(recorder, RecordingLength);
 			p.setRange({ 0.0, 2000.0, 0.1 });
+			p.info.textConverter = parameter::pod::Time;
 			data.add(std::move(p));
 		}
 	}
@@ -781,18 +782,21 @@ public:
 			DEFINE_PARAMETERDATA(ramp, PeriodTime);
 			p.setRange({ 0.1, 1000.0, 0.1 });
 			p.setDefaultValue(100.0);
+			p.info.textConverter = parameter::pod::Time;
 			data.add(std::move(p));
 		}
 
 		{
 			DEFINE_PARAMETERDATA(ramp, LoopStart);
 			p.setDefaultValue(0.0);
+			p.info.textConverter = parameter::pod::NormalizedPercentage;
 			data.add(std::move(p));
 		}
 
 		{
 			DEFINE_PARAMETERDATA(ramp, Gate);
 			p.setDefaultValue(1.0);
+			p.setParameterValueNames({ "Off", "On" });
 			data.add(std::move(p));
 		}
 	}
@@ -1280,6 +1284,7 @@ public:
 		{
 			DEFINE_PARAMETERDATA(phasor_base, Gate);
 			p.setRange({ 0.0, 1.0, 1.0 });
+			p.setParameterValueNames({ "Off", "On" });
 			p.setDefaultValue(1.0);
 			data.add(std::move(p));
 		}
@@ -1287,6 +1292,7 @@ public:
 			DEFINE_PARAMETERDATA(phasor_base, Frequency);
 			p.setRange({ 20.0, 20000.0, 0.1 });
 			p.setDefaultValue(220.0);
+			p.info.textConverter = parameter::pod::Frequency;
 			p.setSkewForCentre(1000.0);
 			data.add(std::move(p));
 		}
@@ -1300,6 +1306,7 @@ public:
 		{
 			DEFINE_PARAMETERDATA(phasor_base, Phase);
 			p.setRange({ 0.0, 1.0 });
+			p.info.textConverter = parameter::pod::NormalizedPercentage;
 			p.setDefaultValue(0.0);
 			data.add(std::move(p));
 		}
@@ -1505,6 +1512,7 @@ public:
 			DEFINE_PARAMETERDATA(oscillator, Frequency);
 			p.setRange({ 20.0, 20000.0, 0.1 });
 			p.setDefaultValue(220.0);
+			p.info.textConverter = parameter::pod::Frequency;
 			p.setSkewForCentre(1000.0);
 			data.add(std::move(p));
 		}
@@ -1518,6 +1526,7 @@ public:
 		{
 			DEFINE_PARAMETERDATA(oscillator, Gate);
 			p.setRange({ 0.0, 1.0, 1.0 });
+			p.setParameterValueNames({ "Off", "On" });
 			p.setDefaultValue(1.0);
 			data.add(std::move(p));
 		}
@@ -1525,6 +1534,7 @@ public:
 		{
 			DEFINE_PARAMETERDATA(oscillator, Phase);
 			p.setRange({ 0.0, 1.0 });
+			p.info.textConverter = parameter::pod::NormalizedPercentage;
 			p.setDefaultValue(0.0);
 			data.add(std::move(p));
 		}
@@ -1951,12 +1961,14 @@ template <int NV> struct file_player : public data::base,
         {
             DEFINE_PARAMETERDATA(file_player, Gate);
             p.setRange({ 0.0, 1.0, 1.0 });
+			p.setParameterValueNames({ "Off", "On" });
             p.setDefaultValue(1.0f);
             d.add(p);
         }
         {
             DEFINE_PARAMETERDATA(file_player, RootFrequency);
             p.setRange({ 20.0, 2000.0 });
+			p.info.textConverter = parameter::pod::Frequency;
             p.setDefaultValue(440.0);
             d.add(p);
         }
@@ -2132,6 +2144,7 @@ public:
 			DEFINE_PARAMETERDATA(gain_impl, Gain);
 			p.setRange({ -100.0, 0.0, 0.1 });
 			p.setSkewForCentre(-12.0);
+			p.info.textConverter = parameter::pod::Decibel;
 			p.setDefaultValue(0.0);
 			data.add(std::move(p));
 		}
@@ -2139,6 +2152,7 @@ public:
 			DEFINE_PARAMETERDATA(gain_impl, Smoothing);
 			p.setRange({ 0.0, 1000.0, 0.1 });
 			p.setSkewForCentre(100.0);
+			p.info.textConverter = parameter::pod::Time;
 			p.setDefaultValue(20.0);
 			data.add(std::move(p));
 		}
@@ -2146,6 +2160,7 @@ public:
 			DEFINE_PARAMETERDATA(gain_impl, ResetValue);
 			p.setRange({ -100.0, 0.0, 0.1 });
 			p.setSkewForCentre(-12.0);
+			p.info.textConverter = parameter::pod::Decibel;
 			p.setDefaultValue(0.0);
 			data.add(std::move(p));
 		}
@@ -2227,11 +2242,13 @@ public:
 		{
 			DEFINE_PARAMETERDATA(smoother, DefaultValue);
 			p.setDefaultValue(0.0);
+			p.info.textConverter = parameter::pod::NormalizedPercentage;
 			data.add(std::move(p));
 		}
 		{
 			DEFINE_PARAMETERDATA(smoother, SmoothingTime);
 			p.setRange({ 0.0, 2000.0, 0.1 });
+			p.info.textConverter = parameter::pod::Time;
 			p.setSkewForCentre(100.0);
 			p.setDefaultValue(100.0);
 			data.add(std::move(p));
@@ -2432,6 +2449,7 @@ template <int NV, typename T> struct snex_osc : public snex_osc_base<T>,
 			p.setRange({ 20.0, 20000.0, 0.1 });
 			p.setSkewForCentre(1000.0);
 			p.setDefaultValue(220.0);
+			p.info.textConverter = parameter::pod::Frequency;
 			data.add(std::move(p));
 		}
 
@@ -2839,6 +2857,7 @@ struct granulator: public data::base
         {
             parameter::data d("GrainSize", { 20.0, 800.0 });
             registerCallback<2>(d);
+			d.info.textConverter = parameter::pod::Time;
             d.setDefaultValue(80.0);
             l.add(d);
         }

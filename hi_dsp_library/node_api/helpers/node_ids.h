@@ -268,6 +268,7 @@ struct CustomNodeProperties
 		bool initialised = false;
 		NamedValueSet properties;
 		NamedValueSet unscaledParameterIds;
+		NamedValueSet modOutputs;
 	};
 
 	template <typename T> static void setPropertyForObject(T& obj, const Identifier& id)
@@ -275,7 +276,33 @@ struct CustomNodeProperties
 		addNodeIdManually(T::getStaticId(), id);
 	}
 
-	
+	static void addModOutput(const Identifier& id, const StringArray& sa)
+	{
+		Array<var> list;
+
+		for(const auto& s: sa)
+			list.add(s);
+
+		CustomNodeProperties d;
+		d.data->modOutputs.set(id, var(list));
+	}
+
+	static StringArray getModOutputs(const Identifier& id)
+	{
+		CustomNodeProperties d;
+		
+		const auto& l = d.data->modOutputs[id];
+
+		StringArray sa;
+
+		if(auto ar = l.getArray())
+		{
+			for(auto& v: *ar)
+				sa.add(v.toString());
+		}
+		
+		return sa;
+	}
 
 	static void setInitialised(bool allInitialised)
 	{
@@ -390,19 +417,39 @@ struct CustomNodeProperties
 	{
 		CustomNodeProperties d;
 
-		if (auto ar = d.data->properties[nodeId].getArray())
+		for(const auto& nv: d.data->properties)
 		{
-			for (auto& nv : *ar)
-				obj->setProperty(Identifier(nv), true);
+			if(auto l = nv.value.getArray())
+			{
+				if(l->contains(nodeId))
+					obj->setProperty(nv.name, true);
+			}
 		}
 
 		if (d.data->unscaledParameterIds[nodeId].isArray())
 			obj->setProperty(PropertyIds::UseUnnormalisedModulation, d.data->unscaledParameterIds[nodeId].clone());
 	}
 
-	static void writeAllProperties(const ValueTree& nodeTree, DynamicObject::Ptr obj)
+	static void writeAllProperties(ValueTree& nodeTree, DynamicObject::Ptr obj)
 	{
 		auto propId = getIdFromValueTree(nodeTree);
+
+		CustomNodeProperties d;
+
+		auto sw = nodeTree.getChildWithName(PropertyIds::SwitchTargets);
+
+		if(sw.isValid())
+		{
+			auto outputs = getModOutputs(propId);
+
+			if(sw.getNumChildren() == outputs.size())
+			{
+				for(int i = 0; i < outputs.size(); i++)
+				{
+					sw.getChild(i).setProperty(PropertyIds::ID, outputs[i], nullptr);
+				}
+			}
+		}
 
 		writeAllProperties(propId, obj);
 	}

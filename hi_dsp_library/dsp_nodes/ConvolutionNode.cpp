@@ -128,6 +128,7 @@ void convolution::createParameters(ParameterDataList& data)
 	{
 		DEFINE_PARAMETERDATA(convolution, Predelay);
 		p.setRange({ 0.0, 1000.0, 1.0 });
+		p.info.textConverter = parameter::pod::Time;
 		p.setDefaultValue(0.0);
 		data.add(std::move(p));
 	}
@@ -135,6 +136,7 @@ void convolution::createParameters(ParameterDataList& data)
 	{
 		DEFINE_PARAMETERDATA(convolution, Damping);
 		p.setRange({ -100.0, 0.0, 0.1 });
+		p.info.textConverter = parameter::pod::Decibel;
 		p.setDefaultValue(0.0);
 		p.setSkewForCentre(-12.0);
 		data.add(std::move(p));
@@ -143,6 +145,7 @@ void convolution::createParameters(ParameterDataList& data)
 	{
 		DEFINE_PARAMETERDATA(convolution, HiCut);
 		p.setRange({ 20.0, 20000.0, 1.0 });
+		p.info.textConverter = parameter::pod::Frequency;
 		p.setDefaultValue(20000.0);
 		p.setSkewForCentre(1000.0);
 		data.add(std::move(p));
