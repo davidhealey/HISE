@@ -273,6 +273,8 @@ struct ZoomableViewport : public Component,
 
 	void setZoomFactor(float newZoomFactor, Point<float> centerPositionInGraph);
 
+	float getCurrentZoomFactor() const { return zoomFactor; };
+
     void setMaxZoomFactor(float newMaxZoomFactor);
 
 	bool changeZoom(bool zoomIn);
