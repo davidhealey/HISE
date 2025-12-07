@@ -52,15 +52,15 @@ juce::Value NodeProperty::asJuceValue()
 	return d.getPropertyAsValue(PropertyIds::Value, um);
 }
 
-bool NodeProperty::initialise(NodeBase* n)
+bool NodeProperty::initialise(UndoManager* um_, ValueTree v)
 {
-	jassert(n != nullptr);
+	jassert(v.getType() == PropertyIds::Node);
 
 	valueTreePropertyid = baseId;
 
-	um = n->getUndoManager();
+	um = um_;
 
-	auto propTree = n->getPropertyTree();
+	auto propTree = v.getOrCreateChildWithName(PropertyIds::Properties, um);
 
 	d = propTree.getChildWithProperty(PropertyIds::ID, getValueTreePropertyId().toString());
 
@@ -69,10 +69,10 @@ bool NodeProperty::initialise(NodeBase* n)
 		d = ValueTree(PropertyIds::Property);
 		d.setProperty(PropertyIds::ID, getValueTreePropertyId().toString(), nullptr);
 		d.setProperty(PropertyIds::Value, defaultValue, nullptr);
-		propTree.addChild(d, -1, n->getUndoManager());
+		propTree.addChild(d, -1, um);
 	}
 
-	postInit(n);
+	postInit();
 
 	return true;
 }
@@ -89,7 +89,7 @@ NodePropertyT<T>::NodePropertyT(const Identifier& id, T defaultValue) :
 {}
 
 template <class T>
-void NodePropertyT<T>::postInit(NodeBase*)
+void NodePropertyT<T>::postInit()
 {
 	updater.setCallback(getPropertyTree(), { PropertyIds::Value }, valuetree::AsyncMode::Synchronously,
 		BIND_MEMBER_FUNCTION_2(NodePropertyT::update));
@@ -132,6 +132,7 @@ template struct NodePropertyT<int>;
 template struct NodePropertyT<String>;
 template struct NodePropertyT<bool>;
 
+#if HISE_INCLUDE_SCRIPTNODE_UI
 ComboBoxWithModeProperty::ComboBoxWithModeProperty(String defaultValue, const Identifier& id):
 	ComboBox(),
 	mode(id, defaultValue)
@@ -173,7 +174,7 @@ void ComboBoxWithModeProperty::mouseUp(const MouseEvent& e)
 	ComboBox::mouseUp(e);
 }
 
-void ComboBoxWithModeProperty::initModes(const StringArray& modes, NodeBase* n)
+void ComboBoxWithModeProperty::initModes(const StringArray& modes, UndoManager* um_, ValueTree v)
 {
 	if (initialised)
 		return;
@@ -181,9 +182,11 @@ void ComboBoxWithModeProperty::initModes(const StringArray& modes, NodeBase* n)
 	clear(dontSendNotification);
 	addItemList(modes, 1);
 
-	um = n->getUndoManager();
-	mode.initialise(n);
+	um = um_;
+	mode.initialise(um, v);
 	mode.setAdditionalCallback(BIND_MEMBER_FUNCTION_2(ComboBoxWithModeProperty::valueTreeCallback), true);
 	initialised = true;
 }
+#endif
+
 }

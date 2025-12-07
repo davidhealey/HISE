@@ -119,7 +119,7 @@ namespace control
 
 			area = area.translated(alpha * w, 0);
 
-			g.setColour(getHeaderColour());
+			g.setColour(getNodeColour());
 
 			g.fillEllipse(area);
 
@@ -691,7 +691,7 @@ struct dynamic
     
     void initialise(NodeBase* n)
     {
-        mode.initialise(n);
+        mode.initialise(n->getUndoManager(), n->getValueTree());
         mode.setAdditionalCallback(BIND_MEMBER_FUNCTION_2(dynamic::setMode), true);
     }
     
@@ -823,7 +823,8 @@ struct dynamic
 
         void timerCallback() override
         {
-            modeSelector.initModes(getConverterNames(), plotter.getSourceNodeFromParent());
+			auto pn = plotter.getSourceNodeFromParent();
+            modeSelector.initModes(getConverterNames(), pn->getUndoManager(), pn->getValueTree());
             repaint();
         };
 
@@ -886,7 +887,7 @@ struct dynamic_base : public base
 
 	void initialise(NodeBase* n) override
 	{
-		mode.initialise(n);
+		mode.initialise(n->getUndoManager(), n->getValueTree());
 		mode.setAdditionalCallback(BIND_MEMBER_FUNCTION_2(dynamic_base::setMode), true);
 	}
 

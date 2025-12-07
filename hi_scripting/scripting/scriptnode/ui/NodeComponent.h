@@ -54,7 +54,8 @@ using NodeProfiler = DummyNodeProfiler;
 
 class NodeComponent : public ComponentWithMiddleMouseDrag,
 					  public DspNetwork::SelectionListener,
-					  public ComponentWithDocumentation
+					  public ComponentWithDocumentation,
+					  public simple_visualiser::ParameterSource
 {
 public:
 
@@ -130,6 +131,7 @@ public:
 		void updateColour(Identifier id, var value)
 		{
 			colour = PropertyHelpers::getColourFromVar(value);
+			parent.setColour(complex_ui_laf::NodeColourId, colour);
 			repaint();
 		}
 
@@ -251,6 +253,18 @@ public:
 	void paintOverChildren(Graphics& g) override;
 	void resized() override;
 
+	double getParameterValue(int index) const override
+	{
+		jassert(isPositiveAndBelow(index, node->getNumParameters()));
+		return node->getParameterFromIndex(index)->getValue();
+	}
+
+	InvertableParameterRange getParameterRange(int index) const override
+	{
+		jassert(isPositiveAndBelow(index, node->getNumParameters()));
+		return RangeHelpers::getDoubleRange(node->getParameterFromIndex(index)->data);
+	}
+
 	bool keyPressed(const KeyPress& key) override
 	{
 		if(key == KeyPress::F2Key)
@@ -331,28 +345,6 @@ struct DeactivatedComponent : public NodeComponent
 	void resized() override;
 };
 
-struct simple_visualiser : public ScriptnodeExtraComponent<NodeBase>
-{
-	simple_visualiser(NodeBase*, PooledUIUpdater* u);
 
-	NodeBase* getNode();
-	double getParameter(int index);
-    
-    InvertableParameterRange getParameterRange(int index);
-    
-	Colour getNodeColour();
-
-	void timerCallback() override;
-	virtual void rebuildPath(Path& path) = 0;
-	void paint(Graphics& g) override;
-
-	Path original;
-	Path gridPath;
-	Path p;
-
-	bool stroke = true;
-	bool drawBackground = true;
-	float thickness = 1.0f;
-};
 
 }

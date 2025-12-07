@@ -209,7 +209,7 @@ public:
 		float fixLeftEdge = -1.0f;
 		float fixRightEdge = -1.0f;
 		int numSteps = -1;
-		int midPointSize = 15;
+		int midPointSize = 0;
 		int dragPointSize = 14;
 		int endPointSize = 20;
 		float margin = 0.0f;

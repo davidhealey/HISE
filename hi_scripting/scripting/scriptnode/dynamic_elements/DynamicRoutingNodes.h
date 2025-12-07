@@ -100,7 +100,7 @@ namespace duplilogic
 
 		void initialise(NodeBase* n)
 		{
-			mode.initialise(n);
+			mode.initialise(n->getUndoManager(), n->getValueTree());
 			mode.setAdditionalCallback(BIND_MEMBER_FUNCTION_2(dynamic::updateMode), true);
 		}
 
@@ -769,7 +769,7 @@ struct dynamic_matrix : public RoutableProcessor
 		//ScopedValueSetter<bool> svs(recursion, true);
 
 		internalData.setAdditionalCallback(BIND_MEMBER_FUNCTION_2(dynamic_matrix::updateFromEmbeddedData));
-		internalData.initialise(n);
+		internalData.initialise(um, n->getValueTree());
 	}
 
 	void updateFromEmbeddedData(Identifier id, var newValue)

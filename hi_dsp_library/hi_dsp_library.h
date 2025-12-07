@@ -62,8 +62,9 @@ END_JUCE_MODULE_DECLARATION
 Set this to 1 to include the big base 64 database dump. 
 */
 #ifndef HISE_INCLUDE_SCRIPTNODE_DATABASE
-#define HISE_INCLUDE_SCRIPTNODE_DATABASE 0
+#define HISE_INCLUDE_SCRIPTNODE_DATABASE 1
 #endif
+
 
 
 /** Config: HI_EXPORT_AS_PROJECT_DLL
@@ -125,7 +126,11 @@ Set this to 1 if you want to embed the libraries created with this module into y
 #endif
 
 
-
+#if USE_BACKEND && !HISE_NO_GUI_TOOLS
+#define HISE_INCLUDE_SCRIPTNODE_UI 1
+#else
+#define HISE_INCLUDE_SCRIPTNODE_UI 0
+#endif
 
 
 
@@ -137,6 +142,8 @@ Set this to 1 if you want to embed the libraries created with this module into y
 
 #include "node_api/helpers/node_macros.h"
 
+#include "node_api/helpers/node_ids.h"
+#include "node_api/helpers/NodeProperty.h"
 
 #include "snex_basics/snex_Types.h"
 
@@ -186,7 +193,7 @@ Set this to 1 if you want to embed the libraries created with this module into y
 #include "dsp_basics/ConvolutionBase.h"
 
 #include "node_api/helpers/Error.h"
-#include "node_api/helpers/node_ids.h"
+
 #include "node_api/helpers/ParameterData.h"
 #include "node_api/helpers/modulation.h"
 
@@ -254,6 +261,9 @@ Set this to 1 if you want to embed the libraries created with this module into y
 
 #include "node_api/helpers/UIUpdater.h"
 
+#if HISE_INCLUDE_SCRIPTNODE_UI
+#include "node_ui/node_ui.h"
+#endif
 
 namespace hise {
 	namespace HelperFunctions

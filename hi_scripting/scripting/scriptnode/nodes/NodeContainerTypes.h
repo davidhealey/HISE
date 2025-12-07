@@ -654,7 +654,7 @@ public:
 		void initialise(NodeBase* n)
 		{
 			parent = n;
-			blockSizeString.initialise(n);
+			blockSizeString.initialise(n->getUndoManager(), n->getValueTree());
 			blockSizeString.setAdditionalCallback(BIND_MEMBER_FUNCTION_2(DynamicBlockProperty::updateBlockSize), true);
 		}
 

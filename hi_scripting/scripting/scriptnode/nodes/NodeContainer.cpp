@@ -77,9 +77,15 @@ void NodeContainer::addFixedParameters()
 
 	auto an = asNode();
 
+
+
 	auto pData = an->createInternalParameterList();
 
 	auto d = an->getValueTree();
+
+	auto id = d[PropertyIds::FactoryPath].toString().fromFirstOccurrenceOf(".", false, false);
+
+	cppgen::CustomNodeProperties::addNodeIdManually(id, PropertyIds::HasFixedParameters);
 
 	d.getOrCreateChildWithName(PropertyIds::Parameters, an->getUndoManager());
 
@@ -503,7 +509,7 @@ SerialNode::SerialNode(DspNetwork* root, ValueTree data) :
 	NodeBase(root, data, 0),
 	isVertical(PropertyIds::IsVertical, true)
 {
-	isVertical.initialise(this);
+	isVertical.initialise(getUndoManager(), data);
 }
 
 struct LockedContainerExtraComponent: public ScriptnodeExtraComponent<NodeBase>,

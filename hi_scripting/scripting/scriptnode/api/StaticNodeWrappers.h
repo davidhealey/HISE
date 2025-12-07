@@ -440,7 +440,13 @@ public:
 		auto newNode = new InterpretedNode(n, d); 
 
 		newNode->template init<T, AddDataOffsetToUIPtr, UseNodeBaseAsUI>();
-		newNode->extraComponentFunction = ComponentType::createExtraComponent;
+
+		UIFactory uiFactory;
+
+		if(auto f = uiFactory.getCreateFunction(d))
+			newNode->extraComponentFunction = f;
+		else
+			newNode->extraComponentFunction = ComponentType::createExtraComponent;
 
 		return newNode;
 	}; 

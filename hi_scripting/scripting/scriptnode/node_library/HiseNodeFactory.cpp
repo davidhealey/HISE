@@ -106,71 +106,7 @@ struct input_toggle_editor : public ScriptnodeExtraComponent<input_toggle_base>
 
 
 
-template <typename ParameterClass> struct xy : 
-	public pimpl::parameter_node_base<ParameterClass>,
-	public pimpl::no_processing
-{
-	SN_NODE_ID("xy");
-	SN_GET_SELF_AS_OBJECT(xy);
-	SN_PARAMETER_NOSIGNAL_CONSTRUCTOR(xy, ParameterClass);
-	
 
-	enum class Parameters
-	{
-		X,
-		Y
-	};
-
-	void initialise(NodeBase* n)
-	{
-		this->p.initialise(n);
-		
-		if constexpr (!parameter::dynamic_list::isStaticList())
-		{
-			this->getParameter().numParameters.storeValue(2, n->getUndoManager());
-			this->getParameter().updateParameterAmount({}, 2);
-		}
-	}
-
-	DEFINE_PARAMETERS
-	{
-		DEF_PARAMETER(X, xy);
-		DEF_PARAMETER(Y, xy);
-	};
-	SN_PARAMETER_MEMBER_FUNCTION;
-
-	void setX(double v)
-	{
-		if(this->getParameter().getNumParameters() > 0)
-			this->getParameter().template call<0>(v);
-	}
-
-	void setY(double v)
-	{
-		if (this->getParameter().getNumParameters() > 1)
-			this->getParameter().template call<1>(v);
-	}
-
-	void createParameters(ParameterDataList& data)
-	{
-		{
-			DEFINE_PARAMETERDATA(xy, X);
-			p.setRange({ 0.0, 1.0 });
-			p.setDefaultValue(0.0);
-			data.add(std::move(p));
-		}
-		{
-			DEFINE_PARAMETERDATA(xy, Y);
-			p.setRange({ -1.0, 1.0 });
-			p.setDefaultValue(0.0);
-			data.add(std::move(p));
-		}
-	}
-
-	
-
-	JUCE_DECLARE_WEAK_REFERENCEABLE(xy);
-};
 
 struct TransportDisplay : public juce::ComponentWithMiddleMouseDrag,
 						  public PooledUIUpdater::SimpleTimer
@@ -863,172 +799,18 @@ Factory::Factory(DspNetwork* network) :
 
 namespace fx
 {
-	struct bitcrush_editor : simple_visualiser
-	{
-		bitcrush_editor(PooledUIUpdater* u) :
-			simple_visualiser(nullptr, u)
-		{};
-
-		void rebuildPath(Path& p) override
-		{
-			span<float, 100> x;
-			
-			for (int i = 0; i < 100; i++)
-				x[i] = (float)i / 100.0f - 50.0f;
-			
-            
-            
-			getBitcrushedValue(x, getParameter(0) / 2.5, getParameter(1));
-			
-            FloatSanitizers::sanitizeArray(x.begin(), x.size());
-            
-			p.startNewSubPath(0, 1.0f - x[0]);
-
-			for (int i = 1; i < 100; i++)
-				p.lineTo(i, 1.0f - x[i]);
-		}
-
-		static Component* createExtraComponent(void* , PooledUIUpdater* u)
-		{
-			return new bitcrush_editor(u);
-		}
-	};
-
-	struct sampleandhold_editor : simple_visualiser
-	{
-		sampleandhold_editor(PooledUIUpdater* u) :
-			simple_visualiser(nullptr, u)
-		{};
-
-		void rebuildPath(Path& p) override
-		{
-			span<float, 100> x;
-
-			for (int i = 0; i < 100; i++)
-				x[i] = hmath::sin(float_Pi * 2.0f * (float)i / 100.0f);
-
-			auto n = getNode();
-
-			if (n == nullptr)
-				return;
-
-			auto delta = (int)(getNode()->getParameterFromIndex(0)->getValue() / JUCE_LIVE_CONSTANT_OFF(10.0f));
-			int counter = 0;
-			float v = 0.0;
-
-			for (int i = 0; i < 100; i++)
-			{
-				if (counter++ >= delta)
-				{
-					counter = 0;
-					v = x[i];
-				}
-
-				x[i] = v;
-			}
-			
-			
-
-			//getBitcrushedValue(x,  / JUCE_LIVE_CONSTANT_OFF(2.5f));
-
-			p.startNewSubPath(0, 1.0f - x[0]);
-
-			for (int i = 1; i < 100; i++)
-				p.lineTo(i, 1.0f - x[i]);
-		}
-
-		static Component* createExtraComponent(void*, PooledUIUpdater* u)
-		{
-			return new sampleandhold_editor(u);
-		}
-	};
-
-	struct phase_delay_editor : public simple_visualiser
-	{
-		phase_delay_editor(PooledUIUpdater* u) :
-			simple_visualiser(nullptr, u)
-		{};
-
-		void rebuildPath(Path& p) override
-		{
-			span<float, 100> x;
-
-			for (int i = 0; i < 100; i++)
-				x[i] = hmath::sin(float_Pi * 2.0f * (float)i / 100.0f);
-
-			auto v = getParameter(0);
-
-			NormalisableRange<double> fr(20.0, 20000.0);
-			fr.setSkewForCentre(500.0);
-
-			auto nv = fr.convertTo0to1(v);
-
-			original.startNewSubPath(0, 1.0f - x[0]);
-
-			for (int i = 1; i < 100; i++)
-				original.lineTo(i, 1.0f - x[i]);
-
-			p.startNewSubPath(0, 1.0f - x[50 + roundToInt(nv * 49)]);
-
-			for (int i = 1; i < 100; i++)
-			{
-				auto index = (i + 50 + roundToInt(nv * 49)) % 100;
-
-				p.lineTo(i, 1.0f - x[index]);
-			}
-		}
-
-		static Component* createExtraComponent(void*, PooledUIUpdater* u)
-		{
-			return new phase_delay_editor(u);
-		}
-	};
-
-    
-
-	struct reverb_editor : simple_visualiser
-	{
-		reverb_editor(PooledUIUpdater* u) :
-			simple_visualiser(nullptr, u)
-		{};
-
-		void rebuildPath(Path& p) override
-		{
-			auto damp = getParameter(0);
-			auto width = getParameter(1);
-			auto size = getParameter(2);
-
-			p.startNewSubPath(0.0f, 0.0f);
-			p.startNewSubPath(1.0f, 1.0f);
-
-			Rectangle<float> base(0.5f, 0.5f, 0.0f, 0.0f);
-
-			for (int i = 0; i < 8; i++)
-			{
-				auto ni = (float)i / 8.0f;
-				ni = hmath::pow(ni, 1.0f + (float)damp);
-
-				auto a = base.withSizeKeepingCentre(width * ni * 2.0f, size * ni);
-				p.addRectangle(a);
-			}
-		}
-
-		static Component* createExtraComponent(void*, PooledUIUpdater* u)
-		{
-			return new reverb_editor(u);
-		}
-	};
+	
 
 
 Factory::Factory(DspNetwork* network) :
 	NodeFactory(network)
 {
-	registerPolyNode<reverb, wrap::illegal_poly<reverb>, reverb_editor>();
-	registerPolyNode<sampleandhold<1>, sampleandhold<NUM_POLYPHONIC_VOICES>, sampleandhold_editor>();
-	registerPolyNode<bitcrush<1>, bitcrush<NUM_POLYPHONIC_VOICES>, bitcrush_editor>();
+	registerPolyNode<reverb, wrap::illegal_poly<reverb>>();
+	registerPolyNode<sampleandhold<1>, sampleandhold<NUM_POLYPHONIC_VOICES>>();
+	registerPolyNode<bitcrush<1>, bitcrush<NUM_POLYPHONIC_VOICES>>();
 	registerPolyNode<wrap::fix<2, haas<1>>, wrap::fix<2, haas<NUM_POLYPHONIC_VOICES>>>();
 	registerPolyNode<pitch_shift<1>, pitch_shift<NUM_POLYPHONIC_VOICES>>();
-	registerPolyNode<phase_delay<1>, phase_delay<NUM_POLYPHONIC_VOICES>, phase_delay_editor>();
+	registerPolyNode<phase_delay<1>, phase_delay<NUM_POLYPHONIC_VOICES>>();
 }
 
 }
@@ -1101,10 +883,10 @@ template <int NV> struct NeuralNode: public NodeBase
     {
         cppgen::CustomNodeProperties::setPropertyForObject(*this, PropertyIds::IsFixRuntimeTarget);
         
-        networkId.initialise(this);
+        networkId.initialise(getUndoManager(), data);
         networkId.setAdditionalCallback(BIND_MEMBER_FUNCTION_2(NeuralNode::updateModel), true);
 
-        hpfFrequency.initialise(this);
+        hpfFrequency.initialise(getUndoManager(), data);
         hpfFrequency.setAdditionalCallback(BIND_MEMBER_FUNCTION_2(NeuralNode::updateHpf), true);
     }
     
@@ -1222,42 +1004,7 @@ template <int NV> struct NeuralNode: public NodeBase
     NodePropertyT<String> hpfFrequency;
 };
 
-struct map_editor : public simple_visualiser
-{
-    map_editor(PooledUIUpdater* u) :
-        simple_visualiser(nullptr, u)
-    {
-        setSize(256, 100);
-    };
 
-    void rebuildPath(Path& p) override
-    {
-        
-        auto p0 = getParameterRange(0).convertTo0to1(getParameter(0), true);
-        auto p1 = getParameterRange(1).convertTo0to1(getParameter(1), true);
-        auto p2 = getParameterRange(2).convertTo0to1(getParameter(2), true);
-        auto p3 = getParameterRange(3).convertTo0to1(getParameter(3), true);
-        
-        p.startNewSubPath(0.0f, 0.0f);
-        p.startNewSubPath(1.0f, 1.0f);
-        
-        original.startNewSubPath(0.0f, 0.0f);
-        original.startNewSubPath(1.0f, 1.0f);
-        
-        p.startNewSubPath(0.0f, 1.0f - p0);
-        p.lineTo(1.0f, 1.0f - p2);
-        p.startNewSubPath(0.0f, 1.0f - p1);
-        p.lineTo(1.0f, 1.0f - p3);
-        
-        original.startNewSubPath(0.0f, 1.0f - (p0 + p1) / 2.0f);
-        original.lineTo(1.0f, 1.0f - (p2 + p3) / 2.0f);
-    }
-
-    static Component* createExtraComponent(void*, PooledUIUpdater* u)
-    {
-        return new map_editor(u);
-    }
-};
     
 
 Factory::Factory(DspNetwork* n) :
@@ -1289,7 +1036,7 @@ Factory::Factory(DspNetwork* n) :
 	REGISTER_POLY_MATH_NODE(pow);
     REGISTER_POLY_MATH_NODE(intensity);
     
-    registerNode<map, map_editor>();
+    registerNode<map>();
     
     registerNode<wrap::data<table, data::dynamic::table>, data::ui::table_editor_without_mod>();
 
@@ -1384,7 +1131,7 @@ namespace control
 
 		registerNoProcessNode<duplilogic::dynamic::NodeType, duplilogic::dynamic::editor>();
 		registerNoProcessNode<dynamic_dupli_pack, data::ui::sliderpack_editor>();
-		registerNoProcessNode<faders::dynamic::NodeType, faders::dynamic::editor>();
+		registerNoProcessNode<faders::NodeType, faders::editor>();
 		registerNoProcessNode<control::xy_editor::NodeType, control::xy_editor>();
 		registerNoProcessNode<control::resetter_editor::NodeType, control::resetter_editor>();
 		registerPolyModNode<dynamic_smoother_parameter<1>, dynamic_smoother_parameter<NUM_POLYPHONIC_VOICES>, smoothers::dynamic_base::editor>();

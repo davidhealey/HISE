@@ -52,7 +52,7 @@ void dynamic::prepare(PrepareSpecs ps)
 void dynamic::initialise(NodeBase* n)
 {
     parentNode = n;
-	mode.initialise(n);
+	mode.initialise(n->getUndoManager(), n->getValueTree());
 	mode.setAdditionalCallback(BIND_MEMBER_FUNCTION_2(dynamic::setMode), true);
 }
 
@@ -106,7 +106,7 @@ dynamic::editor::editor(dynamic* t, PooledUIUpdater* updater) :
 	midiMode("Gate"),
 	meter(updater)
 {
-	midiMode.initModes(dynamic::getModes(), t->parentNode);
+	midiMode.initModes(dynamic::getModes(), t->parentNode->getUndoManager(), t->parentNode->getValueTree());
 
 	meter.setModValue(t->lastValue);
 

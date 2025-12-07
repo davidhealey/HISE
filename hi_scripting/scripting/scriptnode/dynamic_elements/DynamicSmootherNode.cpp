@@ -225,7 +225,7 @@ void minmax_editor::paint(Graphics& g)
 	g.setColour(Colours::white);
 	g.drawText(s, pathArea.reduced(UIValues::NodeMargin), lastData.range.rng.skew < 1.0 ? Justification::centredTop : Justification::centredBottom);
 
-	g.setColour(getHeaderColour());
+	g.setColour(getNodeColour());
 
 	Path dst;
 
@@ -515,7 +515,8 @@ namespace smoothers
 		currentColour =  getObject()->lastValue.getChangedValue(v) ? Colour(SIGNAL_COLOUR) : Colours::grey;
 		repaint();
 
-		modeSelector.initModes(smoothers::dynamic_base::getSmoothNames(), plotter.getSourceNodeFromParent());
+		auto pn = plotter.getSourceNodeFromParent();
+		modeSelector.initModes(smoothers::dynamic_base::getSmoothNames(), pn->getUndoManager(), pn->getValueTree());
 	}
 
 }

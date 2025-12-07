@@ -1008,7 +1008,7 @@ GlobalRoutingNodeBase::GlobalRoutingNodeBase(DspNetwork* n, ValueTree d) :
 {
 	globalRoutingManager = GlobalRoutingManager::Helpers::getOrCreate(n->getScriptProcessor()->getMainController_());
 
-	slotId.initialise(this);
+	slotId.initialise(getUndoManager(), d);
 }
 
 String GlobalRoutingNodeBase::getTargetId() const
@@ -1349,7 +1349,7 @@ GlobalCableNode::GlobalCableNode(DspNetwork* n, ValueTree d) :
 
 	globalRoutingManager = GlobalRoutingManager::Helpers::getOrCreate(n->getScriptProcessor()->getMainController_());
 
-	slotId.initialise(this);
+	slotId.initialise(getUndoManager(), d);
 	slotId.setAdditionalCallback(BIND_MEMBER_FUNCTION_2(GlobalCableNode::updateConnection), true);
 
 	initParameters();

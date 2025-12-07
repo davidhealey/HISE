@@ -1474,7 +1474,7 @@ struct FixBlockXComponent : public Component
 	{
 		addAndMakeVisible(mode);
 
-		mode.initModes({ "8", "16", "32", "64", "128", "256" }, n);
+		mode.initModes({ "8", "16", "32", "64", "128", "256" }, n->getUndoManager(), n->getValueTree());
 		setSize(128 + 2 * UIValues::NodeMargin, 32);
 	};
 
@@ -1645,7 +1645,7 @@ SoftBypassNode::SoftBypassNode(DspNetwork* n, ValueTree t):
 	initListeners();
 	obj.initialise(this);
 
-	smoothingTime.initialise(this);
+	smoothingTime.initialise(getUndoManager(), getValueTree());
 	smoothingTime.setAdditionalCallback(BIND_MEMBER_FUNCTION_2(SoftBypassNode::updateSmoothingTime), true);
 }
 

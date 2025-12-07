@@ -52,12 +52,12 @@ struct NodeProperty
 
 		This will automatically initialise the proper value tree ID at the best time.
 	*/
-	bool initialise(NodeBase* n);
+	bool initialise(UndoManager* um, ValueTree v);
 
 	/** Callback when the initialisation was successful. This might happen either during the initialise() method or after all parameters
 		are created. Use this callback to setup the listeners / the logic that changes the property.
 	*/
-	virtual void postInit(NodeBase* n) = 0;
+	virtual void postInit() = 0;
 
 	/** Returns the ID in the ValueTree. */
 	Identifier getValueTreePropertyId() const;
@@ -86,7 +86,7 @@ template <class T> struct NodePropertyT : public NodeProperty
 {
 	NodePropertyT(const Identifier& id, T defaultValue);;
 
-	void postInit(NodeBase* ) override;
+	void postInit() override;
 
 	void storeValue(const T& newValue, UndoManager* um);
 
@@ -109,6 +109,7 @@ extern template struct NodePropertyT<int>;
 extern template struct NodePropertyT<String>;
 extern template struct NodePropertyT<bool>;
 
+#if HISE_INCLUDE_SCRIPTNODE_UI
 struct ComboBoxWithModeProperty : public ComboBox,
                                   public ComboBoxListener
 {
@@ -124,7 +125,7 @@ struct ComboBoxWithModeProperty : public ComboBox,
 
 	void mouseUp(const MouseEvent& e) override;
 
-	void initModes(const StringArray& modes, NodeBase* n);
+	void initModes(const StringArray& modes, UndoManager* um, ValueTree v);
 
 	bool initialised = false;
 	UndoManager* um;
@@ -132,60 +133,8 @@ struct ComboBoxWithModeProperty : public ComboBox,
 	ScriptnodeComboBoxLookAndFeel plaf;
     JUCE_DECLARE_WEAK_REFERENCEABLE(ComboBoxWithModeProperty);
 };
+#endif
 
 
-template <class T> class ScriptnodeExtraComponent : public ComponentWithMiddleMouseDrag,
-public PooledUIUpdater::SimpleTimer
-{
-public:
-
-	using ObjectType = T;
-
-	ObjectType* getObject() const
-	{
-		return object.get();
-	}
-
-protected:
-
-	ScriptnodeExtraComponent(ObjectType* t, PooledUIUpdater* updater) :
-		SimpleTimer(updater),
-		object(t)
-	{};
-
-	Colour getHeaderColour() const
-	{
-		if (auto nc = findParentComponentOfClass<NodeComponent>())
-		{
-			return nc->getHeaderColour();
-		}
-
-		return Colours::transparentBlack;
-	}
-
-private:
-
-	WeakReference<ObjectType> object;
-};
-
-struct DspNetworkPathFactory : public PathFactory
-{
-	String getId() const override { return "Scriptnode Toolbar"; }
-
-	Path createPath(const String& url) const override;
-	Array<Description> getDescription() const override;
-	
-};
-
-struct NodeComponentFactory : public PathFactory
-{
-	static Component* createComponent(NodeBase* node);
-
-	String getId() const;;
-
-	Array<Description> getDescription() const override;
-
-	Path createPath(const String& id) const override;
-};
 
 }

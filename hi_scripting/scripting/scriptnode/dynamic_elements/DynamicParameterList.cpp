@@ -140,7 +140,8 @@ void dynamic::editor::timerCallback()
 	{
 		if (auto nc = findParentComponentOfClass<NodeComponent>())
 		{
-			mode.initModes(duplilogic::dynamic::getSpreadModes(), nc->node.get());
+			auto pn = nc->node.get();
+			mode.initModes(duplilogic::dynamic::getSpreadModes(), pn->getUndoManager(), pn->getValueTree());
 			initialised = true;
 		}
 	}
@@ -357,7 +358,7 @@ void dynamic_list::initialise(NodeBase* n)
 
 	connectionUpdater.setCallback(switchTree, valuetree::AsyncMode::Synchronously, BIND_MEMBER_FUNCTION_2(dynamic_list::updateConnections));
 
-	numParameters.initialise(n);
+	numParameters.initialise(n->getUndoManager(), n->getValueTree());
 	numParameters.setAdditionalCallback(BIND_MEMBER_FUNCTION_2(dynamic_list::updateParameterAmount));
 
 	if (!rebuildMultiOutputSlots())

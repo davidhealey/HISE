@@ -104,7 +104,7 @@ namespace waveshapers
 
 		getObject()->connectWaveformUpdaterToComplexUI(t->getMainDisplayBuffer().get(), true);
 
-		waveform.setSpecialLookAndFeel(new data::ui::pimpl::complex_ui_laf(), true);
+		waveform.setSpecialLookAndFeel(new scriptnode::complex_ui_laf(), true);
 		waveform.setComplexDataUIBase(t->getMainDisplayBuffer().get());
 
 		addAndMakeVisible(waveform);

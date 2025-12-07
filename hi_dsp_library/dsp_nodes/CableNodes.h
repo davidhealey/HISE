@@ -1828,7 +1828,7 @@ namespace control
 		void initialise(NodeBase* n) override
 		{
 			this->p.initialise(n);
-			fader.initialise(n);
+			fader.initialise(n->getUndoManager(), n->getValueTree());
 		}
 
 		void setValue(double v)
@@ -2743,6 +2743,76 @@ namespace control
     template <int NV, typename ParameterType> using delay_cable = multi_parameter<NV, ParameterType, multilogic::delay_cable>;
 	template <int NV, typename ParameterType> using change = multi_parameter<NV, ParameterType, multilogic::change>;
 	template <int NV, typename ParameterType> using blend = multi_parameter<NV, ParameterType, multilogic::blend>;
+
+	template <typename ParameterClass> struct xy :
+		public pimpl::parameter_node_base<ParameterClass>,
+		public pimpl::no_processing
+	{
+		SN_NODE_ID("xy");
+		SN_DESCRIPTION("A XY-Controller for two parameters");
+		SN_GET_SELF_AS_OBJECT(xy);
+		
+		xy() : 
+		  control::pimpl::parameter_node_base<ParameterClass>(getStaticId()), 
+		  control::pimpl::no_processing(getStaticId()) 
+		{
+			cppgen::CustomNodeProperties::addModOutput(getStaticId(), { "X", "Y" });
+		};
+
+		enum class Parameters
+		{
+			X,
+			Y
+		};
+
+		void initialise(NodeBase* n)
+		{
+			this->p.initialise(n);
+
+			if constexpr (!ParameterClass::isStaticList())
+			{
+				this->getParameter().numParameters.storeValue(2, n->getUndoManager());
+				this->getParameter().updateParameterAmount({}, 2);
+			}
+		}
+
+		DEFINE_PARAMETERS
+		{
+			DEF_PARAMETER(X, xy);
+			DEF_PARAMETER(Y, xy);
+		};
+		SN_PARAMETER_MEMBER_FUNCTION;
+
+		void setX(double v)
+		{
+			if (this->getParameter().getNumParameters() > 0)
+				this->getParameter().template call<0>(v);
+		}
+
+		void setY(double v)
+		{
+			if (this->getParameter().getNumParameters() > 1)
+				this->getParameter().template call<1>(v);
+		}
+
+		void createParameters(ParameterDataList& data)
+		{
+			{
+				DEFINE_PARAMETERDATA(xy, X);
+				p.setRange({ 0.0, 1.0 });
+				p.setDefaultValue(0.0);
+				data.add(std::move(p));
+			}
+			{
+				DEFINE_PARAMETERDATA(xy, Y);
+				p.setRange({ -1.0, 1.0 });
+				p.setDefaultValue(0.0);
+				data.add(std::move(p));
+			}
+		}
+
+		JUCE_DECLARE_WEAK_REFERENCEABLE(xy);
+	};
 
 	struct smoothed_parameter_base: public mothernode
 	{

@@ -134,6 +134,7 @@ DECLARE_ID(Model);
 DECLARE_ID(HpfFreq);
 DECLARE_ID(BlockSize);
 DECLARE_ID(IsPolyphonic);
+DECLARE_ID(HasFixedParameters);
 DECLARE_ID(UseRingBuffer);
 DECLARE_ID(IsProcessingHiseEvent);
 DECLARE_ID(IsControlNode);

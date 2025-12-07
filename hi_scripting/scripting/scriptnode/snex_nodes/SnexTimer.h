@@ -250,7 +250,7 @@ struct snex_timer : public OptionalSnexSource
 	{
 		OptionalSnexSource::initialise(n);
 
-		mode.initialise(n);
+		mode.initialise(n->getUndoManager(), n->getValueTree());
 		mode.setAdditionalCallback(BIND_MEMBER_FUNCTION_2(snex_timer::updateMode), true);
 	}
 

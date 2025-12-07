@@ -318,7 +318,10 @@ void local_cable_base::editor::timerCallback()
 		if(!name.initialised)
 		{
 			auto sa = Helpers::getListOfLocalVariableNames(n->node->getRootNetwork()->getValueTree());
-			name.initModes(sa, n->node.get());
+
+			auto pn = n->node.get();
+
+			name.initModes(sa, pn->getUndoManager(), pn->getValueTree());
 			return;
 		}
 
@@ -762,7 +765,7 @@ void local_cable_base::initialise(NodeBase* n)
 		node->getParameterTree().addChild(np, -1, node->getUndoManager());
 	}
 
-	currentId.initialise(n);
+	currentId.initialise(n->getUndoManager(), n->getValueTree());
 	getManager()->registerCable(this);
 }
 
@@ -1036,7 +1039,7 @@ void dynamic::initialiseDynamic(NodeBase* n)
 {
 	parentNode = n;
 
-	receiveIds.initialise(n);
+	receiveIds.initialise(n->getUndoManager(), n->getValueTree());
     receiveIds.setAdditionalCallback(BIND_MEMBER_FUNCTION_2(dynamic::restoreConnections), true);
 }
 

@@ -717,6 +717,85 @@ struct rms
     linear lf;
 };
 
+struct dynamic
+{
+	static constexpr int NumMaxFaders = 8;
+
+	enum FaderMode
+	{
+		Switch,
+		Linear,
+		Overlap,
+		Squared,
+		RMS,
+		Cosine,
+		CosineHalf,
+		Harmonics,
+		Threshold
+	};
+
+	dynamic() :
+		mode(PropertyIds::Mode, "Linear"),
+        numParameters(PropertyIds::NumParameters, 0)
+	{}
+
+	void initialise(UndoManager* um, const ValueTree& v)
+	{
+		mode.initialise(um, v);
+		mode.setAdditionalCallback(VT_BIND_PROPERTY_LISTENER(updateMode), true); 
+
+        numParameters.initialise(um, v);
+
+		if (v.getChildWithName(PropertyIds::SwitchTargets).getNumChildren() == 0)
+		{
+            numParameters.storeValue(2, um);
+		}
+	}
+
+	void updateMode(const Identifier& id, const var& newValue)
+	{
+		currentMode = (FaderMode)getFaderModes().indexOf(newValue.toString());
+	}
+
+	static StringArray getFaderModes()
+	{
+		return { "Switch", "Linear", "Overlap", "Squared", "RMS", "Cosine", "Cosine Half", "Harmonics", "Threshold" };
+	}
+
+	template <int Index> double getFadeValue(int numElements, double v) const
+	{
+		switch (currentMode)
+		{
+		case FaderMode::Switch:		return sf.getFadeValue<Index>(numElements, v);
+		case FaderMode::Linear:		return lf.getFadeValue<Index>(numElements, v);
+		case FaderMode::Overlap:	return of.getFadeValue<Index>(numElements, v);
+		case FaderMode::Squared:	return qf.getFadeValue<Index>(numElements, v);
+		case FaderMode::RMS:		return rf.getFadeValue<Index>(numElements, v);
+		case FaderMode::Harmonics:  return hf.getFadeValue<Index>(numElements, v);
+		case FaderMode::Threshold:  return tr.getFadeValue<Index>(numElements, v);
+		case FaderMode::Cosine:     return cs.getFadeValue<Index>(numElements, v);
+		case FaderMode::CosineHalf: return ch.getFadeValue<Index>(numElements, v);
+		}
+
+		return 0.0;
+	}
+
+	NodePropertyT<String> mode;
+    NodePropertyT<int> numParameters;
+
+	FaderMode currentMode = FaderMode::Linear;
+
+	harmonics hf;
+	switcher sf;
+	linear lf;
+	rms rf;
+	overlap of;
+	squared qf;
+	threshold tr;
+	cosine cs;
+	cosine_half ch;
+};
+
 
 }
 

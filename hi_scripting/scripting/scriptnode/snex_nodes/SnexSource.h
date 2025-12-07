@@ -609,7 +609,7 @@ public:
 
 		compileChecker.setCallback(n->getValueTree(), valuetree::AsyncMode::Synchronously, BIND_MEMBER_FUNCTION_0(SnexSource::throwScriptnodeErrorIfCompileFail));
 
-		classId.initialise(n);
+		classId.initialise(n->getUndoManager(), n->getValueTree());
 		classId.setAdditionalCallback(BIND_MEMBER_FUNCTION_2(SnexSource::updateClassId), true);
 	}
 
