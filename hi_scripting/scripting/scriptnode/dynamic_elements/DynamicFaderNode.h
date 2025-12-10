@@ -59,12 +59,12 @@ struct dynamic
 		mode(PropertyIds::Mode, "Peak")
 	{};
 
-	void initialise(NodeBase* n)
+	void initialise(ObjectWithValueTree* n)
 	{
-		mode.initialise(n->getUndoManager(), n->getValueTree());
+		mode.initialise(n);
 		mode.setAdditionalCallback(BIND_MEMBER_FUNCTION_2(dynamic::updateMode), true);
 
-		parentNode = n;
+		parentNode = dynamic_cast<NodeBase*>(n);
 	}
 
 	void updateMode(Identifier, var newValue)
@@ -107,7 +107,7 @@ struct dynamic
 			addAndMakeVisible(modeSelector);
 
 			auto pn = getObject()->obj.analyser.parentNode.get();
-			modeSelector.initModes(dynamic::getAnalyserModes(), pn->getUndoManager(), pn->getValueTree());
+			modeSelector.initModes(dynamic::getAnalyserModes(), pn);
 
 			setSize(500, 128);
 			stop();

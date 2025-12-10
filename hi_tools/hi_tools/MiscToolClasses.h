@@ -2753,6 +2753,8 @@ struct TextEditorWithAutocompleteComponent: public Timer,
 
     virtual Identifier getIdForAutocomplete() const = 0;
 
+	static bool isAutocomplete(Component* c);
+
     struct Autocomplete;
 
     Autocomplete* getCurrentAutocomplete();

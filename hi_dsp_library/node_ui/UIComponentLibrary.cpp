@@ -43,7 +43,7 @@ simple_visualiser::simple_visualiser(mothernode*, PooledUIUpdater* u) :
 
 double simple_visualiser::getParameter(int index)
 {
-	if (auto nc = findParentComponentOfClass<ParameterSource>())
+	if (auto nc = findParentComponentOfClass<ParameterSourceObject>())
 		return nc->getParameterValue(index);
 
 	return 0.0;
@@ -51,7 +51,7 @@ double simple_visualiser::getParameter(int index)
 
 InvertableParameterRange simple_visualiser::getParameterRange(int index)
 {
-	if (auto nc = findParentComponentOfClass<ParameterSource>())
+	if (auto nc = findParentComponentOfClass<ParameterSourceObject>())
 		return nc->getParameterRange(index);
 
 	return {};
@@ -244,7 +244,7 @@ void xfader_editor::timerCallback()
 {
 	double v = 0.0;
 
-	if(auto psource = findParentComponentOfClass<NodeComponentParameterSource>())
+	if(auto psource = findParentComponentOfClass<ParameterSourceObject>())
 	{
 		setInputValue(psource->getParameterValue(0));
 	}	

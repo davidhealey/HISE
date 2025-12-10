@@ -162,9 +162,9 @@ using SelectorEditor = HostHelpers::NoExtraComponent;
 
 struct ProcessingCheck
 {
-	void initialise(NodeBase* n)
+	void initialise(ObjectWithValueTree* n)
 	{
-		b = n;
+		b = dynamic_cast<NodeBase*>(n);
 	}
 
 	void prepare(PrepareSpecs ps)
@@ -319,9 +319,7 @@ void local_cable_base::editor::timerCallback()
 		{
 			auto sa = Helpers::getListOfLocalVariableNames(n->node->getRootNetwork()->getValueTree());
 
-			auto pn = n->node.get();
-
-			name.initModes(sa, pn->getUndoManager(), pn->getValueTree());
+			name.initModes(sa, n);
 			return;
 		}
 
@@ -335,8 +333,6 @@ void local_cable_base::editor::timerCallback()
 				name.clear(dontSendNotification);
 				name.addItemList(sa, 1);
 				name.setText(cv, dontSendNotification);
-
-						
 			}
 		}
 
@@ -752,9 +748,9 @@ StringArray LocalCableHelpers::getListOfLocalVariableNames(const ValueTree& netw
 	return sa;
 }
 
-void local_cable_base::initialise(NodeBase* n)
+void local_cable_base::initialise(ObjectWithValueTree* n)
 {
-	node = n;
+	node = dynamic_cast<NodeBase*>(n);
 
 	if(node->getParameterTree().getNumChildren() == 0)
 	{
@@ -765,7 +761,7 @@ void local_cable_base::initialise(NodeBase* n)
 		node->getParameterTree().addChild(np, -1, node->getUndoManager());
 	}
 
-	currentId.initialise(n->getUndoManager(), n->getValueTree());
+	currentId.initialise(n);
 	getManager()->registerCable(this);
 }
 
@@ -1035,11 +1031,11 @@ void dynamic::validateDynamic(PrepareSpecs receiveSpecs_)
 	checkSourceAndTargetProcessSpecs();
 }
 
-void dynamic::initialiseDynamic(NodeBase* n)
+void dynamic::initialiseDynamic(ObjectWithValueTree* n)
 {
-	parentNode = n;
+	parentNode = dynamic_cast<NodeBase*>(n);
 
-	receiveIds.initialise(n->getUndoManager(), n->getValueTree());
+	receiveIds.initialise(n);
     receiveIds.setAdditionalCallback(BIND_MEMBER_FUNCTION_2(dynamic::restoreConnections), true);
 }
 

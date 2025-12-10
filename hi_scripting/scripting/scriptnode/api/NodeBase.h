@@ -230,7 +230,8 @@ private:
 
 /** A node in the DSP network. */
 class NodeBase : public ConstScriptingObject,
-				 public ObjectWithJSONConverter
+				 public ObjectWithJSONConverter,
+				 public ObjectWithValueTree
 {
 public:
 
@@ -432,7 +433,7 @@ public:
 	bool isBeingMoved() const;
 
 	NodeBase* getParentNode() const;
-	ValueTree getValueTree() const;
+	ValueTree getValueTree() const override;
 	String getId() const;
 
 	String getName() const
@@ -445,7 +446,7 @@ public:
 		return nid;
 	}
 
-	UndoManager* getUndoManager(bool returnIfPending=false) const;
+	UndoManager* getUndoManager() const override;
     
 	Rectangle<int> getBoundsToDisplay(Rectangle<int> originalHeight) const;
 
@@ -509,12 +510,32 @@ public:
 
 	float getSignalPeak(int channel, bool post) const;
 
+	struct ScopedUndoDeactivator
+	{
+		ScopedUndoDeactivator(NodeBase& n):
+		  node(n),
+		  prevValue(node.returnIfPending)
+		{
+			node.returnIfPending = true;
+		};
+
+		~ScopedUndoDeactivator()
+		{
+			node.returnIfPending = prevValue;
+		}
+
+		NodeBase& node;
+		bool prevValue;
+	};
+
 protected:
 
 	ValueTree v_data;
 	PrepareSpecs lastSpecs;
 
 private:
+
+	bool returnIfPending = false;
 
     span<span<float, NUM_MAX_CHANNELS>, 2> signalPeaks;
     

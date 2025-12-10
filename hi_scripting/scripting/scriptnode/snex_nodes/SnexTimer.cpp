@@ -153,7 +153,7 @@ bool snex_timer::preprocess(String& code)
 		modeSelector("toggle")
 	{
 		auto pn = t->getParentNode();
-		modeSelector.initModes(snex_timer::getModes(), pn->getUndoManager(), pn->getValueTree());
+		modeSelector.initModes(snex_timer::getModes(), pn);
 		t->addCompileListener(this);
 
 		addAndMakeVisible(modKnob);

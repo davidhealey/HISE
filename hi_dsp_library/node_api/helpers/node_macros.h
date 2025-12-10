@@ -37,9 +37,6 @@ namespace scriptnode
 using namespace juce;
 using namespace hise;
 
-// We'll define it here once so that it can be used in the initialise() callback
-class NodeBase;
-
 /** Parameter Preprocessors
 
 	1. Create a enum called Parameters for each parameter
@@ -127,7 +124,7 @@ constexpr const auto& getWrappedObject() const { return x; }
 	else return false; }
 
 
-#define SN_DEFAULT_INIT(ObjectType)  void initialise(NodeBase* n)  { \
+#define SN_DEFAULT_INIT(ObjectType)  void initialise(ObjectWithValueTree* n)  { \
 	if constexpr(prototypes::check::initialise<ObjectType>::value) \
 		obj.initialise(n); }
 
@@ -163,7 +160,7 @@ constexpr const auto& getWrappedObject() const { return x; }
 
 /** Node empty callback macros. */
 
-#define SN_EMPTY_INITIALISE void initialise(NodeBase* ) {}
+#define SN_EMPTY_INITIALISE void initialise(ObjectWithValueTree* ) {}
 #define SN_EMPTY_PREPARE void prepare(PrepareSpecs) {}
 #define SN_EMPTY_RESET void reset() {}
 #define SN_EMPTY_PROCESS template <typename ProcessDataType> void process(ProcessDataType&) {}

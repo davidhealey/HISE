@@ -79,7 +79,7 @@ template <typename ParameterType> struct envelope_base: public control::pimpl::p
 		}
 	}
 
-	virtual void initialise(NodeBase* n)
+	virtual void initialise(ObjectWithValueTree* n)
 	{
 		this->p.initialise(n);
 
@@ -1020,7 +1020,7 @@ template <int NV, typename ParameterClass, typename DragHandler=flex_ahdsr_base:
 
 	}
 
-	void initialise(NodeBase* n)
+	void initialise(ObjectWithValueTree* n)
 	{
 		pimpl::envelope_base<ParameterClass>::initialise(n);
 

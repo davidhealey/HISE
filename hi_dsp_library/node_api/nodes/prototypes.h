@@ -44,7 +44,7 @@ namespace prototypes
 	typedef void(*reset)(void*);
 	typedef void(*setParameter)(void*, double);
 	typedef void(*handleHiseEvent)(void*, HiseEvent*);
-	typedef void(*initialise)(void*, NodeBase*);
+	typedef void(*initialise)(void*, ObjectWithValueTree*);
 	typedef void(*destruct)(void*);
 	typedef int(*handleModulation)(void*, double*);
 	typedef void(*setExternalData)(void*, const ExternalData*, int);
@@ -252,7 +252,7 @@ namespace prototypes
 		template <typename FrameDataType> static void processFrame(void* obj, FrameDataType* data) { static_cast<T*>(obj)->processFrame(*data); };
 		static void reset(void* obj) { static_cast<T*>(obj)->reset(); }
 		static void handleHiseEvent(void* obj, HiseEvent* e) { static_cast<T*>(obj)->handleHiseEvent(*e); };
-		static void initialise(void* obj, NodeBase* n) { static_cast<T*>(obj)->initialise(n); };
+		static void initialise(void* obj, ObjectWithValueTree* n) { static_cast<T*>(obj)->initialise(n); };
 		static int handleModulation(void* obj, double* modValue) { return (int)static_cast<T*>(obj)->handleModulation(*modValue); }
 		static void setExternalData(void* obj, const ExternalData* d, int index) { static_cast<T*>(obj)->setExternalData(*d, index); }
         
@@ -266,7 +266,7 @@ namespace prototypes
 		template <typename FrameDataType> static void processFrame(void* obj, FrameDataType* data) { ignoreUnused(obj, data); };
 		static void reset(void* obj) { ignoreUnused(obj); }
 		static void handleHiseEvent(void* obj, HiseEvent* e) { ignoreUnused(obj, e); };
-		static void initialise(void* obj, NodeBase* n) { ignoreUnused(obj, n); };
+		static void initialise(void* obj, ObjectWithValueTree* n) { ignoreUnused(obj, n); };
 		static int handleModulation(void* obj, double* modValue) { ignoreUnused(obj, modValue); return 0; }
 		static void setExternalData(void* obj, const ExternalData* d, int index) { ignoreUnused(obj, d, index); }
 	};

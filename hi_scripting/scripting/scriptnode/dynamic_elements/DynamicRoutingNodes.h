@@ -39,6 +39,8 @@ using namespace juce;
 using namespace hise;
 
 
+
+
 namespace parameter
 {
 
@@ -53,7 +55,7 @@ namespace parameter
 
 		void callEachClone(int index, double v, bool);
 
-		void setParameter(NodeBase* n, dynamic_base::Ptr b) override;
+		void setParameter(ObjectWithValueTree* n, dynamic_base::Ptr b) override;
 
 		void rebuild(NodeBase* targetContainer);
 
@@ -98,9 +100,9 @@ namespace duplilogic
 			mode(PropertyIds::Mode, "Spread")
 		{};
 
-		void initialise(NodeBase* n)
+		void initialise(ObjectWithValueTree* n)
 		{
-			mode.initialise(n->getUndoManager(), n->getValueTree());
+			mode.initialise(n);
 			mode.setAdditionalCallback(BIND_MEMBER_FUNCTION_2(dynamic::updateMode), true);
 		}
 
@@ -232,7 +234,7 @@ struct dynamic
 	void prepareDynamic(PrepareSpecs ps);
 	void validateDynamic(PrepareSpecs receiveSpecs);
 	void restoreConnections(Identifier id, var newValue);
-	void initialiseDynamic(NodeBase* n);;
+	void initialiseDynamic(ObjectWithValueTree* n);;
 
 	virtual std::pair<float, float> getDisplayPeakValues() const = 0;
 
@@ -376,7 +378,7 @@ template <int NV> struct dynamic_cable: public dynamic,
 		setConnection(target, false);
 	}
 
-	void initialise(NodeBase* n) override
+	void initialise(ObjectWithValueTree* n) override
 	{
 		dynamic::initialiseDynamic(n);
 	}
@@ -665,7 +667,7 @@ struct local_cable_base :
 		JUCE_DECLARE_WEAK_REFERENCEABLE(ListItem);
 	};
 
-	void initialise(NodeBase* n);
+	void initialise(ObjectWithValueTree* n);
 
 	Manager::Ptr getManager() const;
 
@@ -761,15 +763,17 @@ struct dynamic_matrix : public RoutableProcessor
 		getMatrix().setGainValues(values, isSource);
 	}
 
-	void initialise(NodeBase* n)
+	void initialise(ObjectWithValueTree* n)
 	{
 		um = n->getUndoManager();
 
-		getMatrix().init(dynamic_cast<Processor*>(n->getScriptProcessor()));
+		auto pn = dynamic_cast<NodeBase*>(n);
+
+		getMatrix().init(dynamic_cast<Processor*>(pn->getScriptProcessor()));
 		//ScopedValueSetter<bool> svs(recursion, true);
 
 		internalData.setAdditionalCallback(BIND_MEMBER_FUNCTION_2(dynamic_matrix::updateFromEmbeddedData));
-		internalData.initialise(um, n->getValueTree());
+		internalData.initialise(n);
 	}
 
 	void updateFromEmbeddedData(Identifier id, var newValue)

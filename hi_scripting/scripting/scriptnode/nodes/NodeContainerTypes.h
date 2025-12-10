@@ -651,10 +651,10 @@ public:
 			blockSizeString(PropertyIds::BlockSize, "64")
 		{};
 
-		void initialise(NodeBase* n)
+		void initialise(ObjectWithValueTree* n)
 		{
-			parent = n;
-			blockSizeString.initialise(n->getUndoManager(), n->getValueTree());
+			parent = dynamic_cast<NodeBase*>(n);
+			blockSizeString.initialise(n);
 			blockSizeString.setAdditionalCallback(BIND_MEMBER_FUNCTION_2(DynamicBlockProperty::updateBlockSize), true);
 		}
 

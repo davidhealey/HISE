@@ -42,10 +42,7 @@ namespace faders
 		graph(nullptr, updater_),
 		dragRow(&v->p, updater_)
 	{
-		auto um = v->p.parentNode->getUndoManager();
-		auto vt = v->p.parentNode->getValueTree();
-
-		graph.initialise(um, vt);
+		graph.initialise(v->p.parentNode);
 		addAndMakeVisible(dragRow);
 
 		addAndMakeVisible(graph);

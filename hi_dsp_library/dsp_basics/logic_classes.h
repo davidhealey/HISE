@@ -739,16 +739,16 @@ struct dynamic
         numParameters(PropertyIds::NumParameters, 0)
 	{}
 
-	void initialise(UndoManager* um, const ValueTree& v)
+	void initialise(ObjectWithValueTree* n)
 	{
-		mode.initialise(um, v);
+		mode.initialise(n);
 		mode.setAdditionalCallback(VT_BIND_PROPERTY_LISTENER(updateMode), true); 
 
-        numParameters.initialise(um, v);
+        numParameters.initialise(n);
 
-		if (v.getChildWithName(PropertyIds::SwitchTargets).getNumChildren() == 0)
+		if (n->getValueTree().getChildWithName(PropertyIds::SwitchTargets).getNumChildren() == 0)
 		{
-            numParameters.storeValue(2, um);
+            numParameters.storeValue(2, n->getUndoManager());
 		}
 	}
 

@@ -62,7 +62,7 @@ END_JUCE_MODULE_DECLARATION
 Set this to 1 to include the big base 64 database dump. 
 */
 #ifndef HISE_INCLUDE_SCRIPTNODE_DATABASE
-#define HISE_INCLUDE_SCRIPTNODE_DATABASE 1
+#define HISE_INCLUDE_SCRIPTNODE_DATABASE 0
 #endif
 
 
@@ -126,7 +126,7 @@ Set this to 1 if you want to embed the libraries created with this module into y
 #endif
 
 
-#if USE_BACKEND && !HISE_NO_GUI_TOOLS
+#if !HISE_NO_GUI_TOOLS
 #define HISE_INCLUDE_SCRIPTNODE_UI 1
 #else
 #define HISE_INCLUDE_SCRIPTNODE_UI 0
@@ -174,6 +174,9 @@ Set this to 1 if you want to embed the libraries created with this module into y
 #include "dsp_library/BaseFactory.h"
 #include "dsp_library/DspFactory.h"
 
+#include "node_api/helpers/Error.h"
+
+#include "node_api/helpers/ParameterData.h"
 
 #include "dsp_basics/chunkware_simple_dynamics/chunkware_simple_dynamics.h"
 #include "dsp_basics/AllpassDelay.h"
@@ -192,9 +195,7 @@ Set this to 1 if you want to embed the libraries created with this module into y
 #include "fft_convolver/TwoStageFFTConvolver.h"
 #include "dsp_basics/ConvolutionBase.h"
 
-#include "node_api/helpers/Error.h"
 
-#include "node_api/helpers/ParameterData.h"
 #include "node_api/helpers/modulation.h"
 
 #include "node_api/helpers/range.h"

@@ -55,7 +55,7 @@ using NodeProfiler = DummyNodeProfiler;
 class NodeComponent : public ComponentWithMiddleMouseDrag,
 					  public DspNetwork::SelectionListener,
 					  public ComponentWithDocumentation,
-					  public simple_visualiser::ParameterSource
+					  public ParameterSourceObject
 {
 public:
 
@@ -264,6 +264,10 @@ public:
 		jassert(isPositiveAndBelow(index, node->getNumParameters()));
 		return RangeHelpers::getDoubleRange(node->getParameterFromIndex(index)->data);
 	}
+
+	ValueTree getValueTree() const override { return node->getValueTree(); }
+
+	UndoManager* getUndoManager() const override { return node->getUndoManager(); }
 
 	bool keyPressed(const KeyPress& key) override
 	{

@@ -55,9 +55,9 @@ dynamic_base::~dynamic_base()
 		forcedUpdateSource->removeForcedUpdateListener(this);
 }
 
-void dynamic_base::initialise(NodeBase* p)
+void dynamic_base::initialise(ObjectWithValueTree* p)
 {
-	parentNode = p;
+	parentNode = dynamic_cast<NodeBase*>(p);
 
 	auto h = parentNode->getRootNetwork()->getExternalDataHolder();
 
@@ -224,7 +224,7 @@ dynamic::sliderpack::sliderpack(data::base& t, int index):
 	this->internalData->setNumSliders(16);
 }
 
-void dynamic::sliderpack::initialise(NodeBase* p)
+void dynamic::sliderpack::initialise(ObjectWithValueTree* p)
 {
 	dynamicT<hise::SliderPackData>::initialise(p);
 
@@ -250,9 +250,9 @@ void dynamic::audiofile::onComplexDataEvent(ComplexDataUIUpdaterBase::EventType 
 	}
 }
 
-void dynamic::audiofile::initialise(NodeBase* n)
+void dynamic::audiofile::initialise(ObjectWithValueTree* n)
 {
-	auto mc = n->getScriptProcessor()->getMainController_();
+	auto mc = dynamic_cast<NodeBase*>(n)->getScriptProcessor()->getMainController_();
 
 	auto fileProvider = new PooledAudioFileDataProvider(mc);
 
@@ -305,7 +305,7 @@ dynamic::displaybuffer::displaybuffer(data::base& t, int index /*= 0*/) :
 
 }
 
-void dynamic::displaybuffer::initialise(NodeBase* n)
+void dynamic::displaybuffer::initialise(ObjectWithValueTree* n)
 {
 	dynamicT<hise::SimpleRingBuffer>::initialise(n);
 

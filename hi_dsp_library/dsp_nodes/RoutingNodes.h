@@ -94,7 +94,7 @@ struct cable_base
 
 	virtual void validate(PrepareSpecs ps) {};
 	virtual void prepare(PrepareSpecs ps) = 0;
-	virtual void initialise(NodeBase* n) {};
+	virtual void initialise(ObjectWithValueTree* n) {};
 
 	virtual void reset() = 0;
 
@@ -144,7 +144,7 @@ template <int NV, int C> struct frame: public cable_base
 		}
 	}
 
-	void initialise(NodeBase* n) override {};
+	void initialise(ObjectWithValueTree* n) override {};
 
 	void processFrame(FrameType& t)
 	{
@@ -304,7 +304,7 @@ template <int NV, int C> struct block: public block_base<NV, C>
 	static constexpr bool allowFrame() { return false; };
 	static constexpr bool allowBlock() { return true; };
 
-	void initialise(NodeBase* n) override {};
+	void initialise(ObjectWithValueTree* n) override {};
 
 	void setIsNull() {};
 
@@ -435,7 +435,7 @@ template <int NV, typename CheckClass=NoCheck> struct event_data_reader:
 	SN_EMPTY_PROCESS_FRAME;
 	SN_EMPTY_PROCESS;
 
-	void initialise(NodeBase* b)
+	void initialise(ObjectWithValueTree* b)
 	{
 		checkClass.initialise(b);
 	}
@@ -546,7 +546,7 @@ template <int NV, typename CheckClass=NoCheck> struct event_data_writer:
 	SN_EMPTY_PROCESS_FRAME;
 	SN_EMPTY_PROCESS;
 
-	void initialise(NodeBase* b)
+	void initialise(ObjectWithValueTree* b)
 	{
 		checkClass.initialise(b);
 	}
@@ -682,7 +682,7 @@ template <int NV, typename CableType> struct receive: public receive_base
 
 	void handleHiseEvent(HiseEvent& e) {}
 
-	void initialise(NodeBase* n)
+	void initialise(ObjectWithValueTree* n)
 	{
 		
 	}
@@ -808,7 +808,7 @@ template <int NV, typename CableType> struct send: public send_base
 
 	void createParameters(ParameterDataList&) {};
 
-	void initialise(NodeBase* n)
+	void initialise(ObjectWithValueTree* n)
 	{
 		cable.initialise(n);
 	}
@@ -1251,7 +1251,7 @@ template <class MatrixType> struct matrix
 		m.prepare(specs);
 	}
 
-	void initialise(NodeBase* node)
+	void initialise(ObjectWithValueTree* node)
 	{
 		m.initialise(node);
 	}

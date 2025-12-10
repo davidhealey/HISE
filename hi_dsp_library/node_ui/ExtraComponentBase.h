@@ -41,7 +41,7 @@ struct ScriptnodeExtraComponentBase: public ComponentWithMiddleMouseDrag
 {
 	virtual ~ScriptnodeExtraComponentBase() {};
 
-	virtual void initialise(UndoManager* um, ValueTree v) {};
+	virtual void initialise(ObjectWithValueTree* o) {};
 };
 
 template <class T> class ScriptnodeExtraComponent : 
@@ -79,58 +79,10 @@ private:
 	WeakReference<ObjectType> object;
 };
 
-struct NodeComponentParameterSource
-{
-	virtual ~NodeComponentParameterSource() = default;
 
-	virtual double getParameterValue(int index) const = 0;
-	virtual InvertableParameterRange getParameterRange(int index) const = 0;
-};
-
-struct MultiOutputBase
-{
-	virtual ~MultiOutputBase() {};
-
-	void initialiseOutputs(const ValueTree& v)
-	{
-		jassert(v.getType() == PropertyIds::Node);
-		nodeData = v;
-	}
-
-	int getNumOutputs() const
-	{
-		return nodeData.getChildWithName(PropertyIds::SwitchTargets).getNumChildren();
-	}
-
-	static Colour getFadeColour(int index, int numPaths)
-	{
-		if (numPaths == 0)
-			return Colours::transparentBlack;
-
-		auto hue = (float)index / (float)numPaths;
-
-		auto saturation = JUCE_LIVE_CONSTANT_OFF(0.3f);
-		auto brightness = JUCE_LIVE_CONSTANT_OFF(1.0f);
-		auto minHue = JUCE_LIVE_CONSTANT_OFF(0.2f);
-		auto maxHue = JUCE_LIVE_CONSTANT_OFF(0.8f);
-		auto alpha = JUCE_LIVE_CONSTANT_OFF(0.4f);
-
-		hue = jmap(hue, minHue, maxHue);
-
-		return Colour::fromHSV(hue, saturation, brightness, alpha);
-	}
-
-	ValueTree getValueTree() { return nodeData; }
-
-private:
-
-	ValueTree nodeData;
-};
 
 struct simple_visualiser : public ScriptnodeExtraComponent<mothernode>
 {
-	using ParameterSource = NodeComponentParameterSource;
-
 	simple_visualiser(mothernode*, PooledUIUpdater* u);
 
 	double getParameter(int index);
@@ -156,14 +108,14 @@ struct UIFactory
 
 	UIFactory() {};
 
-	Component* createExtraComponent(const ValueTree& v, UndoManager* um, void* unused, PooledUIUpdater* updater)
+	Component* createExtraComponent(ObjectWithValueTree* o, void* unused, PooledUIUpdater* updater)
 	{
-		if(auto f = getCreateFunction(v))
+		if(auto f = getCreateFunction(o->getValueTree()))
 		{
 			if(auto c = f(unused, updater))
 			{
 				if(auto ec = dynamic_cast<ScriptnodeExtraComponentBase*>(c))
-					ec->initialise(um, v);
+					ec->initialise(o);
 
 				return c;
 			}

@@ -67,7 +67,7 @@ public:
 
 	sampleandhold();
 
-	void initialise(NodeBase* n);
+	void initialise(ObjectWithValueTree* n);
 	void prepare(PrepareSpecs ps);
 
 	template <typename ProcessDataType> void process(ProcessDataType& d)
@@ -201,7 +201,7 @@ public:
 
 	bitcrush();
 
-	void initialise(NodeBase* n);
+	void initialise(ObjectWithValueTree* n);
 	void prepare(PrepareSpecs ps);
 
 	// ======================================================================================================
@@ -261,7 +261,7 @@ public:
 
 	phase_delay();
 
-	void initialise(NodeBase* n);
+	void initialise(ObjectWithValueTree* n);
 	void prepare(PrepareSpecs ps);
 
 	template <typename ProcessDataType> void process(ProcessDataType& data)
@@ -326,7 +326,7 @@ public:
 
 	reverb();
 
-	void initialise(NodeBase* n);
+	void initialise(ObjectWithValueTree* n);
 	void prepare(PrepareSpecs ps);
 
 	template <typename ProcessDataType> void process(ProcessDataType& d)

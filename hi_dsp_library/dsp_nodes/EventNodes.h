@@ -94,7 +94,7 @@ public:
 
 	constexpr bool isPolyphonic() const { return false; }
 
-	void initialise(NodeBase* n)
+	void initialise(ObjectWithValueTree* n)
 	{
 		if constexpr (prototypes::check::initialise<MidiType>::value)
 			mType.initialise(n);
@@ -168,7 +168,7 @@ template <typename TimerType> struct timer_base: public mothernode
 
 	virtual ~timer_base() {};
 
-	void initialise(NodeBase* n)
+	void initialise(ObjectWithValueTree* n)
 	{
 		if constexpr (prototypes::check::initialise<TimerType>::value)
 			tType.initialise(n);

@@ -418,18 +418,18 @@ dynamic_expression::dynamic_expression() :
 
 }
 
-void dynamic_expression::initialise(NodeBase* n)
+void dynamic_expression::initialise(ObjectWithValueTree* n)
 {
-	node = n;
+	node = dynamic_cast<NodeBase*>(n);
 
 	node->getRootNetwork()->checkAllowCompilationFlag(node, true);
 
-	isMathNode = n->getPath().getParent().getIdentifier() == Identifier("math");
+	isMathNode = node->getPath().getParent().getIdentifier() == Identifier("math");
 
-	code.initialise(n->getUndoManager(), n->getValueTree());
+	code.initialise(n);
 	code.setAdditionalCallback(BIND_MEMBER_FUNCTION_2(dynamic_expression::updateCode), true);
 
-	debugEnabled.initialise(n->getUndoManager(), n->getValueTree());
+	debugEnabled.initialise(n);
 }
 
 void dynamic_expression::logMessage(int level, const juce::String& s)

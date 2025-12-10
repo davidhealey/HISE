@@ -324,7 +324,7 @@ template <typename DataType, CloneProcessType ProcessType>
 
 	SN_PARAMETER_MEMBER_FUNCTION;
 
-	void initialise(NodeBase* n)
+	void initialise(ObjectWithValueTree* n)
 	{
         if constexpr (prototypes::check::initialise<typename DataType::ObjectType>::value)
         {

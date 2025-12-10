@@ -103,7 +103,7 @@ protected:
     
     Result compileResult;
     
-	void initialise(NodeBase* n);
+	void initialise(ObjectWithValueTree* n);
 
 	void loadSource();
 	NodePropertyT<String> classId;

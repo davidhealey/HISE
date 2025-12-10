@@ -52,7 +52,7 @@ struct dynamic_base : public base,
 
 	virtual ~dynamic_base();;
 
-	void initialise(NodeBase* p) override;
+	void initialise(ObjectWithValueTree* p) override;
 
 	void onComplexDataEvent(ComplexDataUIUpdaterBase::EventType d, var data) override;
 
@@ -164,7 +164,7 @@ struct sliderpack : public data::pimpl::dynamicT<hise::SliderPackData>
 
 	virtual ~sliderpack() {};
 
-	void initialise(NodeBase* p) override;
+	void initialise(ObjectWithValueTree* p) override;
 
 	void updateNumParameters(Identifier id, var newValue);
 
@@ -194,7 +194,7 @@ struct audiofile : public data::pimpl::dynamicT<hise::MultiChannelAudioBuffer>,
 
 	void onComplexDataEvent(ComplexDataUIUpdaterBase::EventType d, var data) override;
 
-	void initialise(NodeBase* n);
+	void initialise(ObjectWithValueTree* n);
 	
 	void sourceHasChanged(ComplexDataUIBase* oldSource, ComplexDataUIBase* newSource) override;
 
@@ -208,7 +208,7 @@ struct displaybuffer : public data::pimpl::dynamicT<hise::SimpleRingBuffer>
 {
 	displaybuffer(data::base& t, int index = 0);
 
-	void initialise(NodeBase* n) override;
+	void initialise(ObjectWithValueTree* n) override;
 
 	SimpleRingBuffer* getCurrentRingBuffer()
 	{

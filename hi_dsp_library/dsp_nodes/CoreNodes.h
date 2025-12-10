@@ -615,7 +615,7 @@ template <class ShaperType> struct snex_shaper
 		shaper.reset();
 	};
 
-	void initialise(NodeBase* n)
+	void initialise(ObjectWithValueTree* n)
 	{
 		if constexpr (prototypes::check::initialise<ShaperType>::value)
 			shaper.initialise(n);
@@ -2318,7 +2318,7 @@ public:
 
 template <typename T> struct snex_osc_base: public mothernode
 {
-	void initialise(NodeBase* n)
+	void initialise(ObjectWithValueTree* n)
 	{
 		if constexpr (prototypes::check::initialise<T>::value)
 			oscType.initialise(n);

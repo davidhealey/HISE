@@ -509,7 +509,7 @@ SerialNode::SerialNode(DspNetwork* root, ValueTree data) :
 	NodeBase(root, data, 0),
 	isVertical(PropertyIds::IsVertical, true)
 {
-	isVertical.initialise(getUndoManager(), data);
+	isVertical.initialise(this);
 }
 
 struct LockedContainerExtraComponent: public ScriptnodeExtraComponent<NodeBase>,
@@ -698,7 +698,7 @@ void SerialNode::DynamicSerialProcessor::handleHiseEvent(HiseEvent& e)
 		n->handleHiseEvent(e);
 }
 
-void SerialNode::DynamicSerialProcessor::initialise(NodeBase* p)
+void SerialNode::DynamicSerialProcessor::initialise(ObjectWithValueTree* p)
 {
 	parent = dynamic_cast<NodeContainer*>(p);
 }
@@ -790,7 +790,7 @@ juce::ValueTree NodeContainer::MacroParameter::getConnectionTree()
 	if (!existing.isValid())
 	{
 		existing = ValueTree(PropertyIds::Connections);
-		data.addChild(existing, -1, parent->getUndoManager(true));
+		data.addChild(existing, -1, parent->getUndoManager());
 	}
 
 	return existing;

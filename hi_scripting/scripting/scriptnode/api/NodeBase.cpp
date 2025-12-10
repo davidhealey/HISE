@@ -359,7 +359,7 @@ juce::String NodeBase::getId() const
 	return v_data[PropertyIds::ID].toString();
 }
 
-juce::UndoManager* NodeBase::getUndoManager(bool returnIfPending) const
+juce::UndoManager* NodeBase::getUndoManager() const
 {
 	return getRootNetwork()->getUndoManager(returnIfPending);
 }

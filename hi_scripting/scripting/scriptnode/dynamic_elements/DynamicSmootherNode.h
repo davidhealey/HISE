@@ -589,7 +589,7 @@ namespace control
 			data::dynamic::sliderpack(t, index)
 		{};
 
-		void initialise(NodeBase* n) override
+		void initialise(ObjectWithValueTree* n) override
 		{
 			sliderpack::initialise(n);
 
@@ -689,9 +689,9 @@ struct dynamic
                  "Pitch2St", "St2Pitch", "Pitch2Cent", "Cent2Pitch", "Midi2Freq", "Freq2Norm", "Gain2dB", "db2Gain" };
     }
     
-    void initialise(NodeBase* n)
+    void initialise(ObjectWithValueTree* n)
     {
-        mode.initialise(n->getUndoManager(), n->getValueTree());
+        mode.initialise(n);
         mode.setAdditionalCallback(BIND_MEMBER_FUNCTION_2(dynamic::setMode), true);
     }
     
@@ -824,7 +824,7 @@ struct dynamic
         void timerCallback() override
         {
 			auto pn = plotter.getSourceNodeFromParent();
-            modeSelector.initModes(getConverterNames(), pn->getUndoManager(), pn->getValueTree());
+            modeSelector.initModes(getConverterNames(), pn);
             repaint();
         };
 
@@ -885,9 +885,9 @@ struct dynamic_base : public base
 		mode(PropertyIds::Mode, "Linear Ramp")
 	{};
 
-	void initialise(NodeBase* n) override
+	void initialise(ObjectWithValueTree* n) override
 	{
-		mode.initialise(n->getUndoManager(), n->getValueTree());
+		mode.initialise(n);
 		mode.setAdditionalCallback(BIND_MEMBER_FUNCTION_2(dynamic_base::setMode), true);
 	}
 

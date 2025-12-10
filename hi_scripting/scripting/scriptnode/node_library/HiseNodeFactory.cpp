@@ -883,10 +883,10 @@ template <int NV> struct NeuralNode: public NodeBase
     {
         cppgen::CustomNodeProperties::setPropertyForObject(*this, PropertyIds::IsFixRuntimeTarget);
         
-        networkId.initialise(getUndoManager(), data);
+        networkId.initialise(this);
         networkId.setAdditionalCallback(BIND_MEMBER_FUNCTION_2(NeuralNode::updateModel), true);
 
-        hpfFrequency.initialise(getUndoManager(), data);
+        hpfFrequency.initialise(this);
         hpfFrequency.setAdditionalCallback(BIND_MEMBER_FUNCTION_2(NeuralNode::updateHpf), true);
     }
     
@@ -1569,13 +1569,13 @@ Factory::Factory(DspNetwork* network) :
 			}
 		}
 
-		void initialise(NodeBase* n) override
+		void initialise(ObjectWithValueTree* n) override
 		{
-			parentNode = n;
+			parentNode = dynamic_cast<NodeBase*>(n);
 
 			if(n != nullptr)
 			{
-				auto ptree = n->getParameterTree().getChildWithProperty(PropertyIds::ID, "Index");
+				auto ptree = parentNode->getParameterTree().getChildWithProperty(PropertyIds::ID, "Index");
 
 				indexListener.setCallback(ptree, 
 									      { PropertyIds::Value }, 
@@ -1631,9 +1631,9 @@ Factory::Factory(DspNetwork* network) :
 {
 	struct parameter_handler: public flex_ahdsr_base::DragHandlerBase
 	{
-		void initialise(NodeBase* n)
+		void initialise(ObjectWithValueTree* n)
 		{
-			parentNode = n;
+			parentNode = dynamic_cast<NodeBase*>(n);
 		}
 
 		bool handleAdditionalDrag(int parameterIndex, double value) override

@@ -101,7 +101,7 @@ namespace control
 		SN_PARAMETER_NOSIGNAL_CONSTRUCTOR(sliderbank, ParameterClass);
 		SN_DESCRIPTION("Scale a value with a slider pack and send it to multiple targets");
 
-		void initialise(NodeBase* n)
+		void initialise(ObjectWithValueTree* n)
 		{
 			this->p.initialise(n);
 		}
@@ -223,7 +223,7 @@ namespace control
 
 		SN_EMPTY_CREATE_PARAM;
 
-		void initialise(NodeBase* n)
+		void initialise(ObjectWithValueTree* n)
 		{
 			if constexpr (prototypes::check::initialise<AnalyserType>::value)
 				analyser.initialise(n);
@@ -1510,7 +1510,7 @@ namespace control
 		};
 		SN_PARAMETER_MEMBER_FUNCTION;
 
-		void initialise(NodeBase* n)
+		void initialise(ObjectWithValueTree* n)
 		{
 			if constexpr (prototypes::check::initialise<LogicType>::value)
 				obj.initialise(n);
@@ -1737,7 +1737,7 @@ namespace control
 			Value
 		};
 
-		void initialise(NodeBase* n) override
+		void initialise(ObjectWithValueTree* n) override
 		{
 			this->getParameter().initialise(n);
 		}
@@ -1825,10 +1825,10 @@ namespace control
 
 		SN_ADD_SET_VALUE(xfader);
 
-		void initialise(NodeBase* n) override
+		void initialise(ObjectWithValueTree* n) override
 		{
 			this->p.initialise(n);
-			fader.initialise(n->getUndoManager(), n->getValueTree());
+			fader.initialise(n);
 		}
 
 		void setValue(double v)
@@ -2765,7 +2765,7 @@ namespace control
 			Y
 		};
 
-		void initialise(NodeBase* n)
+		void initialise(ObjectWithValueTree* n)
 		{
 			this->p.initialise(n);
 
@@ -2864,7 +2864,7 @@ namespace control
 		SN_PARAMETER_MEMBER_FUNCTION;
 
 
-		void initialise(NodeBase* n)
+		void initialise(ObjectWithValueTree* n)
 		{
 			value.initialise(n);
 		}

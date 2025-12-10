@@ -516,7 +516,7 @@ namespace smoothers
 		repaint();
 
 		auto pn = plotter.getSourceNodeFromParent();
-		modeSelector.initModes(smoothers::dynamic_base::getSmoothNames(), pn->getUndoManager(), pn->getValueTree());
+		modeSelector.initModes(smoothers::dynamic_base::getSmoothNames(), pn);
 	}
 
 }

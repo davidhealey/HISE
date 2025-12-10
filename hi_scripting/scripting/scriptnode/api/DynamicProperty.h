@@ -134,7 +134,7 @@ struct dynamic_base_holder: public dynamic_base
         allowForwardToParameter = forwardParameter;
     }
     
-	virtual void setParameter(NodeBase* n, dynamic_base::Ptr b)
+	virtual void setParameter(ObjectWithValueTree* n, dynamic_base::Ptr b)
 	{
 		dynamic_base::Ptr old = base;
 

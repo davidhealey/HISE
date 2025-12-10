@@ -161,7 +161,7 @@ template <class ParameterClass, typename... Processors> struct container_base
     
 	static constexpr int getFixChannelAmount() { return Helpers::getNumChannelsOfFirstElement<Processors...>(); };
 
-	void initialise(NodeBase* b)
+	void initialise(ObjectWithValueTree* b)
 	{
 		call_tuple_iterator1(initialise, b);
 	}
@@ -220,7 +220,7 @@ protected:
 private:
 
 	tuple_iterator0(reset);
-	tuple_iterator1(initialise, NodeBase*, b);
+	tuple_iterator1(initialise, ObjectWithValueTree*, b);
 };
 
 

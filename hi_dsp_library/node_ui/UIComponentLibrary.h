@@ -240,14 +240,14 @@ struct xfader_editor : public ScriptnodeExtraComponent<mothernode>,
 {
 	xfader_editor(mothernode* f, PooledUIUpdater* updater);
 
-	void initialise(UndoManager* um, ValueTree v) override
+	void initialise(ObjectWithValueTree* o) override
 	{
-		MultiOutputBase::initialiseOutputs(v);
+		MultiOutputBase::initialiseOutputs(o);
 
-		faderSelector.initModes(obj.getFaderModes(), um, v);
-		obj.initialise(um, v);
+		faderSelector.initModes(obj.getFaderModes(), o);
+		obj.initialise(o);
 
-		graphRebuilder.setCallback(v, { PropertyIds::NumParameters, PropertyIds::Value }, valuetree::AsyncMode::Asynchronously, [this](ValueTree, Identifier)
+		graphRebuilder.setCallback(o->getValueTree(), { PropertyIds::NumParameters, PropertyIds::Value }, valuetree::AsyncMode::Asynchronously, [this](ValueTree, Identifier)
 		{
 			this->rebuildFaderCurves();
 		});

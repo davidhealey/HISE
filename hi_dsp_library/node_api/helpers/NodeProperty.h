@@ -37,6 +37,127 @@ using namespace juce;
 using namespace hise;
 
 
+struct InvertableParameterRange
+{
+	InvertableParameterRange(double start, double end) :
+		rng(start, end),
+		inv(false)
+	{};
+
+	InvertableParameterRange() :
+		rng(0.0, 1.0),
+		inv(false)
+	{};
+
+	bool operator==(const InvertableParameterRange& other) const;
+
+	InvertableParameterRange(const ValueTree& v);
+
+	void store(ValueTree& v, UndoManager* um);
+
+	InvertableParameterRange(double start, double end, double interval, double skew = 1.0) :
+		rng(start, end, interval, skew),
+		inv(false)
+	{};
+
+	double convertFrom0to1(double input, bool applyInversion) const;
+
+	InvertableParameterRange inverted() const
+	{
+		auto copy = *this;
+		copy.inv = !copy.inv;
+		return copy;
+	}
+
+	double convertTo0to1(double input, bool applyInversion) const;
+
+	Range<double> getRange() const
+	{
+		return rng.getRange();
+	}
+
+	double snapToLegalValue(double v) const
+	{
+		return rng.snapToLegalValue(v);
+	}
+
+	void setSkewForCentre(double value)
+	{
+		rng.setSkewForCentre(value);
+	}
+
+	void checkIfIdentity();
+
+	juce::NormalisableRange<double> rng;
+	bool inv = false;
+
+	bool isNonDefault() const { return !isIdentity; }
+
+private:
+
+	bool isIdentity = false;
+};
+
+/** A base class for the scriptnode nodes that connect to a value tree and have a undo manager. */
+struct ObjectWithValueTree
+{
+	virtual ~ObjectWithValueTree() = default;
+
+	/** Override this method and return the value tree that represents this object. */
+	virtual ValueTree getValueTree() const = 0;
+
+	/** Override this method and return the undo manager associated to this object. */
+	virtual UndoManager* getUndoManager() const = 0;
+};
+
+struct ParameterSourceObject: public ObjectWithValueTree
+{
+	/** Override this method and return the parameter value. This might be a modulated parameter or the value tree value. */
+	virtual double getParameterValue(int index) const = 0;
+
+	virtual InvertableParameterRange getParameterRange(int index) const = 0;
+};
+
+struct MultiOutputBase
+{
+	virtual ~MultiOutputBase() {};
+
+	void initialiseOutputs(ObjectWithValueTree* o)
+	{
+		nodeData = o->getValueTree();
+		jassert(nodeData.getType() == PropertyIds::Node);
+	}
+
+	int getNumOutputs() const
+	{
+		return nodeData.getChildWithName(PropertyIds::SwitchTargets).getNumChildren();
+	}
+
+	static Colour getFadeColour(int index, int numPaths)
+	{
+		if (numPaths == 0)
+			return Colours::transparentBlack;
+
+		auto hue = (float)index / (float)numPaths;
+
+		auto saturation = JUCE_LIVE_CONSTANT_OFF(0.3f);
+		auto brightness = JUCE_LIVE_CONSTANT_OFF(1.0f);
+		auto minHue = JUCE_LIVE_CONSTANT_OFF(0.2f);
+		auto maxHue = JUCE_LIVE_CONSTANT_OFF(0.8f);
+		auto alpha = JUCE_LIVE_CONSTANT_OFF(0.4f);
+
+		hue = jmap(hue, minHue, maxHue);
+
+		return Colour::fromHSV(hue, saturation, brightness, alpha);
+	}
+
+	ValueTree getValueTree() { return nodeData; }
+
+private:
+
+	ValueTree nodeData;
+};
+
 /** A NodeProperty is a non-realtime controllable property of a node.
 
 	It is saved as ValueTree property. The actual property ID in the ValueTree
@@ -52,7 +173,7 @@ struct NodeProperty
 
 		This will automatically initialise the proper value tree ID at the best time.
 	*/
-	bool initialise(UndoManager* um, ValueTree v);
+	bool initialise(ObjectWithValueTree* o);
 
 	/** Callback when the initialisation was successful. This might happen either during the initialise() method or after all parameters
 		are created. Use this callback to setup the listeners / the logic that changes the property.
@@ -125,7 +246,7 @@ struct ComboBoxWithModeProperty : public ComboBox,
 
 	void mouseUp(const MouseEvent& e) override;
 
-	void initModes(const StringArray& modes, UndoManager* um, ValueTree v);
+	void initModes(const StringArray& modes, ObjectWithValueTree* o);
 
 	bool initialised = false;
 	UndoManager* um;

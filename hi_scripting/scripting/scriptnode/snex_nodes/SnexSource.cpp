@@ -443,7 +443,7 @@ Result SnexSource::ComplexDataHandler::recompiledOk(snex::jit::ComplexType::Ptr 
 	return r;
 }
 
-void SnexSource::ComplexDataHandler::initialise(NodeBase* n)
+void SnexSource::ComplexDataHandler::initialise(ObjectWithValueTree* n)
 {
 	dataTree = n->getValueTree().getOrCreateChildWithName(PropertyIds::ComplexData, n->getUndoManager());
 

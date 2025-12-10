@@ -52,14 +52,14 @@ juce::Value NodeProperty::asJuceValue()
 	return d.getPropertyAsValue(PropertyIds::Value, um);
 }
 
-bool NodeProperty::initialise(UndoManager* um_, ValueTree v)
+bool NodeProperty::initialise(ObjectWithValueTree* o)
 {
+	auto v = o->getValueTree();
 	jassert(v.getType() == PropertyIds::Node);
 
 	valueTreePropertyid = baseId;
 
-	um = um_;
-
+	um = o->getUndoManager();
 	auto propTree = v.getOrCreateChildWithName(PropertyIds::Properties, um);
 
 	d = propTree.getChildWithProperty(PropertyIds::ID, getValueTreePropertyId().toString());
@@ -174,7 +174,7 @@ void ComboBoxWithModeProperty::mouseUp(const MouseEvent& e)
 	ComboBox::mouseUp(e);
 }
 
-void ComboBoxWithModeProperty::initModes(const StringArray& modes, UndoManager* um_, ValueTree v)
+void ComboBoxWithModeProperty::initModes(const StringArray& modes, ObjectWithValueTree* o)
 {
 	if (initialised)
 		return;
@@ -182,8 +182,8 @@ void ComboBoxWithModeProperty::initModes(const StringArray& modes, UndoManager* 
 	clear(dontSendNotification);
 	addItemList(modes, 1);
 
-	um = um_;
-	mode.initialise(um, v);
+	um = o->getUndoManager();
+	mode.initialise(o);
 	mode.setAdditionalCallback(BIND_MEMBER_FUNCTION_2(ComboBoxWithModeProperty::valueTreeCallback), true);
 	initialised = true;
 }

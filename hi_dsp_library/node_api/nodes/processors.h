@@ -270,9 +270,10 @@ public:
 	static constexpr int getFixChannelAmount() { return NumChannels; };
 
 	/** Forwards the callback to its wrapped object. */
-	void initialise(NodeBase* n)
+	void initialise(ObjectWithValueTree* n)
 	{
-		this->obj.initialise(n);
+		if constexpr(prototypes::check::initialise<T>::value)
+			this->obj.initialise(n);
 	}
 
 	/** Forwards the callback to its wrapped object, but it will change the channel amount to NumChannels. */
@@ -358,7 +359,7 @@ public:
 	SN_DEFAULT_PROCESS(T);
 	SN_DEFAULT_MOD(T);
 
-	void initialise(NodeBase* n)
+	void initialise(ObjectWithValueTree* n)
 	{
 		if constexpr(prototypes::check::initialise<T>::value)
 			obj.initialise(n);
@@ -407,9 +408,10 @@ public:
 
 	SN_OPAQUE_WRAPPER(skip, T);
 
-	void initialise(NodeBase* n)
+	void initialise(ObjectWithValueTree* n)
 	{
-		this->obj.initialise(n);
+		if constexpr (prototypes::check::initialise<T>::value)
+			this->obj.initialise(n);
 	}
 
 	void prepare(PrepareSpecs) {}
@@ -601,9 +603,10 @@ public:
 
 	SN_OPAQUE_WRAPPER(frame_x, T);
 
-	void initialise(NodeBase* n)
+	void initialise(ObjectWithValueTree* n)
 	{
-		obj.initialise(n);
+		if constexpr (prototypes::check::initialise<T>::value)
+			this->obj.initialise(n);
 	}
 
 	void prepare(PrepareSpecs ps)
@@ -1036,9 +1039,10 @@ public:
 		oversampler->processSamplesDown(bl);
 	}
 
-	void initialise(NodeBase* n)
+	void initialise(ObjectWithValueTree* n)
 	{
-		obj.initialise(n);
+		if constexpr (prototypes::check::initialise<T>::value)
+			this->obj.initialise(n);
 	}
 
 private:
@@ -1162,7 +1166,11 @@ public:
 	SN_EMPTY_PROCESS_FRAME;
 	SN_EMPTY_HANDLE_EVENT;
 	
-	void initialise(NodeBase* n) { obj.initialise(n); }
+	void initialise(ObjectWithValueTree* n)
+	{
+		if constexpr (prototypes::check::initialise<T>::value)
+			this->obj.initialise(n);
+	}
 
 	void prepare(PrepareSpecs ps) { obj.prepare(ps); }
 
@@ -1250,15 +1258,16 @@ template <class T, typename FixBlockClass> struct fix_blockx
 {
 	SN_OPAQUE_WRAPPER(fix_blockx, T);
 
-	
 	SN_DEFAULT_RESET(T);
 	SN_DEFAULT_MOD(T);
 	SN_DEFAULT_HANDLE_EVENT(T);
 
-	void initialise(NodeBase* n)
+	void initialise(ObjectWithValueTree* n)
 	{
 		fbClass.initialise(n);
-		obj.initialise(n);
+
+		if constexpr (prototypes::check::initialise<T>::value)
+			this->obj.initialise(n);
 	}
 
 	void prepare(PrepareSpecs ps)
@@ -1317,9 +1326,10 @@ template <class T> struct dynamic_blocksize
 		obj.prepare(ps);
 	}
 
-	void initialise(NodeBase* n)
+	void initialise(ObjectWithValueTree* n)
 	{
-		obj.initialise(n);
+		if constexpr (prototypes::check::initialise<T>::value)
+			this->obj.initialise(n);
 	}
 
 	void handleHiseEvent(HiseEvent& e)
@@ -1419,9 +1429,10 @@ public:
 
 	constexpr static bool isModulationSource = false;
 
-	void initialise(NodeBase* n)
+	void initialise(ObjectWithValueTree* n)
 	{
-		obj.initialise(n);
+		if constexpr (prototypes::check::initialise<T>::value)
+			this->obj.initialise(n);
 	}
 
 	void prepare(PrepareSpecs ps)
@@ -1537,9 +1548,10 @@ template <class ParameterClass, class T> struct mod
 		checkModValue();
 	}
 
-	inline void initialise(NodeBase* n)
+	void initialise(ObjectWithValueTree* n)
 	{
-		obj.initialise(n);
+		if constexpr (prototypes::check::initialise<T>::value)
+			this->obj.initialise(n);
 	}
 
 	/** Calls handleHiseEvent on the wrapped object and sends out a modulation signal if required. */
@@ -1654,7 +1666,11 @@ template <typename T> struct illegal_poly: public scriptnode::data::base,
 	SN_EMPTY_HANDLE_EVENT;
 	SN_EMPTY_MOD;
 	
-	void initialise(NodeBase* n) { obj.initialise(n); }
+	void initialise(ObjectWithValueTree* n)
+	{
+		if constexpr (prototypes::check::initialise<T>::value)
+			this->obj.initialise(n);
+	}
 
 	void createParameters(ParameterDataList& l) { obj.createParameters(l); }
 
@@ -1715,9 +1731,10 @@ template <class T> struct node : public scriptnode::data::base
 	{
 	}
 
-	void initialise(NodeBase* n)
+	void initialise(ObjectWithValueTree* n)
 	{
-		obj.initialise(n);
+		if constexpr (prototypes::check::initialise<T>::value)
+			this->obj.initialise(n);
 	}
 
 	template <int P> static void setParameterStatic(void* ptr, double v)

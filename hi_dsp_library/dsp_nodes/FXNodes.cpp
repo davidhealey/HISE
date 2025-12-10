@@ -44,7 +44,7 @@ reverb::reverb()
 	r.setParameters(p);
 }
 
-void reverb::initialise(NodeBase* )
+void reverb::initialise(ObjectWithValueTree* )
 {
 	
 }

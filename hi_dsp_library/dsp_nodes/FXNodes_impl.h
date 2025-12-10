@@ -83,7 +83,7 @@ void sampleandhold<V>::prepare(PrepareSpecs ps)
 }
 
 template <int V>
-void sampleandhold<V>::initialise(NodeBase*)
+void sampleandhold<V>::initialise(ObjectWithValueTree*)
 {
 
 }
@@ -147,7 +147,7 @@ void bitcrush<V>::prepare(PrepareSpecs ps)
 }
 
 template <int V>
-void bitcrush<V>::initialise(NodeBase*)
+void bitcrush<V>::initialise(ObjectWithValueTree*)
 {
 
 }
@@ -162,7 +162,7 @@ phase_delay<V>::phase_delay():
 }
 
 template <int V>
-void phase_delay<V>::initialise(NodeBase*)
+void phase_delay<V>::initialise(ObjectWithValueTree*)
 {
 
 }

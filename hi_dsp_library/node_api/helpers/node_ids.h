@@ -682,9 +682,12 @@ struct NodeDatabase
 	{
 		if(auto pd = data->getProjectData())
 		{
+			auto m1 = data->descriptions;
+			auto m2 = pd->descriptions;
+
 			std::map<String, String> combined;
-			combined.merge(data->descriptions);
-			combined.merge(pd->descriptions);
+			combined.merge(m1);
+			combined.merge(m2);
 			return combined;
 		}
 		else

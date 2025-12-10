@@ -170,7 +170,7 @@ String core::SnexOscillator::getEmptyText(const Identifier& id) const
 	return code;
 }
 
-void core::SnexOscillator::initialise(NodeBase* n)
+void core::SnexOscillator::initialise(ObjectWithValueTree* n)
 {
 	SnexSource::initialise(n);
 }

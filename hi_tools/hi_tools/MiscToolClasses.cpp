@@ -3805,6 +3805,11 @@ TextEditorWithAutocompleteComponent::Autocomplete* TextEditorWithAutocompleteCom
 	return dynamic_cast<Autocomplete*>(currentAutocomplete.get());
 }
 
+bool TextEditorWithAutocompleteComponent::isAutocomplete(Component* c)
+{
+	return dynamic_cast<Autocomplete*>(c) != nullptr;
+}
+
 void ModulationDisplayValue::clipTo0To1()
 {
 	normalisedValue = jlimit(0.0, 1.0, normalisedValue);
