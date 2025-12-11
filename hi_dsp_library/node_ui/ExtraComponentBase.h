@@ -42,6 +42,68 @@ struct ScriptnodeExtraComponentBase: public ComponentWithMiddleMouseDrag
 	virtual ~ScriptnodeExtraComponentBase() {};
 
 	virtual void initialise(ObjectWithValueTree* o) {};
+
+};
+
+/** This can be used to query parameter values from the parent ParameterSourceObject. */
+struct ParameterWatcherBase
+{
+	virtual ~ParameterWatcherBase()
+	{
+
+	}
+
+protected:
+
+	/** Use this to setup the parameter indexes you want to watch. */
+	void setWatchedParameters(const Array<int>& numWatchedParameters)
+	{
+		watchedParameters.clear();
+
+		for (auto& i : numWatchedParameters)
+			watchedParameters.push_back({ i, {} });
+
+		initialised = false;
+	}
+
+	/** Call this in the timer callback and it will check whether any parameter has changed. */
+	bool checkWatchedParameters()
+	{
+		auto changed = false;
+
+		if (auto p = dynamic_cast<Component*>(this)->findParentComponentOfClass<ParameterSourceObject>())
+		{
+			for (auto& v : watchedParameters)
+			{
+				auto newValue = p->getParameterValue(v.first);
+				changed |= v.second.setModValueIfChanged(newValue);
+			}
+		}
+
+		initialised = true;
+		return changed;
+	}
+
+	/** Use this to fetch the current parameter value. */
+	double getWatchedParameterValue(int parameterIndex) const
+	{
+		if(!initialised)
+			return 0.0;
+
+		for (const auto& v : watchedParameters)
+		{
+			if (v.first == parameterIndex)
+				return v.second.getModValue();
+		}
+
+		jassertfalse;
+		return 0.0;
+	}
+
+private:
+
+	bool initialised = false;
+	std::vector<std::pair<int, ModValue>> watchedParameters;
 };
 
 template <class T> class ScriptnodeExtraComponent : 

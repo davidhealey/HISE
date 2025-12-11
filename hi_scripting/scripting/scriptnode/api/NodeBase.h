@@ -424,6 +424,11 @@ public:
 	/** Not necessarily the DSP network. */
 	NodeBase::Holder* getNodeHolder() const;
 
+	PrepareSpecs getLastPrepareSpecs() const override
+	{
+		return lastSpecs;
+	}
+
 	ValueTree getParameterTree();
 
 	ValueTree getPropertyTree();

@@ -1076,9 +1076,9 @@ namespace control
 
 		registerPolyNoProcessNode<control::bipolar<1, parameter::dynamic_base_holder>, control::bipolar<NUM_POLYPHONIC_VOICES, parameter::dynamic_base_holder>, bipolar_editor>();
 
-		registerPolyNoProcessNode<control::blend<1, parameter::dynamic_base_holder>, control::blend<NUM_POLYPHONIC_VOICES, parameter::dynamic_base_holder>, blend_editor>();
+		registerPolyNoProcessNode<control::blend<1, parameter::dynamic_base_holder>, control::blend<NUM_POLYPHONIC_VOICES, parameter::dynamic_base_holder>, blend_editor_wrapped>();
 
-		registerPolyNoProcessNode<control::intensity<1, parameter::dynamic_base_holder>, control::intensity<NUM_POLYPHONIC_VOICES, parameter::dynamic_base_holder>, intensity_editor>();
+		registerPolyNoProcessNode<control::intensity<1, parameter::dynamic_base_holder>, control::intensity<NUM_POLYPHONIC_VOICES, parameter::dynamic_base_holder>, intensity_editor_wrapped>();
 
 		
 
@@ -1125,7 +1125,7 @@ namespace control
 
 		registerPolyNoProcessNode<control::input_toggle<1, parameter::dynamic_base_holder>, control::input_toggle<NUM_POLYPHONIC_VOICES, parameter::dynamic_base_holder>, input_toggle_editor>();
 
-        registerNoProcessNode<conversion_logic::dynamic::NodeType, conversion_logic::dynamic::editor>();
+        registerNoProcessNode<conversion_logic::DynamicNodeType, conversion_logic::DynamicEditor>();
 
 		registerNoProcessNode<control::clone_forward<parameter::clone_holder>, ModulationSourceBaseComponent>();
 

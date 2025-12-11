@@ -108,6 +108,8 @@ struct ObjectWithValueTree
 
 	/** Override this method and return the undo manager associated to this object. */
 	virtual UndoManager* getUndoManager() const = 0;
+
+	virtual snex::Types::PrepareSpecs getLastPrepareSpecs() const = 0;
 };
 
 struct ParameterSourceObject: public ObjectWithValueTree

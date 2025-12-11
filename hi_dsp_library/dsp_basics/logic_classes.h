@@ -178,7 +178,96 @@ struct gain2db
         return hmath::gain2db(input);
     }
 };
+
+struct dynamic
+{
+	enum class Mode
+	{
+		Ms2Freq,
+		Freq2Ms,
+		Freq2Samples,
+		Ms2Samples,
+		Samples2Ms,
+		Ms2BPM,
+		Pitch2St,
+		St2Pitch,
+		Pitch2Cent,
+		Cent2Pitch,
+		Midi2Freq,
+		Freq2Norm,
+		Gain2dB,
+		dB2Gain,
+		numModes
+	};
+
+	dynamic() :
+		mode(PropertyIds::Mode, getConverterNames()[0])
+	{
+
+	}
+
+	static StringArray getConverterNames()
+	{
+		return { "Ms2Freq", "Freq2Ms", "Freq2Samples", "Ms2Samples", "Samples2Ms", "Ms2BPM",
+				 "Pitch2St", "St2Pitch", "Pitch2Cent", "Cent2Pitch", "Midi2Freq", "Freq2Norm", "Gain2dB", "db2Gain" };
+	}
+
+	void initialise(ObjectWithValueTree* n)
+	{
+		mode.initialise(n);
+		mode.setAdditionalCallback(BIND_MEMBER_FUNCTION_2(dynamic::setMode), true);
+	}
+
+	void prepare(PrepareSpecs ps)
+	{
+		m.prepare(ps);
+		s.prepare(ps);
+		fs.prepare(ps);
+	}
+
+	double getValue(double input)
+	{
+		switch (currentMode)
+		{
+		case Mode::Ms2Freq:    return ms2freq().getValue(input);
+		case Mode::Freq2Ms:    return freq2ms().getValue(input);
+		case Mode::Ms2Samples: return m.getValue(input);
+		case Mode::Samples2Ms: return s.getValue(input);
+		case Mode::Freq2Samples: return fs.getValue(input);
+		case Mode::Ms2BPM:     return ms2bpm().getValue(input);
+		case Mode::Pitch2St:   return pitch2st().getValue(input);
+		case Mode::St2Pitch:   return st2pitch().getValue(input);
+		case Mode::Pitch2Cent: return pitch2cent().getValue(input);
+		case Mode::Cent2Pitch: return cent2pitch().getValue(input);
+		case Mode::Midi2Freq:  return midi2freq().getValue(input);
+		case Mode::Freq2Norm:  return freq2norm().getValue(input);
+		case Mode::Gain2dB:    return gain2db().getValue(input);
+		case Mode::dB2Gain:    return db2gain().getValue(input);
+		default: return input;
+		}
+	}
+
+	void setMode(Identifier id, var newValue)
+	{
+		currentMode = (Mode)getConverterNames().indexOf(newValue.toString());
+	}
+
+	
+
+
+
+	NodePropertyT<String> mode;
+
+	Mode currentMode = Mode::Ms2Freq;
+
+	conversion_logic::ms2samples m;
+	conversion_logic::samples2ms s;
+	conversion_logic::freq2samples fs;
+
+	JUCE_DECLARE_WEAK_REFERENCEABLE(dynamic);
 };
+
+}; // conversion_logic
 
 
 /** Contains all different MIDI processing units. */

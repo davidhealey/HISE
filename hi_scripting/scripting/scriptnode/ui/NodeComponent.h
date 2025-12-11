@@ -265,6 +265,8 @@ public:
 		return RangeHelpers::getDoubleRange(node->getParameterFromIndex(index)->data);
 	}
 
+	PrepareSpecs getLastPrepareSpecs() const override { return node->getLastPrepareSpecs(); }
+
 	ValueTree getValueTree() const override { return node->getValueTree(); }
 
 	UndoManager* getUndoManager() const override { return node->getUndoManager(); }

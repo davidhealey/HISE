@@ -32,6 +32,9 @@
 
 #pragma once
 
+#define SN_CREATE_EXTRA_COMPONENT(ComponentType) static Component* createExtraComponent(void* obj, PooledUIUpdater* updater) { \
+	return new ComponentType(static_cast<mothernode*>(obj), updater); }
+
 namespace scriptnode {
 
 using namespace hise;
@@ -196,7 +199,7 @@ namespace math {
 
 struct map_editor : public simple_visualiser
 {
-	map_editor(PooledUIUpdater* u) :
+	map_editor(void* p, PooledUIUpdater* u) :
 		simple_visualiser(nullptr, u)
 	{
 		setSize(256, 100);
@@ -225,10 +228,8 @@ struct map_editor : public simple_visualiser
 		original.lineTo(1.0f, 1.0f - (p2 + p3) / 2.0f);
 	}
 
-	static Component* createExtraComponent(void*, PooledUIUpdater* u)
-	{
-		return new map_editor(u);
-	}
+	SN_CREATE_EXTRA_COMPONENT(map_editor);
+
 };
 
 } // math
@@ -240,20 +241,7 @@ struct xfader_editor : public ScriptnodeExtraComponent<mothernode>,
 {
 	xfader_editor(mothernode* f, PooledUIUpdater* updater);
 
-	void initialise(ObjectWithValueTree* o) override
-	{
-		MultiOutputBase::initialiseOutputs(o);
-
-		faderSelector.initModes(obj.getFaderModes(), o);
-		obj.initialise(o);
-
-		graphRebuilder.setCallback(o->getValueTree(), { PropertyIds::NumParameters, PropertyIds::Value }, valuetree::AsyncMode::Asynchronously, [this](ValueTree, Identifier)
-		{
-			this->rebuildFaderCurves();
-		});
-
-		rebuildFaderCurves();
-	}
+	void initialise(ObjectWithValueTree* o) override;
 
 	valuetree::RecursivePropertyListener graphRebuilder;
 
@@ -286,10 +274,7 @@ struct xfader_editor : public ScriptnodeExtraComponent<mothernode>,
 		return p;
 	}
 
-	static Component* createExtraComponent(void* obj, PooledUIUpdater* updater)
-	{
-		return new xfader_editor(static_cast<mothernode*>(obj), updater);
-	}
+	SN_CREATE_EXTRA_COMPONENT(xfader_editor);
 
 	void rebuildFaderCurves();
 
@@ -306,6 +291,67 @@ struct xfader_editor : public ScriptnodeExtraComponent<mothernode>,
 	Array<Path> faderCurves;
 };
 
-}
 
-}
+
+struct intensity_editor : public ScriptnodeExtraComponent<mothernode>,
+						  public ParameterWatcherBase
+{
+
+	intensity_editor(mothernode* b, PooledUIUpdater* u);
+
+	void paint(Graphics& g) override;
+
+	void rebuildPaths();
+
+	void timerCallback() override;
+
+	void resized() override;
+
+	SN_CREATE_EXTRA_COMPONENT(intensity_editor);
+
+	Rectangle<float> pathArea;
+
+	Path fullPath, valuePath;
+};
+
+struct blend_editor : public ScriptnodeExtraComponent<mothernode>,
+	public ParameterWatcherBase
+{
+	blend_editor(mothernode* b, PooledUIUpdater* u);;
+
+	void paint(Graphics& g) override;
+
+	void timerCallback() override;
+
+	SN_CREATE_EXTRA_COMPONENT(blend_editor);
+};
+
+struct converter_editor : public ScriptnodeExtraComponent<mothernode>,
+						  public ParameterWatcherBase,
+						  public ComboBox::Listener
+{
+	using Mode = conversion_logic::dynamic::Mode;
+
+	converter_editor(mothernode* p, PooledUIUpdater* updater);
+
+	void setRange(NormalisableRange<double> nr, double center = -90.0);
+	void paint(Graphics& g) override;
+	void comboBoxChanged(ComboBox* b);
+	void initialise(ObjectWithValueTree* o);
+	void timerCallback() override;;
+	void resized() override;
+
+	SN_CREATE_EXTRA_COMPONENT(converter_editor);
+
+private:	
+
+	ObjectWithValueTree* node;
+	conversion_logic::dynamic data;
+	Rectangle<float> textArea;
+	ComboBoxWithModeProperty modeSelector;
+	Colour currentColour;
+};
+
+} // control
+
+} // scriptnode
