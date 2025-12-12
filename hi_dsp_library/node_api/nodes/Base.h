@@ -38,8 +38,6 @@ using namespace juce;
 using namespace hise;
 using namespace snex::Types;
 
-class NodeBase;
-
 class ParameterHolder
 {
 public:
@@ -73,7 +71,7 @@ public:
 
 	bool isPolyphonic() const { return false; }
 
-	virtual void initialise(NodeBase* n)
+	virtual void initialise(ObjectWithValueTree* n)
 	{
 		ignoreUnused(n);
 	}
@@ -83,7 +81,7 @@ template <class T> class SingleWrapper : public HiseDspBase
 {
 public:
 
-    inline void initialise(NodeBase* n) override
+    inline void initialise(ObjectWithValueTree* n) override
 	{
 		obj.initialise(n);
 	}

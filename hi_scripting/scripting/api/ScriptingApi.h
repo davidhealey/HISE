@@ -1071,6 +1071,9 @@ public:
 		/** Clears the current samplemap. */
 		bool clearSampleMap();
 
+		/** Returns an object that can be used to control the complex group management of this sampler. */
+		var getComplexGroupManager();
+
 		// ============================================================================================================
 
 		struct Wrapper;
@@ -1538,6 +1541,12 @@ private:
 		/** Enables a high precision grid timer. */
 		void setEnableGrid(bool shouldBeEnabled, int tempoFactor);
 
+		/** Adds a multiplier to slow down the grid callbacks for this transport handler. */
+		void setLocalGridMultiplier(int factor);
+
+		/** Bypasses the grid callback for this transport handler. */
+		void setLocalGridBypassed(bool shouldBeBypassed);
+
         /** Sets the internal clock to stop when the external clock was stopped. */
         void stopInternalClockOnExternalStop(bool shouldStop);
         
@@ -1559,6 +1568,15 @@ private:
 		/** This will return true if the DAW is currently bouncing the audio to a file. You can use this in the transport change callback to modify your processing chain. */
 		bool isNonRealtime() const;
 
+		/** Returns the number of samples for the current grid duration. */
+		double getGridLengthInSamples() const;
+
+		/** Returns whether the transport has been started. */
+		bool isPlaying() const;
+
+		/** Returns the current grid position. */
+		int getGridPosition(int timestamp) const;
+
 	private:
 
 		static void onBypassUpdate(TransportHandler& handler, bool state);
@@ -1578,6 +1596,11 @@ private:
 		int gridIndex = 0;
 		int gridTimestamp = 0;
 		bool firstGridInPlayback = false;
+		int localGridMultiplier = 1;
+		int localBitShift = 0;
+		bool nextLocalIsFirst = false;
+		bool localBypassed = false;
+		int lastGridIndex = -1;
 
 		struct Wrapper;
 

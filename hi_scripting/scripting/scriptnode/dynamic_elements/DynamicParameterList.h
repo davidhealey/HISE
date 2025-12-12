@@ -74,7 +74,7 @@ namespace parameter
 
 		NodePropertyT<int> numParameters;
 
-		void initialise(NodeBase* n);
+		void initialise(ObjectWithValueTree* n);
 
 		bool rebuildMultiOutputSlots();
 
@@ -135,6 +135,8 @@ namespace ui
 		Path createPath(const String& url) const override;
 	};
 
+
+#if HISE_INCLUDE_SCRIPTNODE_UI
 struct dynamic_list_editor : public ScriptnodeExtraComponent<parameter::dynamic_list>,
 	public ButtonListener
 {
@@ -218,6 +220,7 @@ struct dynamic_list_editor : public ScriptnodeExtraComponent<parameter::dynamic_
 	HiseShapeButton editButton;
 	OwnedArray<DragComponent> dragSources;
 };
+#endif
 }
 
 

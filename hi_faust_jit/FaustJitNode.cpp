@@ -145,7 +145,7 @@ void faust_jit_node_base::parameterUpdated(ValueTree child, bool wasAdded)
 	}
 }
 
-void faust_jit_node_base::initialise(NodeBase* n)
+void faust_jit_node_base::initialise(ObjectWithValueTree* n)
 {
 	classId.initialise(n);
 	classId.setAdditionalCallback(BIND_MEMBER_FUNCTION_2(faust_jit_node_base::updateClassId), true);

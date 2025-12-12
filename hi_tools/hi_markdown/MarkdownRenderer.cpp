@@ -395,6 +395,8 @@ void SimpleMarkdownDisplay::resized()
 	if(b.isEmpty())
 		return;
 
+	b = b.reduced(margin);
+
 	vp.setBounds(b);
 	
 	if(resizeToFit)
@@ -409,10 +411,6 @@ void SimpleMarkdownDisplay::resized()
 		totalHeight = r.getHeightForWidth(w, true);
 		canvas.setSize(w, totalHeight);
 	}
-		
-
-	
-
 	
 	repaint();
 }

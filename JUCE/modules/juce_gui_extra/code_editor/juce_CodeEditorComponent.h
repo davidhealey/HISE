@@ -121,6 +121,8 @@ public:
     /** Enables or disables the line-number display in the gutter. */
     void setLineNumbersShown (bool shouldBeShown);
 
+    void setLineNumberOffset(int newLineNumberOffset) { lineNumberOffset = newLineNumberOffset; }
+
     //==============================================================================
     bool moveCaretLeft (bool moveInWholeWordSteps, bool selecting);
     bool moveCaretRight (bool moveInWholeWordSteps, bool selecting);
@@ -393,6 +395,7 @@ private:
     CodeDocument& document;
 
     Font font;
+    int lineNumberOffset = 0;
     int firstLineOnScreen = 0, spacesPerTab = 4;
     float charWidth = 0;
     int lineHeight = 0, linesOnScreen = 0, columnsOnScreen = 0;

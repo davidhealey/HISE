@@ -111,7 +111,7 @@ struct SnexOscillator : public SnexSource
 	Identifier getTypeId() const override { RETURN_STATIC_IDENTIFIER("snex_osc"); };
 	String getEmptyText(const Identifier& id) const override;
 
-	void initialise(NodeBase* n) override;
+	void initialise(ObjectWithValueTree* n) override;
 	float tick(double uptime);
 	void process(OscProcessData& d);
 

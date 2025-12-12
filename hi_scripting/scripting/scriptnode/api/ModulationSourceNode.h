@@ -190,7 +190,55 @@ protected:
 };
 
 
+template <typename T, Justification::Flags J> struct extra_drag_wrapper : public ScriptnodeExtraComponentBase
+{
+	extra_drag_wrapper(mothernode* b, PooledUIUpdater* u) :
+		editor(b, u),
+		dragger(u)
+	{
+		addAndMakeVisible(editor);
+		addAndMakeVisible(dragger);
 
+		if(J == Justification::left || J == Justification::right)
+		{
+			setSize(editor.getWidth() + 32, editor.getHeight());
+		}
+		else
+		{
+			setSize(editor.getWidth(), editor.getHeight() + 28);
+		}
+	}
+
+	void resized() override
+	{
+		auto b = getLocalBounds();
+
+		if(J == Justification::left)
+		{
+			dragger.setBounds(b.removeFromLeft(32).withSizeKeepingCentre(32, 32));
+		}
+		if(J == Justification::right)
+		{
+			dragger.setBounds(b.removeFromRight(32).withSizeKeepingCentre(32, 32));
+		}
+		if(J == Justification::bottom)
+		{
+			dragger.setBounds(b.removeFromBottom(28));
+		}
+
+		editor.setBounds(b);
+	}
+
+	void initialise(ObjectWithValueTree* o)
+	{
+		editor.initialise(o);
+	}
+
+	SN_CREATE_EXTRA_COMPONENT(extra_drag_wrapper);
+
+	T editor;
+	ModulationSourceBaseComponent dragger;
+};
 
 
 struct ModulationSourcePlotter : ModulationSourceBaseComponent

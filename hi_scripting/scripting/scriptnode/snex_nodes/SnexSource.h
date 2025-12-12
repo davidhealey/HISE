@@ -339,7 +339,7 @@ public:
 		}
 
 		Result recompiledOk(snex::jit::ComplexType::Ptr objectClass) override;
-		void initialise(NodeBase* n);
+		void initialise(ObjectWithValueTree* n);
 		void addOrRemoveDataFromUI(ExternalData::DataType t, bool shouldAdd);
 		void dataAddedOrRemoved(ValueTree v, bool wasAdded);
 		ValueTree getDataRoot() { return dataTree; }
@@ -601,9 +601,9 @@ public:
 
 	virtual Identifier getTypeId() const = 0;
 
-	virtual void initialise(NodeBase* n)
+	virtual void initialise(ObjectWithValueTree* n)
 	{
-		parentNode = n;
+		parentNode = dynamic_cast<NodeBase*>(n);
 
 		getComplexDataHandler().initialise(n);
 

@@ -273,6 +273,8 @@ struct ZoomableViewport : public Component,
 
 	void setZoomFactor(float newZoomFactor, Point<float> centerPositionInGraph);
 
+	float getCurrentZoomFactor() const { return zoomFactor; };
+
     void setMaxZoomFactor(float newMaxZoomFactor);
 
 	bool changeZoom(bool zoomIn);
@@ -386,6 +388,8 @@ struct ZoomableViewport : public Component,
 
 		virtual void zoomChanged(float newScalingFactor) = 0;
 
+		virtual void positionChanged(Point<int> newTopLeft) {};
+
 		JUCE_DECLARE_WEAK_REFERENCEABLE(ZoomListener);
 	};
 
@@ -415,6 +419,13 @@ struct ZoomableViewport : public Component,
 		scroller.checkFunction = checkFunction;
 	}
 
+	void setSuspendWASD(bool shouldBeSuspended)
+	{
+		scroller.suspended = shouldBeSuspended;
+		scroller.currentVelocity = {};
+		scroller.currentDelta = {};
+	}
+
 private:
 
 	struct WASDScroller: public juce::Timer
@@ -436,6 +447,8 @@ private:
 		std::function<bool(Component*)> checkFunction;
         Point<float> currentVelocity;
         Point<float> currentDelta;
+
+		bool suspended = false;
         
     } scroller;
 
@@ -494,6 +507,158 @@ struct ComponentWithMiddleMouseDrag: public Component
 #define CHECK_VIEWPORT_SCROLL(e, details) ignoreUnused(e, details);
 using ComponentWithMiddleMouseDrag = juce::Component;
 #endif
+
+/** This class monitors the zoom factor of the parent viewport and switches between 3 levels of detail to save UI render time. 
+
+	In order to use this, subclass the root component that you use as content from LOD Manager.
+
+	In every paint() method of any child component, you can then create a LODGraphics object and
+	call its methods instead of the ones from juce::Graphics.
+
+	This will perform a few optimizations, eg:
+	
+	- skip rendering of text and just show dummy rectangles
+	- don't use rounded rectangles (as they are converted to a path)
+	- don't render a path, but just a circle instead
+
+*/
+struct LODManager : private hise::ZoomableViewport::ZoomListener
+{
+	/** A RAII object that wraps around a juce::Graphics object and performs optimized drawing functions
+		depending on the current LOD. 
+		
+	*/
+	struct LODGraphics
+	{
+		LODGraphics(juce::Graphics& g_, Component& c):
+		  g(g_),
+		  lod(getLOD(c))
+		{};
+
+		int getCurrentLOD() const { return lod; }
+
+		/** This will render the normal text or just fill a placeholder rectangle when fully zoomed out. */
+		void drawText(const String& text, Rectangle<float> tb, Justification j)
+		{
+			if (!isFullyZoomedOut())
+				g.drawText(text, tb, j);
+			else
+			{
+				auto h = GLOBAL_BOLD_FONT().getHeight();
+				auto w = h * 0.4f * (float)text.length();
+
+				tb = j.appliedToRectangle(Rectangle<float>(tb.getX(), tb.getY(), w, h - 2.0f), tb);
+
+				juce::Graphics::ScopedSaveState ss(g);
+
+				g.setOpacity(0.25f);
+				g.fillRect(tb.reduced(3.0f));
+			}
+		}
+
+		/** This will render the rounded rectangle or just draw one without corners if not fully zoomed in. */
+		void fillRoundedRectangle(Rectangle<float> b, float cornerSize)
+		{
+			if (drawFullDetails())
+				g.fillRoundedRectangle(b, cornerSize);
+			else
+				g.fillRect(b);
+		}
+
+		void drawRoundedRectangle(Rectangle<float> b, float cornerSize, float lineThickness=-1.0f)
+		{
+			if(lineThickness < 0.0f)
+				lineThickness = get1PxThickness();
+
+			if (drawFullDetails())
+				g.drawRoundedRectangle(b, cornerSize, lineThickness);
+			else
+				g.drawRect(b, lineThickness);
+		}
+
+		/** This will render a path or a simple ellipse if fully zoomed out. */
+		void fillPath(const Path& p)
+		{
+			if (!isFullyZoomedOut())
+				g.fillPath(p);
+			else
+				g.fillEllipse(p.getBounds());
+		}
+
+		/** Checks if all details should be shown (zoom factor > 85%). */
+		bool drawFullDetails() const { return lod == 0; }
+
+		/** Checks if the viewport is fully zoomed out (zoom factor < 25%). */
+		bool isFullyZoomedOut() const { return lod == 2; }
+
+		float get1PxThickness() const
+		{
+			float data[3] = { 1.0f, 2.0f, 4.0f };
+			return data[jlimit(0, 2, lod)];
+		}
+
+	private:
+
+		juce::Graphics& g;
+		int lod;
+	};
+
+	LODManager(ZoomableViewport& zp_) :
+		zp(&zp_)
+	{
+		zp->addZoomListener(this);
+		currentLOD = zoomFactorToLOD(zp->getCurrentZoomFactor());
+	}
+
+	~LODManager() override
+	{
+		if (auto z = zp.getComponent())
+			z->removeZoomListener(this);
+	};
+
+	static int zoomFactorToLOD(float sf)
+	{
+		if (sf > JUCE_LIVE_CONSTANT_OFF(0.85))
+			return 0;
+		if (sf > JUCE_LIVE_CONSTANT_OFF(0.4))
+			return 1;
+
+		return 2;
+	}
+
+	/** Small helper tool that just prints the LOD level to the given graphcis context. */
+	void paintLOD(Graphics& g, Rectangle<int> b)
+	{
+		auto s = 16.0f / zp->getCurrentZoomFactor();
+		g.setFont(GLOBAL_BOLD_FONT().withHeight(s));
+		g.setColour(Colours::white.withAlpha(0.5f));
+		g.drawText(String(currentLOD), b.toFloat(), Justification::centred);
+	}
+
+	static int getLOD(Component& c)
+	{
+		auto lm = c.findParentComponentOfClass<LODManager>();
+		return lm != nullptr ? lm->currentLOD : 0;
+	}
+
+private:
+
+	Component& asComponent() { return *dynamic_cast<Component*>(this); }
+
+	void zoomChanged(float newScalingFactor) override
+	{
+		auto newLOD = zoomFactorToLOD(newScalingFactor);
+
+		if (newLOD != currentLOD)
+		{
+			currentLOD = newLOD;
+			asComponent().repaint();
+		}
+	}
+
+	int currentLOD = 0;
+	Component::SafePointer<ZoomableViewport> zp;
+};
 
 using Animator = AnimatedPosition<AnimatedPositionBehaviours::ContinuousWithMomentum>;
 

@@ -1033,6 +1033,12 @@ void ZoomableViewport::setMouseWheelScrollEnabled(bool shouldBeEnabled)
 
 void ZoomableViewport::WASDScroller::timerCallback()
 {
+	if(suspended)
+	{
+		stopTimer();
+		return;
+	}
+	
 	if(currentDelta.isOrigin())
 	{
 		currentVelocity *= JUCE_LIVE_CONSTANT_OFF(0.8f);
@@ -1066,6 +1072,9 @@ void ZoomableViewport::WASDScroller::timerCallback()
 
 void ZoomableViewport::WASDScroller::setDelta(Point<float> delta)
 {
+	if(suspended)
+		return;
+
 	currentDelta = delta;
             
 	if(currentVelocity.isOrigin() && !delta.isOrigin())
@@ -1088,6 +1097,9 @@ bool ZoomableViewport::WASDScroller::checkWASD(const KeyPress& key)
 
 bool ZoomableViewport::WASDScroller::keyChangedWASD(bool isKeyDown, Component* c)
 {
+	if (suspended)
+		return false;
+
 	auto fc = c->getCurrentlyFocusedComponent();
 
 	if(checkFunction && checkFunction(fc)) // make better check function
@@ -1111,7 +1123,7 @@ bool ZoomableViewport::WASDScroller::keyChangedWASD(bool isKeyDown, Component* c
 		if(r)
 			delta.x -= 1.0f;
 	            
-		delta *= JUCE_LIVE_CONSTANT(0.1);
+		delta *= JUCE_LIVE_CONSTANT_OFF(0.1);
 		delta *= 0.05f;
 
 		if(turbo)
@@ -1875,6 +1887,9 @@ void ZoomableViewport::refreshPosition()
 	x /= zoomFactor;
 
 	content->setTopLeftPosition(x, y);
+
+	for(auto l: listeners)
+		l->positionChanged({(int)x, (int)y});
 }
 
 

@@ -32,6 +32,8 @@
 
 #pragma once 
 
+#include <map>
+
 namespace hise { using namespace juce;
 
 #define DECLARE_ID(x) static const Identifier x(#x)
@@ -42,7 +44,9 @@ DECLARE_ID(Layers);
 DECLARE_ID(Layer);
 
 DECLARE_ID(type);
+DECLARE_ID(colour);
 DECLARE_ID(id);
+DECLARE_ID(folded);
 DECLARE_ID(tokens);
 DECLARE_ID(ignorable);
 DECLARE_ID(cached);
@@ -50,9 +54,16 @@ DECLARE_ID(purgable);
 DECLARE_ID(fader);
 DECLARE_ID(slotIndex);
 DECLARE_ID(sourceType);
+DECLARE_ID(matrixString);
 
 DECLARE_ID(isChromatic);
 
+DECLARE_ID(matchGain);
+DECLARE_ID(accuracy);
+DECLARE_ID(fadeTime);
+
+DECLARE_ID(groupStart);
+DECLARE_ID(gainMod);
 
 }
 
@@ -62,6 +73,8 @@ DECLARE_ID(isChromatic);
 struct SynthSoundWithBitmask: public ModulatorSynthSound
 {
 	using Bitmask = uint64;
+
+	
 
 	/** This object can be used to filter another bitmask.
 	 *
@@ -109,6 +122,11 @@ struct SynthSoundWithBitmask: public ModulatorSynthSound
 		{
 			mainFilter.clear();
 			ignorableFilters.clear();
+		}
+
+		bool isClear() const 
+		{
+			return ignorableFilters.isEmpty() && mainFilter.value == 0;
 		}
 
 		ValueWithFilter mainFilter;
@@ -251,6 +269,12 @@ struct ComplexGroupManager: public ModulatorSynth::SoundCollectorBase,
 
 	struct Helpers
 	{
+		static var convertToJS(const ValueTree& v, const Identifier& id, ModulatorSampler* sampler);
+
+		static var convertFromJS(const Identifier& id, const var& dataFromJS);
+
+		static bool isValidId(const String& p);
+
 		static uint8 getNumBitsRequired(uint8 numItems);
 		static bool canBePurged(int flag);
 		static bool canBeIgnored(int flag);
@@ -266,7 +290,9 @@ struct ComplexGroupManager: public ModulatorSynth::SoundCollectorBase,
 
 		static StringArray getLogicTypeNames();
 		static String getLogicTypeName(LogicType lt);
-		
+
+		static void initProperties(ValueTree v, UndoManager* um, const NamedValueSet& set);
+
 		static String getItemName(LogicType lt, const StringArray& items);
 		static ValueTree getRoot(const ValueTree& v);
 		static uint8 getLayerIndex(const ValueTree& layerData);
@@ -282,6 +308,18 @@ struct ComplexGroupManager: public ModulatorSynth::SoundCollectorBase,
 		static String getSampleFilename(const SynthSoundWithBitmask* fs);
 		static StringArray getFileTokens(const SynthSoundWithBitmask* fs, String separator="_");
 		static StringArray getFileTokens(const String& fileName, String separator="_");
+
+		static std::vector<uint8> getMatrixFromString(const String& encodedMatrix);
+		static String getStringFromMatrix(const std::vector<uint8>& matrix);
+	};
+
+	struct VoiceStartCallback
+	{
+		virtual ~VoiceStartCallback() = default;
+
+		virtual void onVoiceStart(uint8 groupValue) = 0;
+
+		JUCE_DECLARE_WEAK_REFERENCEABLE(VoiceStartCallback);
 	};
 
 	ComplexGroupManager(ReferenceCountedArray<SynthesiserSound>* allSounds, PooledUIUpdater* updater=nullptr);;
@@ -327,13 +365,14 @@ struct ComplexGroupManager: public ModulatorSynth::SoundCollectorBase,
 	 */
 	void applyFilter(uint8 layerIndex, uint8 value, NotificationType n);
 
-	
+	/** Checks whether a filter for the given layer index was set. */
+	bool isFilterInitialised(uint8 layerIndex) const;
 
 	/** Delays the event that matches a given filter). */
 	void delayEventByFilter(uint8 layerIndex, uint8 value, double delayInSamples);
 
 	/** Adds a fade in to the event that matches a given filter. */
-	void fadeInEventByFilter(uint8 layerIndex, uint8 value, double fadeInTime);
+	void fadeInEventByFilter(uint8 layerIndex, uint8 value, double fadeInTime, double targetGain=1.0);
 
 	/** Sets the sample to fade out with the given fade-in time after a fixed length. */
 	void setFixedLengthByFilter(uint8 layerIndex, uint8 value, double numSamplesToPlayBeforeFadeout);
@@ -343,8 +382,6 @@ struct ComplexGroupManager: public ModulatorSynth::SoundCollectorBase,
 
 	/** Called by HISE in the noteOn callback to figure out what sounds to play. */
 	void collectSounds(const HiseEvent& m, UnorderedStack<ModulatorSynthSound*>& soundsToBeStarted) override;
-
-	                    
 
 	SoundCollectorBase::SpecialStart getSpecialSoundStart(const HiseEvent& m, ModulatorSynthSound* sound) const override;
 
@@ -373,11 +410,18 @@ struct ComplexGroupManager: public ModulatorSynth::SoundCollectorBase,
 
 	Array<WeakReference<SampleType>> getUnassignedSamples(uint8 layerIndex) const;
 
+	int getNumGroupsInLayer(uint8 layerIndex) const;
+
+
+	void setGroupVolume(uint8 layerIndex, uint8 value, float targetGain);
+
+	float getGroupVolume(uint8 layerIndex, uint8 value) const;
+
 	/** Returns the number of matches for each given filter. */
 	int getNumFiltered(uint8 layerIndex, uint8 value, bool includeIgnoredSamples) const;
 
 	/** Call this in the note on callback and it will handle all special behaviour of all layers. */
-	void preHiseEventCallback(const HiseEvent& e) override;
+	void preHiseEventCallback(HiseEvent& e) override;
 	
 	/** Call this whenever you want to reset the internal playing variables (eg. RR counter). */
 	void resetPlayingState();
@@ -388,10 +432,13 @@ struct ComplexGroupManager: public ModulatorSynth::SoundCollectorBase,
 	/** Returns the table fade index (one-based) if there is a layer with table fade enabled. */
 	uint8 getTableFadeValue(Bitmask m) const;
 
+	/** Registers a voice start callback to the given layerIndex. */
+	void setVoiceStartCallback(uint8 layerIndex, VoiceStartCallback* vc);
+
 	/** Locks the layer to the fixed value. */
 	void setLockLayer(uint8 layerIndex, bool shouldBeLocked, uint8 lockValue);
 
-	float* calculateGroupModulationValuesForVoice(const HiseEvent& e, int voiceIndex, int startSample, int numSamples, SampleType::Bitmask m);
+	float* calculateGroupModulationValuesForVoice(const HiseEvent& e, int voiceIndex, int startSample, int numSamples, SampleType::Bitmask m, bool firstInVoice);
 
 	float getConstantGroupModulationValue(int voiceIndex, SampleType::Bitmask m);
 
@@ -438,8 +485,6 @@ struct ComplexGroupManager: public ModulatorSynth::SoundCollectorBase,
 	/** Returns the number of samples that are ignored by this layer. */
 	std::pair<int, int> getNumUnassignedAndIgnored(uint8 layerIndex) const;
 
-	
-
 	void samplePropertyWasChanged(ModulatorSamplerSound* s, const Identifier& id, const var& newValue) override;
 
 	void sampleMapWasChanged(PoolReference) override
@@ -464,9 +509,29 @@ struct ComplexGroupManager: public ModulatorSynth::SoundCollectorBase,
 
 	struct XFadeLayer;
 	
+	struct ScopedMigrator
+	{
+		ScopedMigrator(ComplexGroupManager& gm_, SampleType* s_);
+
+		~ScopedMigrator();
+
+		SampleType* s;
+		ComplexGroupManager& gm;
+		std::map<Identifier, uint8> oldValues;
+
+		struct Collection
+		{
+			Collection(ComplexGroupManager& gm, bool active);
+
+			OwnedArray<ScopedMigrator> migrators;
+		};
+
+		JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(ScopedMigrator);
+	};
+
 private:
 
-	
+	std::array<WeakReference<VoiceStartCallback>, 32> voiceStartCallbacks;
 
 	struct Updater: public AsyncUpdater
 	{
@@ -502,7 +567,7 @@ private:
 		 *
 		 *	startSample and numSamples are using the HISE_CONTROL_RATE_DOWNSAMPLE_FACTOR for the same performance as modulation
 		 */
-		virtual bool calculateGroupModulationValuesForVoice(const HiseEvent& e, int voiceIndex, float* data, int startSample, int numSamples, Bitmask m)
+		virtual bool calculateGroupModulationValuesForVoice(const HiseEvent& e, int voiceIndex, float* data, int startSample, int numSamples, Bitmask m, bool firstInVoice)
 		{
 			jassertfalse;
 			data[0] = 1.0f;
@@ -511,7 +576,7 @@ private:
 
 		int logicFlag = 0;
 
-		virtual void handleHiseEvent(ComplexGroupManager& parent, const HiseEvent& e) {};
+		virtual void handleHiseEvent(ComplexGroupManager& parent, HiseEvent& e) {};
 		virtual void postVoiceStart(ComplexGroupManager& parent, const UnorderedStack<ModulatorSynthSound*>& soundsThatWereStarted) {};
 		virtual void resetPlayState(ComplexGroupManager& parent) {};
 
@@ -532,7 +597,7 @@ private:
 		uint8 getUnmaskedValue(Bitmask m) const;
 		float getXFadeValue(SampleType* t) const;
 		void setValueFilter(ValueWithFilter& v, uint8 value) const;
-		void mask(Bitmask& m, uint8 value) const;
+		void mask(Bitmask& m, uint8 value, bool clearIgnoreFlag) const;
 		void clearBits(Bitmask& m) const;
 
 		virtual void onCacheRebuild(ComplexGroupManager& parent) {};
@@ -574,13 +639,23 @@ private:
 		ValueTree data;
 
 	private:
-		
+
+		void onIdChange(const Identifier& id, const var& newValue)
+		{
+			groupId = Identifier(newValue.toString());
+		}
+
 		valuetree::PropertyListener rangeUpdater;
+		valuetree::PropertyListener idListener;
 
 		JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(Layer);
 	};
 
-	struct RRLayer; struct LegatoLayer; struct TableFadeLayer; struct KeyswitchLayer;
+	
+
+	struct RRLayer; struct LegatoLayer; struct TableFadeLayer; struct KeyswitchLayer; struct ReleaseTriggerLayer; struct ChokeLayer;
+
+	struct CustomLayer;
 
 	bool matchesCurrentFilter(const HiseEvent& m, SampleType* typed) const;
 
@@ -635,6 +710,7 @@ private:
 			StartOffsetIndex,
 			FadeTimeIndex,
 			FadeOutOffset,
+			TargetVolume,
 			numStartData
 		};
 

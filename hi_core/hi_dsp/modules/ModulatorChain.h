@@ -33,6 +33,8 @@
 #ifndef ModulatorChainProcessor_H_INCLUDED
 #define ModulatorChainProcessor_H_INCLUDED
 
+namespace scriptnode { struct NodeBase; }
+
 namespace hise { using namespace juce;
 
 

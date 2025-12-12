@@ -49,9 +49,9 @@ void dynamic::prepare(PrepareSpecs ps)
 }
 
 
-void dynamic::initialise(NodeBase* n)
+void dynamic::initialise(ObjectWithValueTree* n)
 {
-    parentNode = n;
+    parentNode = dynamic_cast<NodeBase*>(n);
 	mode.initialise(n);
 	mode.setAdditionalCallback(BIND_MEMBER_FUNCTION_2(dynamic::setMode), true);
 }

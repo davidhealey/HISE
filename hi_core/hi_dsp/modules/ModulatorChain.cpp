@@ -1349,13 +1349,8 @@ void ModulatorChain::handleHiseEvent(const HiseEvent &m)
 {
 	jassert(shouldBeProcessedAtAll());
 
-	
-
 	if(m.isNoteOn())
-	{
-		jassert(unsavedEventId == -1);
 		unsavedEventId = m.getEventId() % NUM_POLYPHONIC_VOICES;
-	}
 
 	EnvelopeModulator::handleHiseEvent(m);
 
@@ -1481,8 +1476,6 @@ float ModulatorChain::startVoice(int voiceIndex)
 	eventIdToVoiceIndexMap[voiceIndex] = unsavedEventId;
 	runtimeTargetSource.resetFlag[unsavedEventId] = scriptnode::modulation::ClearState::Playing;
 
-	unsavedEventId = -1;
-	
 	activeVoices.setBit(voiceIndex, true);
 
 	polyManager.setLastStartedVoice(voiceIndex);

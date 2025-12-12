@@ -81,7 +81,7 @@ public:
 		Incompatible
 	};
 
-	void initialise(NodeBase* n)
+	void initialise(ObjectWithValueTree* n)
 	{
 		config.initialise(n);
 	}

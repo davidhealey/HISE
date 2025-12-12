@@ -71,10 +71,7 @@ juce::NormalisableRange<double> dynamic_expression::graph::getXRange()
 	if (expr != nullptr && expr->isMathNode)
 		return NormalisableRange<double>(-1.0, 1.0);
 	else
-    {
-        if(auto n = getNode())
-            return RangeHelpers::getDoubleRange(n->getParameterFromIndex(0)->data).rng;
-    }
+		return getParameterRange(0).rng;
     
     return {0.0, 1.0};
 }
@@ -83,8 +80,8 @@ double dynamic_expression::graph::getInputValue()
 {
 	if (expr != nullptr && expr->isMathNode)
 		return expr->lastInput;
-	else if (auto n = getNode())
-		return n->getParameterFromIndex(0)->getValue();
+	else 
+		return getParameter(0);
     
     return 0.0;
 }
@@ -99,7 +96,7 @@ float dynamic_expression::graph::getValue(double x)
 
 void dynamic_expression::graph::rebuildPath(Path& path)
 {
-    if(expr == nullptr && getNode() == nullptr)
+    if(expr == nullptr)
         return;
     
 	auto pRange = getXRange();
@@ -421,13 +418,13 @@ dynamic_expression::dynamic_expression() :
 
 }
 
-void dynamic_expression::initialise(NodeBase* n)
+void dynamic_expression::initialise(ObjectWithValueTree* n)
 {
-	node = n;
+	node = dynamic_cast<NodeBase*>(n);
 
 	node->getRootNetwork()->checkAllowCompilationFlag(node, true);
 
-	isMathNode = n->getPath().getParent().getIdentifier() == Identifier("math");
+	isMathNode = node->getPath().getParent().getIdentifier() == Identifier("math");
 
 	code.initialise(n);
 	code.setAdditionalCallback(BIND_MEMBER_FUNCTION_2(dynamic_expression::updateCode), true);

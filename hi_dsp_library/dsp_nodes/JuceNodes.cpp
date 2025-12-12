@@ -45,6 +45,7 @@ void jcompressor::createParameters(ParameterDataList& d)
 		parameter::data p("Treshold", { -100.0, 0.0 });
 		p.setSkewForCentre(-12.0);
 		registerCallback<0>(p);
+		p.info.textConverter = parameter::pod::Decibel;
 		p.setDefaultValue(0.0);
 		d.add(p);
 	}
@@ -59,6 +60,7 @@ void jcompressor::createParameters(ParameterDataList& d)
 		parameter::data p("Attack", { 0.0, 300.0 });
 		p.setSkewForCentre(50.0);
 		registerCallback<2>(p);
+		p.info.textConverter = parameter::pod::Time;
 		p.setDefaultValue(1.0);
 		d.add(p);
 	}
@@ -68,6 +70,7 @@ void jcompressor::createParameters(ParameterDataList& d)
 		registerCallback<3>(p);
 		p.setSkewForCentre(10.0);
 		p.setDefaultValue(100.0);
+		p.info.textConverter = parameter::pod::Time;
 		d.add(p);
 	}
 }
@@ -78,18 +81,21 @@ void jchorus::createParameters(ParameterDataList& d)
 		parameter::data p("CentreDelay", { 0.0, 100.0 });
 		registerCallback<0>(p);
 		p.setDefaultValue(7.0);
+		p.info.textConverter = parameter::pod::Time;
 		d.add(p);
 	}
 	{
 		parameter::data p("Depth", { 0.0, 1.0 });
 		registerCallback<1>(p);
 		p.setDefaultValue(0.25);
+		p.info.textConverter = parameter::pod::NormalizedPercentage;
 		d.add(p);
 	}
 	{
 		parameter::data p("Feedback", { -1.0, 1.0 });
 		registerCallback<2>(p);
 		p.setDefaultValue(0.0);
+		p.info.textConverter = parameter::pod::NormalizedPercentage;
 		d.add(p);
 	}
 	{
@@ -97,12 +103,14 @@ void jchorus::createParameters(ParameterDataList& d)
 		registerCallback<3>(p);
 		p.setSkewForCentre(10.0);
 		p.setDefaultValue(1.0);
+		p.info.textConverter = parameter::pod::Frequency;
 		d.add(p);
 	}
 	{
 		parameter::data p("Mix", { 0.0, 1.0 });
 		registerCallback<4>(p);
 		p.setDefaultValue(0.5);
+		p.info.textConverter = parameter::pod::NormalizedPercentage;
 		d.add(p);
 	}
 }
@@ -114,6 +122,7 @@ void jlinkwitzriley::createParameters(ParameterDataList& d)
 		registerCallback<0>(p);
 		p.setSkewForCentre(1000.0);
 		p.setDefaultValue(2000.0);
+		p.info.textConverter = parameter::pod::Frequency;
 		d.add(p);
 	}
 	{

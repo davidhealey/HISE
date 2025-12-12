@@ -37,6 +37,129 @@ using namespace juce;
 using namespace hise;
 
 
+struct InvertableParameterRange
+{
+	InvertableParameterRange(double start, double end) :
+		rng(start, end),
+		inv(false)
+	{};
+
+	InvertableParameterRange() :
+		rng(0.0, 1.0),
+		inv(false)
+	{};
+
+	bool operator==(const InvertableParameterRange& other) const;
+
+	InvertableParameterRange(const ValueTree& v);
+
+	void store(ValueTree& v, UndoManager* um);
+
+	InvertableParameterRange(double start, double end, double interval, double skew = 1.0) :
+		rng(start, end, interval, skew),
+		inv(false)
+	{};
+
+	double convertFrom0to1(double input, bool applyInversion) const;
+
+	InvertableParameterRange inverted() const
+	{
+		auto copy = *this;
+		copy.inv = !copy.inv;
+		return copy;
+	}
+
+	double convertTo0to1(double input, bool applyInversion) const;
+
+	Range<double> getRange() const
+	{
+		return rng.getRange();
+	}
+
+	double snapToLegalValue(double v) const
+	{
+		return rng.snapToLegalValue(v);
+	}
+
+	void setSkewForCentre(double value)
+	{
+		rng.setSkewForCentre(value);
+	}
+
+	void checkIfIdentity();
+
+	juce::NormalisableRange<double> rng;
+	bool inv = false;
+
+	bool isNonDefault() const { return !isIdentity; }
+
+private:
+
+	bool isIdentity = false;
+};
+
+/** A base class for the scriptnode nodes that connect to a value tree and have a undo manager. */
+struct ObjectWithValueTree
+{
+	virtual ~ObjectWithValueTree() = default;
+
+	/** Override this method and return the value tree that represents this object. */
+	virtual ValueTree getValueTree() const = 0;
+
+	/** Override this method and return the undo manager associated to this object. */
+	virtual UndoManager* getUndoManager() const = 0;
+
+	virtual snex::Types::PrepareSpecs getLastPrepareSpecs() const = 0;
+};
+
+struct ParameterSourceObject: public ObjectWithValueTree
+{
+	/** Override this method and return the parameter value. This might be a modulated parameter or the value tree value. */
+	virtual double getParameterValue(int index) const = 0;
+
+	virtual InvertableParameterRange getParameterRange(int index) const = 0;
+};
+
+struct MultiOutputBase
+{
+	virtual ~MultiOutputBase() {};
+
+	void initialiseOutputs(ObjectWithValueTree* o)
+	{
+		nodeData = o->getValueTree();
+		jassert(nodeData.getType() == PropertyIds::Node);
+	}
+
+	int getNumOutputs() const
+	{
+		return nodeData.getChildWithName(PropertyIds::SwitchTargets).getNumChildren();
+	}
+
+	static Colour getFadeColour(int index, int numPaths)
+	{
+		if (numPaths == 0)
+			return Colours::transparentBlack;
+
+		auto hue = (float)index / (float)numPaths;
+
+		auto saturation = JUCE_LIVE_CONSTANT_OFF(0.3f);
+		auto brightness = JUCE_LIVE_CONSTANT_OFF(1.0f);
+		auto minHue = JUCE_LIVE_CONSTANT_OFF(0.2f);
+		auto maxHue = JUCE_LIVE_CONSTANT_OFF(0.8f);
+		auto alpha = JUCE_LIVE_CONSTANT_OFF(0.4f);
+
+		hue = jmap(hue, minHue, maxHue);
+
+		return Colour::fromHSV(hue, saturation, brightness, alpha);
+	}
+
+	ValueTree getValueTree() { return nodeData; }
+
+private:
+
+	ValueTree nodeData;
+};
+
 /** A NodeProperty is a non-realtime controllable property of a node.
 
 	It is saved as ValueTree property. The actual property ID in the ValueTree
@@ -52,12 +175,12 @@ struct NodeProperty
 
 		This will automatically initialise the proper value tree ID at the best time.
 	*/
-	bool initialise(NodeBase* n);
+	bool initialise(ObjectWithValueTree* o);
 
 	/** Callback when the initialisation was successful. This might happen either during the initialise() method or after all parameters
 		are created. Use this callback to setup the listeners / the logic that changes the property.
 	*/
-	virtual void postInit(NodeBase* n) = 0;
+	virtual void postInit() = 0;
 
 	/** Returns the ID in the ValueTree. */
 	Identifier getValueTreePropertyId() const;
@@ -86,7 +209,7 @@ template <class T> struct NodePropertyT : public NodeProperty
 {
 	NodePropertyT(const Identifier& id, T defaultValue);;
 
-	void postInit(NodeBase* ) override;
+	void postInit() override;
 
 	void storeValue(const T& newValue, UndoManager* um);
 
@@ -109,6 +232,7 @@ extern template struct NodePropertyT<int>;
 extern template struct NodePropertyT<String>;
 extern template struct NodePropertyT<bool>;
 
+#if HISE_INCLUDE_SCRIPTNODE_UI
 struct ComboBoxWithModeProperty : public ComboBox,
                                   public ComboBoxListener
 {
@@ -124,7 +248,7 @@ struct ComboBoxWithModeProperty : public ComboBox,
 
 	void mouseUp(const MouseEvent& e) override;
 
-	void initModes(const StringArray& modes, NodeBase* n);
+	void initModes(const StringArray& modes, ObjectWithValueTree* o);
 
 	bool initialised = false;
 	UndoManager* um;
@@ -132,60 +256,8 @@ struct ComboBoxWithModeProperty : public ComboBox,
 	ScriptnodeComboBoxLookAndFeel plaf;
     JUCE_DECLARE_WEAK_REFERENCEABLE(ComboBoxWithModeProperty);
 };
+#endif
 
 
-template <class T> class ScriptnodeExtraComponent : public ComponentWithMiddleMouseDrag,
-public PooledUIUpdater::SimpleTimer
-{
-public:
-
-	using ObjectType = T;
-
-	ObjectType* getObject() const
-	{
-		return object.get();
-	}
-
-protected:
-
-	ScriptnodeExtraComponent(ObjectType* t, PooledUIUpdater* updater) :
-		SimpleTimer(updater),
-		object(t)
-	{};
-
-	Colour getHeaderColour() const
-	{
-		if (auto nc = findParentComponentOfClass<NodeComponent>())
-		{
-			return nc->getHeaderColour();
-		}
-
-		return Colours::transparentBlack;
-	}
-
-private:
-
-	WeakReference<ObjectType> object;
-};
-
-struct DspNetworkPathFactory : public PathFactory
-{
-	String getId() const override { return "Scriptnode Toolbar"; }
-
-	Path createPath(const String& url) const override;
-	Array<Description> getDescription() const override;
-	
-};
-
-struct NodeComponentFactory : public PathFactory
-{
-	static Component* createComponent(NodeBase* node);
-
-	String getId() const;;
-
-	Array<Description> getDescription() const override;
-
-	Path createPath(const String& id) const override;
-};
 
 }

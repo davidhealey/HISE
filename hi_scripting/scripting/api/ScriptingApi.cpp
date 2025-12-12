@@ -3842,6 +3842,7 @@ struct ScriptingApi::Sampler::Wrapper
 	API_VOID_METHOD_WRAPPER_2(Sampler, setGUISelection);
 	API_VOID_METHOD_WRAPPER_1(Sampler, setSortByRRGroup);
 	API_VOID_METHOD_WRAPPER_1(Sampler, setOffsetMultiplier);
+	API_METHOD_WRAPPER_0(Sampler, getComplexGroupManager);
 };
 
 
@@ -3904,7 +3905,9 @@ sampler(sampler_)
 	ADD_API_METHOD_0(getTimestretchOptions);
 	ADD_API_METHOD_0(getReleaseStartOptions);
 	ADD_API_METHOD_1(setReleaseStartOptions);
+
 	ADD_API_METHOD_1(setOffsetMultiplier);
+	ADD_API_METHOD_0(getComplexGroupManager);
 
 	sampleIds = SampleIds::Helpers::getAllIds();
 
@@ -5245,6 +5248,15 @@ bool ScriptingApi::Sampler::clearSampleMap()
 
 	s->killAllVoicesAndCall(f);
 	return true;
+}
+
+juce::var ScriptingApi::Sampler::getComplexGroupManager()
+{
+	if(checkValidObject())
+		return new ScriptingObjects::ScriptingComplexGroupManager(getScriptProcessor(), dynamic_cast<ModulatorSampler*>(sampler.get()));
+
+	reportScriptError("No valid sampler");
+	RETURN_IF_NO_THROW(var());
 }
 
 juce::ValueTree ScriptingApi::Sampler::convertJSONListToValueTree(var jsonSampleList)
@@ -8268,6 +8280,11 @@ struct ScriptingApi::TransportHandler::Wrapper
 	API_VOID_METHOD_WRAPPER_0(TransportHandler, sendGridSyncOnNextCallback);
 	API_VOID_METHOD_WRAPPER_1(TransportHandler, setLinkBpmToSyncMode);
 	API_METHOD_WRAPPER_0(TransportHandler, isNonRealtime);
+	API_VOID_METHOD_WRAPPER_1(TransportHandler, setLocalGridMultiplier);
+	API_METHOD_WRAPPER_0(TransportHandler, getGridLengthInSamples);
+	API_VOID_METHOD_WRAPPER_1(TransportHandler, setLocalGridBypassed);
+	API_METHOD_WRAPPER_1(TransportHandler, getGridPosition);
+	API_METHOD_WRAPPER_0(TransportHandler, isPlaying);
 };
 
 ScriptingApi::TransportHandler::TransportHandler(ProcessorWithScriptingContent* sp) :
@@ -8297,6 +8314,11 @@ ScriptingApi::TransportHandler::TransportHandler(ProcessorWithScriptingContent* 
     ADD_API_METHOD_1(stopInternalClockOnExternalStop);
 	ADD_API_METHOD_1(setLinkBpmToSyncMode);
 	ADD_API_METHOD_0(isNonRealtime);
+	ADD_API_METHOD_1(setLocalGridMultiplier);
+	ADD_API_METHOD_0(getGridLengthInSamples);
+	ADD_API_METHOD_1(setLocalGridBypassed);
+	ADD_API_METHOD_1(getGridPosition);
+	ADD_API_METHOD_0(isPlaying);
 }
 
 ScriptingApi::TransportHandler::~TransportHandler()
@@ -8426,11 +8448,31 @@ void ScriptingApi::TransportHandler::onGridChange(int gridIndex_, uint16 timesta
 	gridTimestamp = timestamp;
 	firstGridInPlayback = firstGridInPlayback_;
 
+	if (firstGridInPlayback)
+		nextLocalIsFirst = true;
+
+	auto unsignedIndex = (uint32)gridIndex;
+	auto mask = (uint32)(localGridMultiplier - 1);
+	auto filtered = unsignedIndex & mask;
+
+	if(mask && filtered || localBypassed)
+	{
+		return;
+	}
+
+	auto thisGridIndex = gridIndex >> localBitShift;
+
+	if(thisGridIndex != (lastGridIndex+1))
+		nextLocalIsFirst = true;
+
 	if (gridCallback != nullptr)
-		gridCallback->call(gridIndex, gridTimestamp, firstGridInPlayback);
+		gridCallback->call(thisGridIndex, gridTimestamp, nextLocalIsFirst);
 
 	if (gridCallbackAsync != nullptr)
-		gridCallbackAsync->call(gridIndex, gridTimestamp, firstGridInPlayback);
+		gridCallbackAsync->call(thisGridIndex, gridTimestamp, nextLocalIsFirst);
+
+	lastGridIndex = thisGridIndex;
+	nextLocalIsFirst = false;
 }
 
 void ScriptingApi::TransportHandler::setOnBeatChange(var sync, var f)
@@ -8499,6 +8541,36 @@ void ScriptingApi::TransportHandler::setEnableGrid(bool shouldBeEnabled, int tem
 	}
 }
 
+void ScriptingApi::TransportHandler::setLocalGridMultiplier(int factor)
+{
+	if (factor != 1 && !isPowerOfTwo(factor))
+		reportScriptError("factor must be power of two (or 1).");
+
+	factor = jlimit(1, 64, factor);
+
+	if(factor == 1)
+	{
+		localGridMultiplier = 1;
+		localBitShift = 0;
+	}
+	else
+	{
+		localGridMultiplier = factor;
+		localBitShift = log2(factor);
+	}
+}
+
+void ScriptingApi::TransportHandler::setLocalGridBypassed(bool shouldBeBypassed)
+{
+	if(shouldBeBypassed != localBypassed)
+	{
+		localBypassed = shouldBeBypassed;
+
+		if(!localBypassed)
+			nextLocalIsFirst = true;
+	}
+}
+
 void ScriptingApi::TransportHandler::startInternalClock(int timestamp)
 {
 	auto& clock = getMainController()->getMasterClock();
@@ -8547,6 +8619,28 @@ void ScriptingApi::TransportHandler::setLinkBpmToSyncMode(bool shouldPrefer)
 bool ScriptingApi::TransportHandler::isNonRealtime() const
 {
 	return getScriptProcessor()->getMainController_()->getSampleManager().isNonRealtime();
+}
+
+double ScriptingApi::TransportHandler::getGridLengthInSamples() const
+{
+	auto bpm = getMainController()->getBpm();
+	auto gridSpeed = getMainController()->getMasterClock().getCurrentClockGrid();
+	auto tf = TempoSyncer::getTempoFactor(gridSpeed);
+	auto sr = getMainController()->getMainSynthChain()->getSampleRate();
+	tf *= (float)localGridMultiplier;
+	return TempoSyncer::getTempoInSamples(bpm, sr, tf);
+}
+
+bool ScriptingApi::TransportHandler::isPlaying() const
+{
+	return getMainController()->getMasterClock().isPlaying();
+}
+
+int ScriptingApi::TransportHandler::getGridPosition(int timestamp) const
+{
+	auto ppq = getMainController()->getMasterClock().getPPQPos(timestamp);
+	return ppq;
+
 }
 
 void ScriptingApi::TransportHandler::onBypassUpdate(TransportHandler& handler, bool state)

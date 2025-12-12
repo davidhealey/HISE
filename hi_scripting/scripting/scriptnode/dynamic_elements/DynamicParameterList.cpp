@@ -140,7 +140,8 @@ void dynamic::editor::timerCallback()
 	{
 		if (auto nc = findParentComponentOfClass<NodeComponent>())
 		{
-			mode.initModes(duplilogic::dynamic::getSpreadModes(), nc->node.get());
+			auto pn = nc->node.get();
+			mode.initModes(duplilogic::dynamic::getSpreadModes(), pn);
 			initialised = true;
 		}
 	}
@@ -218,12 +219,10 @@ namespace parameter
 		return list;
 	}
 
-	void clone_holder::setParameter(NodeBase* n, dynamic_base::Ptr b)
+	void clone_holder::setParameter(ObjectWithValueTree* o, dynamic_base::Ptr b)
 	{
+		auto n = dynamic_cast<NodeBase*>(o);
 		base = b;
-
-        
-        
         
 		if (auto cn = dynamic_cast<CloneNode*>(connectedCloneContainer.get()))
 		{
@@ -332,7 +331,7 @@ dynamic_list::MultiOutputSlot::MultiOutputSlot(NodeBase* n, ValueTree switchTarg
 
 juce::ValueTree dynamic_list::MultiOutputSlot::getConnectionTree(NodeBase* n, ValueTree st)
 {
-	return st.getOrCreateChildWithName(PropertyIds::Connections, n->getUndoManager(true));
+	return st.getOrCreateChildWithName(PropertyIds::Connections, n->getUndoManager());
 }
 
 void dynamic_list::MultiOutputSlot::rebuildCallback()
@@ -341,9 +340,9 @@ void dynamic_list::MultiOutputSlot::rebuildCallback()
 	p.setParameter(nullptr, dc);
 }
 
-void dynamic_list::initialise(NodeBase* n)
+void dynamic_list::initialise(ObjectWithValueTree* n)
 {
-	parentNode = n;
+	parentNode = dynamic_cast<NodeBase*>(n);
 
 	switchTree = n->getValueTree().getOrCreateChildWithName(PropertyIds::SwitchTargets, n->getUndoManager());
 
@@ -351,9 +350,8 @@ void dynamic_list::initialise(NodeBase* n)
 
 	if(modTree.isValid())
 	{
-		modTree.getParent().removeChild(modTree, n->getUndoManager(true));
+		modTree.getParent().removeChild(modTree, n->getUndoManager());
 	}
-
 
 	connectionUpdater.setCallback(switchTree, valuetree::AsyncMode::Synchronously, BIND_MEMBER_FUNCTION_2(dynamic_list::updateConnections));
 
@@ -364,7 +362,7 @@ void dynamic_list::initialise(NodeBase* n)
 	{
 		WeakReference<dynamic_list> safeThis(this);
 
-		n->getRootNetwork()->addPostInitFunction([safeThis]()
+		parentNode->getRootNetwork()->addPostInitFunction([safeThis]()
 		{
 			if (safeThis.get() != nullptr)
 			{

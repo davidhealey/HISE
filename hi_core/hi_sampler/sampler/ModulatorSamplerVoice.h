@@ -189,7 +189,7 @@ private:
 	friend class ModulatorSampler;
 
 	bool nonRealtime = false;
-	
+	bool firstInVoice = true;
 
 	StreamingSamplerVoice wrappedVoice;
 

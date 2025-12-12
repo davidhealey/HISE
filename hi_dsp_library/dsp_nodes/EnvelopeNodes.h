@@ -49,10 +49,13 @@ namespace pimpl
 template <typename ParameterType> struct envelope_base: public control::pimpl::parameter_node_base<ParameterType>,
 														public polyphonic_base
 {
-    envelope_base(const Identifier& id):
-	  control::pimpl::parameter_node_base<ParameterType>(id),
-	  polyphonic_base(id, true)
-	{}
+    envelope_base(const Identifier& id_):
+	  control::pimpl::parameter_node_base<ParameterType>(id_),
+	  polyphonic_base(id_, true),
+	  id(id_)
+	{
+		cppgen::CustomNodeProperties::addModOutput(id, { "CV", "Gate" });
+	}
 
 	virtual ~envelope_base() {};
 
@@ -76,7 +79,7 @@ template <typename ParameterType> struct envelope_base: public control::pimpl::p
 		}
 	}
 
-	virtual void initialise(NodeBase* n)
+	virtual void initialise(ObjectWithValueTree* n)
 	{
 		this->p.initialise(n);
 
@@ -148,9 +151,11 @@ template <typename ParameterType> struct envelope_base: public control::pimpl::p
 		return false;
 	}
 
+	Identifier getId() { return id; }
+
 private:
 
-	
+	Identifier id;
 	bool pedal = false;
 	int numKeys = 0;
 	int numSustainedKeys = 0;
@@ -629,6 +634,7 @@ template <int NV, typename ParameterType> struct simple_ar: public pimpl::envelo
 		{
 			DEFINE_PARAMETERDATA(simple_ar, Attack);
 			p.setRange({ 0.0, 1000.0, 0.1 });
+			p.info.textConverter = parameter::pod::Time;
 			p.setSkewForCentre(100.0);
 			p.setDefaultValue(10.0);
 			data.add(std::move(p));
@@ -637,6 +643,7 @@ template <int NV, typename ParameterType> struct simple_ar: public pimpl::envelo
 		{
 			DEFINE_PARAMETERDATA(simple_ar, Release);
 			p.setRange({ 0.0, 1000.0, 0.1 });
+			p.info.textConverter = parameter::pod::Time;
 			p.setSkewForCentre(100.0);
 			p.setDefaultValue(10.0);
 			data.add(std::move(p));
@@ -645,6 +652,7 @@ template <int NV, typename ParameterType> struct simple_ar: public pimpl::envelo
 		{
 			DEFINE_PARAMETERDATA(simple_ar, Gate);
 			p.setRange({ 0.0, 1.0, 1.0 });
+			p.setParameterValueNames({ "Off", "On" });
 			p.setDefaultValue(0.0);
 			data.add(std::move(p));
 		}
@@ -652,6 +660,7 @@ template <int NV, typename ParameterType> struct simple_ar: public pimpl::envelo
 		{
 			DEFINE_PARAMETERDATA(simple_ar, AttackCurve);
 			p.setRange({ 0.0, 1.0 });
+			p.info.textConverter = parameter::pod::NormalizedPercentage;
 			p.setDefaultValue(0.0);
 			data.add(std::move(p));
 		}
@@ -894,12 +903,14 @@ template <int NV, typename ParameterType> struct ahdsr : public pimpl::envelope_
 			DEFINE_PARAMETERDATA(ahdsr, Attack);
 			p.setRange(timeRange);
 			p.setDefaultValue(10.0);
+			p.info.textConverter = parameter::pod::Time;
 			data.add(p);
 		}
 		
 		{
 			DEFINE_PARAMETERDATA(ahdsr, AttackLevel);
 			p.setDefaultValue(1.0);
+			p.info.textConverter = parameter::pod::NormalizedPercentage;
 			data.add(p);
 		}
 
@@ -907,6 +918,7 @@ template <int NV, typename ParameterType> struct ahdsr : public pimpl::envelope_
 			DEFINE_PARAMETERDATA(ahdsr, Hold);
 			p.setRange(timeRange);
 			p.setDefaultValue(20.0);
+			p.info.textConverter = parameter::pod::Time;
 			data.add(p);
 		}
 
@@ -914,12 +926,14 @@ template <int NV, typename ParameterType> struct ahdsr : public pimpl::envelope_
 			DEFINE_PARAMETERDATA(ahdsr, Decay);
 			p.setRange(timeRange);
 			p.setDefaultValue(300.0);
+			p.info.textConverter = parameter::pod::Time;
 			data.add(p);
 		}
 
 		{
 			DEFINE_PARAMETERDATA(ahdsr, Sustain);
 			p.setDefaultValue(0.5);
+			p.info.textConverter = parameter::pod::NormalizedPercentage;
 			data.add(p);
 		}
 
@@ -927,24 +941,28 @@ template <int NV, typename ParameterType> struct ahdsr : public pimpl::envelope_
 			DEFINE_PARAMETERDATA(ahdsr, Release);
 			p.setRange(timeRange);
 			p.setDefaultValue(20.0);
+			p.info.textConverter = parameter::pod::Time;
 			data.add(p);
 		}
 
 		{
 			DEFINE_PARAMETERDATA(ahdsr, AttackCurve);
 			p.setDefaultValue(0.5);
+			p.info.textConverter = parameter::pod::NormalizedPercentage;
 			data.add(p);
 		}
 
 		{
 			DEFINE_PARAMETERDATA(ahdsr, Retrigger);
 			p.setRange({ 0.0, 1.0, 1.0 });
+			p.setParameterValueNames({ "Off", "On"});
 			p.setDefaultValue(0.0);
 			data.add(p);
 		}
 		{
 			DEFINE_PARAMETERDATA(ahdsr, Gate);
 			p.setRange({ 0.0, 1.0, 1.0 });
+			p.setParameterValueNames({ "Off", "On" });
 			p.setDefaultValue(0.0);
 			data.add(p);
 		}
@@ -1002,7 +1020,7 @@ template <int NV, typename ParameterClass, typename DragHandler=flex_ahdsr_base:
 
 	}
 
-	void initialise(NodeBase* n)
+	void initialise(ObjectWithValueTree* n)
 	{
 		pimpl::envelope_base<ParameterClass>::initialise(n);
 
@@ -1791,6 +1809,7 @@ template <int NV> struct silent_killer: public voice_manager_base,
 		{
 			DEFINE_PARAMETERDATA(silent_killer, Active);
 			p.setRange({ 0.0, 1.0, 1.0 });
+			p.setParameterValueNames({ "Off", "On" });
 			p.setDefaultValue(1.0);
 			data.add(std::move(p));
 		}
@@ -1798,6 +1817,7 @@ template <int NV> struct silent_killer: public voice_manager_base,
 		{
 			DEFINE_PARAMETERDATA(silent_killer, Threshold);
 			p.setRange({ -120.0, -60, 1.0 });
+			p.info.textConverter = parameter::pod::Decibel;
 			p.setDefaultValue(-100.0);
 			data.add(std::move(p));
 		}
@@ -1971,6 +1991,11 @@ struct voice_manager: public voice_manager_base
 	SN_NODE_ID("voice_manager");
 	SN_GET_SELF_AS_OBJECT(voice_manager);
 	SN_DESCRIPTION("Sends a voice reset message when `Value < 0.5`");
+
+	voice_manager()
+	{
+		cppgen::CustomNodeProperties::addNodeIdManually(getStaticId(), PropertyIds::OutsideSignalPath);
+	}
 
 	static constexpr bool isPolyphonic() { return false; }
 

@@ -86,8 +86,6 @@ struct ComponentWithGroupManagerConnection: public ControlledObject
 
 	UndoManager* getUndoManager() { return sampler->getUndoManager(); }
 
-	
-
 	virtual int getHeightToUse() const = 0;
 
 	void setBoundsWithoutRecursion(Rectangle<int> newBounds)
@@ -115,8 +113,6 @@ struct ComponentWithGroupManagerConnection: public ControlledObject
 	}
 
 protected:
-
-	
 
 	void clearRulersAndLabels()
 	{
@@ -173,7 +169,66 @@ public:
 		static Path getPath(LogicType lt);
 
 		static Colour getLayerColour(const ValueTree& v);
-		
+		static void createNewLayers(ValueTree& data, UndoManager* um)
+		{
+			auto tokens = data[groupIds::tokens].toString();
+
+			if(tokens.isEmpty())
+				tokens = "Layer groups";
+
+			auto newTokens = PresetHandler::getCustomName(tokens, "Enter comma separated names to create new layer groups.");
+
+			if(newTokens.isNotEmpty() && newTokens != tokens)
+			{
+				data.setProperty(groupIds::tokens, newTokens, um);
+			}
+		}
+	};
+
+	struct LayerColourSelector: public Component,
+							    public ChangeListener
+	{
+		LayerColourSelector(ValueTree& v_, Component* toRepaint):
+		  v(v_),
+		  c(Helpers::getLayerColour(v_)),
+		  attachedComponent(toRepaint),
+		  selector(ColourSelector::ColourSelectorOptions::editableColour |
+				   ColourSelector::ColourSelectorOptions::showColourAtTop |
+				   ColourSelector::ColourSelectorOptions::showColourspace)
+		{
+			addAndMakeVisible(selector);
+			selector.setCurrentColour(c);
+			selector.addChangeListener(this);
+			selector.setLookAndFeel(&laf);
+			setSize(400, 400);
+		}
+
+		~LayerColourSelector()
+		{
+			selector.removeChangeListener(this);
+		}
+
+		void changeListenerCallback(ChangeBroadcaster* source) override
+		{
+			auto nc = selector.getCurrentColour();
+			v.setProperty(groupIds::colour, nc.getARGB(), nullptr);
+
+			if(auto ac = attachedComponent.getComponent())
+				ac->repaint();
+		}
+
+		void resized() override
+		{
+			selector.setBounds(getLocalBounds());
+		}
+
+		ValueTree v;
+		Colour c;
+
+		Component::SafePointer<Component> attachedComponent;
+
+		GlobalHiseLookAndFeel laf;
+		juce::ColourSelector selector;
 	};
 
 	struct LayerComponent: public Component,
@@ -191,24 +246,13 @@ public:
 		void resized() override;
 		void updateHeight(int newHeight);
 
-		
-
-		void mouseDoubleClick(const MouseEvent& event) override
-		{
-			if(data.getType() == groupIds::Layer)
-			{
-				auto isFolded = (bool)data[scriptnode::PropertyIds::Folded];
-				data.setProperty(PropertyIds::Folded, !isFolded, nullptr);
-			}
-		}
-
 		LogicType type = LogicType::numLogicTypes;
 		Factory f;
 		HiseShapeButton clearButton;
 		Path p;
 		String typeName;
 		ValueTree data;
-		valuetree::PropertyListener foldListener;
+		bool showHeaderText = true;
 
 		Colour c;
 
@@ -226,154 +270,33 @@ public:
 		void drawLabel(Graphics& g, Label& l) override;
 	};
 
-	struct FileTokenSelector: public Component,
-							  public ComponentWithGroupManagerConnection
-	{
-		enum class Action
-		{
-			DoNothing,
-			ParseFileToken,
-			SetToFixGroup,
-			SetIgnoreFlag,
-			Unassign,
-			numActions
-		};
-		
-		struct FileToken: public Component,
-						  public SettableTooltipClient
-		{
-			FileToken(const String& t);;
-
-			void mouseDown(const MouseEvent& e) override;
-			void paint(Graphics& g) override;
-
-			int getBestWidth() const { return f.getStringWidth(token) + 20; }
-			void setActive(bool shouldBeActive, bool shouldBeOk);
-
-			Font f;
-			const String token;
-			bool ok = true;
-			bool active = false;
-		};
-
-		FileTokenSelector(ComponentWithGroupManagerConnection& parent, const StringArray& layerTokens, bool showIgnoreButton, bool addMode);
-
-		void checkApplyState();
-
-		void rebuildComboBox();
-
-		void setActiveToken(int idx = -1);
-		void updateSelection(const StringArray& fileTokens);
-		int getHeightToUse() const override;
-
-		StringArray getValidTokens() const
-		{
-			if(!legatoMode)
-				return layerTokens;
-			else
-			{
-				StringArray validNames;
-
-				for(int i = 0; i < 128; i++)
-					validNames.add(String(i));
-				for(int i = 0; i < 128; i++)
-					validNames.add(MidiMessage::getMidiNoteName(i, true, true, 3));
-
-				return validNames;
-			}
-		}
-
-		uint8 getCurrentTokenValue(const String& filename) const;
-
-		uint8 getSelectedTokenIndex() const;
-
-		void paint(Graphics& g) override;
-		void resized() override;
-
-		bool useFileTokens() const;
-
-		String performAction()
-		{
-			String msg;
-			auto data = findParentComponentOfClass<LayerComponent>()->data;
-
-			auto id = Helpers::getId(data);
-
-			if(currentAction == Action::DoNothing)
-				return "Skip layer " + id + "\n";
-
-			if(currentAction == Action::Unassign)
-			{
-				for(auto s: *getSampleEditHandler())
-				{
-					getComplexGroupManager()->clearSampleId(s.get(), { id }, true);
-					auto filename = Helpers::getSampleFilename(s.get());
-
-					
-					msg << "Unassigned layer " << id << " from sample " << filename;
-					msg << "\n";
-				}
-			}
-			else
-			{
-				for(auto s: *getSampleEditHandler())
-				{
-					Array<std::pair<Identifier, uint8>> values;
-
-					auto filename = Helpers::getSampleFilename(s.get());
-					auto v = getCurrentTokenValue(filename);
-
-					values.add({ id, v});
-
-					if(v == ComplexGroupManager::IgnoreFlag)
-						msg << filename << ": " << id << " > IGNORE_FLAG (0xFF)";
-					else
-						msg << filename << ": " << id << " > " << layerTokens[v-1];
-
-					msg << "\n";
-
-					getComplexGroupManager()->setSampleId(s.get(), values, true);
-				}
-			}
-
-			return msg;
-		}
-
-		const bool addMode;
-		int height = LayerComponent::TopBarHeight;
-		bool ok = false;
-
-		Factory f;
-		OwnedArray<FileToken> tokens;
-		
-		String delimiter = "_";
-		StringArray layerTokens;
-		Array<Rectangle<float>> delimiters;
-		Rectangle<float> tokenLabel;
-		bool ignoreable = false;
-
-		SelectorLookAndFeel laf;
-
-		Action currentAction = Action::DoNothing;
-
-		bool legatoMode = false;
-
-		hise::SubmenuComboBox modeSelector;
-
-		bool canUseFileTokens = false;
-
-		HiseShapeButton applyButton;
-
-		StringArray currentFileTokens;
-
-		std::function<void(uint8)> onTokenChange;
-
-		JUCE_DECLARE_WEAK_REFERENCEABLE(FileTokenSelector);
-	};
-
 	struct LogicTypeComponent: public LayerComponent,
 							   public ButtonListener
 	{
+		struct BodyKnob : public Slider,
+						  public SliderWithShiftTextBox,
+						  public Slider::Listener
+		{
+			struct Laf : public GlobalHiseLookAndFeel
+			{
+				void drawLinearSlider(Graphics& g, int x, int y, int width, int height, float sliderPos, float minSliderPos, float maxSliderPos, const Slider::SliderStyle, Slider& s) override;
+			};
+
+			BodyKnob(LogicTypeComponent& parent, const Identifier& propertyId, scriptnode::InvertableParameterRange rng);
+
+			void sliderValueChanged(Slider* ) override;
+			void mouseDown(const MouseEvent& e) override;
+			void onValue(const Identifier&, const var& newValue);
+			void setTextConverter(const String& s);
+
+			Laf laf;
+
+			ValueTree v;
+			Identifier id;
+			UndoManager* um;
+			valuetree::PropertyListener valueListener;
+		};
+
 		struct BodyBase: public Component,
 						 public ComponentWithGroupManagerConnection,
 						 public SampleMap::Listener
@@ -421,8 +344,6 @@ public:
 
 					if(auto c = findParentComponentOfClass<ComplexGroupManagerComponent>())
 					{
-						c->parseButton.setToggleState(true, sendNotificationSync);
-						c->parseButton.setToggleStateAndUpdateIcon(true, true);
 						c->tagButton.setToggleState(true, sendNotificationSync);
 						c->tagButton.setToggleStateAndUpdateIcon(true, true);
 					}
@@ -488,12 +409,23 @@ public:
 			{
 				KeyswitchButton(const ValueTree& layerData, uint8 layerIndex, const String& n, bool addPowerButton=true);
 
+				virtual Rectangle<float> getTextBounds() const
+				{
+					auto b = getLocalBounds().toFloat();
+					if(purgeButton != nullptr)
+						b.removeFromLeft(b.getHeight());
+
+					return b;
+				}
+
 				int getWidthToUse() const override;
 
 				void resized() override;
 				void paint(Graphics& g) override;
 
+				Justification justification = Justification::centred;
 				String name;
+				uint8 layerValue = 0;
 				Factory f;
 				ScopedPointer<HiseShapeButton> purgeButton;
 			};
@@ -510,7 +442,37 @@ public:
 
 				void mouseUp(const MouseEvent& e) override
 				{
-					active = false;
+					//active = false;
+				}
+
+				void refreshActiveState(int numSelected)
+				{
+					if(!isVisible())
+						return;
+
+					active = numSelected > 0 && numSelected == numSamples;
+
+					auto gmc = findParentComponentOfClass<ComponentWithGroupManagerConnection>();
+
+					if(gmc != nullptr && active)
+					{
+						auto h = gmc->getSampleEditHandler();
+						auto gm = gmc->getSampler()->getComplexGroupManager();
+
+						for(auto s: *h)
+						{
+							auto bm = s->getBitmask();
+							auto v = gm->getLayerValue(bm, layerIndex);
+							
+							if(v != layerValue)
+							{
+								active = false;
+								break;
+							}
+						}
+					}
+
+					repaint();
 				}
 
 				void refreshNumSamples();
@@ -533,6 +495,8 @@ public:
 
 				uint8 layerIndex;
 				uint8 layerValue;
+
+				JUCE_DECLARE_WEAK_REFERENCEABLE(SelectionTag);
 			};
 
 			BodyBase(LogicTypeComponent& parent);
@@ -559,31 +523,7 @@ public:
 
 			void paint(Graphics& g) override;
 
-			Array<ButtonBase*> getAllButtonsToShow()
-			{
-				Array<ButtonBase*> list;
-
-				auto idx = Helpers::getLayerIndex(data);
-
-				auto showUnassigned = getComplexGroupManager()->getNumUnassignedAndIgnored(idx).first > 0;
-
-				unassignedButton->setVisible(showUnassigned);
-
-				if(showUnassigned)
-					list.add(unassignedButton.get());
-
-				for(auto b: buttons)
-					list.add(b);
-
-				auto showIgnorable = (bool)data[groupIds::ignorable];
-
-				ignoreButton->setVisible(showIgnorable);
-
-				if(showIgnorable)
-					list.add(ignoreButton.get());
-
-				return list;
-			}
+			Array<ButtonBase*> getAllButtonsToShow();
 
 			static void onLockUpdate(BodyBase& l, uint8 layerIndex, bool active)
 			{
@@ -663,60 +603,14 @@ public:
 			Rectangle<int> allBounds;
 
 			OwnedArray<SelectionTag> selectors;
+			TextButton addGroupButton;
 
 			JUCE_DECLARE_WEAK_REFERENCEABLE(BodyBase);
 		};
 
-#if 0
-		struct SampleCountComponent: public Component,
-								     public ComponentWithGroupManagerConnection
-		{
-			static constexpr int LabelWidth = 80;
-
-			struct CountButton: public Component
-			{
-				CountButton(uint8 layerIndex_, uint8 layerValue);
-
-				int getMinWidth() const;
-				void paint(Graphics& g) override;
-
-				void mouseDown(const MouseEvent& e);
-
-				int numSamples = 0;
-				const uint8 layerIndex = 0;
-				const uint8 layerValue = 0;
-
-				
-			};
-
-			SampleCountComponent(LogicTypeComponent& parent);
-
-			int getHeightToUse() const override;
-			
-			void applyXPositions(Array<int>& positionsAndCount);;
-			bool showSecondRow() const;
-
-			/** Called when the samples change. */
-			void updateNumSamples();
-
-			void paint(Graphics& g) override;
-
-			OwnedArray<CountButton> buttons;
-			ScopedPointer<CountButton> unassignedButton;
-			ScopedPointer<CountButton> ignoredButton;
-			ValueTree data;
-		};
-#endif
 		
-		struct Parser: public FileTokenSelector
-		{
-			Parser(ComponentWithGroupManagerConnection& parent, const ValueTree& v);
-
-			
-		};
 
 		LogicTypeComponent(ComponentWithGroupManagerConnection& parent, const ValueTree& d);
-
 
 		void setBody(BodyBase* b);
 		int getHeightToUse() const override;
@@ -729,29 +623,109 @@ public:
 
 		void updateSampleCounters();
 
+		void mouseDown(const MouseEvent& e) override
+		{
+			if(e.getMouseDownY() < TopBarHeight)
+			{
+				if (e.mods.isShiftDown())
+					rename();
+				else
+					toggleFold();
+			}
+		}
+
+		void toggleFold()
+		{
+			data.setProperty(groupIds::folded, !(bool)data[groupIds::folded], getUndoManager());
+		}
+
+		bool folded = false;
+
+		void onFolded(const Identifier&, const var& newValue)
+		{
+			folded = (bool)newValue;
+			
+			if(auto pc = findParentComponentOfClass<Content>())
+			{
+				refreshHeight();
+			}
+		}
+
+		void mouseDoubleClick(const MouseEvent& e) override
+		{
+			if(e.getMouseDownY() < TopBarHeight)
+				rename();
+		}
+
+		void rename()
+		{
+			addAndMakeVisible(inputLabel = new TextEditor());
+
+			this->showHeaderText = false;
+			inputLabel->setBounds(getLocalBounds().removeFromTop(TopBarHeight).reduced(3));
+
+			inputLabel->onReturnKey = [this]()
+			{
+				data.setProperty(groupIds::id, inputLabel->getText(), getUndoManager());
+
+				MessageManager::callAsync([this]()
+				{
+					this->showHeaderText = true;
+					this->inputLabel = nullptr;
+				});
+			};
+
+			inputLabel->onFocusLost = [this]()
+			{
+				MessageManager::callAsync([this]()
+				{
+					this->showHeaderText = true;
+					this->inputLabel = nullptr;
+				});
+			};
+
+			auto c = Helpers::getLayerColour(data);
+
+			inputLabel->setColour(TextEditor::ColourIds::backgroundColourId, c);
+			inputLabel->setColour(TextEditor::ColourIds::textColourId, Colours::white.withAlpha(0.8f));
+			inputLabel->setColour(TextEditor::ColourIds::highlightedTextColourId, Colours::black);
+			inputLabel->setColour(TextEditor::ColourIds::highlightColourId, Colours::white.withAlpha(0.5f));
+			inputLabel->setColour(TextEditor::ColourIds::focusedOutlineColourId, Colours::transparentBlack);
+			inputLabel->setColour(CaretComponent::ColourIds::caretColourId, Colours::white);
+
+			inputLabel->setFont(GLOBAL_BOLD_FONT());
+			inputLabel->setBorder(BorderSize<int>());
+			inputLabel->setJustification(Justification::centred);
+
+			inputLabel->setText(Helpers::getId(data).toString(), dontSendNotification);
+			inputLabel->selectAll();
+			inputLabel->grabKeyboardFocus();
+		}
+
+		ScopedPointer<TextEditor> inputLabel;
+
 		void showSelectors(bool shouldShow);
 
 		static void onPlaystateUpdate(LogicTypeComponent& l, uint8 value);
 
-		
-
 		StringArray items;
 		ScopedPointer<BodyBase> body;
 		HiseShapeButton lockButton, midiButton;
-		Parser parser;
 
 		SelectorLookAndFeel laf;
 
 		//Label unassignedLabel, ignoreLabel;
 		OwnedArray<BodyBase::SelectionTag> selectors;
 
+		valuetree::PropertyListener foldListener;
 
+		uint8 lastLayerValue = 0;
 
 		JUCE_DECLARE_WEAK_REFERENCEABLE(LogicTypeComponent);
 	};
 
 	struct RRBody; struct KeyswitchBody; struct XFadeBody; struct LegatoBody;
-	struct ChokeBody; struct TableFadeBody;
+	struct ChokeBody; struct TableFadeBody; struct ReleaseBody; struct CustomBody;
 
 	struct AddComponent: public LayerComponent,
 						 public ButtonListener
@@ -778,8 +752,6 @@ public:
 
 		int getHeightToUse() const override;
 
-		//HiseShapeButton addButton, moreButton;
-
 	private:
 
 
@@ -802,10 +774,6 @@ public:
 
 		AlertWindowLookAndFeel alaf;
 		TextButton okButton;
-		FileTokenSelector tokenSelector;
-
-		
-
 		
 		valuetree::ChildListener layerListener;
 		valuetree::RecursivePropertyListener groupRebuildListener;
@@ -816,33 +784,6 @@ public:
 		int flagHeight = TopBarHeight;
 
 		JUCE_DECLARE_WEAK_REFERENCEABLE(AddComponent);
-	};
-
-	struct ParseToolbar: public LayerComponent,
-						 public ButtonListener
-	{
-		static constexpr int ConsoleHeight = 190;
-
-		ParseToolbar(ComponentWithGroupManagerConnection& parent, const ValueTree& d);
-
-		void buttonClicked(Button* b) override;
-		void paint(Graphics& g) override;
-		void resized() override;
-
-		int getHeightToUse() const override;
-
-		void setLayersToParse(const Array<LogicTypeComponent*>& layers, int numSamples);
-		void logToConsole(const String& message);
-
-		String msg;
-		Factory f;
-
-		CodeDocument log;
-		ScopedPointer<CodeTokeniser> tokeniser;
-		CodeEditorComponent console;
-
-		HiseShapeButton applyButton, resetButton;
-		ScrollbarFader sf;
 	};
 
 	struct Content: public Component,
@@ -862,7 +803,6 @@ public:
 		}
 
 		OwnedArray<LogicTypeComponent> layerComponents;
-		ParseToolbar parseToolbar;
 		AddComponent addComponent;
 
 		ValueTree data;
@@ -872,18 +812,6 @@ public:
 		bool recursion = false;
 
 		JUCE_DECLARE_WEAK_REFERENCEABLE(Content);
-	};
-
-	struct Logger: public valuetree::AnyListener
-	{
-		Logger(const ValueTree& d, CodeDocument& doc_);;
-		
-		void anythingChanged(CallbackType cb) override;
-
-	private:
-
-		CodeDocument& doc;
-		ValueTree data;
 	};
 
 	ComplexGroupManagerComponent(ModulatorSampler* s);
@@ -907,7 +835,7 @@ public:
 
 	void sampleMapCleared() override { rebuildSampleCounters(); };
 
-	void setXmlLogger(CodeDocument& doc);
+	
 
 	void setDisplayFilter(uint8 layerIndex, uint8 value);
 
@@ -934,7 +862,7 @@ private:
 	Content content;
 	ScopedPointer<Logger> logger;
 
-	HiseShapeButton editButton, moreButton, tagButton, parseButton;
+	HiseShapeButton editButton, moreButton, tagButton;
 	MarkdownHelpButton helpStateButton;
 
 	JUCE_DECLARE_WEAK_REFERENCEABLE(ComplexGroupManagerComponent);
@@ -962,6 +890,10 @@ struct ComplexGroupManagerFloatingTile: public SamplerBasePanel
 	};
 
 	Component* createContentComponent(int /*index*/) override;;
+
+	JUCE_DECLARE_WEAK_REFERENCEABLE(ComplexGroupManagerFloatingTile);
+	
+	WeakReference<ModulatorSampler> lastSampler;
 };
 
 }

@@ -216,7 +216,7 @@ public:
 
 		bool handleModulation(double&);
 		void handleHiseEvent(HiseEvent& e);
-		void initialise(NodeBase* p);
+		void initialise(ObjectWithValueTree* p);
 		void reset();
 		void prepare(PrepareSpecs);
 

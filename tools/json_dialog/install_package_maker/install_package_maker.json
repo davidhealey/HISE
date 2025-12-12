@@ -1,0 +1,238 @@
+{
+  "StyleData": {
+    "Font": "Lato Regular",
+    "BoldFont": "Lato Regular",
+    "FontSize": 18.0,
+    "bgColour": 4281545523,
+    "codeBgColour": 864585864,
+    "linkBgColour": 8947967,
+    "textColour": 4294967295,
+    "codeColour": 4294967295,
+    "linkColour": 4289374975,
+    "tableHeaderBgColour": 864059520,
+    "tableLineColour": 864059520,
+    "tableBgColour": 864059520,
+    "headlineColour": 4287692721,
+    "UseSpecialBoldFont": false
+  },
+  "Properties": {
+    "Header": "Create Install Asset payload",
+    "Subtitle": "Subtitle",
+    "Image": "",
+    "ProjectName": "MyProject",
+    "Company": "MyCompany",
+    "Version": "1.0.0",
+    "BinaryName": "My Binary",
+    "UseGlobalAppData": false,
+    "Icon": ""
+  },
+  "LayoutData": {
+    "StyleSheet": "ModalPopup",
+    "Style": "label\n{\n\twidth: 140px;\n}\n\n.tag-list\n{\n\tmargin-top: 10px;\n}\n\n#content\n{\n\tpadding-left: 80px;\n\tpadding-right: 60px;\n}\n\n\n.preview\n{\n\tmargin-left: 140px;\n\tbackground: #222;\n\tmargin-top: 20px;\n\tpadding: 10px;\n\tborder-radius: 5px;\n}",
+    "UseViewport": true,
+    "ConfirmClose": true,
+    "CloseMessage": "Do you want to close this popup?",
+    "DialogWidth": 700,
+    "DialogHeight": 630
+  },
+  "GlobalState": {
+    "LoadSettings": "true",
+    "PositiveWildcard": "*",
+    "NegativeWildcard": ""
+  },
+  "Children": [
+    {
+      "Type": "List",
+      "Children": [
+        {
+          "Type": "MarkdownText",
+          "Text": "This dialog will help you create an installer payload that can be used to import certain files and settings of this project to another project.\n\n> This is mainly useful if you intend to publish a product on the HISE store.\n\nThis dialog will help you create a `install_package.json` file that contains instructions on what files to install from this repository when the asset is installed.\n\n___\n"
+        },
+        {
+          "Type": "Button",
+          "Text": "Load settings",
+          "ID": "LoadSettings",
+          "InitValue": "true",
+          "UseInitValue": true,
+          "Help": "Untick this box if you don't want to load any existing settings.\n\nThis will check whether a `install_package.json` file exists in the repository and then load its content so you can modify an existing install script."
+        },
+        {
+          "Type": "JavascriptFunction",
+          "ID": "SettingLoader",
+          "EventTrigger": "OnSubmit",
+          "Code": "{BIND::onLoadSettings}"
+        }
+      ],
+      "Text": ""
+    },
+    {
+      "Type": "List",
+      "Children": [
+        {
+          "Type": "MarkdownText",
+          "Text": "Here you can add all actions & file filters that should be performed when the install script is performed.\n\n> Note that by default the install script would install every single file from the project so you probably might want to reduce the payload using the file type filters & wildcards!"
+        },
+        {
+          "Type": "Column",
+          "Children": []
+        },
+        {
+          "Type": "List",
+          "Text": "InfoText",
+          "Children": [
+            {
+              "Type": "TextInput",
+              "Text": "InfoText",
+              "ID": "InfoText",
+              "Code": "{BIND::onInfoType}",
+              "EmptyText": "Enter markdown text",
+              "Height": 80,
+              "Help": "If this is not empty, the asset manager will show this message whenever a user installs the asset so you can add important installation instructions.\n\n> This supports markdown format.\n\n",
+              "Multiline": true,
+              "CallOnTyping": true
+            },
+            {
+              "Type": "MarkdownText",
+              "Text": "Enter markdown text for preview...",
+              "ID": "MarkdownPreview",
+              "Class": "preview"
+            }
+          ],
+          "Foldable": true,
+          "Folded": true
+        },
+        {
+          "Type": "List",
+          "Text": "Wildcards",
+          "Children": [
+            {
+              "Type": "TextInput",
+              "Text": "Include Wildcards",
+              "ID": "PositiveWildcard",
+              "InitValue": "*",
+              "UseInitValue": true,
+              "Height": 80,
+              "Help": "Specify wildcards (one per line) that will be used to filter all files.\n\n> If a wildcard contains a `*` character, then it will use true file pattern matching, otherwise it will just filter from the relative path of the project (so eg. `Scripts/` will include all script files.\n\nIf this is empty, it will use the default catch-all wildcard `*`. Multiple wildcards will be combined so that every file that matches any of the wildcards is included in the payload.",
+              "Multiline": true
+            },
+            {
+              "Type": "TextInput",
+              "Text": "Exclude Wildcards",
+              "ID": "NegativeWildcard",
+              "UseInitValue": true,
+              "EmptyText": "Add negative wildcards (one per line)",
+              "Height": 80,
+              "Help": "Use this wildcard to exclude files from being included in the payload.\n\nThese wildcards will be used to filter out all results that match the given wildcard, so eg. `*.txt` will prevent any file with the file extension `.txt` from being included in the payload.\n\n> Note that it will automatically exclude all build files, hidden files, special HISE files (eg. PooledResources). so you just need to add file filters that exclude files specific to your project.",
+              "Multiline": true
+            }
+          ],
+          "Foldable": true,
+          "Folded": true
+        },
+        {
+          "Type": "List",
+          "Text": "File Type Filter",
+          "Children": [
+            {
+              "Type": "Button",
+              "Text": "Use File type filter",
+              "ID": "UseFileTypeFilter",
+              "Help": "If enabled, then this will prefilter the files to only allow the specified directories.\n"
+            },
+            {
+              "Type": "TagList",
+              "ID": "FileTypeFilter",
+              "Items": "Scripts\nAdditionalSourceCode\nSamples\nImages\nAudioFiles\nSampleMaps\nMidiFiles\nDspNetworks"
+            }
+          ],
+          "Foldable": true,
+          "Folded": true
+        },
+        {
+          "Type": "List",
+          "Text": "Preprocessors",
+          "Children": [
+            {
+              "Type": "Button",
+              "Text": "Add preprocessors",
+              "ID": "UsePreprocessors",
+              "Help": "Enable this and select all preprocessors from the current `project_info.xml` setting file to be included in the installer payload.\n\n> This will add / overwrite the preprocessors of the HISE project that you install this asset to."
+            },
+            {
+              "Type": "TagList",
+              "ID": "Preprocessors",
+              "Items": "HISE_DEACTIVATE_OVERLAY\nHISE_NUM_CHANNELS\nHISE_MAKE_SOMETHING"
+            }
+          ],
+          "Foldable": true,
+          "Folded": true
+        },
+        {
+          "Type": "List",
+          "Text": "Clipboard",
+          "Children": [
+            {
+              "Type": "Button",
+              "Text": "Copy to clipboard",
+              "ID": "UseClipboard",
+              "Help": "If enabled, the install process will copy a given string to the system clipboard (eg. script code that includes the scripts) or a HISE snippet) to help the user with the integration"
+            },
+            {
+              "Type": "TextInput",
+              "Text": "Clipboard Content",
+              "ID": "ClipboardContent",
+              "EmptyText": "Enter clipboard data...",
+              "Height": 80,
+              "Help": "Enter the text string that you want to copy to the clipboard after the installation process",
+              "Multiline": true
+            }
+          ],
+          "Foldable": true,
+          "Folded": true
+        },
+        {
+          "Type": "JavascriptFunction",
+          "ID": "onPageLoad",
+          "Code": "{BIND::onPageLoad}"
+        },
+        {
+          "Type": "JavascriptFunction",
+          "ID": "onSubmit",
+          "EventTrigger": "OnSubmit",
+          "Code": "{BIND::onSubmit}"
+        }
+      ],
+      "Text": "",
+      "Style": "gap: 15px;"
+    },
+    {
+      "Type": "List",
+      "Children": [
+        {
+          "Type": "MarkdownText",
+          "Text": "Press Finish in order to write the install script to the `install_package.json` file. You can also simulate a test run that prints all actions to the console that would be perfomed if this script was to be used.\n\n> If you supply a .zip file from another project, the simulator will use the content of this zip file instead of the current repository's files so you can test how a installation of another project would work.\n\n___"
+        },
+        {
+          "Type": "FileSelector",
+          "Text": "Test Archive",
+          "ID": "ExternalZipSelector",
+          "Help": "Select any zip file to be used as source for the simulation test run.\n\n> This must be a zipped HISE project folder that contains both the `project_info.xml` file as well as the `install_package.json` install script in the root folder.",
+          "Wildcard": "*.zip"
+        },
+        {
+          "Type": "Button",
+          "Text": "Simulate test run",
+          "ID": "SimulateTestRun",
+          "Code": "{BIND::onSimulateTestRun}",
+          "NoLabel": true,
+          "ButtonType": "Text",
+          "Tooltip": "Click to simulate the install payload",
+          "Trigger": true
+        }
+      ],
+      "Text": "",
+      "Style": "gap:20px;"
+    }
+  ],
+  "Assets": []
+}

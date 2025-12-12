@@ -94,6 +94,9 @@
 #include "backend/doc_generators/MenuReferenceGenerator.cpp"
 #include "backend/doc_generators/UiComponentDocGenerator.cpp"
 
+#include "backend/HiseAssetInstaller.cpp"
+#include "backend/HiseAssetManager.cpp"
+
 #include "backend/PostDocGenerators.cpp"
 
 

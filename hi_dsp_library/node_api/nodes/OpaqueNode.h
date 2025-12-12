@@ -204,7 +204,7 @@ struct OpaqueNode
 		return *static_cast<T*>(this->getObjectPtr());
 	}
 
-	void initialise(NodeBase* n)
+	void initialise(ObjectWithValueTree* n)
 	{
 		if (initFunc)
 			initFunc(this->getObjectPtr(), n);

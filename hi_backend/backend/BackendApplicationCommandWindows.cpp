@@ -309,7 +309,11 @@ void XmlBackupFunctions::restoreAllScripts(ValueTree& v, ModulatorSynthChain *ma
 	static const Identifier id("ID");
 	static const Identifier typ("Type");
 
-	if (v.getType() == Identifier(pr) && v[typ].toString().contains("Script"))
+	auto processorType = v[typ].toString();
+
+	if (v.getType() == Identifier(pr) && 
+		processorType.contains("Script") &&
+		processorType != "ScriptnodeVoiceKiller")
 	{
 		auto fileName = getSanitiziedName(v[id]);
 		const String t = v[scr];

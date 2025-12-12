@@ -409,7 +409,7 @@ public:
 
 		auto mc = getMainController();
 
-		auto key = mc->getExpansionHandler().getEncryptionKey();
+        auto key = mc->getExpansionHandler().getEncryptionKey({});
 		if (key.isEmpty())
 			key = "undefined";
 
@@ -489,6 +489,14 @@ void ExpansionEditBar::buttonClicked(Button* b)
 
 	if (b->getName() == "New")
 	{
+		auto expType = GET_HISE_SETTING(getMainController()->getMainSynthChain(), HiseSettings::Project::ExpansionType).toString();
+
+		if(expType == "Disabled")
+		{
+			PresetHandler::showMessageWindow("Expansions disabled", "Please enable the expansion system for this project in the Project settings (**ExpansionType**), then restart HISE.", PresetHandler::IconType::Error);
+			return;
+		}
+
 		FileChooser fc("Create new Expansion", handler.getExpansionFolder(), "", true);
 
 		if (fc.browseForDirectory())

@@ -42,6 +42,11 @@ NodeComponent* ComponentHelpers::createDefaultComponent(NodeBase* n)
  
 void ComponentHelpers::addExtraComponentToDefault(NodeComponent* nc, Component* c)
 {
+	if(auto ec = dynamic_cast<ScriptnodeExtraComponentBase*>(c))
+	{
+		ec->initialise(nc->node.get());
+	}
+
     dynamic_cast<DefaultParameterNodeComponent*>(nc)->setExtraComponent(c);
 }
 

@@ -243,7 +243,17 @@ public:
 		resizeToFit = shouldResizeToFit;
 	}
 
+	void paint(Graphics& g) override
+	{
+		if(!backgroundColour.isTransparent())
+			g.fillAll(backgroundColour);
+	}
+
+	Colour backgroundColour;
+
 	bool resizeToFit = false;
+
+	int margin = 0;
 
 	MarkdownRenderer r;
 	float totalHeight = 0.0;

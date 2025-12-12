@@ -44,7 +44,25 @@ namespace scriptnode
 using namespace juce;
 using namespace hise;
 
+struct DspNetworkPathFactory : public PathFactory
+{
+	String getId() const override { return "Scriptnode Toolbar"; }
 
+	Path createPath(const String& url) const override;
+	Array<Description> getDescription() const override;
+
+};
+
+struct NodeComponentFactory : public PathFactory
+{
+	static Component* createComponent(NodeBase* node);
+
+	String getId() const;;
+
+	Array<Description> getDescription() const override;
+
+	Path createPath(const String& id) const override;
+};
 
 struct NodeFactory;
 

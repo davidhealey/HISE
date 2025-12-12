@@ -64,7 +64,7 @@ struct OptionalSnexSource
 
 	void setCallbackHandler(DummyCallbackHandler*) {};
 
-	virtual void initialise(NodeBase* ) {};
+	virtual void initialise(ObjectWithValueTree* ) {};
 
 	virtual String getEmptyText(const Identifier& id) const { return {}; }
 
@@ -246,7 +246,7 @@ struct snex_timer : public OptionalSnexSource
 		return new Tester<TimerCallbackHandler>(*this);
 	}
 
-	void initialise(NodeBase* n)
+	void initialise(ObjectWithValueTree* n)
 	{
 		OptionalSnexSource::initialise(n);
 

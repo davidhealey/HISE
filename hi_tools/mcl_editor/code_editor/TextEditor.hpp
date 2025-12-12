@@ -274,6 +274,10 @@ public:
 
 	void setEnableAutocomplete(bool shouldBeEnabled);
 
+	using DiffLine = std::pair<CodeDocument::Position, LineDiff::ChangeType>;
+
+	void setDiffLines(const std::map<int, LineDiff::ChangeType>& diffLineIndexes);
+
 	ScopedPointer<CodeTokeniser> tokeniser;
 
     LanguageManager* getLanguageManager();
@@ -577,6 +581,7 @@ private:
     
     struct DeactivatedRange;
     
+	OwnedArray<DiffLine> difflines;
     
     OwnedArray<DeactivatedRange> deactivatedLines;
     

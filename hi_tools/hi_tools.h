@@ -263,6 +263,9 @@ will break compatibility with older projects / presets because the tempo indexes
 
 #include "hi_dev/JavascriptTokeniser.h"
 #include "hi_dev/CodeEditorApiBase.h"
+
+#include "hi_dev/TextDiff.h"
+
 #if HISE_INCLUDE_PROFILING_TOOLKIT
 #include "hi_dev/DebugSession.h"
 #include "hi_dev/DebugProfileTools.h"

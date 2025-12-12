@@ -77,9 +77,15 @@ void NodeContainer::addFixedParameters()
 
 	auto an = asNode();
 
+
+
 	auto pData = an->createInternalParameterList();
 
 	auto d = an->getValueTree();
+
+	auto id = d[PropertyIds::FactoryPath].toString().fromFirstOccurrenceOf(".", false, false);
+
+	cppgen::CustomNodeProperties::addNodeIdManually(id, PropertyIds::HasFixedParameters);
 
 	d.getOrCreateChildWithName(PropertyIds::Parameters, an->getUndoManager());
 
@@ -692,7 +698,7 @@ void SerialNode::DynamicSerialProcessor::handleHiseEvent(HiseEvent& e)
 		n->handleHiseEvent(e);
 }
 
-void SerialNode::DynamicSerialProcessor::initialise(NodeBase* p)
+void SerialNode::DynamicSerialProcessor::initialise(ObjectWithValueTree* p)
 {
 	parent = dynamic_cast<NodeContainer*>(p);
 }
@@ -784,7 +790,7 @@ juce::ValueTree NodeContainer::MacroParameter::getConnectionTree()
 	if (!existing.isValid())
 	{
 		existing = ValueTree(PropertyIds::Connections);
-		data.addChild(existing, -1, parent->getUndoManager(true));
+		data.addChild(existing, -1, parent->getUndoManager());
 	}
 
 	return existing;

@@ -458,13 +458,13 @@ public:
 	float getConstantCrossFadeModulationValue() const noexcept;
 
 	float* calculateGroupModulationValuesForVoice(const HiseEvent& e, int voiceIndex, int startSample, int numSamples,
-	                                              ModulatorSamplerSound::Bitmask m)
+	                                              ModulatorSamplerSound::Bitmask m, bool firstInVoice)
 	{
 		if(soundCollector == nullptr)
 			return nullptr;
 
 		if(auto gm = getComplexGroupManager())
-			return gm->calculateGroupModulationValuesForVoice(e, voiceIndex, startSample, numSamples, m);
+			return gm->calculateGroupModulationValuesForVoice(e, voiceIndex, startSample, numSamples, m, firstInVoice);
 
 		return nullptr;
 	}

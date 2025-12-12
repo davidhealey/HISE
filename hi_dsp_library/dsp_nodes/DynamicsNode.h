@@ -138,6 +138,7 @@ public:
             DEFINE_PARAMETERDATA(dynamics_wrapper, Threshhold);
             p.setRange({ -100.0, 0.0, 0.1 });
             p.setSkewForCentre(-12.0);
+			p.info.textConverter = parameter::pod::Decibel;
             p.setDefaultValue(0.0);
             data.add(std::move(p));
         }
@@ -146,6 +147,7 @@ public:
             DEFINE_PARAMETERDATA(dynamics_wrapper, Attack);
             p.setRange({ 0.0, 250.0, 0.1 });
             p.setSkewForCentre(50.0);
+			p.info.textConverter = parameter::pod::Time;
             p.setDefaultValue(50.0);
             data.add(std::move(p));
         }
@@ -154,6 +156,7 @@ public:
             DEFINE_PARAMETERDATA(dynamics_wrapper, Release);
             p.setRange({ 0.0, 250.0, 0.1 });
             p.setSkewForCentre(50.0);
+			p.info.textConverter = parameter::pod::Time;
             p.setDefaultValue(50.0);
             data.add(std::move(p));
         }
@@ -401,6 +404,7 @@ public:
             p.setRange({ 0.0, 1000.0, 0.1 });
             p.setSkewForCentre(50.0);
             p.setDefaultValue(20.0);
+			p.info.textConverter = parameter::pod::Time;
                 
             data.add(std::move(p));
         }
@@ -410,12 +414,14 @@ public:
             p.setRange({ 0.0, 1000.0, 0.1 });
             p.setSkewForCentre(50.0);
             p.setDefaultValue(20.0);
+			p.info.textConverter = parameter::pod::Time;
                 
             data.add(std::move(p));
         }
             
         {
             DEFINE_PARAMETERDATA(envelope_follower, ProcessSignal);
+			p.setParameterValueNames({"Off", "On"});
             data.add(std::move(p));
         }
     }

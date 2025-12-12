@@ -3557,7 +3557,7 @@ struct TextEditorWithAutocompleteComponent::Autocomplete: public Component,
         auto newIndex = sb.getCurrentRangeStart() + (e.getPosition().getY() - 15) / ItemHeight;
         
         if(isPositiveAndBelow(newIndex, items.size()))
-            setSelectedIndex(newIndex);
+            setSelectedIndex(newIndex, sendNotification);
     }
     
     void mouseDoubleClick(const MouseEvent& e) override
@@ -3571,7 +3571,7 @@ struct TextEditorWithAutocompleteComponent::Autocomplete: public Component,
         
         if(isPositiveAndBelow(newIndex, items.size()))
         {
-            setSelectedIndex(newIndex);
+            setSelectedIndex(newIndex, sendNotification);
             return true;
         }
         
@@ -3593,7 +3593,7 @@ struct TextEditorWithAutocompleteComponent::Autocomplete: public Component,
         return false;
     }
     
-    void setSelectedIndex(int index)
+    void setSelectedIndex(int index, NotificationType n)
     {
         selectedIndex = index;
         
@@ -3605,6 +3605,9 @@ struct TextEditorWithAutocompleteComponent::Autocomplete: public Component,
                 sb.setCurrentRangeStart(selectedIndex - 3);
         }
         
+		if(n != dontSendNotification)
+			parent.get()->autoCompleteItemSelected(selectedIndex, items[selectedIndex].displayString);
+
         repaint();
     }
     
@@ -3623,6 +3626,16 @@ struct TextEditorWithAutocompleteComponent::Autocomplete: public Component,
 
 		StringArray thisItems;
 
+		LookAndFeelMethods* lafToUse = &laf;
+
+		if(parent != nullptr)
+		{
+			auto plaf = dynamic_cast<LookAndFeelMethods*>(&dynamic_cast<Component*>(parent.get())->getLookAndFeel());
+
+			if(plaf != nullptr)
+				lafToUse = plaf;
+		}
+
 		if(!items.isEmpty())
 		{
 			for(int i = 0; i < itemsToShow; i++)
@@ -3631,7 +3644,7 @@ struct TextEditorWithAutocompleteComponent::Autocomplete: public Component,
 			}
 		}
 
-		laf.drawAutocompleteBackground(g, *parent->getTextEditor(), getLocalBounds().toFloat(), thisItems, thisIndex);
+		lafToUse->drawAutocompleteBackground(g, *parent->getTextEditor(), getLocalBounds().toFloat(), thisItems, thisIndex);
     }
     
     bool setAndDismiss()
@@ -3649,6 +3662,7 @@ struct TextEditorWithAutocompleteComponent::Autocomplete: public Component,
         else
             nt = newTextAfterComma;
         
+		ed->setText("", false);
         ed->setText(nt, true);
         
         return dismiss();
@@ -3686,7 +3700,7 @@ struct TextEditorWithAutocompleteComponent::Autocomplete: public Component,
         
         sb.setRangeLimits(0.0, (double)items.size());
         sb.setCurrentRange(0.0, (double)itemsToShow);
-        setSelectedIndex(0);
+        setSelectedIndex(0, dontSendNotification);
         
         if(items.isEmpty())
             dismiss();
@@ -3727,20 +3741,24 @@ void TextEditorWithAutocompleteComponent::LookAndFeelMethods::drawAutocompleteBa
 	}
 	else
 	{
-		for(int i = 0; i < itemToShow.size(); i++)
-		{
-			g.setColour(Colours::white.withAlpha(0.6f));
-			auto tb = b.removeFromTop(ItemHeight);
+		auto f = te.findParentComponentOfClass<TextEditorWithAutocompleteComponent>();
 
-			if(i == selectedIndex)
-			{
-				g.fillRoundedRectangle(tb.withX(10.0f).reduced(3.0f, 1.0f), 3.0f);
-				g.setColour(Colours::black.withAlpha(0.8f));
-			}
-	                    
-			g.drawText(itemToShow[i], tb, Justification::left);
-		}
+		for(int i = 0; i < itemToShow.size(); i++)
+			drawAutocompleteItem(g, *f, itemToShow[i], b.removeFromTop(ItemHeight).toFloat(), i == selectedIndex);			
 	}
+}
+
+void TextEditorWithAutocompleteComponent::LookAndFeelMethods::drawAutocompleteItem(Graphics& g, TextEditorWithAutocompleteComponent& parent, const String& itemName, Rectangle<float> itemBounds, bool selected)
+{
+	g.setColour(Colours::white.withAlpha(0.6f));
+
+	if (selected)
+	{
+		g.fillRoundedRectangle(itemBounds.withX(10.0f).reduced(3.0f, 1.0f), 3.0f);
+		g.setColour(Colours::black.withAlpha(0.8f));
+	}
+
+	g.drawText(itemName, itemBounds, Justification::left);
 }
 
 void TextEditorWithAutocompleteComponent::textEditorReturnKeyPressed(TextEditor& e)
@@ -3785,6 +3803,11 @@ bool TextEditorWithAutocompleteComponent::AutocompleteNavigator::keyPressed(cons
 TextEditorWithAutocompleteComponent::Autocomplete* TextEditorWithAutocompleteComponent::getCurrentAutocomplete()
 {
 	return dynamic_cast<Autocomplete*>(currentAutocomplete.get());
+}
+
+bool TextEditorWithAutocompleteComponent::isAutocomplete(Component* c)
+{
+	return dynamic_cast<Autocomplete*>(c) != nullptr;
 }
 
 void ModulationDisplayValue::clipTo0To1()
@@ -3868,6 +3891,9 @@ ValueToTextConverter ValueToTextConverter::fromString(const String& converterStr
 
 	if(converterString.isNotEmpty())
 	{
+		if(getAvailableTextConverterModes().contains(converterString))
+			return createForMode(converterString);
+
 #if HI_ZSTD_INCLUDED
 			zstd::ZDefaultCompressor comp;
 

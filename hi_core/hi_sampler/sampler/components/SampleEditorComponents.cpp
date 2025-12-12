@@ -1320,9 +1320,18 @@ SamplerSoundTable::SamplerSoundTable(ModulatorSampler *ownerSampler_, SampleEdit
 	ownerSampler(ownerSampler_),
 	internalSelection(false)
 {
+	ComplexGroupManagerComponent::Factory f;
+	ignorePath = f.createPath("ignore");
+	warningPath = f.createPath("unassigned");
+
     // Create our table component and add it to this component..
     addAndMakeVisible (table);
     table.setModel (this);
+
+	table.getViewport()->setScrollBarThickness(12);
+
+	sf.addScrollBarToAnimate(table.getVerticalScrollBar());
+	sf.addScrollBarToAnimate(table.getHorizontalScrollBar());
 
     // give it a border
     table.setColour (ListBox::outlineColourId, Colours::grey);
@@ -1343,8 +1352,6 @@ SamplerSoundTable::SamplerSoundTable(ModulatorSampler *ownerSampler_, SampleEdit
 		st.currentDisplayFilter = filter;
 		st.repaint();
     });
-
-	//LambdaBroadcaster<int, int> 
 
 	handler->noteBroadcaster.addListener(*this, [](SamplerSoundTable& st, int note, int velocity)
 	{
@@ -1405,7 +1412,13 @@ void SamplerSoundTable::rebuildColumns()
 
 	auto s = handler->getSampler();
 
-	useComplexGroupManager = s->getComplexGroupManager();
+	auto shouldUse = s->getComplexGroupManager() != nullptr;
+
+	auto init = shouldUse != useComplexGroupManager;
+
+	useComplexGroupManager = shouldUse;
+
+	
 
 	columnIds.add(SampleIds::ID);
 	columnIds.add(SampleIds::FileName);
@@ -1437,6 +1450,9 @@ void SamplerSoundTable::rebuildColumns()
 	if(auto gm = s->getComplexGroupManager())
 	{
 		complexDataTree = s->getComplexGroupManager()->getDataTree();
+
+		if(init)
+			complexIdListener.setCallback(complexDataTree, { groupIds::id }, valuetree::AsyncMode::Asynchronously, VT_BIND_RECURSIVE_PROPERTY_LISTENER(onComplexIdUpdate));
 	}
 
 	auto f = GLOBAL_FONT();
@@ -1450,16 +1466,20 @@ void SamplerSoundTable::rebuildColumns()
 	while(auto sound = iter.getNextSound())
 	{
 		PoolReference ref(s->getMainController(), sound->getPropertyAsString(SampleIds::FileName), FileHandlerBase::Samples);
-		auto filename = ref.getFile().getFileNameWithoutExtension();
+		auto filename = ref.getReferenceString();
 		
-		maxFilenameLength = jmax(maxFilenameLength, f.getStringWidth(filename));
-		maxFilenameLength += 50;
+		maxFilenameLength = jmax(maxFilenameLength, f.getStringWidth(filename) + 30);
+
 	}
 
 	maxFilenameLength = jlimit(300, 600, maxFilenameLength);
 
 
-	for (auto c : columnIds)
+	auto bf = GLOBAL_BOLD_FONT();
+
+	auto showBasicProperties = !complexDataTree.isValid();
+
+	for (const auto& c : columnIds)
 	{
 		int i1, i2, i3 = 50;
 
@@ -1467,13 +1487,13 @@ void SamplerSoundTable::rebuildColumns()
 
 		if (c == SampleIds::FileName)
 		{
-			i1 = maxFilenameLength;
+			i1 = 80;
 			i2 = maxFilenameLength;
 			i3 = -1;
 		}
 		else if (groupData.isValid())
 		{
-			int width = f.getStringWidth(c.toString());
+			int width = bf.getStringWidth(c.toString());
 
 			auto tokens = ComplexGroupManagerComponent::Helpers::getTokens(groupData);
 
@@ -1488,12 +1508,20 @@ void SamplerSoundTable::rebuildColumns()
 		}
 		else
 		{
-			i1 = 40;
-			i2 = 30;
+			auto cCopy = String(c.toString());
+			i2 = jmax(40, roundToInt(bf.getStringWidthFloat(cCopy) + 10));
+			i1 = i2;
 			i3 = 80;
 		}
 
-		table.getHeader().addColumn(c.toString(), id++, i1, i2, i3, TableHeaderComponent::ColumnPropertyFlags::defaultFlags);
+		auto x = (int)TableHeaderComponent::ColumnPropertyFlags::defaultFlags;
+
+		if(!showBasicProperties && SampleIds::Helpers::isMapProperty(c))
+		{
+			x -= TableHeaderComponent::ColumnPropertyFlags::visible;
+		}
+
+		table.getHeader().addColumn(c.toString(), id++, i1, i2, i3, x);
 	}
 
 	table.getHeader().setStretchToFitActive(true);
@@ -1531,9 +1559,6 @@ void SamplerSoundTable::paintCell (Graphics& g, int rowNumber, int columnId,
 
 	if (rowNumber < sortedSoundList.size())
 	{
-        
-		
-		
 		if (sortedSoundList[rowNumber].get() == nullptr)
 			return;
 
@@ -1556,8 +1581,6 @@ void SamplerSoundTable::paintCell (Graphics& g, int rowNumber, int columnId,
             g.setColour(Colours::white.withAlpha(alpha));
         }
 
-		
-
 		String text;
 
 		if(isComplexGroupColumn(columnId))
@@ -1566,11 +1589,37 @@ void SamplerSoundTable::paintCell (Graphics& g, int rowNumber, int columnId,
 			auto gm = handler->getSampler()->getComplexGroupManager();
 			auto s = sortedSoundList[rowNumber];
 			text = gm->getLayerValueAsToken(s.get(), layerIndex);
+
+			auto ldata = gm->getDataTree().getChild(layerIndex);
+
+			auto c = ComplexGroupManagerComponent::Helpers::getLayerColour(ldata);
+			g.setColour(c);
+
+			if(text == "0xFF")
+			{
+				Rectangle<float> tb(0.0f, 2.0f, (float)width, (float)height-4.0f);
+				PathFactory::scalePath(ignorePath, tb.reduced(JUCE_LIVE_CONSTANT_OFF(4)));
+				g.fillPath(ignorePath);
+				return;
+			}
+
+			if(text.isEmpty() && layerIndex >= 0)
+			{
+				Rectangle<float> tb(0.0f, 2.0f, (float)width, (float)height-4.0f);
+				PathFactory::scalePath(warningPath, tb.reduced(JUCE_LIVE_CONSTANT_OFF(3)));
+				g.fillPath(warningPath);
+			}
 		}
 		else
 		{
 			auto id = columnIds[columnId-1];
 			text = String(sortedSoundList[rowNumber]->getPropertyAsString(id));
+
+			if(id == SampleIds::FileName)
+			{
+				PoolReference ref(handler->getSampler()->getMainController(), text, ProjectHandler::Samples);
+				text = ref.getReferenceString();
+			}
 		}
 
 		g.drawText(text, 2, 0, width - 4, height, Justification::centred, true);
@@ -1668,12 +1717,243 @@ void SamplerSoundTable::resized()
 	//table.getHeader().setColumnWidth(ModulatorSamplerSound::FileName, table.getVisibleRowWidth() - 330);
 }
 
+void SamplerSoundTable::updateInterface()
+{
+	if(!isPreloading)
+		refreshList();
+}
+
 
 void SamplerSoundTable::refreshPropertyForRow(int index, const Identifier& id)
 {
 	if (columnIds.contains(id))
 		table.repaintRow(index);
 }
+
+void SamplerSoundTable::cellClicked(int rowNumber, int columnId, const MouseEvent& mouseEvent)
+{
+	if(isComplexGroupColumn(columnId) && mouseEvent.mods.isRightButtonDown())
+	{
+		if(isPositiveAndBelow(rowNumber, sortedSoundList.size()))
+		{
+			columnId -= complexGroupOffset;
+			columnId -= 1;
+
+			auto numSelected = handler->getNumSelected();
+
+			auto gm = handler->getSampler()->getComplexGroupManager();
+
+			auto ld = gm->getDataTree().getChild(columnId);
+			auto lt = ComplexGroupManager::Helpers::getLogicType(ld);
+			
+			StringArray notes;
+
+			if (lt == ComplexGroupManager::LogicType::LegatoInterval)
+			{
+				notes.ensureStorageAllocated(128);
+
+				for (int i = 0; i < 127; i++)
+					notes.add(MidiMessage::getMidiNoteName(i, true, true, 3));
+			}
+
+			auto availableLayers = ComplexGroupManager::Helpers::getTokens(ld, handler->getSampler());
+
+			auto s = sortedSoundList[rowNumber];
+
+			auto bm = s->getBitmask();
+
+			auto lv = gm->getLayerValue(bm, columnId);
+
+			GlobalHiseLookAndFeel laf;
+			PopupMenu m;
+			m.setLookAndFeel(&laf);
+
+			m.addSectionHeader("Assign " + String(numSelected) + " samples to " + ComplexGroupManager::Helpers::getId(ld) + " layer");
+
+			int idx = 1;
+
+			for(const auto& s: availableLayers)
+			{
+				if(lt == ComplexGroupManager::LogicType::LegatoInterval)
+				{
+					m.addItem(idx, notes[s.getIntValue()], true, idx == lv);
+				}
+				else
+				{
+					m.addItem(idx, s, true, idx == lv);
+				}
+				
+				idx++;
+			}
+
+			m.addItem((int)ComplexGroupManager::IgnoreFlag, "Bypass this layer", ld[groupIds::ignorable], lv == ComplexGroupManager::IgnoreFlag);
+
+			m.addSeparator();
+
+			auto getTokenizedFileName = [&](ModulatorSamplerSound* s)
+			{
+				PoolReference ref(handler->getSampler()->getMainController(), s->getSampleProperty(SampleIds::FileName), ProjectHandler::Samples);
+				auto refPath = ref.getReferenceString().replace("{PROJECT_FOLDER}", "").upToLastOccurrenceOf(".", false, false);
+				refPath = refPath.replaceCharacter('\\', '_');
+				refPath = refPath.replaceCharacter('/', '_');
+
+				auto fileTokens = StringArray::fromTokens(refPath, "_", "");
+				fileTokens.trim();
+				fileTokens.removeEmptyStrings();
+
+				return fileTokens;
+			};
+
+			PopupMenu fm;
+
+			idx = 0;
+
+
+			std::vector<StringArray> multiTokens;
+
+			for(auto s: handler->getSelectionReference().getItemArray())
+			{
+				StringArray ft = getTokenizedFileName(s.get());
+
+				if (multiTokens.empty())
+				{
+					for (int idx = 0; idx < ft.size(); idx++)
+						multiTokens.push_back({});
+				}
+				else if (ft.size() != multiTokens.size())
+				{
+					// skip samples with a different amount of tokens...
+					continue;
+				}
+
+				for (int idx = 0; idx < ft.size(); idx++)
+				{
+					if (multiTokens[idx].size() < 4)
+						multiTokens[idx].addIfNotAlreadyThere(ft[idx]);
+				}
+			}
+
+			for(auto& mt: multiTokens)
+			{
+				if(mt.size() == 4)
+					mt.add("...");
+			}
+
+			
+
+			for (auto& mt: multiTokens)
+			{
+				auto enabled = availableLayers.isEmpty();// || availableLayers.contains(ft);
+				
+				if(lt == ComplexGroupManager::LogicType::LegatoInterval)
+					enabled = true;
+
+				fm.addItem(9000 + idx, "Token #" + String(idx) + ": " + mt.joinIntoString(" | "), enabled);
+
+				idx++;
+			}
+
+#if 0
+			for(auto& ft: getTokenizedFileName(s.get()))
+			{
+				auto enabled = availableLayers.isEmpty() || availableLayers.contains(ft);
+				fm.addItem(9000 + idx, "Token #" + String(idx) + ": " + ft, enabled);
+
+				idx++;
+			}
+#endif
+				
+
+			m.addSubMenu("Assign from file token", fm);
+
+			auto selection = handler->getSelectionReference().getItemArray();
+
+			if(selection.isEmpty())
+				selection.add(s);
+
+			if(auto r = m.show())
+			{
+				if(r >= 9000)
+				{
+					idx = r -= 9000;
+
+					auto createGroupsFromToken = availableLayers.isEmpty();
+
+					if(createGroupsFromToken)
+					{
+						for(auto ts: selection)
+						{
+							Array<std::pair<Identifier, uint8>> layerValues;
+
+							auto ft = getTokenizedFileName(ts.get());
+							auto thisToken = ft[idx];
+
+							thisToken.trim();
+
+							if(!thisToken.isEmpty())
+								availableLayers.addIfNotAlreadyThere(thisToken);
+						}
+
+						availableLayers.sort(true);
+
+						ComplexGroupManager::ScopedMigrator::Collection c(*gm, true);
+						ld.setProperty(groupIds::tokens, availableLayers.joinIntoString(","), handler->getSampler()->getUndoManager());
+					}
+
+					
+
+					for(auto ts: selection)
+					{
+						Array<std::pair<Identifier, uint8>> layerValues;
+
+						auto ft = getTokenizedFileName(ts.get());
+						auto thisToken = ft[idx];
+
+						
+
+						if(thisToken.isNotEmpty())
+						{
+							if(lt == ComplexGroupManager::LogicType::LegatoInterval)
+							{
+								auto noteIndex = notes.indexOf(thisToken);
+
+								if(noteIndex != -1)
+									thisToken = String(noteIndex);
+							}
+
+							auto lv = availableLayers.indexOf(thisToken);
+
+							if(lv != -1)
+							{
+								layerValues.add({ ComplexGroupManager::Helpers::getId(ld), (uint8)lv+1});
+							}
+
+							if(!layerValues.isEmpty())
+								gm->setSampleId(ts.get(), layerValues, true);
+						}
+					}
+				}
+				else
+				{
+					Array<std::pair<Identifier, uint8>> layerValues;
+					layerValues.add({ ComplexGroupManager::Helpers::getId(ld), (uint8)r});
+
+					for(auto ts: selection)
+					{
+						gm->setSampleId(ts.get(), layerValues, true);
+					}
+				}
+
+				table.repaint();
+			}
+		}
+
+		return;
+	}
+
+	TableListBoxModel::cellClicked(rowNumber, columnId, mouseEvent);
+}
+
 
 void SamplerSoundTable::selectedRowsChanged(int /*lastRowSelected*/)
 {

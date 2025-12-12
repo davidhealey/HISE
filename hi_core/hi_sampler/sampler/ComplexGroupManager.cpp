@@ -262,7 +262,7 @@ void ComplexGroupManager::setLockLayer(uint8 layerIndex, bool shouldBeLocked, ui
 }
 
 float* ComplexGroupManager::calculateGroupModulationValuesForVoice(const HiseEvent& e, int voiceIndex, int startSample, int numSamples,
-	SampleType::Bitmask m)
+	SampleType::Bitmask m, bool firstInVoice)
 {
 	auto useData = false;
 
@@ -274,7 +274,7 @@ float* ComplexGroupManager::calculateGroupModulationValuesForVoice(const HiseEve
 		FloatVectorOperations::fill(scratchBuffer.begin() + startSample_cr, 1.0f, numSamples_cr);
 
 		for(auto p: modulationLayers)
-			useData |= p->calculateGroupModulationValuesForVoice(e, voiceIndex, scratchBuffer.begin(), startSample_cr, numSamples_cr, m);
+			useData |= p->calculateGroupModulationValuesForVoice(e, voiceIndex, scratchBuffer.begin(), startSample_cr, numSamples_cr, m, firstInVoice);
 
 		if(useData)
 			useData &= ModBufferExpansion::expand(scratchBuffer.begin(), startSample, numSamples, lastRampValues[voiceIndex]);
@@ -375,7 +375,7 @@ struct ComplexGroupManager::LegatoLayer final : public ComplexGroupManager::Laye
 		/*TODO:
 
 - fix sample length updating zero crossing
-- fix all note off resetting the filter values OK
+
 
 - check with multiple groups
 - check different sample rate & pitch ratios
@@ -524,7 +524,7 @@ struct ComplexGroupManager::LegatoLayer final : public ComplexGroupManager::Laye
 
 	}
 
-	void handleHiseEvent(ComplexGroupManager& parent, const HiseEvent& e) override
+	void handleHiseEvent(ComplexGroupManager& parent, HiseEvent& e) override
 	{
 		auto n = e.getNoteNumberIncludingTransposeAmount();
 
@@ -604,21 +604,7 @@ struct ComplexGroupManager::XFadeLayer final : public ComplexGroupManager::Layer
 	  Layer(layerData, Helpers::getId(layerData), LogicType::XFade, Helpers::getTokens(layerData), flags),
 	  parent(parent_)
 	{
-		auto t = const_cast<ValueTree*>(&layerData);
-
-		if(!layerData.hasProperty(groupIds::fader))
-			t->setProperty(groupIds::fader, getFaderNames()[0], nullptr);
-
-		if(!layerData.hasProperty(groupIds::sourceType))
-			t->setProperty(groupIds::sourceType, getSourceNames()[1], nullptr);
-
-		if(!layerData.hasProperty(groupIds::slotIndex))
-			t->setProperty(groupIds::slotIndex, 1, nullptr);
-
-		typeListener.setCallback(layerData,
-								 { groupIds::fader, groupIds::slotIndex, groupIds::sourceType }, 
-								 valuetree::AsyncMode::Synchronously, 
-								 BIND_MEMBER_FUNCTION_2(XFadeLayer::update));
+		setPropertiesToWatch({ groupIds::fader, groupIds::fadeTime, groupIds::sourceType, groupIds::slotIndex});
 
 		BACKEND_ONLY(valueUpdater.enableLockFreeUpdate(parent.sampler->getMainController()->getGlobalUIUpdater()));
 	}
@@ -635,18 +621,21 @@ struct ComplexGroupManager::XFadeLayer final : public ComplexGroupManager::Layer
 
 	void prepare(PrepareSpecs ps) override
 	{
-		smoothedValue.prepare(ps.sampleRate, 1000.0);
+		lastSpecs = ps;
+		updateSmoothing();
 	}
 
 	void resetPlayState(ComplexGroupManager& parent) override
 	{
-		smoothedValue.set(midiValue);
-		smoothedValue.reset();
+		
 	}
 
 	double getFadeValue(Bitmask m, double input)
 	{
 		auto groupValue = getUnmaskedValue(m);
+
+		if(groupValue == IgnoreFlag)
+			return 1.0;
 
 		if(groupValue == 1)
 			return getFaderValueInternal<0>(input, numItems, currentType);
@@ -684,7 +673,7 @@ struct ComplexGroupManager::XFadeLayer final : public ComplexGroupManager::Layer
 		return 1.0f;
 	}
 
-	void handleHiseEvent(ComplexGroupManager& parent, const HiseEvent& e) override
+	void handleHiseEvent(ComplexGroupManager& parent, HiseEvent& e) override
 	{
 		if(currentSource == SourceTypes::MidiCC)
 		{
@@ -692,17 +681,37 @@ struct ComplexGroupManager::XFadeLayer final : public ComplexGroupManager::Layer
 			{
 				midiValue = e.getControllerValue() / 127.0f;
 				BACKEND_ONLY(valueUpdater.sendMessage(sendNotificationAsync, 0, midiValue));
-				smoothedValue.set(midiValue);
 			}
 		}
 	};
 
-	
-
-	bool calculateGroupModulationValuesForVoice(const HiseEvent& e, int voiceIndex, float* data, int startSample, int numSamples, Bitmask m) override
+	bool applySmoothedGain(int voiceIndex, bool isFirst, float currentTarget, float* ptr, int numSamples)
 	{
-		float value = 0.0f;
-		float const* values = nullptr;
+		auto& sg = smoothedGains[voiceIndex];
+
+		if (sg.get() != currentTarget)
+			sg.set(currentTarget);
+
+		if (isFirst)
+			sg.reset();
+
+		if (sg.isActive())
+		{
+			for (int i = 0; i < numSamples; i++)
+				ptr[i] *= sg.advance();
+		}
+		else
+		{
+			FloatVectorOperations::multiply(ptr, sg.advance(), numSamples);
+		}
+
+		return true;
+	}
+
+	bool calculateGroupModulationValuesForVoice(const HiseEvent& e, int voiceIndex, float* data, int startSample, int numSamples, Bitmask m, bool firstInVoice) override
+	{
+		if(getUnmaskedValue(m) == IgnoreFlag)
+			return false;
 
 		if(currentSource == SourceTypes::EventData)
 		{
@@ -710,13 +719,19 @@ struct ComplexGroupManager::XFadeLayer final : public ComplexGroupManager::Layer
 
 			if(v.first)
 			{
-				value = (float)v.second;
+				auto value = getFadeValue(m, (float)v.second);
+				return applySmoothedGain(voiceIndex, firstInVoice, value, data + startSample, numSamples);
 			}
 			else
 			{
 				data[0] = 1.0f;
 				return false;
 			}
+		}
+		else if(currentSource == SourceTypes::MidiCC)
+		{
+			auto value = getFadeValue(m, midiValue);
+			return applySmoothedGain(voiceIndex, firstInVoice, value, data + startSample, numSamples);
 		}
 		else if(currentSource == SourceTypes::GlobalMod)
 		{
@@ -725,6 +740,9 @@ struct ComplexGroupManager::XFadeLayer final : public ComplexGroupManager::Layer
 				data[0] = 1.0f;
 				return false;
 			}
+
+			float value = 0.0f;
+			float const* values = nullptr;
 
 			switch(currentModType)
 			{
@@ -744,42 +762,31 @@ struct ComplexGroupManager::XFadeLayer final : public ComplexGroupManager::Layer
 				break;
 			default: ;
 			}
-		}
-		else if (currentSource == SourceTypes::MidiCC)
-		{
-			for(int i = 0; i < numSamples; i++)
+
+			if (values == nullptr)
 			{
-				value = smoothedValue.advance();
+				auto input = jlimit(0.0f, 1.0f, value);
+				ignoreUnused(input);
+				BACKEND_ONLY(valueUpdater.sendMessage(sendNotificationAsync, voiceIndex, input));
 				value = getFadeValue(m, value);
-				data[startSample + i] *= value;
+				FloatVectorOperations::multiply(data + startSample, value, numSamples);
+			}
+			else
+			{
+				auto input = jlimit(0.0f, 1.0f, values[0]);
+				ignoreUnused(input);
+				BACKEND_ONLY(valueUpdater.sendMessage(sendNotificationAsync, voiceIndex, input));
+
+				for (int i = 0; i < numSamples; i++)
+				{
+					value = values[i];
+					value = getFadeValue(m, value);
+					data[startSample + i] *= value;
+				}
 			}
 
 			return true;
 		}
-		
-		if(values == nullptr)
-		{
-			auto input = jlimit(0.0f, 1.0f, value);
-            ignoreUnused(input);
-			BACKEND_ONLY(valueUpdater.sendMessage(sendNotificationAsync, voiceIndex, input));
-			value = getFadeValue(m, value);
-			FloatVectorOperations::multiply(data + startSample, value, numSamples);
-		}
-		else
-		{
-			auto input = jlimit(0.0f, 1.0f, values[0]);
-            ignoreUnused(input);
-			BACKEND_ONLY(valueUpdater.sendMessage(sendNotificationAsync, voiceIndex, input));
-
-			for(int i = 0; i < numSamples; i++)
-			{
-				value = values[i];
-				value = getFadeValue(m, value);
-				data[startSample + i] *= value;
-			}
-		}
-
-		return true;
 	}
 
 	LambdaBroadcaster<int, double> valueUpdater;
@@ -788,7 +795,7 @@ private:
 
 	void rebuildConnection();
 
-	void update(const Identifier& id, const var& newValue)
+	void onValueTreeUpdate(const Identifier& id, const var& newValue)
 	{
 		if(id == groupIds::fader)
 		{
@@ -811,7 +818,26 @@ private:
 
 			rebuildConnection();
 		}
+		if(id == groupIds::fadeTime)
+		{
+			smoothingTimeMs = jlimit(0.0f, 1000.0f, (float)newValue);
+			updateSmoothing();
+		}
 	}
+
+	void updateSmoothing()
+	{
+		if(lastSpecs)
+		{
+			for (auto& s : smoothedGains)
+				s.prepare(lastSpecs.sampleRate / HISE_CONTROL_RATE_DOWNSAMPLING_FACTOR, smoothingTimeMs);
+		}
+	}
+
+	float smoothingTimeMs = 50.0f;
+	PrepareSpecs lastSpecs;
+
+	std::array<sfloat, NUM_POLYPHONIC_VOICES> smoothedGains;
 
 	valuetree::PropertyListener typeListener;
 	scriptnode::routing::GlobalRoutingManager::Ptr gm;
@@ -869,29 +895,40 @@ void ComplexGroupManager::XFadeLayer::rebuildConnection()
 
 struct ComplexGroupManager::KeyswitchLayer final : public ComplexGroupManager::Layer
 {
-	KeyswitchLayer(const ValueTree& v, int flags):
-	  Layer(v, Helpers::getId(v), LogicType::Keyswitch, Helpers::getTokens(v), flags | Flags::FlagProcessHiseEvent)
+	KeyswitchLayer(ComplexGroupManager& parent_, const ValueTree& v, int flags):
+	  Layer(v, Helpers::getId(v), LogicType::Keyswitch, Helpers::getTokens(v), flags | Flags::FlagProcessHiseEvent),
+	  parent(parent_)
 	{
 		setPropertiesToWatch({ SampleIds::LoKey, groupIds::isChromatic });
 		
 	}
 
+	ComplexGroupManager& parent;
+
 	void onValueTreeUpdate(const Identifier& id, const var& newValue)
 	{
 		auto map = Helpers::getKeyRange(data);
 
-		uint8 layerIndex = 1;
+		uint8 li = 1;
 
 		for(int i = 0; i < 128; i++)
 		{
 			if(map[i])
-				layerValues[i] = layerIndex++;
+				layerValues[i] = li++;
 			else
 				layerValues[i] = 0;
 		}
+
+		
 	}
 	
-	void handleHiseEvent(ComplexGroupManager& parent, const HiseEvent& e) override
+	void resetPlayState(ComplexGroupManager& parent) 
+	{
+		if(!parent.isFilterInitialised(layerIndex))
+			parent.applyFilter(layerIndex, 1, sendNotificationSync);
+	};
+
+	void handleHiseEvent(ComplexGroupManager&, HiseEvent& e) override
 	{
 		if(e.isNoteOn())
 		{
@@ -903,6 +940,162 @@ struct ComplexGroupManager::KeyswitchLayer final : public ComplexGroupManager::L
 	}
 
 	std::array<uint8, 128> layerValues;
+};
+
+ 
+
+struct ComplexGroupManager::ReleaseTriggerLayer final : public ComplexGroupManager::Layer
+{
+	static constexpr int CircleBufferSize = NUM_POLYPHONIC_VOICES;
+
+	static constexpr int SustainGroupIndex = 1;
+	static constexpr int ReleaseGroupIndex = 2;
+
+	ReleaseTriggerLayer(const ValueTree& v, int flags, ModulatorSampler* sampler_):
+	  Layer(v, Helpers::getId(v), LogicType::ReleaseTrigger, Helpers::getTokens(v), flags | Flags::FlagProcessHiseEvent | Flags::FlagProcessPostSounds),
+	  sampler(sampler_)
+	{
+		setPropertiesToWatch({ groupIds::matchGain, groupIds::accuracy, groupIds::fadeTime });
+	}
+
+	void onValueTreeUpdate(const Identifier& id, const var& newValue)
+	{
+		if(id == groupIds::matchGain)
+		{
+			matchGain = (bool)newValue;
+			rebuildCache();
+		}
+		if(id == groupIds::fadeTime)
+			fadeTimeSeconds = (double)newValue / 1000.0;
+		if(id == groupIds::accuracy)
+			accuracy = (double)newValue;
+
+		FloatSanitizers::sanitizeDoubleNumber(accuracy);
+		FloatSanitizers::sanitizeDoubleNumber(fadeTimeSeconds);
+
+		fadeTimeSeconds = jlimit(0.0, 1.0, fadeTimeSeconds);
+		accuracy = jlimit(0.0, 1.0, accuracy);
+	}
+
+	void postVoiceStart(ComplexGroupManager& parent, const UnorderedStack<ModulatorSynthSound*>& soundsThatWereStarted) override
+	{
+		if(soundsThatWereStarted.isEmpty())
+		{
+			for(auto av: sampler->activeVoices)
+			{
+				if(av->getCurrentHiseEvent().getEventId() == currentNoteOffId)
+					av->setVolumeFade(fadeTimeSeconds, 0.0);
+			}
+
+			return;
+		}
+
+		for(auto& s: soundsThatWereStarted)
+		{
+			auto releaseSample = static_cast<ModulatorSamplerSound*>(s);
+			auto v = getUnmaskedValue(releaseSample->getBitmask());
+
+			if(v == ReleaseGroupIndex)
+			{
+				double targetGain = 1.0;
+
+				for(auto av: sampler->activeVoices)
+				{
+					if(av->getCurrentHiseEvent().getEventId() == currentNoteOffId)
+					{
+						av->setVolumeFade(fadeTimeSeconds, 0.0);
+
+						if(matchGain)
+						{
+							auto sustainSample = static_cast<ModulatorSamplerSound*>(av->getCurrentlyPlayingSound().get());
+							targetGain = (double)sustainSample->getReferenceToSound()->getCurrentReleasePeak();
+
+							targetGain = (1.0 - accuracy) + accuracy * targetGain;
+						}
+					}
+				}
+
+				parent.fadeInEventByFilter(layerIndex, ReleaseGroupIndex, fadeTimeSeconds, targetGain);
+			}
+		}
+	};
+
+	void rebuildCache()
+	{
+		ModulatorSampler::SoundIterator iter(sampler);
+
+		while(auto s = iter.getNextSound())
+		{
+			auto v = getUnmaskedValue(s->getBitmask());
+
+			if(v == SustainGroupIndex && matchGain)
+			{
+				for(int i = 0; i < s->getNumMultiMicSamples(); i++)
+					s->getReferenceToSound(i)->setIsReleaseSample(true);
+			}
+			else
+			{
+				for(int i = 0; i < s->getNumMultiMicSamples(); i++)
+					s->getReferenceToSound(i)->setIsReleaseSample(false);
+			}
+
+			if(v == ReleaseGroupIndex && matchGain)
+				s->setSampleProperty(SampleIds::Normalized, true, false);
+		}
+	}
+
+	void onCacheRebuild(ComplexGroupManager& parent) override
+	{
+		rebuildCache();
+	}
+
+	void handleHiseEvent(ComplexGroupManager& parent, HiseEvent& e) override
+	{
+		if(e.isNoteOn() && !recursive)
+		{
+			parent.applyFilter(layerIndex, SustainGroupIndex, sendNotificationAsync);
+		}
+		if(e.isNoteOff())
+		{
+			bool stillPlaying = false;
+
+			for(auto av: sampler->activeVoices)
+			{
+				stillPlaying |= av->getCurrentHiseEvent().getEventId() == e.getEventId();
+			}
+
+			if(stillPlaying)
+			{
+				e.ignoreEvent(true);
+
+				ScopedValueSetter<bool> svs(recursive, true);
+				currentNoteOffId = e.getEventId();
+
+				parent.applyFilter(layerIndex, ReleaseGroupIndex, sendNotificationAsync);
+
+				HiseEvent on(HiseEvent::Type::NoteOn, e.getNoteNumber(), e.getVelocity(), e.getChannel());
+				on.setTimeStamp(e.getTimeStamp());
+				on.setArtificial();
+				sampler->getMainController()->getEventHandler().pushArtificialNoteOn(on);
+				sampler->handleHiseEvent(on);
+			}
+		}
+	}
+
+	
+
+	void resetPlayState(ComplexGroupManager& parent) override
+	{
+		parent.applyFilter(layerIndex, SustainGroupIndex, sendNotificationAsync);
+	}
+
+	int currentNoteOffId = -1;
+	double fadeTimeSeconds = 0.15;
+	double accuracy = 1.0;
+	bool matchGain = false;
+
+	bool recursive = false;
+	WeakReference<ModulatorSampler> sampler;
 };
 
 struct ComplexGroupManager::RRLayer final : public ComplexGroupManager::Layer
@@ -937,7 +1130,7 @@ struct ComplexGroupManager::RRLayer final : public ComplexGroupManager::Layer
 		}
 	}
 
-	void handleHiseEvent(ComplexGroupManager& parent, const HiseEvent& e) override
+	void handleHiseEvent(ComplexGroupManager& parent, HiseEvent& e) override
 	{
 		if(e.isNoteOn())
 		{
@@ -954,9 +1147,302 @@ struct ComplexGroupManager::RRLayer final : public ComplexGroupManager::Layer
 	uint8 currentRRGroup = 1;
 };
 
+struct ComplexGroupManager::ChokeLayer: public ComplexGroupManager::Layer
+{
+	ChokeLayer(ValueTree v, const StringArray& tokens, int flags, ModulatorSampler* sampler_):
+	  Layer(v, Helpers::getId(v), LogicType::Choke, tokens, flags),
+	  sampler(sampler_)
+	{
+		setPropertiesToWatch({ groupIds::matrixString, groupIds::fadeTime });
+	}
+
+	std::vector<uint8> groupMatrix;
+	double fadeTime = 50.0;
+
+	void onValueTreeUpdate(const Identifier& id, const var& newValue) override
+	{
+		if(id == groupIds::matrixString)
+			groupMatrix = Helpers::getMatrixFromString(newValue.toString());
+		if(id == groupIds::fadeTime)
+			fadeTime = jlimit(5.0, 2000.0, (double)newValue) * 0.001;
+	}
+
+	void postVoiceStart(ComplexGroupManager& parent, const UnorderedStack<ModulatorSynthSound*>& soundsThatWereStarted) override
+	{
+		auto thisGroup = IgnoreFlag;
+
+		for (auto s : soundsThatWereStarted)
+		{
+			thisGroup = getUnmaskedValue(static_cast<ModulatorSamplerSound*>(s)->getBitmask());
+
+			if(thisGroup != IgnoreFlag)
+				break;
+		}
+
+		if(thisGroup == IgnoreFlag)
+			return;
+
+		if(isPositiveAndBelow(thisGroup-1, groupMatrix.size()))
+		{
+			auto matrixValue = groupMatrix[thisGroup-1];
+
+			for (auto av : parent.sampler->activeVoices)
+			{
+				auto sound = av->getCurrentlyPlayingSound().get();
+				auto ms = static_cast<ModulatorSamplerSound*>(sound);
+
+				auto layerGroup = getUnmaskedValue(ms->getBitmask());
+
+				if(isPositiveAndBelow(layerGroup-1, groupMatrix.size()))
+				{
+					auto voiceMatrixValue = groupMatrix[layerGroup-1];
+
+					if(layerGroup != thisGroup && voiceMatrixValue == matrixValue)
+						av->setVolumeFade(fadeTime, 0.0);
+				}
+			}
+		}
+
+		
+	}
+
+	void handleHiseEvent(ComplexGroupManager& parent, HiseEvent& e) final
+	{
+
+	};
+
+	ModulatorSampler* sampler;
+
+	std::array<int, NUM_POLYPHONIC_VOICES> groupMap;
+};
+
+struct ComplexGroupManager::CustomLayer: public Layer
+{
+	CustomLayer(const ValueTree& v, ComplexGroupManager& gm, const Identifier& g, LogicType lt_, const StringArray& tokens_, int flags):
+	  Layer(v, g, lt_, tokens_, flags),
+	  parent(gm)
+	{
+		setPropertiesToWatch({ groupIds::fadeTime, groupIds::gainMod, groupIds::groupStart });
+
+		for(auto& s: smoothedGains)
+			s.set(1.0);
+
+		for(int i = 0; i < tokens.size(); i++)
+			layerGains.push_back(1.0f);
+	}
+
+	void onValueTreeUpdate(const Identifier& id, const var& newValue) override
+	{
+		if(id == groupIds::groupStart)
+			toggle(FlagProcessPostSounds, (bool)newValue);
+		if(id == groupIds::gainMod)
+			toggle(FlagProcessModulation, (bool)newValue);
+		if(id == groupIds::fadeTime)
+		{
+			fadeTimeMilliSeconds = (double)newValue;
+			updateSmoothing();
+		}
+	}
+
+	void prepare(PrepareSpecs ps) override
+	{
+		if(ps)
+		{
+			lastSpecs = ps;
+			updateSmoothing();
+		}
+	}
+
+	PrepareSpecs lastSpecs;
+
+	void updateSmoothing()
+	{
+		for(auto& s: smoothedGains)
+			s.prepare(lastSpecs.sampleRate / HISE_CONTROL_RATE_DOWNSAMPLING_FACTOR, fadeTimeMilliSeconds);
+	}
+
+	bool calculateGroupModulationValuesForVoice(const HiseEvent& e, int voiceIndex, float* data, int startSample, int numSamples, Bitmask m, bool firstInVoice) override
+	{
+		auto lv = getUnmaskedValue(m);
+
+		if(lv != IgnoreFlag)
+		{
+			jassert(isPositiveAndBelow(lv-1, layerGains.size()));
+
+			auto g = layerGains[lv-1];
+
+			auto& sg = smoothedGains[voiceIndex];
+
+			if(sg.get() != g)
+				sg.set(g);
+
+			if(firstInVoice)
+				sg.reset();
+
+			if(sg.isActive())
+			{
+				for(int i = 0; i < numSamples; i++)
+				{
+					data[startSample + i] *= sg.advance();
+				}
+
+				return true;
+			}
+			else
+			{
+				auto gf = sg.advance();
+
+				if(gf == 1.0f)
+					return false;
+
+				FloatVectorOperations::multiply(data + startSample, gf, numSamples);
+
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	void toggle(Flags f, bool enabled)
+	{
+		if(enabled)
+			propertyFlags |= f;
+		else
+		{
+			if((propertyFlags & f) != 0)
+			{
+				propertyFlags -= (int)f;
+			}
+			
+			jassert((propertyFlags & f) == 0);
+		}
+
+		auto& list = f == Flags::FlagProcessPostSounds ? parent.postProcessors : parent.modulationLayers;
+
+		if(enabled)
+			list.insert(this);
+		else
+			list.remove(this);
+
+		if(f == FlagProcessModulation && lastSpecs)
+			parent.prepare(lastSpecs);
+	}
+
+	void postVoiceStart(ComplexGroupManager&, const UnorderedStack<ModulatorSynthSound *>& sounds) override
+	{
+		auto vc = parent.voiceStartCallbacks[layerIndex];
+
+		if(vc != nullptr)
+		{
+			startedGroups.clearQuick();
+
+			for(auto v: sounds)
+			{
+				auto bm = static_cast<ModulatorSamplerSound*>(v)->getBitmask();
+				auto lv = getUnmaskedValue(bm);
+				startedGroups.insert(lv);
+			}
+
+			parent.activeDelayLayers.clearQuick();
+
+			for(auto& g: startedGroups)
+			{
+				vc->onVoiceStart(g);
+			}
+		}
+	}
+
+	std::array<sfloat, NUM_POLYPHONIC_VOICES> smoothedGains;
+	std::vector<float> layerGains;
+	ComplexGroupManager& parent;
+	double fadeTimeMilliSeconds = 50.0;
+	UnorderedStack<uint8, 128> startedGroups;
+	std::function<void(uint8)> layerFunction;
+};
+
 void ComplexGroupManager::addLayer(const Identifier& groupId, LogicType lt, const StringArray& tokens, int flags)
 {
 	jassertfalse;
+}
+
+juce::var ComplexGroupManager::Helpers::convertToJS(const ValueTree& v, const Identifier& id, ModulatorSampler* sampler)
+{
+	auto dataFromValueTree = v[id];
+
+	if (id == groupIds::matrixString)
+	{
+		auto m = getMatrixFromString(dataFromValueTree.toString());
+
+		Array<var> values;
+
+		for (auto& c : m)
+			values.add((int)c);
+
+		return var(values);
+	}
+	if (id == groupIds::tokens)
+	{
+		return getTokens(v, sampler);
+	}
+
+	return dataFromValueTree;
+}
+
+juce::var ComplexGroupManager::Helpers::convertFromJS(const Identifier& id, const var& dataFromJS)
+{
+	if (id == groupIds::matrixString)
+	{
+		if (auto ar = dataFromJS.getArray())
+		{
+			std::vector<uint8> matrix;
+
+			for (const auto& v : *ar)
+				matrix.push_back((uint8)(int)v);
+
+			return var(getStringFromMatrix(matrix));
+		}
+	}
+	if (id == groupIds::tokens)
+	{
+		if (auto ar = dataFromJS.getArray())
+		{
+			String lines;
+
+			for (const auto& s : *ar)
+				lines << s.toString() << "\n";
+
+			return var(lines);
+		}
+	}
+
+	return dataFromJS;
+}
+
+bool ComplexGroupManager::Helpers::isValidId(const String& p)
+{
+	static Array<Identifier> list = {
+		groupIds::type,
+		groupIds::colour,
+		groupIds::id,
+		groupIds::folded,
+		groupIds::tokens,
+		groupIds::ignorable,
+		groupIds::cached,
+		groupIds::purgable,
+		groupIds::fader,
+		groupIds::slotIndex,
+		groupIds::sourceType,
+		groupIds::matrixString,
+		groupIds::isChromatic,
+		groupIds::matchGain,
+		groupIds::accuracy,
+		groupIds::fadeTime
+	};
+
+	Identifier id(p);
+
+	return list.contains(id);
 }
 
 uint8 ComplexGroupManager::Helpers::getNumBitsRequired(uint8 numItems)
@@ -1075,6 +1561,15 @@ StringArray ComplexGroupManager::Helpers::getLogicTypeNames()
 String ComplexGroupManager::Helpers::getLogicTypeName(LogicType lt)
 {
 	return getLogicTypeNames()[(int)lt];
+}
+
+void ComplexGroupManager::Helpers::initProperties(ValueTree v, UndoManager* um, const NamedValueSet& set)
+{
+	for (const auto& nv : set)
+	{
+		if (!v.hasProperty(nv.name))
+			v.setProperty(nv.name, nv.value, um);
+	}
 }
 
 String ComplexGroupManager::Helpers::getItemName(LogicType lt, const StringArray& items)
@@ -1248,6 +1743,53 @@ StringArray ComplexGroupManager::Helpers::getFileTokens(const String& fileName, 
 	return t;
 }
 
+std::vector<juce::uint8> ComplexGroupManager::Helpers::getMatrixFromString(const String& encodedMatrix)
+{
+	std::vector<uint8> matrix;
+	matrix.reserve(encodedMatrix.length());
+
+	auto s = encodedMatrix.begin();
+	auto e = encodedMatrix.end();
+
+	while (s != e)
+	{
+		auto c = *s;
+
+		if (c == 'X')
+		{
+			matrix.push_back(ComplexGroupManager::IgnoreFlag);
+		}
+		else if (c >= '0' && c <= '9')
+		{
+			matrix.push_back(c - '0');
+		}
+
+		++s;
+	}
+
+	return matrix;
+}
+
+String ComplexGroupManager::Helpers::getStringFromMatrix(const std::vector<uint8>& matrix)
+{
+	String s;
+	s.preallocateBytes(matrix.size());
+
+	for (const auto& c : matrix)
+	{
+		if (c == ComplexGroupManager::IgnoreFlag)
+			s << 'X';
+		else if (isPositiveAndBelow(c, 10))
+		{
+			const char st[2] = { (char)c, '0' };
+			s << String(st, 1);
+		}
+			
+	}
+
+	return s;
+}
+
 Identifier ComplexGroupManager::getLayerId(uint8 layerIndex) const
 {
 	if(isPositiveAndBelow(layerIndex, layers.size()))
@@ -1303,6 +1845,7 @@ void ComplexGroupManager::finalize()
 
 	midiProcessors.clearQuick();
 	postProcessors.clearQuick();
+	modulationLayers.clearQuick();
 
 	tableFadeLayer = -1;
 	uint8 bitPosition = 0;
@@ -1500,6 +2043,18 @@ void ComplexGroupManager::applyFilter(const Identifier& layerId, const String& t
 	}
 }
 
+bool ComplexGroupManager::isFilterInitialised(uint8 layerIndex) const
+{
+	if (isPositiveAndBelow(layerIndex, layers.size()))
+	{
+		auto& l = *layers[layerIndex];
+		auto lv = l.getUnmaskedValue(currentFilters.mainFilter.value);
+		return lv != 0;
+	}
+
+	return false;
+}
+
 Array<ComplexGroupManager::ValueWithFilter> ComplexGroupManager::getAllFiltersForLayer(uint8 layerIndex) const
 {
 	Array<ValueWithFilter> list;
@@ -1551,12 +2106,13 @@ void ComplexGroupManager::applyFilter(uint8 layerIndex, uint8 value, Notificatio
 		}
 		else
 		{
+			
 			l.setValueFilter(currentFilters.mainFilter, value);
 			jassert(currentFilters.mainFilter.ignoreMask == 0);
 		}
 
 		if(Helpers::shouldBeCached(l.propertyFlags))
-			l.mask(currentGroupFilter, value);
+			l.mask(currentGroupFilter, value, false);
 
 		l.playStateBroadcaster.sendMessage(n, value);
 	}
@@ -1593,9 +2149,14 @@ void ComplexGroupManager::delayEventByFilter(uint8 layerIndex, uint8 value, doub
 	applyEventDataInternal(StartData::Type::DelayTimeIndex, layerIndex, value, delayInSamples);
 }
 
-void ComplexGroupManager::fadeInEventByFilter(uint8 layerIndex, uint8 value, double fadeInTime)
+void ComplexGroupManager::fadeInEventByFilter(uint8 layerIndex, uint8 value, double fadeInTime, double targetGain)
 {
 	applyEventDataInternal(StartData::Type::FadeTimeIndex, layerIndex, value, fadeInTime);
+
+	if(targetGain != 1.0)
+		applyEventDataInternal(StartData::Type::TargetVolume, layerIndex, value, targetGain);
+	else
+		applyEventDataInternal(StartData::Type::TargetVolume, layerIndex, value, 0.0);
 }
 
 void ComplexGroupManager::setFixedLengthByFilter(uint8 layerIndex, uint8 value, double numSamplesToPlayBeforeFadeout)
@@ -1664,6 +2225,9 @@ ModulatorSynth::SoundCollectorBase::SpecialStart ComplexGroupManager::getSpecial
 				sd.startOffset = startData.data[(int)StartData::Type::StartOffsetIndex];
 				sd.fadeInTimeSeconds = startData.data[(int)StartData::Type::FadeTimeIndex];
 				sd.fixedLengthSamples = startData.data[(int)StartData::Type::FadeOutOffset];
+				sd.targetVolume = startData.data[(int)StartData::Type::TargetVolume];
+				if(sd.targetVolume == 0.0)
+					sd.targetVolume = 1.0;
 
 				jassert(sd);
 				return sd;
@@ -1718,11 +2282,11 @@ ComplexGroupManager::Bitmask ComplexGroupManager::parseBitmask(const String& fil
 
 				if(t.toLowerCase() == "all")
 				{
-					l.mask(m, IgnoreFlag);
+					l.mask(m, IgnoreFlag, false);
 				}
 				else if(auto v = l.tokens.indexOf(tokens[i].trim()) + 1)
 				{
-					l.mask(m, v);
+					l.mask(m, v, true);
 				}
 			}
 		}
@@ -1755,7 +2319,7 @@ void ComplexGroupManager::setSampleId(SampleType* s, const Array<std::pair<Ident
 			if(c.first == l.groupId)
 			{
 				jassert(isPositiveAndBelow(c.second-1, l.numItems) || c.second == IgnoreFlag);
-				l.mask(m, c.second);
+				l.mask(m, c.second, true);
 				break;
 			}
 		}
@@ -1857,13 +2421,23 @@ Array<WeakReference<ComplexGroupManager::SampleType>> ComplexGroupManager::getUn
 	return list;
 }
 
+int ComplexGroupManager::getNumGroupsInLayer(uint8 layerIndex) const
+{
+	if (isPositiveAndBelow(layerIndex, layers.size()))
+		return layers[layerIndex]->numItems;
+
+	return 0;
+}
+
+
+
 int ComplexGroupManager::getNumFiltered(uint8 layerIndex, uint8 value, bool includeIgnoredSamples) const
 {
 	// Make this faster at some point...
 	return getFilteredSelection(layerIndex, value, includeIgnoredSamples).size();
 }
 
-void ComplexGroupManager::preHiseEventCallback(const HiseEvent& e)
+void ComplexGroupManager::preHiseEventCallback(HiseEvent& e)
 {
 	if(e.isAllNotesOff())
 		resetPlayingState();
@@ -1924,7 +2498,7 @@ void ComplexGroupManager::onDataChange(const ValueTree& c, bool wasAdded)
 			flags |= Flags::FlagPurgable;
 
 		if(Helpers::canBeIgnored(flags) && Helpers::shouldBeCached(flags))
-			throw Result::fail("Can't ignore & cache groups");
+			throw Result::fail("Can't bypass & cache groups");
 
 		for(auto l: layers)
 		{
@@ -1945,7 +2519,7 @@ void ComplexGroupManager::onDataChange(const ValueTree& c, bool wasAdded)
 		}
 		else if (lt == LogicType::Keyswitch)
 		{
-			layers.add(new KeyswitchLayer(c, flags));
+			layers.add(new KeyswitchLayer(*this, c, flags));
 		}
 		else if (lt == LogicType::TableFade)
 		{
@@ -1956,7 +2530,54 @@ void ComplexGroupManager::onDataChange(const ValueTree& c, bool wasAdded)
 		{
 			flags |= Flags::FlagProcessModulation;
 			flags |= Flags::FlagProcessHiseEvent;
+
+			Helpers::initProperties(c, nullptr, {
+				{ groupIds::fadeTime, var(50.0) },
+				{ groupIds::slotIndex, var(1) },
+				{ groupIds::fader, XFadeLayer::getFaderNames()[0] },
+				{ groupIds::sourceType, XFadeLayer::getSourceNames()[1] }
+			});
+
 			layers.add(new XFadeLayer(*this, c, flags));
+		}
+		else if (lt == LogicType::ReleaseTrigger)
+		{
+			Helpers::initProperties(c, nullptr, {
+				{ groupIds::matchGain, var(false) },
+				{ groupIds::fadeTime, var(50.0)},
+				{ groupIds::accuracy, var(1.0) }
+			});
+
+			layers.add(new ReleaseTriggerLayer(c, flags, sampler.get()));
+		}
+		else if (lt == LogicType::Choke)
+		{
+			flags |= Flags::FlagProcessHiseEvent;
+			flags |= Flags::FlagProcessPostSounds;
+
+			Helpers::initProperties(c, nullptr, {
+				{ groupIds::fadeTime, var(50.0)}
+				});
+
+			layers.add(new ChokeLayer(c, tokens, flags, sampler));
+		}
+		else if (lt == LogicType::Custom)
+		{
+			Helpers::initProperties(c, nullptr, {
+				{ groupIds::gainMod, var(false) },
+				{ groupIds::fadeTime, var(50.0) },
+				{ groupIds::groupStart, var(false) }
+				});
+
+			auto lIndex = layers.size();
+
+			if(c[groupIds::gainMod])
+				flags |= FlagProcessModulation;
+
+			if(c[groupIds::groupStart])
+				flags |= FlagProcessPostSounds;
+
+			layers.add(new CustomLayer(c, *this, id, lt, tokens, flags));
 		}
 		else
 		{
@@ -2022,7 +2643,7 @@ std::pair<int, int> ComplexGroupManager::getNumUnassignedAndIgnored(uint8 layerI
 
 void ComplexGroupManager::samplePropertyWasChanged(ModulatorSamplerSound* s, const Identifier& id, const var& newValue)
 {
-	if(id == SampleIds::RRGroup)
+	if(id == SampleIds::RRGroup || id == SampleIds::LoKey || id == SampleIds::HiKey)
 		updater.triggerAsyncUpdate();
 }
 
@@ -2056,6 +2677,8 @@ ComplexGroupManager::Layer::Layer(const ValueTree& v, const Identifier& g, Logic
 {
 	if(lt == LogicType::TableFade || lt == LogicType::XFade)
 		propertyFlags |= FlagXFade;
+
+	idListener.setCallback(data, groupIds::id, valuetree::AsyncMode::Synchronously, VT_BIND_PROPERTY_LISTENER(onIdChange));
 }
 
 uint8 ComplexGroupManager::Layer::getUnmaskedValue(Bitmask m) const
@@ -2087,12 +2710,12 @@ float ComplexGroupManager::Layer::getXFadeValue(SampleType* t) const
 
 void ComplexGroupManager::Layer::setValueFilter(ValueWithFilter& v, uint8 value) const
 {
-	mask(v.value, value);
+	mask(v.value, value, false);
 	v.filterMask |= filter;
 	v.ignoreMask = ignoreFlag;
 }
 
-void ComplexGroupManager::Layer::mask(Bitmask& m, uint8 value) const
+void ComplexGroupManager::Layer::mask(Bitmask& m, uint8 value, bool clearIgnoreFlag) const
 {
 	const Bitmask inverted = ~filter;
 
@@ -2105,6 +2728,11 @@ void ComplexGroupManager::Layer::mask(Bitmask& m, uint8 value) const
 	}
 	else
 	{
+		if(clearIgnoreFlag && ((m & ignoreFlag) != 0))
+		{
+			m &= ~ignoreFlag;
+		}
+
 		jassert(value != 0);
 		Bitmask shifted = (Bitmask)value << bitShift;
 		m |= shifted;
@@ -2117,6 +2745,51 @@ void ComplexGroupManager::Layer::clearBits(Bitmask& m) const
 	const Bitmask invertedIgnore = ~ignoreFlag;
 	m &= inverted;
 	m &= invertedIgnore;
+}
+
+void ComplexGroupManager::setVoiceStartCallback(uint8 layerIndex, VoiceStartCallback* vc)
+{
+	for (auto& v : voiceStartCallbacks)
+	{
+		if (v.get() == nullptr)
+			v = nullptr;
+	}
+
+	if (isPositiveAndBelow(layerIndex, voiceStartCallbacks.size()))
+	{
+		voiceStartCallbacks[layerIndex] = vc;
+
+		if (isPositiveAndBelow(layerIndex, layers.size()))
+		{
+			auto l = layers[layerIndex];
+
+			if (dynamic_cast<CustomLayer*>(l) != nullptr && !postProcessors.contains(l))
+			{
+				l->propertyFlags |= Flags::FlagProcessPostSounds;
+				postProcessors.insert(l);
+			}
+		}
+	}
+}
+
+void ComplexGroupManager::setGroupVolume(uint8 layerIndex, uint8 value, float targetGain)
+{
+	if (auto l = dynamic_cast<CustomLayer*>(layers[layerIndex]))
+	{
+		if(isPositiveAndBelow((value-1), l->layerGains.size()))
+			l->layerGains[value-1] = targetGain;
+	}
+}
+
+float ComplexGroupManager::getGroupVolume(uint8 layerIndex, uint8 value) const
+{
+	if (auto l = dynamic_cast<CustomLayer*>(layers[layerIndex]))
+	{
+		if (isPositiveAndBelow((value - 1), l->layerGains.size()))
+			return l->layerGains[value - 1];
+	}
+
+	return 0.0f;
 }
 
 void ComplexGroupManager::rebuildGroups()
@@ -2213,4 +2886,64 @@ void ComplexGroupManager::refreshCache()
 
 	resetPlayingState();
 }
+
+ComplexGroupManager::ScopedMigrator::ScopedMigrator(ComplexGroupManager& gm_, SampleType* s_) :
+	gm(gm_),
+	s(s_)
+{
+	auto bm = s->getBitmask();
+
+	for (int i = 0; i < gm.getNumLayers(); i++)
+	{
+		auto id = gm.getLayerId(i);
+		auto v = gm.getLayerValue(bm, i);
+		oldValues[id] = v;
+	}
+}
+
+ComplexGroupManager::ScopedMigrator::~ScopedMigrator()
+{
+	Bitmask bm = 0;
+
+	for (const auto& x : oldValues)
+	{
+		auto idx = gm.getLayerIndex(x.first);
+
+		if (isPositiveAndBelow(idx, gm.getNumLayers()))
+		{
+			Layer& l = *gm.layers[idx];
+
+			if(x.second == IgnoreFlag)
+			{
+				if(Helpers::canBeIgnored(l.propertyFlags))
+				{
+					bm |= l.ignoreFlag;
+				}
+			}
+			else
+			{
+				if(auto v = jlimit<uint8>(0, l.numItems, x.second))
+				{
+					l.mask(bm, v, true);
+				}
+			}
+		}
+	}
+
+	s->setBitmask(bm);
+}
+
+ComplexGroupManager::ScopedMigrator::Collection::Collection(ComplexGroupManager& gm, bool active)
+{
+	if(active)
+	{
+		ModulatorSampler::SoundIterator iter(gm.sampler);
+
+		while (auto s = iter.getNextSound())
+		{
+			migrators.add(new ScopedMigrator(gm, s));
+		}
+	}
+}
+
 } // namespace hise

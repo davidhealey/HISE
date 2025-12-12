@@ -111,6 +111,7 @@ DECLARE_ID(Expression);
 DECLARE_ID(Callback);
 DECLARE_ID(undefined);
 DECLARE_ID(FillMode);
+DECLARE_ID(OutsideSignalPath);
 DECLARE_ID(AddToSignal);
 DECLARE_ID(UseFreqDomain);
 DECLARE_ID(IsVertical);
@@ -133,6 +134,7 @@ DECLARE_ID(Model);
 DECLARE_ID(HpfFreq);
 DECLARE_ID(BlockSize);
 DECLARE_ID(IsPolyphonic);
+DECLARE_ID(HasFixedParameters);
 DECLARE_ID(UseRingBuffer);
 DECLARE_ID(IsProcessingHiseEvent);
 DECLARE_ID(IsControlNode);
@@ -158,6 +160,7 @@ DECLARE_ID(TextToValueConverter);
 DECLARE_ID(ModulationBlockSize);
 DECLARE_ID(ExternalModulation);
 DECLARE_ID(ModColour);
+DECLARE_ID(ReceiveTargets);
 
 struct Helpers
 {
@@ -249,6 +252,22 @@ enum EditType
 
 #undef DECLARE_ID
 
+namespace UIValues
+{
+	static constexpr int HeaderHeight = 24;
+	static constexpr int ParameterHeight = 48 + 18 + 20;
+	static constexpr int MacroDragHeight = 20;
+	static constexpr int NodeWidth = 128;
+	static constexpr int NodeHeight = 48;
+	static constexpr int NodeMargin = 10;
+	static constexpr int ZoomOffset = 60;
+	static constexpr int DuplicateSize = 128;
+	static constexpr int PinHeight = 24;
+	static constexpr int TabHeight = 20;
+	static constexpr int GroupHeight = 20;
+	static constexpr int ParameterWidth = 100;
+}
+
 }
 
 namespace snex
@@ -266,6 +285,7 @@ struct CustomNodeProperties
 		bool initialised = false;
 		NamedValueSet properties;
 		NamedValueSet unscaledParameterIds;
+		NamedValueSet modOutputs;
 	};
 
 	template <typename T> static void setPropertyForObject(T& obj, const Identifier& id)
@@ -273,7 +293,33 @@ struct CustomNodeProperties
 		addNodeIdManually(T::getStaticId(), id);
 	}
 
-	
+	static void addModOutput(const Identifier& id, const StringArray& sa)
+	{
+		Array<var> list;
+
+		for(const auto& s: sa)
+			list.add(s);
+
+		CustomNodeProperties d;
+		d.data->modOutputs.set(id, var(list));
+	}
+
+	static StringArray getModOutputs(const Identifier& id)
+	{
+		CustomNodeProperties d;
+		
+		const auto& l = d.data->modOutputs[id];
+
+		StringArray sa;
+
+		if(auto ar = l.getArray())
+		{
+			for(auto& v: *ar)
+				sa.add(v.toString());
+		}
+		
+		return sa;
+	}
 
 	static void setInitialised(bool allInitialised)
 	{
@@ -384,6 +430,47 @@ struct CustomNodeProperties
 		return false;
 	}
 
+	static void writeAllProperties(String nodeId, DynamicObject::Ptr obj)
+	{
+		CustomNodeProperties d;
+
+		for(const auto& nv: d.data->properties)
+		{
+			if(auto l = nv.value.getArray())
+			{
+				if(l->contains(nodeId))
+					obj->setProperty(nv.name, true);
+			}
+		}
+
+		if (d.data->unscaledParameterIds[nodeId].isArray())
+			obj->setProperty(PropertyIds::UseUnnormalisedModulation, d.data->unscaledParameterIds[nodeId].clone());
+	}
+
+	static void writeAllProperties(ValueTree& nodeTree, DynamicObject::Ptr obj)
+	{
+		auto propId = getIdFromValueTree(nodeTree);
+
+		CustomNodeProperties d;
+
+		auto sw = nodeTree.getChildWithName(PropertyIds::SwitchTargets);
+
+		if(sw.isValid())
+		{
+			auto outputs = getModOutputs(propId);
+
+			if(sw.getNumChildren() == outputs.size())
+			{
+				for(int i = 0; i < outputs.size(); i++)
+				{
+					sw.getChild(i).setProperty(PropertyIds::ID, outputs[i], nullptr);
+				}
+			}
+		}
+
+		writeAllProperties(propId, obj);
+	}
+
 	static String getIdFromValueTree(const ValueTree& nodeTree)
 	{
 		auto p = nodeTree[PropertyIds::FactoryPath].toString();
@@ -473,5 +560,462 @@ struct CustomNodeProperties
 
 }
 }
+
+#if HISE_INCLUDE_SCRIPTNODE_DATABASE
+namespace scriptnode {
+using namespace juce;
+using namespace hise;
+
+struct NodeDatabase
+{
+	static constexpr char ItemMarker = 89;
+	static constexpr char IDMarker = 90;
+	static constexpr char DescriptionMarker = 95;
+	static constexpr char TreeMarker = 92;
+	static constexpr char PropertyMarker = 91;
+	static constexpr char ScreenshotMarker = 93;
+
+	struct Item
+	{
+		Item(const ValueTree& v) :
+			nodeTree(v.createCopy()),
+			properties(new DynamicObject())
+		{
+
+		}
+
+		Item() :
+			nodeTree(ValueTree()),
+			properties(nullptr)
+		{};
+
+		operator bool() const { return nodeTree.isValid(); }
+
+		Item(InputStream& is)
+		{
+			auto ok = is.readByte() == DescriptionMarker;
+
+			if(ok)
+				description = is.readString();
+
+			ok = is.readByte() == PropertyMarker;
+
+			if (ok)
+			{
+				auto obj = var::readFromStream(is);
+				properties = obj.getDynamicObject();
+			}
+
+			ok = is.readByte() == TreeMarker;
+
+			if (ok)
+			{
+				nodeTree = ValueTree::readFromStream(is);
+			}
+
+		}
+
+		void writeToStream(OutputStream& os) const
+		{
+			os.writeByte(DescriptionMarker);
+			os.writeString(description);
+			os.writeByte(PropertyMarker);
+
+			if(properties != nullptr)
+			{
+				var obj(properties.get());
+				obj.writeToStream(os);
+			}
+			else
+			{
+				var obj(new DynamicObject());
+				obj.writeToStream(os);
+			}
+
+			os.writeByte(TreeMarker);
+			nodeTree.writeToStream(os);
+		}
+
+		ValueTree nodeTree;
+		DynamicObject::Ptr properties;
+		String description;
+	};
+
+	NodeDatabase()
+	{
+	}
+
+	void writeToStream(OutputStream& os) const
+	{
+		for (const auto& i : data->items)
+		{
+			auto id = i.first;
+			os.writeByte(IDMarker);
+			os.writeString(id);
+			os.writeByte(ItemMarker);
+			i.second.writeToStream(os);
+		}
+	}
+
+	void addItem(const String& path, Item&& item)
+	{
+		data->items[path] = std::move(item);
+	}
+
+	StringArray getFactoryIds(bool getSignalNodes)
+	{
+		if(auto pd = data->getProjectData())
+		{
+			StringArray combined;
+
+			combined.addArray(getSignalNodes ? data->signalFactoryIds : data->cableFactoryIds);
+			combined.addArray(getSignalNodes ? pd->signalFactoryIds : pd->cableFactoryIds);
+			return combined;
+		}
+		else
+		{
+			return getSignalNodes ? data->signalFactoryIds : data->cableFactoryIds;
+		}
+	}
+
+	StringArray getNodeIds(bool getSignalNodes)
+	{
+		if (auto pd = data->getProjectData())
+		{
+			StringArray combined;
+
+			combined.addArray(getSignalNodes ? data->signalNodeIds : data->cableNodeIds);
+			combined.addArray(getSignalNodes ? pd->signalNodeIds : pd->cableNodeIds);
+			return combined;
+		}
+		else
+		{
+			return getSignalNodes ? data->signalNodeIds : data->cableFactoryIds;
+		}
+	}
+
+	std::map<String, String> getDescriptions()
+	{
+		if(auto pd = data->getProjectData())
+		{
+			auto m1 = data->descriptions;
+			auto m2 = pd->descriptions;
+
+			std::map<String, String> combined;
+			combined.merge(m1);
+			combined.merge(m2);
+			return combined;
+		}
+		else
+			return data->descriptions;
+	}
+
+	ValueTree getValueTree(const String& factoryPath) const
+	{
+		if(data->items.find(factoryPath) != data->items.end())
+			return data->items.at(factoryPath).nodeTree.createCopy();
+
+		if (auto pd = data->getProjectData())
+		{
+			if (pd != nullptr && pd->items.find(factoryPath) != pd->items.end())
+				return pd->items.at(factoryPath).nodeTree.createCopy();
+		}
+
+		return ValueTree();
+	}
+
+	DynamicObject::Ptr getProperties(const String& path)
+	{
+		if (data->items.find(path) != data->items.end())
+			return data->items.at(path).properties;
+
+		if(auto pd = data->getProjectData())
+		{
+			if (pd->items.find(path) != pd->items.end())
+				return pd->items.at(path).properties;
+		}
+		
+		return nullptr;
+	}
+
+	void processValueTrees(const std::function<void(ValueTree)>& f)
+	{
+		for(auto& d: data->items)
+		{
+			f(d.second.nodeTree);
+		}
+
+		if(auto pd = data->getProjectData())
+		{
+			for(auto& d: pd->items)
+				f(d.second.nodeTree);
+		}
+	}
+
+	void clear()
+	{
+		data->clear();
+	}
+
+	size_t getNumBytesUncompressed() const { return data->numBytesUncompressed; }
+
+	void setProjectDataFolder(const File& projectDataFolder)
+	{
+		jassert(projectDataFolder.isDirectory());
+		jassert(projectDataFolder.getFileName() == "ThirdParty");
+
+		data->projectData = new ProjectData(projectDataFolder);
+	}
+
+	void writeProjectData(std::map<String, Item>& projectItems, const File& targetFile)
+	{
+		ProjectData::writeProjectData(projectItems, targetFile);
+	}
+
+private:
+
+	struct Common
+	{
+		virtual ~Common() = default;
+
+		void initNodeIdLists()
+		{
+			signalNodeIds.ensureStorageAllocated(items.size());
+			cableNodeIds.ensureStorageAllocated(items.size());
+
+			for (const auto& i : items)
+			{
+				if (i.second.properties->getProperty(PropertyIds::OutsideSignalPath))
+				{
+					cableNodeIds.add(i.first);
+					cableFactoryIds.addIfNotAlreadyThere(i.first.upToFirstOccurrenceOf(".", false, false));
+				}
+
+				else
+				{
+					signalNodeIds.add(i.first);
+					signalFactoryIds.addIfNotAlreadyThere(i.first.upToFirstOccurrenceOf(".", false, false));
+				}
+
+				descriptions[i.first] = i.second.description;
+			}
+
+			idsInitialised = true;
+		}
+
+		virtual void clear()
+		{
+			items.clear();
+
+			signalFactoryIds.clear();
+			signalNodeIds.clear();
+
+			cableFactoryIds.clear();
+			cableNodeIds.clear();
+
+			descriptions.clear();
+
+			idsInitialised = false;
+		}
+
+		std::map<String, Item> items;
+
+		bool idsInitialised = false;
+		StringArray signalNodeIds, cableNodeIds, signalFactoryIds, cableFactoryIds;
+
+		std::map<String, String> descriptions;
+	};
+
+	struct ProjectData: public Common
+	{
+		ProjectData(const File& projectDataFolder)
+		{
+			auto projectDataFile = projectDataFolder.getChildFile("project_database.dat");
+
+			MemoryBlock compressed;
+			
+			if(projectDataFile.loadFileAsData(compressed))
+			{
+				MemoryBlock mb;
+				zstd::ZDefaultCompressor comp;
+				comp.expand(compressed, mb);
+
+				MemoryInputStream mis(mb, false);
+
+				while(!mis.isExhausted())
+				{
+					auto ok = mis.readByte() == IDMarker;
+
+					if(!ok)
+					{
+						jassertfalse;
+						break;
+					}
+
+					auto id = mis.readString();
+
+					ok = mis.readByte() == ItemMarker;
+
+					if(!ok)
+					{
+						jassertfalse;
+						break;
+					}
+					
+					auto ni = Item(mis);
+
+					if(ni)
+						items[id] = std::move(ni);
+				}
+			}
+
+			initNodeIdLists();
+		}
+
+		static ValueTree processProjectValueTree(const String& id, const ValueTree& v)
+		{
+			jassert(v.getType() == PropertyIds::Network);
+
+			auto isCompiler = v[PropertyIds::AllowCompilation];
+			auto numChannels = v.getProperty(PropertyIds::CompileChannelAmount, 2);
+			
+			auto root = v.getChildWithName(PropertyIds::Node).createCopy();
+
+			root.setProperty(PropertyIds::CompileChannelAmount, numChannels, nullptr);
+
+			if(isCompiler)
+			{
+				root.setProperty(PropertyIds::FactoryPath, id, nullptr);
+				
+				auto nodes = root.getChildWithName(PropertyIds::Nodes);
+				root.removeChild(nodes, nullptr);
+
+				auto parameters = root.getChildWithName(PropertyIds::Parameters);
+
+				valuetree::Helpers::forEach(parameters, [](ValueTree& con)
+				{
+					if(con.getType() == PropertyIds::Connections)
+						con.removeAllChildren(nullptr);
+
+					return false;
+				});
+			}
+			else
+			{
+				root.setProperty(PropertyIds::Locked, true, nullptr);
+			}
+			
+			return root;
+		}
+
+		static void writeProjectData(std::map<String, Item>& projectItems, const File& targetFolder)
+		{
+			jassert(targetFolder.isDirectory());
+			auto targetFile = targetFolder.getChildFile("project_database.dat");
+
+			MemoryOutputStream mos;
+
+			for (auto& pi : projectItems)
+			{
+				mos.writeByte(IDMarker);
+
+				String pid = "project.";
+				pid << pi.first;
+
+				mos.writeString(pid);
+				mos.writeByte(ItemMarker);
+				pi.second.nodeTree = processProjectValueTree(pid, pi.second.nodeTree);
+				pi.second.writeToStream(mos);
+			}
+
+			mos.flush();
+
+			MemoryBlock compressed;
+
+			zstd::ZDefaultCompressor comp;
+
+			comp.compress(mos.getMemoryBlock(), compressed);
+
+			targetFile.deleteFile();
+			targetFile.create();
+			FileOutputStream pd(targetFile);
+
+			MemoryInputStream mis(compressed, false);
+			pd.writeFromInputStream(mis, compressed.getSize());
+			pd.flush();
+		}
+	};
+
+	struct Data: public Common
+	{
+		Data()
+		{
+			MemoryBlock mb(ScriptnodeDataBase::scriptnode_database_dat, ScriptnodeDataBase::scriptnode_database_datSize);
+			MemoryBlock uncompressed;
+
+			zstd::ZDefaultCompressor comp;
+			comp.expand(mb, uncompressed);
+
+			numBytesUncompressed = uncompressed.getSize();
+
+			MemoryInputStream is(uncompressed, false);
+
+			// we need to create at least one dynamic object before we can read vars from a stream...
+			DynamicObject::Ptr empty = new DynamicObject();
+
+			while (!is.isExhausted())
+			{
+				auto ok = is.readByte() == IDMarker;
+
+				if (!ok)
+				{
+					jassertfalse;
+					break;
+				}
+
+				auto path = is.readString();
+
+				ok = is.readByte() == ItemMarker;
+
+				if (!ok)
+				{
+					jassertfalse;
+					break;
+				}
+
+				Item i(is);
+
+				if (i)
+					items[path] = std::move(i);
+			}
+
+			initNodeIdLists();
+		}
+
+		void clear() override
+		{
+			Common::clear();
+			numBytesUncompressed = 0;
+			projectData = nullptr;
+		}
+
+		ProjectData* getProjectData() { return projectData.get(); }
+		const ProjectData* getProjectData() const { return projectData.get(); }
+
+		size_t numBytesUncompressed = 0;
+
+		ScopedPointer<ProjectData> projectData;
+	};
+
+	SharedResourcePointer<Data> data;
+
+	
+
+};
+
+
+
+}
+#endif
 
 

@@ -170,7 +170,7 @@ String core::SnexOscillator::getEmptyText(const Identifier& id) const
 	return code;
 }
 
-void core::SnexOscillator::initialise(NodeBase* n)
+void core::SnexOscillator::initialise(ObjectWithValueTree* n)
 {
 	SnexSource::initialise(n);
 }
@@ -229,7 +229,7 @@ core::NewSnexOscillatorDisplay::NewSnexOscillatorDisplay(SnexOscillator* osc, Po
 	display()
 {
 	display.setComplexDataUIBase(osc->getMainDisplayBuffer().get());
-	display.setSpecialLookAndFeel(new data::ui::pimpl::complex_ui_laf(), true);
+	display.setSpecialLookAndFeel(new scriptnode::complex_ui_laf(), true);
 
 	addAndMakeVisible(display);
 	addAndMakeVisible(menuBar);

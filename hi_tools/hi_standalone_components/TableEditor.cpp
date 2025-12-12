@@ -80,10 +80,43 @@ TableEditor::~TableEditor()
 
 void TableEditor::refreshGraph()
 {	
-	if(editedTable.get() != nullptr) editedTable->createPath(dragPath, getTableLookAndFeel()->shouldClosePath());
+	auto closePath = getTableLookAndFeel()->shouldClosePath() && dragProperties.closePath;
+
+	if(editedTable.get() != nullptr) 
+		editedTable->createPath(dragPath, closePath, dragProperties.closePath);
 
 	auto a = getTableArea();
 	dragPath.scaleToFit(a.getX(), a.getY(), a.getWidth(), a.getHeight(), false);
+
+	mid_points.clear();
+
+	if (dragProperties.midPointSize > 0)
+	{
+		auto width = (float)a.getWidth();
+		float w = (float)dragProperties.midPointSize;
+
+		for (int i = 0; i < drag_points.size() - 1; i++)
+		{
+			auto tp = drag_points[i]->getGraphPoint();
+			auto np = drag_points[i + 1]->getGraphPoint();
+
+			auto dist = roundToInt((np.x - tp.x) * width);
+
+			if(dist < dragProperties.midPointSize)
+				continue;
+
+			auto midX = a.getX() + (tp.x + 0.5f * (np.x - tp.x)) * width;
+			auto y = flex_ahdsr_base::Helpers::getYAt(dragPath, midX);
+
+			midX -= w * 0.5f;
+			y -= w * 0.5f;
+
+			Rectangle<float> a(midX, y, w, w);
+
+			mid_points.push_back({ i, a });
+		}
+	}
+
 	needsRepaint = true;
 	repaint();
 }
@@ -113,52 +146,52 @@ int TableEditor::snapXValueToGrid(int x) const
 
 void TableEditor::mouseWheelMove(const MouseEvent &e, const MouseWheelDetails &wheel)
 {
-#if HISE_USE_MOUSE_WHEEL_FOR_TABLE_CURVE
-
-	MouseEvent parentEvent = e.getEventRelativeTo(this);
-	int x = parentEvent.getMouseDownPosition().getX();
-	int y = parentEvent.getMouseDownPosition().getY();
-
-	DragPoint *dp = getNextPointFor(x);
-
-	int thisIndex = drag_points.indexOf(dp);
-
-	int prevIndex = thisIndex - 1;
-
-	DragPoint* pp = drag_points[prevIndex];
-
-	bool useEvent = dp != nullptr;
-
-	useEvent &= e.mods == scrollModifiers;
-
-	if(useEvent)
+	if(dragProperties.useMouseWheelForCurve)
 	{
-		if (getUndoManager(thisIndex != lastEditedPointIndex))
+		MouseEvent parentEvent = e.getEventRelativeTo(this);
+		int x = parentEvent.getMouseDownPosition().getX();
+		int y = parentEvent.getMouseDownPosition().getY();
+
+		DragPoint* dp = getNextPointFor(x);
+
+		int thisIndex = drag_points.indexOf(dp);
+
+		int prevIndex = thisIndex - 1;
+
+		DragPoint* pp = drag_points[prevIndex];
+
+		bool useEvent = dp != nullptr;
+
+		useEvent &= e.mods == scrollModifiers;
+
+		if (useEvent)
 		{
-			lastEditedPointIndex = thisIndex;
-		}
-		
-		updateCurve(x, y, wheel.deltaY, true);
-
-		if (pp != nullptr)
-		{
-			auto curveValue = dp->getCurve();
-
-			auto ar = Rectangle<int>(pp->getPos(), dp->getPos());
-			auto middle = ar.getCentre();
-
-			ScopedLock sl(editListeners.getLock());
-
-			for (auto l : editListeners)
+			if (getUndoManager(thisIndex != lastEditedPointIndex))
 			{
-				if (l.get() != nullptr)
-					l->curveChanged(middle, curveValue);
+				lastEditedPointIndex = thisIndex;
+			}
+
+			updateCurve(x, y, wheel.deltaY, true);
+
+			if (pp != nullptr)
+			{
+				auto curveValue = dp->getCurve();
+
+				auto ar = Rectangle<int>(pp->getPos(), dp->getPos());
+				auto middle = ar.getCentre();
+
+				ScopedLock sl(editListeners.getLock());
+
+				for (auto l : editListeners)
+				{
+					if (l.get() != nullptr)
+						l->curveChanged(middle, curveValue);
+				}
 			}
 		}
+		else 
+			getParentComponent()->mouseWheelMove(e, wheel);
 	}
-
-	else getParentComponent()->mouseWheelMove(e, wheel);
-#endif
 };
 
 
@@ -214,21 +247,20 @@ void TableEditor::addDragPoint(int x, int y, float curve, bool isStart/*=false*/
 	}
 	else
 	{
-		DragPoint *dp = new DragPoint(isStart, isEnd);
+		DragPoint *dp = new DragPoint(*this, isStart, isEnd);
 
 		dp->setCurve(curve);
 
-		dp->setTableEditorSize(getWidth(), getHeight());
-		dp->setPos(Point<int>(x, y));
+		dp->setTableEditorSize(getTableArea());
+		dp->setPosPixel(Point<int>(x, y));
 		addAndMakeVisible(dp);
 
 		DragPointComparator comparator;
 
 		drag_points.addSorted(comparator, dp);
 
-		
-
-		if (!(isEnd || isStart)) currently_dragged_point = nullptr; // fix #59
+		if (!(isEnd || isStart)) 
+			currently_dragged_point = nullptr; // fix #59
 	}
 }
 
@@ -252,6 +284,8 @@ void TableEditor::createDragPoints()
         
 		addNormalizedDragPoint(list.getLast(), false, true);
 	}
+
+	
 };
 
 void TableEditor::setDisplayedIndex(float newIndex)
@@ -289,9 +323,16 @@ void TableEditor::paint (Graphics& g)
 	{
 		l->drawTableBackground(g, *this, getTableArea(), this->ruler->getValue());
 		l->drawTablePath(g, *this, dragPath, getTableArea(), lineThickness);
-	}
-		
 
+		for(const auto& mp: mid_points)
+		{
+			auto dragged = mp.first == draggedMidPointIndex;
+			auto hovered = mp.first == hoveredMidPointIndex;
+
+			l->drawTableMidPoint(g, *this, mp.second, hovered, dragged);
+		}
+	}
+	
     if (currently_dragged_point != nullptr)
     {
 		auto a = getTableArea();
@@ -398,6 +439,21 @@ void TableEditor::mouseDown(const MouseEvent &e)
 	int x = parentEvent.getMouseDownPosition().getX();
 	int y = parentEvent.getMouseDownPosition().getY();
 
+	auto midPointIndex = getDraggedMidPointIndex(parentEvent);
+
+	if(midPointIndex != -1)
+	{
+		lastRightDragValue = (float)parentEvent.getPosition().getY();
+		draggedMidPointIndex = midPointIndex;
+		needsRepaint = true;
+		repaint();
+		return;
+	}
+	else
+	{
+		draggedMidPointIndex = -1;
+	}
+
 	x = snapXValueToGrid(x);
 
 	DragPoint *dp = this->getPointUnder(x, y);
@@ -485,17 +541,30 @@ void TableEditor::mouseDoubleClick(const MouseEvent& e)
 	int x = parentEvent.getMouseDownPosition().getX();
 	int y = parentEvent.getMouseDownPosition().getY();
 
-	Component *clickedComponent = this->getComponentAt(x, y);
+	auto midPointIndex = getDraggedMidPointIndex(parentEvent);
 
-	if (clickedComponent != this)
+	if(midPointIndex != -1)
 	{
-		DragPoint *dp = this->getPointUnder(x, y);
-		if (!dp->isStartOrEnd())
+		// reset to middle
+		if(isPositiveAndBelow(midPointIndex + 1, drag_points.size()))
 		{
+			drag_points[midPointIndex +1]->setCurve(0.5f);
+		}
+	}
+	else
+	{
+		Component* clickedComponent = this->getComponentAt(x, y);
 
-			drag_points.remove(drag_points.indexOf(dp));
+		if (clickedComponent != this)
+		{
+			DragPoint* dp = this->getPointUnder(x, y);
+			if (!dp->isStartOrEnd())
+			{
 
-			updateTable(true);
+				drag_points.remove(drag_points.indexOf(dp));
+
+				updateTable(true);
+			}
 		}
 	}
 	
@@ -517,6 +586,7 @@ void TableEditor::mouseUp(const MouseEvent& e)
 
 	closeTouchOverlay();
 
+	draggedMidPointIndex = -1;
 	currently_dragged_point = nullptr;
 	updateTable(true);
 
@@ -546,6 +616,25 @@ void TableEditor::mouseDrag(const MouseEvent &e)
 	int x = parentEvent.getDistanceFromDragStartX() + parentEvent.getMouseDownPosition().getX();
 	int y = parentEvent.getDistanceFromDragStartY() + parentEvent.getMouseDownPosition().getY();
 
+	if (draggedMidPointIndex != -1)
+	{
+		auto x = parentEvent.getMouseDownX();
+		auto thisPos = (float)parentEvent.getPosition().getY();
+		auto delta = thisPos - lastRightDragValue;
+
+		lastRightDragValue = thisPos;
+
+		auto y1 = drag_points[draggedMidPointIndex]->getGraphPoint().y;
+		auto y2 = drag_points[draggedMidPointIndex+1]->getGraphPoint().y;
+
+		delta /= hmath::abs(y2 - y1);
+
+		delta /= (float)getHeight();
+		delta *= -6.0f;
+		updateCurve(x, y, delta, true);
+		return;
+	}
+
 	auto a = getTableArea();
 
 	if (currently_dragged_point == nullptr)
@@ -567,6 +656,9 @@ void TableEditor::mouseDrag(const MouseEvent &e)
 
 		return;
 	}
+
+	if(!currently_dragged_point->canBeModified(dragProperties))
+		return;
 
 	if (parentEvent.mods.isShiftDown()) 
 		x = parentEvent.getMouseDownPosition().getX();
@@ -590,10 +682,10 @@ void TableEditor::mouseDrag(const MouseEvent &e)
 	}
 
 	
-	y = jmin(y, (int)a.getHeight());
+	y = jlimit<int>((int)a.getY(), (int)a.getBottom(), y);
 
-	
-	y = jmax(y, 0);
+	//y = jmin(y, (int)a.getHeight());
+	//y = jmax(y, 0);
 
 	x = snapXValueToGrid(x);
 
@@ -628,6 +720,10 @@ void TableEditor::mouseDrag(const MouseEvent &e)
 
 void TableEditor::mouseMove(const MouseEvent& e)
 {
+	hoveredMidPointIndex = getDraggedMidPointIndex(e);
+
+	setMouseCursor(hoveredMidPointIndex != -1 ? MouseCursor::DraggingHandCursor : MouseCursor::NormalCursor);
+
 	if (e.eventComponent != this)
 	{
 		pointAreaBetweenMouse = {};
@@ -697,26 +793,16 @@ void TableEditor::updateTouchOverlayPosition()
 }
 
 //==============================================================================
-TableEditor::DragPoint::DragPoint(bool isStart_, bool isEnd_):
+TableEditor::DragPoint::DragPoint(TableEditor& parent, bool isStart_, bool isEnd_):
 	normalizedGraphPoint(-1, -1, 0.5),
 	isStart(isStart_),
 	isEnd(isEnd_),
 	over(false),
-	dragPlotSize(Rectangle<int>()),
+	dragPlotSize({}),
 	constantValue(-1.0f)
 {
-	if (HiseDeviceSimulator::isMobileDevice())
-	{
-		const int size = isStartOrEnd() ? 50 : 35;
-		setSize(size, size);
-	}
-	else
-	{
-		const int size = isStartOrEnd() ? 20 : 14; 
-		setSize(size, size);
-	}
-    
-	
+	const int size = isStartOrEnd() ? parent.dragProperties.endPointSize : parent.dragProperties.dragPointSize;
+	setSize(size, size);
 }
 
 TableEditor::DragPoint::~DragPoint()
@@ -999,6 +1085,8 @@ void TableEditor::setMouseDragProperties(const var& obj)
 {
 	dragProperties.fromVar(obj);
 
+	setMargin(dragProperties.margin);
+
 	if(dragProperties.numSteps != -1)
 	{
 		snapValues.clear();
@@ -1013,13 +1101,30 @@ void TableEditor::setMouseDragProperties(const var& obj)
 
 			snapValues.add(1.0f);
 		}
-
-		if(dragProperties.fixLeftEdge > -0.5f)
-			drag_points.getFirst()->setConstantValue(jlimit(0.0f, 1.0f, dragProperties.fixLeftEdge));
-
-		if(dragProperties.fixRightEdge > -0.5f)
-			drag_points.getLast()->setConstantValue(jlimit(0.0f, 1.0f, dragProperties.fixRightEdge));
 	}
+
+	auto bothDefined = dragProperties.fixLeftEdge > -0.5f &&
+					   dragProperties.fixRightEdge > -0.5f;
+
+	if (dragProperties.fixLeftEdge > -0.5f)
+	{
+		if(editedTable != nullptr)
+			editedTable->setTablePoint(0, 0.0, dragProperties.fixLeftEdge, 0.5);
+	}
+		
+
+	if (dragProperties.fixRightEdge > -0.5f)
+	{
+		if (editedTable != nullptr)
+		{
+			auto numPoints = editedTable->getNumGraphPoints();
+			auto lastCurve = editedTable->getGraphPoint(numPoints-1).curve;
+			editedTable->setTablePoint(numPoints-1, 1.0, dragProperties.fixRightEdge, lastCurve);
+		}
+	}
+	
+	if(bothDefined && editedTable != nullptr)
+		editedTable->setStartAndEndY(dragProperties.fixLeftEdge, dragProperties.fixRightEdge);
 }
 
 void TableEditor::setDrawTableValueLabel(bool shouldBeDisplayed)
@@ -1042,20 +1147,14 @@ void TableEditor::pasteAction()
 	refreshGraph();
 }
 
-void TableEditor::setReadOnlyEdge(float constantLeftEdge, float constantRightEdge)
-{
-	drag_points.getFirst()->setConstantValue(constantLeftEdge);
-	drag_points.getLast()->setConstantValue(constantRightEdge);
-}
-
 void TableEditor::setMargin(float newMargin)
 {
-	margin = newMargin;
+	dragProperties.margin = newMargin;
 }
 
 Rectangle<float> TableEditor::getTableArea() const
 {
-	return getLocalBounds().toFloat().reduced(margin);
+	return getLocalBounds().toFloat().reduced(dragProperties.margin);
 }
 
 void TableEditor::setUseFlatDesign(bool shouldUseFlatDesign)
@@ -1129,7 +1228,7 @@ void TableEditor::setScrollWheelEnabled(bool shouldBeEnabled)
 
 void TableEditor::paintOverChildren(Graphics& g)
 {
-	CopyPasteTarget::paintOutlineIfSelected(g);
+	
 }
 
 void TableEditor::addEditListener(EditListener* l)
@@ -1172,19 +1271,12 @@ void TableEditor::Ruler::setIndex(float newIndex)
 	}
 }
 
-void TableEditor::DragPoint::setConstantValue(float newConstantValue)
-{
-	jassert(isStartOrEnd());
-
-	constantValue = newConstantValue;
-}
-
 Point<int> TableEditor::DragPoint::getPos() const
 {
 	//jassert( !dragPlotSize.isEmpty() );
 
-	const int x_pos = (int)(normalizedGraphPoint.x * dragPlotSize.getWidth());
-	const int y_pos = (int)((1.0f - normalizedGraphPoint.y) * dragPlotSize.getHeight());
+	const int x_pos = (int)(normalizedGraphPoint.x * dragPlotSize.getWidth() + dragPlotSize.getX());
+	const int y_pos = (int)((1.0f - normalizedGraphPoint.y) * dragPlotSize.getHeight() + dragPlotSize.getY());
 
 	return Point<int>(x_pos,y_pos);
 }
@@ -1194,25 +1286,25 @@ void TableEditor::DragPoint::changePos(Point<int> newPosition)
 	jassert( !dragPlotSize.isEmpty() );
 
 	// Check if the x value can be changed
-	if(! isStartOrEnd()) normalizedGraphPoint.x = (float)newPosition.getX() / (float)dragPlotSize.getWidth();
+	if(! isStartOrEnd()) 
+		normalizedGraphPoint.x = (float)(newPosition.getX() - dragPlotSize.getX()) / (float)dragPlotSize.getWidth();
 
-	// Check if the y value should be changed.
-	if(constantValue == -1.0f) normalizedGraphPoint.y = 1.0f - ((float)newPosition.getY() / (float)dragPlotSize.getHeight());
+	normalizedGraphPoint.y = 1.0f - ((float)(newPosition.getY() - dragPlotSize.getY()) / (float)dragPlotSize.getHeight());
 		
 	this->setCentrePosition(getPos().getX(), getPos().getY());
 }
 
-void TableEditor::DragPoint::setPos(Point<int> newPosition)
+void TableEditor::DragPoint::setPosPixel(Point<int> newPosition)
 {
 	//jassert( !dragPlotSize.isEmpty() );
 
-	normalizedGraphPoint.x = (float)newPosition.getX() / (float)dragPlotSize.getWidth();
-	normalizedGraphPoint.y = 1.0f - ((float)newPosition.getY() / (float)dragPlotSize.getHeight());
+	normalizedGraphPoint.x = (float)(newPosition.getX() - dragPlotSize.getX()) / dragPlotSize.getWidth();
+	normalizedGraphPoint.y = 1.0f - ((float)newPosition.getY() - dragPlotSize.getY()) / dragPlotSize.getHeight();
 
 	this->setCentrePosition(getPos().getX(), getPos().getY());
 }
 
-void TableEditor::DragPoint::setPos(Point<float> normalizedPoint)
+void TableEditor::DragPoint::setPosNormalized(Point<float> normalizedPoint)
 {
 	jassert(!dragPlotSize.isEmpty());
 
@@ -1238,9 +1330,9 @@ float TableEditor::DragPoint::getCurve() const
 	return normalizedGraphPoint.curve;
 }
 
-void TableEditor::DragPoint::setTableEditorSize(int width, int height)
+void TableEditor::DragPoint::setTableEditorSize(Rectangle<float> tableEditorBounds)
 {
-	dragPlotSize = Rectangle<int>(width, height);
+	dragPlotSize = tableEditorBounds;
 }
 
 void TableEditor::DragPoint::mouseEnter(const MouseEvent& mouseEvent)
@@ -1264,6 +1356,16 @@ bool TableEditor::DragPoint::isStartOrEnd() const
 const Table::GraphPoint& TableEditor::DragPoint::getGraphPoint() const
 { return normalizedGraphPoint; }
 
+bool TableEditor::DragPoint::canBeModified(const MouseDragProperties& properties) const
+{
+	if (isStart)
+		return properties.fixLeftEdge < -0.5f;
+	if (isEnd)
+		return properties.fixRightEdge < -0.5f;
+
+	return true;
+}
+
 TableEditor::DragPointComparator::DragPointComparator()
 {}
 
@@ -1274,13 +1376,25 @@ int TableEditor::DragPointComparator::compareElements(DragPoint* dp1, DragPoint*
 	else return 0;
 }
 
+int TableEditor::getDraggedMidPointIndex(const MouseEvent& e) const
+{
+	for (const auto& mp: mid_points)
+	{
+		if (mp.second.contains(e.getPosition().toFloat()))
+			return mp.first;
+	}
+
+	return -1;
+}
+
 TableEditor::DragPoint* TableEditor::getPointUnder(int x, int y)
 {
 	DragPoint *dp = static_cast<DragPoint*>(this->getComponentAt(x, y));
 
 	for (int i = 0; i < drag_points.size(); i++)
 	{
-		if (dp == drag_points[i]) return dp;
+		if (dp == drag_points[i]) 
+			return dp;
 	}
 
 	return nullptr;
@@ -1291,13 +1405,10 @@ TableEditor::DragPoint* TableEditor::getNextPointFor(int x) const
 	for (int i = 0; i < drag_points.size() - 1; i++)
 	{
 		auto dp = drag_points[i];
-
 		auto next = drag_points[i + 1];
 
 		if (x >= dp->getX() && x <= next->getX())
-		{
 			return next;
-		}
 	}
 
 	return nullptr;
@@ -1312,9 +1423,7 @@ TableEditor::DragPoint* TableEditor::getPrevPointFor(int x) const
 		auto next = drag_points[i + 1];
 
 		if (x >= dp->getX() && x <= next->getX())
-		{
 			return dp;
-		}
 	}
 
 	return nullptr;
@@ -1334,7 +1443,8 @@ void TableEditor::updateTable(bool refreshLookUpTable)
 
 	Array<Table::GraphPoint> newPoints;
 
-	for(int i = 0; i < drag_points.size(); i++)	newPoints.add(drag_points[i]->getGraphPoint());
+	for(int i = 0; i < drag_points.size(); i++)	
+		newPoints.add(drag_points[i]->getGraphPoint());
 
 	if(editedTable.get() != nullptr) 
 		editedTable->setGraphPoints(newPoints, drag_points.size(), refreshLookUpTable);
@@ -1412,21 +1522,43 @@ void TableEditor::LookAndFeelMethods::drawTablePoint(Graphics& g, TableEditor& t
 	
 }
 
+void TableEditor::LookAndFeelMethods::drawTableMidPoint(Graphics& g, TableEditor& te, Rectangle<float> midPoint, bool isHover, bool isDragged)
+{
+
+	if (te.useFlatDesign)
+	{
+		g.setColour(te.findColour(TableEditor::ColourIds::lineColour));
+		g.fillEllipse(midPoint.reduced(3.0f));
+	}
+	else
+	{
+		g.setColour(Colours::white.withAlpha(0.3f));
+		g.drawEllipse(midPoint.reduced(3.0f), isHover ? 2.0f : 1.0f);
+		g.setColour(Colours::white.withAlpha(0.2f));
+		g.fillEllipse(midPoint.reduced(3.0f));
+	}
+}
+
 void TableEditor::LookAndFeelMethods::drawTableRuler(Graphics& g, TableEditor& te, Rectangle<float> area, float lineThickness, double rulerPosition)
 {
+	float x = (float)rulerPosition * area.getWidth() + area.getX();
+	float y = area.getY();
+	float bottom = area.getBottom();
+
     if(te.useFlatDesign)
     {
         auto c = te.findColour(TableEditor::ColourIds::rulerColour);
 
         g.setColour(c);
-        g.drawLine(Line<float>((float)rulerPosition * area.getWidth(), 0.0f, (float)rulerPosition * area.getWidth(), area.getHeight()), lineThickness);
+        g.drawLine(Line<float>(x, y, x, bottom), lineThickness);
     }
     else
     {
         g.setColour(Colours::lightgrey.withAlpha(0.05f));
-        g.fillRect(jmax(0.0f, (float)rulerPosition * area.getWidth() - 5.0f), 0.0f, rulerPosition == 0.0f ? 5.0f : 10.0f, area.getHeight());
+        g.fillRect(jmax(0.0f, x - 5.0f), y, 10.0f, area.getHeight());
         g.setColour(Colours::white.withAlpha(0.6f));
-        g.drawLine(Line<float>(rulerPosition * area.getWidth(), 0.0f, rulerPosition * area.getWidth(), area.getHeight()), 0.5f);
+
+		g.drawLine(Line<float>(x, y, x, bottom), 0.5f);
     }
 }
 

@@ -314,7 +314,11 @@ Array<juce::Identifier> HiseSettings::SnexWorkbench::getAllIds()
 		P_();
 
 		P(HiseSettings::Project::WindowsStaticLibFolder);
-		D("If you need to link a static library on Windows, supply the absolute path to the folder here. Unfortunately, relative paths do not work well with the VS Linker");
+		D("If you need to link a static library on Windows, supply the absolute path to the folder here. This will be used for both the plugin compilation and DLL network compilation.  \n");
+		D("> Usually you need to supply an absolute path here because the VS linker doesn't work well with relative paths, but you can use the `%ADDITIONAL_SOURCE_CODE%` wildcard to point to the additional source code directory of your project which is the preferred location for static libraries.  \n");
+		D("Once you've supplied a folder here, it assumes that there are two subfolders called `/Debug_x64` and `/Release_x64` which contain all static libraries that should be linked during compilation. Note that the compile flags for the library (static runtime, debug configuration etc.) must match the compiler settings for the entire project otherwise you'll get subtle linker issues.  \n");
+		D("> Example: If the relative path to the static libraries from your additional source code folder is `my_lib/Debug_x64/my_lib1.lib` and `my_lib/Release_x64/mylib1.lib`, then you need to use `%ADDITIONAL_SOURCE_CODE%/my_lib` as value here.  \n");
+		D("You also make sure that both folders (Debug and Release) contain the same amount of .lib files that are linked (so that the debug / release workflow is consistent).");
 		P_();
 
 		P(HiseSettings::Project::OSXStaticLibs);
@@ -391,7 +395,8 @@ Array<juce::Identifier> HiseSettings::SnexWorkbench::getAllIds()
 		D("- Script-encrypted expansions");
 		D("- Full expansions that contain the entire instrument");
 		D("- Custom expansions that uses a custom C++ class");
-		D("> If you use a custom expansion, you will need to implement `ExpansionHandler::createCustomExpansion()` in your project's C++ code");
+		D("If you use a custom expansion, you will need to implement `ExpansionHandler::createCustomExpansion()` in your project's C++ code");
+		D("> Note that you need to restart HISE for this setting to take effect.");
 		P_();
 
 		P(HiseSettings::Project::EncryptionKey);

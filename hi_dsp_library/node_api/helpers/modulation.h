@@ -69,6 +69,13 @@ enum class ParameterMode: uint8
 	numModulationModes
 };
 
+enum class ConnectionMode: uint8
+{
+	Parameter,
+	ModulationNode,
+	numConnectionModes
+};
+
 enum class TargetMode // this defines how the modulation signal is applied inside scriptnode
 {
 	Gain,		// Applies the infamous HISE intensity scale modulation
@@ -151,6 +158,7 @@ struct ConnectionInfo
 	int connectedParameterIndex;
 	ParameterMode modulationMode;
 	HiseModulationColours::ColourId modColour = HiseModulationColours::ColourId::ExtraMod;
+	ConnectionMode connectionMode = ConnectionMode::ModulationNode;
 };
 
 /** This pod structure will hold the information and properties on how the parameters of the Opaque node
@@ -217,6 +225,8 @@ struct ParameterProperties
 	ParameterMode getParameterMode(int parameterIndex) const noexcept;
 
 	void setColour(int parameterIndex, HiseModulationColours::ColourId newColour);
+
+	void setModulationBlockSize(int newBlockSize);
 
 	Colour getModulationColour(int parameterIndex) const;
 

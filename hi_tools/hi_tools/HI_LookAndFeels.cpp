@@ -240,7 +240,7 @@ void GlobalHiseLookAndFeel::drawRotarySlider(Graphics &g, int /*x*/, int /*y*/, 
 	drawHiBackground(g, 12, 10, width-12, 30, &s);
 		
 	const double value = s.getValue();
-    const double normalizedValue = (value - s.getMinimum()) / (s.getMaximum() - s.getMinimum());
+    const double normalizedValue = jlimit(0.0, 1.0, (value - s.getMinimum()) / (s.getMaximum() - s.getMinimum()));
 	const double proportion = pow(normalizedValue, s.getSkewFactor());
 
 	auto area = s.getLocalBounds().toFloat();

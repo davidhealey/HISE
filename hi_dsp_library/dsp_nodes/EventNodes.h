@@ -94,7 +94,7 @@ public:
 
 	constexpr bool isPolyphonic() const { return false; }
 
-	void initialise(NodeBase* n)
+	void initialise(ObjectWithValueTree* n)
 	{
 		if constexpr (prototypes::check::initialise<MidiType>::value)
 			mType.initialise(n);
@@ -168,7 +168,7 @@ template <typename TimerType> struct timer_base: public mothernode
 
 	virtual ~timer_base() {};
 
-	void initialise(NodeBase* n)
+	void initialise(ObjectWithValueTree* n)
 	{
 		if constexpr (prototypes::check::initialise<TimerType>::value)
 			tType.initialise(n);
@@ -288,12 +288,14 @@ public:
 		{
 			DEFINE_PARAMETERDATA(timer, Active);
 			p.setRange({ 0.0, 1.0, 1.0 });
+			p.setParameterValueNames({ "Off", "On" });
 			p.setDefaultValue(1.0);
 			data.add(std::move(p));
 		}
 		{
 			DEFINE_PARAMETERDATA(timer, Interval);
 			p.setRange({ 0.0, 2000.0, 0.1 });
+			p.info.textConverter = parameter::pod::Time;
 			p.setDefaultValue(500.0);
 			data.add(std::move(p));
 		}

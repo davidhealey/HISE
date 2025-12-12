@@ -1102,6 +1102,9 @@ struct ScriptBroadcaster::ModuleParameterListener::ProcessorListener : public hi
 	{
 		auto i = parameterIndexes.indexOf((int)index);
 
+		if(i == -1)
+			return;
+
 		auto newValue = p->getAttribute(index);
 
 		if (lastValues[i] != newValue)

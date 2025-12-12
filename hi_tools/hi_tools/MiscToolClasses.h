@@ -2730,6 +2730,7 @@ struct TextEditorWithAutocompleteComponent: public Timer,
         virtual ~LookAndFeelMethods() {};
         
 	    virtual void drawAutocompleteBackground(Graphics& g, TextEditor& te, Rectangle<float> b, const StringArray& itemToShow, int selectedIndex);
+		virtual void drawAutocompleteItem(Graphics& g, TextEditorWithAutocompleteComponent& parent, const String& itemName, Rectangle<float> itemBounds, bool selected);
     };
 
     void textEditorTextChanged(TextEditor&) override
@@ -2744,7 +2745,15 @@ struct TextEditorWithAutocompleteComponent: public Timer,
     void showAutocomplete(const String& currentText);
     void dismissAutocomplete();
 
+	virtual void autoCompleteItemSelected(int selectedIndex, const String& item)
+	{
+		if(updateTextEditorOnItemChange)
+			getTextEditor()->setText(item, dontSendNotification);
+	}
+
     virtual Identifier getIdForAutocomplete() const = 0;
+
+	static bool isAutocomplete(Component* c);
 
     struct Autocomplete;
 
@@ -2755,6 +2764,7 @@ struct TextEditorWithAutocompleteComponent: public Timer,
 
     bool useDynamicAutocomplete = false;
 	int itemsToShow = 4;
+	bool updateTextEditorOnItemChange = false;
 
     JUCE_DECLARE_WEAK_REFERENCEABLE(TextEditorWithAutocompleteComponent);
 };

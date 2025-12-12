@@ -1078,7 +1078,7 @@ struct base
 {
 	virtual ~base() {};
 
-	virtual void initialise(NodeBase* n) {};
+	virtual void initialise(ObjectWithValueTree* n) {};
 };
 
 
@@ -1153,7 +1153,7 @@ public:
 			n.setExternalData(d, 0);
 	};
 
-	void initialise(NodeBase* n) override
+	void initialise(ObjectWithValueTree* n) override
 	{
 		if constexpr (has_initialise<DataClass>::value)
 			obj.initialise(n);

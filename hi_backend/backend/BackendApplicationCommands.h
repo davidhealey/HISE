@@ -102,6 +102,7 @@ public:
 		MenuFileExtractEmbeddeSnippetFiles,
 		MenuFileCreateRecoveryXml,
 		MenuSnippetClose,
+		MenuFileOpenAssetManager,
 		// --------------------------------
 		MenuFileSettings,
 		MenuToolsEditShortcuts,
@@ -133,6 +134,7 @@ public:
 		MenuExportCleanBuildDirectory,
 		MenuExportCleanDspNetworkFiles,
 		// --------------------------------------
+		MenuExportCreateAssetPayload,
 		MenuExportSampleDataForInstaller,
 		MenuExportCompileFilesInPool,
 		MenuExportCompileNetworksAsDll,
@@ -403,6 +405,8 @@ public:
 
 		static void replaceScriptModules(BackendRootWindow* bpe);
 		static void checkLatency(BackendRootWindow* bpe);
+		static void showHiseAssetManager(BackendRootWindow* bpe);
+		static void createAssetPayload(BackendRootWindow* bpe);
 	};
 
 private:

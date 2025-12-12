@@ -67,6 +67,8 @@ xcopy "xml\classhise_1_1_scripting_objects_1_1_script_buffer.xml" "xml\selection
 xcopy "xml\classhise_1_1_scripting_objects_1_1_scripted_midi_automation_handler.xml" "xml\selection"
 xcopy "xml\classhise_1_1_scripting_objects_1_1_scripted_macro_handler.xml" "xml\selection"
 xcopy "xml\classhise_1_1_scripting_objects_1_1_script_thread_safe_storage.xml" "xml\selection"
+xcopy "xml\structhise_1_1_scripting_objects_1_1_scripting_complex_group_manager.xml" "xml\selection"
+
 xcopy "xml\classhise_1_1_beatport_manager.xml" "xml\selection"
 
 
@@ -183,6 +185,7 @@ ren "xml\selection\classhise_1_1_scripting_objects_1_1_timer_object.xml" "Timer.
 ren "xml\selection\classhise_1_1_scripting_objects_1_1_scripted_midi_player.xml" "MidiPlayer.xml"
 ren "xml\selection\classhise_1_1_scripting_objects_1_1_scripted_midi_automation_handler.xml" "MidiAutomationHandler.xml"
 ren "xml\selection\classhise_1_1_scripting_objects_1_1_scripted_macro_handler.xml" "MacroHandler.xml"
+ren "xml\selection\structhise_1_1_scripting_objects_1_1_scripting_complex_group_manager.xml" "ComplexGroupManager.xml"
 
 ren "xml\selection\classhise_1_1_scripting_objects_1_1_markdown_object.xml" "MarkdownRenderer.xml"
 

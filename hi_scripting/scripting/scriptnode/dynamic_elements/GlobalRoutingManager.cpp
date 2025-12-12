@@ -1007,7 +1007,6 @@ GlobalRoutingNodeBase::GlobalRoutingNodeBase(DspNetwork* n, ValueTree d) :
 	lastResult(Result::ok())
 {
 	globalRoutingManager = GlobalRoutingManager::Helpers::getOrCreate(n->getScriptProcessor()->getMainController_());
-
 	slotId.initialise(this);
 }
 

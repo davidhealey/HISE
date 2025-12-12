@@ -30,8 +30,6 @@
 *   ===========================================================================
 */
 
-#include "ComplexGroupManagerComponent.h"
-#include "ComplexGroupManagerComponent.h"
 
 namespace hise {
 using namespace juce;
@@ -59,8 +57,8 @@ struct ComplexGroupManagerComponent::LayerComponent::KeyboardComponent: public C
 	  mapColour(ComplexGroupManagerComponent::Helpers::getLayerColour(parent.data))
 	{
 		parent.getSampleEditHandler()->noteBroadcaster.addListener(*this, onNote);
-		getComplexGroupManager()->addPlaystateListener(*this, layerIndex, onPlaystateChange);
 		rebuildKeyboard();
+		getComplexGroupManager()->addPlaystateListener(*this, layerIndex, onPlaystateChange);
 	}
 
 	void rebuildKeyboard()
@@ -312,8 +310,6 @@ struct ComplexGroupManagerComponent::RRBody: public LogicTypeComponent::BodyBase
 
 	int getHeightToUse() const override { return jmax(100, height + 10); }
 
-	
-
 	struct CircleButton: public ButtonBase
 	{
 		CircleButton(const ValueTree& layerData, uint8 rrIndex_):
@@ -546,10 +542,14 @@ struct ComplexGroupManagerComponent::TableFadeBody: public LogicTypeComponent::B
 		if(comboBoxThatHasChanged == &tableSelector)
 		{
 			auto id = tableSelector.getSelectedId() - 1;
-			auto t = getSampler()->getTable(id);
-			t->setGlobalUIUpdater(getMainController()->getGlobalUIUpdater());
-			t->setUndoManager(getMainController()->getControlUndoManager());
-			table.setComplexDataUIBase(t);
+
+			if(isPositiveAndBelow(id, getSampler()->getNumDataObjects(ExternalData::DataType::Table)))
+			{
+				auto t = getSampler()->getTable(id);
+				t->setGlobalUIUpdater(getMainController()->getGlobalUIUpdater());
+				t->setUndoManager(getMainController()->getControlUndoManager());
+				table.setComplexDataUIBase(t);
+			}
 		}
 	}
 
@@ -695,12 +695,9 @@ struct ComplexGroupManagerComponent::XFadeBody: public LogicTypeComponent::BodyB
 	  BodyBase(parent),
 	  slotSelector(*this, LayerPropertySelector::DataStorageType::Index),
 	  modeSelector(*this, LayerPropertySelector::DataStorageType::Text),
-	  sourceSelector(*this, LayerPropertySelector::DataStorageType::Text)
+	  sourceSelector(*this, LayerPropertySelector::DataStorageType::Text),
+	  fadeTime(parent, groupIds::fadeTime, { 0.0, 1000.0, 1.0 })
 	{
-		// TODO: implement CC mode
-		// TODO: implement smoothing
-		// TODO: implement global mods 
-
 		uint8 layerValue = 1;
 
 		for(auto t: tokens)
@@ -710,11 +707,16 @@ struct ComplexGroupManagerComponent::XFadeBody: public LogicTypeComponent::BodyB
 		addAndMakeVisible(modeSelector);
 		addAndMakeVisible(sourceSelector);
 		
+		addAndMakeVisible(fadeTime);
+		fadeTime.setTextConverter("Time");
+		fadeTime.setSkewFactorFromMidPoint(100.0);
+		fadeTime.setTooltip("The fade time when using CC messages or event data");
+
 		auto idx = Helpers::getLayerIndex(parent.data);
 
 		if(auto l = dynamic_cast<ComplexGroupManager::XFadeLayer*>(getComplexGroupManager()->layers[idx]))
 		{
-			l->valueUpdater.addListener(*this, updateValue, false);
+			l->valueUpdater.addListener(*this, updateValue, true);
 		}
 
 		modeSelector.additionalCallback = [this]()
@@ -740,6 +742,8 @@ struct ComplexGroupManagerComponent::XFadeBody: public LogicTypeComponent::BodyB
 		if(idx != -1)
 		{
 			auto sourceType = (ComplexGroupManager::XFadeLayer::SourceTypes)idx;
+
+			fadeTime.setEnabled(sourceType != ComplexGroupManager::XFadeLayer::SourceTypes::GlobalMod);
 
 			switch (sourceType)
 			{
@@ -771,11 +775,6 @@ struct ComplexGroupManagerComponent::XFadeBody: public LogicTypeComponent::BodyB
 			
 		}
 		
-
-		
-
-		
-
 		slotSelector.setup(data, groupIds::slotIndex, sa);
 	}
 
@@ -809,7 +808,7 @@ struct ComplexGroupManagerComponent::XFadeBody: public LogicTypeComponent::BodyB
 		return p;
 	}
 
-	int getHeightToUse() const override { return 5 * LayerComponent::BodyMargin + 80 + LayerComponent::TopBarHeight + slotSelector.getHeightToUse(); }
+	int getHeightToUse() const override { return 5 * LayerComponent::BodyMargin + 15 + 80 + LayerComponent::TopBarHeight + slotSelector.getHeightToUse(); }
 
 	void resized() override
 	{
@@ -900,9 +899,12 @@ struct ComplexGroupManagerComponent::XFadeBody: public LogicTypeComponent::BodyB
 
 		bottom.removeFromBottom(LayerComponent::BodyMargin);
 
-		modeSelector.setBounds(bottom.removeFromLeft(128));
-		slotSelector.setBounds(bottom.removeFromRight(128));
-		sourceSelector.setBounds(bottom.withSizeKeepingCentre(128, bottom.getHeight()));
+		modeSelector.setBounds(bottom.removeFromLeft(100).reduced(0, 7));
+		bottom.removeFromLeft(LayerComponent::BodyMargin);
+		slotSelector.setBounds(bottom.removeFromLeft(100).reduced(0, 7));
+		bottom.removeFromLeft(LayerComponent::BodyMargin);
+		sourceSelector.setBounds(bottom.removeFromLeft(100).reduced(0, 7));
+		fadeTime.setBounds(bottom.removeFromRight(100).withSizeKeepingCentre(100, 35));
 
 		BodyBase::resized();
 	}
@@ -953,6 +955,7 @@ struct ComplexGroupManagerComponent::XFadeBody: public LogicTypeComponent::BodyB
 	LayerPropertySelector slotSelector;
 	LayerPropertySelector sourceSelector;
 	LayerPropertySelector modeSelector;
+	LogicTypeComponent::BodyKnob fadeTime;
 
 	JUCE_DECLARE_WEAK_REFERENCEABLE(XFadeBody);
 };
@@ -1102,11 +1105,789 @@ struct ComplexGroupManagerComponent::LegatoBody: public LogicTypeComponent::Body
 
 };
 
-struct ComplexGroupManagerComponent::ChokeBody: public KeyswitchBody
+struct ComplexGroupManagerComponent::ChokeBody: public LogicTypeComponent::BodyBase,
+												public ComboBox::Listener
 {
 	ChokeBody(LogicTypeComponent& parent):
-	  KeyswitchBody(parent)
-	{}
+	  BodyBase(parent),
+	  fadeTime(parent, groupIds::fadeTime, { 0.0, 1000.0, 1.0 })
+	{
+		addAndMakeVisible(fadeTime);
+		fadeTime.setTextConverter("Time");
+		fadeTime.setSkewFactorFromMidPoint(100.0);
+		fadeTime.setTooltip("The fade time when fading out choked notes");
+
+		uint8 layerValue = 1;
+
+		for (auto t : tokens)
+		{
+			auto kw = new KeyswitchButton(parent.data, layerValue++, t, parent.data[groupIds::purgable]);
+			addAndMakeVisible(buttons.add(kw));
+			groupButtons.add(kw);
+
+			auto cb = new ComboBox();
+			cb->addItem("Off", ComplexGroupManager::IgnoreFlag);
+			cb->addItem("A", 1);
+			cb->addItem("B", 2);
+			cb->addItem("C", 3);
+			cb->addItem("D", 4);
+			cb->setTooltip("Set the choke group for the layer above");
+			cb->setLookAndFeel(&slaf);
+
+			cb->addListener(this);
+			chokeMatrix.add(cb);
+
+			addAndMakeVisible(cb);
+		}
+
+		matrixListener.setCallback(parent.data, { groupIds::matrixString }, valuetree::AsyncMode::Asynchronously, VT_BIND_PROPERTY_LISTENER(updateMatrix));
+		updateMatrix(groupIds::matrixString, parent.data[groupIds::matrixString]);
+	}
+
+	void comboBoxChanged(ComboBox* cb) override
+	{
+		std::vector<uint8> m;
+
+		for(auto c: chokeMatrix)
+			m.push_back((uint8)c->getSelectedId());
+
+		auto newString = ComplexGroupManager::Helpers::getStringFromMatrix(m);
+		data.setProperty(groupIds::matrixString, newString, getUndoManager());
+	}
+
+	void updateMatrix(const Identifier& id, const var& newValue)
+	{
+		if(newValue.isString() && newValue.toString().length() == chokeMatrix.size())
+		{
+			auto s = newValue.toString();
+			auto m = ComplexGroupManager::Helpers::getMatrixFromString(newValue.toString());
+
+			if (m.size() == chokeMatrix.size())
+			{
+				for (int i = 0; i < m.size(); i++)
+					chokeMatrix[i]->setSelectedId((int)m[i], dontSendNotification);
+			}
+		}
+		else
+		{
+			for(auto c: chokeMatrix)
+				c->setSelectedId(ComplexGroupManager::IgnoreFlag, dontSendNotification);
+		}
+	}
+
+	void resized() override
+	{
+		SimpleFlexbox fb;
+
+		fb.padding = 10;
+		fb.justification = Justification::centred;
+
+		for (auto b : buttons)
+			b->setSize(b->getWidthToUse(), LayerComponent::TopBarHeight);
+
+		auto buttonList = getAllButtonsToShow();
+
+		auto list = fb.createBoundsListFromComponents(buttonList);
+
+		auto b = getLocalBounds().removeFromTop(130).reduced(5);
+
+		auto lb = b.removeFromRight(60);
+
+		fadeTime.setBounds(lb.withSizeKeepingCentre(60, 35));
+
+		if (auto newHeight = fb.apply(list, b))
+		{
+			height = newHeight;
+
+			fb.applyBoundsListToComponents(buttonList, list);
+
+			for (int i = 0; i < groupButtons.size(); i++)
+			{
+				auto gb = groupButtons[i]->getBoundsInParent();
+				auto c = chokeMatrix[i];
+				c->setBounds(gb.translated(0.0, 40));
+			}
+
+			if (getHeight() != getHeightToUse())
+			{
+				findParentComponentOfClass<Content>()->updateSize();
+			}
+		}
+
+		BodyBase::resized();
+	}
+
+	int getHeightToUse() const override
+	{
+		return jmax(100, height + 50);
+	}
+
+	int height = 10;
+	LogicTypeComponent::BodyKnob fadeTime;
+
+	SelectorLookAndFeel slaf;
+	Array<Component::SafePointer<KeyswitchButton>> groupButtons;
+	OwnedArray<ComboBox> chokeMatrix;
+	valuetree::PropertyListener matrixListener;
+};
+
+
+
+
+struct ComplexGroupManagerComponent::ReleaseBody: public LogicTypeComponent::BodyBase,
+												  public PathFactory
+{
+	
+
+	
+
+	ReleaseBody(LogicTypeComponent& parent):
+	  BodyBase(parent),
+	  releaseStartOptions("release", nullptr, *this),
+	  fadeTime(parent, groupIds::fadeTime, { 0.0, 1000.0, 1.0} ),
+	  accuracy(parent, groupIds::accuracy, { 0.0, 1.0} )
+	{
+		fadeTime.setTextConverter("Time");
+		accuracy.setTextConverter("NormalizedPercentage");
+
+		fadeTime.setTooltip("The fade time between sustain and release sample");
+		accuracy.setTooltip("If gain matching is enabled, this will control how much the release sample is attenuated based on the current level of the sustain sample");
+
+		fadeTime.setSkewFactorFromMidPoint(100.0);
+
+		addAndMakeVisible(releaseStartOptions);
+		addAndMakeVisible(fadeTime);
+		addAndMakeVisible(accuracy);
+		releaseStartOptions.setTooltip("Enable gain matching between sustain and release group");
+
+		releaseStartOptions.setToggleModeWithColourChange(true);
+		releaseStartOptions.getToggleStateValue().referTo(parent.data.getPropertyAsValue(groupIds::matchGain, parent.getUndoManager(), true));
+		releaseStartOptions.setToggleStateAndUpdateIcon((bool)releaseStartOptions.getToggleStateValue().getValue(), true);
+
+		uint8 layerValue = 1;
+
+		for(auto t: tokens)
+			addAndMakeVisible(buttons.add(new KeyswitchButton(parent.data, layerValue++, t, parent.data[groupIds::purgable])));
+	}
+
+	Path createPath(const String& url) const override
+	{
+		Path p;
+		LOAD_EPATH_IF_URL("release", SampleToolbarIcons::releaseStartOptions);
+		return p;
+	}
+
+	int getHeightToUse() const override
+	{
+		return jmax(140, height + 20);
+	}
+
+	int height = 10;
+
+	void resized() override
+	{
+		SimpleFlexbox fb;
+
+		fb.padding = 10;
+		fb.justification = Justification::centred;
+
+		for(auto b: buttons)
+			b->setSize(b->getWidthToUse(), LayerComponent::TopBarHeight);
+
+		auto buttonList = getAllButtonsToShow();
+
+		auto list = fb.createBoundsListFromComponents(buttonList);
+
+		auto b = getLocalBounds().removeFromTop(130).reduced(5);
+
+		auto lb = b.removeFromRight(60);
+
+		releaseStartOptions.setBounds(lb.removeFromTop(40).reduced(10));
+		accuracy.setBounds(lb.removeFromTop(35));
+		lb.removeFromTop(5);
+		fadeTime.setBounds(lb.removeFromTop(35));
+		
+		if(auto newHeight = fb.apply(list, b))
+		{
+			height = newHeight;
+
+			fb.applyBoundsListToComponents(buttonList, list);
+			
+			if(getHeight() != getHeightToUse())
+			{
+				findParentComponentOfClass<Content>()->updateSize();
+			}
+		}
+		
+		BodyBase::resized();
+	}
+
+	HiseShapeButton releaseStartOptions;
+	LogicTypeComponent::BodyKnob fadeTime;
+	LogicTypeComponent::BodyKnob accuracy;
+
+};
+
+struct ComplexGroupManagerComponent::CustomBody: public LogicTypeComponent::BodyBase,
+												 public PathFactory
+{
+	struct CustomButton: public KeyswitchButton,
+						 public PooledUIUpdater::SimpleTimer
+	{
+		CustomButton(PooledUIUpdater* updater, const ValueTree& ld, uint8 gi, const String& n, bool addPower):
+		  KeyswitchButton(ld, gi, n, addPower),
+		  SimpleTimer(updater, false),
+		  realLayerIndex(ld.getParent().indexOf(ld)),
+		  data(ld)
+		{}
+
+		void setUseGain(bool shouldUseGain)
+		{
+			if(shouldUseGain != useGain)
+			{
+				useGain = shouldUseGain;
+
+				if(useGain)
+					start();
+				else
+					stop();
+
+				repaint();
+			}
+		}
+
+		void timerCallback() override { repaint(); }
+
+		bool useGain = false;
+		ValueTree data;
+		uint8 realLayerIndex;
+
+		int getWidthToUse() const override
+		{
+			return KeyswitchButton::getWidthToUse() + (useGain ? getHeight() : 0);
+		}
+
+		Rectangle<float> getTextBounds() const override
+		{
+			auto tb = KeyswitchButton::getTextBounds();
+			if(useGain)
+				tb.removeFromRight(getHeight());
+			return tb;
+		}
+
+		void paint(Graphics& g) override
+		{
+			KeyswitchButton::paint(g);
+
+			if(data[groupIds::gainMod])
+			{
+				auto b = getLocalBounds().removeFromRight(getHeight()).reduced(7).toFloat();
+
+				if (auto gc = findParentComponentOfClass<ComponentWithGroupManagerConnection>())
+				{
+					auto gain = gc->getComplexGroupManager()->getGroupVolume(realLayerIndex, layerIndex);
+
+					g.setColour(getButtonColour(true));
+					g.drawEllipse(b, 2.0f);
+					auto w = jlimit(3.0f, b.getWidth() - 3.0f, b.getWidth() * gain);
+					g.fillEllipse(b.withSizeKeepingCentre(w, w));
+				}
+			}
+		}
+	};
+
+	CustomBody(LogicTypeComponent& parent):
+	  BodyBase(parent),
+	  fadeTime(parent, groupIds::fadeTime, { 0.0, 1000.0, 1.0 }),
+	  groupButton("group", nullptr, *this),
+	  gainButton("gain", nullptr, *this),
+	  dbgButton("dbg", nullptr, *this),
+	  debugPanel(*this)
+	{
+		auto updater = parent.getSampler()->getMainController()->getGlobalUIUpdater();
+
+		addAndMakeVisible(fadeTime);
+		fadeTime.setTextConverter("Time");
+		fadeTime.setSkewFactorFromMidPoint(100.0);
+
+		addAndMakeVisible(groupButton);
+		addAndMakeVisible(gainButton);
+		addAndMakeVisible(dbgButton);
+		addChildComponent(debugPanel);
+
+		groupButton.setToggleModeWithColourChange(true);
+		gainButton.setToggleModeWithColourChange(true);
+		dbgButton.setToggleModeWithColourChange(true);
+
+		dbgButton.onClick = [this]()
+		{
+			debugPanel.setVisible(dbgButton.getToggleState());
+
+			if(auto c = findParentComponentOfClass<Content>())
+				c->updateSize();
+		};
+
+		groupButton.setTooltip("Enable callbacks when voices are started");
+		gainButton.setTooltip("Enable gain modulation for this layer");
+		dbgButton.setTooltip("Show debugging info");
+
+		groupButton.onClick = [this]()
+		{
+			this->data.setProperty(groupIds::groupStart, groupButton.getToggleState(), getUndoManager());
+		};
+
+		gainButton.onClick = [this]()
+		{
+			this->data.setProperty(groupIds::gainMod, gainButton.getToggleState(), getUndoManager());
+		};
+
+		uint8 layerValue = 1;
+
+		for (auto t : tokens)
+			addAndMakeVisible(buttons.add(new CustomButton(updater, parent.data, layerValue++, t, parent.data[groupIds::purgable])));
+
+		flagButtonListener.setCallback(parent.data, { groupIds::gainMod, groupIds::groupStart }, valuetree::AsyncMode::Asynchronously, VT_BIND_PROPERTY_LISTENER(onFlagProperty));
+	}
+
+	void onFlagProperty(const Identifier& id, const var& newValue)
+	{
+		if(id == groupIds::gainMod)
+		{
+			gainButton.setToggleStateAndUpdateIcon((bool)newValue);
+			fadeTime.setEnabled((bool)newValue);
+
+			for (auto b : buttons)
+			{
+				if (auto t = dynamic_cast<CustomButton*>(b))
+					t->setUseGain((bool)newValue);
+			}
+
+			resized();
+		}
+		if(id == groupIds::groupStart)
+			groupButton.setToggleStateAndUpdateIcon((bool)newValue);
+	}
+
+	valuetree::PropertyListener flagButtonListener;
+
+	Path createPath(const String& url) const override
+	{
+		Path p;
+
+		LOAD_EPATH_IF_URL("gain", HiBinaryData::ProcessorIcons::gainModulation);
+		LOAD_EPATH_IF_URL("group", HiBinaryData::SpecialSymbols::midiData);
+		LOAD_EPATH_IF_URL("dbg", BackendBinaryData::ToolbarIcons::debugPanel);
+
+		return p;
+	}
+
+	struct DebugPanel : public Component,
+						public Timer
+	{
+		enum ColumnType
+		{
+			GroupVolume,
+			CurrentPeak,
+			EventIdList,
+			StartProperties
+		};
+
+		struct ColumnInfo
+		{
+			ColumnType type;
+			String name;
+			float scale;
+			bool visible;
+		};
+
+		std::vector<ColumnInfo> columns;
+
+		void forEachVisibleColumn(Rectangle<float> rowArea, const std::function<void(Rectangle<float>, const ColumnInfo&)>& f)
+		{
+			float sum = 0.0f;
+			float numVisible = 0.0f;
+
+			for(const auto& c: columns)
+			{
+				if(c.visible)
+				{
+					sum += c.scale;
+					numVisible += 1.0f;
+				}
+			}
+
+			float fullWidth = rowArea.getWidth();
+
+			for(const auto& c: columns)
+			{
+				if(c.visible)
+				{
+					auto w = fullWidth * c.scale / sum;
+					auto cell = rowArea.removeFromLeft(w);
+					f(cell, c);
+				}
+			}
+		}
+
+		void timerCallback() override
+		{
+			for(auto r: rows)
+				r->repaint();
+		}
+
+		struct Row: public Component
+		{
+			static constexpr int RowHeight = 70;
+			static constexpr int LayerLabelWidth = 80;
+			
+			Row(DebugPanel& parent_, uint8 groupIndex_):
+			  parent(parent_),
+			  groupIndex(groupIndex_)
+			{
+				auto v = parent.parent.data;
+				layerIndex = v.getParent().indexOf(v);
+			}
+
+			struct StaleValue
+			{
+				StaleValue(const var& v):
+				  lastValue(v),
+				  staleCounter(0)
+				{};
+
+				StaleValue() = default;
+
+				bool isValid() 
+				{
+					return !lastValue.isUndefined() && ++staleCounter < 30;
+				}
+
+				var lastValue;
+				int staleCounter = 0;
+			};
+
+			std::map<ColumnType, float> lastGains;
+			
+			std::map<ColumnType, StaleValue> staleValues;
+
+			void drawGainValue(bool stale, ColumnType c, Graphics& g, Rectangle<float> area, float gv, String topLabel={}, String bottomLabel={})
+			{
+				float gainToUse;
+
+
+				if(stale)
+					gainToUse = gv;
+				else
+				{
+					auto lg = lastGains[c];
+					gainToUse = gv; 
+					lastGains[c] = gainToUse;
+				}
+
+				auto staleAlpha = stale ? 0.5f : 1.0f;
+
+				g.setColour(Colours::white.withAlpha(0.3f * staleAlpha));
+
+				if(!topLabel.isEmpty())
+					g.drawText(topLabel, area, Justification::centredTop);
+
+				if(bottomLabel.isEmpty())
+					bottomLabel << String(Decibels::gainToDecibels(gainToUse), 1) << " dB";
+
+				g.drawText(bottomLabel, area, Justification::centredBottom);
+
+				area = area.withSizeKeepingCentre(area.getWidth(), 20.0f);
+
+				g.setColour(Colour(0xFF1D1D1D).withAlpha(staleAlpha));
+				
+				g.fillRoundedRectangle(area, area.getHeight() * 0.5f);
+
+				auto wScale = hmath::pow(jlimit(0.0f, 1.0f, gainToUse), 0.3f);
+
+				area = area.reduced(3.0f);
+				area = area.removeFromLeft(jmax(area.getHeight(), wScale * area.getWidth()));
+				g.setColour(Colour(0xFF8E8E8E).withAlpha(staleAlpha));
+				g.fillRoundedRectangle(area, area.getHeight() * 0.5f);
+			}
+
+			void paint(Graphics& g) override
+			{
+				g.setFont(GLOBAL_BOLD_FONT());
+				g.setColour(Colours::white.withAlpha(0.4f));
+
+				auto b = getLocalBounds().toFloat().reduced(3.0f);
+				
+				g.drawText(parent.parent.tokens[groupIndex-1], b.removeFromLeft((float)LayerLabelWidth), Justification::right);
+				b.removeFromLeft(LogicTypeComponent::BodyMargin);
+				g.setColour(Colours::white.withAlpha(0.05f));
+				g.fillRoundedRectangle(b, 3.0f);
+
+				parent.forEachVisibleColumn(b, [&](Rectangle<float> cell, ColumnInfo info)
+				{
+					if(info.type == ColumnType::GroupVolume)
+					{
+						auto gain = getGroupManager()->getGroupVolume(layerIndex, groupIndex);
+						drawGainValue(gain == 1.0f, info.type, g, cell.reduced(3.0f), gain);
+					}
+					if(info.type == ColumnType::CurrentPeak)
+					{
+						auto ok = forEachActiveVoiceMatch([&](ModulatorSynthVoice* v)
+						{
+							auto s = static_cast<ModulatorSamplerSound*>(v->getCurrentlyPlayingSound().get());
+							auto watchesPeak = s->getReferenceToSound()->getReleaseStartBuffer() != nullptr;
+
+							if (watchesPeak)
+							{
+								auto gain = (double)s->getReferenceToSound()->getCurrentReleasePeak();
+								String eventId;
+								eventId << String(v->getCurrentHiseEvent().getEventId());
+								drawGainValue(false, info.type, g, cell.reduced(3.0f), gain, eventId);
+								staleValues[info.type] = { var(gain) };
+							}
+							
+							return watchesPeak;
+						});
+
+						if(ok)
+							return;
+
+						if(staleValues[info.type].isValid())
+						{
+							auto v = (float)staleValues[info.type].lastValue;
+							drawGainValue(true, info.type, g, cell.reduced(3.0f), v);
+							return;
+						}
+
+						g.setColour(Colours::white.withAlpha(0.2f));
+						g.drawText("n.a.", cell, Justification::centred);
+					}
+					if(info.type == ColumnType::EventIdList)
+					{
+						forEachActiveVoiceMatch([&](ModulatorSynthVoice* v)
+						{
+							auto e = v->getCurrentHiseEvent();
+							g.setColour(Colours::white.withAlpha(0.6f));
+							g.setFont(GLOBAL_MONOSPACE_FONT());
+							g.drawText(e.toDebugString(), cell.removeFromTop(20.0f), Justification::left);
+							return false;
+						});
+					}
+					if(info.type == ColumnType::StartProperties)
+					{
+						auto gm = getGroupManager();
+
+						auto ok = forEachActiveVoiceMatch([&](ModulatorSynthVoice* v)
+						{
+							auto e = v->getCurrentHiseEvent();
+							auto sound = static_cast<ModulatorSynthSound*>(v->getCurrentlyPlayingSound().get());
+							
+							if(auto ss = gm->getSpecialSoundStart(e, sound))
+							{
+								if(ss.fadeInTimeSeconds != 0.0)
+								{
+									String text;
+
+									text << "Fade in " << String(roundToInt(ss.fadeInTimeSeconds * 0.001)) << "ms";
+									drawGainValue(false, info.type, g, cell.reduced(3.0f), ss.targetVolume, text);
+									staleValues[info.type] = { var(ss.targetVolume) };
+
+									return true;
+								}
+								
+							}
+
+							return false;
+						});
+
+						if(ok)
+							return;
+
+						if (staleValues[info.type].isValid())
+						{
+							auto v = (float)staleValues[info.type].lastValue;
+							drawGainValue(true, info.type, g, cell.reduced(3.0f), v);
+							return;
+						}
+
+						g.setColour(Colours::white.withAlpha(0.2f));
+						g.drawText("n.a.", cell, Justification::centred);
+					}
+				});
+
+			}
+
+			bool forEachActiveVoiceMatch(const std::function<bool(ModulatorSynthVoice*)>& f)
+			{
+				auto gm = getGroupManager();
+
+				std::vector<ModulatorSynthVoice*> activeVoices;
+
+				for (auto av : getSampler()->activeVoices)
+				{
+					if (av != nullptr)
+						activeVoices.push_back(av);
+				}
+
+				for (auto av : activeVoices)
+				{
+					auto sustainSample = static_cast<ModulatorSamplerSound*>(av->getCurrentlyPlayingSound().get());
+
+					if(sustainSample != nullptr)
+					{
+						auto bm = sustainSample->getBitmask();
+						auto lv = gm->getLayerValue(bm, layerIndex);
+
+						if (lv == groupIndex)
+						{
+							if (f(av))
+								return true;
+						}
+					}
+				}
+
+				return false;
+			}
+
+			ModulatorSampler* getSampler()
+			{
+				if (auto c = findParentComponentOfClass<ComponentWithGroupManagerConnection>())
+					return c->getSampler();
+
+				jassertfalse;
+				return nullptr;
+			}
+
+			ComplexGroupManager* getGroupManager()
+			{
+				if(auto c = findParentComponentOfClass<ComponentWithGroupManagerConnection>())
+					return c->getComplexGroupManager();
+
+				jassertfalse;
+				return nullptr;
+			}
+
+			uint8 layerIndex;
+			uint8 groupIndex;
+			DebugPanel& parent;
+
+			JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(Row);
+		};
+
+		OwnedArray<Row> rows;
+
+		DebugPanel(CustomBody& parent_):
+		  parent(parent_)
+		{
+			columns.push_back({ ColumnType::GroupVolume, "Group Volume",     1.0f, true });
+			columns.push_back({ ColumnType::CurrentPeak, "Current Peak",     1.0f, true });
+			columns.push_back({ ColumnType::EventIdList, "Event Ids",        1.5f, true });
+			columns.push_back({ ColumnType::StartProperties, "Start Properties", 1.0f, true });
+
+			for(int i = 0; i < parent.tokens.size(); i++)
+			{
+				rows.add(new Row(*this, i+1));
+				addAndMakeVisible(rows.getLast());
+			}
+
+			startTimer(30);
+		};
+
+		int getHeightToUse() const 
+		{
+			if(isVisible())
+			{
+				return LogicTypeComponent::TopBarHeight + rows.size() * Row::RowHeight;
+			}
+
+			return 0;
+		}
+
+		void paint(Graphics& g) override
+		{
+			auto b = getLocalBounds().removeFromTop(LogicTypeComponent::TopBarHeight).reduced(3, 0);
+			b.removeFromLeft(Row::LayerLabelWidth + LogicTypeComponent::BodyMargin);
+
+			g.setFont(GLOBAL_BOLD_FONT());
+			
+			forEachVisibleColumn(b.toFloat(), [&](Rectangle<float> cell, const ColumnInfo& info)
+			{
+				g.setColour(Colours::white.withAlpha(0.05f));
+				g.fillRoundedRectangle(cell.reduced(1.0f), 3.0f);
+				g.setColour(Colours::white.withAlpha(0.7f));
+				g.drawText(info.name, cell, Justification::centred);
+			});
+		}
+
+		void resized() override
+		{
+			auto b = getLocalBounds();
+			b.removeFromTop(LogicTypeComponent::TopBarHeight);
+
+			for(auto r: rows)
+				r->setBounds(b.removeFromTop(Row::RowHeight));
+		}
+
+		CustomBody& parent;
+
+	} debugPanel;
+
+	void resized() override
+	{
+		auto b = getLocalBounds().reduced(LayerComponent::BodyMargin);
+
+		for (auto b : buttons)
+			b->setSize(b->getWidthToUse(), LayerComponent::TopBarHeight);
+
+		SimpleFlexbox fb;
+		fb.justification = Justification::centred;
+
+		auto buttonList = getAllButtonsToShow();
+
+		auto rb = b.removeFromRight(100);
+		auto tb = rb.removeFromTop(24);
+
+		fadeTime.setBounds(rb.removeFromTop(35));
+
+		gainButton.setBounds(tb.removeFromRight(24).reduced(3));
+		groupButton.setBounds(tb.removeFromRight(24).reduced(3));
+		dbgButton.setBounds(tb.removeFromRight(24).reduced(3));
+
+		auto list = fb.createBoundsListFromComponents(buttonList);
+
+		if (auto h = fb.apply(list, b.removeFromTop(100 - 2 * LayerComponent::BodyMargin)))
+		{
+			height = h;
+
+			fb.applyBoundsListToComponents(buttonList, list);
+
+			if (getHeight() != getHeightToUse())
+			{
+				findParentComponentOfClass<Content>()->updateSize();
+			}
+		}
+
+		if(debugPanel.isVisible())
+		{
+			b = getLocalBounds().reduced(LogicTypeComponent::BodyMargin);
+			debugPanel.setBounds(b.removeFromBottom(debugPanel.getHeightToUse()));
+		}
+		
+		BodyBase::resized();
+	}
+
+	int height = 10;
+
+	
+
+	int getHeightToUse() const override
+	{
+		return jmax(100, height) + (debugPanel.isVisible() ? (debugPanel.getHeightToUse() + LogicTypeComponent::BodyMargin) : 0);
+	}
+
+	LogicTypeComponent::BodyKnob fadeTime;
+	HiseShapeButton gainButton;
+	HiseShapeButton groupButton;
+	HiseShapeButton dbgButton;
 };
 
 }

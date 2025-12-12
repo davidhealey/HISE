@@ -99,7 +99,7 @@ struct dynamic
 
 	void prepare(PrepareSpecs ps);
 
-	void initialise(NodeBase* n);
+	void initialise(ObjectWithValueTree* n);
 
 	void setMode(Identifier id, var newValue);
 

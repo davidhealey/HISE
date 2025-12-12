@@ -244,7 +244,7 @@ ColourParser::ColourParser(const String& value)
 	}
 	else if(value.startsWith("0x"))
 	{
-		c = Colour(value.getHexValue64());
+		c = Colour((uint32)value.getHexValue64());
 	}
 	else if(value.startsWith("rgb") || value.startsWith("hsl"))
 	{

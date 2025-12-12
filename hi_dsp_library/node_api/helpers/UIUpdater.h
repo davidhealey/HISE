@@ -114,7 +114,7 @@ protected:
 					{
 						Array<WeakReference<DllUpdaterBase>> pending;
 						pending.ensureStorageAllocated(128);
-						pending.swapWithArray(asyncUpdaters);
+						pending.swapWith(asyncUpdaters);
 
 						for (auto& p : pending)
 							p->execute();

@@ -57,6 +57,7 @@
 
 #include "snex_basics/snex_ExternalData.cpp"
 #include "node_api/helpers/Error.cpp"
+#include "node_api/helpers/NodeProperty.cpp"
 #include "node_api/helpers/ParameterData.cpp"
 #include "node_api/helpers/modulation.cpp"
 #include "node_api/nodes/Base.cpp"
@@ -97,6 +98,14 @@
 #include "dsp_nodes/AnalyserNodes.cpp"
 #include "dsp_nodes/ConvolutionNode.cpp"
 #include "dsp_nodes/DynamicsNode.cpp"
+
+#if HISE_INCLUDE_SCRIPTNODE_DATABASE
+#include "dsp_library/ScriptnodeDataBase.cpp"
+#endif
+
+#if HISE_INCLUDE_SCRIPTNODE_UI
+#include "node_ui/node_ui.cpp"
+#endif
 
 namespace hise
 {

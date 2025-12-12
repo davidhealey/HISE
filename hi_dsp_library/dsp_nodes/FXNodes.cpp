@@ -44,7 +44,7 @@ reverb::reverb()
 	r.setParameters(p);
 }
 
-void reverb::initialise(NodeBase* )
+void reverb::initialise(ObjectWithValueTree* )
 {
 	
 }
@@ -64,18 +64,21 @@ void reverb::createParameters(ParameterDataList& data)
 	{
 		DEFINE_PARAMETERDATA(reverb, Damping);
 		p.setDefaultValue(0.5);
+		p.info.textConverter = parameter::pod::NormalizedPercentage;
 		data.add(std::move(p));
 	}
 
 	{
 		DEFINE_PARAMETERDATA(reverb, Width);
 		p.setDefaultValue(0.5);
+		p.info.textConverter = parameter::pod::NormalizedPercentage;
 		data.add(std::move(p));
 	}
 
 	{
 		DEFINE_PARAMETERDATA(reverb, Size);
 		p.setDefaultValue(0.5);
+		p.info.textConverter = parameter::pod::NormalizedPercentage;
 		data.add(std::move(p));
 	}
 }

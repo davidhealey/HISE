@@ -198,7 +198,6 @@ compile / debug cycle and don't need all nodes in scriptnode you might want to t
 
 
 
-#include "scripting/scriptnode/api/NodeProperty.h"
 #include "scripting/scriptnode/api/ModulationSourceNode.h"
 #include "scripting/scriptnode/dynamic_elements/DynamicParameterList.h"
 
