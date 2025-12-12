@@ -4356,6 +4356,8 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawPopupMenuBackground(Graphic
 	if (functionDefined("drawPopupMenuBackground"))
 	{
 		auto obj = new DynamicObject();
+		Rectangle<float> area(0.0f, 0.0f, (float)width, (float)height);
+		obj->setProperty("area", ApiHelpers::getVarRectangle(useRectangleClass, area));
 		obj->setProperty("width", width);
 		obj->setProperty("height", height);
 
