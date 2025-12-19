@@ -9287,7 +9287,8 @@ String ScriptingApi::Content::Helpers::createScriptVariableDeclaration(Reference
 		{
 			auto c = selection[i];
 
-			s << "const var " << c->name.toString() << " = Content.getComponent(\"" << c->name.toString() << "\");" << nl;;
+			s << "//! " << c->name.toString() << nl;
+			s << "const " << c->name.toString() << " = Content.getComponent(\"" << c->name.toString() << "\");" << nl;
 		}
 
 		s << nl;
@@ -9296,14 +9297,15 @@ String ScriptingApi::Content::Helpers::createScriptVariableDeclaration(Reference
 	}
 	else
 	{
-		s << "const var " << variableName << " = [";
+		s << "const " << variableName << " = [";
 
 		int length = s.length();
 
 		for (int i = 0; i < selection.size(); i++)
 		{
 			auto c = selection[i];
-
+			
+			s << "//! " << c->name.toString() << nl;
 			s << "Content.getComponent(\"" << c->name.toString() << "\")";
 
 			if (i != selection.size() - 1)
@@ -9539,16 +9541,19 @@ String ScriptingApi::Content::Helpers::createCustomCallbackDefinition(ReferenceC
 		auto c = selection[i];
 
 		auto name = c->getName();
+		String id = name.toString().removeCharacters(" \n\t\"\'!$%&/()");
 
 		String callbackName = "on" + name.toString() + "Control";
 
 		code << nl;
+		code << "//! " << name << nl;
+		code << "const " << id << " = Content.getComponent(\"" << name << "\");" << nl;
+		code << id << ".setControlCallback(" << callbackName << ");" << nl;
+		code << nl;
 		code << "inline function " << callbackName << "(component, value)" << nl;
 		code << "{" << nl;
 		code << "\t//Add your custom logic here..." << nl;
-		code << "};" << nl;
-		code << nl;
-		code << "Content.getComponent(\"" << name.toString() << "\").setControlCallback(" << callbackName << ");" << nl;
+		code << "}" << nl;
 
 	}
 

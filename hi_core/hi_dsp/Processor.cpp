@@ -1088,7 +1088,7 @@ juce::String ProcessorHelpers::getTypedScriptVariableDeclaration(const Processor
 	String name = p->getId();
 	String id = name.removeCharacters(" \n\t\"\'!$%&/()");
 
-	code << "const var " << id << " = Synth.get" << typeName << "(\"" << name << "\");";
+	code << "const " << id << " = Synth.get" << typeName << "(\"" << name << "\");";
 
 	if (copyToClipboard)
 	{
