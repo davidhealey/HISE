@@ -8413,7 +8413,7 @@ void ScriptingApi::TransportHandler::onGridChange(int gridIndex_, uint16 timesta
 	auto mask = (uint32)(localGridMultiplier - 1);
 	auto filtered = unsignedIndex & mask;
 
-	if(mask && filtered || localBypassed)
+	if((mask && filtered) || localBypassed)
 	{
 		return;
 	}

@@ -231,12 +231,12 @@ template <class NodeType, class UIClass> struct multi_output_wrapper : public Sc
 		static_assert(std::is_base_of<ScriptnodeExtraComponent<mothernode>, UIClass>(), "not a base class");
 
 		graph.initialise(v->p.parentNode);
-		addAndMakeVisible(dragRow);
+		this->addAndMakeVisible(dragRow);
 
-		addAndMakeVisible(graph);
-		setSize(graph.getWidth(), graph.getHeight() + 10 + parameter::ui::UIConstants::ButtonHeight + parameter::ui::UIConstants::DragHeight + UIValues::NodeMargin);
-		setRepaintsOnMouseActivity(true);
-		stop();
+		this->addAndMakeVisible(graph);
+		this->setSize(graph.getWidth(), graph.getHeight() + 10 + parameter::ui::UIConstants::ButtonHeight + parameter::ui::UIConstants::DragHeight + UIValues::NodeMargin);
+		this->setRepaintsOnMouseActivity(true);
+		this->stop();
 	}
 
 	void timerCallback() override
@@ -246,7 +246,7 @@ template <class NodeType, class UIClass> struct multi_output_wrapper : public Sc
 
 	void resized() override
 	{
-		auto b = getLocalBounds();
+		auto b = this->getLocalBounds();
 		graph.setBounds(b.removeFromTop(graph.getHeight()));
 		b.removeFromTop(UIValues::NodeMargin);
 		dragRow.setBounds(b);

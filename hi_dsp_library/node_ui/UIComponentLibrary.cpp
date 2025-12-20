@@ -1105,15 +1105,19 @@ void minmax_editor::setRange(InvertableParameterRange newRange, const String& tc
 	{
 		auto pTree = node->getValueTree().getChildWithName(PropertyIds::Parameters);
 
-		RangeHelpers::storeDoubleRange(pTree.getChild(1), newRange, node->getUndoManager());
-		RangeHelpers::storeDoubleRange(pTree.getChild(2), newRange, node->getUndoManager());
+        auto p0 = pTree.getChild(0);
+        auto p1 = pTree.getChild(1);
+        auto p2 = pTree.getChild(2);
+        
+		RangeHelpers::storeDoubleRange(p1, newRange, node->getUndoManager());
+		RangeHelpers::storeDoubleRange(p2, newRange, node->getUndoManager());
 
-		pTree.getChild(0).setProperty(PropertyIds::TextToValueConverter, "NormalizedPercentage", node->getUndoManager());
-		pTree.getChild(1).setProperty(PropertyIds::TextToValueConverter, tc, node->getUndoManager());
-		pTree.getChild(2).setProperty(PropertyIds::TextToValueConverter, tc, node->getUndoManager());
+        p0.setProperty(PropertyIds::TextToValueConverter, "NormalizedPercentage", node->getUndoManager());
+        p1.setProperty(PropertyIds::TextToValueConverter, tc, node->getUndoManager());
+        p2.setProperty(PropertyIds::TextToValueConverter, tc, node->getUndoManager());
 
-		pTree.getChild(1).setProperty(PropertyIds::Value, newRange.inv ? newRange.rng.end : newRange.rng.start, node->getUndoManager());
-		pTree.getChild(2).setProperty(PropertyIds::Value, newRange.inv ? newRange.rng.start : newRange.rng.end, node->getUndoManager());
+        p1.setProperty(PropertyIds::Value, newRange.inv ? newRange.rng.end : newRange.rng.start, node->getUndoManager());
+		p2.setProperty(PropertyIds::Value, newRange.inv ? newRange.rng.start : newRange.rng.end, node->getUndoManager());
 		pTree.getChild(3).setProperty(PropertyIds::Value, newRange.rng.skew, node->getUndoManager());
 		pTree.getChild(4).setProperty(PropertyIds::Value, newRange.rng.interval, node->getUndoManager());
 		pTree.getChild(5).setProperty(PropertyIds::Value, newRange.inv ? 1.0 : 0.0, node->getUndoManager());
