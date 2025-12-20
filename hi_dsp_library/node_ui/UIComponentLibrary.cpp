@@ -58,6 +58,27 @@ InvertableParameterRange simple_visualiser::getParameterRange(int index)
 }
 
 
+void simple_visualiser::paint(Graphics& g)
+{
+	if (drawBackground)
+		ScriptnodeComboBoxLookAndFeel::drawScriptnodeDarkBackground(g, getLocalBounds().toFloat(), false);
+
+	if (!gridPath.isEmpty())
+	{
+		UnblurryGraphics ug(g, *this);
+
+		g.setColour(Colours::black.withAlpha(0.5f));
+		g.strokePath(gridPath, PathStrokeType(ug.getPixelSize()));
+	}
+
+	g.setColour(getNodeColour());
+
+	if (!original.isEmpty())
+		g.fillPath(original);
+
+	g.strokePath(p, PathStrokeType(thickness));
+}
+
 
 void simple_visualiser::timerCallback()
 {
@@ -89,35 +110,26 @@ void simple_visualiser::timerCallback()
 	repaint();
 }
 
-void simple_visualiser::paint(Graphics& g)
-{
-	if (drawBackground)
-		ScriptnodeComboBoxLookAndFeel::drawScriptnodeDarkBackground(g, getLocalBounds().toFloat(), false);
-
-	if (!gridPath.isEmpty())
-	{
-		UnblurryGraphics ug(g, *this);
-
-		g.setColour(Colours::black.withAlpha(0.5f));
-		g.strokePath(gridPath, PathStrokeType(ug.getPixelSize()));
-	}
-
-	g.setColour(getNodeColour());
-
-	if (!original.isEmpty())
-		g.fillPath(original);
-
-	g.strokePath(p, PathStrokeType(thickness));
-}
 
 namespace control {
 
 xfader_editor::xfader_editor(mothernode* f, PooledUIUpdater* updater) :
 	ScriptnodeExtraComponent<mothernode>(f, updater),
-	faderSelector("Linear")
+	faderSelector("Linear"),
+	numOutputs("2", PropertyIds::NumParameters)
 {
 	addAndMakeVisible(faderSelector);
-	setSize(256, 120);
+	addAndMakeVisible(numOutputs);
+	setSize(200, 120);
+}
+
+void xfader_editor::setInputValue(double v)
+{
+	if(v != inputValue)
+	{
+		inputValue = v;
+		repaint();
+	}
 }
 
 void xfader_editor::initialise(ObjectWithValueTree* o)
@@ -125,15 +137,19 @@ void xfader_editor::initialise(ObjectWithValueTree* o)
 	MultiOutputBase::initialiseOutputs(o);
 
 	faderSelector.initModes(obj.getFaderModes(), o);
+
+	numOutputs.initModes({ "2", "3", "4", "5", "6", "7", "8" }, o);
+
 	obj.initialise(o);
 
 	graphRebuilder.setCallback(o->getValueTree(), { PropertyIds::NumParameters, PropertyIds::Value }, valuetree::AsyncMode::Asynchronously, [this](ValueTree, Identifier)
-		{
-			this->rebuildFaderCurves();
-		});
+	{
+		this->rebuildFaderCurves();
+	});
 
 	rebuildFaderCurves();
 }
+
 
 void xfader_editor::paint(Graphics& g)
 {
@@ -186,15 +202,6 @@ void xfader_editor::paint(Graphics& g)
 	}
 }
 
-void xfader_editor::setInputValue(double v)
-{
-	if(v != inputValue)
-	{
-		inputValue = v;
-		repaint();
-	}
-}
-
 void xfader_editor::rebuildFaderCurves()
 {
 	int numPaths = getNumOutputs();
@@ -221,6 +228,7 @@ void xfader_editor::rebuildFaderCurves()
 	resized();
 }
 
+
 void xfader_editor::resized()
 {
 	auto b = getLocalBounds().reduced(2).toFloat();
@@ -229,7 +237,9 @@ void xfader_editor::resized()
 
 	b.removeFromTop(10.0f);
 
+	numOutputs.setBounds(top.removeFromRight(80));
 	faderSelector.setBounds(top);
+
 
 	float maxHeight = 0.0f;
 
@@ -255,22 +265,31 @@ void xfader_editor::resized()
 	}
 }
 
+
+
 void xfader_editor::timerCallback()
 {
 	double v = 0.0;
 
-	if(auto psource = findParentComponentOfClass<ParameterSourceObject>())
+	if (auto psource = findParentComponentOfClass<ParameterSourceObject>())
 	{
 		setInputValue(psource->getParameterValue(0));
-	}	
+	}
 }
 
 intensity_editor::intensity_editor(mothernode* b, PooledUIUpdater* u) :
 	ScriptnodeExtraComponent(b, u)
 {
 	setSize(256, 256);
+	setLayout(ScriptnodeExtraComponentBase::PreferredLayout::PreferBetween);
 	setWatchedParameters({ 0, 1 });
 	start();
+}
+
+void intensity_editor::onLayoutChange()
+{
+	if (getPreferredLayout() == ScriptnodeExtraComponentBase::PreferredLayout::PreferBetween)
+		setSize(NewParameterHeight * 2, NewParameterHeight * 2);
 }
 
 void intensity_editor::paint(Graphics& g)
@@ -301,6 +320,7 @@ void intensity_editor::paint(Graphics& g)
 	g.strokePath(valuePath, PathStrokeType(4.0f * ug.getPixelSize()));
 }
 
+
 void intensity_editor::rebuildPaths()
 {
 	fullPath.clear();
@@ -325,12 +345,25 @@ void intensity_editor::rebuildPaths()
 
 	valuePath.lineTo(v, (float)Interpolator::interpolateLinear(valuePos1, valuePos2, v));
 
-	auto pb = pathArea.reduced(UIValues::NodeMargin);
+	auto pb = pathArea.reduced(UIValues::NodeMargin/2);
 
 	fullPath.scaleToFit(pb.getX(), pb.getY(), pb.getWidth(), pb.getHeight(), false);
 	valuePath.scaleToFit(pb.getX(), pb.getY(), pb.getWidth(), pb.getHeight(), false);
 
 	repaint();
+}
+
+void intensity_editor::resized()
+{
+	auto b = getLocalBounds();
+
+	pathArea = b.toFloat();
+	pathArea = pathArea.withSizeKeepingCentre(pathArea.getHeight(), pathArea.getHeight());
+	
+	if(getPreferredLayout() != ScriptnodeExtraComponentBase::PreferredLayout::PreferBetween)
+		pathArea = pathArea.reduced(10.0f);
+
+	rebuildPaths();
 }
 
 void intensity_editor::timerCallback()
@@ -339,25 +372,26 @@ void intensity_editor::timerCallback()
 		rebuildPaths();
 }
 
-void intensity_editor::resized()
-{
-	auto b = getLocalBounds();
-
-	pathArea = b.toFloat();
-	pathArea = pathArea.withSizeKeepingCentre(pathArea.getHeight(), pathArea.getHeight()).reduced(10.0f);
-	rebuildPaths();
-}
-
 blend_editor::blend_editor(mothernode* b, PooledUIUpdater* u) :
 	ScriptnodeExtraComponent<mothernode>(b, u)
 {
 	setWatchedParameters({ 0, 1, 2 });
+	setLayout(ScriptnodeExtraComponentBase::PreferredLayout::PreferBetween);
 
 	setSize(256 - 32, 50);
 }
 
+void blend_editor::onLayoutChange()
+{
+	if (getPreferredLayout() == ScriptnodeExtraComponentBase::PreferredLayout::PreferBetween)
+		setSize(40, (32 + 5) * 3);
+}
+
+
 void blend_editor::paint(Graphics& g)
 {
+	auto vertical = getPreferredLayout() == ScriptnodeExtraComponentBase::PreferredLayout::PreferBetween;
+
 	multilogic::blend bl;
 	bl.setParameter<0>(getWatchedParameterValue(0));
 	bl.setParameter<1>(getWatchedParameterValue(1));
@@ -365,28 +399,46 @@ void blend_editor::paint(Graphics& g)
 
 	auto alpha = bl.alpha * 2.0f - 1.0f;
 
-	auto b = getLocalBounds().removeFromRight((getWidth() * 2) / 3).toFloat();
+	Rectangle<float> area;
+	Rectangle<float> tb;
 
-	auto area = b.reduced(JUCE_LIVE_CONSTANT(40), 15).toFloat();
+	if (vertical)
+	{
+		auto b = getLocalBounds().toFloat();
+		area = b.removeFromBottom((getHeight() * 2) / 3);
+		area = area.reduced(JUCE_LIVE_CONSTANT_OFF(12), 10);
+		tb = b;
+		ScriptnodeComboBoxLookAndFeel::drawScriptnodeDarkBackground(g, tb, false);
+	}
+	else
+	{
+		auto b = getLocalBounds().toFloat();
+		b = b.removeFromRight((getWidth() * 2) / 3);
+		area = b.reduced(40, 15);
+	}
 
 	ScriptnodeComboBoxLookAndFeel::drawScriptnodeDarkBackground(g, area, true);
-
 	area = area.reduced(4);
 
-	auto w = (area.getWidth() - area.getHeight()) * 0.5f;
 
-	auto tb = area.translated(0, 20);
 
-	area = area.withSizeKeepingCentre(area.getHeight(), area.getHeight());
+	auto w = std::abs((area.getWidth() - area.getHeight())) * 0.5f;
 
-	area = area.translated(alpha * w, 0);
+	if (vertical)
+	{
+		area = area.withSizeKeepingCentre(area.getWidth(), area.getWidth());
+		area = area.translated(0, alpha * w);
+	}
+	else
+	{
+		tb = area.translated(0, 20);
+		area = area.withSizeKeepingCentre(area.getHeight(), area.getHeight());
+		area = area.translated(alpha * w, 0);
+	}
 
 	g.setColour(getNodeColour());
-
 	g.fillEllipse(area);
-
 	g.setFont(GLOBAL_BOLD_FONT());
-
 	g.drawText(String(bl.getValue(), 2), tb, Justification::centred);
 }
 
@@ -408,6 +460,7 @@ converter_editor::converter_editor(mothernode* p, PooledUIUpdater* updater) :
 	setWatchedParameters({ 0 });
 
 	modeSelector.addListener(this);
+	setLayout(PreferredLayout::PreferBetween);
 }
 
 void converter_editor::setRange(NormalisableRange<double> nr, double center /*= -90.0*/)
@@ -424,6 +477,14 @@ void converter_editor::setRange(NormalisableRange<double> nr, double center /*= 
 	repaint();
 }
 
+
+void converter_editor::initialise(ObjectWithValueTree* o)
+{
+	node = o;
+	modeSelector.initModes(data.getConverterNames(), o);
+}
+
+
 void converter_editor::paint(Graphics& g)
 {
 	g.setColour(Colours::white.withAlpha(0.5f));
@@ -434,7 +495,7 @@ void converter_editor::paint(Graphics& g)
 	auto m = (Mode)data.getConverterNames().indexOf(modeSelector.getText());
 	data.currentMode = m;
 	auto output = data.getValue(v);
-	
+
 
 	String inputDomain, outputDomain;
 
@@ -464,6 +525,14 @@ void converter_editor::paint(Graphics& g)
 	g.drawText(s, textArea, Justification::centred);
 }
 
+void converter_editor::resized()
+{
+	auto b = getLocalBounds();
+	modeSelector.setBounds(b.removeFromTop(24));
+	textArea = b.toFloat();
+}
+
+
 void converter_editor::comboBoxChanged(ComboBox* b)
 {
 	auto m = (Mode)data.getConverterNames().indexOf(b->getText());
@@ -490,11 +559,6 @@ void converter_editor::comboBoxChanged(ComboBox* b)
 	repaint();
 }
 
-void converter_editor::initialise(ObjectWithValueTree* o)
-{
-	node = o;
-	modeSelector.initModes(data.getConverterNames(), o);
-}
 
 void converter_editor::timerCallback()
 {
@@ -502,14 +566,642 @@ void converter_editor::timerCallback()
 		repaint();
 }
 
-void converter_editor::resized()
+void pma_editor::initialise(ObjectWithValueTree* o)
+{
+	node = dynamic_cast<ParameterSourceObject*>(o);
+	jassert(node != nullptr);
+}
+
+
+pma_editor::pma_editor(mothernode* b, PooledUIUpdater* u) :
+	ScriptnodeExtraComponent<mothernode>(b, u)
+{
+	setLayout(ScriptnodeExtraComponentBase::PreferredLayout::PreferBetween);
+	setWatchedParameters({ 0, 1, 2 });
+	setSize(120, 120);
+	setRepaintsOnMouseActivity(true);
+}
+
+
+void pma_editor::paint(Graphics& g)
+{
+	g.setFont(GLOBAL_BOLD_FONT());
+
+	auto r = node->getParameterRange(0).rng;
+
+	String start, mid, end;
+
+	int numDigits = jmax<int>(1, -1 * roundToInt(log10(r.interval)));
+
+	start = String(r.start, numDigits);
+
+	mid = String(r.convertFrom0to1(0.5), numDigits);
+
+	end = String(r.end, numDigits);
+
+	auto b = getLocalBounds().toFloat();
+
+	float w = JUCE_LIVE_CONSTANT_OFF(85.0f);
+
+	auto midCircle = b.withSizeKeepingCentre(w, w).translated(0.0f, 5.0f);
+
+	float r1 = JUCE_LIVE_CONSTANT_OFF(3.0f);
+	float r2 = JUCE_LIVE_CONSTANT_OFF(5.0f);
+
+	float startArc = JUCE_LIVE_CONSTANT_OFF(-2.5f);
+	float endArc = JUCE_LIVE_CONSTANT_OFF(2.5f);
+
+	Colour trackColour = JUCE_LIVE_CONSTANT_OFF(Colour(0xff4f4f4f));
+
+	auto createArc = [startArc, endArc](Rectangle<float> b, float startNormalised, float endNormalised)
+	{
+		if (startNormalised > endNormalised)
+			std::swap(startNormalised, endNormalised);
+
+		Path p;
+
+		auto s = startArc + jmin(startNormalised, endNormalised) * (endArc - startArc);
+		auto e = startArc + jmax(startNormalised, endNormalised) * (endArc - startArc);
+
+		s = jlimit(startArc, endArc, s);
+		e = jlimit(startArc, endArc, e);
+
+		p.addArc(b.getX(), b.getY(), b.getWidth(), b.getHeight(), s, e, true);
+
+		return p;
+	};
+
+	auto oc = midCircle;
+	auto mc = midCircle.reduced(5.0f);
+	auto ic = midCircle.reduced(10.0f);
+
+	auto outerTrack = createArc(oc, 0.0f, 1.0f);
+	auto midTrack = createArc(mc, 0.0f, 1.0f);
+	auto innerTrack = createArc(ic, 0.0f, 1.0f);
+
+	if (isMouseOver())
+		trackColour = trackColour.withMultipliedBrightness(1.1f);
+
+	if (isMouseButtonDown())
+		trackColour = trackColour.withMultipliedBrightness(1.1f);
+
+	g.setColour(trackColour);
+
+	g.strokePath(outerTrack, PathStrokeType(r1));
+	g.strokePath(midTrack, PathStrokeType(r2));
+	g.strokePath(innerTrack, PathStrokeType(r1));
+
+	auto nrm = [r](double v)
+	{
+		return r.convertTo0to1(v);
+	};
+
+	auto value = nrm(node->getParameterValue(0));
+	auto mulValue = node->getParameterValue(1);
+	auto addValue = node->getParameterValue(2);
+
+	auto totalValue = value * mulValue + addValue;
+
+	auto outerRing = createArc(oc, mulValue * value, totalValue);
+	auto midRing = createArc(mc, 0.0f, totalValue);
+	auto innerRing = createArc(ic, 0.0f, mulValue * value);
+	auto valueRing = createArc(ic, 0.0f, value);
+
+	auto c1 = MultiOutputBase::getFadeColour(0, 2).withAlpha(0.8f);
+	auto c2 = MultiOutputBase::getFadeColour(1, 2).withAlpha(0.8f);
+
+	auto ab = getLocalBounds().toFloat();
+
+	Rectangle<float> ar1, ar2;
+
+	if (getPreferredLayout() == ScriptnodeExtraComponentBase::PreferredLayout::PreferBetween)
+	{
+		ab = ab.removeFromLeft(5.0f);
+		ab.removeFromTop(ab.getHeight() / 3.0f);
+		ar2 = ab.removeFromTop(ab.getHeight() / 2.0f).withSizeKeepingCentre(5.0f, 5.0f);
+		ar1 = ab.withSizeKeepingCentre(5.0f, 5.0f);
+
+	}
+	else
+	{
+		ab = ab.removeFromBottom(5.0f);
+		ab.removeFromLeft(ab.getWidth() / 3.0f);
+		ar2 = ab.removeFromLeft(ab.getWidth() / 2.0f).withSizeKeepingCentre(5.0f, 5.0f);
+		ar1 = ab.withSizeKeepingCentre(5.0f, 5.0f);
+	}
+
+	g.setColour(Colour(c1));
+	g.strokePath(outerRing, PathStrokeType(r1 - 1.0f));
+	g.setColour(c1.withMultipliedAlpha(addValue == 0.0 ? 0.2f : 1.0f));
+	g.fillEllipse(ar1);
+	g.setColour(JUCE_LIVE_CONSTANT_OFF(Colour(0xffd7d7d7)));
+	g.strokePath(midRing, PathStrokeType(r2 - 1.0f));
+
+	g.setColour(c2.withMultipliedAlpha(JUCE_LIVE_CONSTANT_OFF(0.4f)));
+	g.strokePath(valueRing, PathStrokeType(r1 - 1.0f));
+	g.setColour(c2.withMultipliedAlpha(mulValue == 1.0 ? 0.2f : 1.0f));
+	g.fillEllipse(ar2);
+	g.setColour(c2);
+	g.strokePath(innerRing, PathStrokeType(r1));
+
+	b.removeFromTop(18.0f);
+
+	g.setColour(Colours::white.withAlpha(0.3f));
+
+	Rectangle<float> t((float)getWidth() / 2.0f - 35.0f, 0.0f, 70.0f, 15.0f);
+
+	g.drawText(start, t.translated(-70.0f, 80.0f), Justification::centred);
+	g.drawText(mid, t, Justification::centred);
+	g.drawText(end, t.translated(70.0f, 80.0f), Justification::centred);
+}
+
+void pma_editor::onLayoutChange()
+{
+	if (getPreferredLayout() == ScriptnodeExtraComponentBase::PreferredLayout::PreferBetween)
+		setSize(NewParameterHeight * 3, NewParameterHeight * 3);
+}
+
+
+void pma_editor::timerCallback()
+{
+	if (checkWatchedParameters())
+		repaint();
+}
+
+compare_editor::compare_editor(mothernode* b, PooledUIUpdater* u) :
+	ScriptnodeExtraComponent<mothernode>(b, u)
+{
+	setLayout(ScriptnodeExtraComponentBase::PreferredLayout::PreferBetween);
+	setSize(256, 60);
+	setWatchedParameters({ 0, 1, 2 });
+}
+
+juce::Array<int> compare_editor::getParameterOrder() const
+{
+	return { 2, 0, 1 };
+}
+
+
+void compare_editor::onLayoutChange()
+{
+	if (getPreferredLayout() == ScriptnodeExtraComponentBase::PreferredLayout::PreferBetween)
+		setSize(NewParameterHeight, NewParameterHeight * 3);
+	else
+		setSize(256, 60);
+}
+
+
+void compare_editor::paint(Graphics& g)
 {
 	auto b = getLocalBounds();
-	modeSelector.setBounds(b.removeFromTop(24));
-	textArea = b.toFloat();
+
+	auto circles = getCircles(3, 16.0f);
+
+	auto l = circles.getRectangle(getParameterIndexForPreferredLayout(0));
+	auto r = circles.getRectangle(getParameterIndexForPreferredLayout(1));
+	auto m = circles.getRectangle(getParameterIndexForPreferredLayout(2));
+
+	ScriptnodeComboBoxLookAndFeel::drawScriptnodeDarkBackground(g, l.getUnion(r).expanded(6.0f, 6.0f), true);
+
+	g.setColour(Colours::white.withAlpha(0.9f));
+	g.drawEllipse(l, 2.0f);
+	g.drawEllipse(r, 2.0f);
+	g.drawEllipse(m, 2.0f);
+
+	g.setFont(GLOBAL_MONOSPACE_FONT().withHeight(l.getHeight() - 1.0f));
+
+	using Comp = multilogic::compare::Comparator;
+
+	multilogic::compare data;
+	initObjectWithParameterValues<3>(data);
+
+	String w;
+
+	switch (data.comparator)
+	{
+	case Comp::EQ: w = "==";
+		break;
+	case Comp::NEQ: w = "!=";
+		break;
+	case Comp::GT: w = ">";
+		break;
+	case Comp::LT: w = "<";
+		break;
+	case Comp::GET: w = ">=";
+		break;
+	case Comp::LET: w = "<=";
+		break;
+	case Comp::MIN: w = "min";
+		break;
+	case Comp::MAX: w = "max";
+		break;
+	case Comp::numComparators:
+		break;
+	default:;
+	}
+
+	g.drawText(w, l.getUnion(r), Justification::centred);
+
+	g.fillEllipse(l.reduced(3.0f + 5.0f * jlimit(0.0, 1.0, 1.0 - data.leftValue)));
+	g.fillEllipse(r.reduced(3.0f + 5.0f * jlimit(0.0, 1.0, 1.0 - data.rightValue)));
+
+	g.fillEllipse(m.reduced(3.0f + 5.0f * jlimit(0.0, 1.0, 1.0 - data.getValue())));
+}
+
+void compare_editor::timerCallback()
+{
+	if (checkWatchedParameters())
+		repaint();
+}
+
+logic_op_editor::logic_op_editor(mothernode* b, PooledUIUpdater* u) :
+	ScriptnodeExtraComponent<mothernode>(b, u)
+{
+	setLayout(ScriptnodeExtraComponentBase::PreferredLayout::PreferBetween);
+	setSize(256, 60);
+	setWatchedParameters({ 0, 1, 2 });
+}
+
+Array<int> logic_op_editor::getParameterOrder() const
+{
+	return { 2, 0, 1 };
+}
+
+
+void logic_op_editor::paint(Graphics& g)
+{
+	auto b = getLocalBounds().toFloat();
+
+	auto circles = getCircles(3, 16.0f);
+
+	auto l = circles.getRectangle(getParameterIndexForPreferredLayout(0));
+	auto r = circles.getRectangle(getParameterIndexForPreferredLayout(1));
+	auto m = circles.getRectangle(getParameterIndexForPreferredLayout(2));
+
+	ScriptnodeComboBoxLookAndFeel::drawScriptnodeDarkBackground(g, l.getUnion(r).expanded(6.0f, 6.0f), true);
+
+	g.setColour(Colours::white.withAlpha(0.9f));
+	g.drawEllipse(l, 2.0f);
+	g.drawEllipse(r, 2.0f);
+	g.drawEllipse(m, 2.0f);
+
+	g.setFont(GLOBAL_MONOSPACE_FONT().withHeight(l.getHeight() - 1.0f));
+
+	control::multilogic::logic_op lastData;
+
+	initObjectWithParameterValues<3>(lastData);
+
+	String w;
+
+	switch (lastData.logicType)
+	{
+	case multilogic::logic_op::LogicType::AND: w = "AND"; break;
+	case multilogic::logic_op::LogicType::OR: w = "OR"; break;
+	case multilogic::logic_op::LogicType::XOR: w = "XOR"; break;
+	default: jassertfalse; break;
+	}
+
+	g.drawText(w, l.getUnion(r), Justification::centred);
+
+	if (lastData.leftValue == multilogic::logic_op::LogicState::True)
+		g.fillEllipse(l.reduced(4.0f));
+
+	if (lastData.rightValue == multilogic::logic_op::LogicState::True)
+		g.fillEllipse(r.reduced(4.0f));
+
+	if (lastData.getValue() > 0.5)
+		g.fillEllipse(m.reduced(4.0f));
+}
+
+void logic_op_editor::timerCallback()
+{
+	if (checkWatchedParameters())
+		repaint();
+}
+
+void logic_op_editor::onLayoutChange()
+{
+	if (getPreferredLayout() == ScriptnodeExtraComponentBase::PreferredLayout::PreferBetween)
+		setSize(NewParameterHeight, NewParameterHeight * 3);
+}
+
+bipolar_editor::bipolar_editor(mothernode* b, PooledUIUpdater* u) :
+	ScriptnodeExtraComponent<mothernode>(b, u)
+{
+	setLayout(ScriptnodeExtraComponentBase::PreferredLayout::PreferBetween);
+	setWatchedParameters({ 0, 1, 2 });
+	setSize(256, 256);
+}
+
+void bipolar_editor::onLayoutChange()
+{
+	if (getPreferredLayout() == ScriptnodeExtraComponentBase::PreferredLayout::PreferBetween)
+		setSize(NewParameterHeight * 3, NewParameterHeight * 3);
+}
+
+
+
+void bipolar_editor::paint(Graphics& g)
+{
+	ScriptnodeComboBoxLookAndFeel::drawScriptnodeDarkBackground(g, pathArea, false);
+
+	UnblurryGraphics ug(g, *this, true);
+
+	g.setColour(Colours::white.withAlpha(0.1f));
+
+	auto pb = pathArea.reduced(UIValues::NodeMargin / 2);
+
+	ug.draw1PxHorizontalLine(pathArea.getCentreY(), pb.getX(), pb.getRight());
+	ug.draw1PxVerticalLine(pathArea.getCentreX(), pb.getY(), pb.getBottom());
+	ug.draw1PxRect(pb);
+
+	auto c = getNodeColour();
+	g.setColour(c);
+
+	Path dst;
+
+	auto ps = ug.getPixelSize();
+	float l[2] = { 4.0f * ps, 4.0f * ps };
+
+	PathStrokeType(2.0f * ps).createDashedStroke(dst, outlinePath, l, 2);
+
+	g.fillPath(dst);
+	g.strokePath(valuePath, PathStrokeType(4.0f * ug.getPixelSize()));
+}
+
+
+
+void bipolar_editor::resized()
+{
+	auto b = getLocalBounds();
+	auto bSize = jmin(b.getWidth(), b.getHeight());
+	pathArea = b.withSizeKeepingCentre(bSize, bSize).toFloat();
+}
+
+
+void bipolar_editor::timerCallback()
+{
+	if (checkWatchedParameters())
+		rebuild();
+}
+
+void bipolar_editor::rebuild()
+{
+	outlinePath.clear();
+
+	valuePath.clear();
+	outlinePath.startNewSubPath(0.0f, 0.0f);
+	outlinePath.startNewSubPath(1.0f, 1.0f);
+
+	valuePath.startNewSubPath(0.0f, 0.0f);
+	valuePath.startNewSubPath(1.0f, 1.0f);
+
+	multilogic::bipolar lastData;
+	initObjectWithParameterValues<3>(lastData);
+
+	auto copy = lastData;
+
+	auto numPixels = pathArea.getWidth();
+
+	bool outlineEmpty = true;
+	bool valueEmpty = true;
+
+	bool valueBiggerThanHalf = copy.value > 0.5;
+	auto v = lastData.value;
+
+	for (float i = 0.0; i < numPixels; i++)
+	{
+		float x = i / numPixels;
+
+		copy.value = x;
+		float y = 1.0f - copy.getValue();
+
+		if (outlineEmpty)
+		{
+			outlinePath.startNewSubPath(x, y);
+			outlineEmpty = false;
+		}
+		else
+			outlinePath.lineTo(x, y);
+
+		bool drawBiggerValue = valueBiggerThanHalf && x > 0.5f && x < v;
+		bool drawSmallerValue = !valueBiggerThanHalf && x < 0.5f && x > v;
+
+		if (drawBiggerValue || drawSmallerValue)
+		{
+			if (valueEmpty)
+			{
+				valuePath.startNewSubPath(x, y);
+				valueEmpty = false;
+			}
+			else
+				valuePath.lineTo(x, y);
+		}
+	}
+
+	PathFactory::scalePath(outlinePath, pathArea.reduced(UIValues::NodeMargin));
+	PathFactory::scalePath(valuePath, pathArea.reduced(UIValues::NodeMargin));
+
+	repaint();
+}
+
+
+
+
+
+
+
+
+minmax_editor::minmax_editor(mothernode* b, PooledUIUpdater* u) :
+	ScriptnodeExtraComponent<mothernode>(b, u)
+{
+	addAndMakeVisible(rangePresets);
+	rangePresets.setLookAndFeel(&slaf);
+	rangePresets.setColour(ComboBox::ColourIds::textColourId, Colours::white.withAlpha(0.8f));
+
+	setWatchedParameters({ 0, 1, 2, 3, 4, 5 });
+
+	for (const auto& p : presets.presets)
+		rangePresets.addItem(p.id, p.index + 1);
+
+	rangePresets.onChange = [this]()
+	{
+		for (const auto& p : presets.presets)
+		{
+			if (p.id == rangePresets.getText())
+			{
+				setRange(p.nr, p.textConverter);
+			}
+				
+		}
+	};
+
+	setSize(256, 100);
+	start();
+}
+
+void minmax_editor::paint(Graphics& g)
+{
+	ScriptnodeComboBoxLookAndFeel::drawScriptnodeDarkBackground(g, pathArea, false);
+	g.setFont(GLOBAL_BOLD_FONT());
+
+	auto r = currentRange.rng;
+
+	auto tc = node->getValueTree().getChildWithName(PropertyIds::Parameters).getChild(1)[PropertyIds::TextToValueConverter].toString();
+	auto vtc = hise::ValueToTextConverter::fromString(tc);
+	
+	String startValue, endValue;
+
+	if (vtc.active)
+	{
+		startValue = vtc.getTextForValue(r.start);
+		endValue = vtc.getTextForValue(r.end);
+	}
+	else
+	{
+		startValue = String(r.start);
+		endValue = String(r.end);
+	}
+
+
+	String s;
+	s << "[" << startValue;
+	s << " - " << endValue << "]";
+
+	g.setColour(Colours::white);
+	g.drawText(s, pathArea.reduced(UIValues::NodeMargin), r.skew < 1.0 ? Justification::centredTop : Justification::centredBottom);
+
+	g.setColour(getNodeColour());
+
+	Path dst;
+
+	UnblurryGraphics ug(g, *this, true);
+	auto ps = ug.getPixelSize();
+	float l[2] = { 4.0f * ps, 4.0f * ps };
+
+	PathStrokeType(2.0f * ps).createDashedStroke(dst, fullPath, l, 2);
+
+	g.fillPath(dst);
+
+	g.strokePath(valuePath, PathStrokeType(4.0f * ug.getPixelSize()));
+}
+
+void minmax_editor::timerCallback()
+{
+	if (checkWatchedParameters())
+	{
+		rebuildPaths();
+	}
+}
+
+void minmax_editor::initialise(ObjectWithValueTree* o)
+{
+	node = o;
+}
+
+void minmax_editor::setRange(InvertableParameterRange newRange, const String& tc)
+{
+	if (node != nullptr)
+	{
+		auto pTree = node->getValueTree().getChildWithName(PropertyIds::Parameters);
+
+		RangeHelpers::storeDoubleRange(pTree.getChild(1), newRange, node->getUndoManager());
+		RangeHelpers::storeDoubleRange(pTree.getChild(2), newRange, node->getUndoManager());
+
+		pTree.getChild(0).setProperty(PropertyIds::TextToValueConverter, "NormalizedPercentage", node->getUndoManager());
+		pTree.getChild(1).setProperty(PropertyIds::TextToValueConverter, tc, node->getUndoManager());
+		pTree.getChild(2).setProperty(PropertyIds::TextToValueConverter, tc, node->getUndoManager());
+
+		pTree.getChild(1).setProperty(PropertyIds::Value, newRange.inv ? newRange.rng.end : newRange.rng.start, node->getUndoManager());
+		pTree.getChild(2).setProperty(PropertyIds::Value, newRange.inv ? newRange.rng.start : newRange.rng.end, node->getUndoManager());
+		pTree.getChild(3).setProperty(PropertyIds::Value, newRange.rng.skew, node->getUndoManager());
+		pTree.getChild(4).setProperty(PropertyIds::Value, newRange.rng.interval, node->getUndoManager());
+		pTree.getChild(5).setProperty(PropertyIds::Value, newRange.inv ? 1.0 : 0.0, node->getUndoManager());
+		rebuildPaths();
+	}
+}
+
+void minmax_editor::rebuildPaths()
+{
+	fullPath.clear();
+	valuePath.clear();
+
+	if (getWidth() == 0)
+		return;
+
+	multilogic::minmax lastData;
+	initObjectWithParameterValues<6>(lastData);
+
+	currentRange = lastData.range;
+
+	
+
+	if (currentRange.rng.getRange().isEmpty())
+		return;
+
+	auto maxValue = (float)lastData.range.convertFrom0to1(1.0, false);
+	auto minValue = (float)lastData.range.convertFrom0to1(0.0, false);
+
+	auto vToY = [&](float v)
+	{
+		return -v;
+	};
+
+	fullPath.startNewSubPath(1.0f, vToY(maxValue));
+	fullPath.startNewSubPath(1.0f, vToY(minValue));
+	fullPath.startNewSubPath(0.0f, vToY(maxValue));
+	fullPath.startNewSubPath(0.0f, vToY(minValue));
+
+	valuePath.startNewSubPath(1.0f, vToY(maxValue));
+	valuePath.startNewSubPath(1.0f, vToY(minValue));
+	valuePath.startNewSubPath(0.0f, vToY(maxValue));
+	valuePath.startNewSubPath(0.0f, vToY(minValue));
+
+	for (int i = 0; i < getWidth(); i += 3)
+	{
+		float normX = (float)i / (float)getWidth();
+
+		auto v = lastData.range.convertFrom0to1(normX, false);
+		v = lastData.range.snapToLegalValue(v);
+
+		auto y = vToY((float)v);
+
+		fullPath.lineTo(normX, y);
+
+		if (lastData.value > normX)
+			valuePath.lineTo(normX, y);
+	}
+
+	fullPath.lineTo(1.0, vToY(maxValue));
+
+	if (lastData.value == 1.0)
+		valuePath.lineTo(1.0, vToY(maxValue));
+
+	auto pb = pathArea.reduced((float)UIValues::NodeMargin);
+
+	fullPath.scaleToFit(pb.getX(), pb.getY(), pb.getWidth(), pb.getHeight(), false);
+	valuePath.scaleToFit(pb.getX(), pb.getY(), pb.getWidth(), pb.getHeight(), false);
+
+	repaint();
+}
+
+void minmax_editor::resized()
+{
+	auto b = getLocalBounds();
+	auto bottom = b.removeFromBottom(28);
+	b.removeFromBottom(UIValues::NodeMargin);
+	bottom.removeFromRight(UIValues::NodeMargin);
+	rangePresets.setBounds(bottom);
+
+	b.reduced(UIValues::NodeWidth, 0);
+
+	pathArea = b.toFloat();
+
+	rebuildPaths();
 }
 
 }
+
 
 UIFactory::Data::Data()
 {
@@ -522,6 +1214,13 @@ UIFactory::Data::Data()
 	registerComponent<control::xfader_editor>("control.xfader");
 	registerComponent<control::blend_editor>("control.blend");
 	registerComponent<control::converter_editor>("control.converter");
+	registerComponent<control::pma_editor>("control.pma");
+	registerComponent<control::pma_editor>("control.pma_unscaled");
+	registerComponent<control::compare_editor>("control.compare");
+	registerComponent<control::logic_op_editor>("control.logic_op");
+	registerComponent<control::bipolar_editor>("control.bipolar");
+	registerComponent<control::minmax_editor>("control.minmax");
+	registerComponent<control::branch_editor>("control.branch_cable");
 }
 
 

@@ -37,36 +37,6 @@ using namespace hise;
 namespace faders
 {
 
-	editor::editor(NodeType* v, PooledUIUpdater* updater_) :
-		ScriptnodeExtraComponent(v, updater_),
-		graph(nullptr, updater_),
-		dragRow(&v->p, updater_)
-	{
-		graph.initialise(v->p.parentNode);
-		addAndMakeVisible(dragRow);
-
-		addAndMakeVisible(graph);
-
-		setSize(256, 24 + 10 + parameter::ui::UIConstants::ButtonHeight + parameter::ui::UIConstants::DragHeight + parameter::ui::UIConstants::GraphHeight + UIValues::NodeMargin);
-
-		setRepaintsOnMouseActivity(true);
-
-		stop();
-	}
-
-	void editor::resized()
-	{
-		auto b = getLocalBounds();
-		graph.setBounds(b.removeFromTop(parameter::ui::UIConstants::GraphHeight + 24 + UIValues::NodeMargin));
-		dragRow.setBounds(b);
-	}
-
-	juce::Component* editor::createExtraComponent(void* obj, PooledUIUpdater* updater)
-	{
-		auto v = static_cast<NodeType*>(obj);
-		return new editor(v, updater);
-	}
-
 }
 
 

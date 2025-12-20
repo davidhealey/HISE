@@ -1074,7 +1074,7 @@ namespace control
 		NodeFactory(network)
 	{
 
-		registerPolyNoProcessNode<control::bipolar<1, parameter::dynamic_base_holder>, control::bipolar<NUM_POLYPHONIC_VOICES, parameter::dynamic_base_holder>, bipolar_editor>();
+		registerPolyNoProcessNode<control::bipolar<1, parameter::dynamic_base_holder>, control::bipolar<NUM_POLYPHONIC_VOICES, parameter::dynamic_base_holder>, bipolar_editor_wrapped>();
 
 		registerPolyNoProcessNode<control::blend<1, parameter::dynamic_base_holder>, control::blend<NUM_POLYPHONIC_VOICES, parameter::dynamic_base_holder>, blend_editor_wrapped>();
 
@@ -1082,16 +1082,16 @@ namespace control
 
 		
 
-		registerPolyNoProcessNode<control::pma<1, parameter::dynamic_base_holder>, control::pma<NUM_POLYPHONIC_VOICES, parameter::dynamic_base_holder>, pma_editor<multilogic::pma>>();
-		registerPolyNoProcessNode<control::pma_unscaled<1, parameter::dynamic_base_holder>, control::pma_unscaled<NUM_POLYPHONIC_VOICES, parameter::dynamic_base_holder>, pma_editor<multilogic::pma_unscaled>>();
+		registerPolyNoProcessNode<control::pma<1, parameter::dynamic_base_holder>, control::pma<NUM_POLYPHONIC_VOICES, parameter::dynamic_base_holder>, extra_drag_wrapper<pma_editor, Justification::bottom>>();
+		registerPolyNoProcessNode<control::pma_unscaled<1, parameter::dynamic_base_holder>, control::pma_unscaled<NUM_POLYPHONIC_VOICES, parameter::dynamic_base_holder>, extra_drag_wrapper<pma_editor, Justification::bottom>>();
 
 		registerPolyNoProcessNode<control::minmax<1, parameter::dynamic_base_holder>, control::minmax<NUM_POLYPHONIC_VOICES, parameter::dynamic_base_holder>, minmax_editor>();
 
-		registerPolyNoProcessNode<control::logic_op<1, parameter::dynamic_base_holder>, control::logic_op<NUM_POLYPHONIC_VOICES, parameter::dynamic_base_holder>, logic_op_editor>();
+		registerPolyNoProcessNode<control::logic_op<1, parameter::dynamic_base_holder>, control::logic_op<NUM_POLYPHONIC_VOICES, parameter::dynamic_base_holder>, logic_op_editor_wrapped>();
 
 		registerPolyNoProcessNode<control::bang<1, parameter::dynamic_base_holder>, control::bang<NUM_POLYPHONIC_VOICES, parameter::dynamic_base_holder>, ModulationSourceBaseComponent>();
 
-		registerPolyNoProcessNode<control::compare<1, parameter::dynamic_base_holder>, control::compare<NUM_POLYPHONIC_VOICES, parameter::dynamic_base_holder>, compare_editor>();
+		registerPolyNoProcessNode<control::compare<1, parameter::dynamic_base_holder>, control::compare<NUM_POLYPHONIC_VOICES, parameter::dynamic_base_holder>, compare_editor_wrapped>();
 
 		registerPolyNoProcessNode<control::change<1, parameter::dynamic_base_holder>, control::change<NUM_POLYPHONIC_VOICES, parameter::dynamic_base_holder>, ModulationSourceBaseComponent>();
         
@@ -1100,7 +1100,7 @@ namespace control
 
         registerNoProcessNode<dynamic_pack_resizer, data::ui::sliderpack_editor>();
         
-		registerPolyNoProcessNode<branch_cable<1, parameter::dynamic_list>, branch_cable<NUM_POLYPHONIC_VOICES, parameter::dynamic_list>, branch_editor>()
+		registerPolyNoProcessNode<branch_cable<1, parameter::dynamic_list>, branch_cable<NUM_POLYPHONIC_VOICES, parameter::dynamic_list>, branch_editor_wrapped>()
 
         ;
         
@@ -1131,7 +1131,7 @@ namespace control
 
 		registerNoProcessNode<duplilogic::dynamic::NodeType, duplilogic::dynamic::editor>();
 		registerNoProcessNode<dynamic_dupli_pack, data::ui::sliderpack_editor>();
-		registerNoProcessNode<faders::NodeType, faders::editor>();
+		registerNoProcessNode<faders::NodeType, faders::Editor>();
 		registerNoProcessNode<control::xy_editor::NodeType, control::xy_editor>();
 		registerNoProcessNode<control::resetter_editor::NodeType, control::resetter_editor>();
 		registerPolyModNode<dynamic_smoother_parameter<1>, dynamic_smoother_parameter<NUM_POLYPHONIC_VOICES>, smoothers::dynamic_base::editor>();

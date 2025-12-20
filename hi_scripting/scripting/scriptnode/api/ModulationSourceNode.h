@@ -225,6 +225,10 @@ template <typename T, Justification::Flags J> struct extra_drag_wrapper : public
 		{
 			dragger.setBounds(b.removeFromBottom(28));
 		}
+		if(J == Justification::top)
+		{
+			dragger.setBounds(b.removeFromTop(28));
+		}
 
 		editor.setBounds(b);
 	}

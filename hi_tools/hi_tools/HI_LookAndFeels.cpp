@@ -1735,9 +1735,10 @@ void ScriptnodeComboBoxLookAndFeel::drawScriptnodeDarkBackground(Graphics& g, Re
 
 	if (roundedCorners)
 	{
-		g.fillRoundedRectangle(area, area.getHeight() / 2.0f);
+		auto cornerSize = jmin(area.getWidth(), area.getHeight()) / 2.0f;
+		g.fillRoundedRectangle(area, cornerSize);
 		g.setColour(Colour(0xFF060609));
-		g.drawRoundedRectangle(area.reduced(0.5f), area.getHeight() / 2.0f, 1.0f);
+		g.drawRoundedRectangle(area.reduced(0.5f), cornerSize, 1.0f);
 	}
 	else
 	{

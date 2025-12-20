@@ -60,7 +60,7 @@ struct ParameterSlider::RangeComponent : public ComponentWithMiddleMouseDrag,
 
 	ParameterSlider& parent;
 
-	RangePresets presets;
+	RangeHelpers::RangePresets presets;
 
 	ValueTree connectionSource;
 
@@ -775,7 +775,7 @@ struct ParameterSlider::RangeComponent : public ComponentWithMiddleMouseDrag,
 				if (n.isNotEmpty())
 				{
 					auto cr = getParentRange();
-					presets.createDefaultRange(n, cr);
+					//presets.createDefaultRange(n, cr);
 				}
 			}
 			if (r == 5)

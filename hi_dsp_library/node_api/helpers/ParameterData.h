@@ -136,6 +136,38 @@ struct RangeHelpers
 		return { PropertyIds::NodeId, PropertyIds::ParameterId, Identifier("Enabled") };
 	}
 
+	struct RangePresets
+	{
+		RangePresets();
+
+		int getPresetIndex(const InvertableParameterRange& r)
+		{
+			for (int i = 0; i < presets.size(); i++)
+			{
+				if (presets[i].nr == r)
+					return i;
+			}
+
+			return -1;
+		}
+
+		~RangePresets();
+
+		struct Preset
+		{
+			void restoreFromValueTree(const ValueTree& v);
+
+			ValueTree exportAsValueTree() const;
+
+			InvertableParameterRange nr;
+			String id;
+			int index;
+			String textConverter;
+		};
+
+		Array<Preset> presets;
+	};
+
 private:
 	static Identifier ri(IdSet set, RangeIdentifier r)
 	{
