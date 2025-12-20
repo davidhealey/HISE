@@ -224,7 +224,7 @@ struct dynamic_list_editor : public ScriptnodeExtraComponent<parameter::dynamic_
 template <class NodeType, class UIClass> struct multi_output_wrapper : public ScriptnodeExtraComponent<NodeType>
 {
 	multi_output_wrapper(NodeType* v, PooledUIUpdater* updater_):
-	ScriptnodeExtraComponent(v, updater_),
+	ScriptnodeExtraComponent<NodeType>(v, updater_),
 		graph(nullptr, updater_),
 		dragRow(&v->getParameter(), updater_)
 	{
@@ -255,7 +255,7 @@ template <class NodeType, class UIClass> struct multi_output_wrapper : public Sc
 	static Component* createExtraComponent(void* obj, PooledUIUpdater* updater)
 	{
 		auto v = static_cast<NodeType*>(obj);
-		return new multi_output_wrapper(v, updater);
+		return new multi_output_wrapper<NodeType, UIClass>(v, updater);
 	}
 
 	UIClass graph;
