@@ -1121,6 +1121,7 @@ struct ScriptExpansionHandler::Wrapper
 	API_VOID_METHOD_WRAPPER_1(ScriptExpansionHandler, setAllowedExpansionTypes);
 	API_METHOD_WRAPPER_2(ScriptExpansionHandler, installExpansionFromPackage);
 	API_METHOD_WRAPPER_1(ScriptExpansionHandler, getExpansionForInstallPackage);
+	API_METHOD_WRAPPER_1(ScriptExpansionHandler, getMetaDataFromPackage);
 };
 
 ScriptExpansionHandler::ScriptExpansionHandler(JavascriptProcessor* jp_) :
@@ -1148,6 +1149,7 @@ ScriptExpansionHandler::ScriptExpansionHandler(JavascriptProcessor* jp_) :
 	ADD_API_METHOD_1(setAllowedExpansionTypes);
 	ADD_API_METHOD_0(getCurrentExpansion);
 	ADD_API_METHOD_1(setInstallCallback);
+	ADD_API_METHOD_1(getMetaDataFromPackage);
 	ADD_API_METHOD_1(getExpansionForInstallPackage);
 
 	
@@ -1335,6 +1337,17 @@ bool ScriptExpansionHandler::installExpansionFromPackage(var packageFile, var sa
 		reportScriptError("argument is not a file");
 		RETURN_IF_NO_THROW(false);
 	}
+}
+
+var ScriptExpansionHandler::getMetaDataFromPackage(var packageFile)
+{
+	if (auto sf = dynamic_cast<ScriptingObjects::ScriptFile*>(packageFile.getObject()))
+	{
+		hlac::HlacArchiver a(nullptr);
+		return a.readMetadataFromArchive(sf->f);
+	}
+	
+	return {};
 }
 
 var ScriptExpansionHandler::getExpansionForInstallPackage(var packageFile)
