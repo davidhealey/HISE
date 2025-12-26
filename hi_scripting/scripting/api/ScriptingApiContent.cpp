@@ -1108,7 +1108,7 @@ void ScriptingApi::Content::ScriptComponent::AsyncControlCallbackSender::handleA
 	{
 		auto v = parent->getValue();
 
-		if(v.isDouble() || v.isInt() || v.isInt64() || v.isBool())
+		/*if (v.isDouble() || v.isInt() || v.isInt64() || v.isBool())
 		{
 			auto value = (float)v;
 			FloatSanitizers::sanitizeFloatNumber(value);
@@ -1119,9 +1119,9 @@ void ScriptingApi::Content::ScriptComponent::AsyncControlCallbackSender::handleA
 			dynamic_cast<Processor*>(p)->setAttribute(cachedParameterIndex, value, dispatch::sendNotificationSync);
 		}
 		else
-		{
+		{*/
 			p->controlCallback(parent, v);
-		}
+		//}
 
 		if (auto sp = dynamic_cast<ScriptPanel*>(parent))
 			sp->repaint();
