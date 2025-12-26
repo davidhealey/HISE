@@ -2545,6 +2545,8 @@ juce::Result FullInstrumentExpansion::initialise()
 		if(iconData.isNotEmpty())
 			pool->getImagePool().setDataProvider(new PublicIconProvider(&pool->getImagePool(), iconData));
 
+		initialiseFromValueTree(allData);
+
 		fullyLoaded = false;
 
 		getMainController()->getExpansionHandler().addListener(this);
