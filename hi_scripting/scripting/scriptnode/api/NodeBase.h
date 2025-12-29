@@ -231,7 +231,7 @@ private:
 /** A node in the DSP network. */
 class NodeBase : public ConstScriptingObject,
 				 public ObjectWithJSONConverter,
-				 public ObjectWithValueTree
+				 public ParameterSourceObject
 {
 public:
 
@@ -427,6 +427,23 @@ public:
 	PrepareSpecs getLastPrepareSpecs() const override
 	{
 		return lastSpecs;
+	}
+
+	
+	double getParameterValue(int index) const override 
+	{
+		if(auto p = getParameterFromIndex(index))
+			return p->getValue();
+
+		return 0.0;
+	}
+
+	InvertableParameterRange getParameterRange(int index) const override
+	{
+		if(auto p = getParameterFromIndex(index))
+			return RangeHelpers::getDoubleRange(p->data);
+
+		return {};
 	}
 
 	ValueTree getParameterTree();

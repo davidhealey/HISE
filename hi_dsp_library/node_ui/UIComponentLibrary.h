@@ -287,24 +287,154 @@ struct xfader_editor : public ScriptnodeExtraComponent<mothernode>,
 	faders::dynamic obj;
 
 	ComboBoxWithModeProperty faderSelector;
+	ComboBoxWithModeProperty numOutputs;
 
 	Array<Path> faderCurves;
 };
 
+struct branch_editor : public ScriptnodeExtraComponent<mothernode>,
+					   public ParameterWatcherBase
+{
+	branch_editor(mothernode* t, PooledUIUpdater* u) :
+		ScriptnodeExtraComponent<mothernode>(t, u),
+		numOutputs("8", PropertyIds::NumParameters)
+	{
+		addAndMakeVisible(numOutputs);
+		setLayout(ScriptnodeExtraComponentBase::PreferredLayout::PreferBetween);
+		setWatchedParameters({ 0 });
+		setSize(512, 20);
+		start();
+	}
 
+	void onLayoutChange() override
+	{
+		if(getPreferredLayout() == ScriptnodeExtraComponentBase::PreferredLayout::PreferBetween)
+			setSize(80, 30);
+	}
+
+	SN_CREATE_EXTRA_COMPONENT(branch_editor);
+
+	void initialise(ObjectWithValueTree* o) override
+	{
+		numOutputs.initModes({ "2", "3", "4", "5", "6", "7", "8" }, o);
+
+		auto v = o->getValueTree();
+		um = o->getUndoManager();
+		sts = v.getChildWithName(PropertyIds::SwitchTargets);
+		numParameterListener.setCallback(sts, valuetree::AsyncMode::Asynchronously, VT_BIND_CHILD_LISTENER(onNumParameters));
+
+		indexParameterTree = v.getChildWithName(PropertyIds::Parameters).getChildWithProperty(PropertyIds::ID, "Index");
+		jassert(indexParameterTree.isValid());
+	}
+
+	valuetree::ChildListener numParameterListener;
+
+	void onNumParameters(const ValueTree& v, bool wasAdded)
+	{
+		numLastParameters = sts.getNumChildren();
+
+		if (numLastParameters > 1)
+			indexParameterTree.setProperty(PropertyIds::MaxValue, numLastParameters - 1, um);
+
+		resized();
+		repaint();
+	}
+
+	void timerCallback() override
+	{
+		if (checkWatchedParameters())
+			repaint();
+	}
+
+	void paint(Graphics& g) override
+	{
+		
+
+		if (numLastParameters > 0)
+		{
+			auto circles = getCircles(numLastParameters, 12.0f, top.toFloat());
+			
+			auto nc = getNodeColour();
+			auto currentIndex = (int)getWatchedParameterValue(0);
+
+			if(getPreferredLayout() == ScriptnodeExtraComponentBase::PreferredLayout::PreferBetween)
+			{
+				Point<float> start(0, 37 * 3 / 2);
+				
+				for(int i = 0; i < numLastParameters; i++)
+				{
+					Path p;
+					p.startNewSubPath(start);
+
+					auto end = circles.getRectangle(i).getCentre().translated(JUCE_LIVE_CONSTANT(10.0f), 0.f);
+
+					auto mx = start.translated(60.0f - i * 5.0f, 0.0f);
+
+					auto mx2 = mx.withY(end.getY());
+
+					p.lineTo(mx);
+					p.lineTo(mx2);
+					p.lineTo(end);
+
+					p = p.createPathWithRoundedCorners(3.0f);
+
+					auto active = i == currentIndex;
+					g.setColour(nc.withAlpha(active ? 1.0f : 0.1f));
+					g.strokePath(p, PathStrokeType(1.0f));
+
+					g.fillEllipse(Rectangle<float>(start, start).withSizeKeepingCentre(5.0f, 5.0f).translated(2.5f, 0.0f));
+					g.fillEllipse(Rectangle<float>(end, end).withSizeKeepingCentre(5.0f, 5.0f).translated(-2.5f, 0.0f));
+
+				}
+			}
+			else
+			{
+				auto copy = top;
+
+				for (int i = 0; i < numLastParameters; i++)
+				{
+					auto r = circles.getRectangle(i);
+					auto active = i == currentIndex;
+					g.setColour(nc.withAlpha(active ? 1.0f : 0.1f));
+					g.fillEllipse(r);
+				}
+			}
+
+			
+		}
+	}
+
+	void resized() override
+	{
+		if(getPreferredLayout() == ScriptnodeExtraComponentBase::PreferredLayout::PreferBetween)
+			setSize(80, NewParameterHeight * jmax(2, sts.getNumChildren()));
+
+		auto b = getLocalBounds();
+		numOutputs.setBounds(b.removeFromLeft(50).removeFromTop(28));
+		top = b;
+	}
+
+private:
+
+	int numLastParameters = 0;
+	UndoManager* um;
+	Rectangle<int> top;
+	ValueTree indexParameterTree;
+	ValueTree sts;
+
+	ComboBoxWithModeProperty numOutputs;
+};
 
 struct intensity_editor : public ScriptnodeExtraComponent<mothernode>,
 						  public ParameterWatcherBase
 {
-
 	intensity_editor(mothernode* b, PooledUIUpdater* u);
 
+	void onLayoutChange() override;
+
 	void paint(Graphics& g) override;
-
 	void rebuildPaths();
-
 	void timerCallback() override;
-
 	void resized() override;
 
 	SN_CREATE_EXTRA_COMPONENT(intensity_editor);
@@ -319,8 +449,8 @@ struct blend_editor : public ScriptnodeExtraComponent<mothernode>,
 {
 	blend_editor(mothernode* b, PooledUIUpdater* u);;
 
+	void onLayoutChange() override;
 	void paint(Graphics& g) override;
-
 	void timerCallback() override;
 
 	SN_CREATE_EXTRA_COMPONENT(blend_editor);
@@ -350,6 +480,99 @@ private:
 	Rectangle<float> textArea;
 	ComboBoxWithModeProperty modeSelector;
 	Colour currentColour;
+};
+
+struct pma_editor : public ScriptnodeExtraComponent<mothernode>,
+					public ParameterWatcherBase
+{
+	pma_editor(mothernode* b, PooledUIUpdater* u);;
+
+	void initialise(ObjectWithValueTree* o) override;
+	void onLayoutChange() override;
+	void timerCallback() override;
+	void paint(Graphics& g) override;
+
+	SN_CREATE_EXTRA_COMPONENT(pma_editor);
+
+private:
+
+	ParameterSourceObject* node;
+	bool colourOk = false;
+};
+
+struct compare_editor : public ScriptnodeExtraComponent<mothernode>,
+						public ParameterWatcherBase
+{
+	compare_editor(mothernode* b, PooledUIUpdater* u);
+
+	Array<int> getParameterOrder() const override;
+	void onLayoutChange() override;
+	void paint(Graphics& g) override;
+	void timerCallback() override;
+
+	SN_CREATE_EXTRA_COMPONENT(compare_editor);
+};
+
+struct logic_op_editor : public ScriptnodeExtraComponent<mothernode>,
+					     public ParameterWatcherBase
+{
+	logic_op_editor(mothernode* b, PooledUIUpdater* u);
+
+	Array<int> getParameterOrder() const override;
+	void onLayoutChange() override;
+	void paint(Graphics& g) override;
+	void timerCallback() override;
+
+	SN_CREATE_EXTRA_COMPONENT(logic_op_editor);
+};
+
+struct bipolar_editor : public ScriptnodeExtraComponent<mothernode>,
+	public ParameterWatcherBase
+{
+	bipolar_editor(mothernode* b, PooledUIUpdater* u);;
+
+	void onLayoutChange() override;
+	void timerCallback() override;
+	void rebuild();
+	void paint(Graphics& g) override;
+	void resized() override;
+
+	SN_CREATE_EXTRA_COMPONENT(bipolar_editor);
+
+	Path outlinePath;
+	Path valuePath;
+
+
+	Rectangle<float> pathArea;
+};
+
+struct minmax_editor : public ScriptnodeExtraComponent<mothernode>,
+	public ParameterWatcherBase
+{
+	minmax_editor(mothernode* b, PooledUIUpdater* u);
+
+	void paint(Graphics& g) override;
+	void timerCallback() override;
+
+	SN_CREATE_EXTRA_COMPONENT(minmax_editor);
+
+	void initialise(ObjectWithValueTree* o) override;
+	void setRange(InvertableParameterRange newRange, const String& textConverter);
+	
+	void resized() override;
+
+private:
+
+	void rebuildPaths();
+
+	ObjectWithValueTree* node;
+	Path fullPath, valuePath;
+
+	ComboBox rangePresets;
+	InvertableParameterRange currentRange;
+	Rectangle<float> pathArea;
+	ScriptnodeComboBoxLookAndFeel slaf;
+	RangeHelpers::RangePresets presets;
 };
 
 } // control

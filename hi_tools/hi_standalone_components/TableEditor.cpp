@@ -188,10 +188,12 @@ void TableEditor::mouseWheelMove(const MouseEvent &e, const MouseWheelDetails &w
 						l->curveChanged(middle, curveValue);
 				}
 			}
+
+			return;
 		}
-		else 
-			getParentComponent()->mouseWheelMove(e, wheel);
 	}
+
+	getParentComponent()->mouseWheelMove(e, wheel);
 };
 
 

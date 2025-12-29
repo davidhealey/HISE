@@ -39,10 +39,74 @@ using namespace juce;
 
 struct ScriptnodeExtraComponentBase: public ComponentWithMiddleMouseDrag
 {
+	enum class PreferredLayout
+	{
+		Undefined,
+		PreferTop,
+		PreferBetween
+	};
+
 	virtual ~ScriptnodeExtraComponentBase() {};
 
 	virtual void initialise(ObjectWithValueTree* o) {};
 
+	PreferredLayout getPreferredLayout() const 
+	{ 
+		return usePreferredLayout ? layout : PreferredLayout::Undefined; 
+	}
+
+	void setUsePreferredLayout(bool shouldUsePreferredLayout)
+	{
+		usePreferredLayout = shouldUsePreferredLayout;
+		onLayoutChange();
+	}
+
+	RectangleList<float> getCircles(int numParameters, float circleSize=16.0f, Rectangle<float> b=Rectangle<float>()) const
+	{
+		RectangleList<float> list;
+
+		if(b.isEmpty())
+			b = getLocalBounds().toFloat();
+
+		if (getPreferredLayout() == ScriptnodeExtraComponentBase::PreferredLayout::PreferBetween)
+		{
+			for(int i = 0; i < numParameters; i++)
+				list.addWithoutMerging(b.removeFromTop(getHeight() / numParameters).toFloat().withSizeKeepingCentre(circleSize, circleSize));
+		}
+		else
+		{
+			for (int i = 0; i < numParameters; i++)
+				list.addWithoutMerging(b.removeFromLeft(getWidth() / numParameters).withSizeKeepingCentre(circleSize, circleSize));
+		}
+
+		return list;
+	}
+
+	virtual Array<int> getParameterOrder() const { return {}; }
+
+	int getParameterIndexForPreferredLayout(int parameterIndex) const 
+	{
+		if(getPreferredLayout() == PreferredLayout::PreferBetween)
+		{
+			auto list = getParameterOrder();
+
+			if(list.contains(parameterIndex))
+				return list.indexOf(parameterIndex);
+		}
+
+		return parameterIndex;
+	}
+
+protected:
+
+	void setLayout(PreferredLayout layoutToUse) { layout = layoutToUse; }
+
+	virtual void onLayoutChange() {};
+
+private:
+
+	bool usePreferredLayout = false;
+	PreferredLayout layout;
 };
 
 /** This can be used to query parameter values from the parent ParameterSourceObject. */
@@ -100,6 +164,18 @@ protected:
 		return 0.0;
 	}
 
+	/** Use this in order to initialise a (temporary) node object with all watched parameters. */
+	template <int NumParameters, typename T> void initObjectWithParameterValues(T& obj)
+	{
+		if constexpr (NumParameters > 0) obj.template setParameter<0>(getWatchedParameterValue(0));
+		if constexpr (NumParameters > 1) obj.template setParameter<1>(getWatchedParameterValue(1));
+		if constexpr (NumParameters > 2) obj.template setParameter<2>(getWatchedParameterValue(2));
+		if constexpr (NumParameters > 3) obj.template setParameter<3>(getWatchedParameterValue(3));
+		if constexpr (NumParameters > 4) obj.template setParameter<4>(getWatchedParameterValue(4));
+		if constexpr (NumParameters > 5) obj.template setParameter<5>(getWatchedParameterValue(5));
+		if constexpr (NumParameters > 6) obj.template setParameter<6>(getWatchedParameterValue(6));
+	}
+
 private:
 
 	bool initialised = false;
@@ -111,6 +187,9 @@ template <class T> class ScriptnodeExtraComponent :
 	public PooledUIUpdater::SimpleTimer
 {
 public:
+
+	static constexpr int NewParameterHeight = 32 + 5;
+	static constexpr int NewParameterWidth = 110;
 
 	using ObjectType = T;
 
@@ -170,16 +249,19 @@ struct UIFactory
 
 	UIFactory() {};
 
-	Component* createExtraComponent(ObjectWithValueTree* o, void* unused, PooledUIUpdater* updater)
+	ScriptnodeExtraComponentBase* createExtraComponent(ObjectWithValueTree* o, void* unused, PooledUIUpdater* updater)
 	{
 		if(auto f = getCreateFunction(o->getValueTree()))
 		{
 			if(auto c = f(unused, updater))
 			{
 				if(auto ec = dynamic_cast<ScriptnodeExtraComponentBase*>(c))
+				{
 					ec->initialise(o);
-
-				return c;
+					return ec;
+				}
+				else
+					jassertfalse;
 			}
 		}
 
