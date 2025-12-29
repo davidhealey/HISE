@@ -1529,7 +1529,7 @@ public:
 
 	private:
 
-		bool allValueChangeCausesCallback = false;
+		bool allValueChangeCausesCallback = true;
 
 		const SliderPackData* getCachedSliderPack() const { return static_cast<const SliderPackData*>(getCachedDataObject()); };
 		SliderPackData* getCachedSliderPack() { return static_cast<SliderPackData*>(getCachedDataObject()); };
