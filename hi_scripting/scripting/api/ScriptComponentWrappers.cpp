@@ -1121,7 +1121,7 @@ ScriptCreatedComponentWrapper(content, index)
 
 	cb->setup(getProcessor(), getIndex(), scriptComboBox->name.toString());
 	cb->addListener(this);
-	//cb->setLookAndFeel(&plaf);
+	cb->setLookAndFeel(&plaf);
 
 	component = cb;
 
