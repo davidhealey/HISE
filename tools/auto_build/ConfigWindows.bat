@@ -5,7 +5,7 @@ SET nightly_build_folder="D:\Development\Installer\Windows\nightly_builds"
 REM This is the project folder for the Standalone app
 SET standalone_project="projects\standalone\Builds\VisualStudio2022\HISE Standalone.sln"
 
-SET projucerPath="tools\projucer\Projucer.exe"
+SET projucerPath="JUCE\projucer\Projucer.exe"
 
 SET standalone_projucer_project="projects\standalone\HISE Standalone.jucer"
 
