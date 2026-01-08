@@ -111,7 +111,7 @@ void DynamicObject::cloneAllProperties()
             *v = v->clone();
 }
 
-DynamicObject::Ptr DynamicObject::clone()
+DynamicObject::Ptr DynamicObject::clone() const
 {
     Ptr d (new DynamicObject (*this));
     d->cloneAllProperties();

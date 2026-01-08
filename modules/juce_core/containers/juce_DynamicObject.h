@@ -188,7 +188,7 @@ public:
         with a (deep) copy of all of its properties. Subclasses can override this to
         implement their own custom copy routines.
     */
-    virtual Ptr clone();
+    virtual Ptr clone() const;
 
     //==============================================================================
     /** Writes this object to a text stream in JSON format.
