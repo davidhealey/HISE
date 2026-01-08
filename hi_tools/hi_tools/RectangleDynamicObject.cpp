@@ -305,10 +305,10 @@ var RectangleDynamicObject::invokeMethod(Identifier methodName, const var::Nativ
 	return functionMap->invoke(methodName, args);
 }
 
-DynamicObject::Ptr RectangleDynamicObject::clone()
+DynamicObject::Ptr RectangleDynamicObject::clone() const
 {
 	jassertfalse;
-	return this;
+	return const_cast<RectangleDynamicObject*>(this);
 }
 
 void RectangleDynamicObject::writeAsJSON(OutputStream& mos, int indentLevel, bool cond, int i)

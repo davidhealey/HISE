@@ -115,7 +115,7 @@ namespace ScriptingObjects
 			return getProperty(id);
 		}
 
-		Ptr clone() override
+		Ptr clone() const override
 		{
 			return new ScriptRectangle(this->rectangle);
 		}
