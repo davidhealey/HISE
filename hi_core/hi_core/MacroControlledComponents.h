@@ -734,7 +734,7 @@ protected:
 class HiSlider: public juce::Slider,
 			    public SliderWithShiftTextBox,
 				public MacroControlledObject,
-				public SliderListener,
+				public Slider::Listener,
 				public ProfiledComponent,
 				public TouchAndHoldComponent,
 			    public DragAndDropTarget

@@ -40,7 +40,7 @@ namespace hise { using namespace juce;
 */
 class FilterEditor  : public ProcessorEditorBody,
                       public Timer,
-                      public SliderListener,
+                      public Slider::Listener,
                       public ComboBoxListener
 {
 public:

@@ -461,7 +461,7 @@ struct SliderMatrix: public MatrixBase
 	};
 
 	struct Row: public RowBase,
-				public SliderListener 
+				public Slider::Listener 
 	{
 		Row(SliderMatrix& parent, const StringArray& sources, const String& targetId_);
 

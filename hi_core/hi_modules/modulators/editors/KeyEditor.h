@@ -145,7 +145,7 @@ private:
                                                                     //[/Comments]
 */
 class KeyEditor  : public ProcessorEditorBody,
-                   public SliderListener,
+                   public Slider::Listener,
                    public ButtonListener
 {
 public:

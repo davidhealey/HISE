@@ -38,7 +38,7 @@
 */
 class ValueSettingComponent  : public Component,
                                public SafeChangeBroadcaster,
-                               public SliderListener,
+							   public Slider::Listener,
                                public LabelListener,
 							   public SampleMap::Listener,
                                public ButtonListener

@@ -36,7 +36,7 @@ namespace hise { using namespace juce;
 */
 class SaturationEditor  : public ProcessorEditorBody,
                           public Timer,
-                          public SliderListener
+                          public Slider::Listener
 {
 public:
     //==============================================================================

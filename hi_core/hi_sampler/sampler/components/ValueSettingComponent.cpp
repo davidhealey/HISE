@@ -479,7 +479,7 @@ void ValueSettingComponent::samplePropertyWasChanged(ModulatorSamplerSound* s, c
 BEGIN_JUCER_METADATA
 
 <JUCER_COMPONENT documentType="Component" className="ValueSettingComponent" componentName=""
-                 parentClasses="public Component, public SafeChangeListener, public SliderListener"
+                 parentClasses="public Component, public SafeChangeListener, public Slider::Listener"
                  constructorParams="" variableInitialisers="" snapPixels="8" snapActive="1"
                  snapShown="1" overlayOpacity="0.330" fixedSize="1" initialWidth="100"
                  initialHeight="32">

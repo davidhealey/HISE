@@ -39,7 +39,7 @@ namespace hise { using namespace juce;
 */
 class ControlEditorBody  : public ProcessorEditorBody,
                            public ButtonListener,
-                           public SliderListener
+                            public Slider::Listener
 {
 public:
     //==============================================================================
