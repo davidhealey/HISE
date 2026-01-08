@@ -39,8 +39,10 @@ namespace melatonin::internal
             shadowPath.addRectangle (shadowPath.getBounds().expanded ((float) scaledRadius));
         }
 
+        juce::SoftwareImageType softwareImage;
+
         // each shadow is its own single channel image associated with a color
-        juce::Image renderedSingleChannel (juce::Image::SingleChannel, scaledShadowBounds.getWidth(), scaledShadowBounds.getHeight(), true);
+        juce::Image renderedSingleChannel (juce::Image::SingleChannel, scaledShadowBounds.getWidth(), scaledShadowBounds.getHeight(), true, softwareImage);
 
         // boot up a graphics context to give us access to fillPath, etc
         juce::Graphics g2 (renderedSingleChannel);

@@ -135,7 +135,9 @@ class HiseLosslessAudioFormatReader : public AudioFormatReader
 public:
 	HiseLosslessAudioFormatReader(InputStream* input_);
 
-	bool readSamples(int** destSamples, int numDestChannels, int startOffsetInDestBuffer, int64 startSampleInFile, int numSamples) override;
+	bool readSamples(AUDIO_READ_PTRS destSamples, int numDestChannels, int startOffsetInDestBuffer, int64 startSampleInFile, int numSamples) override;
+
+	
 
 	double getDecompressionPerformanceForLastFile() { return internalReader.decoder.getDecompressionPerformance(); }
 
@@ -175,7 +177,7 @@ public:
 		}
 	}
 
-	bool readSamples(int** destSamples, int numDestChannels, int startOffsetInDestBuffer, int64 startSampleInFile, int numSamples) override;
+	bool readSamples(AUDIO_READ_PTRS destSamples, int numDestChannels, int startOffsetInDestBuffer, int64 startSampleInFile, int numSamples) override;
 
 	bool mapSectionOfFile(Range<int64> samplesToMap) override;
 
@@ -208,7 +210,7 @@ public:
 
 	HlacSubSectionReader(AudioFormatReader* sourceReader, int64 subsectionStartSample, int64 subsectionLength);
 
-	bool readSamples(int** destSamples, int numDestChannels, int startOffsetInDestBuffer,
+	bool readSamples(AUDIO_READ_PTRS destSamples, int numDestChannels, int startOffsetInDestBuffer,
 		int64 startSampleInFile, int numSamples);
 
 	void readMaxLevels(int64 startSampleInFile, int64 numSamples, Range<float>* results, int numChannelsToRead);
