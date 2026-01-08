@@ -392,8 +392,57 @@ public:
 
 	bool checkCyclicReferences(CyclicReferenceCheckBase::ThreadData& references, const Identifier &id);
 
+	struct RootObject;
 	
-	
+	struct Breakpoint
+	{
+	public:
+
+		struct Reference
+		{
+			Identifier localScopeId;
+			int index = -1;
+		};
+
+		class Listener
+		{
+		public:
+			virtual void breakpointWasHit(int breakpointIndex) = 0;
+
+			virtual ~Listener();
+
+		private:
+
+			friend class WeakReference<Listener>;
+
+			WeakReference<Listener>::Master masterReference;
+		};
+
+		Breakpoint();
+
+		Breakpoint(const Identifier& snippetId_, const String& externalLocation_, int lineNumber_, int charNumber_, int charIndex_, int index_);
+		;
+
+		~Breakpoint();
+
+		bool operator ==(const Breakpoint& other) const;
+
+		void copyLocalScopeToRoot(RootObject* r);
+
+		const Identifier snippetId;
+		const int lineNumber;
+		const int colNumber;
+		const int charIndex;
+
+		const int index;
+		const String externalLocation;
+
+		bool found = false;
+		bool hit = false;
+
+		DynamicObject::Ptr localScope;
+
+	};
 
 	//==============================================================================
 	struct RootObject : public DynamicObject,
@@ -443,8 +492,51 @@ public:
 		var getLocalThisObject() const { return localThreadThisObject.get(); }
 
 		//==============================================================================
-		struct CodeLocation;
-		struct CallStackEntry;
+		struct CodeLocation
+		{
+			CodeLocation(const String& code, const String& externalFile_) noexcept;
+			CodeLocation(const CodeLocation& other) noexcept;
+
+			String getCallbackName(bool returnExternalFileName = false) const;
+
+			void fillColumnAndLines(int& col, int& line) const;
+
+			String getLocationString() const;
+
+			int getCharIndex() const;
+
+			String getEncodedLocationString(const String& processorId, const File& scriptRoot, int col, int line) const;
+
+			String getEncodedLocationString(const String& processorId, const File& scriptRoot) const;
+
+			using Helpers = mcl::TextEditor::Error::Helpers;
+
+			String getErrorMessage(const String& message) const;
+
+			void throwError(const String& message) const;
+
+			String program;
+			mutable String externalFile;
+			String::CharPointerType location;
+		};
+		
+		struct CallStackEntry
+		{
+			CallStackEntry();
+			CallStackEntry(const Identifier & functionName_, const CodeLocation & location_, Processor * processor_);
+			CallStackEntry(const CallStackEntry & otherEntry);
+			CallStackEntry& operator=(const CallStackEntry & otherEntry);
+			CallStackEntry(const Identifier & functionName_);
+
+			bool operator== (const CallStackEntry & otherEntry) const;
+
+			CodeLocation swapLocation(CodeLocation & otherLocation);
+
+			WeakReference<Processor> processor;
+			Identifier functionName;
+			CodeLocation location;
+		};
+
 		struct Scope;
 
         HiseJavascriptPreprocessor::Ptr preprocessor;
@@ -924,55 +1016,7 @@ public:
 
 	
 
-	struct Breakpoint
-	{
-	public:
-
-		struct Reference
-		{
-			Identifier localScopeId;
-			int index = -1;
-		};
-
-		class Listener
-		{
-		public:
-			virtual void breakpointWasHit(int breakpointIndex) = 0;
-
-			virtual ~Listener();
-
-		private:
-
-			friend class WeakReference<Listener>;
-
-			WeakReference<Listener>::Master masterReference;
-		};
-
-		Breakpoint();
-
-		Breakpoint(const Identifier& snippetId_, const String& externalLocation_, int lineNumber_, int charNumber_, int charIndex_, int index_);
-		;
-
-		~Breakpoint();
-
-		bool operator ==(const Breakpoint& other) const;
-
-		void copyLocalScopeToRoot(RootObject& r);
-
-		const Identifier snippetId;
-		const int lineNumber;
-		const int colNumber;
-		const int charIndex;
-		
-		const int index;
-		const String externalLocation;
-
-		bool found = false;
-		bool hit = false;
-
-		DynamicObject::Ptr localScope;
-		
-	};
+	
 
 	void getColourAndLetterForType(int type, Colour& colour, char& letter) override
 	{

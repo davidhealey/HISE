@@ -44,274 +44,7 @@ bool StartupLogger::isInitialised = false;
 double StartupLogger::timeToLastCall = 0.0;
 #endif
 
-struct DebugLogger::Message
-{
-	Message() {};
 
-	Message(int messageIndex_, int callbackIndex_, double timestamp_, Location l, const Processor* const p_, const Identifier& id_) :
-		messageIndex(messageIndex_),
-		callbackIndex(callbackIndex_),
-		timestamp(timestamp_),
-		p(const_cast<Processor*>(p_)),
-		id(id_),
-		location(l)
-	{};
-    
-    virtual ~Message() {};
-
-	String getTimeString()
-	{
-		String t;
-		NewLine nl;
-
-		t << "- Time: **" << String(timestamp, 2) << "**  " << " / ";
-		t << "CallbackIndex: **" << String(callbackIndex) << "**  " << nl;
-
-		return t;
-	}
-
-	String getLocationString()
-	{
-		String l;
-		NewLine nl;
-
-
-		l << "- Location: `";
-
-		if (p.get() != nullptr)
-		{
-			l << p.get()->getId() << "::";
-		}
-
-		if (!id.isNull())
-		{
-			l << id.toString() << "::";
-		}
-
-		l << DebugLogger::getNameForLocation(location) << "`  " << nl;
-
-		return l;
-	}
-
-	virtual bool shouldPrintBacktrace() const { return false; };
-
-	virtual String getMessageText(int errorIndex = -1) { ignoreUnused(errorIndex); jassertfalse; return String(); }
-
-
-	int messageIndex = -1;
-
-	int callbackIndex = -1;
-	double timestamp = 0.0;
-
-	const Identifier id;
-	WeakReference<Processor> p;
-
-	Location location;
-};
-
-struct DebugLogger::StringMessage : public DebugLogger::Message
-{
-	StringMessage(int messageIndex, int callbackIndex, const String& message_, double ts) :
-		Message(messageIndex, callbackIndex, ts, Location::Empty, nullptr, Identifier()),
-		message(message_)
-	{}
-
-    virtual ~StringMessage()
-    {
-        
-    };
-    
-	String getMessageText(int errorIndex /* = -1 */) override 
-	{
-		ignoreUnused(errorIndex);
-
-		String s;
-		s << message << "(CI: `" << String(callbackIndex) << "`)  ";
-
-		return s; 
-	}
-
-	String message;
-};
-
-struct DebugLogger::Event : public DebugLogger::Message
-{
-	Event(int messageIndex, int callbackIndex, const HiseEvent& e_) :
-		Message(messageIndex, callbackIndex, 0, Location::MainRenderCallback, nullptr, Identifier()),
-		e(e_)
-	{}
-    
-    virtual ~Event()
-    {
-        
-    };
-
-	String getMessageText(int errorIndex /* = -1 */) override
-	{
-		ignoreUnused(errorIndex);
-
-		String eventString;
-		
-		eventString << "**" << e.getTypeAsString() << "** CI: `" << String(callbackIndex) << "` ID: `" << String(e.getEventId()) << "` TS: `" << String(e.getTimeStamp()) << "` ";
-		eventString << "V1: `" << (e.isNoteOnOrOff() ? MidiMessage::getMidiNoteName(e.getNoteNumber(), true, true, 3) : String(e.getNoteNumber())) << "`, V2: `" << String(e.getVelocity()) << "`, Ch: `" << String(e.getChannel()) << "`  ";
-
-		return eventString;
-	}
-
-	const HiseEvent e;
-};
-
-struct DebugLogger::AudioSettingChange : public DebugLogger::Message
-{
-	AudioSettingChange(int messageIndex, int callbackIndex, double ts, FailureType type_, double oldValue_, double newValue_) :
-		Message(messageIndex, callbackIndex, ts, Location::MainRenderCallback, nullptr, Identifier()),
-		type(type_),
-		oldValue(oldValue_),
-		newValue(newValue_)
-	{};
-    
-    virtual ~AudioSettingChange()
-    {
-        
-    };
-
-	FailureType type;
-	double oldValue;
-	double newValue;
-
-	String getMessageText(int errorIndex = -1)
-	{
-		ignoreUnused(errorIndex);
-		
-		NewLine nl;
-		String errorMessage;
-
-		errorMessage << "### " << DebugLogger::getNameForFailure(type) << nl;
-
-		errorMessage << getTimeString();
-
-		if (type == FailureType::SampleRateChange || type == FailureType::BufferSizeChange)
-		{
-			errorMessage << "- Old: **" << String(oldValue, 0) << "**  " << nl;
-			errorMessage << "- New: **" << String(newValue, 0) << "**  " << nl << nl;
-			
-		}
-
-		return errorMessage;
-	}
-};
-
-struct DebugLogger::PerformanceWarning : public DebugLogger::Message
-{
-	PerformanceWarning(int messageIndex, int callbackIndex, const DebugLogger::PerformanceData& d_, double timestamp_, int voiceAmount_) :
-		Message(messageIndex, callbackIndex, timestamp_, (Location)d_.location, d_.p, Identifier()),
-		d(d_),
-		voiceAmount(voiceAmount_),
-		timestamp(timestamp_)
-	{};
-    
-    virtual ~PerformanceWarning()
-    {
-        
-    };
-
-	int voiceAmount = 0;
-	double timestamp = 0.0;
-
-	String getMessageText(int /*errorIndex*/) override
-	{
-		String errorMessage;
-		NewLine nl;
-
-		errorMessage << "### PerformanceWarning" << nl;
-
-		errorMessage << getTimeString();
-		errorMessage << getLocationString();
-
-		errorMessage << "- Voice Amount: **" << String(voiceAmount) << "**  " << nl;
-		errorMessage << "- Limit: `" << String(100.0 * d.limit, 1) << "%` Avg: `" << String(d.averagePercentage, 2) << "%`, Peak: `" << String(d.thisPercentage, 1) << "%`  ";
-
-		return errorMessage;
-	}
-
-	const DebugLogger::PerformanceData d;
-};
-
-struct DebugLogger::ParameterChange : public DebugLogger::Message
-{
-	ParameterChange(int messageIndex, int callbackIndex, double timestamp, const Identifier& id, var value_):
-		Message(messageIndex, callbackIndex, timestamp, Location::Empty, nullptr, id),
-		value(value_)
-	{}
-
-	ParameterChange() :
-		value(var())
-	{};
-
-	String getMessageText(int) override
-	{
-		String s;
-		s << "**Parameter Change** ";
-		s << "ID: `" << id << "` value: `" << value.toString() << "`  " << "CI: `" << callbackIndex << "`  ";
-		return s;
-	}
-
-	var value;
-};
-
-struct DebugLogger::Failure : public DebugLogger::Message
-{
-	Failure(int messageIndex, int callbackIndex_, Location loc_, FailureType t, const Processor* faultyModule, double ts, double extraValue_, const Identifier& id_ = Identifier()) :
-		Message(messageIndex, callbackIndex_, ts, loc_, faultyModule, id_),
-		type(t),
-		extraValue(extraValue_)
-	{};
-
-    virtual ~Failure()
-    {
-        
-    };
-    
-	bool shouldPrintBacktrace() const override { return type == FailureType::PriorityInversion; }
-
-	String getMessageText(int errorIndex = -1)
-	{
-		static const String ok("All OK");
-
-		if (type == FailureType::Empty)
-			return ok;
-
-		NewLine nl;
-		String errorMessage;
-
-		if (errorIndex == -1)
-		{
-			errorMessage << "### " << DebugLogger::getNameForFailure(type) << nl;
-		}
-		else
-		{
-			errorMessage << "### #" << String(errorIndex) << ": " << DebugLogger::getNameForFailure(type) << nl;
-		}
-
-		errorMessage << getTimeString();
-
-		errorMessage << getLocationString();
-
-		if (extraValue != 0.0)
-		{
-			errorMessage << "- AdditionalInfo: **" << String(extraValue, 3) << "**  " << nl;
-		}
-
-
-		errorMessage << nl;
-		return errorMessage;
-	}
-
-	FailureType type;
-	
-	double extraValue = 0.0;
-	
-};
 
 
 DebugLogger::PerformanceData::PerformanceData(int location_, float thisPercentage_, float averagePercentage_,
@@ -793,7 +526,7 @@ void DebugLogger::timerCallback()
 
 	messageIndex = 0;
 
-	Array<Message*> messages;
+	juce::Array<Message*> messages;
 
 	for (int i = 0; i < warningCopy.size(); i++)
 		messages.add(&warningCopy.getReference(i));
@@ -1317,7 +1050,8 @@ void DebugLogger::RecordDumper::handleAsyncUpdate()
 		}
 
 		parent.currentExportThread = new DebugRenderer(parent.getMainController(), parent.eventBuffer, BIND_MEMBER_FUNCTION_1(RecordDumper::onOfflineRender));
-		parent.currentExportThread->startThread(5);
+
+		ThreadStarters::startNormal(parent.currentExportThread);
 	}
 	else
 	{
@@ -1364,4 +1098,151 @@ void DebugLogger::RecordDumper::onOfflineRender(const AudioSampleBuffer& b)
 	parent.renderOffline = false;
 	triggerAsyncUpdate();
 }
+
+DebugLogger::Message::Message(int messageIndex_, int callbackIndex_, double timestamp_, Location l, const Processor* const p_, const Identifier& id_) :
+	messageIndex(messageIndex_),
+	callbackIndex(callbackIndex_),
+	timestamp(timestamp_),
+	p(const_cast<Processor*>(p_)),
+	id(id_),
+	location(l)
+{
+
+}
+
+String DebugLogger::Message::getTimeString()
+{
+	String t;
+	NewLine nl;
+
+	t << "- Time: **" << String(timestamp, 2) << "**  " << " / ";
+	t << "CallbackIndex: **" << String(callbackIndex) << "**  " << nl;
+
+	return t;
+}
+
+String DebugLogger::Message::getLocationString()
+{
+	String l;
+	NewLine nl;
+
+
+	l << "- Location: `";
+
+	if (p.get() != nullptr)
+	{
+		l << p.get()->getId() << "::";
+	}
+
+	if (!id.isNull())
+	{
+		l << id.toString() << "::";
+	}
+
+	l << DebugLogger::getNameForLocation(location) << "`  " << nl;
+
+	return l;
+}
+
+String DebugLogger::Message::getMessageText(int errorIndex /*= -1*/)
+{
+	ignoreUnused(errorIndex); jassertfalse; return String();
+}
+
+bool DebugLogger::Message::shouldPrintBacktrace() const
+{
+	return false;
+}
+
+DebugLogger::StringMessage::StringMessage(int messageIndex, int callbackIndex, const String& message_, double ts) :
+	Message(messageIndex, callbackIndex, ts, Location::Empty, nullptr, Identifier()),
+	message(message_)
+{
+
+}
+
+String DebugLogger::StringMessage::getMessageText(int errorIndex /* = -1 */)
+{
+	ignoreUnused(errorIndex);
+
+	String s;
+	s << message << "(CI: `" << String(callbackIndex) << "`)  ";
+
+	return s;
+}
+
+DebugLogger::Event::Event(int messageIndex, int callbackIndex, const HiseEvent& e_) :
+	Message(messageIndex, callbackIndex, 0, Location::MainRenderCallback, nullptr, Identifier()),
+	e(e_)
+{
+
+}
+
+String DebugLogger::Event::getMessageText(int errorIndex /* = -1 */)
+{
+	ignoreUnused(errorIndex);
+
+	String eventString;
+
+	eventString << "**" << e.getTypeAsString() << "** CI: `" << String(callbackIndex) << "` ID: `" << String(e.getEventId()) << "` TS: `" << String(e.getTimeStamp()) << "` ";
+	eventString << "V1: `" << (e.isNoteOnOrOff() ? MidiMessage::getMidiNoteName(e.getNoteNumber(), true, true, 3) : String(e.getNoteNumber())) << "`, V2: `" << String(e.getVelocity()) << "`, Ch: `" << String(e.getChannel()) << "`  ";
+
+	return eventString;
+}
+
+DebugLogger::AudioSettingChange::AudioSettingChange(int messageIndex, int callbackIndex, double ts, FailureType type_, double oldValue_, double newValue_) :
+	Message(messageIndex, callbackIndex, ts, Location::MainRenderCallback, nullptr, Identifier()),
+	type(type_),
+	oldValue(oldValue_),
+	newValue(newValue_)
+{
+
+}
+
+String DebugLogger::AudioSettingChange::getMessageText(int errorIndex /*= -1*/)
+{
+	ignoreUnused(errorIndex);
+
+	NewLine nl;
+	String errorMessage;
+
+	errorMessage << "### " << DebugLogger::getNameForFailure(type) << nl;
+
+	errorMessage << getTimeString();
+
+	if (type == FailureType::SampleRateChange || type == FailureType::BufferSizeChange)
+	{
+		errorMessage << "- Old: **" << String(oldValue, 0) << "**  " << nl;
+		errorMessage << "- New: **" << String(newValue, 0) << "**  " << nl << nl;
+
+	}
+
+	return errorMessage;
+}
+
+DebugLogger::PerformanceWarning::PerformanceWarning(int messageIndex, int callbackIndex, const DebugLogger::PerformanceData& d_, double timestamp_, int voiceAmount_) :
+	Message(messageIndex, callbackIndex, timestamp_, (Location)d_.location, d_.p, Identifier()),
+	d(d_),
+	voiceAmount(voiceAmount_),
+	timestamp(timestamp_)
+{
+
+}
+
+String DebugLogger::PerformanceWarning::getMessageText(int /*errorIndex*/)
+{
+	String errorMessage;
+	NewLine nl;
+
+	errorMessage << "### PerformanceWarning" << nl;
+
+	errorMessage << getTimeString();
+	errorMessage << getLocationString();
+
+	errorMessage << "- Voice Amount: **" << String(voiceAmount) << "**  " << nl;
+	errorMessage << "- Limit: `" << String(100.0 * d.limit, 1) << "%` Avg: `" << String(d.averagePercentage, 2) << "%`, Peak: `" << String(d.thisPercentage, 1) << "%`  ";
+
+	return errorMessage;
+}
+
 } // namespace hise

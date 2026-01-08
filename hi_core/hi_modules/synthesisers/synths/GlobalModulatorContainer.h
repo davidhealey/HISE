@@ -850,7 +850,19 @@ private:
 		GlobalModulatorContainer& parent;
 	} runtimeSource;
 
-    struct GlobalModulatorCable;
+	struct GlobalModulatorCable
+	{
+		WeakReference<Modulator> mod;
+		var cable;
+
+		void send(int voiceIndex, bool isEnvelope = false, int startSample = 0);
+
+		bool operator==(const GlobalModulatorCable& other) const
+		{
+			return other.mod == mod &&
+				cable == other.cable;
+		}
+	};
 
     SimpleReadWriteLock cableLock;
     
