@@ -1710,7 +1710,13 @@ MainController::CustomTypeFace::CustomTypeFace(ReferenceCountedObjectPtr<juce::T
 	for(char i = 32; i < 127; i++)
 	{
 		s = String::fromUTF8((&i), 1);
-		characterWidths[i] = tf->getStringWidth(TypefaceMetricsKind::legacy, s);
+
+#if HISE_JUCE8
+	characterWidths[i] = tf->getStringWidth(TypefaceMetricsKind::legacy, s);
+#else
+	characterWidths[i] = tf->getStringWidth(s);
+#endif
+
 	}
 }
 
