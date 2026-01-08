@@ -196,6 +196,8 @@ String CompileExporter::getCompileResult(ErrorCodes result)
 	case CompileExporter::ASIOSDKMissing: return "ASIO SDK is missing";
 	case CompileExporter::HISEPathNotSpecified: return "HISE path not set";
 	case CompileExporter::HiseCodeMismatch: return "The git commit hash of the HISE build doesn't match the source code hash.";
+	case CompileExporter::JUCESubModuleNotInitialised: return "The JUCE codebase was not pulled as submodule yet";
+	case CompileExporter::JUCEVersionMismatch: return "The JUCE version of the source code is different to the HISE build version";
 	case CompileExporter::CorruptedPoolFiles:	return "Pooled binary resources are corrupt. Clean build folder and retry.";
 	case CompileExporter::numErrorCodes: return "OK";
 		
@@ -812,6 +814,69 @@ CompileExporter::ErrorCodes CompileExporter::exportInternal(TargetTypes type, Bu
 	return ErrorCodes::UserAbort;
 }
 
+struct JuceVersionExtractor
+{
+	JuceVersionExtractor(const File& hisePath_):
+	  hisePath(hisePath_),
+	  sysDef(hisePath.getChildFile("JUCE/modules/juce_core/system/juce_StandardHeader.h"))
+	{
+		
+	}
+
+	bool doesVersionMatch() const
+	{
+		if(hasJUCE())
+		{
+			auto lines = StringArray::fromLines(sysDef.loadFileAsString());
+
+			int major = 0;
+			int minor = 0;
+			int patch = 0;
+
+			for(auto l: lines)
+			{
+				if(!l.startsWith("#define"))
+					continue;
+
+				if(l.contains("#define JUCE_MAJOR_VERSION"))
+					major = l.getTrailingIntValue();
+				
+				if (l.contains("#define JUCE_MINOR_VERSION"))
+					minor = l.getTrailingIntValue();
+
+				if (l.contains("#define JUCE_BUILDNUMBER"))
+					patch = l.getTrailingIntValue();
+			}
+
+			auto ok =  major == JUCE_MAJOR_VERSION &&
+				       minor == JUCE_MINOR_VERSION &&
+				       patch == JUCE_BUILDNUMBER;
+
+			if(!ok)
+			{
+				errorMessage << "JUCE version mismatch: HISE was built with " << SystemStats::getJUCEVersion();
+				errorMessage << ", but the JUCE submodule has version ";
+				errorMessage << String(major) << "." << String(minor) << "." << String(patch);
+			}
+
+			return ok;
+		}
+
+		return false;
+	}
+
+	bool hasJUCE() const { return sysDef.existsAsFile(); }
+
+	String getErrorMessage() const { return errorMessage; }
+
+private:
+
+	mutable String errorMessage;
+
+	File hisePath;
+	File sysDef;
+};
+
 CompileExporter::ErrorCodes CompileExporter::setupHisePath()
 {
 	const auto& data = dynamic_cast<GlobalSettingManager*>(chainToExport->getMainController())->getSettingsObject();
@@ -838,6 +903,17 @@ CompileExporter::ErrorCodes CompileExporter::setupHisePath()
 		
 	if (!hisePath.isDirectory()) 
 		return ErrorCodes::HISEPathNotSpecified;
+
+	JuceVersionExtractor jve(hisePath);
+
+	if(!jve.hasJUCE())
+		return ErrorCodes::JUCESubModuleNotInitialised;
+
+	if(!jve.doesVersionMatch())
+	{
+		printErrorMessage("JUCE version error", jve.getErrorMessage());
+		return ErrorCodes::JUCEVersionMismatch;
+	}
 
 	return ErrorCodes::OK;
 }
@@ -915,6 +991,8 @@ bool CompileExporter::checkSanity(TargetTypes type, BuildOption option)
 	// Check if a frontend script is in the main synth chain
 
     const bool frontWasFound = chainToExport->hasDefinedFrontInterface();
+
+	
 
 #if !USE_IPP
 	if(useIpp)

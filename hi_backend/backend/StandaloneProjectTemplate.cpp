@@ -78,6 +78,7 @@ static const unsigned char projectStandaloneTemplate_jucer_lines[] = R"(
         <MODULEPATH id="juce_audio_devices" path="%JUCE_PATH%"/>
         <MODULEPATH id="juce_audio_formats" path="%JUCE_PATH%"/>
         <MODULEPATH id="juce_audio_processors" path="%JUCE_PATH%"/>
+        <MODULEPATH id="juce_audio_processors_headless" path="%JUCE_PATH%"/>
         <MODULEPATH id="juce_product_unlocking" path="%JUCE_PATH%"/>
         <MODULEPATH id="juce_audio_utils" path="%JUCE_PATH%"/>
         <MODULEPATH id="juce_opengl" path="%JUCE_PATH%"/>
@@ -122,6 +123,7 @@ static const unsigned char projectStandaloneTemplate_jucer_lines[] = R"(
         <MODULEPATH id="juce_core" path="%JUCE_PATH%"/>
         <MODULEPATH id="juce_audio_utils" path="%JUCE_PATH%"/>
         <MODULEPATH id="juce_audio_processors" path="%JUCE_PATH%"/>
+        <MODULEPATH id="juce_audio_processors_headless" path="%JUCE_PATH%"/>
         <MODULEPATH id="juce_audio_formats" path="%JUCE_PATH%"/>
         <MODULEPATH id="juce_audio_devices" path="%JUCE_PATH%"/>
         <MODULEPATH id="juce_audio_basics" path="%JUCE_PATH%"/>
@@ -160,6 +162,7 @@ static const unsigned char projectStandaloneTemplate_jucer_lines[] = R"(
         <MODULEPATH id="juce_core" path="%JUCE_PATH%"/>
         <MODULEPATH id="juce_audio_utils" path="%JUCE_PATH%"/>
         <MODULEPATH id="juce_audio_processors" path="%JUCE_PATH%"/>
+        <MODULEPATH id="juce_audio_processors_headless" path="%JUCE_PATH%"/>
         <MODULEPATH id="juce_audio_formats" path="%JUCE_PATH%"/>
         <MODULEPATH id="juce_audio_devices" path="%JUCE_PATH%"/>
         <MODULEPATH id="juce_audio_basics" path="%JUCE_PATH%"/>
@@ -198,6 +201,7 @@ static const unsigned char projectStandaloneTemplate_jucer_lines[] = R"(
     <MODULE id="juce_audio_devices" showAllCode="1" useLocalCopy="0"/>
     <MODULE id="juce_audio_formats" showAllCode="1" useLocalCopy="0"/>
     <MODULE id="juce_audio_processors" showAllCode="1" useLocalCopy="0"/>
+    <MODULE id="juce_audio_processors_headless" showAllCode="1" useLocalCopy="0" useGlobalPath="0"/>
     <MODULE id="juce_audio_utils" showAllCode="1" useLocalCopy="0"/>
     <MODULE id="juce_core" showAllCode="1" useLocalCopy="0"/>
     <MODULE id="juce_cryptography" showAllCode="1" useLocalCopy="0"/>

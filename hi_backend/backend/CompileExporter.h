@@ -169,6 +169,8 @@ public:
 		AAXSDKMissing,
 		ASIOSDKMissing,
 		HISEPathNotSpecified,
+		JUCESubModuleNotInitialised,
+		JUCEVersionMismatch,
 		HiseCodeMismatch,
 		numErrorCodes
 	};
