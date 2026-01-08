@@ -29,8 +29,8 @@ jobs:
         run: sh ./build_ci.sh
   ci_windows:
     runs-on: [self-hosted, windows]
-      env:
-        JUCE_BRANCH: ${{ github.event.inputs.juce_branch || 'juce6' }}
+    env:
+      JUCE_BRANCH: ${{ github.event.inputs.juce_branch || 'juce6' }}
     steps:
       - name: Cleanup working directory
         working-directory: ${{ github.workspace }}
