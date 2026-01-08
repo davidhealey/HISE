@@ -1,0 +1,3 @@
+Note: Starting with HISE 5.0, JUCE is put into a separate submodule that contains a compiled version of the Projucer so you can switch out JUCE 6 and JUCE 8 depending on your preferred license.
+
+This directory just holds xcbeautify for sanitizing the macOS compiler output from now on...
