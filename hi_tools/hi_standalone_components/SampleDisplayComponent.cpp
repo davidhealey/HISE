@@ -1436,7 +1436,7 @@ void HiseAudioThumbnail::handleAsyncUpdate()
 	if (rebuildOnUpdate)
 	{
 		loadingThread.stopThread(-1);
-		loadingThread.startThread(5);
+		ThreadStarters::startNormal(&loadingThread);
 				
 		repaint();
 		rebuildOnUpdate = false;

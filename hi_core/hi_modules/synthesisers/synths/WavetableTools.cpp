@@ -216,7 +216,7 @@ bool WavetableHelpers::ExportData::restore(const MemoryBlock& mb)
 		{
 			fileSampleRate = reader->sampleRate;
 			numChannels = reader->numChannels;
-			auto cycleLength = reader->lengthInSamples / numCycles;
+			auto cycleLength = (int)(reader->lengthInSamples / numCycles);
 
 			AudioSampleBuffer b(numChannels, reader->lengthInSamples);
 			reader->read(&b, 0, reader->lengthInSamples, 0, true, true);

@@ -198,7 +198,8 @@ bool MainController::unitTestMode = false;
 
 	getGlobalUIUpdater()->setDebugSession(&getDebugSession());
 
-	javascriptThreadPool->startThread(8);
+	ThreadStarters::startHigh(javascriptThreadPool);
+
 	getKillStateHandler().setScriptingThreadId(javascriptThreadPool->getThreadId());
 };
 
