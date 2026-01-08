@@ -1,24 +1,33 @@
 /*
   ==============================================================================
 
-   This file is part of the JUCE library.
-   Copyright (c) 2020 - Raw Material Software Limited
+   This file is part of the JUCE framework.
+   Copyright (c) Raw Material Software Limited
 
-   JUCE is an open source library subject to commercial or open-source
+   JUCE is an open source framework subject to commercial or open source
    licensing.
 
-   By using JUCE, you agree to the terms of both the JUCE 6 End-User License
-   Agreement and JUCE Privacy Policy (both effective as of the 16th June 2020).
+   By downloading, installing, or using the JUCE framework, or combining the
+   JUCE framework with any other source code, object code, content or any other
+   copyrightable work, you agree to the terms of the JUCE End User Licence
+   Agreement, and all incorporated terms including the JUCE Privacy Policy and
+   the JUCE Website Terms of Service, as applicable, which will bind you. If you
+   do not agree to the terms of these agreements, we will not license the JUCE
+   framework to you, and you must discontinue the installation or download
+   process and cease use of the JUCE framework.
 
-   End User License Agreement: www.juce.com/juce-6-licence
-   Privacy Policy: www.juce.com/juce-privacy-policy
+   JUCE End User Licence Agreement: https://juce.com/legal/juce-8-licence/
+   JUCE Privacy Policy: https://juce.com/juce-privacy-policy
+   JUCE Website Terms of Service: https://juce.com/juce-website-terms-of-service/
 
-   Or: You may also use this code under the terms of the GPL v3 (see
-   www.gnu.org/licenses).
+   Or:
 
-   JUCE IS PROVIDED "AS IS" WITHOUT ANY WARRANTY, AND ALL WARRANTIES, WHETHER
-   EXPRESSED OR IMPLIED, INCLUDING MERCHANTABILITY AND FITNESS FOR PURPOSE, ARE
-   DISCLAIMED.
+   You may also use this code under the terms of the AGPLv3:
+   https://www.gnu.org/licenses/agpl-3.0.en.html
+
+   THE JUCE FRAMEWORK IS PROVIDED "AS IS" WITHOUT ANY WARRANTY, AND ALL
+   WARRANTIES, WHETHER EXPRESSED OR IMPLIED, INCLUDING WARRANTY OF
+   MERCHANTABILITY OR FITNESS FOR A PARTICULAR PURPOSE, ARE DISCLAIMED.
 
   ==============================================================================
 */
@@ -266,7 +275,7 @@ void ProjectContentComponent::setScrollableEditorComponent (std::unique_ptr<Comp
 {
     jassert (component.get() != nullptr);
 
-    class ContentViewport  : public Component
+    class ContentViewport final : public Component
     {
     public:
         ContentViewport (std::unique_ptr<Component> content)
@@ -318,25 +327,26 @@ void ProjectContentComponent::closeDocument()
         hideEditor();
 }
 
-static void showSaveWarning (OpenDocumentManager::Document* currentDocument)
+static ScopedMessageBox showSaveWarning (OpenDocumentManager::Document* currentDocument)
 {
-    AlertWindow::showMessageBoxAsync (MessageBoxIconType::WarningIcon,
-                                      TRANS("Save failed!"),
-                                      TRANS("Couldn't save the file:")
-                                          + "\n" + currentDocument->getFile().getFullPathName());
+    auto options = MessageBoxOptions::makeOptionsOk (MessageBoxIconType::WarningIcon,
+                                                     TRANS ("Save failed!"),
+                                                     TRANS ("Couldn't save the file:")
+                                                         + "\n" + currentDocument->getFile().getFullPathName());
+    return AlertWindow::showScopedAsync (options, nullptr);
 }
 
 void ProjectContentComponent::saveDocumentAsync()
 {
     if (currentDocument != nullptr)
     {
-        currentDocument->saveAsync ([parent = SafePointer<ProjectContentComponent> { this }] (bool savedSuccessfully)
+        currentDocument->saveAsync ([parent = SafePointer { this }] (bool savedSuccessfully)
         {
             if (parent == nullptr)
                 return;
 
             if (! savedSuccessfully)
-                showSaveWarning (parent->currentDocument);
+                parent->messageBox = showSaveWarning (parent->currentDocument);
 
             parent->refreshProjectTreeFileStatuses();
         });
@@ -351,13 +361,13 @@ void ProjectContentComponent::saveAsAsync()
 {
     if (currentDocument != nullptr)
     {
-        currentDocument->saveAsAsync ([parent = SafePointer<ProjectContentComponent> { this }] (bool savedSuccessfully)
+        currentDocument->saveAsAsync ([parent = SafePointer { this }] (bool savedSuccessfully)
         {
             if (parent == nullptr)
                 return;
 
             if (! savedSuccessfully)
-                showSaveWarning (parent->currentDocument);
+                parent->messageBox = showSaveWarning (parent->currentDocument);
 
             parent->refreshProjectTreeFileStatuses();
         });
@@ -504,9 +514,6 @@ void ProjectContentComponent::openInSelectedIDE (bool saveFirst)
 
     if (auto selectedExporter = headerComponent.getSelectedExporter())
     {
-        if (! selectedExporter->canLaunchProject())
-            return;
-
         if (saveFirst)
         {
             if (project->isTemporaryProject())
@@ -515,15 +522,13 @@ void ProjectContentComponent::openInSelectedIDE (bool saveFirst)
                 return;
             }
 
-            if (project->hasChangedSinceSaved() || ! selectedExporter->getIDEProjectFile().exists())
-            {
-                project->saveAsync (true, true, [safeThis = SafePointer<ProjectContentComponent> { this }] (Project::SaveResult r)
-                {
-                    if (safeThis != nullptr && r == Project::SaveResult::savedOk)
-                        safeThis->openInSelectedIDE (false);
-                });
-                return;
-            }
+            SafePointer<ProjectContentComponent> safeThis { this };
+            project->saveAsync (true, true, [safeThis] (Project::SaveResult r)
+                                {
+                                    if (safeThis != nullptr && r == Project::SaveResult::savedOk)
+                                        safeThis->openInSelectedIDE (false);
+                                });
+            return;
         }
 
         project->openProjectInIDE (*selectedExporter);
@@ -605,7 +610,7 @@ void ProjectContentComponent::showTranslationTool()
 }
 
 //==============================================================================
-struct AsyncCommandRetrier  : public Timer
+struct AsyncCommandRetrier final : public Timer
 {
     AsyncCommandRetrier (const ApplicationCommandTarget::InvocationInfo& i)  : info (i)
     {
@@ -661,8 +666,7 @@ void ProjectContentComponent::getAllCommands (Array <CommandID>& commands)
                          CommandIDs::saveAndOpenInIDE,
                          CommandIDs::createNewExporter,
                          CommandIDs::deleteSelectedItem,
-                         CommandIDs::showTranslationTool,
-                         CommandIDs::addNewGUIFile });
+                         CommandIDs::showTranslationTool });
 }
 
 void ProjectContentComponent::getCommandInfo (const CommandID commandID, ApplicationCommandInfo& result)
@@ -818,13 +822,6 @@ void ProjectContentComponent::getCommandInfo (const CommandID commandID, Applica
                         CommandCategories::general, 0);
         break;
 
-    case CommandIDs::addNewGUIFile:
-        result.setInfo ("Add new GUI Component...",
-                        "Adds a new GUI Component file to the project",
-                        CommandCategories::general,
-                        (! ProjucerApplication::getApp().isGUIEditorEnabled() ? ApplicationCommandInfo::isDisabled : 0));
-        break;
-
     default:
         break;
     }
@@ -888,8 +885,6 @@ bool ProjectContentComponent::perform (const InvocationInfo& info)
 
         case CommandIDs::showTranslationTool:       showTranslationTool();          break;
 
-        case CommandIDs::addNewGUIFile:             addNewGUIFile();                break;
-
         default:
             return false;
     }
@@ -906,16 +901,6 @@ void ProjectContentComponent::getSelectedProjectItemsBeingDragged (const DragAnd
                                                                    OwnedArray<Project::Item>& selectedNodes)
 {
     TreeItemTypes::FileTreeItemBase::getSelectedProjectItemsBeingDragged (dragSourceDetails, selectedNodes);
-}
-
-void ProjectContentComponent::addNewGUIFile()
-{
-    if (project != nullptr)
-    {
-        wizardHolder = std::make_unique<WizardHolder>();
-        wizardHolder->wizard.reset (createGUIComponentWizard (*project));
-        wizardHolder->wizard->createNewFile (*project, project->getMainGroup());
-    }
 }
 
 //==============================================================================

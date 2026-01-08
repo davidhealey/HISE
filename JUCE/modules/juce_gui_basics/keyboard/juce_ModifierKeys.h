@@ -1,24 +1,33 @@
 /*
   ==============================================================================
 
-   This file is part of the JUCE library.
-   Copyright (c) 2020 - Raw Material Software Limited
+   This file is part of the JUCE framework.
+   Copyright (c) Raw Material Software Limited
 
-   JUCE is an open source library subject to commercial or open-source
+   JUCE is an open source framework subject to commercial or open source
    licensing.
 
-   By using JUCE, you agree to the terms of both the JUCE 6 End-User License
-   Agreement and JUCE Privacy Policy (both effective as of the 16th June 2020).
+   By downloading, installing, or using the JUCE framework, or combining the
+   JUCE framework with any other source code, object code, content or any other
+   copyrightable work, you agree to the terms of the JUCE End User Licence
+   Agreement, and all incorporated terms including the JUCE Privacy Policy and
+   the JUCE Website Terms of Service, as applicable, which will bind you. If you
+   do not agree to the terms of these agreements, we will not license the JUCE
+   framework to you, and you must discontinue the installation or download
+   process and cease use of the JUCE framework.
 
-   End User License Agreement: www.juce.com/juce-6-licence
-   Privacy Policy: www.juce.com/juce-privacy-policy
+   JUCE End User Licence Agreement: https://juce.com/legal/juce-8-licence/
+   JUCE Privacy Policy: https://juce.com/juce-privacy-policy
+   JUCE Website Terms of Service: https://juce.com/juce-website-terms-of-service/
 
-   Or: You may also use this code under the terms of the GPL v3 (see
-   www.gnu.org/licenses).
+   Or:
 
-   JUCE IS PROVIDED "AS IS" WITHOUT ANY WARRANTY, AND ALL WARRANTIES, WHETHER
-   EXPRESSED OR IMPLIED, INCLUDING MERCHANTABILITY AND FITNESS FOR PURPOSE, ARE
-   DISCLAIMED.
+   You may also use this code under the terms of the AGPLv3:
+   https://www.gnu.org/licenses/agpl-3.0.en.html
+
+   THE JUCE FRAMEWORK IS PROVIDED "AS IS" WITHOUT ANY WARRANTY, AND ALL
+   WARRANTIES, WHETHER EXPRESSED OR IMPLIED, INCLUDING WARRANTY OF
+   MERCHANTABILITY OR FITNESS FOR A PARTICULAR PURPOSE, ARE DISCLAIMED.
 
   ==============================================================================
 */
@@ -89,9 +98,13 @@ public:
 
     inline bool isMiddleButtonDown() const noexcept     { return testFlags (middleButtonModifier); }
 
-	inline bool isX1ButtonDown() const noexcept			{ return testFlags(x1ButtonModifier); }
+    inline bool isX1ButtonDown() const noexcept         { return testFlags (backButtonModifier); }
 
-	inline bool isX2ButtonDown() const noexcept			{ return testFlags(x2ButtonModifier); }
+    inline bool isX2ButtonDown() const noexcept         { return testFlags (forwardButtonModifier); }
+
+    inline bool isBackButtonDown() const noexcept       { return testFlags (backButtonModifier); }
+
+    inline bool isForwardButtonDown() const noexcept    { return testFlags (forwardButtonModifier); }
 
     /** Tests for any of the mouse-button flags. */
     inline bool isAnyMouseButtonDown() const noexcept   { return testFlags (allMouseButtonModifiers); }
@@ -139,11 +152,11 @@ public:
         /** Middle mouse button flag. */
         middleButtonModifier                    = 64,
 
-		/** First additional mouse button */
-		x1ButtonModifier						= 128,
+        /* Back mouse button flag. Otherwise known as button 4. */
+        backButtonModifier                      = 128,
 
-		/** Second additional mouse button. */
-		x2ButtonModifier						= 256,
+        /* Forward mouse button flag. Otherwise known as button 5. */
+        forwardButtonModifier                   = 256,
 
        #if JUCE_MAC || JUCE_IOS
         /** Command key flag - on windows this is the same as the CTRL key flag. */
@@ -165,7 +178,11 @@ public:
         allKeyboardModifiers                    = shiftModifier | ctrlModifier | altModifier | commandModifier,
 
         /** Represents a combination of all the mouse buttons at once. */
-        allMouseButtonModifiers                 = leftButtonModifier | rightButtonModifier | middleButtonModifier | x1ButtonModifier | x2ButtonModifier,
+        allMouseButtonModifiers                 = leftButtonModifier
+                                                | rightButtonModifier
+                                                | middleButtonModifier
+                                                | backButtonModifier
+                                                | forwardButtonModifier,
 
         /** Represents a combination of all the alt, ctrl and command key modifiers. */
         ctrlAltCommandModifiers                 = ctrlModifier | altModifier | commandModifier
@@ -173,23 +190,23 @@ public:
 
     //==============================================================================
     /** Returns a copy of only the mouse-button flags */
-    ModifierKeys withOnlyMouseButtons() const noexcept                  { return ModifierKeys (flags & allMouseButtonModifiers); }
+    [[nodiscard]] ModifierKeys withOnlyMouseButtons() const noexcept                  { return ModifierKeys (flags & allMouseButtonModifiers); }
 
     /** Returns a copy of only the non-mouse flags */
-    ModifierKeys withoutMouseButtons() const noexcept                   { return ModifierKeys (flags & ~allMouseButtonModifiers); }
+    [[nodiscard]] ModifierKeys withoutMouseButtons() const noexcept                   { return ModifierKeys (flags & ~allMouseButtonModifiers); }
 
-    bool operator== (const ModifierKeys other) const noexcept           { return flags == other.flags; }
-    bool operator!= (const ModifierKeys other) const noexcept           { return flags != other.flags; }
+    bool operator== (const ModifierKeys other) const noexcept                          { return flags == other.flags; }
+    bool operator!= (const ModifierKeys other) const noexcept                          { return flags != other.flags; }
 
     //==============================================================================
     /** Returns the raw flags for direct testing. */
-    inline int getRawFlags() const noexcept                             { return flags; }
+    inline int getRawFlags() const noexcept                                            { return flags; }
 
-    ModifierKeys withoutFlags (int rawFlagsToClear) const noexcept      { return ModifierKeys (flags & ~rawFlagsToClear); }
-    ModifierKeys withFlags (int rawFlagsToSet) const noexcept           { return ModifierKeys (flags | rawFlagsToSet); }
+    [[nodiscard]] ModifierKeys withoutFlags (int rawFlagsToClear) const noexcept      { return ModifierKeys (flags & ~rawFlagsToClear); }
+    [[nodiscard]] ModifierKeys withFlags (int rawFlagsToSet) const noexcept           { return ModifierKeys (flags | rawFlagsToSet); }
 
     /** Tests a combination of flags and returns true if any of them are set. */
-    bool testFlags (int flagsToTest) const noexcept                     { return (flags & flagsToTest) != 0; }
+    bool testFlags (int flagsToTest) const noexcept                                    { return (flags & flagsToTest) != 0; }
 
     /** Returns the total number of mouse buttons that are down. */
     int getNumMouseButtonsDown() const noexcept;
@@ -204,7 +221,7 @@ public:
         This method is here for backwards compatibility and there's no need to call it anymore,
         you should use the public currentModifiers member directly.
      */
-    static ModifierKeys getCurrentModifiers() noexcept                  { return currentModifiers; }
+    static ModifierKeys getCurrentModifiers() noexcept                                 { return currentModifiers; }
 
     /** Creates a ModifierKeys object to represent the current state of the
         keyboard and mouse buttons.

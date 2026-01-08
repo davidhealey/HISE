@@ -1,21 +1,33 @@
 /*
   ==============================================================================
 
-   This file is part of the JUCE library.
-   Copyright (c) 2020 - Raw Material Software Limited
+   This file is part of the JUCE framework.
+   Copyright (c) Raw Material Software Limited
 
-   JUCE is an open source library subject to commercial or open-source
+   JUCE is an open source framework subject to commercial or open source
    licensing.
 
-   The code included in this file is provided under the terms of the ISC license
-   http://www.isc.org/downloads/software-support-policy/isc-license. Permission
-   To use, copy, modify, and/or distribute this software for any purpose with or
-   without fee is hereby granted provided that the above copyright notice and
-   this permission notice appear in all copies.
+   By downloading, installing, or using the JUCE framework, or combining the
+   JUCE framework with any other source code, object code, content or any other
+   copyrightable work, you agree to the terms of the JUCE End User Licence
+   Agreement, and all incorporated terms including the JUCE Privacy Policy and
+   the JUCE Website Terms of Service, as applicable, which will bind you. If you
+   do not agree to the terms of these agreements, we will not license the JUCE
+   framework to you, and you must discontinue the installation or download
+   process and cease use of the JUCE framework.
 
-   JUCE IS PROVIDED "AS IS" WITHOUT ANY WARRANTY, AND ALL WARRANTIES, WHETHER
-   EXPRESSED OR IMPLIED, INCLUDING MERCHANTABILITY AND FITNESS FOR PURPOSE, ARE
-   DISCLAIMED.
+   JUCE End User Licence Agreement: https://juce.com/legal/juce-8-licence/
+   JUCE Privacy Policy: https://juce.com/juce-privacy-policy
+   JUCE Website Terms of Service: https://juce.com/juce-website-terms-of-service/
+
+   Or:
+
+   You may also use this code under the terms of the AGPLv3:
+   https://www.gnu.org/licenses/agpl-3.0.en.html
+
+   THE JUCE FRAMEWORK IS PROVIDED "AS IS" WITHOUT ANY WARRANTY, AND ALL
+   WARRANTIES, WHETHER EXPRESSED OR IMPLIED, INCLUDING WARRANTY OF
+   MERCHANTABILITY OR FITNESS FOR A PARTICULAR PURPOSE, ARE DISCLAIMED.
 
   ==============================================================================
 */
@@ -121,7 +133,6 @@ public:
     //==============================================================================
     DynamicObject();
     DynamicObject (const DynamicObject&);
-    ~DynamicObject() override;
 
     using Ptr = ReferenceCountedObjectPtr<DynamicObject>;
 
@@ -143,11 +154,8 @@ public:
     virtual void removeProperty (const Identifier& propertyName);
 
     //==============================================================================
-    /** Checks whether this object has the specified method.
-
-        The default implementation of this just checks whether there's a property
-        with this name that's actually a method, but this can be overridden for
-        building objects with dynamic invocation.
+    /** Checks whether this object has a property with the given name that has a
+        value of type NativeFunction.
     */
     virtual bool hasMethod (const Identifier& methodName) const;
 
@@ -155,12 +163,9 @@ public:
 
         The default implementation looks up the named property, and if it's a method
         call, then it invokes it.
-
-        This method is virtual to allow more dynamic invocation to used for objects
-        where the methods may not already be set as properties.
     */
     virtual var invokeMethod (Identifier methodName,
-                              const var::NativeFunctionArgs& args);
+                      const var::NativeFunctionArgs& args);
 
     /** Adds a method to the class.
 
@@ -177,6 +182,9 @@ public:
     /** Returns the NamedValueSet that holds the object's properties. */
     NamedValueSet& getProperties() noexcept;
 
+    /** Returns the NamedValueSet that holds the object's properties. */
+    const NamedValueSet& getProperties() const noexcept     { return properties; }
+
     void swapProperties(NamedValueSet&& other);
 
     /** Calls var::clone() on all the properties that this object contains. */
@@ -188,7 +196,7 @@ public:
         with a (deep) copy of all of its properties. Subclasses can override this to
         implement their own custom copy routines.
     */
-    virtual Ptr clone() const;
+    virtual DynamicObject::Ptr clone() const;
 
     //==============================================================================
     /** Writes this object to a text stream in JSON format.
@@ -196,6 +204,8 @@ public:
         never need to call it directly, but it's virtual so that custom object types
         can stringify themselves appropriately.
     */
+    virtual void writeAsJSON (OutputStream&, const JSON::FormatOptions&);
+
     void writeAsJSON (OutputStream&, int indentLevel, bool allOnOneLine, int maximumDecimalPlaces) override;
 
     void writeToStream(OutputStream& os) override;
@@ -205,6 +215,16 @@ public:
     JUCE_MAKE_STREAMABLE_OBJECT(1);
 
 private:
+    /** Derived classes may override this function to take additional actions after
+        properties are assigned or removed.
+
+        @param name         the name of the property that changed
+        @param value        if non-null, the value of the property after assignment
+                            if null, indicates that the property was removed
+    */
+    virtual void didModifyProperty ([[maybe_unused]] const Identifier& name,
+                                    [[maybe_unused]] const std::optional<var>& value) {}
+
     //==============================================================================
     NamedValueSet properties;
 

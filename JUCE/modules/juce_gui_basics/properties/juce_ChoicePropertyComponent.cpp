@@ -1,24 +1,33 @@
 /*
   ==============================================================================
 
-   This file is part of the JUCE library.
-   Copyright (c) 2020 - Raw Material Software Limited
+   This file is part of the JUCE framework.
+   Copyright (c) Raw Material Software Limited
 
-   JUCE is an open source library subject to commercial or open-source
+   JUCE is an open source framework subject to commercial or open source
    licensing.
 
-   By using JUCE, you agree to the terms of both the JUCE 6 End-User License
-   Agreement and JUCE Privacy Policy (both effective as of the 16th June 2020).
+   By downloading, installing, or using the JUCE framework, or combining the
+   JUCE framework with any other source code, object code, content or any other
+   copyrightable work, you agree to the terms of the JUCE End User Licence
+   Agreement, and all incorporated terms including the JUCE Privacy Policy and
+   the JUCE Website Terms of Service, as applicable, which will bind you. If you
+   do not agree to the terms of these agreements, we will not license the JUCE
+   framework to you, and you must discontinue the installation or download
+   process and cease use of the JUCE framework.
 
-   End User License Agreement: www.juce.com/juce-6-licence
-   Privacy Policy: www.juce.com/juce-privacy-policy
+   JUCE End User Licence Agreement: https://juce.com/legal/juce-8-licence/
+   JUCE Privacy Policy: https://juce.com/juce-privacy-policy
+   JUCE Website Terms of Service: https://juce.com/juce-website-terms-of-service/
 
-   Or: You may also use this code under the terms of the GPL v3 (see
-   www.gnu.org/licenses).
+   Or:
 
-   JUCE IS PROVIDED "AS IS" WITHOUT ANY WARRANTY, AND ALL WARRANTIES, WHETHER
-   EXPRESSED OR IMPLIED, INCLUDING MERCHANTABILITY AND FITNESS FOR PURPOSE, ARE
-   DISCLAIMED.
+   You may also use this code under the terms of the AGPLv3:
+   https://www.gnu.org/licenses/agpl-3.0.en.html
+
+   THE JUCE FRAMEWORK IS PROVIDED "AS IS" WITHOUT ANY WARRANTY, AND ALL
+   WARRANTIES, WHETHER EXPRESSED OR IMPLIED, INCLUDING WARRANTY OF
+   MERCHANTABILITY OR FITNESS FOR A PARTICULAR PURPOSE, ARE DISCLAIMED.
 
   ==============================================================================
 */
@@ -27,11 +36,11 @@ namespace juce
 {
 
 //==============================================================================
-class ChoicePropertyComponent::RemapperValueSource    : public Value::ValueSource,
-                                                        private Value::Listener
+class ChoiceRemapperValueSource final : public Value::ValueSource,
+                                        private Value::Listener
 {
 public:
-    RemapperValueSource (const Value& source, const Array<var>& map)
+    ChoiceRemapperValueSource (const Value& source, const Array<var>& map)
        : sourceValue (source),
          mappings (map)
     {
@@ -64,17 +73,17 @@ protected:
     void valueChanged (Value&) override    { sendChangeMessage (true); }
 
     //==============================================================================
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (RemapperValueSource)
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (ChoiceRemapperValueSource)
 };
 
 //==============================================================================
-class ChoicePropertyComponent::RemapperValueSourceWithDefault    : public Value::ValueSource,
-                                                                   private Value::Listener
+class ChoiceRemapperValueSourceWithDefault final : public Value::ValueSource,
+                                                   private Value::Listener
 {
 public:
-    RemapperValueSourceWithDefault (ValueWithDefault* vwd, const Array<var>& map)
-        : valueWithDefault (vwd),
-          sourceValue (valueWithDefault->getPropertyAsValue()),
+    ChoiceRemapperValueSourceWithDefault (const ValueTreePropertyWithDefault& v, const Array<var>& map)
+        : value (v),
+          sourceValue (value.getPropertyAsValue()),
           mappings (map)
     {
         sourceValue.addListener (this);
@@ -82,7 +91,7 @@ public:
 
     var getValue() const override
     {
-        if (valueWithDefault != nullptr && ! valueWithDefault->isUsingDefault())
+        if (! value.isUsingDefault())
         {
             const auto target = sourceValue.getValue();
             const auto equalsWithSameType = [&target] (const var& map) { return map.equalsWithSameType (target); };
@@ -101,33 +110,30 @@ public:
 
     void setValue (const var& newValue) override
     {
-        if (valueWithDefault == nullptr)
-            return;
-
         auto newValueInt = static_cast<int> (newValue);
 
         if (newValueInt == -1)
         {
-            valueWithDefault->resetToDefault();
+            value.resetToDefault();
         }
         else
         {
             auto remappedVal = mappings [newValueInt - 1];
 
             if (! remappedVal.equalsWithSameType (sourceValue))
-                *valueWithDefault = remappedVal;
+                value = remappedVal;
         }
     }
 
 private:
     void valueChanged (Value&) override { sendChangeMessage (true); }
 
-    WeakReference<ValueWithDefault> valueWithDefault;
+    ValueTreePropertyWithDefault value;
     Value sourceValue;
     Array<var> mappings;
 
     //==============================================================================
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (RemapperValueSourceWithDefault)
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (ChoiceRemapperValueSourceWithDefault)
 };
 
 //==============================================================================
@@ -139,13 +145,13 @@ ChoicePropertyComponent::ChoicePropertyComponent (const String& name)
 
 ChoicePropertyComponent::ChoicePropertyComponent (const String& name,
                                                   const StringArray& choiceList,
-                                                  const Array<var>& correspondingValues)
+                                                  [[maybe_unused]] const Array<var>& correspondingValues)
     : PropertyComponent (name),
       choices (choiceList)
 {
     // The array of corresponding values must contain one value for each of the items in
     // the choices array!
-    jassertquiet (correspondingValues.size() == choices.size());
+    jassert (correspondingValues.size() == choices.size());
 }
 
 ChoicePropertyComponent::ChoicePropertyComponent (const Value& valueToControl,
@@ -155,23 +161,23 @@ ChoicePropertyComponent::ChoicePropertyComponent (const Value& valueToControl,
     : ChoicePropertyComponent (name, choiceList, correspondingValues)
 {
     refreshChoices();
-    initialiseComboBox (Value (new RemapperValueSource (valueToControl, correspondingValues)));
+    initialiseComboBox (Value (new ChoiceRemapperValueSource (valueToControl, correspondingValues)));
 }
 
-ChoicePropertyComponent::ChoicePropertyComponent (ValueWithDefault& valueToControl,
+ChoicePropertyComponent::ChoicePropertyComponent (const ValueTreePropertyWithDefault& valueToControl,
                                                   const String& name,
                                                   const StringArray& choiceList,
                                                   const Array<var>& correspondingValues)
     : ChoicePropertyComponent (name, choiceList, correspondingValues)
 {
-    valueWithDefault = &valueToControl;
+    value = valueToControl;
 
-    auto getDefaultString = [this, correspondingValues] { return choices [correspondingValues.indexOf (valueWithDefault->getDefault())]; };
+    auto getDefaultString = [this, correspondingValues] { return choices [correspondingValues.indexOf (value.getDefault())]; };
 
     refreshChoices (getDefaultString());
-    initialiseComboBox (Value (new RemapperValueSourceWithDefault (valueWithDefault, correspondingValues)));
+    initialiseComboBox (Value (new ChoiceRemapperValueSourceWithDefault (value, correspondingValues)));
 
-    valueWithDefault->onDefaultChange = [this, getDefaultString]
+    value.onDefaultChange = [this, getDefaultString]
     {
         auto selectedId = comboBox.getSelectedId();
         refreshChoices (getDefaultString());
@@ -179,30 +185,24 @@ ChoicePropertyComponent::ChoicePropertyComponent (ValueWithDefault& valueToContr
     };
 }
 
-ChoicePropertyComponent::ChoicePropertyComponent (ValueWithDefault& valueToControl,
+ChoicePropertyComponent::ChoicePropertyComponent (const ValueTreePropertyWithDefault& valueToControl,
                                                   const String& name)
     : PropertyComponent (name),
       choices ({ "Enabled", "Disabled" })
 {
-    valueWithDefault = &valueToControl;
+    value = valueToControl;
 
-    auto getDefaultString = [this] { return valueWithDefault->getDefault() ? "Enabled" : "Disabled"; };
+    auto getDefaultString = [this] { return value.getDefault() ? "Enabled" : "Disabled"; };
 
     refreshChoices (getDefaultString());
-    initialiseComboBox (Value (new RemapperValueSourceWithDefault (valueWithDefault, { true, false })));
+    initialiseComboBox (Value (new ChoiceRemapperValueSourceWithDefault (value, { true, false })));
 
-    valueWithDefault->onDefaultChange = [this, getDefaultString]
+    value.onDefaultChange = [this, getDefaultString]
     {
         auto selectedId = comboBox.getSelectedId();
         refreshChoices (getDefaultString());
         comboBox.setSelectedId (selectedId);
     };
-}
-
-ChoicePropertyComponent::~ChoicePropertyComponent()
-{
-    if (valueWithDefault != nullptr)
-        valueWithDefault->onDefaultChange = nullptr;
 }
 
 //==============================================================================
