@@ -928,11 +928,14 @@ int MainController::getNumActiveVoices() const
 	return getMainSynthChain()->getNumActiveVoices();
 }
 
+#if !HISE_JUCE8
 void MainController::beginParameterChangeGesture(int index)			{ dynamic_cast<PluginParameterAudioProcessor*>(this)->beginParameterChangeGesture(index); }
 
 void MainController::endParameterChangeGesture(int index)			{ dynamic_cast<PluginParameterAudioProcessor*>(this)->endParameterChangeGesture(index); }
 
 void MainController::setPluginParameter(int index, float newValue)  { dynamic_cast<PluginParameterAudioProcessor*>(this)->setParameterNotifyingHost(index, newValue); }
+#endif
+
 
 Processor *MainController::createProcessor(FactoryType *factory,
 											 const Identifier &typeName,
@@ -1707,7 +1710,7 @@ MainController::CustomTypeFace::CustomTypeFace(ReferenceCountedObjectPtr<juce::T
 	for(char i = 32; i < 127; i++)
 	{
 		s = String::fromUTF8((&i), 1);
-		characterWidths[i] = tf->getStringWidth(s);
+		characterWidths[i] = tf->getStringWidth(TypefaceMetricsKind::legacy, s);
 	}
 }
 
