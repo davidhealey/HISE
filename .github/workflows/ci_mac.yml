@@ -18,7 +18,9 @@ jobs:
     runs-on: [self-hosted, macos]
     steps:
       - name: Cleanup working directory
-        run: rm -rf "${{github.workspace}}"
+        run: 
+          rm -rf "${{github.workspace}}"
+          mkdir "${{github.workspace}}"
       - name: Checkout HISE repository
         uses: actions/checkout@v4
         with:
