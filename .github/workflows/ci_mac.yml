@@ -22,7 +22,15 @@ jobs:
         with:
           ref: 'develop'
           clean: true
-          submodules: false 
+          submodules: false
+      - name: Checkout JUCE submodule
+        run: |
+          JUCE_BRANCH="${{ github.event.inputs.juce_branch || 'juce6' }}"
+          git submodule update --init --recursive
+          cd JUCE
+          git fetch origin
+          git checkout $JUCE_BRANCH
+          git pull origin $JUCE_BRANCH
       - name: Build & Run CI script
         working-directory: ${{ github.workspace }}/tools/auto_build/
         run: sh ./build_ci.sh
