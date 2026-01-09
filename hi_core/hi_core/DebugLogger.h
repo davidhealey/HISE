@@ -133,7 +133,7 @@ public:
 
 	~DebugLogger();
 
-	struct DebugLogger::Message
+	struct Message
 	{
 		Message() {};
 
@@ -157,7 +157,7 @@ public:
 		Location location;
 	};
 
-	struct DebugLogger::StringMessage : public DebugLogger::Message
+	struct StringMessage : public Message
 	{
 		StringMessage(int messageIndex, int callbackIndex, const String& message_, double ts);
 
@@ -171,7 +171,7 @@ public:
 		String message;
 	};
 
-	struct DebugLogger::Event : public DebugLogger::Message
+	struct Event : public Message
 	{
 		Event(int messageIndex, int callbackIndex, const HiseEvent& e_);
 
@@ -185,7 +185,7 @@ public:
 		const HiseEvent e;
 	};
 
-	struct DebugLogger::AudioSettingChange : public DebugLogger::Message
+	struct AudioSettingChange : public Message
 	{
 		AudioSettingChange(int messageIndex, int callbackIndex, double ts, FailureType type_, double oldValue_, double newValue_);;
 
@@ -201,7 +201,7 @@ public:
 		String getMessageText(int errorIndex = -1);
 	};
 
-	struct DebugLogger::PerformanceWarning : public DebugLogger::Message
+	struct PerformanceWarning : public Message
 	{
 		PerformanceWarning(int messageIndex, int callbackIndex, const DebugLogger::PerformanceData& d_, double timestamp_, int voiceAmount_);;
 
@@ -218,7 +218,7 @@ public:
 		const DebugLogger::PerformanceData d;
 	};
 
-	struct DebugLogger::ParameterChange : public DebugLogger::Message
+	struct ParameterChange : public Message
 	{
 		ParameterChange(int messageIndex, int callbackIndex, double timestamp, const Identifier& id, var value_) :
 			Message(messageIndex, callbackIndex, timestamp, Location::Empty, nullptr, id),
@@ -240,7 +240,7 @@ public:
 		var value;
 	};
 
-	struct DebugLogger::Failure : public DebugLogger::Message
+	struct Failure : public DebugLogger::Message
 	{
 		Failure(int messageIndex, int callbackIndex_, Location loc_, FailureType t, const Processor* faultyModule, double ts, double extraValue_, const Identifier& id_ = Identifier()) :
 			Message(messageIndex, callbackIndex_, ts, loc_, faultyModule, id_),

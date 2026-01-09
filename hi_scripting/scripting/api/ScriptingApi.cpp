@@ -7209,7 +7209,7 @@ var ScriptingApi::Colours::toHsl(var colour)
 int ScriptingApi::Colours::fromHsl(var hsl)
 {
 	if (hsl.isArray() && hsl.size() == 4)
-		return Colour().fromHSL(hsl[0], hsl[1], hsl[2], hsl[3]).getARGB();
+		return Colour().fromHSL((float)hsl[0], (float)hsl[1], (float)hsl[2], (uint8)(int)hsl[3]).getARGB();
 
 	return 0;
 }
