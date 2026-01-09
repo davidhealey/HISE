@@ -1,6 +1,15 @@
 name: CI Build
-on: 
+on:
   workflow_dispatch:
+    inputs:
+      juce_branch:
+        description: 'JUCE branch to use'
+        required: false
+        default: 'juce6'
+        type: choice
+        options:
+          - juce6
+          - juce8 
   push:
     branches: 
       - develop
@@ -8,26 +17,49 @@ jobs:
   ci_macos:
     runs-on: [self-hosted, macos]
     steps:
-      - name: Cleanup working directory
-        run: rm -rf "${{github.workspace}}" 
       - name: Checkout HISE repository
-        uses: actions/checkout@v1
+        uses: actions/checkout@v4
         with:
           ref: 'develop'
+          clean: true
+          submodules: false
+      - name: Checkout JUCE submodule
+        run: |
+          JUCE_BRANCH="${{ github.event.inputs.juce_branch || 'juce6' }}"
+          git submodule update --init --recursive
+          cd JUCE
+          git fetch origin
+          git checkout $JUCE_BRANCH
+          git pull origin $JUCE_BRANCH
       - name: Build & Run CI script
         working-directory: ${{ github.workspace }}/tools/auto_build/
         run: sh ./build_ci.sh
   ci_windows:
     runs-on: [self-hosted, windows]
+    env:
+      JUCE_BRANCH: ${{ github.event.inputs.juce_branch || 'juce6' }}
     steps:
       - name: Cleanup working directory
         working-directory: ${{ github.workspace }}
         run: del *.* /Q /S
         shell: cmd
       - name: Checkout HISE repository
-        uses: actions/checkout@v1
+        uses: actions/checkout@v4
         with:
           ref: 'develop'
+          submodules: false 
+      - name: Checkout JUCE submodule
+        shell: cmd
+        run: |
+          if "%JUCE_BRANCH%"=="" set JUCE_BRANCH=juce6
+          echo Using JUCE branch: %JUCE_BRANCH%
+
+          git submodule update --init --recursive
+          cd JUCE
+          git fetch origin
+          git checkout %JUCE_BRANCH%
+          git pull origin %JUCE_BRANCH%
+          
       - name: Build HISE CI, run unit tests & export demo project
         working-directory: ${{ github.workspace }}/tools/auto_build/
         run: build_ci.bat

@@ -1687,14 +1687,17 @@ public:
 
 	
 	
+#if !HISE_JUCE8
 	/** same as AudioProcessor::beginParameterGesture(). */
 	void beginParameterChangeGesture(int index);
 	
 	/** same as AudioProcessor::beginParameterGesture(). */
 	void endParameterChangeGesture(int index);
-	
+
 	/** sets the plugin parameter to the new Value. */
 	void setPluginParameter(int index, float newValue);
+
+	#endif
 	
 	/** Returns the uptime in seconds. */
 	double getUptime() const noexcept { return uptime; }

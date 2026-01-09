@@ -236,7 +236,7 @@ void PluginParameterRamp::setCurrentInfo(const PluginParameterSimulatorInfo& new
 		stop();
 
 	if(useThread)
-		startThread(8);
+		ThreadStarters::startHigh(this);
 	else
 		stopThread(1000);
 

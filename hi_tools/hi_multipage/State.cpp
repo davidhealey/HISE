@@ -813,7 +813,7 @@ void State::addJob(Job::Ptr b, bool addFirst)
 			d->prevButton.setEnabled(false);
 		}
             
-		startThread(6);
+		ThreadStarters::startNormal(this);
 	}
 }
 

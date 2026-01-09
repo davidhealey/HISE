@@ -1677,7 +1677,7 @@ void HiseAssetManager::addNewAssetFolder()
 
 		if (auto info = HiseAssetInstaller::UninstallInfo(f))
 		{
-			localAssets->assets.add(info);
+			localAssets->assets.push_back(info);
 			productList->setProducts({}, this);
 			localAssets->resave();
 		}
@@ -1723,7 +1723,11 @@ void HiseAssetManager::performAction(SpecialAction a, ProductList::Row* r, bool 
 		{
 			if (a.localFolder == folderToRemove)
 			{
-				localAssets->assets.removeAllInstancesOf(a);
+				auto& v = localAssets->assets;
+
+				v.erase(std::remove(v.begin(), v.end(), a),
+					v.end());
+
 				localAssets->resave();
 				break;
 			}

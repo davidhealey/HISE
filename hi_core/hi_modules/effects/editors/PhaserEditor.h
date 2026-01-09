@@ -35,7 +35,7 @@ namespace hise { using namespace juce;
                                                                     //[/Comments]
 */
 class PhaserEditor  : public ProcessorEditorBody,
-                      public SliderListener
+                      public Slider::Listener
 {
 public:
     //==============================================================================

@@ -69,7 +69,7 @@ protected:
 			timers.ensureStorageAllocated(64);
 			asyncUpdaters.ensureStorageAllocated(128);
 
-			startThread(5);
+			ThreadStarters::startNormal(this);
 		}
 
 		~TimerThread()

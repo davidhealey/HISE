@@ -74,6 +74,9 @@ namespace ScriptnodeIcons
 	DECLARE_DATA(os2Icon, 345);
 	DECLARE_DATA(os4Icon, 277);
 	DECLARE_DATA(os8Icon, 570);
+	DECLARE_DATA(rangeIcon, 421);
+	DECLARE_DATA(colourIcon, 1024);
+	DECLARE_DATA(swapOrientationIcon, 428);
 }
 
 

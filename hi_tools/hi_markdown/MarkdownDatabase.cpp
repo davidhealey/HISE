@@ -662,23 +662,30 @@ void MarkdownDataBase::Item::addChild(Item&& item)
 		item.url.setType(url.getType());
 	}
 
-	children.add(item);
+	children.push_back(item);
 }
 
 void MarkdownDataBase::Item::sortChildren()
 {
 	MarkdownDataBase::Item::Sorter sorter;
-	children.sort(sorter);
+
+	std::sort(children.begin(), children.end(),
+	[&sorter](Item& a, Item& b)
+	{
+		return sorter.compareElements(a, b) < 0;
+	});
+
+	
 }
 
 void MarkdownDataBase::Item::removeChild(int childIndex)
 {
-	children.remove(childIndex);
+	children.erase(children.begin() + childIndex);
 }
 
-void MarkdownDataBase::Item::swapChildren(Array<Item>& other)
+void MarkdownDataBase::Item::swapChildren(std::vector<Item>& other)
 {
-	children.swapWith(other);
+	std::swap(children, other);
 }
 
 int MarkdownDataBase::Item::getWeight() const

@@ -36,7 +36,7 @@ namespace hise { using namespace juce;
                                                                     //[/Comments]
 */
 class ReverbEditor  : public ProcessorEditorBody,
-                      public SliderListener
+                      public Slider::Listener
 {
 public:
     //==============================================================================

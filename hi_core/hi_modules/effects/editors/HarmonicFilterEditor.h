@@ -39,7 +39,7 @@ namespace hise { using namespace juce;
 class HarmonicFilterEditor  : public ProcessorEditorBody,
                               public Timer,
                               public ComboBoxListener,
-                              public SliderListener
+                              public Slider::Listener
 {
 public:
     //==============================================================================

@@ -497,7 +497,7 @@ class ScriptCreatedComponentWrappers
 public:
 
 	class SliderWrapper: public ScriptCreatedComponentWrapper,
-						 public SliderListener
+						 public Slider::Listener
 	{
 	public:
 		SliderWrapper(ScriptContentComponent *content, ScriptingApi::Content::ScriptSlider *scriptSlider, int index);

@@ -126,7 +126,12 @@ private:
 		  Thread("Dispatch HiPriority Thread"),
 		  parent(r)
 		{
+#if HISE_JUCE8
+			ThreadStarters::startHigh(this);
+#else
+			// Originally it's slightly below 8 to ensure that the other worker threads get the priority...
 			startThread(7);
+#endif
 		}
 
 		~HiPriorityThread()

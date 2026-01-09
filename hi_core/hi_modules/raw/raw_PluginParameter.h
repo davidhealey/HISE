@@ -173,12 +173,14 @@ public:
 
 	void setParameterNotifyingHost(int index, float newValue)
 	{
+#if !HISE_JUCE8
 		ScopedValueSetter<bool> setter(getMainController()->getPluginParameterUpdateState(), false);
 
 		auto sanitizedValue = jlimit<float>(parameterRange.start, parameterRange.end, newValue);
 		auto parentProcessor = dynamic_cast<AudioProcessor*>(getMainController());
 
 		parentProcessor->setParameterNotifyingHost(index, parameterRange.convertTo0to1(sanitizedValue));
+#endif
 	}
 
 	bool isAutomatable() const override { return true; };

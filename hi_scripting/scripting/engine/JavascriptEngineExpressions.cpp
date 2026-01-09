@@ -594,7 +594,7 @@ struct HiseJavascriptEngine::RootObject::FunctionObject : public DynamicObject,
 
 	FunctionObject(const FunctionObject& other);
 
-	DynamicObject::Ptr clone() override    { return new FunctionObject(*this); }
+	DynamicObject::Ptr clone() const override    { return new FunctionObject(*this); }
 
 	void writeAsJSON(OutputStream& out, int /*indentLevel*/, bool /*allOnOneLine*/, int /*maximumDecimalPlaces*/) override
 	{
