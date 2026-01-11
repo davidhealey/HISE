@@ -342,6 +342,29 @@ void AudioProcessorDriver::initialiseAudioDriver(XmlElement *deviceData)
 	deviceManager->addMidiInputCallback(String(), callback);
 
 	getSettingsObject().initialiseAudioDriverData();
+
+	// Apply saved MIDI input settings to ensure MIDI inputs are properly connected
+	// This fixes the issue where MIDI keyboards appear selected but don't work until manually toggled
+	auto midiInputSetting = getSettingsObject().getSetting(HiseSettings::Midi::MidiInput);
+	if (midiInputSetting.isInt64())
+	{
+		auto state = BigInteger((int64)midiInputSetting);
+		auto mc = dynamic_cast<MainController*>(this);
+
+		StringArray midiNames;
+		if (mc != nullptr && !mc->isFlakyThreadingAllowed())
+		{
+			midiNames = MidiInput::getDevices();
+		}
+
+		if (midiNames.size() > 0)
+		{
+			for (int i = 0; i < midiNames.size(); i++)
+			{
+				toggleMidiInput(midiNames[i], state[i]);
+			}
+		}
+	}
 }
 
 void GlobalSettingManager::setGlobalScaleFactor(double newScaleFactor, NotificationType notifyListeners/*=dontSendNotification*/)
