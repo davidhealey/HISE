@@ -648,7 +648,7 @@ void WebViewWrapper::refresh()
 #if !JUCE_LINUX
 	jassert(MessageManager::getInstance()->isThisTheMessageThread());
 
-	auto currentFocusComponent = Component::getCurrentlyFocusedComponent();
+	
 
 	choc::ui::WebView::Options options;
 	options.enableDebugMode = data->isDebugModeEnabled();
@@ -696,7 +696,7 @@ void WebViewWrapper::refresh()
 	
 	refreshBounds(UnblurryGraphics::getScaleFactorForComponent(this));
 
-	if(currentFocusComponent != nullptr)
+	if(auto currentFocusComponent = Component::getCurrentlyFocusedComponent())
 		currentFocusComponent->grabKeyboardFocusAsync();
 
 	webView->navigate("");

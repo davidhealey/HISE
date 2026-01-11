@@ -942,12 +942,12 @@ void HardcodedSynthesiser::Voice::resetVoice()
 
 void HardcodedSynthesiser::Voice::prepareToPlay(double sampleRate, int samplesPerBlock)
 {
-	ModulatorSynthVoice::prepareToPlay(sampleRate, samplesPerBlock);
-
 	auto numSynthChannels = synth->numChannelsToRender;
 
-	if(numSynthChannels != voiceBuffer.getNumChannels())
+	if (numSynthChannels != voiceBuffer.getNumChannels())
 		voiceBuffer.setSize(numSynthChannels, samplesPerBlock);
+	
+	ModulatorSynthVoice::prepareToPlay(sampleRate, samplesPerBlock);
 }
 
 HardcodedSynthesiser::HardcodedSynthesiser(MainController* mc, const String& id, int numVoices):
