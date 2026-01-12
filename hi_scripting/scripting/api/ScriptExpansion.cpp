@@ -3363,7 +3363,7 @@ juce::var ScriptUnlocker::getExpansionList()
 		mos.writeString(registeredMachineId);
 		mos.flush();
 
-		BlowFish bf(mos.getData(), mos.getDataSize());
+		BlowFish bf(mos.getData(), (int)mos.getDataSize());
 		
 		bf.decrypt(mb);
 

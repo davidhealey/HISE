@@ -387,14 +387,11 @@ private:
 				c->setAttribute("value", nv.value.toString());
 			}
 
-			auto ok = projectInfo.replaceWithText(xml->createDocument(""));
-
-			dynamic_cast<GlobalSettingManager*>(getMainController())->getSettingsObject().refreshProjectData();
+			if(projectInfo.replaceWithText(xml->createDocument("")))
+				dynamic_cast<GlobalSettingManager*>(getMainController())->getSettingsObject().refreshProjectData();
 
 			return true;
 		}
-
-		
 
 		bool perform() override
 		{

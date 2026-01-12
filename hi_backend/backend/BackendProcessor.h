@@ -147,8 +147,6 @@ private:
 
 	File getAutoSaveFile()
 	{
-		Processor* mainSynthChain = getMainController()->getMainSynthChain();
-
 		File presetDirectory = getPresetFolder();
 
 		if (presetDirectory.isDirectory())

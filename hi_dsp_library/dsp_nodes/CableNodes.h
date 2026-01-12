@@ -1746,7 +1746,7 @@ namespace control
 
 		void setValue(double newValue)
 		{
-			int index;
+			int index = -1;
 
 			for(auto& s: state)
 			{
@@ -1764,7 +1764,7 @@ namespace control
 		{
 			auto ni = roundToInt(newIndex);
 
-			double valueToSend;
+			double valueToSend = 0.0;
 
 			for(auto& s: state)
 			{

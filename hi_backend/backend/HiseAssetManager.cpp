@@ -394,7 +394,11 @@ DiffViewer::FileDiff::FileDiff(const File& rootDir_, const File& file, const Lin
 		m.addItem(1, "Show file");
 		m.addItem(2, "Revert file");
 
-		auto r = m.show();
+		if(auto r = m.show())
+		{
+			// Implement me...
+			jassertfalse;
+		}
 	};
 
 	setSize(400, h);
@@ -1103,6 +1107,7 @@ struct HiseAssetManager::ProductList::Row::UninstallAction : public RowAction
 		{
 			e.info = info;
 			manager->setError(e);
+			return false;
 		}
 	}
 
@@ -1189,21 +1194,11 @@ struct HiseAssetManager::ProductList::Row::UpdateAction : public RowAction,
 
 	void finished(URL::DownloadTask* task, bool success) override
 	{
-		if (currentTask.get() == task)
-		{
-
-			int x = 5;
-		}
-
 		currentState = success ? State::Success : State::Fail;
 	}
 
 	void progress(URL::DownloadTask* task, int64 bytesDownloaded, int64 totalLength) override
 	{
-		if (currentTask.get() == task)
-		{
-			int x = 5;
-		}
 	}
 
 	void onCompletion(HiseAssetManager* manager) override
@@ -1344,8 +1339,6 @@ void HiseAssetManager::ProductList::Row::updateAfterTag(HiseAssetManager* m)
 		info.updateState();
 
 	title.clear();
-
-	float alpha = 0.7f;
 
 	title.append(info.getNameToDisplay(), GLOBAL_BOLD_FONT().withHeight(18.0f), Colours::white.withAlpha(0.9f));
 	title.append(" by " + info.installInfo.vendor, GLOBAL_BOLD_FONT().withHeight(18.0f), Colours::white.withAlpha(0.6f));
@@ -1865,7 +1858,7 @@ void HiseAssetManager::showHelpPopup(Component* attachedComponent, const String&
 	auto brw = GET_BACKEND_ROOT_WINDOW(attachedComponent);
 
 	auto localArea = brw->getLocalArea(attachedComponent, attachedComponent->getLocalBounds());
-	auto& cb = juce::CallOutBox::launchAsynchronously(std::move(n), localArea, brw);
+	juce::CallOutBox::launchAsynchronously(std::move(n), localArea, brw);
 }
 
 void HiseAssetManager::mouseDown(const MouseEvent& e)

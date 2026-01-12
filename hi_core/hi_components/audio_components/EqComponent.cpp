@@ -1097,9 +1097,6 @@ void FilterDragOverlay::FilterDragComponent::mouseDrag(const MouseEvent& e)
 
 	xp = CurveEq::BandParameter::Freq;
 
-	float xvalue;
-	float yvalue;
-
 	if(yp == CurveEq::BandParameter::Q)
 	{
 		auto deltaNormalised = (float)e.getDistanceFromDragStartY() / (float)getParentComponent()->getHeight();

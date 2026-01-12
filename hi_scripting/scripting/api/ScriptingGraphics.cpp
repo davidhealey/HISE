@@ -2817,8 +2817,6 @@ var ScriptingObjects::ScriptedLookAndFeel::callDefinedFunction(const Identifier&
 
 	if (HiseJavascriptEngine::isJavascriptFunction(f))
 	{
-		int counter = 0;
-
 		if(auto sl = SimpleReadWriteLock::ScopedTryReadLock(getScriptProcessor()->getMainController_()->getJavascriptThreadPool().getLookAndFeelRenderLock()))
 		{
 			SimpleReadWriteLock::ScopedReadLock sl2(getScriptProcessor()->getMainController_()->getJavascriptThreadPool().getLookAndFeelRenderLock());

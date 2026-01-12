@@ -225,11 +225,7 @@ MatrixModulatorBody::MatrixModulatorBody(ProcessorEditor* parent):
 		if(auto r = m.show())
 		{
 			auto pr = (Presets)(r - 1);
-
 			auto rd = MatrixIds::Helpers::getRangePreset(pr);
-
-			auto um = getMainController()->getControlUndoManager();
-			auto set = RangeHelpers::IdSet::ScriptComponents;
 
 			if(auto gc = ProcessorHelpers::getFirstProcessorWithType<GlobalModulatorContainer>(getMainController()->getMainSynthChain()))
 			{
