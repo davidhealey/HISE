@@ -2656,6 +2656,33 @@ Result FullInstrumentExpansion::lazyLoad()
 
 	auto r = initialiseFromValueTree(allData);
 
+	if(r.wasOk())
+	{
+		// We'll add a check if the samples exist in the loading stage so that it can be catched 
+		// gracefully by the expansion handler
+		auto sampleMapList = pool->getSampleMapPool().getListOfAllReferences(true);
+
+		auto expSampleRoot = getSubDirectory(FileHandlerBase::Samples);
+		auto sampleRoot = getMainController()->getSampleManager().getProjectHandler().getSubDirectory(Samples);
+
+		Array<File> expSamples = expSampleRoot.findChildFiles(File::findFiles, true, "*");
+		Array<File> globalSamples = sampleRoot.findChildFiles(File::findFiles, true, "*");
+
+		for(auto sm: sampleMapList)
+		{
+			auto vt = pool->getSampleMapPool().loadFromReference(sm, PoolHelpers::LoadingType::DontCreateNewEntry);
+
+			// checks if the sample file is found in either of the sample folder (global sample folder or expansion).
+			auto missing1 = SampleMap::checkReferences(getMainController(), vt->data, sampleRoot, globalSamples);
+			auto missing2 = SampleMap::checkReferences(getMainController(), vt->data, expSampleRoot, expSamples);
+
+			if(missing1.isNotEmpty() && missing2.isNotEmpty())
+			{
+				return Result::fail("Error at loading samples: " + missing1);
+			}
+		}
+	}
+
 	auto webResources = allData.getChildWithName("WebViewResources");
 
 	if (webResources.isValid())
