@@ -269,12 +269,8 @@ void xfader_editor::resized()
 
 void xfader_editor::timerCallback()
 {
-	double v = 0.0;
-
 	if (auto psource = findParentComponentOfClass<ParameterSourceObject>())
-	{
 		setInputValue(psource->getParameterValue(0));
-	}
 }
 
 intensity_editor::intensity_editor(mothernode* b, PooledUIUpdater* u) :

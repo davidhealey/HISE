@@ -510,7 +510,16 @@ void ScriptCreatedComponentWrapper::initAllProperties()
 	}
 }
 
-
+void ScriptCreatedComponentWrapper::postInit()
+{
+	// Apply the current z-level after component is fully initialized
+	auto sc = getScriptComponent();
+	auto currentLevel = sc->getCurrentZLevel();
+	if (currentLevel != ScriptingApi::Content::ScriptComponent::ZLevelListener::ZLevel::Default)
+	{
+		zLevelChanged(currentLevel);
+	}
+}
 
 ScriptCreatedComponentWrappers::SliderWrapper::SliderWrapper(ScriptContentComponent *content, ScriptingApi::Content::ScriptSlider *sc, int index) :
 ScriptCreatedComponentWrapper(content, index)
@@ -2000,7 +2009,8 @@ void ScriptCreatedComponentWrappers::ViewportWrapper::scrollBarMoved(ScrollBar* 
 
 		auto sv = dynamic_cast<ScriptingApi::Content::ScriptedViewport*>(getScriptComponent());
 		sv->positionBroadcaster.sendMessage(dontSendNotification, pos[0], pos[1]);
-		getScriptComponent()->setScriptObjectProperty(propertyToChange, normPos, dontSendNotification);
+		// Use sendNotificationAsync so the script's broadcaster gets notified, but async to avoid circular updates
+		getScriptComponent()->setScriptObjectProperty(propertyToChange, normPos, sendNotificationAsync);
 	}
 }
 

@@ -168,7 +168,7 @@ struct RDPReducer
 	{
 		if(!pointList.isEmpty())
 		{
-			simplifyCollinear(pointList, JUCE_LIVE_CONSTANT_OFF(0.19));
+			simplifyCollinear(pointList, JUCE_LIVE_CONSTANT_OFF(0.19f));
 			result.swapWith(pointList);
 		}
 	}
@@ -367,7 +367,6 @@ juce::Path Helpers::FFT::createPath(Range<int> sampleRange, Range<float> valueRa
 			auto prev = dataPoints[i-1];
 			auto current = dataPoints[i];
 			auto deltaX = current.getX() - prev.getX();
-			auto deltaY = current.getY() - prev.getY();
 			auto useCubic = current.getX() < cubicX;// (i < lastIndex / 2) && hmath::abs(deltaY) > JUCE_LIVE_CONSTANT_OFF(10);
 
 			if(useCubic)

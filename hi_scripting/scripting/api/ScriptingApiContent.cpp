@@ -2377,7 +2377,7 @@ void ScriptingApi::Content::ScriptSlider::connectToModulatedParameter(String mod
 
 	if(auto p = ProcessorHelpers::getFirstProcessorWithName(getScriptProcessor()->getMainController_()->getMainSynthChain(), moduleId))
 	{
-		int parameterIndex;
+		int parameterIndex = -1;
 
 		if(parameterId.isInt())
 			parameterIndex = (int)parameterId;
@@ -2403,9 +2403,12 @@ void ScriptingApi::Content::ScriptSlider::connectToModulatedParameter(String mod
 			
 			getScriptProcessor()->setModulationDisplayQueryFunction(idx, p, mv);
 
-			if(auto gc = ProcessorHelpers::getFirstProcessorWithType<GlobalModulatorContainer>(p->getMainController()->getMainSynthChain()))
+			if(parameterIndex != -1)
 			{
-				setModulationData(gc->createMatrixModulationPopupData(p, parameterIndex));
+				if (auto gc = ProcessorHelpers::getFirstProcessorWithType<GlobalModulatorContainer>(p->getMainController()->getMainSynthChain()))
+				{
+					setModulationData(gc->createMatrixModulationPopupData(p, parameterIndex));
+				}
 			}
 		}
 		

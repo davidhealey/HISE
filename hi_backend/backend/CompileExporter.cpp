@@ -2330,7 +2330,7 @@ void CompileExporter::ProjectTemplateHelpers::handleAdditionalSourceCode(Compile
 
 		for (int i = 0; i < additionalSourceFiles.size(); i++)
 		{
-			auto fileEntry = createXmlElementForFile(chainToExport, templateProject, additionalSourceFiles[i], true);
+			ScopedPointer<XmlElement> fileEntry = createXmlElementForFile(chainToExport, templateProject, additionalSourceFiles[i], true);
 
 			String newAditionalSourceLine = fileEntry->createDocument("", false, false);
             

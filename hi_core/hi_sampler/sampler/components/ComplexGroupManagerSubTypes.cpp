@@ -1579,7 +1579,6 @@ struct ComplexGroupManagerComponent::CustomBody: public LogicTypeComponent::Body
 					gainToUse = gv;
 				else
 				{
-					auto lg = lastGains[c];
 					gainToUse = gv; 
 					lastGains[c] = gainToUse;
 				}

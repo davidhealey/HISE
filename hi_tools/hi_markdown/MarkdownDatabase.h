@@ -134,7 +134,7 @@ public:
 
 		void swapChildren(std::vector<Item>& other);
 
-		int getNumChildren() const { return children.size(); }
+		int getNumChildren() const { return (int)children.size(); }
 
 		Item& operator[](int childIndex) { return children[childIndex]; };
 

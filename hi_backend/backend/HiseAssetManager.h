@@ -354,7 +354,7 @@ struct HiseAssetManager: public Component,
 		static constexpr int ButtonWidth = 60;
 		static constexpr int RowHeight = 64 + 2*16;
 		static constexpr int HeaderHeight = 24;
-		static constexpr int SignalColour = 0xFF39439D;
+		static constexpr uint32 SignalColour = 0xFF39439D;
 
 		struct TagInfo
 		{

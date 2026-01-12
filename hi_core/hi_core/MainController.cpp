@@ -115,7 +115,6 @@ bool MainController::unitTestMode = false;
 	globalPitchFactor(1.0),
 	midiInputFlag(false),
 	macroManager(this),
-	autoSaver(this),
 	delayedRenderer(this),
 	enablePluginParameterUpdate(true),
 	customTypeFaceData(ValueTree("CustomFonts")),

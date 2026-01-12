@@ -1984,7 +1984,8 @@ juce::var AssetInstallCreator::onLoadSettings(const var::NativeFunctionArgs& arg
 
 		return var(true);
 	}
-	
+
+	return var(false);
 }
 
 juce::var AssetInstallCreator::onSimulateTestRun(const var::NativeFunctionArgs& args)

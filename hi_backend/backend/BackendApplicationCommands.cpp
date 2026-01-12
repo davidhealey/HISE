@@ -173,6 +173,7 @@ void BackendCommandTarget::getAllCommands(Array<CommandID>& commands)
 		MenuViewReset,
         MenuViewRotate,
 		MenuViewEnableGlobalLayoutMode,
+		MenuViewShowPluginPreview,
 		MenuViewAddFloatingWindow,
         MenuViewToggleSnippetBrowser,
         MenuViewGotoUndo,
@@ -649,6 +650,33 @@ void BackendCommandTarget::getCommandInfo(CommandID commandID, ApplicationComman
 		setCommandTarget(result, "Enable Layout Mode", true, bpe->getRootFloatingTile()->isLayoutModeEnabled(), 'X', false);
 		result.categoryName = "View";
 		break;
+	case MenuViewShowPluginPreview:
+	{
+		bool isShown = false;
+		if (auto rootTile = bpe->getRootFloatingTile())
+		{
+			if (rootTile->isRootPopupShown())
+			{
+				// Check if the current popup is the plugin preview by checking component name
+				Component::callRecursive<FloatingTilePopup>(rootTile, [&isShown](FloatingTilePopup* popup)
+				{
+					if (auto comp = popup->getTrueContent())
+					{
+						auto name = comp->getName();
+						if (name == "Interface Preview" || name == "Create User Interface")
+						{
+							isShown = true;
+							return true; // Stop searching
+						}
+					}
+					return false;
+				});
+			}
+		}
+		setCommandTarget(result, "Show Plugin Preview", true, isShown, 'P', true, ModifierKeys::commandModifier | ModifierKeys::shiftModifier);
+		result.categoryName = "View";
+		break;
+	}
 	case MenuViewAddFloatingWindow:
 		setCommandTarget(result, "Add floating window", true, false, 'x', false);
 		result.categoryName = "View";
@@ -763,6 +791,36 @@ bool BackendCommandTarget::perform(const InvocationInfo &info)
         updateCommands();
         return true;
 	case MenuViewEnableGlobalLayoutMode: bpe->toggleLayoutMode(); updateCommands(); return true;
+	case MenuViewShowPluginPreview:
+	{
+		if (auto topBar = bpe->getMainTopBar())
+		{
+			// Check if preview is currently shown by checking the popup component name
+			bool isCurrentlyShown = false;
+			if (auto rootTile = bpe->getRootFloatingTile())
+			{
+				if (rootTile->isRootPopupShown())
+				{
+					Component::callRecursive<FloatingTilePopup>(rootTile, [&isCurrentlyShown](FloatingTilePopup* popup)
+					{
+						if (auto comp = popup->getTrueContent())
+						{
+							auto name = comp->getName();
+							if (name == "Interface Preview" || name == "Create User Interface")
+							{
+								isCurrentlyShown = true;
+								return true; // Stop searching
+							}
+						}
+						return false;
+					});
+				}
+			}
+			topBar->togglePopup(MainTopBar::PopupType::PluginPreview, !isCurrentlyShown);
+		}
+		updateCommands();
+		return true;
+	}
 	case MenuViewAddFloatingWindow:		bpe->addFloatingWindow(); return true;
     case MenuViewGotoUndo: bpe->getBackendProcessor()->getLocationUndoManager()->undo(); updateCommands(); return true;
     case MenuViewGotoRedo:  bpe->getBackendProcessor()->getLocationUndoManager()->redo(); updateCommands(); return true;
@@ -1149,6 +1207,7 @@ PopupMenu BackendCommandTarget::getMenuForIndex(int topLevelMenuIndex, const Str
 	        
 	        ADD_MENU_ITEM(MenuViewRotate);
 			ADD_MENU_ITEM(MenuViewEnableGlobalLayoutMode);
+			ADD_MENU_ITEM(MenuViewShowPluginPreview);
 
 			p.addSeparator();
 			ADD_MENU_ITEM(WorkspaceCustom);
@@ -1820,102 +1879,108 @@ void BackendCommandTarget::Actions::createRnboTemplate(BackendRootWindow* bpe)
 
 void BackendCommandTarget::Actions::saveFileXml(BackendRootWindow * bpe)
 {
-	if (!PresetHandler::showYesNoWindow("Save XML", "This will save the current XML file"))
-		return;
-	
-	bpe->owner->getUserPresetHandler().initDefaultPresetManager({});
-	
-	const String mainSynthChainId = bpe->owner->getMainSynthChain()->getId();
-	const bool hasDefaultName = mainSynthChainId == "Master Chain";
-	
-	if (hasDefaultName)
+	if (PresetHandler::showYesNoWindow("Save XML", "This will save the current XML file"))
 	{
-		debugToConsole(bpe->owner->getMainSynthChain(), "This project has never been saved as XML, please create XML first");
-		Actions::saveFileAsXml(bpe);
-		return;		
-	}
-	
-	File f = GET_PROJECT_HANDLER(bpe->getMainSynthChain()).getSubDirectory(ProjectHandler::SubDirectories::XMLPresetBackups).getChildFile(mainSynthChainId + ".xml");
+		bpe->owner->getUserPresetHandler().initDefaultPresetManager({});
 
-	if (!GET_PROJECT_HANDLER(bpe->getMainSynthChain()).isActive())
-		return;
-		
-	if (!f.existsAsFile())
-	{
-		debugToConsole(bpe->owner->getMainSynthChain(), "Master Chain name is not default but no corresponding XML found, please create XML first");
-		Actions::saveFileAsXml(bpe);
-		return;
-	}
-	
-	if (!PresetHandler::showYesNoWindow("Overwrite " + mainSynthChainId, "Overwrite the existing XML?"))
-		return;
-	
-	ValueTree v = bpe->owner->getMainSynthChain()->exportAsValueTree();
-	v.setProperty("BuildVersion", BUILD_SUB_VERSION, nullptr);
-	
-	auto xml = v.createXml();
-			
-	XmlBackupFunctions::removeEditorStatesFromXml(*xml);
-	
-	Processor::Iterator<ModulatorSampler> siter(bpe->getMainSynthChain());	            
+		const String mainSynthChainId = bpe->owner->getMainSynthChain()->getId();
+		const bool hasDefaultName = mainSynthChainId == "Master Chain";
 
-	while (auto s = siter.getNextProcessor())
-	{
-		if (s->getSampleMap()->hasUnsavedChanges())
-			s->getSampleMap()->saveAndReloadMap();
-	}
-						
-	File originalScriptDirectory = XmlBackupFunctions::getScriptDirectoryFor(bpe->getMainSynthChain());			
-						
-	File scriptDirectory = originalScriptDirectory.getSiblingFile("TempScriptDirectory");					
-						
-	Processor::Iterator<JavascriptProcessor> iter(bpe->getMainSynthChain());
-
-	scriptDirectory.deleteRecursively();
-	scriptDirectory.createDirectory();
-	
-	String interfaceId = "";
-
-	while (JavascriptProcessor *sp = iter.getNextProcessor())
-	{
-		if (sp->isConnectedToExternalFile())
-			continue;
-
-		String content;
-
-		if (auto jmp = dynamic_cast<JavascriptMidiProcessor*>(sp))
+		if (!hasDefaultName)
 		{
-			if (jmp->isFront())
-				interfaceId = jmp->getId();
+			File f = GET_PROJECT_HANDLER(bpe->getMainSynthChain()).getSubDirectory(ProjectHandler::SubDirectories::XMLPresetBackups).getChildFile(mainSynthChainId + ".xml");
+
+			if (GET_PROJECT_HANDLER(bpe->getMainSynthChain()).isActive())
+			{
+				if (f.existsAsFile())
+				{
+					if (PresetHandler::showYesNoWindow("Overwrite " + mainSynthChainId, "Overwrite the existing XML?"))
+					{
+						ValueTree v = bpe->owner->getMainSynthChain()->exportAsValueTree();
+
+			            v.setProperty("BuildVersion", BUILD_SUB_VERSION, nullptr);
+			            
+						XmlBackupFunctions::normalizePositionProperties(v);
+
+						auto xml = v.createXml();
+						
+						XmlBackupFunctions::removeEditorStatesFromXml(*xml);
+						
+						Processor::Iterator<ModulatorSampler> siter(bpe->getMainSynthChain());
+
+						while (auto s = siter.getNextProcessor())
+						{
+							if (s->getSampleMap()->hasUnsavedChanges())
+								s->getSampleMap()->saveAndReloadMap();
+						}
+
+						File originalScriptDirectory = XmlBackupFunctions::getScriptDirectoryFor(bpe->getMainSynthChain());
+
+						File scriptDirectory = originalScriptDirectory.getSiblingFile("TempScriptDirectory");
+
+						Processor::Iterator<JavascriptProcessor> iter(bpe->getMainSynthChain());
+
+						scriptDirectory.deleteRecursively();
+
+						scriptDirectory.createDirectory();
+
+						String interfaceId = "";
+
+						while (JavascriptProcessor *sp = iter.getNextProcessor())
+						{
+							if (sp->isConnectedToExternalFile())
+								continue;
+
+							String content;
+
+							if (auto jmp = dynamic_cast<JavascriptMidiProcessor*>(sp))
+							{
+								if (jmp->isFront())
+									interfaceId = jmp->getId();
+							}
+
+							sp->mergeCallbacksToScript(content);
+
+							File scriptFile = XmlBackupFunctions::getScriptFileFor(bpe->getMainSynthChain(), scriptDirectory, dynamic_cast<Processor*>(sp)->getId());
+
+							scriptFile.replaceWithText(content);
+						}
+
+						XmlBackupFunctions::removeAllScripts(*xml);
+
+						if(interfaceId.isNotEmpty())
+							XmlBackupFunctions::extractContentData(*xml, interfaceId, f);
+
+						f.replaceWithText(xml->createDocument(""));
+
+						debugToConsole(bpe->owner->getMainSynthChain(), "Save " + mainSynthChainId + " to " + f.getFullPathName());
+			            
+						if (originalScriptDirectory.deleteRecursively())
+						{
+							scriptDirectory.moveFileTo(originalScriptDirectory);
+						}
+						else
+						{
+							PresetHandler::showMessageWindow("Error at writing script file",
+								"The embedded script files could not be saved (probably because the file is opened somewhere else).\nPress OK to show the folder and move it manually", PresetHandler::IconType::Error);
+
+							scriptDirectory.revealToUser();
+						}
+					}
+				}
+				else
+				{
+					debugToConsole(bpe->owner->getMainSynthChain(), "Master Chain name is not default but no corresponding XML found, please create XML first");
+					Actions::saveFileAsXml(bpe);
+				}
+			}
 		}
-
-		sp->mergeCallbacksToScript(content);
-
-		File scriptFile = XmlBackupFunctions::getScriptFileFor(bpe->getMainSynthChain(), scriptDirectory, dynamic_cast<Processor*>(sp)->getId());
-
-		scriptFile.replaceWithText(content);
+		else
+		{
+			debugToConsole(bpe->owner->getMainSynthChain(), "This project has never been saved as XML, please create XML first");
+			Actions::saveFileAsXml(bpe);
+		}
 	}
-	
-	XmlBackupFunctions::removeAllScripts(*xml);				
-
-	if(interfaceId.isNotEmpty())
-		XmlBackupFunctions::extractContentData(*xml, interfaceId, f);					
-
-	f.replaceWithText(xml->createDocument(""));
-	
-	debugToConsole(bpe->owner->getMainSynthChain(), "Save " + mainSynthChainId + " to " + f.getFullPathName());
-
-	if (originalScriptDirectory.deleteRecursively())
-	{
-		scriptDirectory.moveFileTo(originalScriptDirectory);
-	}
-	else
-	{
-		PresetHandler::showMessageWindow("Error at writing script file",
-			"The embedded script files could not be saved (probably because the file is opened somewhere else).\nPress OK to show the folder and move it manually", PresetHandler::IconType::Error);
-
-		scriptDirectory.revealToUser();
-	}	
 }
 
 void BackendCommandTarget::Actions::saveFileAsXml(BackendRootWindow * bpe)
@@ -1933,6 +1998,8 @@ void BackendCommandTarget::Actions::saveFileAsXml(BackendRootWindow * bpe)
 
             v.setProperty("BuildVersion", BUILD_SUB_VERSION, nullptr);
             
+			XmlBackupFunctions::normalizePositionProperties(v);
+
 			auto xml = v.createXml();
 
 			FullInstrumentExpansion::setNewDefault(bpe->owner, v);
@@ -3541,6 +3608,32 @@ void XmlBackupFunctions::removeAllScripts(XmlElement &xml)
 	for (int i = 0; i < xml.getNumChildElements(); i++)
 	{
 		removeAllScripts(*xml.getChildElement(i));
+	}
+}
+
+void XmlBackupFunctions::normalizePositionProperties(ValueTree& v)
+{
+	static const Identifier x("x");
+	static const Identifier y("y");
+	static const Identifier width("width");
+	static const Identifier height("height");
+
+	// Cast all position props to int to prevent "34.0" in XML
+	for (int i = 0; i < v.getNumProperties(); i++)
+	{
+		auto propName = v.getPropertyName(i);
+		if (propName == x || propName == y || propName == width || propName == height)
+		{
+			var propValue = v.getProperty(propName);
+			v.setProperty(propName, (int)propValue, nullptr);
+		}
+	}
+
+	// Recursively normalize child trees
+	for (int i = 0; i < v.getNumChildren(); i++)
+	{
+		auto child = v.getChild(i);
+		normalizePositionProperties(child);
 	}
 }
 

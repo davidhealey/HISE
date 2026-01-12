@@ -1205,8 +1205,7 @@ bool HlacArchiver::extractSampleData(const DecompressData& data)
 		}
 	}
 
-  auto parts = getSourceFiles(sourceFile);
-  const int numParts = parts.size();
+	auto parts = getSourceFiles(sourceFile);
 	
 	int64 processedBytes = 0;
 	int64 totalBytes = 0;
