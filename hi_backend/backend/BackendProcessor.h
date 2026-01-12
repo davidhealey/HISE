@@ -62,6 +62,128 @@ struct AnalyserInfo: public ReferenceCountedObject
 	SimpleRingBuffer::Ptr ringBuffer[2];
 };
 
+class AutoSaver : private Timer,
+				  public ControlledObject,
+				  public ProjectHandler::Listener
+{
+public:
+
+	~AutoSaver() override
+	{
+		getMainController()->getSampleManager().getProjectHandler().removeListener(this);
+	}
+
+	AutoSaver(MainController* mc) :
+	  ControlledObject(mc),
+	  currentAutoSaveIndex(0)
+	{
+		
+	}
+
+	void updateAutosaving()
+	{
+		if (isAutoSaving())
+			enableAutoSaving();
+		else
+			disableAutoSaving();
+	}
+
+	void initialise()
+	{
+		getMainController()->getSampleManager().getProjectHandler().addListener(this);
+		projectChanged(File());
+	}
+
+private:
+
+	int getIntervalInMinutes() const
+	{
+		auto value = (int)dynamic_cast<const GlobalSettingManager*>(getMainController())->getSettingsObject().getSetting(HiseSettings::Other::AutosaveInterval);
+
+		if (value >= 1 && value <= 30)
+			return value;
+
+		return 5;
+	}
+
+	void enableAutoSaving()
+	{
+		IF_NOT_HEADLESS(startTimer(1000 * 60 * getIntervalInMinutes())); // autosave all 5 minutes
+	}
+
+	void disableAutoSaving()
+	{
+		stopTimer();
+	}
+
+	bool isAutoSaving() const
+	{
+		return dynamic_cast<const GlobalSettingManager*>(getMainController())->getSettingsObject().getSetting(HiseSettings::Other::EnableAutosave);
+	}
+
+	void projectChanged(const File&) override
+	{
+		currentAutoSaveIndex = 0;
+		fileList.clear();
+		updateAutosaving();
+	}
+
+	
+
+	void timerCallback() override
+	{
+		Processor* mainSynthChain = getMainController()->getMainSynthChain();
+
+		File backupFile = getAutoSaveFile();
+
+		ValueTree v = mainSynthChain->exportAsValueTree();
+
+		v.setProperty("BuildVersion", BUILD_SUB_VERSION, nullptr);
+		FileOutputStream fos(backupFile);
+		v.writeToStream(fos);
+
+		debugToConsole(mainSynthChain, "Autosaving as " + backupFile.getFileName());
+	}
+
+	File getAutoSaveFile()
+	{
+		Processor* mainSynthChain = getMainController()->getMainSynthChain();
+
+		File presetDirectory = getPresetFolder();
+
+		if (presetDirectory.isDirectory())
+		{
+			if (fileList.size() == 0)
+			{
+				fileList.add(presetDirectory.getChildFile("Autosave_1.hip"));
+				fileList.add(presetDirectory.getChildFile("Autosave_2.hip"));
+				fileList.add(presetDirectory.getChildFile("Autosave_3.hip"));
+				fileList.add(presetDirectory.getChildFile("Autosave_4.hip"));
+				fileList.add(presetDirectory.getChildFile("Autosave_5.hip"));
+			}
+
+			File toReturn = fileList[currentAutoSaveIndex];
+
+			if (toReturn.existsAsFile()) toReturn.deleteFile();
+
+			currentAutoSaveIndex = (currentAutoSaveIndex + 1) % 5;
+
+			return toReturn;
+		}
+
+		return File();
+	}
+
+	File getPresetFolder() const 
+	{
+		return getMainController()->getSampleManager().getProjectHandler().getSubDirectory(FileHandlerBase::Presets);
+	}
+
+	Array<File> fileList;
+
+	int currentAutoSaveIndex;
+};
+
 struct ExampleAssetManager: public ReferenceCountedObject,
 							public ProjectHandler
 						    
@@ -331,6 +453,8 @@ public:
 		return 8;
 	}
 
+	AutoSaver& getAutoSaver() { return autosaver; }
+
 	/// @brief returns the PluginParameter value of the indexed PluginParameter.
     float getParameter (int index) override
 	{
@@ -493,6 +617,8 @@ private:
 
 	ScopedPointer<BackendProcessor> docProcessor;
 	BackendRootWindow* docWindow;
+
+	AutoSaver autosaver;
 
 	JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(BackendProcessor)
 };

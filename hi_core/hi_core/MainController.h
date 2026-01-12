@@ -1523,9 +1523,6 @@ public:
 	MacroManager &getMacroManager() noexcept {return macroManager;};
 	const MacroManager &getMacroManager() const noexcept {return macroManager;};
 
-	AutoSaver &getAutoSaver() noexcept { return autoSaver; }
-	const AutoSaver &getAutoSaver() const noexcept { return autoSaver; }
-
 	PluginBypassHandler& getPluginBypassHandler() noexcept { return bypassHandler; }
 	const PluginBypassHandler& getPluginBypassHandler() const noexcept { return bypassHandler; }
 
@@ -2373,7 +2370,6 @@ private:
 	WeakReference<Console> popupConsole;
 	bool usePopupConsole;
 
-	AutoSaver autoSaver;
 
 	DebugLogger debugLogger;
 

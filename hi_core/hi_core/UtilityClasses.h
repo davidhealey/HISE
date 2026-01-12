@@ -498,38 +498,7 @@ private:
 
 class MainController;
 
-class AutoSaver : private Timer
-{
-public:
 
-	
-
-	AutoSaver(MainController *mc_);;
-
-	
-
-	void updateAutosaving();
-
-private:
-
-	int getIntervalInMinutes() const;
-
-	void enableAutoSaving();
-
-	void disableAutoSaving();
-
-	bool isAutoSaving() const;
-
-	void timerCallback() override;
-
-	File getAutoSaveFile();
-
-	Array<File> fileList;
-
-	int currentAutoSaveIndex;
-
-	MainController *mc;
-};
 
 
 

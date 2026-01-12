@@ -1382,7 +1382,9 @@ void HiseSettings::Data::settingWasChanged(const Identifier& id, const var& newV
 	else if (id == Other::UseOpenGL)
 		PresetHandler::showMessageWindow("Reopen HISE window", "Restart HISE (or reopen this window) in order to apply the new Graphics setting", PresetHandler::IconType::Info);
 	else if (id == Other::EnableAutosave || id == Other::AutosaveInterval)
-		mc->getAutoSaver().updateAutosaving();
+	{
+		BACKEND_ONLY(dynamic_cast<BackendProcessor*>(mc)->getAutoSaver().updateAutosaving());
+	}
 	else if (id == Other::AudioThreadGuardEnabled)
 		mc->getKillStateHandler().enableAudioThreadGuard(newValue);
 	else if (id == Other::GlobalHiseScaleFactor)
