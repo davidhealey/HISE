@@ -50,6 +50,7 @@ namespace hise { using namespace juce;
 		auto tc = c->findColour(trackColour);
 		auto pc = c->findColour(peakColour);
 		auto mc = c->findColour(maxPeakColour);
+		auto oc = c->findColour(overPeakColour);
             
 		RectangleList<float> onSegments, offSegments, maxSegments;
             
@@ -75,7 +76,14 @@ namespace hise { using namespace juce;
 				{
 					auto maxPos = fullSize * maxPeaks[i];
                         
-					g.setColour(mc);
+					if (maxPeaks[i] >= 0.99f && oc.getAlpha() > 0)
+					{
+						g.setColour(oc);
+					}
+					else
+					{
+						g.setColour(mc);
+					}
                         
 					auto c = isVertical ? maxCopy.removeFromBottom(maxPos).withHeight(2.0f) :
 						         maxCopy.removeFromLeft(maxPos).removeFromRight(2.0f);
@@ -373,6 +381,7 @@ namespace hise { using namespace juce;
 			ni->setColour(peakColour, findPanelColour(PanelColourId::itemColour1));
 			ni->setColour(trackColour, findPanelColour(PanelColourId::itemColour2));
 			ni->setColour(maxPeakColour, findPanelColour(PanelColourId::textColour));
+			ni->setColour(overPeakColour, findPanelColour(PanelColourId::itemColour3));
             
 			if(ni->findColour(bgColour).isOpaque())
 				ni->setOpaque(true);
@@ -912,6 +921,44 @@ void TooltipPanel::fromDynamicObject(const var& object)
 	tooltipBar->setColour(TooltipBar::textColour, findPanelColour(PanelColourId::textColour));
 
 	tooltipBar->setFont(getFont());
+
+	useFade = getPropertyWithDefault(object, SpecialPanelIds::Fade);
+	tooltipBar->setUseFade(useFade);
+
+	showIcon = getPropertyWithDefault(object, SpecialPanelIds::ShowIcon);
+	tooltipBar->setShowInfoIcon(showIcon);
+}
+
+var TooltipPanel::toDynamicObject() const
+{
+	var obj = FloatingTileContent::toDynamicObject();
+	storePropertyInObject(obj, SpecialPanelIds::Fade, useFade);
+	storePropertyInObject(obj, SpecialPanelIds::ShowIcon, showIcon);
+	return obj;
+}
+
+Identifier TooltipPanel::getDefaultablePropertyId(int index) const
+{
+	if (index < (int)PanelPropertyId::numPropertyIds)
+		return FloatingTileContent::getDefaultablePropertyId(index);
+
+	RETURN_DEFAULT_PROPERTY_ID(index, SpecialPanelIds::Fade, "Fade");
+	RETURN_DEFAULT_PROPERTY_ID(index, SpecialPanelIds::ShowIcon, "ShowIcon");
+
+	jassertfalse;
+	return{};
+}
+
+var TooltipPanel::getDefaultProperty(int index) const
+{
+	if (index < (int)PanelPropertyId::numPropertyIds)
+		return FloatingTileContent::getDefaultProperty(index);
+
+	RETURN_DEFAULT_PROPERTY(index, SpecialPanelIds::Fade, true);
+	RETURN_DEFAULT_PROPERTY(index, SpecialPanelIds::ShowIcon, true);
+
+	jassertfalse;
+	return{};
 }
 
 void TooltipPanel::resized()
@@ -1801,6 +1848,19 @@ void TableFloatingTileBase::resized()
 
 	if(auto root = CSSRootComponent::find(*this))
 	{
+		// CSS LAF is set in refreshComponentForCell(),
+		// but that isn't called when there are no rows in the table.
+		// Initialising here for consistent styling for the empty state.
+		if (css_laf == nullptr)
+		{
+			css_laf = new simple_css::StyleSheetLookAndFeel(*root);
+
+			if (root->css.getWithAllStates(this, simple_css::Selector("th")) != nullptr)
+				table.getHeader().setLookAndFeel(css_laf);
+			else
+				table.getHeader().setLookAndFeel(laf);
+		}
+
 		int firstWidth = 0;
 
 		if(auto ss = root->css.getWithAllStates(this, Selector(ElementType::TableHeader)))

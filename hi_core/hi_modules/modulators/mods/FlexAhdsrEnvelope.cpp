@@ -65,6 +65,19 @@ FlexAhdsrEnvelope::FlexAhdsrEnvelope(MainController *mc, const String &id, int v
 	parameterNames.add(Identifier("ReleaseCurve"));
 	updateParameterSlots();
 
+	internalChains.reserve(numInternalChains);
+
+	internalChains += {this, "Attack Time", ModulatorChain::ModulationType::VoiceStartOnly };
+	internalChains += {this, "Attack Level", ModulatorChain::ModulationType::VoiceStartOnly };
+	internalChains += {this, "Decay Time", ModulatorChain::ModulationType::VoiceStartOnly };
+	internalChains += {this, "Sustain Level", ModulatorChain::ModulationType::Normal };
+	internalChains += {this, "Release Time", ModulatorChain::ModulationType::VoiceStartOnly };
+
+	internalChains.finalise();
+
+	for (auto& mb : internalChains)
+		mb.getChain()->setParentProcessor(this);
+
 	scriptnode::ParameterDataList list;
 	obj.createParameters(list);
 
@@ -114,8 +127,22 @@ ValueTree FlexAhdsrEnvelope::exportAsValueTree() const
 	return v;
 }
 
+hise::Processor* FlexAhdsrEnvelope::getChildProcessor(int processorIndex)
+{
+	jassert(processorIndex < internalChains.size());
+	return internalChains[processorIndex].getChain();
+}
+
+const hise::Processor* FlexAhdsrEnvelope::getChildProcessor(int processorIndex) const
+{
+	jassert(processorIndex < internalChains.size());
+	return internalChains[processorIndex].getChain();
+}
+
 float FlexAhdsrEnvelope::startVoice(int voiceIndex)
 {
+	EnvelopeModulator::startVoice(voiceIndex);
+
 	bool restart = true;
 
 	if(isMonophonic)
@@ -127,12 +154,46 @@ float FlexAhdsrEnvelope::startVoice(int voiceIndex)
 	
 	PolyHandler::ScopedVoiceSetter svs(polyHandler, voiceIndex);
 
+	std::array<float, (int)InternalChains::numInternalChains> modValues;
+
+	int idx = 0;
+
+	for (auto& mb : internalChains)
+	{
+		mb.startVoice(voiceIndex);
+		modValues[idx++] = mb.getChain()->getConstantVoiceValue(voiceIndex);
+	}
+		
+
 	if(restart)
 	{
+		using STATE = flex_ahdsr_base::State;
+
+		auto& voiceState = obj.state.get();
+
+		constexpr auto TIME = hise::flex_ahdsr_base::ParameterType::Time;
+		constexpr auto LEVEL = hise::flex_ahdsr_base::ParameterType::Level;
+
+		auto& s = obj.state.get();
+
+		s.template setModulationValue<STATE::ATTACK, TIME>(modValues[InternalChains::AttackTimeChain]);
+		s.template setModulationValue<STATE::ATTACK, LEVEL>(modValues[InternalChains::AttackLevelChain]);
+		s.template setModulationValue<STATE::HOLD, LEVEL>(modValues[InternalChains::AttackLevelChain]); 
+		s.template setModulationValue<STATE::DECAY, TIME>(modValues[InternalChains::DecayTimeChain]); 
+		s.template setModulationValue<STATE::RELEASE, TIME>(modValues[InternalChains::ReleaseTimeChain]);
+
+		if(!internalChains[InternalChains::SustainLevelChain].getChain()->hasTimeModulationMods())
+		{
+			s.template setModulationValue<STATE::DECAY, LEVEL>(modValues[InternalChains::SustainLevelChain]);
+			s.template setModulationValue<STATE::SUSTAIN, LEVEL>(modValues[InternalChains::SustainLevelChain]);
+		}
+
 		auto ownerSynth = static_cast<ModulatorSynth*>(getParentProcessor(true));
 		auto ownerVoice = static_cast<ModulatorSynthVoice*>(ownerSynth->getVoice(voiceIndex));
 		auto e = ownerVoice->getCurrentHiseEvent();
 
+		// reset the smoothers
+		obj.reset();
 		obj.handleHiseEvent(e);
 	}
 
@@ -154,6 +215,8 @@ bool FlexAhdsrEnvelope::isPlaying(int voiceIndex) const
 
 void FlexAhdsrEnvelope::stopVoice(int voiceIndex)
 {
+	EnvelopeModulator::stopVoice(voiceIndex);
+
 	auto gateOff = true;
 
 	if(isMonophonic)
@@ -192,6 +255,14 @@ void FlexAhdsrEnvelope::reset(int voiceIndex)
 	obj.reset();
 }
 
+void FlexAhdsrEnvelope::handleHiseEvent(const HiseEvent& e)
+{
+	EnvelopeModulator::handleHiseEvent(e);
+
+	for (auto& mb : internalChains)
+		mb.handleHiseEvent(e);
+}
+
 void FlexAhdsrEnvelope::calculateBlock(int startSample, int numSamples)
 {
 	auto voiceIndex = polyManager.getCurrentVoice();
@@ -203,7 +274,47 @@ void FlexAhdsrEnvelope::calculateBlock(int startSample, int numSamples)
 	if(isMonophonic)
 		voiceIndex = 0;
 
+	
+
 	PolyHandler::ScopedVoiceSetter svs(polyHandler, voiceIndex);
+
+	auto& schain = internalChains[InternalChains::SustainLevelChain];
+
+	
+
+	if (schain.getChain()->hasTimeModulationMods())
+	{
+		auto os = static_cast<ModulatorSynth*>(getParentProcessor(true, true));
+		auto msv = static_cast<ModulatorSynthVoice*>(os->getVoice(voiceIndex));
+
+		const int pseudoOffset = startSample * HISE_CONTROL_RATE_DOWNSAMPLING_FACTOR;
+		const int pseudoSize = numSamples * HISE_CONTROL_RATE_DOWNSAMPLING_FACTOR;
+
+		if (msv->isFirstRenderedVoice())
+			schain.calculateMonophonicModulationValues(pseudoOffset, pseudoSize);
+
+		schain.calculateModulationValuesForCurrentVoice(voiceIndex, pseudoOffset, pseudoSize);
+
+		auto sv = schain.getWritePointerForManualExpansion(pseudoOffset);
+		
+		span<float, 1> data;
+
+		auto& s = obj.state.get();
+
+		for(int i = 0; i < numSamples; i++)
+		{
+			data[0] = 1.0f;//internalBuffer.getSample(0, startSample + i);
+			
+			auto mv = sv[i];
+
+			s.template setModulationValue<flex_ahdsr_base::State::DECAY, flex_ahdsr_base::ParameterType::Level>(mv);
+			s.template setModulationValue<flex_ahdsr_base::State::SUSTAIN, flex_ahdsr_base::ParameterType::Level>(mv);
+			obj.processFrame(data);
+			internalBuffer.setSample(0, i + startSample, data[0]);
+		}
+
+		return;
+	}
 
 	float* ptr[1] = { internalBuffer.getWritePointer(0, startSample) };
 	FloatVectorOperations::fill(ptr[0], 1.0f, numSamples);
@@ -344,6 +455,9 @@ float FlexAhdsrEnvelope::getAttribute(int parameterIndex) const
 void FlexAhdsrEnvelope::prepareToPlay(double sampleRate, int samplesPerBlock)
 {
 	EnvelopeModulator::prepareToPlay(sampleRate, samplesPerBlock);
+
+	for (auto& mb : internalChains)
+		mb.prepareToPlay(sampleRate, samplesPerBlock);
 
 	PrepareSpecs ps;
 	ps.voiceIndex = &polyHandler;
