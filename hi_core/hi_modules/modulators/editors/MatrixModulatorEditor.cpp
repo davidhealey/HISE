@@ -233,6 +233,10 @@ MatrixModulatorBody::MatrixModulatorBody(ProcessorEditor* parent):
 
 				gc->matrixProperties.rangeData[targetId] = rd;
 				gc->matrixProperties.sendChangeMessage(targetId);
+			} 
+			else
+			{
+				PresetHandler::showMessageWindow("No Global Modulator Container present", "You need to add at least a single global modulator container to use this method.  \n> The range values are not stored in this modulator but globally to allow multiple modulators share the same target.");
 			}
 			
 		}
@@ -341,6 +345,7 @@ void MatrixModulatorBody::updateValueSlider()
 	valueSlider.valueFromTextFunction = vtc;
 	valueSlider.textFromValueFunction = vtc;
 	valueSlider.updateText();
+	valueSlider.updateValue();
 
 	for(auto r: content.rows)
 	{
