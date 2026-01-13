@@ -314,7 +314,7 @@ public:
 
 		bool manualExpansionPending = false;
 
-		
+		int numActiveVoices = 0;
 
 		Options options;
 		

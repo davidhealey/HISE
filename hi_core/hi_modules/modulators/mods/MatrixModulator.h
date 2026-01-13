@@ -91,6 +91,11 @@ public:
 
 	void onModulationDrop(int parameterIndex, int modulationSourceIndex) override;
 
+	float getInactiveModValue() const override 
+	{ 
+		return rangeData.outputRange.convertFrom0to1(baseValue.targetValue, false);
+	}
+
 	String getModulationTargetId(int parameterIndex) const override;
 
 	void setRangeData(const MatrixIds::Helpers::Properties::RangeData& rd)
