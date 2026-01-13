@@ -125,6 +125,7 @@ GlobalModulatorContainer::GlobalModulatorContainer(MainController *mc, const Str
 	gainChain->getHandler()->addListener(this);
 
 	dragBroadcaster.setEnableQueue(true);
+	currentMatrixSourceBroadcaster.sendMessage(dontSendNotification, -1);
 }
 
 GlobalModulatorContainer::~GlobalModulatorContainer()

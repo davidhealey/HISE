@@ -140,7 +140,7 @@ struct Helpers
 
 		std::map<String, DefaultInitValue> initValues;
 		std::map<String, RangeData> rangeData;
-		bool selectableSources = true;
+		bool selectableSources = false;
 
 		LambdaBroadcaster<Properties*, String> propertyUpdateBroadcaster;
 	};

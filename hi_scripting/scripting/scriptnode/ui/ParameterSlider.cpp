@@ -1263,7 +1263,7 @@ void ParameterSlider::timerCallback()
 
 		NormalisableRange<double> nr(getRange());
 		nr.skew = getSkewFactor();
-		auto thisValue = modulationQueryFunction->getDisplayValue(modulationQueryProcessor, getValue(), nr);
+		auto thisValue = modulationQueryFunction->getDisplayValue(modulationQueryProcessor, getValue(), nr, -1);
 
 		if(thisValue != lastValue)
 		{

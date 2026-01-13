@@ -432,9 +432,12 @@ ModulationDisplayValue::QueryFunction::Ptr MatrixModulator::getModulationQueryFu
 				return dynamic_cast<MatrixModulator*>(p)->onScaleDrag(isDown, delta);
 			}
 
-			ModulationDisplayValue getDisplayValue(Processor* p, double nv, NormalisableRange<double> nr) const override
+			ModulationDisplayValue getDisplayValue(Processor* p, double nv, NormalisableRange<double> nr, int sourceIndex) const override
 			{
-				return dynamic_cast<MatrixModulator*>(p)->getDisplayValue(nv, nr);
+				auto mm = dynamic_cast<MatrixModulator*>(p);
+
+				ScopedValueSetter<int> sv(mm->displaySourceIndex, sourceIndex);
+				return mm->getDisplayValue(nv, nr);
 			}
 		};
 
@@ -632,8 +635,11 @@ ModulationDisplayValue MatrixModulator::getDisplayValue(double nv, NormalisableR
 
 	mv.modulationRange = { mv.normalisedValue, mv.normalisedValue };
 
-	for(auto i: items)
-		i->handleDisplayValue(mv);
+	for (auto i : items)
+	{
+		if (displaySourceIndex == -1 || i->sourceIndex == displaySourceIndex)
+			i->handleDisplayValue(mv);
+	}
 
 	mv.clipTo0To1();
 

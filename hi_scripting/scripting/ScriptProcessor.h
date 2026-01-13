@@ -74,12 +74,12 @@ public:
 			return false;
 		}
 
-		ModulationDisplayValue getDisplayValue(Processor* p, double nv, NormalisableRange<double> nr) const override
+		ModulationDisplayValue getDisplayValue(Processor* p, double nv, NormalisableRange<double> nr, int displayIndex) const override
 		{
 			jassert(targetFunction != nullptr);
 
 			if(safeP != nullptr)
-				return targetFunction->getDisplayValue(safeP, nv, nr);
+				return targetFunction->getDisplayValue(safeP, nv, nr, displayIndex);
 
 			return {};
 		}

@@ -395,6 +395,7 @@ struct MatrixContent: public MatrixBase
 			String p64;
 			Path p;
 			bool currentlySelected = false;
+			int prevSourceIndex = -1;
 		};
 
 		Controller(MainController* mc, Component& p);

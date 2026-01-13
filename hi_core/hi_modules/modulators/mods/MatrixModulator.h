@@ -145,6 +145,8 @@ public:
 		customTargetId = newId;
 	}
 
+	int displaySourceIndex = -1;
+
 private:
 
 	String customTargetId;

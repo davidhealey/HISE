@@ -662,6 +662,7 @@ public:
 	StringArray customEditCallbacks;
 	LambdaBroadcaster<int, String> editCallbackHandler;
 
+	bool exclusiveSourceMode = false;
 	LambdaBroadcaster<int> currentMatrixSourceBroadcaster;
 
 	enum class DragAction
@@ -684,6 +685,22 @@ public:
 	void cleanUpRuntimeSources()
 	{
 		runtimeSource.clear();
+	}
+
+	void setExlusiveMatrixSource(int sourceIndex, NotificationType n)
+	{
+		if (matrixProperties.selectableSources)
+		{
+			currentMatrixSourceBroadcaster.sendMessage(n, sourceIndex);
+		}
+	}
+
+	int getExclusiveMatrixSource() const
+	{
+		if(matrixProperties.selectableSources)
+			return currentMatrixSourceBroadcaster.getLastValue();
+
+		return -1;
 	}
 
 private:

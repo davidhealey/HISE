@@ -194,7 +194,7 @@ bool ModulatorChain::SpecialQueryFunctions::GainModulation::onScaleDrag(Processo
 }
 
 ModulationDisplayValue ModulatorChain::SpecialQueryFunctions::GainModulation::getDisplayValue(Processor* p, double v,
-	NormalisableRange<double> nr) const
+	NormalisableRange<double> nr, int ) const
 {
 	jassert(dynamic_cast<ModulatorSynth*>(p) != nullptr);
 	auto modChain = dynamic_cast<ModulatorChain*>(p->getChildProcessor(ModulatorSynth::InternalChains::GainModulation)); 
@@ -226,7 +226,7 @@ bool ModulatorChain::SpecialQueryFunctions::PitchModulation::onScaleDrag(Process
 }
 
 ModulationDisplayValue ModulatorChain::SpecialQueryFunctions::PitchModulation::getDisplayValue(Processor* p, double v,
-	NormalisableRange<double> nr) const
+	NormalisableRange<double> nr, int) const
 {
 	jassert(dynamic_cast<ModulatorSynth*>(p) != nullptr);
 	auto modChain = dynamic_cast<ModulatorChain*>(p->getChildProcessor(ModulatorSynth::InternalChains::PitchModulation));
