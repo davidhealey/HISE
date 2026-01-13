@@ -1174,7 +1174,12 @@ template <int NV, typename ParameterClass, typename DragHandler=flex_ahdsr_base:
 			memset(data.data(), 0, sizeof(data));
 
 			for(auto& s: data)
+			{
+				s.timeModValue = 1.0f;
+				s.levelModValue = 1.0f;
 				s.curve.set(1.0);
+			}
+				
 
 			set<State::DECAY, ParameterType::Level>(0.5);
 			set<State::SUSTAIN, ParameterType::Level>(0.5);
@@ -1279,9 +1284,9 @@ template <int NV, typename ParameterClass, typename DragHandler=flex_ahdsr_base:
 			switch(T)
 			{
 			case ParameterType::Time:
-				return v.time;
+				return v.time * v.timeModValue;
 			case ParameterType::Level:
-				return v.level.advance();
+				return v.level.advance() * v.levelModValue;
 			case ParameterType::Curve:
 				return v.curve.advance();
 			default:
@@ -1296,6 +1301,17 @@ template <int NV, typename ParameterClass, typename DragHandler=flex_ahdsr_base:
 			{
 				data[i].prepare(sampleRate, 20.0);
 			}
+		}
+
+		template <State S, ParameterType T> void setModulationValue(float newValue)
+		{
+			jassert(newValue >= 0.0f & newValue <= 1.0f);
+			auto& s = data[(int)S];
+
+			if (T == ParameterType::Level)
+				s.levelModValue = newValue;
+			else
+				s.timeModValue = newValue;
 		}
 
 		bool isStaticState()
@@ -1415,6 +1431,8 @@ template <int NV, typename ParameterClass, typename DragHandler=flex_ahdsr_base:
 			sfloat curve;
 			float time = 0.0f;
 			sfloat level;
+			float timeModValue = 0.0f;
+			float levelModValue = 0.0f;
 		};
 
 		Mode m = Mode::Note;
