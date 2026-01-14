@@ -490,18 +490,28 @@ namespace parameter
 		return p;
 	}
 
-	data data::withRange(InvertableParameterRange r)
+	scriptnode::parameter::data data::withRange(InvertableParameterRange r) const
 	{
 		data copy(*this);
 		copy.info.setRange(r);
 		return copy;
 	}
 
+	scriptnode::parameter::data data::withClonedParameters() const
+	{
+		data copy(*this);
+
+		if(parameterNames != nullptr)
+			copy.parameterNames = parameterNames->createCopy();
+
+		return copy;
+	}
+
 	hise::ValueToTextConverter data::getValueToTextConverter() const
 	{
-		if (!parameterNames.isEmpty())
+		if (parameterNames != nullptr)
 		{
-			return ValueToTextConverter::createForOptions(parameterNames);
+			return ValueToTextConverter::createForOptions(getParameterNames().toStringArray());
 		}
 
 		switch (info.textConverter)
@@ -521,8 +531,17 @@ namespace parameter
 
 	void data::setParameterValueNames(const StringArray& valueNames)
 	{
-		parameterNames = valueNames;
+		MemoryOutputStream mos;
 
+		for(const auto& sa: valueNames)
+			mos.writeString(sa);
+
+		mos.flush();
+
+		parameterNames = new RefCountedHeapBuffer(mos.getDataSize());
+
+		memcpy(parameterNames->getData(), mos.getData(), mos.getDataSize());
+		
 		if (valueNames.size() > 1)
 			setRange({ 0.0, (double)valueNames.size() - 1.0, 1.0 });
 	}

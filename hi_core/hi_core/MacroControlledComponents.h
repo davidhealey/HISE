@@ -937,6 +937,12 @@ public:
 		
 	}
 
+	void visibilityChanged() override
+	{
+		if(currentHoverPopup != nullptr && modUpdater != nullptr && modUpdater->isUsingExclusiveSourceMode())
+			currentHoverPopup->setVisible(isVisible());
+	}
+
     void itemDragExit (const SourceDetails& d) override
 	{
 		if(isInterestedInDragSource(d))

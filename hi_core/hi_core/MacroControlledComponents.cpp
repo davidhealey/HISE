@@ -1271,7 +1271,11 @@ struct HiSlider::HoverPopup: public Component,
 	  exclusiveMode(exclusiveMode_)
 	{
 		auto pp = parent->getParentComponent();
-		pp->addAndMakeVisible(this);
+
+		auto pIndex = pp->getIndexOfChildComponent(parent);
+
+		pp->addAndMakeVisible(this, pIndex+1);
+
 		auto pb = parent->getBoundsInParent();
 		auto b = dragAreas.getBounds();
 
