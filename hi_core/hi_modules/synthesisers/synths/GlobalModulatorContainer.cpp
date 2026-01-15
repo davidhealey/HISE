@@ -32,68 +32,52 @@
 
 namespace hise { using namespace juce;
 
-struct GlobalModulatorContainer::GlobalModulatorCable
+void GlobalModulatorContainer::GlobalModulatorCable::send(int voiceIndex, bool isEnvelope /*= false*/, int startSample /*= 0*/)
 {
-    WeakReference<Modulator> mod;
-    var cable;
-    
-	
+	if (auto c = cable.getObject())
+	{
+		auto cable = static_cast<scriptnode::routing::GlobalRoutingManager::Cable*>(c);
 
-    void send(int voiceIndex, bool isEnvelope=false, int startSample=0)
-    {
-        if (auto c = cable.getObject())
-        {
-            auto cable = static_cast<scriptnode::routing::GlobalRoutingManager::Cable*>(c);
-            
-            double modValue = 1.0;
-            
-            if(voiceIndex == -1)
-            {
-                if(auto m = static_cast<TimeVariantModulator*>(mod.get()))
-                {
-                    modValue = m->getLastConstantValue();
-                }
-            }
-			else if (isEnvelope)
+		double modValue = 1.0;
+
+		if (voiceIndex == -1)
+		{
+			if (auto m = static_cast<TimeVariantModulator*>(mod.get()))
 			{
-				auto gs = dynamic_cast<GlobalModulatorContainer*>(mod->getParentProcessor(true));
+				modValue = m->getLastConstantValue();
+			}
+		}
+		else if (isEnvelope)
+		{
+			auto gs = dynamic_cast<GlobalModulatorContainer*>(mod->getParentProcessor(true));
 
-				auto ev = static_cast<ModulatorSynthVoice*>(gs->getVoice(voiceIndex))->getCurrentHiseEvent();
+			auto ev = static_cast<ModulatorSynthVoice*>(gs->getVoice(voiceIndex))->getCurrentHiseEvent();
 
-				if(!mod->isBypassed())
+			if (!mod->isBypassed())
+			{
+				auto idx = gs->getEnvelopeIndex(mod);
+
+				if (auto data = gs->getEnvelopeValuesForModulator(idx, startSample, ev))
 				{
-					auto idx = gs->getEnvelopeIndex(mod);
-
-					if (auto data = gs->getEnvelopeValuesForModulator(idx, startSample, ev))
-					{
-						modValue = *data;
-					}
-					else
-					{
-						return;
-					}
+					modValue = *data;
+				}
+				else
+				{
+					return;
 				}
 			}
-			else
-            {
-                if(auto m = static_cast<VoiceStartModulator*>(mod.get()))
-                {
-                    modValue = m->getVoiceStartValue(voiceIndex);
-                }
-            }
-            
-            cable->sendValue(nullptr, modValue);
-        }
-        
-        
-    }
-    
-    bool operator==(const GlobalModulatorCable& other) const
-    {
-        return other.mod == mod &&
-               cable == other.cable;
-    }
-};
+		}
+		else
+		{
+			if (auto m = static_cast<VoiceStartModulator*>(mod.get()))
+			{
+				modValue = m->getVoiceStartValue(voiceIndex);
+			}
+		}
+
+		cable->sendValue(nullptr, modValue);
+	}
+}
 
 GlobalModulatorContainer::GlobalModulatorContainer(MainController *mc, const String &id, int numVoices) :
   ModulatorSynth(mc, id, numVoices),

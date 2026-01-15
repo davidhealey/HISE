@@ -7714,7 +7714,7 @@ void ScriptingObjects::ScriptBackgroundTask::callOnBackgroundThread(var backgrou
 		currentTask = WeakCallbackHolder(getScriptProcessor(), this, backgroundTaskFunction, 1);
 		currentTask.incRefCount();
 		currentTask.addAsSource(this, "backgroundFunction");
-		startThread(8);
+		ThreadStarters::startHigh(this);
 	}
 }
 
@@ -7861,7 +7861,7 @@ void ScriptingObjects::ScriptBackgroundTask::runProcess(var command, var args, v
 		currentTask.clear();
 		childProcessData = new ChildProcessData(*this, command.toString(), args, logFunction);
 
-		startThread(8);
+		ThreadStarters::startHigh(this);
 	}
 }
 

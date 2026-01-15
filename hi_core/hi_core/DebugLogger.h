@@ -133,19 +133,167 @@ public:
 
 	~DebugLogger();
 
-	struct Message;
+	struct Message
+	{
+		Message() {};
 
-	struct Failure;
+		Message(int messageIndex_, int callbackIndex_, double timestamp_, Location l, const Processor* const p_, const Identifier& id_);;
 
-	struct Event;
+		virtual ~Message() {};
 
-	struct PerformanceWarning;
+		String getTimeString();
 
-	struct ParameterChange;
+		String getLocationString();
 
-	struct StringMessage;
+		virtual bool shouldPrintBacktrace() const;;
 
-	struct AudioSettingChange;
+		virtual String getMessageText(int errorIndex = -1);
+
+		int messageIndex = -1;
+		int callbackIndex = -1;
+		double timestamp = 0.0;
+		const Identifier id;
+		WeakReference<Processor> p;
+		Location location;
+	};
+
+	struct StringMessage : public Message
+	{
+		StringMessage(int messageIndex, int callbackIndex, const String& message_, double ts);
+
+		virtual ~StringMessage()
+		{
+
+		};
+
+		String getMessageText(int errorIndex /* = -1 */) override;
+
+		String message;
+	};
+
+	struct Event : public Message
+	{
+		Event(int messageIndex, int callbackIndex, const HiseEvent& e_);
+
+		virtual ~Event()
+		{
+
+		};
+
+		String getMessageText(int errorIndex /* = -1 */) override;
+
+		const HiseEvent e;
+	};
+
+	struct AudioSettingChange : public Message
+	{
+		AudioSettingChange(int messageIndex, int callbackIndex, double ts, FailureType type_, double oldValue_, double newValue_);;
+
+		virtual ~AudioSettingChange()
+		{
+
+		};
+
+		FailureType type;
+		double oldValue;
+		double newValue;
+
+		String getMessageText(int errorIndex = -1);
+	};
+
+	struct PerformanceWarning : public Message
+	{
+		PerformanceWarning(int messageIndex, int callbackIndex, const DebugLogger::PerformanceData& d_, double timestamp_, int voiceAmount_);;
+
+		virtual ~PerformanceWarning()
+		{
+
+		};
+
+		int voiceAmount = 0;
+		double timestamp = 0.0;
+
+		String getMessageText(int /*errorIndex*/) override;
+
+		const DebugLogger::PerformanceData d;
+	};
+
+	struct ParameterChange : public Message
+	{
+		ParameterChange(int messageIndex, int callbackIndex, double timestamp, const Identifier& id, var value_) :
+			Message(messageIndex, callbackIndex, timestamp, Location::Empty, nullptr, id),
+			value(value_)
+		{}
+
+		ParameterChange() :
+			value(var())
+		{};
+
+		String getMessageText(int) override
+		{
+			String s;
+			s << "**Parameter Change** ";
+			s << "ID: `" << id << "` value: `" << value.toString() << "`  " << "CI: `" << callbackIndex << "`  ";
+			return s;
+		}
+
+		var value;
+	};
+
+	struct Failure : public DebugLogger::Message
+	{
+		Failure(int messageIndex, int callbackIndex_, Location loc_, FailureType t, const Processor* faultyModule, double ts, double extraValue_, const Identifier& id_ = Identifier()) :
+			Message(messageIndex, callbackIndex_, ts, loc_, faultyModule, id_),
+			type(t),
+			extraValue(extraValue_)
+		{};
+
+		virtual ~Failure()
+		{
+
+		};
+
+		bool shouldPrintBacktrace() const override { return type == FailureType::PriorityInversion; }
+
+		String getMessageText(int errorIndex = -1)
+		{
+			static const String ok("All OK");
+
+			if (type == FailureType::Empty)
+				return ok;
+
+			NewLine nl;
+			String errorMessage;
+
+			if (errorIndex == -1)
+			{
+				errorMessage << "### " << DebugLogger::getNameForFailure(type) << nl;
+			}
+			else
+			{
+				errorMessage << "### #" << String(errorIndex) << ": " << DebugLogger::getNameForFailure(type) << nl;
+			}
+
+			errorMessage << getTimeString();
+
+			errorMessage << getLocationString();
+
+			if (extraValue != 0.0)
+			{
+				errorMessage << "- AdditionalInfo: **" << String(extraValue, 3) << "**  " << nl;
+			}
+
+
+			errorMessage << nl;
+			return errorMessage;
+		}
+
+		FailureType type;
+
+		double extraValue = 0.0;
+
+	};
+
 
 	struct Listener
 	{

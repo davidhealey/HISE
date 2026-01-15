@@ -67,7 +67,7 @@ hise::MarkdownDataBase::Item ScriptingApiDatabase::ItemGenerator::updateWithValu
 
 	if (v.getType() == root)
 	{
-		Array<MarkdownDataBase::Item> newItems;
+		std::vector<MarkdownDataBase::Item> newItems;
 
 		// Create all classes
 		for (auto c : v)
@@ -88,7 +88,7 @@ hise::MarkdownDataBase::Item ScriptingApiDatabase::ItemGenerator::updateWithValu
 				i.url = rootUrl.getChildUrl(c.getType().toString());
 			}
 
-			newItems.add(updateWithValueTree(i, c));
+			newItems.push_back(updateWithValueTree(i, c));
 		}
 
 		item.swapChildren(newItems);
@@ -134,7 +134,7 @@ hise::MarkdownDataBase::Item ScriptingApiDatabase::ItemGenerator::updateWithValu
 
 		item.url.setType(MarkdownLink::Folder);
 
-		Array<MarkdownDataBase::Item> newChildren;
+		std::vector<MarkdownDataBase::Item> newChildren;
 
 		item.swapChildren(newChildren);
 

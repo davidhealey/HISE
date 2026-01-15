@@ -446,8 +446,8 @@ using ParameterDataList = Array<parameter::data>;
 
 struct PageInfo
 {
-	static constexpr char HasPageMarker =  0xF0;
-	static constexpr char HasGroupMarker = 0x0F;
+	static constexpr uint8 HasPageMarker =  0xF0;
+	static constexpr uint8 HasGroupMarker = 0x0F;
 
 	PageInfo(const parameter::pod& info);
 	PageInfo(InputStream& mis);

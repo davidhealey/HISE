@@ -523,7 +523,8 @@ var AboutWindow::initValues(const var::NativeFunctionArgs& args)
     
     
     String Version = hise::PresetHandler::getVersionString();
-    
+	String JuceVersion = SystemStats::getJUCEVersion();
+
 #if JUCE_DEBUG
     setXY(JUCE_DEBUG, 1);
 #else
@@ -537,6 +538,7 @@ var AboutWindow::initValues(const var::NativeFunctionArgs& args)
 #endif
 
     set(Version);
+	set(JuceVersion);
     set(USE_IPP);
     set(HISE_INCLUDE_RLOTTIE);
     set(HISE_INCLUDE_RT_NEURAL);
@@ -1982,7 +1984,8 @@ juce::var AssetInstallCreator::onLoadSettings(const var::NativeFunctionArgs& arg
 
 		return var(true);
 	}
-	
+
+	return var(false);
 }
 
 juce::var AssetInstallCreator::onSimulateTestRun(const var::NativeFunctionArgs& args)

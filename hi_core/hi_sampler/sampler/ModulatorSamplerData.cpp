@@ -856,7 +856,7 @@ void SampleMap::setNewValueTree(const ValueTree& v)
 
 	auto layers = v.getChildWithName(groupIds::Layers);
 
-	if(storeComplexLayers || layers.isValid());
+	if(storeComplexLayers || layers.isValid())
 	{
 		storeComplexLayers = true;
 		

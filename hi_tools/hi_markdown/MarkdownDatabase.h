@@ -132,22 +132,22 @@ public:
 
 		void removeChild(int childIndex);
 
-		void swapChildren(Array<Item>& other);
+		void swapChildren(std::vector<Item>& other);
 
-		int getNumChildren() const { return children.size(); }
+		int getNumChildren() const { return (int)children.size(); }
 
-		Item& operator[](int childIndex) { return children.getReference(childIndex); };
+		Item& operator[](int childIndex) { return children[childIndex]; };
 
-		bool hasChildren() const { return !children.isEmpty(); }
+		bool hasChildren() const { return !children.empty(); }
 
 		Item* begin() const
 		{
-			return const_cast<Item*>(children.begin());
+			return const_cast<Item*>(children.data());
 		}
 
 		Item* end() const
 		{
-			return const_cast<Item*>(children.end());
+			return const_cast<Item*>(children.data() + children.size());
 		}
 
 		Item* getParentItem() const { return parent; }
@@ -172,7 +172,7 @@ public:
 
 		Item* parent = nullptr;
 
-		Array<Item> children;
+		std::vector<Item> children;
 
 		
 	};

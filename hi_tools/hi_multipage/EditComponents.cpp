@@ -46,7 +46,7 @@ set vs_args=/p:Configuration="Release" /verbosity:minimal
 set PreferredToolArchitecture=x64
 set VisualStudioVersion=17.0
 
-"%HISE_PATH%\tools\Projucer\Projucer.exe" --resave "%build_path%\%PROJECT%.jucer"
+"%HISE_PATH%\JUCE\Projucer\Projucer.exe" --resave "%build_path%\%PROJECT%.jucer"
 
 echo Compiling 64bit FX plugin %project% ...
 set Platform=X64
@@ -56,9 +56,9 @@ pause
 )";
 #elif JUCE_MAC
 static const char* BatchFile = R"(
-    chmod +x "%HISE_PATH%/tools/Projucer/Projucer.app/Contents/MacOS/Projucer"
+    chmod +x "%HISE_PATH%/JUCE/Projucer/Projucer.app/Contents/MacOS/Projucer"
     cd "`dirname "$0"`"
-    "%HISE_PATH%/tools/Projucer/Projucer.app/Contents/MacOS/Projucer" --resave "%PROJECT%.jucer"
+    "%HISE_PATH%/JUCE/Projucer/Projucer.app/Contents/MacOS/Projucer" --resave "%PROJECT%.jucer"
 
     set -o pipefail
     echo Compiling %PROJECT% ...

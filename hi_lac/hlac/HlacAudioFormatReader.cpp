@@ -49,7 +49,7 @@ HiseLosslessAudioFormatReader::HiseLosslessAudioFormatReader(InputStream* input_
 	}
 }
 
-bool HiseLosslessAudioFormatReader::readSamples(int** destSamples, int numDestChannels, int startOffsetInDestBuffer, int64 startSampleInFile, int numSamples)
+bool HiseLosslessAudioFormatReader::readSamples(AUDIO_READ_PTRS destSamples, int numDestChannels, int startOffsetInDestBuffer, int64 startSampleInFile, int numSamples)
 {
 	if (isMonolith)
 	{
@@ -88,7 +88,7 @@ bool HiseLosslessAudioFormatReader::readSamples(int** destSamples, int numDestCh
 	}
 	else
 	{
-		return internalReader.internalHlacRead(destSamples, numDestChannels, startOffsetInDestBuffer, startSampleInFile, numSamples);
+		return internalReader.internalHlacRead(const_cast<int**>(destSamples), numDestChannels, startOffsetInDestBuffer, startSampleInFile, numSamples);
 	}
 }
 
@@ -377,7 +377,7 @@ bool HiseLosslessAudioFormatReader::copyFromMonolith(HiseSampleBuffer& destinati
 	return true;
 }
 
-bool HlacMemoryMappedAudioFormatReader::readSamples(int** destSamples, int numDestChannels, int startOffsetInDestBuffer, int64 startSampleInFile, int numSamples)
+bool HlacMemoryMappedAudioFormatReader::readSamples(AUDIO_READ_PTRS destSamples, int numDestChannels, int startOffsetInDestBuffer, int64 startSampleInFile, int numSamples)
 {
 	if (isMonolith)
 	{
@@ -398,7 +398,7 @@ bool HlacMemoryMappedAudioFormatReader::readSamples(int** destSamples, int numDe
 	{
 		if (internalReader.input != nullptr)
 		{
-			return internalReader.internalHlacRead(destSamples, numDestChannels, startOffsetInDestBuffer, startSampleInFile, numSamples);
+			return internalReader.internalHlacRead(const_cast<int**>(destSamples), numDestChannels, startOffsetInDestBuffer, startSampleInFile, numSamples);
 		}
 
 		// You have to call mapEverythingAndCreateMemoryStream() before using this method
@@ -544,7 +544,7 @@ HlacSubSectionReader::HlacSubSectionReader(AudioFormatReader* sourceReader, int6
 	}
 }
 
-bool HlacSubSectionReader::readSamples(int** destSamples, int numDestChannels, int startOffsetInDestBuffer, int64 startSampleInFile, int numSamples)
+bool HlacSubSectionReader::readSamples(AUDIO_READ_PTRS destSamples, int numDestChannels, int startOffsetInDestBuffer, int64 startSampleInFile, int numSamples)
 {
 	clearSamplesBeyondAvailableLength(destSamples, numDestChannels, startOffsetInDestBuffer,
 		startSampleInFile, numSamples, length);

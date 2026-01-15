@@ -22,7 +22,7 @@
 namespace hise { using namespace juce;
 
 class TransposerEditor  : public ProcessorEditorBody,
-                          public SliderListener
+                          public Slider::Listener
 {
 public:
     //==============================================================================

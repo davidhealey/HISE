@@ -173,6 +173,7 @@ void BackendCommandTarget::getAllCommands(Array<CommandID>& commands)
 		MenuViewReset,
         MenuViewRotate,
 		MenuViewEnableGlobalLayoutMode,
+		MenuViewShowPluginPreview,
 		MenuViewAddFloatingWindow,
         MenuViewToggleSnippetBrowser,
         MenuViewGotoUndo,
@@ -649,6 +650,33 @@ void BackendCommandTarget::getCommandInfo(CommandID commandID, ApplicationComman
 		setCommandTarget(result, "Enable Layout Mode", true, bpe->getRootFloatingTile()->isLayoutModeEnabled(), 'X', false);
 		result.categoryName = "View";
 		break;
+	case MenuViewShowPluginPreview:
+	{
+		bool isShown = false;
+		if (auto rootTile = bpe->getRootFloatingTile())
+		{
+			if (rootTile->isRootPopupShown())
+			{
+				// Check if the current popup is the plugin preview by checking component name
+				Component::callRecursive<FloatingTilePopup>(rootTile, [&isShown](FloatingTilePopup* popup)
+				{
+					if (auto comp = popup->getTrueContent())
+					{
+						auto name = comp->getName();
+						if (name == "Interface Preview" || name == "Create User Interface")
+						{
+							isShown = true;
+							return true; // Stop searching
+						}
+					}
+					return false;
+				});
+			}
+		}
+		setCommandTarget(result, "Show Plugin Preview", true, isShown, 'P', true, ModifierKeys::commandModifier | ModifierKeys::shiftModifier);
+		result.categoryName = "View";
+		break;
+	}
 	case MenuViewAddFloatingWindow:
 		setCommandTarget(result, "Add floating window", true, false, 'x', false);
 		result.categoryName = "View";
@@ -763,6 +791,36 @@ bool BackendCommandTarget::perform(const InvocationInfo &info)
         updateCommands();
         return true;
 	case MenuViewEnableGlobalLayoutMode: bpe->toggleLayoutMode(); updateCommands(); return true;
+	case MenuViewShowPluginPreview:
+	{
+		if (auto topBar = bpe->getMainTopBar())
+		{
+			// Check if preview is currently shown by checking the popup component name
+			bool isCurrentlyShown = false;
+			if (auto rootTile = bpe->getRootFloatingTile())
+			{
+				if (rootTile->isRootPopupShown())
+				{
+					Component::callRecursive<FloatingTilePopup>(rootTile, [&isCurrentlyShown](FloatingTilePopup* popup)
+					{
+						if (auto comp = popup->getTrueContent())
+						{
+							auto name = comp->getName();
+							if (name == "Interface Preview" || name == "Create User Interface")
+							{
+								isCurrentlyShown = true;
+								return true; // Stop searching
+							}
+						}
+						return false;
+					});
+				}
+			}
+			topBar->togglePopup(MainTopBar::PopupType::PluginPreview, !isCurrentlyShown);
+		}
+		updateCommands();
+		return true;
+	}
 	case MenuViewAddFloatingWindow:		bpe->addFloatingWindow(); return true;
     case MenuViewGotoUndo: bpe->getBackendProcessor()->getLocationUndoManager()->undo(); updateCommands(); return true;
     case MenuViewGotoRedo:  bpe->getBackendProcessor()->getLocationUndoManager()->redo(); updateCommands(); return true;
@@ -1149,6 +1207,7 @@ PopupMenu BackendCommandTarget::getMenuForIndex(int topLevelMenuIndex, const Str
 	        
 	        ADD_MENU_ITEM(MenuViewRotate);
 			ADD_MENU_ITEM(MenuViewEnableGlobalLayoutMode);
+			ADD_MENU_ITEM(MenuViewShowPluginPreview);
 
 			p.addSeparator();
 			ADD_MENU_ITEM(WorkspaceCustom);
@@ -1570,9 +1629,13 @@ void BackendCommandTarget::Actions::testPlugin(const String& pluginToLoad)
 	AudioPluginFormatManager fm;
 	KnownPluginList list;
 
+#if HISE_JUCE8
+	addHeadlessDefaultFormatsToManager(fm);
+#else
 	fm.addDefaultFormats();
 
 	
+#endif
 
 	OwnedArray <PluginDescription> typesFound;
 
@@ -1837,6 +1900,8 @@ void BackendCommandTarget::Actions::saveFileXml(BackendRootWindow * bpe)
 
 			            v.setProperty("BuildVersion", BUILD_SUB_VERSION, nullptr);
 			            
+						XmlBackupFunctions::normalizePositionProperties(v);
+
 						auto xml = v.createXml();
 						
 						XmlBackupFunctions::removeEditorStatesFromXml(*xml);
@@ -1933,6 +1998,8 @@ void BackendCommandTarget::Actions::saveFileAsXml(BackendRootWindow * bpe)
 
             v.setProperty("BuildVersion", BUILD_SUB_VERSION, nullptr);
             
+			XmlBackupFunctions::normalizePositionProperties(v);
+
 			auto xml = v.createXml();
 
 			FullInstrumentExpansion::setNewDefault(bpe->owner, v);
@@ -3541,6 +3608,32 @@ void XmlBackupFunctions::removeAllScripts(XmlElement &xml)
 	for (int i = 0; i < xml.getNumChildElements(); i++)
 	{
 		removeAllScripts(*xml.getChildElement(i));
+	}
+}
+
+void XmlBackupFunctions::normalizePositionProperties(ValueTree& v)
+{
+	static const Identifier x("x");
+	static const Identifier y("y");
+	static const Identifier width("width");
+	static const Identifier height("height");
+
+	// Cast all position props to int to prevent "34.0" in XML
+	for (int i = 0; i < v.getNumProperties(); i++)
+	{
+		auto propName = v.getPropertyName(i);
+		if (propName == x || propName == y || propName == width || propName == height)
+		{
+			var propValue = v.getProperty(propName);
+			v.setProperty(propName, (int)propValue, nullptr);
+		}
+	}
+
+	// Recursively normalize child trees
+	for (int i = 0; i < v.getNumChildren(); i++)
+	{
+		auto child = v.getChild(i);
+		normalizePositionProperties(child);
 	}
 }
 

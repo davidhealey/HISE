@@ -1270,7 +1270,7 @@ String Expansion::Helpers::getExpansionSpecificKey(MainController* mc, const Fil
 	s.preallocateBytes(numBytes);
 
 	for (int i = 0; i < numBytes; i++)
-		s << printable[r.nextInt(printable.size())];
+		s << printable[r.nextInt((int)printable.size())];
 
 	return s;
 }

@@ -622,8 +622,14 @@ AudioProcessor::BusesProperties PluginParameterAudioProcessor::getHiseBusPropert
 #else
 	auto busProp = BusesProperties();
 
+#if HISE_JUCE8
+	auto isProTools = wrapperType == wrapperType_AAX;
+#else
+	auto isProTools = getWrapperTypeBeingCreated() == wrapperType_AAX;
+#endif
+
 	// Protools is behaving really nasty and hiding the instrument plugin if it hasn't at least one input bus...
-	if (getWrapperTypeBeingCreated() == wrapperType_AAX || FORCE_INPUT_CHANNELS)
+	if (isProTools || FORCE_INPUT_CHANNELS)
 		busProp = busProp.withInput("Input", AudioChannelSet::stereo());
 		
 #if IS_STANDALONE_FRONTEND || IS_STANDALONE_APP

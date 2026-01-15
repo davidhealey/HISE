@@ -294,7 +294,7 @@ public:
 		CompileHandler(data_.get())
 	{
 		getParent()->getGlobalScope().getBreakpointHandler().setExecutingThread(this);
-		setPriority(4);
+		ThreadStarters::startLow(this);
 	}
 
 	~BackgroundCompileThread()

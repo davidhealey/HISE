@@ -258,6 +258,9 @@ public:
 	/** Decompresses the samples and installs the .hxi / .hxp file. */
 	bool installExpansionFromPackage(var packageFile, var sampleDirectory);
 
+	/** Returns a meta data object from the .hr file */
+	var getMetaDataFromPackage(var packageFile);
+
 	/** Checks if the expansion is already installed and returns a reference to the expansion if it exists. */
 	var getExpansionForInstallPackage(var packageFile);
 

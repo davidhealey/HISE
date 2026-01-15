@@ -250,7 +250,7 @@ public:
                 backgroundThread->numRegisteredConvolvers++;
             
             if (backgroundThread != nullptr && !backgroundThread->isThreadRunning())
-                backgroundThread->startThread(10);
+                ThreadStarters::startRealtime(backgroundThread);
         }
 	}
 

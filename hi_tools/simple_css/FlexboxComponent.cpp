@@ -999,7 +999,7 @@ CSSImage::LoadThread::LoadThread(CSSImage& parent_, const URL& url):
 	parent(parent_),
 	imageURL(url)
 {
-	startThread(5);
+	ThreadStarters::startNormal(this);
 }
 
 void CSSImage::LoadThread::handleAsyncUpdate()

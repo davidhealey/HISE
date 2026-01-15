@@ -39,7 +39,7 @@ namespace hise { using namespace juce;
 */
 class SimpleEnvelopeEditorBody  : public ProcessorEditorBody,
                                   public Timer,
-                                  public SliderListener,
+                                  public Slider::Listener,
                                   public ButtonListener
 {
 public:

@@ -537,7 +537,7 @@ var HiseJavascriptEngine::callExternalFunction(var function, const var::NativeFu
 	}
 	catch (Breakpoint& bp)
 	{
-		bp.copyLocalScopeToRoot(*root);
+		bp.copyLocalScopeToRoot(root.get());
 		sendBreakpointMessage(bp.index);
 
 		static const Identifier func("function");
@@ -1011,7 +1011,7 @@ bool HiseJavascriptEngine::Breakpoint::operator==(const Breakpoint& other) const
 	return snippetId == other.snippetId && lineNumber == other.lineNumber;
 }
 
-void HiseJavascriptEngine::Breakpoint::copyLocalScopeToRoot(RootObject& r)
+void HiseJavascriptEngine::Breakpoint::copyLocalScopeToRoot(RootObject* r)
 {
 	if (localScope != nullptr)
 	{
@@ -1024,14 +1024,14 @@ void HiseJavascriptEngine::Breakpoint::copyLocalScopeToRoot(RootObject& r)
 			if (properties.getName(i) == thisIdentifier)
 				continue;
 
-			r.setProperty(properties.getName(i), properties.getValueAt(i));
+			r->setProperty(properties.getName(i), properties.getValueAt(i));
 		}
 	}
 
 	localScope = nullptr;
 
-	r.hiseSpecialData.clearDebugInformation();
-	r.hiseSpecialData.createDebugInformation(&r);
+	r->hiseSpecialData.clearDebugInformation();
+	r->hiseSpecialData.createDebugInformation(r);
 }
 
 void HiseJavascriptEngine::RootObject::HiseSpecialData::checkIfExistsInOtherStorage(VariableStorageType thisType, const Identifier &name, CodeLocation& l)
@@ -1185,7 +1185,7 @@ var HiseJavascriptEngine::executeInlineFunction(var inlineFunction, var* argumen
 		if(bp.localScope == nullptr)
 			bp.localScope = f->createDynamicObjectForBreakpoint().getDynamicObject();
 
-		bp.copyLocalScopeToRoot(*root);
+		bp.copyLocalScopeToRoot(root.get());
 
 		sendBreakpointMessage(bp.index);
 		
@@ -1246,7 +1246,7 @@ var HiseJavascriptEngine::executeCallback(int callbackIndex, Result *result)
 			if(bp.localScope == nullptr)
 				bp.localScope = c->createDynamicObjectForBreakpoint().getDynamicObject();
 
-			bp.copyLocalScopeToRoot(*root);
+			bp.copyLocalScopeToRoot(root.get());
 
 			sendBreakpointMessage(bp.index);
 			

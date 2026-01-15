@@ -38,6 +38,11 @@ HiseLosslessAudioFormatWriter::HiseLosslessAudioFormatWriter(EncodeMode mode_, O
 	tempOutputStream(new MemoryOutputStream()),
 	blockOffsets(blockOffsetBuffer)
 {
+#if HISE_JUCE8
+	// this comes from a std::unique_ptr, so it would leak if we don't take ownership
+	ownedStream = output;
+#endif
+
 	auto option = HlacEncoder::CompressorOptions::getPreset(HlacEncoder::CompressorOptions::Presets::Diff);
 
 	encoder.setOptions(option);

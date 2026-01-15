@@ -135,9 +135,8 @@ struct HiseJavascriptEngine::RootObject::ApiCall : public Expression
 			catch (String& error)
 			{
 				throw Error::fromLocation(l, error);
+				RETURN_IF_NO_THROW(var());
 			}
-
-			return var();
 		}
 
 	private:

@@ -496,7 +496,7 @@ private:
 
 	class TouchOverlay : public Component,
 						 public ButtonListener,
-						 public SliderListener
+						 public Slider::Listener
 	{
 	public:
 

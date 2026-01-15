@@ -322,7 +322,7 @@ public:
 	/** Don't forget to deregister the listener here. */
 	virtual ~ScriptCreatedComponentWrapper();;
 
-	virtual void postInit() {};
+	virtual void postInit();
 
 	/** Overwrite this method and update the component. */
 	virtual void updateComponent() = 0;
@@ -497,7 +497,7 @@ class ScriptCreatedComponentWrappers
 public:
 
 	class SliderWrapper: public ScriptCreatedComponentWrapper,
-						 public SliderListener
+						 public Slider::Listener
 	{
 	public:
 		SliderWrapper(ScriptContentComponent *content, ScriptingApi::Content::ScriptSlider *scriptSlider, int index);

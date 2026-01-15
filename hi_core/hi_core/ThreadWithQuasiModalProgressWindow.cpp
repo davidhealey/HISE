@@ -101,7 +101,7 @@ bool ThreadWithQuasiModalProgressWindow::runThread (const int priority)
 {
 	jassert(MessageManager::getInstance()->isThisTheMessageThread());
 
-	startThread(priority);
+	ThreadStarters::startNormal(this);
 	startTimer(100);
 
 	{

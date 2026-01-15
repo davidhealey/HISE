@@ -49,7 +49,7 @@ public:
 	void removeProperty (const Identifier& propertyName) override {}
     bool hasMethod (const Identifier& methodName) const override;
 	var invokeMethod (Identifier methodName, const var::NativeFunctionArgs& args) override;
-	Ptr clone() override;
+	Ptr clone() const override;
 
 	
 

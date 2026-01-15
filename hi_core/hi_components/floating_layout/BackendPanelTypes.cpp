@@ -1502,7 +1502,35 @@ int ExternalClockSimulator::getLoopBeforeWrap(int numSamples)
 	return 0;
 }
 
-bool ExternalClockSimulator::getCurrentPosition(CurrentPositionInfo& result)
+#if HISE_JUCE8
+Optional<AudioPlayHead::PositionInfo> ExternalClockSimulator::getPosition() const
+{
+	AudioPlayHead::PositionInfo result;
+	
+	TimeSignature sig;
+	sig.numerator = nom;
+	sig.denominator = denom;
+
+	result.setBpm(bpm);
+	result.setTimeSignature(sig);
+	result.setTimeInSamples(TempoSyncer::getTempoInSamples(bpm, sampleRate, TempoSyncer::Quarter) * ppqPos);
+	result.setTimeInSeconds(TempoSyncer::getTempoInMilliSeconds(bpm, TempoSyncer::Quarter) * ppqPos);
+	result.setPpqPosition(ppqPos);
+	result.setPpqPositionOfLastBarStart(hmath::floor(ppqPos / 4.0) * 4.0);
+	result.setIsPlaying(isPlaying);
+	result.setIsRecording(false);
+
+	LoopPoints lp;
+	lp.ppqStart = ppqLoop.getStart();
+	lp.ppqEnd = ppqLoop.getEnd();
+
+	result.setLoopPoints(lp);
+	result.setIsLooping(isLooping);
+
+	return { result };
+}
+#else
+bool ExternalClockSimulator::getCurrentPosition(AudioPlayHead::CurrentPositionInfo& result)
 {
 	result.bpm = bpm;
 	result.timeSigNumerator = nom;
@@ -1519,6 +1547,7 @@ bool ExternalClockSimulator::getCurrentPosition(CurrentPositionInfo& result)
         
 	return true;
 }
+#endif
 
 void ExternalClockSimulator::prepareToPlay(double newSampleRate)
 {

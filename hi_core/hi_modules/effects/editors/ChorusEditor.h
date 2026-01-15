@@ -37,7 +37,7 @@ namespace hise { using namespace juce;
                                                                     //[/Comments]
 */
 class ChorusEditor  : public ProcessorEditorBody,
-                      public SliderListener
+                      public Slider::Listener
 {
 public:
     //==============================================================================

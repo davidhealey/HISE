@@ -1523,9 +1523,6 @@ public:
 	MacroManager &getMacroManager() noexcept {return macroManager;};
 	const MacroManager &getMacroManager() const noexcept {return macroManager;};
 
-	AutoSaver &getAutoSaver() noexcept { return autoSaver; }
-	const AutoSaver &getAutoSaver() const noexcept { return autoSaver; }
-
 	PluginBypassHandler& getPluginBypassHandler() noexcept { return bypassHandler; }
 	const PluginBypassHandler& getPluginBypassHandler() const noexcept { return bypassHandler; }
 
@@ -1687,14 +1684,17 @@ public:
 
 	
 	
+#if !HISE_JUCE8
 	/** same as AudioProcessor::beginParameterGesture(). */
 	void beginParameterChangeGesture(int index);
 	
 	/** same as AudioProcessor::beginParameterGesture(). */
 	void endParameterChangeGesture(int index);
-	
+
 	/** sets the plugin parameter to the new Value. */
 	void setPluginParameter(int index, float newValue);
+
+	#endif
 	
 	/** Returns the uptime in seconds. */
 	double getUptime() const noexcept { return uptime; }
@@ -2370,7 +2370,6 @@ private:
 	WeakReference<Console> popupConsole;
 	bool usePopupConsole;
 
-	AutoSaver autoSaver;
 
 	DebugLogger debugLogger;
 

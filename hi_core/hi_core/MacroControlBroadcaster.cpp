@@ -876,7 +876,7 @@ void MacroControlBroadcaster::setMacroControl(int macroIndex, float newValue, No
 		// Skip sending parameter changes before everything is loaded
 		if(macroIndex >= p->getNumParameters()) return;
 
-#if USE_BACKEND
+#if USE_BACKEND && !HISE_JUCE8
 		p->setParameterNotifyingHost(macroIndex, newValue / 127.0f);
 #endif
 	}

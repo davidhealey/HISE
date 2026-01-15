@@ -35,7 +35,7 @@ namespace hise { using namespace juce;
                                                                     //[/Comments]
 */
 class WaveSynthBody  : public ProcessorEditorBody,
-                       public SliderListener,
+                       public Slider::Listener,
                        public ComboBoxListener,
                        public LabelListener,
                        public ButtonListener

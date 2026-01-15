@@ -787,6 +787,8 @@ struct ComplexGroupManager::XFadeLayer final : public ComplexGroupManager::Layer
 
 			return true;
 		}
+
+		return false;
 	}
 
 	LambdaBroadcaster<int, double> valueUpdater;
@@ -2568,8 +2570,6 @@ void ComplexGroupManager::onDataChange(const ValueTree& c, bool wasAdded)
 				{ groupIds::fadeTime, var(50.0) },
 				{ groupIds::groupStart, var(false) }
 				});
-
-			auto lIndex = layers.size();
 
 			if(c[groupIds::gainMod])
 				flags |= FlagProcessModulation;

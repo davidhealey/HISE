@@ -36,7 +36,7 @@ namespace hise { using namespace juce;
 */
 class PitchWheelEditorBody  : public ProcessorEditorBody,
                               public ButtonListener,
-                              public SliderListener
+                              public Slider::Listener
 {
 public:
     //==============================================================================

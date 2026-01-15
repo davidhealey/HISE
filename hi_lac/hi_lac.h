@@ -81,6 +81,31 @@ SampleMap bugs:
 // This is the current HLAC version. HLAC has full backward compatibility.
 #define HLAC_VERSION 3
 
+#if JUCE_MAJOR_VERSION >= 8
+#define HISE_JUCE8 1
+#define AUDIO_READ_PTRS int* const*
+
+struct ThreadStarters
+{
+	static void startLow(juce::Thread* t) { t->startThread(juce::Thread::Priority::low); };
+    static void startNormal(juce::Thread* t) { t->startThread(juce::Thread::Priority::normal); }
+    static void startHigh(juce::Thread* t) { t->startThread(juce::Thread::Priority::high); }
+    static void startRealtime(juce::Thread* t) { t->startThread(juce::Thread::Priority::highest); }
+};
+
+#else
+#define HISE_JUCE8 0
+#define AUDIO_READ_PTRS int**
+
+struct ThreadStarters
+{
+	static void startLow(juce::Thread* t) { t->startThread(3); };
+    static void startNormal(juce::Thread* t) { t->startThread(5); }
+	static void startHigh(juce::Thread* t) { t->startThread(8); }
+	static void startRealtime(juce::Thread* t) { t->startThread(10); }
+};
+
+#endif
 // This is the compression block size used by HLAC. Don't change that value unless you know what you're doing...
 #define COMPRESSION_BLOCK_SIZE 4096
 

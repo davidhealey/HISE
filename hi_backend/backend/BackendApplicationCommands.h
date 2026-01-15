@@ -161,6 +161,7 @@ public:
 		MenuViewToggleSnippetBrowser,
 		MenuViewRotate,
 		MenuViewEnableGlobalLayoutMode,
+		MenuViewShowPluginPreview,
 		// -----------------------------
 		WorkspaceScript,
 		WorkspaceSampler,
@@ -438,6 +439,8 @@ struct XmlBackupFunctions
 	static void removeEditorStatesFromXml(XmlElement &xml);
 
 	static XmlElement* getFirstChildElementWithAttribute(XmlElement* parent, const String& attributeName, const String& value);
+
+	static void normalizePositionProperties(ValueTree& v);
 
 	static void addContentFromSubdirectory(XmlElement& xml, const File& fileToLoad);
 

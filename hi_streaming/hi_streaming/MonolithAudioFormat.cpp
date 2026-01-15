@@ -368,7 +368,7 @@ juce::AudioFormatReader* HlacMonolithInfo::createUserInterfaceReader(int sampleI
 		const auto& info = sampleInfo[sampleIndex];
 
 		const int64 start = info.start;
-		const int64 length = jmin<int64>(realSampleLength, info.length);
+		const int64 length = std::min<int64>(realSampleLength, info.length);
 
 		auto mf = getFile(channelIndex, sampleIndex);
 

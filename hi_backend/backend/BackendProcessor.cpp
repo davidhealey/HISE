@@ -236,7 +236,7 @@ void PluginParameterRamp::setCurrentInfo(const PluginParameterSimulatorInfo& new
 		stop();
 
 	if(useThread)
-		startThread(8);
+		ThreadStarters::startHigh(this);
 	else
 		stopThread(1000);
 
@@ -267,10 +267,11 @@ void PluginParameterRamp::bump(PluginParameterSimulatorInfo& info, double milliS
 	info.performChange();
 }
 
-	BackendProcessor::BackendProcessor(AudioDeviceManager *deviceManager_/*=nullptr*/, AudioProcessorPlayer *callback_/*=nullptr*/) :
+BackendProcessor::BackendProcessor(AudioDeviceManager *deviceManager_/*=nullptr*/, AudioProcessorPlayer *callback_/*=nullptr*/) :
   MainController(),
   AudioProcessorDriver(deviceManager_, callback_),
   scriptUnlocker(this),
+  autosaver(this),
   pluginParameterRamp(this)
 {
 	//printData();
@@ -317,7 +318,8 @@ void PluginParameterRamp::bump(PluginParameterSimulatorInfo& info, double milliS
 
 	if (!inUnitTestMode())
 	{
-		getAutoSaver().updateAutosaving();
+		getAutoSaver().initialise();
+		
 	}
 	
 	clearPreset(dontSendNotification);

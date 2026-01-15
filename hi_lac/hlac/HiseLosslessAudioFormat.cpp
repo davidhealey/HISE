@@ -113,6 +113,28 @@ AudioFormatWriter* HiseLosslessAudioFormat::createWriterFor(OutputStream* stream
 	return new HiseLosslessAudioFormatWriter(mode, streamToWriteTo, sampleRateToUse, numberOfChannels, blockOffsets);
 }
 
+#if HISE_JUCE8
+std::unique_ptr<juce::AudioFormatWriter> HiseLosslessAudioFormat::createWriterFor(std::unique_ptr<OutputStream>& streamToWriteTo, const AudioFormatWriterOptions& options)
+{
+	OutputStream* output = streamToWriteTo.get();
+
+	StringPairArray metadata;
+
+	for(auto& s: options.getMetadataValues())
+		metadata.set(s.first, s.second);
+
+	std::unique_ptr<juce::AudioFormatWriter> writer;
+	auto nr = createWriterFor(output, 
+							  options.getSampleRate(), 
+							  options.getNumChannels(), 
+							  options.getBitsPerSample(), 
+							  metadata, 
+							  options.getQualityOptionIndex());
+
+	writer.reset(nr);
+	return writer;
+}
+#endif
 
 MemoryMappedAudioFormatReader* HiseLosslessAudioFormat::createMemoryMappedReader(FileInputStream* fin)
 {

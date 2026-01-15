@@ -1401,11 +1401,7 @@ modulation::TargetMode SliderMatrix::Row::getTargetModeForIntensitySlider(int in
 	if(x.isValid() && x.hasProperty(MatrixIds::Mode))
 		return (scriptnode::modulation::TargetMode)(int)x[MatrixIds::Mode];
 	else if (isPositiveAndBelow(index, intensitySliders.size()))
-	{
 		return intensitySliders[index]->lastMode;
-		jassertfalse;
-	}
-
 
 	return modulation::TargetMode::Gain;
 }
