@@ -819,10 +819,9 @@ void MatrixContent::Controller::ModulationDragger::mouseDown(const MouseEvent& e
 
 	if(auto gc = ProcessorHelpers::getFirstProcessorWithType<GlobalModulatorContainer>(chain))
 	{
+		prevSourceIndex = gc->getExclusiveMatrixSource();
 		gc->sendDragMessage(sourceIndex, "", GlobalModulatorContainer::DragAction::DragStart);
-
-		if(gc->matrixProperties.selectableSources)
-			gc->currentMatrixSourceBroadcaster.sendMessage(sendNotificationSync, sourceIndex);
+		gc->setExlusiveMatrixSource(sourceIndex, sendNotificationSync);
 	}
 		
 }
@@ -830,6 +829,17 @@ void MatrixContent::Controller::ModulationDragger::mouseDown(const MouseEvent& e
 void MatrixContent::Controller::ModulationDragger::mouseUp(const MouseEvent& event)
 {
 	MatrixIds::Helpers::stopDragging(this);
+
+	if(!event.mouseWasDraggedSinceMouseDown())
+	{
+		auto chain = findParentComponentOfClass<Controller>()->getMainController()->getMainSynthChain();
+
+		if (auto gc = ProcessorHelpers::getFirstProcessorWithType<GlobalModulatorContainer>(chain))
+		{
+			if(gc->getExclusiveMatrixSource() == prevSourceIndex)
+				gc->setExlusiveMatrixSource(-1, sendNotificationSync);
+		}
+	}
 }
 
 MatrixContent::Controller::Controller(MainController* mc, Component& p):

@@ -1319,6 +1319,12 @@ void WavetableSynthVoice::startNote(int midiNoteNumber, float /*velocity*/, Synt
 	voiceUptime = (double)getCurrentHiseEvent().getStartOffset() / 441.0 * (double)tableSize;
 }
 
+void WavetableSynthVoice::resetVoice()
+{
+	ModulatorSynthVoice::resetVoice();
+	wavetableSynth->resetModChains(voiceIndex);
+}
+
 static MemoryBlock getMemoryBlockFromWavetableData(const ValueTree& v, int channelIndex)
 {
 	MemoryBlock mb(*v.getProperty(channelIndex == 0 ? "data" : "data1", var::undefined()).getBinaryData());

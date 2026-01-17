@@ -119,7 +119,7 @@ struct ScriptingApi::Content::ScriptSlider::MatrixCableConnection: public Matrix
 		QueryFunction(MatrixCableConnection* c);
 		WeakReference<MatrixCableConnection> connection;
 		bool onScaleDrag(Processor* p, bool isDown, float delta) override { return true; };
-		ModulationDisplayValue getDisplayValue(Processor* p, double nv, NormalisableRange<double> nr) const override;
+		ModulationDisplayValue getDisplayValue(Processor* p, double nv, NormalisableRange<double> nr, int sourceIndex) const override;
 	};
 
 	struct Target: public routing::GlobalRoutingManager::CableTargetBase,
@@ -190,7 +190,7 @@ struct ScriptingApi::Content::ScriptSlider::MatrixCableConnection: public Matrix
 	void rebuildTargets();
 
 	SimpleRingBuffer::Ptr getDisplayBuffer(int sourceIndex) override;
-	ModulationDisplayValue getDisplayValue(double nv, NormalisableRange<double> nr);
+	ModulationDisplayValue getDisplayValue(double nv, NormalisableRange<double> nr, int displayIndex);
 	void onSourceTargetChange(const ValueTree& v, const Identifier& id);
 	void addConnection(const ValueTree& v);
 	void removeConnection(const ValueTree& v);

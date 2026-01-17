@@ -194,7 +194,7 @@ bool ModulatorChain::SpecialQueryFunctions::GainModulation::onScaleDrag(Processo
 }
 
 ModulationDisplayValue ModulatorChain::SpecialQueryFunctions::GainModulation::getDisplayValue(Processor* p, double v,
-	NormalisableRange<double> nr) const
+	NormalisableRange<double> nr, int ) const
 {
 	jassert(dynamic_cast<ModulatorSynth*>(p) != nullptr);
 	auto modChain = dynamic_cast<ModulatorChain*>(p->getChildProcessor(ModulatorSynth::InternalChains::GainModulation)); 
@@ -226,7 +226,7 @@ bool ModulatorChain::SpecialQueryFunctions::PitchModulation::onScaleDrag(Process
 }
 
 ModulationDisplayValue ModulatorChain::SpecialQueryFunctions::PitchModulation::getDisplayValue(Processor* p, double v,
-	NormalisableRange<double> nr) const
+	NormalisableRange<double> nr, int) const
 {
 	jassert(dynamic_cast<ModulatorSynth*>(p) != nullptr);
 	auto modChain = dynamic_cast<ModulatorChain*>(p->getChildProcessor(ModulatorSynth::InternalChains::PitchModulation));
@@ -668,16 +668,23 @@ void ModulatorChain::ModChainWithBuffer::prepareToPlay(double sampleRate, int sa
 
 	if (type == Type::Normal)
 		modBuffer.setMaxSize(samplesPerBlock);
+
+	jassert(numActiveVoices == 0);
 }
 
 void ModulatorChain::ModChainWithBuffer::handleHiseEvent(const HiseEvent& m)
 {
 	if (c->shouldBeProcessedAtAll())
 		c->handleHiseEvent(m);
+
+	if(m.isAllNotesOff())
+		numActiveVoices = 0;
 }
 
 void ModulatorChain::ModChainWithBuffer::resetVoice(int voiceIndex)
 {
+	numActiveVoices = jmax(numActiveVoices-1, 0);
+
 	if (c->hasActiveEnvelopesAtAll())
 	{
 		c->reset(voiceIndex);
@@ -694,6 +701,8 @@ void ModulatorChain::ModChainWithBuffer::stopVoice(int voiceIndex)
 
 void ModulatorChain::ModChainWithBuffer::startVoice(int voiceIndex)
 {
+	numActiveVoices++;
+
 	float firstDynamicValue = c->getInitialValueInternal();
 
 	
@@ -1190,6 +1199,22 @@ float ModulatorChain::ModChainWithBuffer::getModValueForVoiceWithOffset(int star
 
 float ModulatorChain::ModChainWithBuffer::getOneModulationValue(int startSample) const
 {
+	if(numActiveVoices == 0)
+	{
+		ModIterator<Modulator> iter(c);
+
+		float m = 1.0f;
+
+		while(auto mod = iter.next())
+		{
+			auto mv = mod->getInactiveModValue();
+			m *= mv;
+		}
+
+		return m;
+	}
+		
+
 	// If you set this, you probably don't need this method...
 	jassert(!options.expandToAudioRate);
 

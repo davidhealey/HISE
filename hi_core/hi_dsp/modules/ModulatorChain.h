@@ -314,7 +314,7 @@ public:
 
 		bool manualExpansionPending = false;
 
-		
+		int numActiveVoices = 0;
 
 		Options options;
 		
@@ -343,13 +343,13 @@ public:
 		struct GainModulation: public ModulationDisplayValue::QueryFunction
 		{
 			bool onScaleDrag(Processor* p, bool isDown, float delta) override;
-			ModulationDisplayValue getDisplayValue(Processor* p, double v, NormalisableRange<double> nr) const override;
+			ModulationDisplayValue getDisplayValue(Processor* p, double v, NormalisableRange<double> nr, int /*displayIndex*/) const override;
 		};
 
 		struct PitchModulation: public ModulationDisplayValue::QueryFunction
 		{
 			bool onScaleDrag(Processor* p, bool isDown, float delta) override;
-			ModulationDisplayValue getDisplayValue(Processor* p, double v, NormalisableRange<double> nr) const override;
+			ModulationDisplayValue getDisplayValue(Processor* p, double v, NormalisableRange<double> nr, int /*displayIndex*/) const override;
 		};
 	};
 
@@ -365,7 +365,7 @@ public:
 			return modChain->onIntensityDrag(isDown, delta);
 		}
 
-		ModulationDisplayValue getDisplayValue(Processor* p, double pValue, NormalisableRange<double> nr) const override
+		ModulationDisplayValue getDisplayValue(Processor* p, double pValue, NormalisableRange<double> nr, int /*displayIndex*/) const override
 		{
 			auto modChain = dynamic_cast<ModulatorChain*>(p->getChildProcessor(P));
 			jassert(modChain != nullptr);
@@ -930,7 +930,7 @@ public:
 		  self(c)
 		{};
 
-		ModulationDisplayValue getDisplayValue(Processor* p, double nv, NormalisableRange<double> nr) const override
+		ModulationDisplayValue getDisplayValue(Processor* p, double nv, NormalisableRange<double> nr, int /*displayIndex*/) const override
 		{
 			return self->getModulationDisplayValue(nv, nr);
 		}

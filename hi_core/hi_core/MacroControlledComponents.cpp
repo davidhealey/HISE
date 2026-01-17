@@ -1088,7 +1088,7 @@ void HiSlider::ModUpdater::timerCallback()
 		{
 			auto nr = parent.getRange();
 
-			auto mv = modFunction->getDisplayValue(p, parent.getValue(), nr);
+			auto mv = modFunction->getDisplayValue(p, parent.getValue(), nr, currentExlusiveIndex);
 
 			auto lastModValue = lastValue.lastModValue;
 			auto thisModValue = mv.getNormalisedModulationValue();
@@ -1105,27 +1105,7 @@ void HiSlider::ModUpdater::timerCallback()
 	}
 }
 
-void HiSlider::ModUpdater::setUpdateFunction(const ModulationDisplayValue::QueryFunction::Ptr f)
-{
-	modFunction = f;
 
-	if(modFunction)
-	{
-		parent.scaleFunction = [this](bool isDown, float delta)
-		{
-			return modFunction->onScaleDrag(parent.getProcessor(), isDown, delta);
-		};
-
-		start();
-	}
-	else
-	{
-		parent.scaleFunction = {};
-
-		stop();
-	}
-				
-}
 
 bool HiSlider::ModUpdater::canBeDropped(const var& info) const
 {
@@ -1165,6 +1145,9 @@ void HiSlider::ModUpdater::onDrop(const var& info)
 	}
 
 	parent.getProcessor()->onModulationDrop(parent.getParameter(), sourceIndex);
+
+	if (isUsingExclusiveSourceMode())
+		onExclusiveSourceSelection(*this, sourceIndex);
 }
 
 
@@ -1273,8 +1256,9 @@ struct HiSlider::HoverPopup: public Component,
 		       const String& targetId_, 
 		       const Array<int>& sourceIndexes_, 
 		       const StringArray& sourceNames_, 
-		       const HoverPopupLookandFeel::PositionData& pd):
-	  SimpleTimer(slider.getProcessor()->getMainController()->getGlobalUIUpdater()),
+		       const HoverPopupLookandFeel::PositionData& pd,
+			   bool exclusiveMode_):
+	  SimpleTimer(slider.getProcessor()->getMainController()->getGlobalUIUpdater(), false),
 	  parent(&slider),
 	  targetId(targetId_),
 	  matrixData(matrixData_),
@@ -1283,10 +1267,15 @@ struct HiSlider::HoverPopup: public Component,
 	  dragAreas(pd.draggers),
 	  labelArea(pd.labelArea),
 	  sensitivity(pd.sensitivity),
-	  sliderStyle(pd.s)
+	  sliderStyle(pd.s),
+	  exclusiveMode(exclusiveMode_)
 	{
 		auto pp = parent->getParentComponent();
-		pp->addAndMakeVisible(this);
+
+		auto pIndex = pp->getIndexOfChildComponent(parent);
+
+		pp->addAndMakeVisible(this, pIndex+1);
+
 		auto pb = parent->getBoundsInParent();
 		auto b = dragAreas.getBounds();
 
@@ -1303,12 +1292,14 @@ struct HiSlider::HoverPopup: public Component,
 		if(!labelArea.isEmpty())
 			labelArea = labelArea.transformed(translationToOrigin);
 
-		start();
+		
 
 		gc = ProcessorHelpers::getFirstProcessorWithType<GlobalModulatorContainer>(slider.getProcessor()->getMainController()->getMainSynthChain());
 
-		if(gc != nullptr)
+		if(gc != nullptr && !exclusiveMode)
 		{
+			start();
+
 			gc->currentMatrixSourceBroadcaster.addListener(*this, [](HoverPopup& hp, int)
 			{
 				hp.keepAlive = false;
@@ -1319,11 +1310,13 @@ struct HiSlider::HoverPopup: public Component,
 		rebuild();
 	}
 
+	const bool exclusiveMode = false;
+
 	WeakReference<GlobalModulatorContainer> gc;
 
 	~HoverPopup()
 	{
-		if(gc != nullptr)
+		if(gc != nullptr && !exclusiveMode)
 		{
 			gc->currentMatrixSourceBroadcaster.removeListener(*this);
 		}
@@ -1527,18 +1520,26 @@ struct HiSlider::HoverPopup: public Component,
 
 	void mouseMove(const MouseEvent& e) override
 	{
-		currentHoverIndex = getSourceIndexForMouseEvent(e, false);
+		if(!exclusiveMode)
+			currentHoverIndex = getSourceIndexForMouseEvent(e, false);
+
 		repaint();
 	}
 
 	void mouseEnter(const MouseEvent& event) override
 	{
+		if(exclusiveMode)
+			currentHoverIndex = 0;
+
 		keepAlive = false;
 		repaint();
 	}
 
 	void mouseExit(const MouseEvent& event) override
 	{
+		if(exclusiveMode)
+			currentHoverIndex = -1;
+
 		repaint();
 	}
 
@@ -1759,10 +1760,75 @@ struct HiSlider::HoverPopup: public Component,
 	JUCE_DECLARE_WEAK_REFERENCEABLE(HoverPopup);
 };
 
+void HiSlider::ModUpdater::onExclusiveSourceSelection(ModUpdater& mu, int index)
+{
+	auto& slider = mu.parent;
+	auto matrixData = MatrixIds::Helpers::getMatrixDataFromGlobalContainer(slider.getProcessor()->getMainController());
+	auto targetId = slider.getProcessor()->getModulationTargetId(slider.getParameter());
+	auto hasConnection = MatrixIds::Helpers::getConnection(matrixData, index, targetId).isValid();
+
+	if (hasConnection)
+	{
+		mu.currentExlusiveIndex = index;
+		Array<int> connectedSources;
+		connectedSources.add(index);
+		StringArray allSources, sourceList;
+		MatrixIds::Helpers::fillModSourceList(slider.getProcessor()->getMainController(), allSources);
+		sourceList.add(allSources[index]);
+
+		if (auto pd = slider.getHoverPopupLookAndFeel().getModulatorDragData(slider, sourceList))
+			slider.currentHoverPopup = new HoverPopup(slider, matrixData, targetId, connectedSources, sourceList, pd, true);
+	}
+	else
+	{
+		mu.currentExlusiveIndex = -1;
+		slider.currentHoverPopup = nullptr;
+	}
+}
+
+void HiSlider::ModUpdater::setUpdateFunction(const ModulationDisplayValue::QueryFunction::Ptr f)
+{
+	modFunction = f;
+
+	if (modFunction)
+	{
+		auto chain = parent.getProcessor()->getMainController()->getMainSynthChain();
+
+		if (auto container = ProcessorHelpers::getFirstProcessorWithType<GlobalModulatorContainer>(chain))
+		{
+			exclusiveSourceMode = container->matrixProperties.selectableSources;
+
+			if (exclusiveSourceMode)
+			{
+				container->currentMatrixSourceBroadcaster.addListener(*this, ModUpdater::onExclusiveSourceSelection);	
+			}
+			else
+			{
+				container->currentMatrixSourceBroadcaster.removeListener(*this);
+			}
+		}
+
+		parent.scaleFunction = [this](bool isDown, float delta)
+		{
+			return modFunction->onScaleDrag(parent.getProcessor(), isDown, delta);
+		};
+
+		start();
+	}
+	else
+	{
+		parent.scaleFunction = {};
+		stop();
+	}
+}
+
 void HiSlider::showModHoverPopup(bool shouldShow, bool closeOnExit)
 {
 	if(modUpdater != nullptr && modUpdater->modFunction)
 	{
+		if(modUpdater->exclusiveSourceMode)
+			return;
+
 		auto hp = dynamic_cast<HoverPopup*>(currentHoverPopup.get());
 
 		if(hp != nullptr)
@@ -1811,7 +1877,7 @@ void HiSlider::showModHoverPopup(bool shouldShow, bool closeOnExit)
 							return false;
 						});
 
-						currentHoverPopup = new HoverPopup(*this, md, targetId, connectedSources, sourceList, pd);
+						currentHoverPopup = new HoverPopup(*this, md, targetId, connectedSources, sourceList, pd, false);
 					}
 				}
 			}

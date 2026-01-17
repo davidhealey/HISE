@@ -280,6 +280,8 @@ public:
 
 	virtual Colour getColour() const override;;
 
+	virtual float getInactiveModValue() const { return 1.0f; }
+
 	UpdateMerger editorUpdater;
 
 private:

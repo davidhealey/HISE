@@ -908,9 +908,18 @@ public:
 		bool canBeDropped(const var& info) const;
 		void onDrop(const var& info);
 
+		bool isUsingExclusiveSourceMode() const { return exclusiveSourceMode; }
+
+		bool exclusiveSourceMode = false;
+		int currentExlusiveIndex = -1;
+
+		static void onExclusiveSourceSelection(ModUpdater& updater, int sourceIndex);
+
 		ModulationDisplayValue::QueryFunction::Ptr modFunction;
 		HiSlider& parent;
 		ModulationDisplayValue lastValue;
+		
+		JUCE_DECLARE_WEAK_REFERENCEABLE(ModUpdater);
 	} ;
 
 	bool isInterestedInDragSource (const SourceDetails& dragSourceDetails) override
@@ -926,6 +935,12 @@ public:
 			repaint();
 		}
 		
+	}
+
+	void visibilityChanged() override
+	{
+		if(currentHoverPopup != nullptr && modUpdater != nullptr && modUpdater->isUsingExclusiveSourceMode())
+			currentHoverPopup->setVisible(isVisible());
 	}
 
     void itemDragExit (const SourceDetails& d) override

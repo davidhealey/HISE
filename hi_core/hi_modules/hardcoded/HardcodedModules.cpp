@@ -667,6 +667,12 @@ bool HardcodedTimeVariantModulator::checkHardcodedChannelCount()
 
 Result HardcodedTimeVariantModulator::prepareOpaqueNode(scriptnode::OpaqueNode *n)
 {
+	if (auto rm = dynamic_cast<scriptnode::routing::GlobalRoutingManager*>(asProcessor().getMainController()->getGlobalRoutingManager()))
+	{
+		tempoSyncer.additionalEventStorage = &rm->additionalEventStorage;
+		tempoSyncer.uuidManager = &rm->uuidManager;
+	}
+
     if (n != nullptr && asProcessor().getSampleRate() > 0.0 && asProcessor().getLargestBlockSize() > 0)
     {
         PrepareSpecs ps;
@@ -799,7 +805,10 @@ void HardcodedEnvelopeModulator::prepareToPlay(double sampleRate, int samplesPer
 Result HardcodedEnvelopeModulator::prepareOpaqueNode(scriptnode::OpaqueNode* n)
 {
 	if(auto rm = dynamic_cast<scriptnode::routing::GlobalRoutingManager*>(asProcessor().getMainController()->getGlobalRoutingManager()))
+	{
 		tempoSyncer.additionalEventStorage = &rm->additionalEventStorage;
+		tempoSyncer.uuidManager = &rm->uuidManager;
+	}
 
 	if (n != nullptr && asProcessor().getSampleRate() > 0.0 && asProcessor().getLargestBlockSize() > 0)
 	{

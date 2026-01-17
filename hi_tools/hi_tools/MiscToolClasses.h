@@ -2782,7 +2782,7 @@ struct ModulationDisplayValue
 		virtual ~QueryFunction() {}
 
 		virtual bool onScaleDrag(Processor* p, bool isDown, float delta) = 0;
-		virtual ModulationDisplayValue getDisplayValue(Processor* p, double nv, NormalisableRange<double> nr) const = 0;
+		virtual ModulationDisplayValue getDisplayValue(Processor* p, double nv, NormalisableRange<double> nr, int sourceIndex) const = 0;
 		
 		JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(QueryFunction);
 	};

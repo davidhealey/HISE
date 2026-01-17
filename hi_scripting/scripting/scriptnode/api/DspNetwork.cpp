@@ -79,6 +79,7 @@ DspNetwork::DspNetwork(hise::ProcessorWithScriptingContent* p, ValueTree data_, 
 		if(auto rm = dynamic_cast<scriptnode::routing::GlobalRoutingManager*>(mc_->getGlobalRoutingManager()))
 		{
 			tempoSyncer.additionalEventStorage = &rm->additionalEventStorage;
+			tempoSyncer.uuidManager = &rm->uuidManager;
 			return true;
 		}
 		

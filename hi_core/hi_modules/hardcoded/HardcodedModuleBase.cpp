@@ -477,6 +477,22 @@ HardcodedSwappableEffect::HardcodedSwappableEffect(MainController* mc, bool isPo
 	polyHandler.setTempoSyncer(&tempoSyncer);
 	mc->addTempoListener(&tempoSyncer);
 
+	tempoSyncer.uuidRequestFunction = [this](char* suffix, int& len)
+	{
+		String id = dynamic_cast<Processor*>(this)->getId();
+
+		if(len != 0)
+		{
+			String sf(suffix, len);
+			id << "." << sf;
+
+			len = id.length();
+			memcpy(suffix, id.getCharPointer().getAddress(), len);
+		}
+
+		return true;
+	};
+
 #if USE_BACKEND
 	auto dllManager = dynamic_cast<BackendProcessor*>(mc)->dllManager.get();
 	dllManager->loadDll(false);
@@ -1150,7 +1166,10 @@ float* HardcodedSwappableEffect::getParameterPtr(int index) const
 Result HardcodedSwappableEffect::prepareOpaqueNode(OpaqueNode* n)
 {
 	if(auto rm = dynamic_cast<scriptnode::routing::GlobalRoutingManager*>(asProcessor().getMainController()->getGlobalRoutingManager()))
+	{
 		tempoSyncer.additionalEventStorage = &rm->additionalEventStorage;
+		tempoSyncer.uuidManager = &rm->uuidManager;
+	}
 
 	if (n != nullptr && asProcessor().getSampleRate() > 0.0 && asProcessor().getLargestBlockSize() > 0)
 	{

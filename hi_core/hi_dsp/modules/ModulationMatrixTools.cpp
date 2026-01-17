@@ -148,7 +148,7 @@ void Helpers::Properties::sendChangeMessage(const String& targetId)
 
 void Helpers::Properties::fromJSON(const var& obj)
 {
-	selectableSources = obj.getProperty(SelectableSources, true);
+	selectableSources = obj.getProperty(SelectableSources, false);
 	initValues.clear();
 	rangeData.clear();
 

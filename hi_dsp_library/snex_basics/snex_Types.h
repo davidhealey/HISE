@@ -402,6 +402,20 @@ struct VoiceResetter
 	JUCE_DECLARE_WEAK_REFERENCEABLE(VoiceResetter);
 };
 
+struct DllBoundaryUUIDManager
+{
+	virtual ~DllBoundaryUUIDManager() {};
+
+	/** Override this method, make sure that the initialId is unique and update the char buffer and length accordingly. */
+	virtual void registerUUID(void* obj, char* initialId, int& len) = 0;
+
+	/** Override this method and remove the UUID for the given object. */
+	virtual bool deregisterUUID(void* obj) = 0;
+	
+	/** Removes all UUIDs. */
+	virtual void clearUUIDs() = 0;
+};
+
 struct DllBoundaryTempoSyncer: public hise::TempoListener
 {
 	DllBoundaryTempoSyncer() = default;
@@ -508,6 +522,35 @@ struct DllBoundaryTempoSyncer: public hise::TempoListener
 
 	// And now we don't even care anymore about tucking stuff in here...
 	hise::AdditionalEventStorage* additionalEventStorage = nullptr;
+
+	DllBoundaryUUIDManager* uuidManager = nullptr;
+
+	/** use a function that returns a HISE wide UUID for the given element. */
+	std::function<bool(char*, int&)> uuidRequestFunction;
+
+	String requestUUID(void* obj, const String& suffix) const
+	{
+		char bf[128];
+		memset(bf, 0, 128);
+		int numBytes = suffix.length();
+		memcpy(bf, suffix.getCharPointer().getAddress(), numBytes);
+
+		if (uuidRequestFunction && uuidRequestFunction(bf, numBytes))
+		{
+			if(uuidManager != nullptr)
+				uuidManager->registerUUID(obj, bf, numBytes);
+
+			return String(bf, numBytes);
+		}
+
+		return String();
+	}
+
+	bool deregisterUUID(void* obj)
+	{
+		if(uuidManager != nullptr)
+			return uuidManager->deregisterUUID(obj);
+	}
 
 	/** @internal This can be used to temporarily change the pointer to the mod value.
 		The OpaqueNetworkHolder uses this abomination of a class in the prepare
