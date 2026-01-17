@@ -419,15 +419,16 @@ var ExportSetupWizard::checkIDE(const var::NativeFunctionArgs& args)
 var ExportSetupWizard::checkSDK(const var::NativeFunctionArgs& args)
 {
 	auto toolsDir = File(readState("HisePath").toString()).getChildFile("tools");
+	auto juceDir = File(readState("HisePath").toString()).getChildFile("JUCE");
 	auto vst3sdk = toolsDir.getChildFile("SDK/VST3 SDK");
 
 #if JUCE_WINDOWS
-	auto projucer = toolsDir.getChildFile("projucer/Projucer.exe");
+	auto projucer = juceDir.getChildFile("projucer/Projucer.exe");
 
 	auto ok = projucer.startAsProcess("--help");
 #elif JUCE_MAC
         
-        auto projucer = toolsDir.getChildFile("projucer/Projucer.app/Contents/MacOS/Projucer");
+        auto projucer = juceDir.getChildFile("projucer/Projucer.app/Contents/MacOS/Projucer");
         
         jassert(projucer.existsAsFile());
         
