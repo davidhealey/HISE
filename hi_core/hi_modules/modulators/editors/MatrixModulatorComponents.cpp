@@ -836,13 +836,13 @@ void MatrixContent::Controller::ModulationDragger::mouseUp(const MouseEvent& eve
 
 		if (auto gc = ProcessorHelpers::getFirstProcessorWithType<GlobalModulatorContainer>(chain))
 		{
-			if(gc->getExclusiveMatrixSource() == prevSourceIndex)
+			if(gc->getExclusiveMatrixSource() == prevSourceIndex && !unselectableExclusiveSource)
 				gc->setExlusiveMatrixSource(-1, sendNotificationSync);
 		}
 	}
 }
 
-MatrixContent::Controller::Controller(MainController* mc, Component& p):
+MatrixContent::Controller::Controller(MainController* mc, Component& p, bool unselectableExclusiveSource):
   FlexboxComponent(simple_css::Selector(simple_css::ElementType::Panel)),
   ControlledObject(mc),
   addButton("Add"),
@@ -887,6 +887,7 @@ MatrixContent::Controller::Controller(MainController* mc, Component& p):
 		{
 			auto sourceId = modChain->getChildProcessor(i)->getId();
 			auto nd = new ModulationDragger(sourceId);
+			nd->unselectableExclusiveSource = unselectableExclusiveSource;
 			draggers.add(nd);
 			addFlexItem(*nd);
 		}
@@ -1739,11 +1740,27 @@ ModulationMatrixControlPanel::ModulationMatrixControlPanel(FloatingTile* parent)
 	ModulationMatrixBasePanel(parent)
 {}
 
+juce::var ModulationMatrixControlPanel::toDynamicObject() const
+{
+	auto obj = ModulationMatrixBasePanel::toDynamicObject();
+
+	obj.getDynamicObject()->setProperty("UnselectableExclusiveSource", exclusiveSource);
+
+	return obj;
+}
+
+void ModulationMatrixControlPanel::fromDynamicObject(const var& object)
+{
+	exclusiveSource = object.getDynamicObject()->getProperty("UnselectableExclusiveSource");
+
+	ModulationMatrixBasePanel::fromDynamicObject(object);
+}
+
 Component* ModulationMatrixControlPanel::createMatrixComponent(const String& targetId)
 {
 	if(getParentShell()->isOnInterface())
 	{
-		auto controller = new MatrixContent::Controller(getMainController(), *getParentShell());
+		auto controller = new MatrixContent::Controller(getMainController(), *getParentShell(), exclusiveSource);
 
 		if(auto gc = ProcessorHelpers::getFirstProcessorWithType<GlobalModulatorContainer>(getMainController()->getMainSynthChain()))
 		{
@@ -1760,7 +1777,7 @@ Component* ModulationMatrixControlPanel::createMatrixComponent(const String& tar
 								   public MatrixContent::Parent
 		{
 			FloatingTileParent(MainController* mc, const String& targetId):
-			  controller(mc, *this)
+			  controller(mc, *this, false)
 			{
 				addAndMakeVisible(controller);
 				controller.setCSS(css);

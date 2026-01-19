@@ -137,7 +137,7 @@ MatrixModulatorBody::MatrixModulatorBody(ProcessorEditor* parent):
 	valueSlider("Value"),
 	smoothingSlider("SmoothingTime"),
 	content(getMainController(),  dynamic_cast<MatrixModulator*>(getProcessor())->getMatrixTargetId(), false),
-	controller(getMainController(), *this),
+	controller(getMainController(), *this, false),
 	inputRangeEditor(createValueTreeFromRange(getProcessor(), true), getMainController()->getControlUndoManager()),
 	outputRangeEditor(createValueTreeFromRange(getProcessor(), false), getMainController()->getControlUndoManager()),
     editRangeButton("Edit value range"),
