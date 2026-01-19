@@ -794,7 +794,14 @@ void MatrixBase::RowBase::setIntensityConverter(JavascriptMidiProcessor* jmp, in
 		{
 			auto si = getIntensitySlider(i);
 			auto sourceIndex = getSourceIndexForIntensitySlider(i);
+
+			if(sourceIndex == -1)
+				continue;
+
 			auto cd = s->createIntensityConverter(sourceIndex);
+
+			if(cd.p == nullptr)
+				continue;
 
 			cd.connectedSlider = si;
 			customConverters.add(new MatrixIds::Helpers::IntensityTextConverter(cd));
