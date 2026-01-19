@@ -101,6 +101,21 @@ struct MatrixBase: public Component,
 		bool initialised = false;
 	};
 
+	struct DeleteButton : public Button
+	{
+		DeleteButton();
+
+		void paintButton(Graphics& g, bool shouldDrawButtonAsHighlighted, bool shouldDrawButtonAsDown) override;
+
+		void resized() override
+		{
+			PathFactory::scalePath(icon, this, 4.0f);
+		}
+
+		String pathData;
+		Path icon;
+	};
+
 	struct SearchBar: public Label,
 					  public Label::Listener,
 					  public Timer
@@ -275,6 +290,7 @@ struct MatrixContent: public MatrixBase
 				addHeaderItem(id, pn[id]);
 
 			addHeaderItem("Plotter", "Plotter");
+			addHeaderItem("delete", " ");
 		}
 
 	};
@@ -348,6 +364,7 @@ struct MatrixContent: public MatrixBase
 		IntensitySlider intensitySlider;
 		IntensitySlider auxIntensitySlider;
 		ToggleButton invertedButton;
+		DeleteButton deleteButton;
 		ComboBox auxSelector;
 		UndoManager* um;
 	};

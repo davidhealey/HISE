@@ -88,6 +88,12 @@ String MatrixContent::Parent::getDefaultCSS()
 			margin: 1px;
 			border-radius: 3px;
 		}
+
+		.delete-button
+		{
+			width: 20px;
+			background: rgba(255,255,255, 0.7);
+		}
 		)";
 
 	//return File("D:\\test.css").loadFileAsString();
@@ -126,6 +132,9 @@ String MatrixBase::getColumnStyleSheet(const Identifier& id)
 
 	if(id == Identifier("Plotter"))
 		return "width: 100px; height:48px; flex-grow: 1;";
+
+	if(id == Identifier("delete"))
+		return"width: 20px;height:24px;";
 
 	jassertfalse;
 	return {};
@@ -252,6 +261,51 @@ Component* MatrixContent::HeaderBase::addHeaderItem(const Identifier& id, const 
 	}
 }
 
+MatrixBase::DeleteButton::DeleteButton():
+  Button("delete"),
+  pathData("120.t01YE2AQ..fmCwF..d.QhotXCw1i5.AQd++OCw18+YBQeqHiCwFbEyCQd++OCw1++UDQhotXCwFl57BQ..fmCw1++UDQwqnxCwFbEyCQQ..2Cw18+YBQBU2qCw1i5.AQQ..2CwF..d.QwqnxCw1YE2AQ..fmCMVY")
+{
+	simple_css::FlexboxComponent::Helpers::setFallbackStyleSheet(*this, "background-image:var(--icon);background-color:#aaa;margin:0px;");
+
+	simple_css::FlexboxComponent::Helpers::writeSelectorsToProperties(*this, { "#delete", ".delete-button" });
+
+	MemoryBlock mb;
+	mb.fromBase64Encoding(pathData);
+	icon.loadPathFromData(mb.getData(), mb.getSize());
+
+	onClick = [this]()
+	{
+		if(auto r = findParentComponentOfClass<MatrixContent::Row>())
+		{
+			auto p = r->data.getParent();
+			MatrixIds::Helpers::removeConnection(p, r->um, r->getTargetId(), r->getSourceIndexForIntensitySlider(0));
+		}
+	};
+}
+
+
+
+void MatrixBase::DeleteButton::paintButton(Graphics& g, bool shouldDrawButtonAsHighlighted, bool shouldDrawButtonAsDown)
+{
+	if (auto root = simple_css::CSSRootComponent::find(*this))
+	{
+		if (auto ss = root->css.getForComponent(this))
+		{
+			ss->setPropertyVariable("icon", pathData);
+			simple_css::Renderer r(this, root->stateWatcher);
+
+			auto currentState = simple_css::Renderer::getPseudoClassFromComponent(this);
+			root->stateWatcher.checkChanges(this, ss, currentState);
+
+			r.drawBackground(g, getLocalBounds().toFloat(), ss);
+			return;
+		}
+	}
+
+	g.setColour(Colours::white.withAlpha(shouldDrawButtonAsHighlighted ? 0.5f : 0.4f));
+	g.fillPath(icon);
+}
+
 MatrixBase::SearchBar::ClearButton::ClearButton():
 	Button("clear"),
 	pathData("230.t0FP.ZBQN++OCIlNbdCQN++OCA.fEQj5Od2P..XQDA..dNjX..XQDs.N.OjNbdCQZ..2CADflPjF.v8PhgDYUPjF.v8P..3ADs.N.OD..d.Q..fmCIF..d.Qp+3cCgDYUPjy++yP.AnID47++LzXsQKmdPD..34PrgElTPzHIH6PrI1dbPTAPG7PrADflPD+F25Pr4IgvPTAPG7ProBZ3PzHIH6Pro7XtPD..34ProBZ3Pz81m3Pr4IgvPj8eQ2PrADflPjG433PrI1dbPj8eQ2PrgElTPz81m3PrQKmdPD..34PiUF")
@@ -315,7 +369,8 @@ MatrixContent::Row::Row(MainController* mc, ValueTree rowData, const String& tar
   data(rowData),
   um(mc->getControlUndoManager()),
   intensitySlider(MatrixIds::Intensity),
-  auxIntensitySlider(MatrixIds::AuxIntensity)
+  auxIntensitySlider(MatrixIds::AuxIntensity),
+  deleteButton()
 {
 	jassert(data.getType() == MatrixIds::Connection);
 
@@ -336,6 +391,9 @@ MatrixContent::Row::Row(MainController* mc, ValueTree rowData, const String& tar
 
 	addFlexItem(plotter);
 
+	Helpers::appendToElementStyle(deleteButton, getColumnStyleSheet("delete"));
+	addFlexItem(deleteButton);
+
 	targetSelector.setEnabled(targetId.isEmpty());
 
 	sourceSelector.setTooltip("The modulation source.");
@@ -344,6 +402,7 @@ MatrixContent::Row::Row(MainController* mc, ValueTree rowData, const String& tar
 	intensitySlider.setTooltip("How much the modulation source is affecting the target.");
 	auxSelector.setTooltip("A modulation source that modulates the intensity of this modulation.");
 	auxIntensitySlider.setTooltip("How much the aux modulation source is affecting the modulation signal.");
+	deleteButton.setTooltip("Removes the mod connection");
 
 	auxIntensitySlider.setRange(0.0, 1.0, 0.0);
 	auxIntensitySlider.valueFromTextFunction = ValueToTextConverter::createForMode("NormalizedPercentage");
