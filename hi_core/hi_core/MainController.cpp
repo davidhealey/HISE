@@ -1115,8 +1115,26 @@ void MainController::connectToGlobalRuntimeTargets(scriptnode::OpaqueNode& on, b
     {
         auto nn = getNeuralNetworks().getOrCreate(id);
         
-        auto con = nn->createConnection();
-        on.connectToRuntimeTarget(shouldAdd, con);
+		try
+		{
+			auto con = nn->createConnection();
+			on.connectToRuntimeTarget(shouldAdd, con);
+
+			auto h = id.hashCode();
+			auto h2 = id.hash();
+
+			if(shouldAdd && pendingInitialisedHashes.contains(h))
+			{
+				pendingInitialisedHashes.removeAllInstancesOf(h);
+				debugToConsole(getMainSynthChain(), "initialised neural network with hash " + String(h) + " (" + id + ")");
+			}
+		}
+		catch(scriptnode::Error& e)
+		{
+			auto x = ScriptnodeExceptionHandler::getErrorMessage(e);
+			pendingInitialisedHashes.add(e.expected);
+			debugToConsole(getMainSynthChain(), x);
+		}
     }
 #endif
 }
