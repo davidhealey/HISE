@@ -2367,8 +2367,71 @@ void CompileExporter::ProjectTemplateHelpers::handleAdditionalStaticLibs(Compile
 	File additionalSourceCodeDirectory = GET_PROJECT_HANDLER(chainToExport).getSubDirectory(ProjectHandler::SubDirectories::AdditionalSourceCode);
 
 #if JUCE_MAC
-	const String additionalStaticLibs = exporter->GET_SETTING(HiseSettings::Project::OSXStaticLibs);
-	templateProject = templateProject.replace("%OSX_STATIC_LIBS%", additionalStaticLibs);
+    
+    auto additionalStaticLibFolder = exporter->GET_SETTING(HiseSettings::Project::WindowsStaticLibFolder);
+    
+    if(additionalStaticLibFolder.isNotEmpty())
+    {
+        if (additionalStaticLibFolder.contains("%ADDITIONAL_SOURCE_CODE%"))
+            additionalStaticLibFolder = additionalStaticLibFolder.replace("%ADDITIONAL_SOURCE_CODE%", additionalSourceCodeDirectory.getFullPathName());
+
+        additionalStaticLibFolder = additionalStaticLibFolder.replace("\\", "/");
+
+        auto debugFolder = File(additionalStaticLibFolder).getChildFile("Debug_macOS");
+        auto releaseFolder = File(additionalStaticLibFolder).getChildFile("Release_macOS");
+
+        Array<File> debugLibraries = debugFolder.findChildFiles(File::findFiles, false, "*.a");
+        Array<File> releaseLibraries = debugFolder.findChildFiles(File::findFiles, false, "*.a");
+
+        if (debugLibraries.size() == releaseLibraries.size())
+        {
+            StringArray debugLibs, releaseLibs;
+
+            for (int i = 0; i < debugLibraries.size(); i++)
+            {
+                // remove "lib" xxx ".a"
+                debugLibs.add(debugLibraries[i].getFileNameWithoutExtension().substring(3));
+                releaseLibs.add(releaseLibraries[i].getFileNameWithoutExtension().substring(3));
+            }
+
+            debugLibs.sort(true);
+            releaseLibs.sort(true);
+
+            String debugLibString = "";
+
+            for (int i = 0; i < debugLibs.size(); i++)
+            {
+                if (debugLibs[i] != releaseLibs[i])
+                {
+                    debugToConsole(chainToExport, "!Debug / Release library mismatch: " + debugLibs[i]);
+                }
+                else
+                {
+                    debugToConsole(chainToExport, "Added static library " + debugLibs[i]);
+                    debugLibString << "&#10;" << debugLibs[i];
+                }
+            }
+
+            REPLACE_WILDCARD_WITH_STRING("%OSX_EXTERNAL_LIBRARIES%", debugLibString);
+        }
+        else
+        {
+            debugToConsole(chainToExport, "!Debug / Release library mismatch");
+            REPLACE_WILDCARD_WITH_STRING("%OSX_EXTERNAL_LIBRARIES%", "");
+        }
+
+        REPLACE_WILDCARD_WITH_STRING("%OSC_STATIC_LIB_FOLDER_DEBUG%", previousLibPath + ";" + debugFolder.getFullPathName());
+        REPLACE_WILDCARD_WITH_STRING("%OSC_STATIC_LIB_FOLDER_RELEASE%", previousLibPath + ";" + releaseFolder.getFullPathName());
+        
+    }
+    else
+    {
+        REPLACE_WILDCARD_WITH_STRING("%OSX_EXTERNAL_LIBRARIES%", "");
+    }
+    
+    const String additionalStaticLibs = exporter->GET_SETTING(HiseSettings::Project::OSXStaticLibs);
+    templateProject = templateProject.replace("%OSX_STATIC_LIBS%", additionalStaticLibs);
+    
 #else
 
 	auto additionalStaticLibFolder = exporter->GET_SETTING(HiseSettings::Project::WindowsStaticLibFolder);
