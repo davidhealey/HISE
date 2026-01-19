@@ -486,13 +486,13 @@ void PropertyListener::valueTreePropertyChanged(ValueTree& v_, const Identifier&
 	{
 		auto thisValue = v[id];
 
-		if (v.hasProperty(id) && lastValue == thisValue)
+		if (v.hasProperty(id) && lastValues[id] == thisValue)
 		{
 			//probably priorised
 			return;
 		}
 
-		lastValue = thisValue;
+		lastValues.set(id, thisValue);
 
 		if (auto pb = dynamic_cast<PropertyListener*>(priorisedListener.get()))
 		{
