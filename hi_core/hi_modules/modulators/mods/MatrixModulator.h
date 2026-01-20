@@ -165,7 +165,7 @@ private:
 
 		void onUpdate(const Identifier& id, const var& newValue);
 		void handleScaleDrag(bool isDown, float delta);
-		void handleDisplayValue(ModulationDisplayValue& mv);
+		void handleDisplayValue(ModulationDisplayValue& mv, scriptnode::InvertableParameterRange outputRange, double rangeFactor);
 		void prepare(double sampleRate, int blockSize, scriptnode::PolyHandler& ph);
 		bool isConnected() const noexcept { return sourceIndex != -1; }
 		SimpleRingBuffer* getRingBuffer() const;

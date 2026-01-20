@@ -133,7 +133,7 @@ void MatrixModulator::Item::handleScaleDrag(bool isDown, float delta)
 	}
 }
 
-void MatrixModulator::Item::handleDisplayValue(ModulationDisplayValue& mv)
+void MatrixModulator::Item::handleDisplayValue(ModulationDisplayValue& mv, scriptnode::InvertableParameterRange outputRange, double fullRangeFactor)
 {
 	if(!isConnected())
 		return;
@@ -165,19 +165,25 @@ void MatrixModulator::Item::handleDisplayValue(ModulationDisplayValue& mv)
 	}
 	else
 	{
-		mv.addValue += v;
+		auto factor = fullRangeFactor / outputRange.rng.getRange().getLength();
+
+		auto thisIntensity = intensity * factor;
+
+		auto thisV = v * factor;
+
+		mv.addValue += thisV;
 
 		auto minValue = mv.modulationRange.getStart();
 		auto maxValue = mv.modulationRange.getEnd();
 
 		if(isBipolar)
 		{
-			minValue -= intensity;
-			maxValue += intensity;
+			minValue -= thisIntensity;
+			maxValue += thisIntensity;
 		}
 		else
 		{
-			minValue += intensity;
+			minValue += thisIntensity;
 		}
 
 		if(minValue > maxValue)
@@ -635,10 +641,12 @@ ModulationDisplayValue MatrixModulator::getDisplayValue(double nv, NormalisableR
 
 	mv.modulationRange = { mv.normalisedValue, mv.normalisedValue };
 
+	auto fullRange = getMode() == Modulation::Mode::PitchMode ? 2.0f : 1.0f;
+
 	for (auto i : items)
 	{
 		if (displaySourceIndex == -1 || i->sourceIndex == displaySourceIndex)
-			i->handleDisplayValue(mv);
+			i->handleDisplayValue(mv, rangeData.outputRange, fullRange);
 	}
 
 	mv.clipTo0To1();
