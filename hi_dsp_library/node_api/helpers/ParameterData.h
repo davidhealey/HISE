@@ -333,14 +333,20 @@ struct RefCountedHeapBuffer: public ReferenceCountedObject
 	RefCountedHeapBuffer(int numBytes):
 		numUsed(numBytes)
 	{
-		data.calloc(numUsed);
+		if(numUsed > 0)
+			data.calloc(numUsed);
 	}
 
 	Ptr createCopy()
 	{
-		Ptr newData = new RefCountedHeapBuffer(numUsed);
-		memcpy(newData->getData(), getData(), getNumBytes());
-		return newData;
+		if(getData() != nullptr && getNumBytes() > 0)
+		{
+			Ptr newData = new RefCountedHeapBuffer(numUsed);
+			memcpy(newData->getData(), getData(), getNumBytes());
+			return newData;
+		}
+
+		return nullptr;
 	}
 
 	void* getData() { return data.get(); }
@@ -409,14 +415,14 @@ struct data
 
 	struct ParameterNames
 	{
-		const void* data;
-		size_t size;
+		const void* data = nullptr;
+		size_t size = 0;
 
 		StringArray toStringArray() const
 		{
 			StringArray sa;
 
-			if(size != 0)
+			if(size != 0 && data != nullptr)
 			{
 				MemoryInputStream mis(data, size, false);
 
