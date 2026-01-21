@@ -2426,6 +2426,8 @@ void CompileExporter::ProjectTemplateHelpers::handleAdditionalStaticLibs(Compile
     }
     else
     {
+        REPLACE_WILDCARD_WITH_STRING("%OSC_STATIC_LIB_FOLDER_DEBUG%", "");
+        REPLACE_WILDCARD_WITH_STRING("%OSC_STATIC_LIB_FOLDER_RELEASE%", "");
         REPLACE_WILDCARD_WITH_STRING("%OSX_EXTERNAL_LIBRARIES%", "");
     }
     
