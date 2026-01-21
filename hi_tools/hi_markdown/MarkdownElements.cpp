@@ -1395,24 +1395,29 @@ struct MarkdownParser::ContentFooter : public MarkdownParser::Element
 
 		for (int i = 0; i < list.size(); i++)
 		{
-			if (list[i].url == links.thisLink)
+			if (list[i]->url == links.thisLink)
 			{
 				int nextIndex = i + 1;
 
-				links.nextLink = list[nextIndex].url.withAnchor("");
-
-				while (nextIndex < list.size() && links.nextLink == links.thisLink)
+				if(isPositiveAndBelow(nextIndex, list.size()))
 				{
-					nextIndex++;
-					links.nextLink = list[nextIndex].url.withAnchor("");
+					links.nextLink = list[nextIndex]->url.withAnchor("");
+
+					while (nextIndex < list.size() && links.nextLink == links.thisLink)
+					{
+						nextIndex++;
+						links.nextLink = list[nextIndex]->url.withAnchor("");
+					}
+
+					auto linkWithoutAnchor = list[nextIndex]->url.withAnchor("");
+
+					links.nextLink = parent->getHolder()->getDatabase().getLink(linkWithoutAnchor.toString(MarkdownLink::UrlFull));
+
+					jassert(links.nextLink.getType() != MarkdownLink::MarkdownFileOrFolder);
+					links.nextName = list[nextIndex]->tocString;
 				}
 
-				auto linkWithoutAnchor = list[nextIndex].url.withAnchor("");
-
-				links.nextLink = parent->getHolder()->getDatabase().getLink(linkWithoutAnchor.toString(MarkdownLink::UrlFull));
-
-				jassert(links.nextLink.getType() != MarkdownLink::MarkdownFileOrFolder);
-				links.nextName = list[nextIndex].tocString;
+				
 				break;
 			}
 

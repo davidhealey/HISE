@@ -36,7 +36,8 @@ using namespace juce;
 
 
 
-MarkdownDataBase::MarkdownDataBase()
+MarkdownDataBase::MarkdownDataBase():
+  rootItem(new Item())
 {
 
 }
@@ -46,11 +47,11 @@ MarkdownDataBase::~MarkdownDataBase()
 
 }
 
-const juce::Array<hise::MarkdownDataBase::Item>& MarkdownDataBase::getFlatList()
+const MarkdownDataBase::Item::List& MarkdownDataBase::getFlatList()
 {
 	if (cachedFlatList.isEmpty())
 	{
-		rootItem.addToList(cachedFlatList);
+		rootItem->addToList(cachedFlatList);
 	}
 
 	return cachedFlatList;
@@ -68,8 +69,8 @@ juce::String MarkdownDataBase::generateHtmlToc(const String&) const
 
 void MarkdownDataBase::buildDataBase(bool useCache)
 {
-	rootItem = {};
-	rootItem.url = { rootDirectory, "/" };
+	rootItem = new Item();
+	rootItem->url = { rootDirectory, "/" };
 
 	if (useCache && getDatabaseFile().existsAsFile())
 	{
@@ -100,10 +101,10 @@ void MarkdownDataBase::buildDataBase(bool useCache)
 		}
 
 		auto newItem = g->createRootItem(*this);
-		rootItem.addChild(std::move(newItem));
+		rootItem->addChild(newItem);
 	}
 
-	rootItem.sortChildren();
+	rootItem->sortChildren();
 }
 
 
@@ -120,7 +121,7 @@ juce::var MarkdownDataBase::getHtmlSearchDatabaseDump()
 
 	auto f = getRoot();
 
-	rootItem.callForEach([v, f](Item& item)
+	rootItem->callForEach([v, f](Item& item)
 	{ 
 		if (!item.hasChildren())
 			return false;
@@ -128,8 +129,10 @@ juce::var MarkdownDataBase::getHtmlSearchDatabaseDump()
 		if (item.tocString.isEmpty())
 			return false;
 
-		for (auto& c : item)
+		for (auto child : item)
 		{
+			auto& c = *child;
+
 			if (c.tocString.isEmpty())
 				continue;
 
@@ -176,53 +179,51 @@ MarkdownDataBase::DirectoryItemGenerator::DirectoryItemGenerator(const File& roo
 	colour = colour_;
 }
 
-hise::MarkdownDataBase::Item MarkdownDataBase::DirectoryItemGenerator::createRootItem(MarkdownDataBase& parent)
+hise::MarkdownDataBase::Item::Ptr MarkdownDataBase::DirectoryItemGenerator::createRootItem(MarkdownDataBase& parent)
 {
 	rootDirectory = parent.getRoot();
-	Item rItem;
+	Item::Ptr rItem = new Item();
 	addFileRecursive(rItem, startDirectory);
 
-	if (!rItem.c.isTransparent())
-		colour = rItem.c;
+	if (!rItem->c.isTransparent())
+		colour = rItem->c;
 
-	rItem.setDefaultColour(colour);
+	rItem->setDefaultColour(colour);
 
 	return rItem;
 }
 
-void MarkdownDataBase::DirectoryItemGenerator::addFileRecursive(Item& folder, File f)
+void MarkdownDataBase::DirectoryItemGenerator::addFileRecursive(Item::Ptr folder, File f)
 {
 	if (f.isDirectory())
 	{
-		folder.url = { rootDirectory, f.getRelativePathFrom(rootDirectory) };
-		jassert(folder.url.getType() == MarkdownLink::Folder);
+		folder->url = { rootDirectory, f.getRelativePathFrom(rootDirectory) };
+		jassert(folder->url.getType() == MarkdownLink::Folder);
 
-		folder.fillMetadataFromURL();
+		folder->fillMetadataFromURL();
 
-		if (folder.url.fileExists({}))
+		if (folder->url.fileExists({}))
 		{
-			Item ni;
+			Item::Ptr ni = new Item();
 
-			MarkdownParser::createDatabaseEntriesForFile(rootDirectory, ni, folder.url.getMarkdownFile(folder.url.getRoot()), folder.c);
+			MarkdownParser::createDatabaseEntriesForFile(rootDirectory, ni.get(), folder->url.getMarkdownFile(folder->url.getRoot()), folder->c);
 
-			if (ni)
+			if (*ni)
 			{
-				folder.description = ni.description;
+				folder->description = ni->description;
+				folder->keywords = ni->keywords;
 
-				folder.keywords = ni.keywords;
+				auto u = folder->url;
 
-				auto u = folder.url;
-
-				ni.callForEach([u](Item& i) 
+				ni->callForEach([u](Item& i) 
 				{ 
 					i.index = 0; 
 					i.url = u.withAnchor(i.url.toString(MarkdownLink::AnchorWithoutHashtag));
 					return false;
 				});
 
-				for (auto c : ni)
-					folder.addChild(std::move(c));
-
+				for (auto c : *ni)
+					folder->addChild(c);
 			}
 		}
 
@@ -237,14 +238,14 @@ void MarkdownDataBase::DirectoryItemGenerator::addFileRecursive(Item& folder, Fi
 			if (!c.isDirectory() && !c.hasFileExtension(".md"))
 				continue;
 
-			Item newItem;
+			Item::Ptr newItem = new Item();
 			addFileRecursive(newItem, c);
 
 			if (newItem)
-				folder.addChild(std::move(newItem));
+				folder->addChild(newItem);
 		}
 
-		folder.sortChildren();
+		folder->sortChildren();
 	}
 	else
 	{
@@ -252,19 +253,19 @@ void MarkdownDataBase::DirectoryItemGenerator::addFileRecursive(Item& folder, Fi
 		if (f.getFileName().toLowerCase() == "readme.md")
 			return;
 
-		MarkdownParser::createDatabaseEntriesForFile(rootDirectory, folder, f, colour);
+		MarkdownParser::createDatabaseEntriesForFile(rootDirectory, folder.get(), f, colour);
 	}
 }
 
-int MarkdownDataBase::Item::Sorter::compareElements(Item& first, Item& second)
+int MarkdownDataBase::Item::Sorter::compareElements(Item* first, Item* second)
 {
-	if (first.index != -1)
+	if (first->index != -1)
 	{
-		if (second.index != -1)
+		if (second->index != -1)
 		{
-			if (first.index < second.index)
+			if (first->index < second->index)
 				return -1;
-			else if (first.index > second.index)
+			else if (first->index > second->index)
 				return 1;
 			else
 				return 0;
@@ -275,17 +276,17 @@ int MarkdownDataBase::Item::Sorter::compareElements(Item& first, Item& second)
 			return -1;
 		}
 	}
-	if (second.index != -1)
+	if (second->index != -1)
 	{
 		return 1;
 	}
 
-	return first.tocString.compareNatural(second.tocString);
+	return first->tocString.compareNatural(second->tocString);
 }
 
-int MarkdownDataBase::Item::PrioritySorter::PSorter::compareElements(const Item& first, const Item& second) const
+int MarkdownDataBase::Item::PrioritySorter::PSorter::compareElements(const Item* first, const Item* second) const
 {
-	if (first.getWeight() > second.getWeight())
+	if (first->getWeight() > second->getWeight())
 		return -1;
 	else return 1;
 }
@@ -293,11 +294,14 @@ int MarkdownDataBase::Item::PrioritySorter::PSorter::compareElements(const Item&
 
 
 
-juce::Array<hise::MarkdownDataBase::Item> MarkdownDataBase::Item::PrioritySorter::sortItems(Array<Item>& arrayToBeSorted)
+MarkdownDataBase::Item::List MarkdownDataBase::Item::PrioritySorter::sortItems(List& arrayToBeSorted)
 {
 	PSorter s(searchString);
-	arrayToBeSorted.sort(s, false);
-	return arrayToBeSorted;
+
+	List other;
+	other.addArray(arrayToBeSorted);
+	other.sort(s, false);
+	return other;
 }
 
 bool MarkdownDataBase::Item::callForEach(const IteratorFunction& f)
@@ -305,24 +309,28 @@ bool MarkdownDataBase::Item::callForEach(const IteratorFunction& f)
 	if (f(*this))
 		return true;
 
-	for (auto& child : children)
+	for (auto child : children)
 	{
-		if (child.callForEach(f))
+		if (child->callForEach(f))
 			return true;
 	}
 
 	return false;
 }
 
-bool MarkdownDataBase::Item::swapChildWithName(Item& itemToSwap, const String& name)
+bool MarkdownDataBase::Item::swapChildWithName(Item::Ptr itemToSwap, const String& name)
 {
-	for (auto& i : children)
+	int idx = 0;
+
+	for (auto i : children)
 	{
-		if (i.url.toString(MarkdownLink::UrlSubPath) == name)
+		if (i->url.toString(MarkdownLink::UrlSubPath) == name)
 		{
-			std::swap(i, itemToSwap);
+			children.set(idx, itemToSwap);
 			return true;
 		}
+
+		idx++;
 	}
 
 	return false;
@@ -339,28 +347,26 @@ var MarkdownDataBase::Item::toJSONObject() const
 
 	Array<var> childrenArray;
 
-	for (const auto& child : children)
-		childrenArray.add(child.toJSONObject());
+	for (const auto child : children)
+		childrenArray.add(child->toJSONObject());
 
 	newObject->setProperty("Children", childrenArray);
 
 	return var(newObject.get());
 }
 
-MarkdownDataBase::Item MarkdownDataBase::Item::getChildWithName(const String& name) const
+MarkdownDataBase::Item::Ptr MarkdownDataBase::Item::getChildWithName(const String& name)
 {
 	if (url.toString(MarkdownLink::UrlSubPath) == name)
-		return *this;
+		return this;
 
-	for (const auto& child : children)
+	for (const auto child : children)
 	{
-		auto i = child.getChildWithName(name);
-
-		if (i.url.isValid())
+		if(auto i = child->getChildWithName(name))
 			return i;
 	}
 
-	return {};
+	return nullptr;
 }
 
 int MarkdownDataBase::Item::fits(String search) const
@@ -408,23 +414,20 @@ juce::String MarkdownDataBase::Item::generateHtml(const String& rootString, cons
 
 	html << d;
 
-	for (const auto& child : children)
+	for (const auto child : children)
 	{
-		html << child.generateHtml(rootString, activeURL);
+		html << child->generateHtml(rootString, activeURL);
 	}
 
 	return g.surroundWithTag(html, "details", "");// containsURL(activeURL) ? "open" : "");
 }
 
-void MarkdownDataBase::Item::addToList(Array<Item>& list) const
+void MarkdownDataBase::Item::addToList(List& list)
 {
-	list.add(*this);
+	list.add(this);
 
-	for (const auto& child : children)
-	{
-		child.addToList(list);
-	}
-		
+	for (const auto child : children)
+		child->addToList(list);
 }
 
 void MarkdownDataBase::Item::addTocChildren(File root)
@@ -433,30 +436,32 @@ void MarkdownDataBase::Item::addTocChildren(File root)
 
 	if (f.existsAsFile())
 	{
-		MarkdownParser::createDatabaseEntriesForFile(root, *this, f, c);
+		MarkdownParser::createDatabaseEntriesForFile(root, this, f, c);
 	}
 }
 
-MarkdownDataBase::Item MarkdownDataBase::Item::createChildItem(const String& subPath) const
+MarkdownDataBase::Item::Ptr MarkdownDataBase::Item::createChildItem(const String& subPath) const
 {
-	MarkdownDataBase::Item item;
-	item.url = url.getChildUrlWithRoot(subPath);
-	item.c = c;
+	auto item = createNew();
+	item->url = url.getChildUrlWithRoot(subPath);
+	item->c = c;
 	return item;
 }
 
-MarkdownDataBase::Item::Item(File root, File f, const StringArray& keywords_, String description_) :
-	url({ root, f.getRelativePathFrom(root) })
+MarkdownDataBase::Item::Item(File root, File f, const StringArray& keywords_, String description_)
 {
-	// If you construct an item like this, you need a directory...
-	jassert(root.isDirectory());
-	keywords = keywords_;
-	description = description_;
+	setData(root, f, keywords_, description_);
 }
 
-MarkdownDataBase::Item::Item(const MarkdownLink& link):
-	url(link)
+MarkdownDataBase::Item::Item(const MarkdownLink& link)
 {
+	setLink(link);
+}
+
+void MarkdownDataBase::Item::setLink(const MarkdownLink& link)
+{
+	url = link;
+
 	// You need to pass in a valid root
 	jassert(url.getRoot().isDirectory());
 
@@ -476,57 +481,27 @@ MarkdownDataBase::Item::Item(const MarkdownLink& link):
 		{
 			auto cUrl = url.getChildUrlWithRoot(cf.getFileNameWithoutExtension(), false);
 
-			Item cItem(cUrl);
-			addChild(std::move(cItem));
+			Item::Ptr nc = new Item(cUrl);
+			addChild(nc);
 		}
 	}
 	if (link.getType() == MarkdownLink::Type::MarkdownFile)
 	{
-		MarkdownParser::createDatabaseEntriesForFile(url.getRoot(), *this, link.toFile(MarkdownLink::FileType::ContentFile), c);
+		MarkdownParser::createDatabaseEntriesForFile(url.getRoot(), this, link.toFile(MarkdownLink::FileType::ContentFile), c);
 	}
 }
 
-MarkdownDataBase::Item::Item(const Item& other)
+
+
+void MarkdownDataBase::Item::setData(File root, File f, const StringArray& keywords_, const String& description_)
 {
-	description = std::move(other.description);
-	keywords =    std::move(other.keywords);
-	url = other.url;
-	tocString = other.tocString;
-	icon = other.icon;
-	c = other.c;
-	isAlwaysOpen = other.isAlwaysOpen;
-	autoWeight = other.autoWeight;
-	deltaWeight = other.deltaWeight;
-	absoluteWeight = other.absoluteWeight;
-	index = other.index;
-
-	children = other.children;
-
-	for (auto& child : children)
-		child.parent = this;
+	jassert(root.isDirectory());
+	url = { root, f.getRelativePathFrom(root) };
+	keywords = keywords_;
+	description = description_;
 }
 
-hise::MarkdownDataBase::Item& MarkdownDataBase::Item::operator=(const Item& other)
-{
-	description = std::move(other.description);
-	keywords = std::move(other.keywords);
-	url = other.url;
-	tocString = other.tocString;
-	icon = other.icon;
-	c = other.c;
-	isAlwaysOpen = other.isAlwaysOpen;
-	autoWeight = other.autoWeight;
-	deltaWeight = other.deltaWeight;
-	absoluteWeight = other.absoluteWeight;
-	index = other.index;
 
-	children = other.children;
-
-	for (auto& child : children)
-		child.parent = this;
-
-	return *this;
-}
 
 juce::ValueTree MarkdownDataBase::Item::createValueTree() const
 {
@@ -547,7 +522,11 @@ juce::ValueTree MarkdownDataBase::Item::createValueTree() const
 	v.setProperty("AbsoluteWeight", absoluteWeight, nullptr);
 
 	for (const auto& child : children)
-		v.addChild(child.createValueTree(), -1, nullptr);
+	{
+		if(*child)
+			v.addChild(child->createValueTree(), -1, nullptr);
+	}
+		
 
 	return v;
 }
@@ -568,9 +547,9 @@ void MarkdownDataBase::Item::loadFromValueTree(ValueTree& v)
 
 	for (auto child : v)
 	{
-		Item newChild;
-		newChild.loadFromValueTree(child);
-		addChild(std::move(newChild));
+		auto newChild = createNew();
+		newChild->loadFromValueTree(child);
+		addChild(newChild);
 	}
 }
 
@@ -579,8 +558,8 @@ void MarkdownDataBase::Item::setDefaultColour(Colour newColour)
 	if (c.isTransparent())
 		c = newColour;
 
-	for (auto& child : children)
-		child.setDefaultColour(c);
+	for (auto child : children)
+		child->setDefaultColour(c);
 }
 
 
@@ -610,7 +589,7 @@ hise::MarkdownLink MarkdownDataBase::getLink(const String& link)
 	{
 		MarkdownLink* tmp = &linkToReturn;
 
-		rootItem.callForEach([linkString, tmp](Item& r)
+		rootItem->callForEach([linkString, tmp](Item& r)
 		{
 			auto thisLink = r.url.toString(MarkdownLink::UrlFull);
 
@@ -651,41 +630,35 @@ void MarkdownDataBase::Item::fillMetadataFromURL()
 	}
 }
 
-void MarkdownDataBase::Item::addChild(Item&& item)
+void MarkdownDataBase::Item::addChild(Item::Ptr item)
 {
-	item.parent = this;
-	item.setAutoweight(getWeight() - 10);
+	item->parent = this;
+	item->setAutoweight(getWeight() - 10);
 
-	if (item.url.getType() == MarkdownLink::Type::MarkdownFileOrFolder)
+	if (item->url.getType() == MarkdownLink::Type::MarkdownFileOrFolder)
 	{
-		jassert(item.url.hasAnchor());
-		item.url.setType(url.getType());
+		jassert(item->url.hasAnchor());
+		item->url.setType(url.getType());
 	}
 
-	children.push_back(item);
+	children.add(item);
 }
 
 void MarkdownDataBase::Item::sortChildren()
 {
 	MarkdownDataBase::Item::Sorter sorter;
-
-	std::sort(children.begin(), children.end(),
-	[&sorter](Item& a, Item& b)
-	{
-		return sorter.compareElements(a, b) < 0;
-	});
-
-	
+	children.sort(sorter);
 }
 
 void MarkdownDataBase::Item::removeChild(int childIndex)
 {
-	children.erase(children.begin() + childIndex);
+	children.remove(childIndex);
+	
 }
 
-void MarkdownDataBase::Item::swapChildren(std::vector<Item>& other)
+void MarkdownDataBase::Item::swapChildren(List& other)
 {
-	std::swap(children, other);
+	children.swapWith(other);
 }
 
 int MarkdownDataBase::Item::getWeight() const
@@ -700,8 +673,8 @@ void MarkdownDataBase::Item::setAutoweight(int newAutoWeight)
 {
 	autoWeight = newAutoWeight;
 
-	for (auto& child : children)
-		child.setAutoweight(getWeight() - 10);
+	for (auto child : children)
+		child->setAutoweight(getWeight() - 10);
 }
 
 void MarkdownDataBase::Item::applyWeightFromHeader(const MarkdownHeader& h)

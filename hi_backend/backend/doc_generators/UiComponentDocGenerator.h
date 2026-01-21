@@ -88,11 +88,11 @@ namespace UIComponentDatabase
 			colour = Colour(0xFF9064FF);
 		}
 
-		MarkdownDataBase::Item createRootItem(MarkdownDataBase& parent) override;
+		MarkdownDataBase::Item::Ptr createRootItem(MarkdownDataBase& parent) override;
 
-		void createFloatingTileApi(MarkdownDataBase::Item& item);
+		void createFloatingTileApi(MarkdownDataBase::Item::Ptr item);
 
-		MarkdownDataBase::Item createItemForFloatingTile(MarkdownDataBase::Item& item, FloatingTileContent::Factory& f, Identifier& id, FloatingTile* root);
+		MarkdownDataBase::Item::Ptr createItemForFloatingTile(MarkdownDataBase::Item::Ptr item, FloatingTileContent::Factory& f, Identifier& id, FloatingTile* root);
 
 		MarkdownDatabaseHolder& holder;
 	};

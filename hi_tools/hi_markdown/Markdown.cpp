@@ -392,7 +392,7 @@ hise::MarkdownParser::HyperLink MarkdownParser::getHyperLinkForEvent(const Mouse
 }
 
 
-void MarkdownParser::createDatabaseEntriesForFile(File root, MarkdownDataBase::Item& item, File f, Colour c)
+void MarkdownParser::createDatabaseEntriesForFile(File root, MarkdownDataBase::Item* item, File f, Colour c)
 {
 	jassert(root.isDirectory());
 
@@ -407,44 +407,40 @@ void MarkdownParser::createDatabaseEntriesForFile(File root, MarkdownDataBase::I
 
 	try
 	{
-		auto saveURL = item.url;
+		auto saveURL = item->url;
 
-		item = MarkdownDataBase::Item(root, f, p.header.getKeywords(), p.header.getDescription());
+		item->setData(root, f, p.header.getKeywords(), p.header.getDescription());
 
 		if (saveURL.isValid())
-			item.url = saveURL;
+			item->url = saveURL;
 
-		item.c = c;
-		item.tocString = item.keywords[0];
-		item.icon = p.getHeader().getKeyValue("icon");
+		item->c = c;
+		item->tocString = item->keywords[0];
+		item->icon = p.getHeader().getKeyValue("icon");
 		
-		item.setIndexFromHeader(p.getHeader());
-		item.applyWeightFromHeader(p.getHeader());
-
-		MarkdownDataBase::Item lastHeadLine;
+		item->setIndexFromHeader(p.getHeader());
+		item->applyWeightFromHeader(p.getHeader());
 
 		for (auto e : p.elements)
 		{
 			if (auto h = dynamic_cast<Headline*>(e))
 			{
-				MarkdownDataBase::Item headLineItem(root, f, p.header.getKeywords(), p.header.getDescription());
+				MarkdownDataBase::Item::Ptr headLineItem = new MarkdownDataBase::Item(root, f, p.header.getKeywords(), p.header.getDescription());
 
-				headLineItem.description = h->content.getText();
+				headLineItem->description = h->content.getText();
 
-				if (headLineItem.description.trim() == item.tocString)
+				if (headLineItem->description.trim() == item->tocString)
 					continue;
 
-				headLineItem.url = item.url.getChildUrl(h->anchorURL);
-				headLineItem.c = c;
+				headLineItem->url = item->url.getChildUrl(h->anchorURL);
+				headLineItem->c = c;
 
-				headLineItem.tocString << headLineItem.description;
+				headLineItem->tocString << headLineItem->description;
 
-				if (h->headlineLevel >= 3)
-					headLineItem.tocString = {};
+				if (h->headlineLevel >= 4)
+					headLineItem->tocString = {};
 
-
-				item.addChild(std::move(headLineItem));
-
+				item->addChild(headLineItem);
 			}
 		}
 	}

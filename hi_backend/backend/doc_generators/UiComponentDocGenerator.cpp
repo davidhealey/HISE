@@ -120,48 +120,46 @@ juce::String UIComponentDatabase::CommonData::getComponentIDFromURL(const Markdo
 #endif
 }
 
-hise::MarkdownDataBase::Item UIComponentDatabase::ItemGenerator::createRootItem(MarkdownDataBase& )
+hise::MarkdownDataBase::Item::Ptr UIComponentDatabase::ItemGenerator::createRootItem(MarkdownDataBase& )
 {
-	MarkdownDataBase::Item item;
+	auto item = MarkdownDataBase::Item::createNew();
 
-	item.c = Colour(0xFF9064FF);
-	item.url = { rootDirectory, uiComponentWildcard };
-	item.fillMetadataFromURL();
+	item->c = Colour(0xFF9064FF);
+	item->url = { rootDirectory, uiComponentWildcard };
+	item->fillMetadataFromURL();
 
-	MarkdownDataBase::Item pluginItem = item.createChildItem("plugin-components");
+	auto pluginItem = item->createChildItem("plugin-components");
 	
-	pluginItem.fillMetadataFromURL();
+	pluginItem->fillMetadataFromURL();
 
-	if (pluginItem.url.fileExists(rootDirectory))
+	if (pluginItem->url.fileExists(rootDirectory))
 	{
-		MarkdownParser::createDatabaseEntriesForFile(rootDirectory, pluginItem, pluginItem.url.toFile(MarkdownLink::FileType::ContentFile, rootDirectory), pluginItem.c);
+		MarkdownParser::createDatabaseEntriesForFile(rootDirectory, pluginItem.get(), pluginItem->url.toFile(MarkdownLink::FileType::ContentFile, rootDirectory), pluginItem->c);
 	}
 
 	for (auto c : d->list)
 	{
-		MarkdownDataBase::Item cItem;
-		cItem.url = pluginItem.url.getChildUrlWithRoot(MarkdownLink::Helpers::getSanitizedFilename(c->getName().toString()), false);
-		cItem.fillMetadataFromURL();
-		
-		pluginItem.addChild(std::move(cItem));
+		auto cItem = MarkdownDataBase::Item::createNew();
+		cItem->url = pluginItem->url.getChildUrlWithRoot(MarkdownLink::Helpers::getSanitizedFilename(c->getName().toString()), false);
+		cItem->fillMetadataFromURL();
+		pluginItem->addChild(cItem);
 	}
 
-	item.addChild(std::move(pluginItem));
+	item->addChild(pluginItem);
 
-	MarkdownDataBase::Item floatingTileItem = item.createChildItem("floating-tiles");
-	floatingTileItem.tocString = "Floating Tiles";
+	auto floatingTileItem = item->createChildItem("floating-tiles");
+	floatingTileItem->tocString = "Floating Tiles";
 
 	createFloatingTileApi(floatingTileItem);
 	
-	item.addChild(std::move(floatingTileItem));
-
-	item.setDefaultColour(colour);
+	item->addChild(floatingTileItem);
+	item->setDefaultColour(colour);
 
 	return item;
 }
 
 
-void UIComponentDatabase::ItemGenerator::createFloatingTileApi(MarkdownDataBase::Item& item)
+void UIComponentDatabase::ItemGenerator::createFloatingTileApi(MarkdownDataBase::Item::Ptr item)
 {
 	Component::SafePointer<BackendRootWindow> root;
 
@@ -176,16 +174,16 @@ void UIComponentDatabase::ItemGenerator::createFloatingTileApi(MarkdownDataBase:
 
 	auto layoutList = f3.getIdList();
 
-	MarkdownDataBase::Item layout = item.createChildItem("layout");
-	layout.tocString = "Layout Floating Tiles";
-	layout.keywords.add("Layout");
+	auto layout = item->createChildItem("layout");
+	layout->tocString = "Layout Floating Tiles";
+	layout->keywords.add("Layout");
 
 	for (auto id : layoutList)
 	{
-		layout.addChild(createItemForFloatingTile(layout, f3, id, root->getRootFloatingTile()));
+		layout->addChild(createItemForFloatingTile(layout, f3, id, root->getRootFloatingTile()));
 	}
 
-	item.addChild(std::move(layout));
+	item->addChild(layout);
 
 	FloatingTileContent::Factory f;
 
@@ -193,16 +191,14 @@ void UIComponentDatabase::ItemGenerator::createFloatingTileApi(MarkdownDataBase:
 
 	auto frontendList = f.getIdList();
 
-	
-
-	MarkdownDataBase::Item frontend;
-	frontend.url = item.url.getChildUrl("plugin");
-	frontend.url.setType(MarkdownLink::Folder);
-	frontend.tocString = "Plugin Floating Tiles";
+	auto frontend = MarkdownDataBase::Item::createNew();
+	frontend->url = item->url.getChildUrl("plugin");
+	frontend->url.setType(MarkdownLink::Folder);
+	frontend->tocString = "Plugin Floating Tiles";
 
 	for (auto id : frontendList)
 	{
-		frontend.addChild(createItemForFloatingTile(frontend, f, id, root->getRootFloatingTile()));
+		frontend->addChild(createItemForFloatingTile(frontend, f, id, root->getRootFloatingTile()));
 	}
 
 	FloatingTileContent::Factory f2;
@@ -211,10 +207,10 @@ void UIComponentDatabase::ItemGenerator::createFloatingTileApi(MarkdownDataBase:
 
 	auto allList = f2.getIdList();
 
-	MarkdownDataBase::Item backend;
-	backend.url = item.url.getChildUrl("hise");
-	backend.url.setType(MarkdownLink::Folder);
-	backend.tocString = "HISE Floating tiles";
+	auto backend = MarkdownDataBase::Item::createNew();
+	backend->url = item->url.getChildUrl("hise");
+	backend->url.setType(MarkdownLink::Folder);
+	backend->tocString = "HISE Floating tiles";
 
 	for (auto id : allList)
 	{
@@ -224,11 +220,11 @@ void UIComponentDatabase::ItemGenerator::createFloatingTileApi(MarkdownDataBase:
 		if (layoutList.contains(id))
 			continue;
 
-		backend.addChild(createItemForFloatingTile(backend, f2, id, root->getRootFloatingTile()));
+		backend->addChild(createItemForFloatingTile(backend, f2, id, root->getRootFloatingTile()));
 	}
 
-	item.addChild(std::move(frontend));
-	item.addChild(std::move(backend));
+	item->addChild(frontend);
+	item->addChild(backend);
 
 	{
 		MessageManagerLock mm;
@@ -236,12 +232,12 @@ void UIComponentDatabase::ItemGenerator::createFloatingTileApi(MarkdownDataBase:
 	};
 }
 
-hise::MarkdownDataBase::Item UIComponentDatabase::ItemGenerator::createItemForFloatingTile(MarkdownDataBase::Item& parent, FloatingTileContent::Factory& f, Identifier& id, FloatingTile* tile)
+hise::MarkdownDataBase::Item::Ptr UIComponentDatabase::ItemGenerator::createItemForFloatingTile(MarkdownDataBase::Item::Ptr parent, FloatingTileContent::Factory& f, Identifier& id, FloatingTile* tile)
 {
-	MarkdownDataBase::Item i;
+	auto i = MarkdownDataBase::Item::createNew();
 
-	i.url = parent.url.getChildUrl(id.toString());
-	i.url.setType(MarkdownLink::MarkdownFile);
+	i->url = parent->url.getChildUrl(id.toString());
+	i->url.setType(MarkdownLink::MarkdownFile);
 
 	ScopedPointer<FloatingTileContent> ft;
 	
@@ -250,9 +246,9 @@ hise::MarkdownDataBase::Item UIComponentDatabase::ItemGenerator::createItemForFl
 		//ft = f.createFromId(id, tile);
 	}
 
-	i.keywords.add(id.toString());
-	i.tocString = id.toString();
-	i.icon = "/images/icon_" + MarkdownLink::Helpers::getSanitizedFilename(id.toString());
+	i->keywords.add(id.toString());
+	i->tocString = id.toString();
+	i->icon = "/images/icon_" + MarkdownLink::Helpers::getSanitizedFilename(id.toString());
 
 	{
 		//MessageManagerLock mm;

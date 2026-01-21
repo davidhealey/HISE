@@ -126,19 +126,19 @@ namespace MenuReferenceDocGenerator
 			colour = Colour(0xFF73CF8F);
 		};
 
-		void createMenuReference(MarkdownDataBase::Item& parent);
+		void createMenuReference(MarkdownDataBase::Item::Ptr parent);
 
-		void createMenu(MarkdownDataBase::Item& parent, const String& menuName);
+		void createMenu(MarkdownDataBase::Item::Ptr parent, const String& menuName);
 
 		
 
-		void createSettingsItem(MarkdownDataBase::Item& parent);
+		void createSettingsItem(MarkdownDataBase::Item::Ptr parent);
 
-		void createSettingSubMenu(MarkdownDataBase::Item& parent, const String& name);
+		void createSettingSubMenu(MarkdownDataBase::Item::Ptr parent, const String& name);
 
-		void addItemForSettingList(const Array<Identifier>& idList, const String& subName, MarkdownDataBase::Item& parent);
+		void addItemForSettingList(const Array<Identifier>& idList, const String& subName, MarkdownDataBase::Item::Ptr parent);
 
-		MarkdownDataBase::Item createRootItem(MarkdownDataBase& parent) override;
+		MarkdownDataBase::Item::Ptr createRootItem(MarkdownDataBase& parent) override;
 	};
 	
 	class Resolver : public MarkdownParser::LinkResolver,
