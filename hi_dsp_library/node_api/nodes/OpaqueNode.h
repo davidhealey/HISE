@@ -238,8 +238,6 @@ struct OpaqueNode
 
 	void initExternalData(ExternalDataHolder* externalDataHolder);
 
-	void setExternalPtr(void* externPtr);
-
 	void callDestructor();
 
 	bool handleModulation(double& d);
