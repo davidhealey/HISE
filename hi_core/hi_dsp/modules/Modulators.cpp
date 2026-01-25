@@ -55,7 +55,7 @@ namespace hise { using namespace juce;
 
 	String Modulation::getValueAsSemitone(float input)
 	{
-		return String(input*12.0f, 2) + " st";
+		return String(input*24.0f - 12.0f, 2) + " st";
 	}
 
 	void Modulation::applyModulationValue(Mode m, float& target, const float modValue)
@@ -100,6 +100,8 @@ namespace hise { using namespace juce;
 			return Modulation::Mode::OffsetMode;
 		case ParameterMode::Pan:
 			return Modulation::Mode::PanMode;
+		case ParameterMode::Pitch:
+			return Modulation::Mode::PitchMode;
 		case ParameterMode::numModulationModes:
 		case ParameterMode::Disabled:
 		default: // should never happen...
@@ -128,6 +130,13 @@ namespace hise { using namespace juce;
 	{
 		return std::exp2(octaveValue / 12.0f);
 	}
+
+	float Modulation::PitchConverters::pitchFactorToOutputValue(float pitchFactor)
+	{
+		return jlimit<float>(0.0f, 1.0f, 0.5f + 0.5f * std::log2(pitchFactor));
+	}
+
+	
 
 	void Modulation::PitchConverters::octaveRangeToSignedNormalisedRange(float* octaveValues, int numValues)
 	{
@@ -344,8 +353,9 @@ float Modulator::getValueForTextConverter(float valueToConvert) const
 		outputValue = asMod->calcIntensityValue(outputValue);
 		break;
 	case Modulation::Mode::PitchMode:
+		return Modulation::PitchConverters::pitchFactorToOutputValue(valueToConvert);
 		// The intensity is already in the output value
-		outputValue = hmath::log(outputValue) / hmath::log(2.0f);
+		//outputValue = hmath::log(outputValue) / hmath::log(2.0f);
 		break;
 	default:
 		outputValue = asMod->calcIntensityValue(outputValue);
@@ -1310,10 +1320,11 @@ void TimeVariantModulator::render(float* monoModulationValues, float* scratchBuf
 	applyTimeModulation(monoModulationValues, startSample, numSamples);
 	lastConstantValue = monoModulationValues[startSample];
 
-#if ENABLE_ALL_PEAK_METERS
-	const float displayValue = internalBuffer.getSample(0, startSample);
-	pushPlotterValues(internalBuffer.getReadPointer(0), startSample, numSamples);
+	
 
+#if ENABLE_ALL_PEAK_METERS
+	float displayValue = internalBuffer.getSample(0, startSample);
+	pushPlotterValues(internalBuffer.getReadPointer(0), startSample, numSamples);
 	setOutputValue(displayValue);
 #endif
 }

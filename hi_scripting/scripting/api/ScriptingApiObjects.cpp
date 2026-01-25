@@ -3165,7 +3165,12 @@ float ScriptingObjects::ScriptingModulator::getCurrentLevel()
 {
 	if (checkValidObject())
 	{
-		return m->getProcessor()->getDisplayValues().outL;
+		auto outValue = m->getProcessor()->getDisplayValues().outL;
+
+		if(m->getMode() == Modulation::Mode::PitchMode)
+			outValue = Modulation::PitchConverters::pitchFactorToOutputValue(outValue);
+
+		return outValue;
 	}
 	
 	return 0.f;

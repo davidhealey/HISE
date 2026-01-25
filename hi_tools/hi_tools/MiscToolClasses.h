@@ -2963,7 +2963,7 @@ struct ValueToTextConverter
 			if(v > 0.0)
 				s << '+';
 
-			if(std::fmod(std::abs(v), 1.0) < 0.001)
+			if(std::fmod(std::abs(v+0.005), 1.0) < 0.01)
 				s << String(roundToInt(v));
 			else
 				s << String(v, 2);

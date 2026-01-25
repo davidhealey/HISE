@@ -162,7 +162,7 @@ void MatrixBase::IntensitySlider::setActive(bool shouldBeActive, const ValueTree
 		if(!shouldBeActive)
 			intensityValue = 0.0;
 
-		setRange(minValue, 1.0);
+		setRange(minValue, 1.0, getInterval());
 		setValue(intensityValue, dontSendNotification);
 	}
 	
@@ -775,6 +775,20 @@ void MatrixBase::RowBase::setIntensityConverter(MatrixModulator* mm)
 		customConverters.add(new MatrixIds::Helpers::IntensityTextConverter(cd));
 		customConverters.getLast()->showInactive = true;
 		auto vtc = ValueToTextConverter::createForCustomClass(customConverters.getLast());
+
+
+		auto interval = cd.inputRange.interval;
+
+		auto smin = si->getMinimum();
+		auto smax = si->getMaximum();
+
+		if(interval != 0.0)
+		{
+			interval /= cd.inputRange.getRange().getLength();
+		}
+
+		si->setRange(smin, smax, interval);
+
 		si->valueFromTextFunction = vtc;
 		si->textFromValueFunction = vtc;
 		si->updateText();

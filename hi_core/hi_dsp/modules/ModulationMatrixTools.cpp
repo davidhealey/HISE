@@ -245,6 +245,8 @@ StringArray Helpers::getRangePresetNames()
 		"Pitch1Octave",
 		"Pitch2Octaves",
 		"Pitch1Semitone",
+		"PitchOctaveStep",
+		"PitchSemitoneStep",
 		"FilterFreq",
 		"FilterFreqLog",
 		"Stereo",
@@ -279,21 +281,37 @@ Helpers::Properties::RangeData Helpers::getRangePreset(RangePresets p)
 	case RangePresets::Pitch1Octave:
 		rd.inputRange = { -12.0, 12.0};
 		rd.inputRange.rng.interval = 1.0;
-		rd.outputRange = { -1.0, 1.0};
+		rd.outputRange = { 0.5 - 1.0 * 0.5, 0.5 + 1.0 * 0.5};
 		rd.converter = "Semitones";
 		rd.useMidPositionAsZero = true;
 		break;
 	case RangePresets::Pitch2Octaves:
 		rd.inputRange = { -24.0, 24.0};
 		rd.inputRange.rng.interval = 1.0;
-		rd.outputRange = { -2.0, 2.0};
+		rd.outputRange = { 0.5 - 2.0 * 0.5, 0.5 + 2.0 * 0.5 };
 		rd.converter = "Semitones";
 		rd.useMidPositionAsZero = true;
 		break;
 	case RangePresets::Pitch1Semitone:
 		rd.inputRange = { -1.0, 1.0};
 		rd.inputRange.rng.interval = 0.01;
-		rd.outputRange = { -1.0 / 12.0, 1.0 / 12.0};
+		rd.outputRange = { 0.5 - 0.5 / 12.0, 0.5 + 0.5 / 12.0};
+		rd.converter = "Semitones";
+		rd.useMidPositionAsZero = true;
+		break;
+	case RangePresets::PitchOctaveStep:
+		rd.inputRange = { -4.0, 4.0 };
+		rd.inputRange.rng.interval = 1.0;
+		rd.outputRange = { 0.5 - 4.0 * 0.5, 0.5 + 4.0 * 0.5 };
+		rd.outputRange.rng.interval = 0.5;
+		rd.converter = "";
+		rd.useMidPositionAsZero = true;
+		break;
+	case RangePresets::PitchSemitoneStep:
+		rd.inputRange = { -12.0, 12.0 };
+		rd.inputRange.rng.interval = 1.0;
+		rd.outputRange = { 0.5 - 1.0 * 0.5 , 0.5 + 1.0 * 0.5 };
+		rd.outputRange.rng.interval = 1.0 / 24.0;
 		rd.converter = "Semitones";
 		rd.useMidPositionAsZero = true;
 		break;
@@ -370,6 +388,13 @@ ValueTree Helpers::addConnection(ValueTree& v, MainController* mc, const String&
 				break;
 			default: ;
 			}
+		}
+		else
+		{
+			// use a sensible default for UI matrix targets here...
+
+			iv.intensity = 0.5f;
+			iv.defaultMode = modulation::TargetMode::Unipolar;
 		}
 	}
 
@@ -662,16 +687,10 @@ double Helpers::IntensityTextConverter::getValue(const String& text) const
 		FloatSanitizers::sanitizeDoubleNumber(v);
 
 		auto inputRange = data.inputRange;
-		// remove the interval to be able to set different values.
-		inputRange.interval = 0;
-		v = inputRange.convertTo0to1(v);
+		auto delta = inputRange.getRange().getLength();
 
-		if(data.tm != scriptnode::modulation::TargetMode::Gain)
-		{
-			v -= 0.5;
-			v *= 2.0;
-		}
-		
+		v = v / delta;
+
 		return v;
 	}
 
@@ -693,8 +712,8 @@ String Helpers::IntensityTextConverter::getText(double v) const
 
 		if(ir.skew == 1.0)
 		{
-			v = v * 0.5 + 0.5;
-			v = ir.convertFrom0to1(v);
+			auto delta = ir.getRange().getLength();
+			v *= delta;
 
 			if(data.tm == modulation::TargetMode::Unipolar)
 				return prettifier(v);

@@ -91,10 +91,7 @@ public:
 
 	void onModulationDrop(int parameterIndex, int modulationSourceIndex) override;
 
-	float getInactiveModValue() const override 
-	{ 
-		return rangeData.outputRange.convertFrom0to1(baseValue.targetValue, false);
-	}
+	float getInactiveModValue() const override;
 
 	String getModulationTargetId(int parameterIndex) const override;
 
@@ -109,7 +106,7 @@ public:
 
 		if(getMode() == Modulation::PitchMode)
 		{
-			setIsBipolar(false);
+			setIsBipolar(true);
 			setIntensity(1.0);
 		}
 

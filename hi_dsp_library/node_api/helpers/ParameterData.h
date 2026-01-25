@@ -268,6 +268,7 @@ struct pod
 		Pan,
 		NormalizedPercentage,
 		Decibel,
+		Semitones,
 		numTextValueConverters
 	};
 

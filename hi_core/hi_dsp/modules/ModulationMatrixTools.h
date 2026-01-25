@@ -84,6 +84,8 @@ struct Helpers
 		Pitch1Octave,
 		Pitch2Octaves,
 		Pitch1Semitone,
+		PitchOctaveStep,
+		PitchSemitoneStep,
 		FilterFreq,
 		FilterFreqLog,
 		Stereo,

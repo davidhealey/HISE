@@ -41,9 +41,18 @@ Plotter::Plotter(PooledUIUpdater* updater):
 	setSpecialLookAndFeel(new GlobalHiseLookAndFeel(), true);
 
 	rb = new SimpleRingBuffer();
+	rb2 = rb;
+
+	rb->setCurrentWriter(this);
 
 	rb->getUpdater().addEventListener(rb.get());
 	rb->getUpdater().addEventListener(this);
+
+	{
+		SimpleRingBuffer::ScopedPropertyCreator spc(rb.get());
+		rb->registerPropertyObject<ModPlotter::ModPlotterPropertyObject>();
+	}
+	
 
 	rb->getUpdater().setUpdater(updater);
 
@@ -72,6 +81,9 @@ Plotter::~Plotter()
 	}
 	
 	SimpleReadWriteLock::ScopedWriteLock sl(deleteLock);
+	
+	rb->setCurrentWriter(nullptr);
+	rb2 = nullptr;
 	rb = nullptr;
 };
 
@@ -131,7 +143,7 @@ void Plotter::paint (Graphics& g)
 
 		float bottomValue = 0.0f;
 
-		if (currentMode == Plotter::PitchMode || currentMode == Plotter::PanMode)
+		if (currentMode == Plotter::PanMode)
 			bottomValue = -1.0f;
 
 		auto bottomText = yConverter(bottomValue);
@@ -209,7 +221,9 @@ void Plotter::rebuildPath()
 	if(!active)
 		return;
 
-	drawPath = rb->getPropertyObject()->createPath({0, rb->getReadBuffer().getNumSamples()}, {0.0, 1.0}, getLocalBounds().toFloat(), 0.0f);
+	auto& b = rb->getReadBuffer();
+
+	drawPath = rb->getPropertyObject()->createPath({0, b.getNumSamples()}, {0.0, 1.0}, getLocalBounds().toFloat(), 0.0f);
 	repaint();
 }
 
@@ -270,6 +284,18 @@ void Plotter::mouseExit(const MouseEvent& /*m*/)
 void Plotter::setMode(Mode m)
 {
 	currentMode = m;
+
+	if(auto p = dynamic_cast<ModPlotter::ModPlotterPropertyObject*>(rb->getPropertyObject().get()))
+	{
+		if(m == PitchMode)
+		{
+			p->transformFunction = ModBufferExpansion::pitchFactorToNormalisedRange;
+		}
+		else
+		{
+			p->transformFunction = {};
+		}
+	}
 }
 
 void Plotter::setFont(const Font& f)

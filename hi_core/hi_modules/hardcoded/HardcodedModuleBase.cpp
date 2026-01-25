@@ -856,6 +856,10 @@ void HardcodedSwappableEffect::setHardcodedAttribute(int parameterIndex, float n
 		if(auto mc = getModulationChainForParameter(parameterIndex))
 		{
 			auto normValue = p->toRange().convertTo0to1(newValue, false);
+
+			if(mc->getChain()->getMode() == Modulation::Mode::PitchMode)
+				normValue = Modulation::PitchConverters::normalisedRangeToPitchFactor(normValue * 2.0f - 1.0f);
+
 			mc->getChain()->setInitialValue(normValue);
 		}
 		else
