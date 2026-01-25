@@ -294,9 +294,6 @@ void MatrixModulator::setValueInternal(float valueWithinInputRange)
 }
 
 
-
-
-
 MatrixModulator::MatrixModulator(MainController* mc, const String& id, int voiceAmount, Modulation::Mode m):
   EnvelopeModulator(mc, id, voiceAmount, m),
   Modulation(m),
