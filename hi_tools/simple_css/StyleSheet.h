@@ -73,7 +73,7 @@ struct StyleSheet: public ReferenceCountedObject
 
 		void addComponentToSetup(Component* c);
 
-		void setPropertyVariable(const Identifier& id, const var& newValue);
+		void setPropertyVariable(Component* c, const Identifier& id, const var& newValue);
 
 		MarkdownLayout::StyleData getMarkdownStyleData(Component* c);
 
@@ -93,7 +93,7 @@ struct StyleSheet: public ReferenceCountedObject
 
 		void copyStyleSheetsFrom(Component* c, const Collection& other);
 
-		void addCollectionForComponent(Component* c, const Collection& other);
+		void addCollectionForComponent(Component* c, const Collection& other, const String& filename);
 
 		void updateStyleSheetInCache(Component* component, const Ptr& ss);
 
@@ -119,8 +119,17 @@ struct StyleSheet: public ReferenceCountedObject
 
 		bool useIsolatedCollections = false;
 		
-		Array<std::pair<Component::SafePointer<Component>, String>> isolatedStyleSheetFileNames;
-		Array<std::pair<Component::SafePointer<Component>, List>> childCollections;
+		NamedValueSet rootProperties;
+
+		struct ChildCollection
+		{
+			Component::SafePointer<Component> first;
+			List second;
+			String filename;
+			NamedValueSet childProperties;
+		};
+
+		Array<ChildCollection> childCollections;
 
 #if HISE_INCLUDE_CSS_DEBUG_TOOLS
 		bool createStackTrace = true;
@@ -128,7 +137,7 @@ struct StyleSheet: public ReferenceCountedObject
 
 		Ptr operator[](const Selector& s) const;
 
-		void forEach(const std::function<void(Ptr)>& f);
+		void forEach(Component* c, const std::function<void(Ptr)>& f);
 
         struct CachedStyleSheet
         {

@@ -44,6 +44,8 @@ CustomSettingsWindowPanel::CustomSettingsWindowPanel(FloatingTile* parent) :
 
 	window = new CustomSettingsWindow(getMainController(), parent->shouldCreateChildComponents());
 
+	simple_css::FlexboxComponent::Helpers::writeSelectorsToProperties(*window, { ".settings-window" });
+
 	viewport->setViewedComponent(window);
 	viewport->setScrollBarsShown(true, false, true, false);
 

@@ -388,7 +388,7 @@ StyleSheet::Collection::Collection(List l):
 
 StyleSheet::Collection::operator bool() const
 {
-	return useIsolatedCollections ? !isolatedStyleSheetFileNames.isEmpty() : !list.isEmpty();
+	return useIsolatedCollections ? !childCollections.isEmpty() : !list.isEmpty();
 }
 
 void StyleSheet::Collection::setAnimator(Animator* a)
@@ -396,7 +396,7 @@ void StyleSheet::Collection::setAnimator(Animator* a)
 	jassert(a != nullptr);
 	animator = a;
 
-	forEach([a](Ptr p)
+	forEach(nullptr, [a](Ptr p)
 	{
 		p->animator = a;
 	});
@@ -563,12 +563,15 @@ StyleSheet::Ptr StyleSheet::Collection::getForComponent(Component* c)
 		}
 	};
 
+	NamedValueSet propertiesToUse;
+
 	if(useIsolatedCollections)
 	{
 		for(auto& cc: childCollections)
 		{
 			if(sameOrParent(cc.first.getComponent(), c))
 			{
+				propertiesToUse = cc.childProperties;
 				addFromList(cc.second);
 				break;
 			}
@@ -576,6 +579,8 @@ StyleSheet::Ptr StyleSheet::Collection::getForComponent(Component* c)
 	}
 	else
 	{
+		propertiesToUse = rootProperties;
+
 		addFromList(list);
 
 		for(auto& cc: childCollections)
@@ -647,6 +652,9 @@ StyleSheet::Ptr StyleSheet::Collection::getForComponent(Component* c)
 	else
 		ptr = new StyleSheet(elementSelector);
     
+	for(const auto& nv: propertiesToUse)
+		ptr->setPropertyVariable(nv.name, nv.value.toString());
+
 	ptr->copyPropertiesFromParent(all);
 	ptr->copyPropertiesFromParent(parentStyle);
 
@@ -879,9 +887,35 @@ StyleSheet::Ptr StyleSheet::Collection::getWithAllStates(Component* c, const Sel
 }
 
 
-void StyleSheet::Collection::setPropertyVariable(const Identifier& id, const var& newValue)
+void StyleSheet::Collection::setPropertyVariable(Component* c, const Identifier& id, const var& newValue)
 {
-	forEach([id, newValue](Ptr p)
+	jassert(id.toString() != "class");
+
+	if(useIsolatedCollections)
+	{
+		jassert(c != nullptr);
+
+		if(c != nullptr)
+		{
+			c = simple_css::FlexboxComponent::Helpers::getComponentForStyleSheet(c);
+		}
+
+		for(auto& cc: childCollections)
+		{
+			if(cc.first == c)
+			{
+				cc.childProperties.set(id, newValue);
+			}
+		}
+
+	}
+	else
+	{
+		jassert(c == nullptr);
+		rootProperties.set(id, newValue);		
+	}
+
+	forEach(c, [id, newValue](Ptr p)
 	{
 		p->setPropertyVariable(id, newValue);
 	});
@@ -982,32 +1016,7 @@ bool StyleSheet::Collection::clearCache(Component* c)
 void StyleSheet::Collection::addIsolatedCollection(Component* c, const String& fileName, const Collection& other)
 {
 	setUseIsolatedCollections(true);
-	addCollectionForComponent(c, other);
-
-	if(fileName.isNotEmpty())
-	{
-		for(auto& f: isolatedStyleSheetFileNames)
-		{
-			if(f.first == c)
-			{
-				f.second = fileName;
-				return;
-			}
-		}
-
-		isolatedStyleSheetFileNames.add({ c, fileName});
-	}
-	else
-	{
-		for(const auto& f: isolatedStyleSheetFileNames)
-		{
-			if(f.first == c)
-			{
-				isolatedStyleSheetFileNames.remove(&f);
-				return;
-			}
-		}
-	}
+	addCollectionForComponent(c, other, fileName);
 }
 
 void StyleSheet::Collection::updateIsolatedCollection(const String& fileName, const Collection& other)
@@ -1015,32 +1024,20 @@ void StyleSheet::Collection::updateIsolatedCollection(const String& fileName, co
 	// refresh the popup menu...
 	cachedMapForAllStates.clear();
 
-	for(int i = 0; i < isolatedStyleSheetFileNames.size(); i++)
+	
+	for (auto& c : childCollections)
 	{
-		if(isolatedStyleSheetFileNames[i].first.getComponent() == nullptr)
-			isolatedStyleSheetFileNames.remove(i--);
-	}
-
-	for(const auto& f: isolatedStyleSheetFileNames)
-	{
-		if(f.second == fileName)
+		if (c.filename == fileName)
 		{
-			for(auto& c: childCollections)
-			{
-				if(c.first == f.first)
-				{
-					auto prev = getForComponent(c.first);
+			auto prev = getForComponent(c.first);
+			c.second = other.list;
 
-					c.second = other.list;
+			clearCache(c.first);
 
-					clearCache(c.first);
+			auto ss = getForComponent(c.first);
 
-					auto ss = getForComponent(c.first);
-
-					if(prev != nullptr && ss != nullptr)
-						ss->copyVarProperties(prev);
-				}
-			}
+			if (prev != nullptr && ss != nullptr)
+				ss->copyVarProperties(prev);
 		}
 	}
 }
@@ -1102,7 +1099,7 @@ void StyleSheet::Collection::copyStyleSheetsFrom(Component* c, const Collection&
 	clearCache(nullptr);
 }
 
-void StyleSheet::Collection::addCollectionForComponent(Component* c, const Collection& other)
+void StyleSheet::Collection::addCollectionForComponent(Component* c, const Collection& other, const String& fileName)
 {
 	for(int i = 0; i < childCollections.size(); i++)
 	{
@@ -1119,7 +1116,12 @@ void StyleSheet::Collection::addCollectionForComponent(Component* c, const Colle
 		}
 	}
 
-	childCollections.add({ c, other.list });
+	ChildCollection nc;
+	nc.first = c;
+	nc.filename = fileName;
+	nc.second = other.list;
+
+	childCollections.add(nc);
 }
 
 void StyleSheet::Collection::updateStyleSheetInCache(Component* component, const Ptr& ss)
@@ -1262,20 +1264,34 @@ bool StyleSheet::Collection::sameOrParent(Component* possibleParent, Component* 
 	return false;
 }
 
-void StyleSheet::Collection::forEach(const std::function<void(Ptr)>& f)
+void StyleSheet::Collection::forEach(Component* c, const std::function<void(Ptr)>& f)
 {
-	for(auto l: list)
-		f(l);
+	if(c == nullptr)
+	{
+		for (auto l : list)
+			f(l);
+	}
+
+	for(auto& cc: childCollections)
+	{
+		if(cc.first.getComponent() == c || c == nullptr)
+		{
+			for(auto l: cc.second)
+				f(l);
+		}
+	}
+	
 
 	for(const auto& e: cachedMaps)
 	{
-		if(e.first != nullptr)
+		if(e.first != nullptr && (c == nullptr || sameOrParent(c, e.first)))
 			f(e.second);
 	}
 
 	for(const auto& e: cachedMapForAllStates)
 	{
-		f(e.second);
+		if(c == nullptr || sameOrParent(c, e.first.first))
+			f(e.second);
 	}
 }
 

@@ -160,11 +160,13 @@ struct FlexboxComponent: public Component,
 			return item.withMargin(margin);
 		}
 
-		static void writeSelectorsToProperties(Component& c, const StringArray& selectors);
+		static void writeSelectorsToProperties(Component& c, const StringArray& selectors, bool appendClasses=false);
 		static Selector getTypeSelectorFromComponentClass(Component* c);
 		static Array<Selector> getClassSelectorFromComponentClass(Component* c);
 
 		static void writeClassSelectors(Component& c, const Array<Selector>& classList, bool append);
+
+		static void setDynamicClasses(Component& c, const StringArray& dynamicClassIds);
 
 		static void invalidateCache(Component& c);
 
