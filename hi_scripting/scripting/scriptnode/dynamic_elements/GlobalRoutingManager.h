@@ -404,7 +404,7 @@ struct GlobalRoutingManager: public ReferenceCountedObject
 
 			uuids[obj] = id;
 
-			numBytes = id.getNumBytesAsUTF8();
+			numBytes = (int)id.getNumBytesAsUTF8();
 			memcpy(initialId, id.begin().getAddress(), numBytes);
 		}
 

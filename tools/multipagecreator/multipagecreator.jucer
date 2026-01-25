@@ -63,11 +63,11 @@
         <MODULEPATH id="melatonin_blur" path="../../"/>
       </MODULEPATHS>
     </XCODE_MAC>
-    <VS2022 targetFolder="Builds/VisualStudio2022" extraCompilerFlags="/bigobj /wd&quot;4100&quot; /wd&quot;4661&quot; /wd&quot;4456&quot; /wd&quot;4244&quot; /wd&quot;4457&quot; /wd&quot;4458&quot; /wd&quot;4127&quot; /Zc:__cplusplus /permissive-"
+    <VS2026 targetFolder="Builds/VisualStudio2026" extraCompilerFlags="/bigobj /wd&quot;4100&quot; /wd&quot;4661&quot; /wd&quot;4456&quot; /wd&quot;4244&quot; /wd&quot;4457&quot; /wd&quot;4458&quot; /wd&quot;4127&quot; /Zc:__cplusplus /permissive-"
             extraDefs="HI_RUN_UNIT_TESTS=0&#10;USE_BACKEND=1&#10;HISE_MULTIPAGE_INCLUDE_EDIT=1"
             IPP1ALibrary="Static_Library">
       <CONFIGURATIONS>
-        <CONFIGURATION isDebug="1" name="Debug" defines="PERFETTO=1&#10;NOMINMAX=1 &#10;WIN32_LEAN_AND_MEAN=1"
+        <CONFIGURATION isDebug="1" name="Debug" defines="PERFETTO=0&#10;NOMINMAX=1 &#10;WIN32_LEAN_AND_MEAN=1"
                        targetName="multipagecreator"/>
         <CONFIGURATION isDebug="0" name="Release" targetName="multipagecreator" linkTimeOptimisation="0"
                        optimisation="2"/>
@@ -95,7 +95,7 @@
         <MODULEPATH id="juce_product_unlocking" path="../../JUCE/modules"/>
         <MODULEPATH id="melatonin_blur" path="../../"/>
       </MODULEPATHS>
-    </VS2022>
+    </VS2026>
   </EXPORTFORMATS>
   <MODULES>
     <MODULE id="hi_dsp_library" showAllCode="1" useLocalCopy="0" useGlobalPath="0"/>

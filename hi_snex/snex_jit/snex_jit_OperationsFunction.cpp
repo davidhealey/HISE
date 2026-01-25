@@ -763,7 +763,7 @@ void Operations::FunctionCall::process(BaseCompiler* compiler, BaseScope* scope)
 
 		if (getObjectExpression()->getTypeInfo().isComplexType())
 		{
-			if (fc = getObjectExpression()->getTypeInfo().getComplexType()->getFunctionClass())
+			if ((fc = getObjectExpression()->getTypeInfo().getComplexType()->getFunctionClass()))
 			{
 				ownedFc = fc.get();
 
@@ -785,7 +785,7 @@ void Operations::FunctionCall::process(BaseCompiler* compiler, BaseScope* scope)
 		{
 			auto symbol = ss->getSymbol();
 
-			if (fc = scope->getRootData()->getSubFunctionClass(symbol.id))
+			if ((fc = scope->getRootData()->getSubFunctionClass(symbol.id)))
 			{
 				// Function with registered parent object (either API class or JIT callable object)
 

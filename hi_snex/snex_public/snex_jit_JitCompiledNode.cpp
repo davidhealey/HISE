@@ -102,7 +102,7 @@ JitCompiledNode::JitCompiledNode(Compiler& c, const String& code, const String& 
 
 		NamespacedIdentifier impl("impl");
 
-		if (instanceType = c.getComplexType(implId))
+		if ((instanceType = c.getComplexType(implId)))
 		{
 			if (auto st = dynamic_cast<StructType*>(instanceType.get()))
 			{

@@ -1121,8 +1121,7 @@ void MainController::connectToGlobalRuntimeTargets(scriptnode::OpaqueNode& on, b
 			on.connectToRuntimeTarget(shouldAdd, con);
 
 			auto h = id.hashCode();
-			auto h2 = id.hash();
-
+			
 			if(shouldAdd && pendingInitialisedHashes.contains(h))
 			{
 				pendingInitialisedHashes.removeAllInstancesOf(h);

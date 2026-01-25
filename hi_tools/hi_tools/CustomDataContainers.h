@@ -935,6 +935,9 @@ private:
 	static constexpr size_t guardOffset() { return 0; }
 	static constexpr size_t extraBytes() { return Alignment; }
 	void checkGuards() const {}
+
+	void writeGuards(uint8*, size_t) {}
+
 #endif
 
 	void fixPtr()

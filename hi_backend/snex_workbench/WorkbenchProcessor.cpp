@@ -186,14 +186,14 @@ void DspNetworkCompileExporter::writeDebugFileAndShowSolution()
 	auto currentExecutable = File::getSpecialLocation(File::currentExecutableFile);
 
 #if JUCE_WINDOWS
-    auto isUsingVs2017 = HelperClasses::isUsingVisualStudio2017(settings);
-    auto vsString = isUsingVs2017 ? "VisualStudio2017" : "VisualStudio2022";
-    auto vsVersion = isUsingVs2017 ? "15.0" : "17.0";
+    auto isUsingVs2026 = HelperClasses::isUsingVisualStudio2026(settings);
+    auto vsString = isUsingVs2026 ? "VisualStudio2026" : "VisualStudio2022";
+    auto vsVersion = isUsingVs2026 ? "18.0" : "17.0";
 	auto folder = currentExecutable.getFullPathName().contains(" with Faust") ? "Debug with Faust" : "Minimal Build";
 
 	debugExecutable = debugExecutable.getChildFile(vsString).getChildFile("x64").getChildFile(folder).getChildFile("App").getChildFile("HISE Debug.exe");
 
-	// If this hits, then you have a mismatch between VS2022 and VS2017...
+	// If this hits, then you have a mismatch between VS2022 and VS2026...
 	jassertEqual(debugExecutable, currentExecutable);
 	
     solutionFolder = solutionFolder.getChildFile(vsString);

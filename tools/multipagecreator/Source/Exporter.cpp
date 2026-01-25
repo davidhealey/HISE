@@ -151,7 +151,7 @@ Dialog* projucer_exporter::createDialog(State& state)
 	});
 
 	auto& openProjucer_8 = List_5.addChild<factory::Launch>({
-	  { mpid::Text, "$hisePath/tools/Projucer.exe" }, 
+	  { mpid::Text, "$hisePath/JUCE/projucer/Projucer.exe" }, 
 	  { mpid::ID, "openProjucer" }, 
 	  { mpid::EventTrigger, "OnSubmit" }, 
 	  { mpid::Args, "\"$projectDirectory/$projectName.jucer\"" }

@@ -12,7 +12,7 @@ static const unsigned char projectDllTemplate_jucer_lines[] =
 "    </GROUP>\r\n"
 "  </MAINGROUP>\r\n"
 "  <EXPORTFORMATS>\r\n"
-"    <%VS_VERSION% targetFolder=\"Builds/%TARGET_FOLDER%\" IPP1ALibrary=\"%IPP_1A%\" extraCompilerFlags=\"/bigobj /cgthreads8 %MSVC_WARNINGS%&#10;/arch:AVX&#10;\" extraDefs=\"NOMINMAX=1&#10;%EXTRA_DEFINES_WIN%&#10;WIN32_LEAN_AND_MEAN=1\" extraLinkerFlags=\"%WIN_STATIC_LIBS%\" >"
+"    <%VS_VERSION% targetFolder=\"Builds/%TARGET_FOLDER%\" IPP1ALibrary=\"%IPP_1A%\" extraCompilerFlags=\"/bigobj /cgthreads8 %MSVC_WARNINGS%&#10;\" extraDefs=\"NOMINMAX=1&#10;%EXTRA_DEFINES_WIN%&#10;WIN32_LEAN_AND_MEAN=1\" extraLinkerFlags=\"%WIN_STATIC_LIBS%\" >"
 "      <CONFIGURATIONS>\r\n"
 "        <CONFIGURATION isDebug=\"1\" name=\"Debug\" binaryPath=\"dll\" targetName=\"%DEBUG_DLL_NAME%\" headerPath =\"%FAUST_HEADER_PATH%\" libraryPath=\"%WIN_STATIC_LIB_FOLDER_D64%\" useRuntimeLibDLL=\"0\"/>\r\n"
 "		 <CONFIGURATION isDebug = \"0\" name = \"CI\" targetName=\"%CI_DLL_NAME%\" headerPath =\"%FAUST_HEADER_PATH%\" binaryPath = \"dll\"\r\n"

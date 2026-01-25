@@ -603,10 +603,10 @@ public:
 			xml->addChildElement(c1);
 
 			auto c2 = new XmlElement("VisualStudioVersion");
-			c2->setAttribute("value", "Visual Studio 2017");
+			c2->setAttribute("value", "Visual Studio 2026");
 			c2->setAttribute("type", "LIST");
 			c2->setAttribute("description", "Installed VisualStudio version");
-			c2->setAttribute("options", "Visual Studio 2013&#10;Visual Studio 2015");
+			c2->setAttribute("options", "Visual Studio 2026&#10;Visual Studio 2022");
 			xml->addChildElement(c2);
 
 			auto c3 = new XmlElement("UseIPP");

@@ -56,7 +56,7 @@ static const unsigned char projectStandaloneTemplate_jucer_lines[] = R"(
     </GROUP>
   </MAINGROUP>
   <EXPORTFORMATS>
-    <%VS_VERSION% targetFolder="Builds/%TARGET_FOLDER%/" IPP1ALibrary="%IPP_1A%"  %ICON_FILE% extraDefs="%EXTRA_DEFINES_WIN%&#10;%PERFETTO_INCLUDE_WIN%"  extraLinkerFlags="%FFT_LINKER_FLAGS%&#10;%UAC_LEVEL%" extraCompilerFlags="/bigobj /cgthreads8 %MSVC_WARNINGS% %PERFETTO_COMPILER_FLAGS_WIN%&#10;/arch:AVX&#10;">
+    <%VS_VERSION% targetFolder="Builds/%TARGET_FOLDER%/" IPP1ALibrary="%IPP_1A%"  %ICON_FILE% extraDefs="%EXTRA_DEFINES_WIN%&#10;%PERFETTO_INCLUDE_WIN%"  extraLinkerFlags="%FFT_LINKER_FLAGS%&#10;%UAC_LEVEL%" extraCompilerFlags="/bigobj /cgthreads8 %MSVC_WARNINGS% %PERFETTO_COMPILER_FLAGS_WIN%&#10;">
       <CONFIGURATIONS>
         <CONFIGURATION name="Debug" winWarningLevel="1" generateManifest="1" winArchitecture="x64"
                        libraryPath="%WIN_STATIC_LIB_FOLDER_D64%" isDebug="1" optimisation="1" targetName="%NAME% Debug"
