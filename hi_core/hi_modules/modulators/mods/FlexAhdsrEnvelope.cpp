@@ -169,8 +169,6 @@ float FlexAhdsrEnvelope::startVoice(int voiceIndex)
 	{
 		using STATE = flex_ahdsr_base::State;
 
-		auto& voiceState = obj.state.get();
-
 		constexpr auto TIME = hise::flex_ahdsr_base::ParameterType::Time;
 		constexpr auto LEVEL = hise::flex_ahdsr_base::ParameterType::Level;
 

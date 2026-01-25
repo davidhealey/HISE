@@ -99,10 +99,10 @@
         <MODULEPATH id="juce_audio_processors_headless" path="../../JUCE/modules"/>
       </MODULEPATHS>
     </XCODE_MAC>
-    <VS2022 targetFolder="Builds/VisualStudio2022" vstFolder="c:\SDKs\vstsdk2.4"
+    <VS2026 targetFolder="Builds/VisualStudio2026" vstFolder="c:\SDKs\vstsdk2.4"
             smallIcon="" useIPP="Sequential" aaxFolder="D:\Development\SDKs\AAX"
-            IPPLibrary="" extraCompilerFlags="/bigobj  /cgthreads8 /wd&quot;4100&quot; /wd&quot;4661&quot; /wd&quot;4456&quot; /wd&quot;4244&quot; /wd&quot;4457&quot; /wd&quot;4458&quot; /wd&quot;4127&quot; /vmg&#10;/arch:AVX&#10; "
-            IPP1ALibrary="Static_Library" extraDefs="HISE_USE_VS2022=1&#10;PERFETTO=0&#10;HISE_INCLUDE_PROFILING_TOOLKIT=1">
+            IPPLibrary="" extraCompilerFlags="/bigobj  /cgthreads8 /wd&quot;4100&quot; /wd&quot;4661&quot; /wd&quot;4456&quot; /wd&quot;4244&quot; /wd&quot;4457&quot; /wd&quot;4458&quot; /wd&quot;4127&quot; /vmg&#10; "
+            IPP1ALibrary="Static_Library" extraDefs="HISE_USE_VS2022=0&#10;PERFETTO=0&#10;HISE_INCLUDE_PROFILING_TOOLKIT=1">
       <CONFIGURATIONS>
         <CONFIGURATION name="Debug" winWarningLevel="4" generateManifest="1" winArchitecture="x64"
                        isDebug="1" optimisation="1" targetName="HISE x64 Debug" libraryPath=""
@@ -162,7 +162,7 @@
         <MODULEPATH id="melatonin_blur" path="../../"/>
         <MODULEPATH id="juce_audio_processors_headless" path="../../JUCE/modules"/>
       </MODULEPATHS>
-    </VS2022>
+    </VS2026>
     <LINUX_MAKE targetFolder="Builds/LinuxMakefile" extraDefs="PERFETTO=0" linuxExtraPkgConfig="x11 xinerama xext">
       <CONFIGURATIONS>
         <CONFIGURATION name="Debug" isDebug="1" optimisation="1" targetName="HISE" defines=""/>

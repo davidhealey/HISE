@@ -1305,7 +1305,7 @@ template <int NV, typename ParameterClass, typename DragHandler=flex_ahdsr_base:
 
 		template <State S, ParameterType T> void setModulationValue(float newValue)
 		{
-			jassert(newValue >= 0.0f & newValue <= 1.0f);
+			jassert(newValue >= 0.0f && newValue <= 1.0f);
 			auto& s = data[(int)S];
 
 			if (T == ParameterType::Level)

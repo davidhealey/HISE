@@ -768,53 +768,22 @@ template <int BSize, int Alignment> struct ObjectStorage
 {
 	static constexpr int SmallBufferSize = BSize;
 
+#if JUCE_DEBUG
+	static constexpr uint8 GuardPattern = 0xCD;
+	static constexpr size_t GuardSize = 16;
+	static constexpr int InternalSmallBufferSize = BSize + Alignment + GuardSize * 2;
+#else
+	static constexpr int InternalSmallBufferSize = BSize + Alignment;
+#endif
+
 	ObjectStorage()
 	{
-		free();
+		reset();
 	}
 
 	~ObjectStorage()
 	{
 		free();
-		bigBuffer.free();
-	}
-
-    ObjectStorage& operator=(ObjectStorage&& other)
-    {
-        objPtr = other.objPtr;
-        other.objPtr = nullptr;
-        
-        allocatedSize = other.allocatedSize;
-        other.allocatedSize = 0;
-        
-        memcpy(smallBuffer, other.smallBuffer, BSize + Alignment);
-        bigBuffer = std::move(other.bigBuffer);
-        
-        return *this;
-    }
-    
-	ObjectStorage(const ObjectStorage& other)
-	{
-		setSize(other.allocatedSize);
-		memcpy(getObjectPtr(), other.getObjectPtr(), allocatedSize);
-	}
-
-	void free()
-	{
-		if (allocatedSize > SmallBufferSize)
-		{
-			bigBuffer.free();
-		}
-		
-		memset(smallBuffer, 0, BSize + Alignment);
-		objPtr = nullptr;
-		allocatedSize = 0;
-	}
-	
-	void setExternalPtr(void* ptr)
-	{
-		free();
-		objPtr = ptr;
 	}
 
 	void* getObjectPtr() const
@@ -822,62 +791,186 @@ template <int BSize, int Alignment> struct ObjectStorage
 		return objPtr;
 	}
 
-    void ensureAllocated(size_t numToAllocate, bool copyOldContent=false)
-    {
-        if(numToAllocate > allocatedSize)
-            setSize(numToAllocate, copyOldContent);
-    }
-    
-	void setSize(size_t newSize, bool copyOldContent=false)
+	size_t size() const
 	{
-		if (newSize != allocatedSize)
+		return allocatedSize;
+	}
+
+	void ensureAllocated(size_t numToAllocate, bool copyOldContent = false)
+	{
+		if (numToAllocate > allocatedSize)
+			setSize(numToAllocate, copyOldContent);
+	}
+
+	void setSize(size_t newSize, bool copyOldContent = false)
+	{
+		checkGuards();
+
+		if (newSize == allocatedSize)
+			return;
+
+		const size_t totalSize = newSize + extraBytes();
+
+		if (newSize > SmallBufferSize)
 		{
-            if (newSize >= (SmallBufferSize))
-			{
-                HeapBlock<uint8> newBuffer;
-                
-				newBuffer.allocate(newSize + Alignment, !copyOldContent);
-                
-                if(copyOldContent && allocatedSize > 0)
-                    memcpy(newBuffer.get() + Alignment, getObjectPtr(), allocatedSize);
-                
-                std::swap(newBuffer, bigBuffer);
-				objPtr = bigBuffer.get();
+			HeapBlock<uint8> newBuffer;
+			newBuffer.allocate(totalSize, !copyOldContent);
 
-				newBuffer.free();
-                allocatedSize = newSize;
-			}
-			else
-			{
-                if(copyOldContent && allocatedSize > SmallBufferSize)
-                {
-					jassert(isPositiveAndBelow(newSize, SmallBufferSize));
-                    memcpy(&smallBuffer + Alignment, bigBuffer.get() + Alignment, newSize);
-                }
+			uint8* base = newBuffer.get();
+			uint8* aligned = static_cast<uint8*>(alignPtr(base + guardOffset()));
 
-				if(allocatedSize > SmallBufferSize)
-					bigBuffer.free();
-				
-				objPtr = &smallBuffer;
-                allocatedSize = newSize;
-			}
+			writeGuards(aligned, newSize);
 
-			if constexpr (Alignment != 0)
-			{
-				if (auto o = reinterpret_cast<uint64_t>(objPtr) % Alignment)
-					objPtr = (static_cast<uint8*>(objPtr) + (Alignment - o));
-			}
+			if (copyOldContent && allocatedSize > 0)
+				std::memcpy(aligned, objPtr, allocatedSize);
+
+			if (allocatedSize > SmallBufferSize)
+				bigBuffer.free();
+
+			bigBuffer = std::move(newBuffer);
+			objPtr = aligned;
 		}
+		else
+		{
+			uint8* base = smallBuffer;
+			uint8* aligned = static_cast<uint8*>(alignPtr(base + guardOffset()));
+
+			writeGuards(aligned, newSize);
+
+			if (copyOldContent && allocatedSize > SmallBufferSize)
+				std::memcpy(aligned, objPtr, newSize);
+
+			if (allocatedSize > SmallBufferSize)
+				bigBuffer.free();
+
+			objPtr = aligned;
+		}
+
+		allocatedSize = newSize;
+	}
+
+	void free()
+	{
+		checkGuards();
+
+		if (allocatedSize > SmallBufferSize)
+			bigBuffer.free();
+
+		reset();
+	}
+
+	void swapWith(ObjectStorage& other) noexcept
+	{
+		if (this == &other)
+			return;
+
+		checkGuards();
+		other.checkGuards();
+
+		// swap metadata
+		std::swap(allocatedSize, other.allocatedSize);
+
+		// swap heap buffers
+		std::swap(bigBuffer, other.bigBuffer);
+
+		// swap small buffers
+		uint8 tmp[InternalSmallBufferSize];
+
+		std::memcpy(tmp, smallBuffer, sizeof(tmp));
+		std::memcpy(smallBuffer, other.smallBuffer, sizeof(tmp));
+		std::memcpy(other.smallBuffer, tmp, sizeof(tmp));
+
+		// recompute objPtr for both
+		fixPtr();
+		other.fixPtr();
 	}
 
 private:
+	// ---------------------------------------------------------------------
+
+	static void* alignPtr(void* p)
+	{
+		if constexpr (Alignment == 0)
+			return p;
+		else
+		{
+			auto ip = reinterpret_cast<std::uintptr_t>(p);
+			auto misalignment = ip % Alignment;
+
+			if (misalignment == 0)
+				return p;
+
+			return static_cast<uint8*>(p) + (Alignment - misalignment);
+		}
+	}
+
+#if JUCE_DEBUG
+	static constexpr size_t guardOffset() { return GuardSize; }
+	static constexpr size_t extraBytes() { return GuardSize * 2 + Alignment; }
+
+	void writeGuards(uint8* alignedPtr, size_t size)
+	{
+		std::memset(alignedPtr - GuardSize, GuardPattern, GuardSize);
+		std::memset(alignedPtr + size, GuardPattern, GuardSize);
+	}
+
+	void checkGuards() const
+	{
+		if (objPtr == nullptr || allocatedSize == 0)
+			return;
+
+		const uint8* p = static_cast<const uint8*>(objPtr);
+
+		for (size_t i = 0; i < GuardSize; ++i)
+		{
+			if (p[-static_cast<ptrdiff_t>(GuardSize) + i] != GuardPattern ||
+				p[allocatedSize + i] != GuardPattern)
+			{
+				jassertfalse; // memory corruption
+				break;
+			}
+		}
+	}
+#else
+	static constexpr size_t guardOffset() { return 0; }
+	static constexpr size_t extraBytes() { return Alignment; }
+	void checkGuards() const {}
+
+	void writeGuards(uint8*, size_t) {}
+
+#endif
+
+	void fixPtr()
+	{
+		if (allocatedSize == 0)
+			objPtr = nullptr;
+		else if (allocatedSize > SmallBufferSize)
+			objPtr = alignPtr(bigBuffer.get() + guardOffset());
+		else
+			objPtr = alignPtr(smallBuffer + guardOffset());
+	}
+
+	void reset()
+	{
+		objPtr = nullptr;
+		allocatedSize = 0;
+
+#ifdef JUCE_DEBUG
+		std::memset(smallBuffer, 0, sizeof(smallBuffer));
+#endif
+	}
+
+	// ---------------------------------------------------------------------
 
 	void* objPtr = nullptr;
 	size_t allocatedSize = 0;
-	uint8 smallBuffer[BSize + Alignment];
-	HeapBlock<uint8> bigBuffer;
-};
 
+	uint8 smallBuffer[InternalSmallBufferSize]; 
+
+	HeapBlock<uint8> bigBuffer;
+
+	JUCE_DECLARE_NON_COPYABLE(ObjectStorage)
+};
 
 /** A simple container holding NUM_POLYPHONIC_VOICES elements of the given ObjectType
 *	@ingroup data_containers

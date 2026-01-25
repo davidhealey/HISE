@@ -67,7 +67,7 @@ namespace ScriptingApiDatabase
 			colour = Colour(0xFFD557D9);
 		}
 
-		MarkdownDataBase::Item createRootItem(MarkdownDataBase& parent) override;
+		MarkdownDataBase::Item::Ptr createRootItem(MarkdownDataBase& parent) override;
 
 	private:
 
@@ -78,7 +78,7 @@ namespace ScriptingApiDatabase
 		File rootFile;
 		MarkdownLink rootUrl;
 
-		MarkdownDataBase::Item updateWithValueTree(MarkdownDataBase::Item& item, ValueTree& v);
+		MarkdownDataBase::Item::Ptr updateWithValueTree(MarkdownDataBase::Item::Ptr item, ValueTree& v);
 
 		SharedResourcePointer<Data> data;
 	};

@@ -95,14 +95,14 @@ namespace HiseModuleDatabase
 
 		}
 
-		MarkdownDataBase::Item createRootItem(MarkdownDataBase& parent) override;
+		MarkdownDataBase::Item::Ptr createRootItem(MarkdownDataBase& parent) override;
 
 	private:
 
-		MarkdownDataBase::Item createItemForProcessor(Processor* p, const MarkdownDataBase::Item& parent);
-		MarkdownDataBase::Item createItemForFactory(FactoryType* owned, const String& factoryName, MarkdownDataBase::Item& parent);
+		MarkdownDataBase::Item::Ptr createItemForProcessor(Processor* p, const MarkdownDataBase::Item* parent);
+		MarkdownDataBase::Item::Ptr createItemForFactory(FactoryType* owned, const String& factoryName, MarkdownDataBase::Item* parent);
 
-		MarkdownDataBase::Item createItemForCategory(const String& categoryName, const MarkdownDataBase::Item& parent);
+		MarkdownDataBase::Item::Ptr createItemForCategory(const String& categoryName, const MarkdownDataBase::Item* parent);
 
 	};
 
@@ -186,9 +186,9 @@ struct ItemGenerator : public MarkdownDataBase::ItemGeneratorBase,
 {
 
 	ItemGenerator(File root, BackendProcessor& bp);
-	MarkdownDataBase::Item createRootItem(MarkdownDataBase& parent) override;
-	void addNodeFactoryItem(ValueTree factoryTree, MarkdownDataBase::Item& root);
-	void addNodeItem(ValueTree nodeTree, MarkdownDataBase::Item& factory);
+	MarkdownDataBase::Item::Ptr createRootItem(MarkdownDataBase& parent) override;
+	void addNodeFactoryItem(ValueTree factoryTree, MarkdownDataBase::Item::Ptr root);
+	void addNodeItem(ValueTree nodeTree, MarkdownDataBase::Item::Ptr factory);
 
 	SharedResourcePointer<CommonData> data;
 };

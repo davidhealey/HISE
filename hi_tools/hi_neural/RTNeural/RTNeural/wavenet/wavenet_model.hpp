@@ -48,7 +48,7 @@ struct Wavenet_Model
         head_scale = *weights_iterator++;
 
         // Make sure we use the all of the weights exactly
-        assert (std::distance (model_weights.begin(), weights_iterator) == model_weights.size());
+        assert ((int)std::distance (model_weights.begin(), weights_iterator) == (int)model_weights.size());
     }
 
     T forward (T input) noexcept

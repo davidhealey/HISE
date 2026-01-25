@@ -2971,11 +2971,20 @@ void ScriptCreatedComponentWrappers::FloatingTileWrapper::updateLookAndFeel()
     {
         laf = &mc->getGlobalLookAndFeel();
 
-        if (auto l = floatingTile->createLocalLookAndFeel(contentComponent, ft))
-        {
-            localLookAndFeel = l;
-            laf = localLookAndFeel.get();
-        }
+		if(auto content = dynamic_cast<Component*>(ft->getCurrentFloatingPanel()))
+		{
+			if(auto pc = dynamic_cast<PanelWithProcessorConnection*>(content))
+				content = pc->getContent<Component>();
+
+			if(content != nullptr)
+			{
+				if (auto l = floatingTile->createLocalLookAndFeel(contentComponent, content))
+				{
+					localLookAndFeel = l;
+					laf = localLookAndFeel.get();
+				}
+			}
+		}
     }
     
     if (dynamic_cast<ScriptingObjects::ScriptedLookAndFeel::LafBase*>(laf) != nullptr)

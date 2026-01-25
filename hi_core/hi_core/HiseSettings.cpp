@@ -987,7 +987,7 @@ juce::StringArray HiseSettings::Data::getOptionsFor(const Identifier& id)
 	    return { "Yes", "No" };
 
 	if (id == Compiler::VisualStudioVersion)
-		return { "Visual Studio 2017", "Visual Studio 2022" };
+		return { "Visual Studio 2022", "Visual Studio 2026" };
 
 	if(id == Other::GlobalHiseScaleFactor)
 	{
@@ -1230,7 +1230,7 @@ var HiseSettings::Data::getDefaultSetting(const Identifier& id) const
 #if HISE_USE_VS2022
 	else if (id == Compiler::VisualStudioVersion)	return "Visual Studio 2022";
 #else
-	else if (id == Compiler::VisualStudioVersion)	return "Visual Studio 2017";
+	else if (id == Compiler::VisualStudioVersion)	return "Visual Studio 2026";
 #endif
 
 #if JUCE_MAC

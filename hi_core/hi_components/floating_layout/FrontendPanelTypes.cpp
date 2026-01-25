@@ -975,6 +975,8 @@ PresetBrowserPanel::PresetBrowserPanel(FloatingTile* parent) :
 
 	addAndMakeVisible(presetBrowser = new PresetBrowser(getMainController()));
 	
+	simple_css::FlexboxComponent::Helpers::setIsOpaqueWrapper(*this, true);
+
 	if (parent->getMainController()->getCurrentScriptLookAndFeel() != nullptr)
 	{
 		scriptlaf = HiseColourScheme::createAlertWindowLookAndFeel(parent->getMainController());

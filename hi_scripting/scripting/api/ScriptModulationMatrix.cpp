@@ -342,9 +342,14 @@ ModulationDisplayValue ScriptingApi::Content::ScriptSlider::MatrixCableConnectio
 		if(displayIndex == -1 || s->sourceIndex == displayIndex)
 		{
 			auto i = s->intensity;
+
+			min = jmin(min, (1.0f - i) * sv);
+
+			if (s->auxTarget != nullptr)
+				i *= s->auxTarget->getAuxValue();
+
 			auto a = 1.0f - i;
 			normValue *= a + i * s->lastModValue;
-			min = jmin(min, a * sv);
 		}
 	}
 		
@@ -364,7 +369,14 @@ ModulationDisplayValue ScriptingApi::Content::ScriptSlider::MatrixCableConnectio
 				min -= a->intensity;
 			}
 
-			modValue *= a->intensity;
+			auto thisIntensity = a->intensity;
+
+			if(a->auxTarget != nullptr)
+			{
+				thisIntensity *= a->auxTarget->getAuxValue();
+			}
+
+			modValue *= thisIntensity;
 			mv.addValue += modValue;
 		}
 	}

@@ -618,10 +618,7 @@ bool HardcodedSwappableEffect::setEffect(const String& factoryId, bool /*unused*
 	if (factoryId == currentEffect)
 		return true;
 
-	if(opaqueNode != nullptr)
-	{
-		asProcessor().connectToRuntimeTargets(*opaqueNode, false);
-	}
+	disconnectRuntimeTargets(&asProcessor());
 
 	auto idx = getModuleList().indexOf(factoryId);
 
@@ -780,7 +777,7 @@ bool HardcodedSwappableEffect::swap(HotswappableProcessor* other)
 		displayBuffers.swapWith(otherFX->displayBuffers);
 		listeners.swapWith(otherFX->listeners);
 
-		std::swap(lastParameters, otherFX->lastParameters);
+		lastParameters.swapWith(otherFX->lastParameters);
 
 		{
 			SimpleReadWriteLock::ScopedWriteLock sl(lock);
@@ -859,6 +856,10 @@ void HardcodedSwappableEffect::setHardcodedAttribute(int parameterIndex, float n
 		if(auto mc = getModulationChainForParameter(parameterIndex))
 		{
 			auto normValue = p->toRange().convertTo0to1(newValue, false);
+
+			if(mc->getChain()->getMode() == Modulation::Mode::PitchMode)
+				normValue = Modulation::PitchConverters::normalisedRangeToPitchFactor(normValue * 2.0f - 1.0f);
+
 			mc->getChain()->setInitialValue(normValue);
 		}
 		else

@@ -296,6 +296,8 @@ FilterDataObject::CoefficientData FilterEffect::getDisplayCoefficients(FilterBan
 	if (srToUse < 1.0)
 		srToUse = 44100.0;
 
+	FloatSanitizers::sanitizeDoubleNumber(frequency);
+
 	frequency = jlimit<double>(20.0, srToUse / 2.0, frequency);
 	gain = jlimit<float>(0.01f, 32.0f, gain);
 	q = jlimit<double>(0.3, 8.0, q);

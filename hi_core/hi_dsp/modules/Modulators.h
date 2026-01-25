@@ -153,6 +153,9 @@ public:
 		static void octaveRangeToSignedNormalisedRange(float* octaveValues, int numValues);
 		static void normalisedRangeToPitchFactor(float* rangeValues, int numValues);
 		static void octaveRangeToPitchFactor(float* octaveValues, int numValues);
+
+		/*** 0.5 ... 2.0 => [0...1] clipped. */
+		static float pitchFactorToOutputValue(float pitchFactor);
 	};
 
 	public:

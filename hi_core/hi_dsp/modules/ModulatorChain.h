@@ -512,6 +512,9 @@ public:
 	 */
 	void setInitialValue(float newInitialValue);
 
+	/** Call this whenever a bypassed mod is supposed to update the initial value of the mod chain. */
+	void updateInitialValueFromChildMods();
+
 	void changeChildModulatorMode(Processor* childMod, Modulation::Mode newMode, bool isBipolar)
 	{
 		auto mod = dynamic_cast<Modulation*>(childMod);

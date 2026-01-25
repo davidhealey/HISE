@@ -2409,6 +2409,7 @@ private:
 
 #if HISE_INCLUDE_RT_NEURAL
 	NeuralNetwork::Holder neuralNetworks;
+	Array<int> pendingInitialisedHashes;
 #endif
 
 	double processingSampleRate = 0.0;

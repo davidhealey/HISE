@@ -137,7 +137,7 @@ MatrixModulatorBody::MatrixModulatorBody(ProcessorEditor* parent):
 	valueSlider("Value"),
 	smoothingSlider("SmoothingTime"),
 	content(getMainController(),  dynamic_cast<MatrixModulator*>(getProcessor())->getMatrixTargetId(), false),
-	controller(getMainController(), *this),
+	controller(getMainController(), *this, false),
 	inputRangeEditor(createValueTreeFromRange(getProcessor(), true), getMainController()->getControlUndoManager()),
 	outputRangeEditor(createValueTreeFromRange(getProcessor(), false), getMainController()->getControlUndoManager()),
     editRangeButton("Edit value range"),
@@ -196,6 +196,8 @@ MatrixModulatorBody::MatrixModulatorBody(ProcessorEditor* parent):
 			true,
 			true,
 			true,
+			true,
+			true,
 			true
 		};
 
@@ -209,12 +211,16 @@ MatrixModulatorBody::MatrixModulatorBody(ProcessorEditor* parent):
 			allowed[(int)Presets::Pitch1Octave] = true;
 			allowed[(int)Presets::Pitch2Octaves] = true;
 			allowed[(int)Presets::Pitch1Semitone] = true;
+			allowed[(int)Presets::PitchOctaveStep] = true;
+			allowed[(int)Presets::PitchSemitoneStep] = true;
 		}
 		else
 		{
 			allowed[(int)Presets::Pitch1Octave] = false;
 			allowed[(int)Presets::Pitch2Octaves] = false;
 			allowed[(int)Presets::Pitch1Semitone] = false;
+			allowed[(int)Presets::PitchOctaveStep] = false;
+			allowed[(int)Presets::PitchSemitoneStep] = false;
 		}
 		
 		for(int i = 0; i < (int)Presets::numPresets; i++)

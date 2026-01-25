@@ -273,7 +273,7 @@ void DatabaseCrawler::createContentTree()
 
 	totalLinks = db.getFlatList().size();
 
-	contentTree = db.rootItem.createValueTree();
+	contentTree = db.rootItem->createValueTree();
 	addContentToValueTree(contentTree);
 
 	for(auto r: linkResolvers)

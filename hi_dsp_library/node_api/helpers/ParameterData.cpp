@@ -88,7 +88,7 @@ bool RangeHelpers::isBypassIdentity(InvertableParameterRange d)
 
 bool RangeHelpers::isIdentity(InvertableParameterRange d)
 {
-	if (d.rng.start == 0.0 && d.rng.end == 1.0 && d.rng.skew == 1.0 && !d.inv)
+	if (d.rng.start == 0.0 && d.rng.end == 1.0 && d.rng.skew == 1.0 && d.rng.interval == 0.0 && !d.inv)
 		return true;
 
 	return false;
@@ -538,7 +538,7 @@ namespace parameter
 
 		mos.flush();
 
-		parameterNames = new RefCountedHeapBuffer(mos.getDataSize());
+		parameterNames = new RefCountedHeapBuffer((int)mos.getDataSize());
 
 		memcpy(parameterNames->getData(), mos.getData(), mos.getDataSize());
 		
@@ -635,6 +635,7 @@ namespace parameter
 			"Pan",
 			"NormalizedPercentage",
 			"Decibel",
+			"Semitones",
 			"Undefined"
 		};
 	}

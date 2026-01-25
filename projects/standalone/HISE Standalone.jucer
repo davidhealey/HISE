@@ -3,8 +3,8 @@
 <JUCERPROJECT id="jUHBuI" name="HISE Standalone" projectType="guiapp" version="4.1.0"
               bundleIdentifier="com.hartinstruments.HISEStandalone" includeBinaryInAppConfig="1"
               companyName="Hart Instruments" companyWebsite="http://hise.audio"
-              companyCopyright="Hart Instruments" displaySplashScreen="0" reportAppUsage="0"
-              splashScreenColour="Dark" cppLanguageStandard="17" jucerFormatVersion="1">
+              companyCopyright="Hart Instruments" reportAppUsage="0" splashScreenColour="Dark"
+              cppLanguageStandard="17" jucerFormatVersion="1">
   <MAINGROUP id="yomWt4" name="HISE Standalone">
     <GROUP id="{577963C7-1A49-BB2A-D701-52DC7A5895F7}" name="Source">
       <FILE id="Fw455d" name="ScriptNodeTestSuite.cpp" compile="1" resource="0"
@@ -99,9 +99,9 @@
         <MODULEPATH id="juce_audio_processors_headless" path="../../JUCE/modules"/>
       </MODULEPATHS>
     </XCODE_MAC>
-    <VS2022 targetFolder="Builds/VisualStudio2022" smallIcon="ho3qQy" bigIcon="ho3qQy"
-            useIPP="Sequential" IPPLibrary="" extraDefs="AUDIOFFT_FFTW3=1&#10;HISE_USE_EXTENDED_TEMPO_VALUES=1&#10;HI_ENABLE_EXPANSION_EDITING=1&#10;HISE_USE_VS2022=1&#10;HISE_ENABLE_EXPANSIONS=1&#10;HISE_ENABLE_FULL_CONTROL_RATE_PITCH_MOD=1&#10;HISE_SCRIPT_SERVER_TIMEOUT=20000&#10;HISE_USE_OPENGL_FOR_PLUGIN=1&#10;PERFETTO=0&#10;NOMINMAX=1 &#10;WIN32_LEAN_AND_MEAN=1&#10;HISE_INCLUDE_PROFILING_TOOLKIT=0&#10;HISE_USE_SCRIPT_RECTANGLE_OBJECT=1"
-            extraCompilerFlags="/bigobj /wd&quot;4100&quot; /wd&quot;4661&quot; /wd&quot;4456&quot; /wd&quot;4244&quot; /wd&quot;4457&quot; /wd&quot;4458&quot; /wd&quot;4127&quot; /vmg&#10;/arch:AVX&#10; "
+    <VS2022 targetFolder="Builds/VisualStudio2026" smallIcon="ho3qQy" bigIcon="ho3qQy"
+            useIPP="Sequential" IPPLibrary="" extraDefs="AUDIOFFT_FFTW3=1&#10;HISE_USE_EXTENDED_TEMPO_VALUES=1&#10;HI_ENABLE_EXPANSION_EDITING=1&#10;HISE_USE_VS2022=0&#10;HISE_ENABLE_EXPANSIONS=1&#10;HISE_ENABLE_FULL_CONTROL_RATE_PITCH_MOD=1&#10;HISE_SCRIPT_SERVER_TIMEOUT=20000&#10;PERFETTO=0&#10;HISE_INCLUDE_PROFILING_TOOLKIT=0&#10;HISE_USE_SCRIPT_RECTANGLE_OBJECT=1"
+            extraCompilerFlags="/bigobj  /cgthreads8 /wd&quot;4100&quot; /wd&quot;4661&quot; /wd&quot;4456&quot; /wd&quot;4244&quot; /wd&quot;4457&quot; /wd&quot;4458&quot; /wd&quot;4127&quot; /vmg&#10; "
             IPP1ALibrary="" extraLinkerFlags="fftw3f.lib">
       <CONFIGURATIONS>
         <CONFIGURATION name="Debug" generateManifest="1" winArchitecture="x64" isDebug="1"
@@ -173,7 +173,7 @@
         <MODULEPATH id="melatonin_blur" path="../../"/>
         <MODULEPATH id="juce_audio_processors_headless" path="../../JUCE/modules"/>
       </MODULEPATHS>
-    </VS2022>
+    </VS2026>
     <LINUX_MAKE targetFolder="Builds/LinuxMakefile" extraDefs="AUDIOFFT_FFTW3=1&#10;HISE_USE_EXTENDED_TEMPO_VALUES=1&#10;HI_ENABLE_EXPANSION_EDITING=1&#10;HISE_ENABLE_EXPANSIONS=1&#10;HISE_ENABLE_FULL_CONTROL_RATE_PITCH_MOD=1&#10;HISE_USE_OPENGL_FOR_PLUGIN=1&#10;HISE_DEACTIVATE_OVERLAY=1&#10;NUM_HARDCODED_FX_MODS=6&#10;HISE_USE_SCRIPT_RECTANGLE_OBJECT=1&#10;HISE_USE_MOUSE_WHEEL_FOR_TABLE_CURVE=1&#10;PERFETTO=0&#10;HISE_INCLUDE_PROFILING_TOOLKIT=0"
                 smallIcon="bfBEgJ" bigIcon="bfBEgJ" linuxExtraPkgConfig="x11 xinerama xext"
                 extraLinkerFlags="-no-pie&#10;-flto=auto&#10;-fuse-ld=gold&#10;-lfftw3f"

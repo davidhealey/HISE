@@ -1571,7 +1571,7 @@ CompileExporter::ErrorCodes CompileExporter::createResourceFile(const String &so
 	resourcesFile << "  END" << "\n";
 	resourcesFile << "END" << "\n";
 
-    String year = HelperClasses::isUsingVisualStudio2017(dataObject) ? "2017" : "2022";
+    String year = HelperClasses::isUsingVisualStudio2026(dataObject) ? "2026" : "2022";
 
 	File resourcesFileObject(solutionDirectory + "/Builds/VisualStudio" + year + "/resources.rc");
 
@@ -2140,15 +2140,15 @@ void CompileExporter::ProjectTemplateHelpers::handleCompanyInfo(CompileExporter*
 
 void CompileExporter::ProjectTemplateHelpers::handleVisualStudioVersion(const HiseSettings::Data& dataObject, String& templateProject)
 {
-	const bool isUsingVisualStudio2017 = HelperClasses::isUsingVisualStudio2017(dataObject);
+	const bool isUsingVisualStudio2026 = HelperClasses::isUsingVisualStudio2026(dataObject);
 
-	auto shouldUseVS2017 = !(bool)HISE_USE_VS2022;
+	auto shouldUseVS2026 = !(bool)HISE_USE_VS2022;
 
 #if JUCE_WINDOWS
-	if (isUsingVisualStudio2017 != shouldUseVS2017)
+	if (isUsingVisualStudio2026 != shouldUseVS2026)
 	{
-		auto buildVersion = shouldUseVS2017 ? "VS2017" : "VS2022";
-		auto settingsVersion = isUsingVisualStudio2017 ? "VS2017" : "VS2022";
+		auto buildVersion = shouldUseVS2026 ? "VS2026" : "VS2022";
+		auto settingsVersion = isUsingVisualStudio2026 ? "VS2026" : "VS2022";
 
 		String message;
 
@@ -2160,10 +2160,10 @@ void CompileExporter::ProjectTemplateHelpers::handleVisualStudioVersion(const Hi
 	}
 #endif
 	
-	if (isUsingVisualStudio2017)
+	if (isUsingVisualStudio2026)
 	{
-		REPLACE_WILDCARD_WITH_STRING("%VS_VERSION%", "VS2017");
-		REPLACE_WILDCARD_WITH_STRING("%TARGET_FOLDER%", "VisualStudio2017");
+		REPLACE_WILDCARD_WITH_STRING("%VS_VERSION%", "VS2026");
+		REPLACE_WILDCARD_WITH_STRING("%TARGET_FOLDER%", "VisualStudio2026");
 	}
 	else
 	{
@@ -2367,8 +2367,73 @@ void CompileExporter::ProjectTemplateHelpers::handleAdditionalStaticLibs(Compile
 	File additionalSourceCodeDirectory = GET_PROJECT_HANDLER(chainToExport).getSubDirectory(ProjectHandler::SubDirectories::AdditionalSourceCode);
 
 #if JUCE_MAC
-	const String additionalStaticLibs = exporter->GET_SETTING(HiseSettings::Project::OSXStaticLibs);
-	templateProject = templateProject.replace("%OSX_STATIC_LIBS%", additionalStaticLibs);
+    
+    auto additionalStaticLibFolder = exporter->GET_SETTING(HiseSettings::Project::WindowsStaticLibFolder);
+    
+    if(additionalStaticLibFolder.isNotEmpty())
+    {
+        if (additionalStaticLibFolder.contains("%ADDITIONAL_SOURCE_CODE%"))
+            additionalStaticLibFolder = additionalStaticLibFolder.replace("%ADDITIONAL_SOURCE_CODE%", additionalSourceCodeDirectory.getFullPathName());
+
+        additionalStaticLibFolder = additionalStaticLibFolder.replace("\\", "/");
+
+        auto debugFolder = File(additionalStaticLibFolder).getChildFile("Debug_macOS");
+        auto releaseFolder = File(additionalStaticLibFolder).getChildFile("Release_macOS");
+
+        Array<File> debugLibraries = debugFolder.findChildFiles(File::findFiles, false, "*.a");
+        Array<File> releaseLibraries = debugFolder.findChildFiles(File::findFiles, false, "*.a");
+
+        if (debugLibraries.size() == releaseLibraries.size())
+        {
+            StringArray debugLibs, releaseLibs;
+
+            for (int i = 0; i < debugLibraries.size(); i++)
+            {
+                // remove "lib" xxx ".a"
+                debugLibs.add(debugLibraries[i].getFileNameWithoutExtension().substring(3));
+                releaseLibs.add(releaseLibraries[i].getFileNameWithoutExtension().substring(3));
+            }
+
+            debugLibs.sort(true);
+            releaseLibs.sort(true);
+
+            String debugLibString = "";
+
+            for (int i = 0; i < debugLibs.size(); i++)
+            {
+                if (debugLibs[i] != releaseLibs[i])
+                {
+                    debugToConsole(chainToExport, "!Debug / Release library mismatch: " + debugLibs[i]);
+                }
+                else
+                {
+                    debugToConsole(chainToExport, "Added static library " + debugLibs[i]);
+                    debugLibString << "&#10;" << debugLibs[i];
+                }
+            }
+
+            REPLACE_WILDCARD_WITH_STRING("%OSX_EXTERNAL_LIBRARIES%", debugLibString);
+        }
+        else
+        {
+            debugToConsole(chainToExport, "!Debug / Release library mismatch");
+            REPLACE_WILDCARD_WITH_STRING("%OSX_EXTERNAL_LIBRARIES%", "");
+        }
+
+        REPLACE_WILDCARD_WITH_STRING("%OSC_STATIC_LIB_FOLDER_DEBUG%", previousLibPath + ";" + debugFolder.getFullPathName());
+        REPLACE_WILDCARD_WITH_STRING("%OSC_STATIC_LIB_FOLDER_RELEASE%", previousLibPath + ";" + releaseFolder.getFullPathName());
+        
+    }
+    else
+    {
+        REPLACE_WILDCARD_WITH_STRING("%OSC_STATIC_LIB_FOLDER_DEBUG%", "");
+        REPLACE_WILDCARD_WITH_STRING("%OSC_STATIC_LIB_FOLDER_RELEASE%", "");
+        REPLACE_WILDCARD_WITH_STRING("%OSX_EXTERNAL_LIBRARIES%", "");
+    }
+    
+    const String additionalStaticLibs = exporter->GET_SETTING(HiseSettings::Project::OSXStaticLibs);
+    templateProject = templateProject.replace("%OSX_STATIC_LIBS%", additionalStaticLibs);
+    
 #else
 
 	auto additionalStaticLibFolder = exporter->GET_SETTING(HiseSettings::Project::WindowsStaticLibFolder);
@@ -2689,15 +2754,16 @@ void CompileExporter::BatchFileCreator::createBatchFile(CompileExporter* exporte
 
 #if JUCE_WINDOWS
     
-	const String msbuildPath = HelperClasses::isUsingVisualStudio2017(exporter->dataObject) ? 
-		"\"C:\\Program Files (x86)\\Microsoft Visual Studio\\2017\\Community\\MSBuild\\15.0\\Bin\\MsBuild.exe\"" :
+	const String msbuildPath = HelperClasses::isUsingVisualStudio2026(exporter->dataObject) ? 
+
+		"\"C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\MSBuild\\Current\\Bin\\MsBuild.exe\"" :
 		"\"C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\MSBuild\\Current\\Bin\\MsBuild.exe\"";
 
 	const String projucerPath = exporter->hisePath.getChildFile("JUCE/Projucer/Projucer.exe").getFullPathName();
 	
 	const String vsArgs = "/p:Configuration=\"" + exporter->configurationName + "\" /verbosity:minimal";
 
-	const String vsFolder = HelperClasses::isUsingVisualStudio2017(exporter->dataObject) ? "VisualStudio2017" : "VisualStudio2022";
+	const String vsFolder = HelperClasses::isUsingVisualStudio2026(exporter->dataObject) ? "VisualStudio2026" : "VisualStudio2022";
 
 	ADD_LINE("@echo off");
 
@@ -2711,13 +2777,13 @@ void CompileExporter::BatchFileCreator::createBatchFile(CompileExporter* exporte
 		ADD_LINE("set vs_args=" << vsArgs);
 		ADD_LINE("set PreferredToolArchitecture=x64");
 
-		if (HelperClasses::isUsingVisualStudio2017(exporter->dataObject))
+		if (HelperClasses::isUsingVisualStudio2026(exporter->dataObject))
 		{
-			ADD_LINE("set VisualStudioVersion=15.0");
+			ADD_LINE("set VisualStudioVersion=18.0"); // VS2026
 		}
 		else
 		{
-			ADD_LINE("set VisualStudioVersion=17.0");
+			ADD_LINE("set VisualStudioVersion=17.0"); // VS2022
 		}
 	}
 	
@@ -2725,26 +2791,6 @@ void CompileExporter::BatchFileCreator::createBatchFile(CompileExporter* exporte
 	ADD_LINE("\"" << projucerPath << "\" --resave \"%build_path%\\AutogeneratedProject.jucer\"");
 	ADD_LINE("");
 
-	if (!exporter->rawMode && BuildOptionHelpers::is32Bit(buildOption))
-	{
-		ADD_LINE("echo Compiling 32bit " << projectType << " %project% ...");
-		ADD_LINE("set Platform=Win32");
-		ADD_LINE("%msbuild% \"%build_path%\\Builds\\" << vsFolder << "\\%project%.sln\" %vs_args%");
-
-		ADD_LINE("");
-
-		if (isUsingCIMode())
-		{
-			ADD_LINE("if %errorlevel% NEQ 0 (");
-			ADD_LINE("  echo Compile error at " << projectType);
-			ADD_LINE("  exit 1");
-			ADD_LINE(")");
-		}
-
-		
-		ADD_LINE("");
-	}
-	
 	if (!exporter->rawMode && BuildOptionHelpers::is64Bit(buildOption))
 	{
 		ADD_LINE("echo Compiling 64bit " << projectType << " %project% ...");
@@ -2768,7 +2814,7 @@ void CompileExporter::BatchFileCreator::createBatchFile(CompileExporter* exporte
 
 	if (exporter->rawMode)
 	{
-		ADD_LINE("echo Project was exported succesfully. Open the VS2017 Solution file found in Binaries/Builds/VS2017");
+		ADD_LINE("echo Project was exported succesfully. Open the VS2026 / VS2022 Solution file found in Binaries/Builds/VS2026/VS2022");
 	}
 
 	if (!CompileExporter::isExportingFromCommandLine() && !hasChildProcessManager)
@@ -2934,7 +2980,7 @@ juce::String CompileExporter::HelperClasses::getFileNameForCompiledPlugin(const 
 	return String();
 }
 
-bool CompileExporter::HelperClasses::isUsingVisualStudio2017(const HiseSettings::Data& dataObject)
+bool CompileExporter::HelperClasses::isUsingVisualStudio2026(const HiseSettings::Data& dataObject)
 {
 	// Always use the version you build HISE with in CI mode
 	if (isUsingCIMode())
@@ -2944,7 +2990,7 @@ bool CompileExporter::HelperClasses::isUsingVisualStudio2017(const HiseSettings:
 
 	const String v = GET_SETTING(HiseSettings::Compiler::VisualStudioVersion);
 
-	return v.isEmpty() || (v == "Visual Studio 2017");
+	return v.isEmpty() || (v == "Visual Studio 2026");
 }
 
 CompileExporter::ErrorCodes CompileExporter::HelperClasses::saveProjucerFile(String templateProject, CompileExporter* exporter)

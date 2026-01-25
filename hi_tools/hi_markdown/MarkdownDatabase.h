@@ -40,13 +40,17 @@ class MarkdownDataBase
 {
 public:
 
-	struct Item
+	struct Item: public ReferenceCountedObject
 	{
+		using Ptr = ReferenceCountedObjectPtr<Item>;
+		using WeakPtr = WeakReference<Item>;
+		using List = ReferenceCountedArray<Item>;
+
 		using IteratorFunction = std::function<bool(Item&)>;
 
 		struct Sorter
 		{
-			static int compareElements(Item& first, Item& second);
+			static int compareElements(Item* first, Item* second);
 		};
 
 		struct PrioritySorter
@@ -55,7 +59,7 @@ public:
 			{
 				PSorter(const String& s_) : s(s_) {};
 
-				int compareElements(const Item& first, const Item& second) const;
+				int compareElements(const Item* first, const Item* second) const;
 
 				String s;
 			};
@@ -64,7 +68,7 @@ public:
 				searchString(searchString_)
 			{};
 
-			Array<Item> sortItems(Array<Item>& arrayToBeSorted);
+			Item::List sortItems(Item::List& arrayToBeSorted);
 
 			String searchString;
 		};
@@ -82,31 +86,32 @@ public:
 
 		bool callForEach(const IteratorFunction& f);
 
-		bool swapChildWithName(Item& itemToSwap, const String& name);
+		bool swapChildWithName(Item::Ptr itemToSwap, const String& name);
 
 		var toJSONObject() const;
 
-		Item getChildWithName(const String& name) const;
+		Item::Ptr getChildWithName(const String& name);
 
 		explicit operator bool() const
 		{
 			return url.isValid();
 		}
 
-		Item createChildItem(const String& subPath) const;
+		Item::Ptr createChildItem(const String& subPath) const;
 
 		Item(File root, File f, const StringArray& keywords_, String description_);
 		Item() {};
-
-		Item(const Item& other);
-
-		Item& operator=(const Item& other);
-
 		Item(const MarkdownLink& link);
+
+		void setData(File root, File f, const StringArray& keywords, const String& description);
+
+		static Ptr createNew() { return new Item(); }
+
+		void setLink(const MarkdownLink& link);
 
 		int fits(String search) const;
 		String generateHtml(const String& rootString, const String& activeUrl) const;
-		void addToList(Array<Item>& list) const;
+		void addToList(Item::List& list);
 
 		void addTocChildren(File root);
 
@@ -126,31 +131,31 @@ public:
 		Colour c;
 		String icon;
 
-		void addChild(Item&& item);
+		void addChild(Item::Ptr item);
 
 		void sortChildren();
 
 		void removeChild(int childIndex);
 
-		void swapChildren(std::vector<Item>& other);
+		void swapChildren(Item::List& other);
 
 		int getNumChildren() const { return (int)children.size(); }
 
-		Item& operator[](int childIndex) { return children[childIndex]; };
+		Item::Ptr operator[](int childIndex) { return children[childIndex]; };
 
-		bool hasChildren() const { return !children.empty(); }
+		bool hasChildren() const { return !children.isEmpty(); }
 
-		Item* begin() const
+		Item** begin()
 		{
-			return const_cast<Item*>(children.data());
+			return children.begin();
 		}
 
-		Item* end() const
+		Item** end()
 		{
-			return const_cast<Item*>(children.data() + children.size());
+			return children.end();
 		}
 
-		Item* getParentItem() const { return parent; }
+		Item* getParentItem() const { return parent.get(); }
 
 		int index = -1;
 		
@@ -170,46 +175,45 @@ public:
 		int absoluteWeight = -1;
 		int autoWeight = 100;
 
-		Item* parent = nullptr;
+		ReferenceCountedArray<Item> children;
+		WeakReference<Item> parent = nullptr;
 
-		std::vector<Item> children;
-
-		
+		JUCE_DECLARE_WEAK_REFERENCEABLE(Item);
+		JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(Item);
 	};
 
 	struct ItemGeneratorBase
 	{
 		ItemGeneratorBase(File rootDirectory_):
-			rootDirectory(rootDirectory_)
+			rootDirectory(rootDirectory_),
+			rootItem(new Item())
 		{}
 
 		File getFolderReadmeFile(const String& folderURL);
 		void setColour(Colour c) { colour = c; };
 
 		virtual ~ItemGeneratorBase() {};
-		virtual Item createRootItem(MarkdownDataBase& parent) = 0;
+		virtual Item::Ptr createRootItem(MarkdownDataBase& parent) = 0;
 
 		Colour colour;
 		File rootDirectory;
-		MarkdownDataBase::Item rootItem;
+		MarkdownDataBase::Item::Ptr rootItem;
 	};
 
 	struct DirectoryItemGenerator : public ItemGeneratorBase
 	{
 		DirectoryItemGenerator(const File& rootDirectory, Colour colour);
-		Item createRootItem(MarkdownDataBase& parent) override;
-		void addFileRecursive(Item& folder, File f);
+		Item::Ptr createRootItem(MarkdownDataBase& parent) override;
+		void addFileRecursive(Item::Ptr folder, File f);
 
 		File startDirectory;
 	};
 
-	
-
 	MarkdownDataBase();
 	~MarkdownDataBase();
 
-	Item rootItem;
-	const Array<Item>& getFlatList();
+	Item::Ptr rootItem;
+	const Item::List& getFlatList();
 
 	void setRoot(const File& newRootDirectory);
 	File getRoot() const { return rootDirectory; }
@@ -222,7 +226,7 @@ public:
 
 	var getJSONObjectForToc()
 	{
-		return rootItem.toJSONObject();
+		return rootItem->toJSONObject();
 	}
 
 	File getDatabaseFile()
@@ -236,7 +240,7 @@ public:
 		itemGenerators.clear();
 		cachedFlatList.clear();
         rootDirectory = File();
-		rootItem = {};
+		rootItem = new Item();
 	}
 
 	struct ForumDiscussionLink
@@ -267,7 +271,7 @@ private:
 
 	void buildDataBase(bool useCache);
 
-	Array<Item> cachedFlatList;
+	Item::List cachedFlatList;
 
 	File rootDirectory;
 	OwnedArray<ItemGeneratorBase> itemGenerators;
@@ -276,8 +280,8 @@ private:
 
 	void loadFromValueTree(ValueTree& v)
 	{
-		rootItem = {};
-		rootItem.loadFromValueTree(v);
+		rootItem = new Item();
+		rootItem->loadFromValueTree(v);
 	}
 
 	JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(MarkdownDataBase);

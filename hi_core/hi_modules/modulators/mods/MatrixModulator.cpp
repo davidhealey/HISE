@@ -53,6 +53,7 @@ Array<Identifier> MatrixModulator::getRangeIds(bool isInput)
 		static const Array<Identifier> op({
 			Identifier("min"),
 			Identifier("max"),
+			Identifier("stepSize"),
 			Identifier("middlePosition"),
 			MatrixIds::UseMidPositionAsZero
 		});
@@ -133,7 +134,7 @@ void MatrixModulator::Item::handleScaleDrag(bool isDown, float delta)
 	}
 }
 
-void MatrixModulator::Item::handleDisplayValue(ModulationDisplayValue& mv)
+void MatrixModulator::Item::handleDisplayValue(ModulationDisplayValue& mv, scriptnode::InvertableParameterRange outputRange, double fullRangeFactor)
 {
 	if(!isConnected())
 		return;
@@ -165,19 +166,25 @@ void MatrixModulator::Item::handleDisplayValue(ModulationDisplayValue& mv)
 	}
 	else
 	{
-		mv.addValue += v;
+		auto factor = fullRangeFactor / outputRange.rng.getRange().getLength();
+
+		auto thisIntensity = intensity * factor;
+
+		auto thisV = v * factor;
+
+		mv.addValue += thisV;
 
 		auto minValue = mv.modulationRange.getStart();
 		auto maxValue = mv.modulationRange.getEnd();
 
 		if(isBipolar)
 		{
-			minValue -= intensity;
-			maxValue += intensity;
+			minValue -= thisIntensity;
+			maxValue += thisIntensity;
 		}
 		else
 		{
-			minValue += intensity;
+			minValue += thisIntensity;
 		}
 
 		if(minValue > maxValue)
@@ -228,6 +235,24 @@ void MatrixModulator::onModulationDrop(int parameterIndex, int modulationSourceI
 	}
 }
 
+float MatrixModulator::getInactiveModValue() const
+{
+
+	auto iv = rangeData.outputRange.convertFrom0to1(baseValue.targetValue, false);
+
+	// convert it to bipolar -1 ... 1 to match the applyModulation function
+	if (isBipolar())
+	{
+		iv *= 2.0f;
+		iv -= 1.0f;
+	}
+
+	if (getMode() == Modulation::PitchMode)
+		iv = PitchConverters::normalisedRangeToPitchFactor(iv);
+
+	return iv;
+}
+
 String MatrixModulator::getModulationTargetId(int parameterIndex) const
 {
 	if(parameterIndex == SpecialParameters::Value)
@@ -246,7 +271,6 @@ void MatrixModulator::setValueRange(bool isInputRange, scriptnode::InvertablePar
 	}
 	else
 	{
-		nr.rng.interval = 0.0;
 		rangeData.outputRange = nr;
 		rangeData.outputRange.checkIfIdentity();
 	}
@@ -263,24 +287,11 @@ void MatrixModulator::setValueInternal(float valueWithinInputRange)
 	if(auto parentModChain = dynamic_cast<ModulatorChain*>(getParentProcessor(false, false)))
 	{
 		if(isBypassed())
-		{
-			auto norm =  rangeData.inputRange.convertTo0to1(inputValue, false);
-			auto iv =  rangeData.outputRange.convertFrom0to1(norm, false);
-
-			if(getMode() == Modulation::PitchMode)
-				iv *= 12.0;
-
-			parentModChain->setInitialValue(iv);
-		}
+			parentModChain->updateInitialValueFromChildMods();
 		else
-		{
 			parentModChain->setInitialValue(parentModChain->getInitialValue());
-		}
 	}
 }
-
-
-
 
 
 MatrixModulator::MatrixModulator(MainController* mc, const String& id, int voiceAmount, Modulation::Mode m):
@@ -615,8 +626,7 @@ void MatrixModulator::calculateBlock(int startSample, int numSamples)
 
 	if(rangeData.outputRange.isNonDefault())
 	{
-		Range<float> r((float)rangeData.outputRange.rng.start, (float)rangeData.outputRange.rng.end);
-		ModBufferExpansion::applySkewFactor(ptr, numSamples, r, (float)rangeData.outputRange.rng.skew);
+		ModBufferExpansion::applySkewFactor(ptr, numSamples, rangeData.outputRange.rng);
 	}
 }
 
@@ -635,10 +645,12 @@ ModulationDisplayValue MatrixModulator::getDisplayValue(double nv, NormalisableR
 
 	mv.modulationRange = { mv.normalisedValue, mv.normalisedValue };
 
+	auto fullRange = getMode() == Modulation::PitchMode ? 2.0f : 1.0f;
+
 	for (auto i : items)
 	{
 		if (displaySourceIndex == -1 || i->sourceIndex == displaySourceIndex)
-			i->handleDisplayValue(mv);
+			i->handleDisplayValue(mv, rangeData.outputRange, fullRange);
 	}
 
 	mv.clipTo0To1();
@@ -806,6 +818,15 @@ double MatrixModulator::getModeValue(const var& v)
 
 void MatrixModulator::init()
 {
+	// hardwire these settings into any mod that is loaded into a pitch chain
+	auto m = getMode();
+
+	if(m == Modulation::PitchMode || m == Modulation::PanMode)
+	{
+		setIntensity(1.0f);
+		setIsBipolar(true);
+	}
+
 	if(container != nullptr)
 		return;
 

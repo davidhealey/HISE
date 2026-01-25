@@ -999,13 +999,60 @@ template <bool Inverse> struct PitchSimd
     }
 };
 
-struct SkewSimd
+struct StepSimd
 {
 	template <class Arch>
-    void operator()(Arch, float* data, int numValues, Range<float> targetRange, float skew)
-    {
+	void operator()(Arch, float* data, int numValues, Range<float> targetRange, float interval)
+	{
 		using b_type = xsimd::batch<float, Arch>;
-	    auto inc = (int)b_type::size;
+		auto inc = (int)b_type::size;
+		auto numVectorized = numValues - numValues % inc;
+
+		jassert(interval != 0.0f);
+
+		const auto min = targetRange.getStart();
+		const auto max = targetRange.getEnd();
+		const auto intervalInv = 1.0f / interval;
+		const auto delta = max - min;
+
+		for (int i = 0; i < numVectorized; i += inc)
+		{
+			auto v = b_type::load_unaligned(data + i);
+			
+			v *= (max - min);
+			v *= intervalInv;
+			v += 0.5f;
+			v  = xsimd::floor(v);
+			v *= interval;
+			v += min;
+
+			v.store_unaligned(data + i);
+		}
+
+		for (int i = numVectorized; i < numValues; i++)
+		{
+			// v [0 ... 1]
+			auto v = data[i];
+
+			v *= delta;
+			v *= intervalInv;
+			v += 0.5f;
+			v  = std::floor (v);
+			v *= interval;
+			v += min;
+
+			data[i] = v;
+		}
+	}
+};
+
+struct ScaleSimd
+{
+	template <class Arch>
+	void operator()(Arch, float* data, int numValues, Range<float> targetRange)
+	{
+		using b_type = xsimd::batch<float, Arch>;
+		auto inc = (int)b_type::size;
 		auto numVectorized = numValues - numValues % inc;
 
 		auto min = targetRange.getStart();
@@ -1016,47 +1063,71 @@ struct SkewSimd
 
 		// return min + (max - min) * hmath::exp(hmath::log(value) / skew);
 
-		if(skew != 1.0f)
+		for (int i = 0; i < numVectorized; i += inc)
 		{
-			skew = 1.0f / skew;
-
-			for (int i = 0; i < numVectorized; i += inc)
-		    {
-		        auto v = b_type::load_unaligned(data + i);
-
-				v = xsimd::clip(v, b_type(0.0f), b_type(1.0f));
-
-				v = xsimd::log(v);
-				v *= skew;
-				v = xsimd::exp(v);
-				v *= scale;
-				v += offset;
-
-		        v.store_unaligned(data + i);
-		    }
-
-			for(int i = numVectorized; i < numValues; i++)
-			{
-				auto v = jlimit(0.0f, 1.0f, data[i]);
-				v = std::exp(std::log(v) * skew);
-				v *= scale;
-				v += offset;
-
-				data[i] = v;
-			}
+			auto v = b_type::load_unaligned(data + i);
+			v *= scale;
+			v += offset;
+			v.store_unaligned(data + i);
 		}
-		else
+
+		for (int i = numVectorized; i < numValues; i++)
 		{
-			for(int i = 0; i < numValues; i++)
-			{
-				data[i] *= scale;
-				data[i] += offset;
-			}
+			auto v = data[i];
+			v *= scale;
+			v += offset;
+			data[i] = v;
 		}
-    }
+	}
 };
 
+struct SkewSimd
+{
+	template <class Arch>
+	void operator()(Arch, float* data, int numValues, Range<float> targetRange, float skew)
+	{
+		using b_type = xsimd::batch<float, Arch>;
+		auto inc = (int)b_type::size;
+		auto numVectorized = numValues - numValues % inc;
 
+		auto min = targetRange.getStart();
+		auto max = targetRange.getEnd();
+
+		auto offset = min;
+		auto scale = max - min;
+
+		jassert(skew != 1.0f);
+
+		skew = 1.0f / skew;
+
+		for (int i = 0; i < numVectorized; i += inc)
+		{
+			auto v = b_type::load_unaligned(data + i);
+
+			v = xsimd::clip(v, b_type(0.0f), b_type(1.0f));
+
+			v = xsimd::log(v);
+			v *= skew;
+			v = xsimd::exp(v);
+			v *= scale;
+			v += offset;
+
+			v.store_unaligned(data + i);
+		}
+
+		for (int i = numVectorized; i < numValues; i++)
+		{
+			auto v = jlimit(0.0f, 1.0f, data[i]);
+			v = std::log(v);
+			v *= skew;
+			v = std::exp(v);
+			v *= scale;
+			v += offset;
+
+			data[i] = v;
+		}
+	}
+};
 
 void ModBufferExpansion::pitchFactorToNormalisedRange(float* data, int numSamples)
 {
@@ -1068,9 +1139,16 @@ void ModBufferExpansion::normalisedRangeToPitchFactor(float* data, int numSample
 	xsimd::dispatch(PitchSimd<false>{})(data, numSamples);
 }
 
-void ModBufferExpansion::applySkewFactor(float* data, int numSamples, Range<float> targetRange, float skewFactor)
+void ModBufferExpansion::applySkewFactor(float* data, int numSamples, NormalisableRange<double> targetRange)
 {
-	xsimd::dispatch(SkewSimd{})(data, numSamples, targetRange, skewFactor);
+	Range<float> r((float)targetRange.start, (float)targetRange.end);
+
+	if(targetRange.skew != 1.0)
+		xsimd::dispatch(SkewSimd{})(data, numSamples, r, targetRange.skew);
+	else if (targetRange.interval != 0.0)
+		xsimd::dispatch(StepSimd{})(data, numSamples, r, targetRange.interval);
+	else
+		xsimd::dispatch(ScaleSimd{})(data, numSamples, r);
 }
 
 Ramper::Ramper():

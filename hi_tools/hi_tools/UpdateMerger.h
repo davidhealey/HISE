@@ -240,7 +240,7 @@ struct ModBufferExpansion
 
 	static void normalisedRangeToPitchFactor(float* data, int numSamples);
 
-	static void applySkewFactor(float* data, int numSamples, Range<float> targetRange, float skewFactor);
+	static void applySkewFactor(float* data, int numSamples, NormalisableRange<double> targetRange);
 };
 
 /** This class divides a block into fixed chunks of data.

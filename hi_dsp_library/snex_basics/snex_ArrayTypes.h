@@ -127,12 +127,22 @@ template <class T, int Size, int Alignment=16> struct span
 			}
 		}
 		else
-			memcpy(data, l.begin(), sizeof(T)*Size);
+		{
+			jassert((int)l.size() == Size);
+
+			auto n = jmin<int>((int)l.size(), Size);
+
+			memcpy(data, l.begin(), sizeof(T) * n);
+			for (int i = n; i < Size; ++i)
+				data[i] = T{};
+		}
 	}
 
 	static Type& fromExternalData(T* data, int numElements)
 	{
 		jassert(numElements <= Size);
+		jassert((static_cast<uintptr_t>(data) % Alignment) == 0);
+
 		return *reinterpret_cast<Type*>(data);
 	}
 
@@ -148,41 +158,6 @@ template <class T, int Size, int Alignment=16> struct span
 		else
 			return 1;
 	}
-
-	Type& operator=(const std::initializer_list<T>& l)
-	{
-		*this = (float)*l.begin();
-		return *this;
-	}
-
-#if 0
-	Type& operator=(const T& t)
-	{
-		if constexpr (isSimdable())
-		{
-			constexpr int numLoop = Size / getSimdSize();
-
-			if (std::is_same<DataType, float>())
-			{
-				auto dst = (float*)data;
-				auto v = _mm_load_ps1(&t);
-
-				for (int i = 0; i < numLoop; i++)
-				{
-					_mm_store_ps(dst, v);
-					dst += getSimdSize();
-				}
-			}
-		}
-		else
-		{
-			for (auto& v : *this)
-				v = t;
-		}
-
-		return *this;
-	}
-#endif
 
 	operator T()
 	{
@@ -287,7 +262,6 @@ template <class T, int Size, int Alignment=16> struct span
 				{
 					static constexpr int MaxIndex = jmin(ThisSize, OtherSize) / (int)getSimdSize();
 					
-
 					using SSESpanType = span<span<float, (int)getSimdSize()>, ThisSize / (int)getSimdSize()>;
 					using OpSSESpanType = span<span<float, (int)getSimdSize()>, OtherSize / (int)getSimdSize()>;
 
@@ -361,53 +335,10 @@ template <class T, int Size, int Alignment=16> struct span
 
 	template <typename OperandType> Type& operator=(const OperandType& t) { return this->performOp<typename SpanOperators<T>::assign>(t); };
 
-
-#if 0
-	Type& operator=(const Type& other)
-	{
-		memcpy(data, other.begin(), size() * sizeof(T));
-		return *this;
-	}
-#endif
-
 	constexpr bool isFloatType()
 	{
 		return std::is_same<float, T>() || std::is_same<double, T>();
 	}
-
-#if 0
-	Type& operator* (const Type& other)
-	{
-		static_assert(std::is_arithmetic<T>(), "not an arithmetic type");
-
-		const auto src = other.begin();
-
-		for (int i = 0; i < size(); i++)
-			data[i] *= src[i];
-
-		return *this;
-	}
-
-	Type& operator *=(const Type& other)
-	{
-		return *this * other;
-	}
-
-	Type& operator*=(const T& scalar)
-	{
-		return *this * scalar;
-	}
-
-	Type& operator*(const T& scalar)
-	{
-		static_assert(std::is_arithmetic<T>(), "not an arithmetic type");
-
-		for (auto& s : *this)
-			s *= scalar;
-
-		return *this;
-	}
-#endif
 
 	void clear()
 	{
@@ -636,7 +567,7 @@ template <class T> struct dyn
 		size_((int)s_)
 	{
 		auto fullSize = o.end() - o.begin();
-		jassert(offset + size() < fullSize);
+		jassert(offset + size() <= fullSize);
 	}
 
 	dyn<float4> toSimd() const
@@ -673,6 +604,10 @@ template <class T> struct dyn
 		jassert(size() > 0);
 		jassert(begin() != nullptr);
 		jassert(other.begin() != nullptr);
+		jassert(size() == other.size());
+
+		int n = jmin(size(), other.size());
+		memcpy(begin(), other.begin(), n * sizeof(T));
 
 		memcpy(begin(), other.begin(), size() * sizeof(T));
 		return *this;
@@ -786,91 +721,13 @@ template <class T> struct dyn
 		}
 	}
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-#if 0
-	template <class InterpolatorType> DataType interpolate(const InterpolatorType& i) const
-	{
-		if (isEmpty())
-			return DataType(0);
-
-		return i.getFrom(*this);
-	}
-
-	template <class IndexType> const T& operator[](const IndexType& t) const
-	{
-		jassert(!isEmpty());
-
-		if constexpr (std::is_integral<IndexType>())
-		{
-			jassert(isPositiveAndBelow((int)t, size()));
-			return data[t];
-		}
-		else
-		{
-			return t.getFrom(*this);
-		}
-	}
-
-	template <class IndexType> T& operator[](const IndexType& t)
-	{
-		if constexpr (std::is_integral<IndexType>())
-		{
-			jassert(!isEmpty());
-			jassert(isPositiveAndBelow((int)t, size()));
-			return data[t];
-		}
-		else
-		{
-			return *const_cast<T*>(&t.getFrom(*this));
-		}
-	}
-#endif
-
-	template <class Other> bool valid(Other& t)
+	template <class Other> bool valid(const Other& t) const
 	{
 		return t.valid(*this);
 	}
 
-	T* begin() const
-	{
-		return const_cast<T*>(data);
-	}
-
-	T* end() const
-	{
-		return const_cast<T*>(data) + size();
-	}
+	T* begin() const { return const_cast<T*>(data); }
+	T* end() const { return begin() + size(); }
 
 	bool isSimdable() const
 	{
@@ -909,6 +766,8 @@ template <class T> struct dyn
 
 	template <typename OtherContainer> void copyTo(OtherContainer& t)
 	{
+		static_assert(std::is_trivially_copyable<T>());
+
 		jassert(size() <= t.size());
 		int numBytesToCopy = size() * sizeof(T);
 		memcpy(t.begin(), begin(), numBytesToCopy);
@@ -916,6 +775,8 @@ template <class T> struct dyn
 
 	template <typename OtherContainer> void copyFrom(const OtherContainer& t)
 	{
+		static_assert(std::is_trivially_copyable<T>());
+
 		jassert(size() >= t.size());
 		int numBytesToCopy = t.size() * sizeof(T);
 		memcpy(begin(), t.begin(), numBytesToCopy);
@@ -955,19 +816,26 @@ template <typename T> struct heap
 
 	T& operator[](int index)
 	{
+		jassert(isPositiveAndBelow(index, size()));
 		return *(begin() + index);
 	}
 
 	const T& operator[](int index) const
 	{
+		jassert(isPositiveAndBelow(index, size()));
 		return *(begin() + index);
 	}
 
-	T* begin() const { return data.get();  }
-	T* end() const { return data + size(); }
+	T* begin() { return data.get();  }
+	T* end() { return begin() + size(); }
+
+	const T* begin() const { return data.get(); }
+	const T* end() const { return begin() + size(); }
 
 	template <typename OtherContainer> void copyTo(OtherContainer& t)
 	{
+		static_assert(std::is_trivially_copyable<T>(), "heap requires trivially copyable T");
+
 		jassert(size() <= t.size());
 		int numBytesToCopy = size() * sizeof(T);
 		memcpy(t.begin(), begin(), numBytesToCopy);
@@ -975,6 +843,8 @@ template <typename T> struct heap
 
 	template <typename OtherContainer> void copyFrom(const OtherContainer& t)
 	{
+		static_assert(std::is_trivially_copyable<T>(), "heap requires trivially copyable T");
+
 		jassert(size() >= t.size());
 		int numBytesToCopy = t.size() * sizeof(T);
 		memcpy(begin(), t.begin(), numBytesToCopy);

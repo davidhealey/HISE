@@ -316,7 +316,7 @@ struct PropertyListener : public Base
 		changedIds.clear();
 		Base::shutdown();
 		v.removeListener(this);
-		lastValue = var();
+		lastValues.clear();
 		f = {};
 	}
 
@@ -331,7 +331,8 @@ private:
 	ValueTree v;
 	Array<Identifier> ids;
 	Array<Identifier> changedIds;
-	var lastValue;
+
+	NamedValueSet lastValues;
 };
 
 

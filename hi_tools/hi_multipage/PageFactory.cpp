@@ -158,7 +158,7 @@ void HtmlElement::postInit()
 
         if(auto r = simple_css::CSSRootComponent::find(*this))
         {
-	        r->css.addCollectionForComponent(this, hi.css);
+	        r->css.addCollectionForComponent(this, hi.css, "");
         }
         
         Factory factory;

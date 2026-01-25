@@ -127,12 +127,6 @@ void OpaqueNode::initExternalData(ExternalDataHolder* externalDataHolder)
 	ExternalData::forEachType(initAll);
 }
 
-void OpaqueNode::setExternalPtr(void* externPtr)
-{
-	callDestructor();
-
-	object.setExternalPtr(externPtr);
-}
 
 void OpaqueNode::callDestructor()
 {

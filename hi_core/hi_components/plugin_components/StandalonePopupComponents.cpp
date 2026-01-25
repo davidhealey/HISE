@@ -563,26 +563,77 @@ void CustomSettingsWindow::comboBoxChanged(ComboBox* comboBoxThatHasChanged)
 	}
 }
 
-#define DRAW_LABEL(id, text) if (isOn(id)) { g.drawText(text, 0, y, getWidth() / 2 - 30, 30, Justification::centredLeft); y += 40; }
+
 
 void CustomSettingsWindow::paint(Graphics& g)
 {
+	std::function<void(Properties, const char*)> drawLabel;
+
+	if(auto css = dynamic_cast<simple_css::StyleSheetLookAndFeel*>(&getLookAndFeel()))
+	{
+		css->drawComponentBackground(g, this, {});
+
+		auto b = getLocalBounds();
+		b.removeFromTop(10);
+		b.removeFromRight(getWidth() / 2 + 30);
+
+		if(auto root = simple_css::CSSRootComponent::find(*this))
+		{
+			if(auto ss = root->css.getForComponent(this))
+			{
+				simple_css::Renderer r(this, root->stateWatcher);
+
+				drawLabel = [&](Properties id, const char* text)
+				{
+					if (isOn(id))
+					{
+						auto tb = b.removeFromTop(30).toFloat();
+						r.renderText(g, tb, text, ss);
+						b.removeFromTop(10);
+					}
+				};
+
+				drawLabel(Properties::Driver, "Driver");
+				drawLabel(Properties::Device, "Audio Device");
+				drawLabel(Properties::Output, "Output");
+				drawLabel(Properties::BufferSize, "Buffer Size");
+				drawLabel(Properties::SampleRate, "Sample Rate");
+				drawLabel(Properties::GlobalBPM, "Global BPM");
+				drawLabel(Properties::ScaleFactor, "UI Zoom Factor");
+				drawLabel(Properties::UseOpenGL, "Use OpenGL");
+				drawLabel(Properties::StreamingMode, "Streaming Mode");
+				drawLabel(Properties::VoiceAmountMultiplier, "Max Voices");
+			}
+		}
+
+		return;
+	}
+
     g.setColour(findColour((int)ColourIds::textColour));
     
 	g.setFont(font);
 
 	int y = 10;
 
-	DRAW_LABEL(Properties::Driver, "Driver");
-	DRAW_LABEL(Properties::Device, "Audio Device");
-	DRAW_LABEL(Properties::Output, "Output");
-	DRAW_LABEL(Properties::BufferSize, "Buffer Size");
-	DRAW_LABEL(Properties::SampleRate, "Sample Rate");
-	DRAW_LABEL(Properties::GlobalBPM, "Global BPM");
-	DRAW_LABEL(Properties::ScaleFactor, "UI Zoom Factor");
-	DRAW_LABEL(Properties::UseOpenGL, "Use OpenGL");
-	DRAW_LABEL(Properties::StreamingMode, "Streaming Mode");
-	DRAW_LABEL(Properties::VoiceAmountMultiplier, "Max Voices");
+	drawLabel = [&](Properties id, const char* text)
+	{
+		if (isOn(id)) 
+		{ 
+			g.drawText(text, 0, y, getWidth() / 2 - 30, 30, Justification::centredRight); 
+			y += 40;
+		}
+	};
+
+	drawLabel(Properties::Driver, "Driver");
+	drawLabel(Properties::Device, "Audio Device");
+	drawLabel(Properties::Output, "Output");
+	drawLabel(Properties::BufferSize, "Buffer Size");
+	drawLabel(Properties::SampleRate, "Sample Rate");
+	drawLabel(Properties::GlobalBPM, "Global BPM");
+	drawLabel(Properties::ScaleFactor, "UI Zoom Factor");
+	drawLabel(Properties::UseOpenGL, "Use OpenGL");
+	drawLabel(Properties::StreamingMode, "Streaming Mode");
+	drawLabel(Properties::VoiceAmountMultiplier, "Max Voices");
 
 	if (isOn(Properties::ClearMidiCC))
 	{
@@ -603,7 +654,7 @@ void CustomSettingsWindow::paint(Graphics& g)
 	}
 }
 
-#undef DRAW_LABEL
+
 
 #define POSITION_COMBOBOX(id, comboBox) if (isOn(id)) {comboBox->setBounds(getWidth() / 2 - 20, y, getWidth() / 2 - 20, 30); y += 40; } else comboBox->setVisible(false);
 #define POSITION_BUTTON(id, button) if (isOn(id)) {button->setBounds(10, y, getWidth() - 20, 30); y += 40; } else button->setVisible(false);

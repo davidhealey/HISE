@@ -514,7 +514,8 @@ void ProcessorEditorHeader::paintOverChildren(Graphics& g)
 
 		if(mc != nullptr)
 		{
-			float outputValue = mod->getValueForTextConverter(mod->getOutputValue());
+			auto outputValue = mod->getOutputValue();
+			outputValue = mod->getValueForTextConverter(outputValue);
 			auto v = mc->getTableValueConverter()(outputValue);
 
 			g.setColour(Colours::white.withAlpha(0.35f));
@@ -1030,29 +1031,14 @@ void ProcessorEditorHeader::timerCallback()
 	{
 		if (isHeaderOfModulator())
 		{
-			const float outputValue = getProcessor()->getOutputValue();
+			float outputValue = getProcessor()->getOutputValue();
 
 			Modulation* m = dynamic_cast<Modulation*>(getProcessor());
 
 			if (m->getMode() == Modulation::PitchMode)
-			{
-				const float intensity = m->getIntensity();
+				outputValue = Modulation::PitchConverters::pitchFactorToOutputValue(outputValue);
 
-				if (m->isBipolar())
-				{
-					const float value = 0.5f + (outputValue-0.5f) * intensity;
-					valueMeter->setPeak(value, -1.0f);
-				}
-				else
-				{
-					const float value = 0.5f + 0.5f * (outputValue * intensity);
-					valueMeter->setPeak(value, -1.0f);
-				}
-			}
-			else
-			{
-				valueMeter->setPeak(outputValue, -1.0f);
-			}
+			valueMeter->setPeak(outputValue, -1.0f);
 		}
 		else
 		{

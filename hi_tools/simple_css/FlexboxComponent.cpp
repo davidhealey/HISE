@@ -63,7 +63,7 @@ void FlexboxComponent::Helpers::appendToElementStyle(Component& c, const String&
 	invalidateCache(c);
 }
 
-void FlexboxComponent::Helpers::writeSelectorsToProperties(Component& c, const StringArray& selectors)
+void FlexboxComponent::Helpers::writeSelectorsToProperties(Component& c, const StringArray& selectors, bool appendClasses)
 {
 	Array<Selector> classSelectors;
 
@@ -87,7 +87,7 @@ void FlexboxComponent::Helpers::writeSelectorsToProperties(Component& c, const S
 
 	static const Identifier iid("id");
 
-	writeClassSelectors(c, classSelectors, false);
+	writeClassSelectors(c, classSelectors, appendClasses);
 
 	if(id.isNotEmpty())
 		c.getProperties().set(iid, id);
@@ -140,22 +140,47 @@ Array<Selector> FlexboxComponent::Helpers::getClassSelectorFromComponentClass(Co
 
 	Array<Selector> list;
 
+	StringArray classes;
+
 	static const Identifier cid("class");
 
-	auto classes = c->getProperties()[cid];
+	auto classProperty = c->getProperties()[cid];
 
-	if(classes.isString())
-		list.add(Selector(SelectorType::Class, classes.toString()));
-	else if(auto a = classes.getArray())
+	if(classProperty.isString())
+		classes.add(classProperty.toString());
+	else if(auto a = classProperty.getArray())
 	{
 		for(const auto& v: *a)
 		{
 			auto className = v.toString();
 
 			if(className.isNotEmpty())
-				list.add(Selector(SelectorType::Class, className));
+				classes.add(className);
 		}
 	}
+
+	static const Identifier dcid("dynamicClass");
+
+	auto dc = c->getProperties()[dcid];
+
+	if(auto a = dc.getArray())
+	{
+		for (const auto& v : *a)
+		{
+			auto className = v.toString();
+
+			if (className.isNotEmpty())
+				classes.add(className);
+		}
+	}
+
+	classes.sortNatural();
+	classes.trim();
+	classes.removeDuplicates(false);
+	classes.removeEmptyStrings();
+
+	for(const auto& cl: classes)
+		list.add(Selector(SelectorType::Class, cl));
 
 	return list;
 }
@@ -206,6 +231,22 @@ void FlexboxComponent::Helpers::writeClassSelectors(Component& c, const Array<Se
 
 	c.getProperties().set(cid, classes);
 
+	invalidateCache(c);
+}
+
+void FlexboxComponent::Helpers::setDynamicClasses(Component& c, const StringArray& dynamicClassIds)
+{
+	Array<var> dc;
+
+	static const Identifier cid("dynamicClass");
+
+	for(auto& id: dynamicClassIds)
+	{
+		if(id.isNotEmpty())
+			dc.add(var(id));
+	}
+	
+	c.getProperties().set(cid, var(dc));
 	invalidateCache(c);
 }
 
@@ -1089,7 +1130,7 @@ void HeaderContentFooter::setFixStyleSheet(StyleSheet::Collection& newCss)
 	if(defaultProperties != nullptr)
 	{
 		for(const auto& p: defaultProperties->getProperties())
-			css.setPropertyVariable(p.name, p.value);
+			css.setPropertyVariable(nullptr, p.name, p.value);
 	}
 
 	css.setAnimator(&animator);
@@ -1129,7 +1170,7 @@ void HeaderContentFooter::setDefaultCSSProperties(DynamicObject::Ptr newDefaultP
 	if(defaultProperties != nullptr)
 	{
 		for(const auto& p: defaultProperties->getProperties()) 
-			css.setPropertyVariable(p.name, p.value);
+			css.setPropertyVariable(nullptr, p.name, p.value);
 	}
 }
 
@@ -1151,7 +1192,7 @@ void HeaderContentFooter::update(simple_css::StyleSheet::Collection& newCss)
 		if(defaultProperties != nullptr)
 		{
 			for(const auto& p: defaultProperties->getProperties()) 
-				css.setPropertyVariable(p.name, p.value);
+				css.setPropertyVariable(nullptr, p.name, p.value);
 		}
 
 		css.setAnimator(&animator);

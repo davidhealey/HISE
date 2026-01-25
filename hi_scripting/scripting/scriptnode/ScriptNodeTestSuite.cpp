@@ -746,13 +746,13 @@ struct ScriptNodeTests : public juce::UnitTest
 		}
 	}
 
-	template <typename T> static void clear(const T& data)
+	template <typename T> static void clear(T& data)
 	{
 		for (auto& s : data)
 			s = 0.0f;
 	}
 
-	template <typename T> static float sum(const T& data)
+	template <typename T> static float sum(T& data)
 	{
 		float sum = 0.0f;
 		

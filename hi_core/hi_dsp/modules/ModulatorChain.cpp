@@ -326,9 +326,7 @@ ModulationDisplayValue ModulatorChain::getModulationDisplayValue(double pValue, 
 		}
 		case Modulation::PitchMode:
 		{
-			// Use SpecialQueryFunction::PitchModulation instead...
-			jassertfalse;
-			break;
+			return SpecialQueryFunctions::PitchModulation().getDisplayValue(const_cast<Processor*>(getParentProcessor()), pValue, nr, -1);
 		}
 		case Modulation::PanMode:
 		case Modulation::OffsetMode:
@@ -462,6 +460,24 @@ void ModulatorChain::applyMonoOnOutputValue(float monoValue)
 #endif
 }
 
+void ModulatorChain::updateInitialValueFromChildMods()
+{
+	auto iv = getInitialValue();
+
+	for(auto m: allModulators)
+	{
+		if(m->isBypassed())
+		{
+			auto mod = dynamic_cast<Modulation*>(m);
+			auto inactiveValue = m->getInactiveModValue();
+			m->setOutputValue(inactiveValue);
+			mod->applyModulationValue(inactiveValue, iv);
+		}
+	}
+
+	setInitialValue(iv);
+}
+
 void ModulatorChain::setInitialValue(float newInitialValue)
 {
 	if(getInitialValue() == newInitialValue)
@@ -482,7 +498,7 @@ void ModulatorChain::setInitialValue(float newInitialValue)
 		initialValue = { true, newInitialValue };
 		break;
 	case PitchMode:
-		initialValue = { true, PitchConverters::octaveRangeToPitchFactor(newInitialValue) };
+		initialValue = { true, newInitialValue };
 		break;
 	}
 }
@@ -915,7 +931,8 @@ void ModulatorChain::ModChainWithBuffer::calculateMonophonicModulationValues(int
 		else
 		{
 			jassert(c->getMode() == Mode::CombinedMode ||
-					c->getMode() == Mode::GainMode);
+					c->getMode() == Mode::GainMode ||
+					c->getMode() == Mode::PitchMode);
 			FloatVectorOperations::fill(modBuffer.monoValues + startSample_cr, 1.0f, numSamples_cr);
 		}
 	}
@@ -2229,23 +2246,36 @@ void ModulatorChain::ExtraModulatorRuntimeTargetSource::updateModulationProperti
 		{
 			if (parameterIndex != -1)
 			{
-				auto zp = mode == Modulation::Mode::PanMode ? 0.5f : 0.0f;
-				mb->getChain()->setZeroPosition(zp);
+				if(mode == Modulation::Mode::PitchMode)
+				{
+					mb->getChain()->setZeroPosition(0.5f);
+					mb->getChain()->setMode(mode, sendNotificationAsync);
+					mb->getChain()->setInitialValue(mb->getChain()->getInitialValue());
+					mb->getChain()->setTableValueConverter(Modulation::getValueAsSemitone);
+					mb->setClampTo0To1(false);
 
-				// For some reason we'll force the CombinedMode....
-				auto modeToUse = mb->getChain()->checkRelease ? Modulation::Mode::GainMode :
-																Modulation::Mode::CombinedMode;
+					
 
-				
+				}
+				else
+				{
+					mb->setClampTo0To1(true);
 
-				mb->getChain()->setMode(modeToUse, sendNotificationAsync);
+					auto zp = mode == Modulation::Mode::PanMode ? 0.5f : 0.0f;
+					mb->getChain()->setZeroPosition(zp);
 
-				auto pd = pf(parameterIndex);
+					// For some reason we'll force the CombinedMode....
+					auto modeToUse = mb->getChain()->checkRelease ? Modulation::Mode::GainMode :
+						Modulation::Mode::CombinedMode;
 
-				auto initialValue = pd.ir.convertTo0to1(pd.initValue, false);
-				mb->getChain()->setInitialValue(initialValue);
+					mb->getChain()->setMode(modeToUse, sendNotificationAsync);
 
-				mb->getChain()->setTableValueConverter([pd](float v)
+					auto pd = pf(parameterIndex);
+
+					auto initialValue = pd.ir.convertTo0to1(pd.initValue, false);
+					mb->getChain()->setInitialValue(initialValue);
+
+					mb->getChain()->setTableValueConverter([pd](float v)
 					{
 						v = pd.ir.convertFrom0to1(v, false);
 
@@ -2254,6 +2284,7 @@ void ModulatorChain::ExtraModulatorRuntimeTargetSource::updateModulationProperti
 						else
 							return String(v);
 					});
+				}
 			}
 		}
 

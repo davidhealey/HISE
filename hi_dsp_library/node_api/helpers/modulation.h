@@ -49,7 +49,7 @@ enum class SourceType
 	Envelope
 };
 
-enum class ClearState : uint8
+enum class ClearState : int8
 {
 	Playing,
 	PendingReset1, // Leave one buffer through to avoid glitches at fast release times
@@ -59,18 +59,20 @@ enum class ClearState : uint8
 
 // These are the available modulation modes that can be used to define how a given parameter
 // should be modulated
-enum class ParameterMode: uint8
+enum class ParameterMode: int8
 {
 	Disabled = 0, ///< indicates no modulation of this parameter
-	ScaleAdd, ///< this parameter can be modulated with scale & unipolar / bipolar add
-	ScaleOnly, ///< this parameter will be modulated with scaling only (like the gain modulation in HISE)
-	AddOnly, ///< this parameter will be modulated with unipolar / bipolar offset only (Offset mode in HISE)
-	Pan, ///< this parameter will be modulated with unipolar / bipolar scale around the zero position (like HISE's StereoFX)
+	ScaleAdd,     ///< this parameter can be modulated with scale & unipolar / bipolar add
+	ScaleOnly,    ///< this parameter will be modulated with scaling only (like the gain modulation in HISE)
+	AddOnly,      ///< this parameter will be modulated with unipolar / bipolar offset only (Offset mode in HISE)
+	Pan,          ///< this parameter will be modulated with unipolar / bipolar scale around the zero position (like HISE's StereoFX)
+	Pitch,        ///< a special mode that automatically converts the mod value to a pitch factor from 0.5 ... 2.0 (like HISE's Pitch mod).
 	numModulationModes
 };
 
-enum class ConnectionMode: uint8
+enum class ConnectionMode: int8
 {
+	Disabled = 0,
 	Parameter,
 	ModulationNode,
 	numConnectionModes
@@ -86,11 +88,11 @@ enum class TargetMode // this defines how the modulation signal is applied insid
 	Aux      // Only applies the intensity to the signal
 };
 
+// The maximum number of parameter indexes that can be used with the modulation system
+static constexpr int NumMaxModulationParameterIndex = 256;
+
 // The maximum number of modulators that can be fetched as source signal
 static constexpr int NumMaxModulationSources = HISE_NUM_MODULATORS_PER_CHAIN;
-
-// The maximum number of modulation slots that a single module can have
-static constexpr int NumMaxModulationSlots = 16;
 
 /** Subclass all classes that provide modulation signals from this. */
 struct Host
@@ -155,10 +157,60 @@ struct ConnectionInfo
 {
 	using List = std::vector<ConnectionInfo>;
 
-	int connectedParameterIndex;
+	int16 connectedParameterIndex;
 	ParameterMode modulationMode;
 	HiseModulationColours::ColourId modColour = HiseModulationColours::ColourId::ExtraMod;
 	ConnectionMode connectionMode = ConnectionMode::ModulationNode;
+
+	static ConnectionInfo::List readFrom(InputStream& is)
+	{
+		List l;
+
+		if(is.readByte() == 59)
+		{
+			while (!is.isExhausted())
+			{
+				auto check = is.readByte();
+
+				if (check == 60)
+				{
+					ConnectionInfo ni;
+					ni.connectedParameterIndex = is.readCompressedInt();
+					ni.modulationMode = static_cast<ParameterMode>(is.readByte());
+					ni.modColour =		static_cast<HiseModulationColours::ColourId>(is.readByte());
+					ni.connectionMode = static_cast<ConnectionMode>(is.readByte());
+
+					l.push_back(ni);
+				}
+				else
+				{
+					// corrupted, recompile
+					jassertfalse;
+				}
+			}
+		}
+		else
+		{
+			// corrupted, recompile
+			jassertfalse;
+		}
+
+		return l;
+	}
+
+	static void writeTo(const List& list, OutputStream& os)
+	{
+		os.writeByte(59);
+
+		for(const auto& info: list)
+		{
+			os.writeByte(60);
+			os.writeCompressedInt(info.connectedParameterIndex);
+			os.writeByte(static_cast<char>(info.modulationMode));
+			os.writeByte(static_cast<char>(info.modColour));
+			os.writeByte(static_cast<char>(info.connectionMode));
+		}
+	}
 };
 
 /** This pod structure will hold the information and properties on how the parameters of the Opaque node
@@ -193,14 +245,14 @@ struct ParameterProperties
 	void fromConnectionList(const ConnectionList& c);
 
 	void fromValueTree(const ValueTree& v);
-	bool isUsed(int modulationIndex) const;
+	bool isUsed(int8 modulationIndex) const;
 
 	/** Checks whether the slot is used and the parameter is connected to something
 	 *
 	 *  (Note that a parameter can still be used but not be connected if it is controlling
 	 *	a modulation chain with a `extra_mod` connection.
 	 */
-	bool isConnected(int modulationIndex) const;
+	bool isConnected(int8 modulationIndex) const;
 
 	/** Returns the block size that should be used for chunking.
 	 *
@@ -209,46 +261,73 @@ struct ParameterProperties
 	 */
 	int getBlockSize(int fullBlocksize) const;
 
-	
 	void writeToStream(OutputStream& output) const;
-	
-	int getParameterIndex(int modulationIndex) const;
-	int getModulationChainIndex(int parameterIndex) const;
 
+	/** Returns the parameter index of the modulation slot or -1 if not assigned. */
+	int16 getParameterIndex(int8 modulationIndex) const;
+
+	/** Returns the modulation chain index of the parameter or -1 if not assigned. */
+	int8 getModulationChainIndex(int16 parameterIndex) const;
+
+	/** Returns the number of modulation slots used by this setup. You can pass in a limit that will
+		cap of the number of slots, which is usually the amount of slots available through the HISE
+		preprocessors
+
+		HISE_NUM_HARDCODED_FX_SLOTS=2
+		...
+	*/
 	int getNumUsed(int maxNumber) const noexcept
 	{
-		return jmin(maxNumber, (int)numUsedModulationSlots);
+		return jmin<int>(maxNumber, numUsedModulationSlots);
 	}
 
-	bool isAnyConnected() const noexcept { return anyConnected; }
+	/** This checks whether the modulation setup has any connections to parameters.
+	
+		Note that if you use modulation slots with mod targets that do not control the parameters,
+		this will still return false, so it's not guaranteed that anyConnected == (numModulationSlotsUsed != 0)
+	*/
+	bool isAnyConnected() const noexcept;
 
-	ParameterMode getParameterMode(int parameterIndex) const noexcept;
+	ParameterMode getParameterMode(int16 parameterIndex) const noexcept;
 
-	void setColour(int parameterIndex, HiseModulationColours::ColourId newColour);
+	void setColour(int16 parameterIndex, HiseModulationColours::ColourId newColour);
 
 	void setModulationBlockSize(int newBlockSize);
 
-	Colour getModulationColour(int parameterIndex) const;
+	Colour getModulationColour(int16 parameterIndex) const;
 
 private:
 
 	friend class ParameterPropertiesTest;
 
 	/** Sets the connected flag for the given parameterIndex. */
-	void setConnected(int parameterIndex, bool isConnected);
+	void setConnected(int16 parameterIndex, bool isConnected);
 
-	void setModulationMode(int parameterIndex, ParameterMode m);
+	void setModulationMode(int16 parameterIndex, ParameterMode m);
 
 	void readFromStream(InputStream& input);
 
-	std::array<ParameterMode, NumMaxModulationSources> modulationModes;
-	std::array<char, NumMaxModulationSources> parameterToModulation;    
-	std::array<char, NumMaxModulationSources> modulationToParameter;
-	std::array<char, NumMaxModulationSources> modulationConnectState;
-	std::array<char, NumMaxModulationSources> modulationColours;
+	struct ParameterInfo
+	{
+		ParameterMode mode = ParameterMode::Disabled;
+		int8 modulationSlotIndex = -1;
+	};
 
+	struct ModInfo
+	{
+		ConnectionMode connectionMode = ConnectionMode::Disabled;
+		int16 parameterIndex = -1;
+		HiseModulationColours::ColourId colour = HiseModulationColours::ColourId::ExtraMod;
+	};
+
+	// this contains the modulation mode and slot index of every parameter indexes (0 ... 1024)
+	std::array<ParameterInfo, NumMaxModulationParameterIndex> parameterInfo;
+
+	// this contains the parameter index, connection mode and colour of every modulation slot
+	std::array<ModInfo, NumMaxModulationSources> modInfo;
+
+	int numUsedModulationSlots = 0;
 	bool anyConnected = false;
-	char numUsedModulationSlots = 0;
 	int modulationBlocksize = 0;
 };
 

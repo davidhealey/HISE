@@ -935,10 +935,10 @@ juce::Path MarkdownPreview::Topbar::TopbarPaths::createPath(const String& id) co
 	return p;
 }
 
-MarkdownPreview::Topbar::SearchResults::ItemComponent::ItemComponent(MarkdownDataBase::Item i,
+MarkdownPreview::Topbar::SearchResults::ItemComponent::ItemComponent(MarkdownDataBase::Item::Ptr i,
 	const MarkdownLayout::StyleData& l):
 	item(i),
-	p(i.description),
+	p(i->description),
 	style(l)
 {
 	p.parse();
@@ -975,7 +975,7 @@ void MarkdownPreview::Topbar::SearchResults::ItemComponent::mouseDown(const Mous
 
 		int result = m.show();
 
-		if (mp->performPopupMenuForEditingIcons(result, item.url))
+		if (mp->performPopupMenuForEditingIcons(result, item->url))
 			return;
 	}
 }
@@ -986,7 +986,7 @@ void MarkdownPreview::Topbar::SearchResults::ItemComponent::gotoLink()
 	{
 		auto& r = mp->renderer;
 
-		r.gotoLink(item.url.withRoot(mp->rootDirectory, true));
+		r.gotoLink(item->url.withRoot(mp->rootDirectory, true));
 
 		auto f2 = [mp]()
 		{
@@ -1011,7 +1011,7 @@ void MarkdownPreview::Topbar::SearchResults::ItemComponent::paint(Graphics& g)
 {
 	g.fillAll(Colours::grey.withAlpha(down ? 0.6f : (hover ? 0.3f : 0.1f)));
 
-	g.setColour(item.c);
+	g.setColour(item->c);
 
 	g.fillRect(0.0f, 0.0f, 3.0f, (float)getHeight());
 
@@ -1027,20 +1027,18 @@ void MarkdownPreview::Topbar::SearchResults::ItemComponent::paint(Graphics& g)
 
 	ar.removeFromLeft(kBounds.getWidth());
 
-	g.drawText(item.keywords[0], kBounds.toFloat(), Justification::centred);
+	g.drawText(item->keywords[0], kBounds.toFloat(), Justification::centred);
 
 	if (!starBounds.isEmpty())
 	{
 		ar.removeFromLeft(starBounds.getWidth());
 
-		g.setColour(item.c);
+		g.setColour(item->c);
 
 		Path starPath;
 		starPath.addStar(starBounds.toFloat().getCentre(), 5, 5.0f, 10.0f);
 		g.fillPath(starPath);
 	}
-
-
 
 	p.draw(g, ar.toFloat().reduced(5.0f).translated(0.0f, -5.0f));
 
@@ -1050,7 +1048,7 @@ void MarkdownPreview::Topbar::SearchResults::ItemComponent::paint(Graphics& g)
 
 int MarkdownPreview::Topbar::SearchResults::ItemComponent::calculateHeight(int width)
 {
-	kBounds = { 0, 0, GLOBAL_BOLD_FONT().getStringWidth(item.keywords[0]) + 20, 0 };
+	kBounds = { 0, 0, GLOBAL_BOLD_FONT().getStringWidth(item->keywords[0]) + 20, 0 };
 
 	starBounds = {};
 
@@ -1260,18 +1258,18 @@ void MarkdownPreview::Topbar::SearchResults::rebuildItems()
 
 		MarkdownLink linkURL = { parent.parent.rootDirectory, searchString };
 
-		MarkdownDataBase::Item linkItem;
+		MarkdownDataBase::Item::Ptr linkItem;
 
 		for (auto item : allItems)
 		{
-			if (item.url == linkURL)
+			if (item->url == linkURL)
 			{
 				linkItem = item;
 				break;
 			}
 		}
 
-		if (linkItem)
+		if (linkItem != nullptr)
 		{
 			ScopedPointer<ItemComponent> newItem(new ItemComponent(linkItem, parent.parent.internalComponent.styleData));
 
@@ -1290,9 +1288,9 @@ void MarkdownPreview::Topbar::SearchResults::rebuildItems()
 		exactMatches.clear();
 		fuzzyMatches.clear();
 
-		for (const auto& item : sorted)
+		for (const auto item : sorted)
 		{
-			int matchLevel = item.fits(searchString);
+			int matchLevel = item->fits(searchString);
 
 			if (matchLevel > 0)
 			{
@@ -1685,7 +1683,7 @@ void MarkdownPreview::Topbar::paint(Graphics& g)
 	g.fillPath(searchPath);
 }
 
-MarkdownPreview::MarkdownDatabaseTreeview::Item::Item(MarkdownDataBase::Item item_, MarkdownPreview& previewParent_):
+MarkdownPreview::MarkdownDatabaseTreeview::Item::Item(MarkdownDataBase::Item::Ptr item_, MarkdownPreview& previewParent_):
 	TreeViewItem(),
 	item(item_),
 	previewParent(previewParent_)
@@ -1710,23 +1708,23 @@ bool MarkdownPreview::MarkdownDatabaseTreeview::Item::keyPressed(const KeyPress&
 }
 
 bool MarkdownPreview::MarkdownDatabaseTreeview::Item::mightContainSubItems()
-{ return item.hasChildren(); }
+{ return item->hasChildren(); }
 
 String MarkdownPreview::MarkdownDatabaseTreeview::Item::getUniqueName() const
-{ return item.url.toString(MarkdownLink::UrlFull); }
+{ return item->url.toString(MarkdownLink::UrlFull); }
 
 void MarkdownPreview::MarkdownDatabaseTreeview::Item::itemOpennessChanged(bool isNowOpen)
 {
-	if (item.isAlwaysOpen && !isNowOpen)
+	if (item->isAlwaysOpen && !isNowOpen)
 		return;
 
 	clearSubItems();
 
 	if (isNowOpen)
 	{
-		for (auto c : item)
+		for (auto c : *item)
 		{
-			if (c.tocString.isEmpty())
+			if (c->tocString.isEmpty())
 				continue;
 
 			auto i = new Item(c, previewParent);
@@ -1735,14 +1733,11 @@ void MarkdownPreview::MarkdownDatabaseTreeview::Item::itemOpennessChanged(bool i
 
 			auto currentLink = previewParent.renderer.getLastLink();
 
-			const bool open = c.isAlwaysOpen || currentLink.isChildOf(c.url);
+			const bool open = c->isAlwaysOpen || currentLink.isChildOf(c->url);
 
 			if (open)
 				i->setOpen(true);
-
-
 		}
-
 	}
 
 	//previewParent.resized();
@@ -1756,7 +1751,7 @@ MarkdownParser* MarkdownPreview::MarkdownDatabaseTreeview::Item::getCurrentParse
 MarkdownPreview::MarkdownDatabaseTreeview::Item* MarkdownPreview::MarkdownDatabaseTreeview::Item::selectIfURLMatches(
 	const MarkdownLink& url)
 {
-	if (item.url == url)
+	if (item->url == url)
 	{
 		return this;
 	}
@@ -1776,7 +1771,7 @@ void MarkdownPreview::MarkdownDatabaseTreeview::Item::gotoLink()
 	{
 		previewParent.currentSearchResults = nullptr;
 
-		previewParent.renderer.gotoLink(item.url.withRoot(previewParent.rootDirectory, true));
+		previewParent.renderer.gotoLink(item->url.withRoot(previewParent.rootDirectory, true));
 
 #if 0
 					auto link = item.url.upToFirstOccurrenceOf("#", false, false);
@@ -1818,7 +1813,7 @@ void MarkdownPreview::MarkdownDatabaseTreeview::Item::itemClicked(const MouseEve
 
 		int result = m.show();
 
-		if (previewParent.performPopupMenuForEditingIcons(result, item.url))
+		if (previewParent.performPopupMenuForEditingIcons(result, item->url))
 			return;
 	}
 	else
@@ -1847,7 +1842,7 @@ int MarkdownPreview::MarkdownDatabaseTreeview::Item::getItemWidth() const
 	const auto& s = previewParent.internalComponent.styleData;
 	auto f = s.getBoldFont().withHeight(16.0f);
 
-	int thisWidth = intendation + f.getStringWidth(item.tocString) + 30;
+	int thisWidth = intendation + f.getStringWidth(item->tocString) + 30;
 
 	int maxWidth = thisWidth;
 
@@ -1881,7 +1876,7 @@ void MarkdownPreview::MarkdownDatabaseTreeview::Item::paintItem(Graphics& g, int
 
 	const auto& s = previewParent.internalComponent.styleData;
 
-	g.setColour(item.c);
+	g.setColour(item->c);
 	g.fillRect(r);
 
 
@@ -1893,7 +1888,7 @@ void MarkdownPreview::MarkdownDatabaseTreeview::Item::paintItem(Graphics& g, int
 
 	g.setFont(f);
 
-	g.drawText(item.tocString, area, Justification::centredLeft);
+	g.drawText(item->tocString, area, Justification::centredLeft);
 }
 
 MarkdownPreview::MarkdownDatabaseTreeview::MarkdownDatabaseTreeview(MarkdownPreview& parent_):
@@ -1947,7 +1942,7 @@ void MarkdownPreview::MarkdownDatabaseTreeview::closeAllExcept(TreeViewItem* ite
 
 bool MarkdownPreview::MarkdownDatabaseTreeview::closeIfNoMatch(TreeViewItem* item, const MarkdownLink& id)
 {
-	if (dynamic_cast<Item*>(item)->item.url == id)
+	if (dynamic_cast<Item*>(item)->item->url == id)
 		return true;
 
 	item->setOpen(true);

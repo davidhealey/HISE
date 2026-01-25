@@ -2908,9 +2908,11 @@ struct ValueToTextConverter
 	{
 		static String Frequency(double input)
 		{
-			if (input < 30.0f)
+			auto absValue = std::abs(input);
+
+			if (absValue < 30.0f)
 				return String(input, 1) + " Hz";
-			else if (input < 1000.0f)
+			else if (absValue < 1000.0f)
 				return String(roundToInt(input)) + " Hz";
 			else
 				return String(input / 1000.0, 1) + " kHz";
@@ -2961,7 +2963,7 @@ struct ValueToTextConverter
 			if(v > 0.0)
 				s << '+';
 
-			if(std::fmod(std::abs(v), 1.0) < 0.001)
+			if(std::fmod(std::abs(v+0.005), 1.0) < 0.01)
 				s << String(roundToInt(v));
 			else
 				s << String(v, 2);

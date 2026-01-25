@@ -88,6 +88,12 @@ String MatrixContent::Parent::getDefaultCSS()
 			margin: 1px;
 			border-radius: 3px;
 		}
+
+		.delete-button
+		{
+			width: 20px;
+			background: rgba(255,255,255, 0.7);
+		}
 		)";
 
 	//return File("D:\\test.css").loadFileAsString();
@@ -127,6 +133,9 @@ String MatrixBase::getColumnStyleSheet(const Identifier& id)
 	if(id == Identifier("Plotter"))
 		return "width: 100px; height:48px; flex-grow: 1;";
 
+	if(id == Identifier("delete"))
+		return"width: 20px;height:24px;";
+
 	jassertfalse;
 	return {};
 }
@@ -153,7 +162,7 @@ void MatrixBase::IntensitySlider::setActive(bool shouldBeActive, const ValueTree
 		if(!shouldBeActive)
 			intensityValue = 0.0;
 
-		setRange(minValue, 1.0);
+		setRange(minValue, 1.0, getInterval());
 		setValue(intensityValue, dontSendNotification);
 	}
 	
@@ -252,6 +261,51 @@ Component* MatrixContent::HeaderBase::addHeaderItem(const Identifier& id, const 
 	}
 }
 
+MatrixBase::DeleteButton::DeleteButton():
+  Button("delete"),
+  pathData("120.t01YE2AQ..fmCwF..d.QhotXCw1i5.AQd++OCw18+YBQeqHiCwFbEyCQd++OCw1++UDQhotXCwFl57BQ..fmCw1++UDQwqnxCwFbEyCQQ..2Cw18+YBQBU2qCw1i5.AQQ..2CwF..d.QwqnxCw1YE2AQ..fmCMVY")
+{
+	simple_css::FlexboxComponent::Helpers::setFallbackStyleSheet(*this, "background-image:var(--icon);background-color:#aaa;margin:0px;");
+
+	simple_css::FlexboxComponent::Helpers::writeSelectorsToProperties(*this, { "#delete", ".delete-button" });
+
+	MemoryBlock mb;
+	mb.fromBase64Encoding(pathData);
+	icon.loadPathFromData(mb.getData(), mb.getSize());
+
+	onClick = [this]()
+	{
+		if(auto r = findParentComponentOfClass<MatrixContent::Row>())
+		{
+			auto p = r->data.getParent();
+			MatrixIds::Helpers::removeConnection(p, r->um, r->getTargetId(), r->getSourceIndexForIntensitySlider(0));
+		}
+	};
+}
+
+
+
+void MatrixBase::DeleteButton::paintButton(Graphics& g, bool shouldDrawButtonAsHighlighted, bool shouldDrawButtonAsDown)
+{
+	if (auto root = simple_css::CSSRootComponent::find(*this))
+	{
+		if (auto ss = root->css.getForComponent(this))
+		{
+			ss->setPropertyVariable("icon", pathData);
+			simple_css::Renderer r(this, root->stateWatcher);
+
+			auto currentState = simple_css::Renderer::getPseudoClassFromComponent(this);
+			root->stateWatcher.checkChanges(this, ss, currentState);
+
+			r.drawBackground(g, getLocalBounds().toFloat(), ss);
+			return;
+		}
+	}
+
+	g.setColour(Colours::white.withAlpha(shouldDrawButtonAsHighlighted ? 0.5f : 0.4f));
+	g.fillPath(icon);
+}
+
 MatrixBase::SearchBar::ClearButton::ClearButton():
 	Button("clear"),
 	pathData("230.t0FP.ZBQN++OCIlNbdCQN++OCA.fEQj5Od2P..XQDA..dNjX..XQDs.N.OjNbdCQZ..2CADflPjF.v8PhgDYUPjF.v8P..3ADs.N.OD..d.Q..fmCIF..d.Qp+3cCgDYUPjy++yP.AnID47++LzXsQKmdPD..34PrgElTPzHIH6PrI1dbPTAPG7PrADflPD+F25Pr4IgvPTAPG7ProBZ3PzHIH6Pro7XtPD..34ProBZ3Pz81m3Pr4IgvPj8eQ2PrADflPjG433PrI1dbPj8eQ2PrgElTPz81m3PrQKmdPD..34PiUF")
@@ -315,7 +369,8 @@ MatrixContent::Row::Row(MainController* mc, ValueTree rowData, const String& tar
   data(rowData),
   um(mc->getControlUndoManager()),
   intensitySlider(MatrixIds::Intensity),
-  auxIntensitySlider(MatrixIds::AuxIntensity)
+  auxIntensitySlider(MatrixIds::AuxIntensity),
+  deleteButton()
 {
 	jassert(data.getType() == MatrixIds::Connection);
 
@@ -336,6 +391,9 @@ MatrixContent::Row::Row(MainController* mc, ValueTree rowData, const String& tar
 
 	addFlexItem(plotter);
 
+	Helpers::appendToElementStyle(deleteButton, getColumnStyleSheet("delete"));
+	addFlexItem(deleteButton);
+
 	targetSelector.setEnabled(targetId.isEmpty());
 
 	sourceSelector.setTooltip("The modulation source.");
@@ -344,6 +402,7 @@ MatrixContent::Row::Row(MainController* mc, ValueTree rowData, const String& tar
 	intensitySlider.setTooltip("How much the modulation source is affecting the target.");
 	auxSelector.setTooltip("A modulation source that modulates the intensity of this modulation.");
 	auxIntensitySlider.setTooltip("How much the aux modulation source is affecting the modulation signal.");
+	deleteButton.setTooltip("Removes the mod connection");
 
 	auxIntensitySlider.setRange(0.0, 1.0, 0.0);
 	auxIntensitySlider.valueFromTextFunction = ValueToTextConverter::createForMode("NormalizedPercentage");
@@ -716,6 +775,20 @@ void MatrixBase::RowBase::setIntensityConverter(MatrixModulator* mm)
 		customConverters.add(new MatrixIds::Helpers::IntensityTextConverter(cd));
 		customConverters.getLast()->showInactive = true;
 		auto vtc = ValueToTextConverter::createForCustomClass(customConverters.getLast());
+
+
+		auto interval = cd.inputRange.interval;
+
+		auto smin = si->getMinimum();
+		auto smax = si->getMaximum();
+
+		if(interval != 0.0)
+		{
+			interval /= cd.inputRange.getRange().getLength();
+		}
+
+		si->setRange(smin, smax, interval);
+
 		si->valueFromTextFunction = vtc;
 		si->textFromValueFunction = vtc;
 		si->updateText();
@@ -735,7 +808,14 @@ void MatrixBase::RowBase::setIntensityConverter(JavascriptMidiProcessor* jmp, in
 		{
 			auto si = getIntensitySlider(i);
 			auto sourceIndex = getSourceIndexForIntensitySlider(i);
+
+			if(sourceIndex == -1)
+				continue;
+
 			auto cd = s->createIntensityConverter(sourceIndex);
+
+			if(cd.p == nullptr)
+				continue;
 
 			cd.connectedSlider = si;
 			customConverters.add(new MatrixIds::Helpers::IntensityTextConverter(cd));
@@ -836,13 +916,13 @@ void MatrixContent::Controller::ModulationDragger::mouseUp(const MouseEvent& eve
 
 		if (auto gc = ProcessorHelpers::getFirstProcessorWithType<GlobalModulatorContainer>(chain))
 		{
-			if(gc->getExclusiveMatrixSource() == prevSourceIndex)
+			if(gc->getExclusiveMatrixSource() == prevSourceIndex && !unselectableExclusiveSource)
 				gc->setExlusiveMatrixSource(-1, sendNotificationSync);
 		}
 	}
 }
 
-MatrixContent::Controller::Controller(MainController* mc, Component& p):
+MatrixContent::Controller::Controller(MainController* mc, Component& p, bool unselectableExclusiveSource):
   FlexboxComponent(simple_css::Selector(simple_css::ElementType::Panel)),
   ControlledObject(mc),
   addButton("Add"),
@@ -887,6 +967,7 @@ MatrixContent::Controller::Controller(MainController* mc, Component& p):
 		{
 			auto sourceId = modChain->getChildProcessor(i)->getId();
 			auto nd = new ModulationDragger(sourceId);
+			nd->unselectableExclusiveSource = unselectableExclusiveSource;
 			draggers.add(nd);
 			addFlexItem(*nd);
 		}
@@ -1739,11 +1820,27 @@ ModulationMatrixControlPanel::ModulationMatrixControlPanel(FloatingTile* parent)
 	ModulationMatrixBasePanel(parent)
 {}
 
+juce::var ModulationMatrixControlPanel::toDynamicObject() const
+{
+	auto obj = ModulationMatrixBasePanel::toDynamicObject();
+
+	obj.getDynamicObject()->setProperty("UnselectableExclusiveSource", exclusiveSource);
+
+	return obj;
+}
+
+void ModulationMatrixControlPanel::fromDynamicObject(const var& object)
+{
+	exclusiveSource = object.getDynamicObject()->getProperty("UnselectableExclusiveSource");
+
+	ModulationMatrixBasePanel::fromDynamicObject(object);
+}
+
 Component* ModulationMatrixControlPanel::createMatrixComponent(const String& targetId)
 {
 	if(getParentShell()->isOnInterface())
 	{
-		auto controller = new MatrixContent::Controller(getMainController(), *getParentShell());
+		auto controller = new MatrixContent::Controller(getMainController(), *getParentShell(), exclusiveSource);
 
 		if(auto gc = ProcessorHelpers::getFirstProcessorWithType<GlobalModulatorContainer>(getMainController()->getMainSynthChain()))
 		{
@@ -1760,7 +1857,7 @@ Component* ModulationMatrixControlPanel::createMatrixComponent(const String& tar
 								   public MatrixContent::Parent
 		{
 			FloatingTileParent(MainController* mc, const String& targetId):
-			  controller(mc, *this)
+			  controller(mc, *this, false)
 			{
 				addAndMakeVisible(controller);
 				controller.setCSS(css);

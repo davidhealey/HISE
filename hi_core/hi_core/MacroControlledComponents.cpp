@@ -1270,12 +1270,16 @@ struct HiSlider::HoverPopup: public Component,
 	  sliderStyle(pd.s),
 	  exclusiveMode(exclusiveMode_)
 	{
-		auto pp = parent->getParentComponent();
+		
 
-		auto pIndex = pp->getIndexOfChildComponent(parent);
+		int pIndex = -1;
 
-		pp->addAndMakeVisible(this, pIndex+1);
-
+		if(auto pp = parent->getParentComponent())
+		{
+			pIndex = pp->getIndexOfChildComponent(parent);
+			pp->addAndMakeVisible(this, pIndex+1);
+		}
+		
 		auto pb = parent->getBoundsInParent();
 		auto b = dragAreas.getBounds();
 
@@ -1727,7 +1731,23 @@ struct HiSlider::HoverPopup: public Component,
 
 			auto isScale = (int)cd[MatrixIds::Mode] == 0;
 
-			auto newValue = jlimit(isScale ? 0.0f : -1.0f, 1.0f, downValue + (deltaX - deltaY) * sensitivity * 0.25f);
+			auto minValue = isScale ? 0.0f : -1.0f;
+
+			auto newValue = jlimit(minValue, 1.0f, downValue + (deltaX - deltaY) * sensitivity * 0.25f);
+
+			auto interval = parent->getInterval();
+
+			if (interval != 0.0)
+			{
+				interval /= parent->getRange().getRange().getLength();
+				auto intervalInv = 1.0 / interval;
+
+				newValue *= intervalInv;
+				newValue += 0.5f;
+				newValue = hmath::floor(newValue);
+				newValue *= interval;
+			}
+			
 
 			intensityValues[currentHoverIndex] = newValue;
 
