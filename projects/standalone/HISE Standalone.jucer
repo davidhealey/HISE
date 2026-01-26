@@ -99,7 +99,7 @@
         <MODULEPATH id="juce_audio_processors_headless" path="../../JUCE/modules"/>
       </MODULEPATHS>
     </XCODE_MAC>
-    <VS2022 targetFolder="Builds/VisualStudio2026" smallIcon="ho3qQy" bigIcon="ho3qQy"
+    <VS2026 targetFolder="Builds/VisualStudio2026" smallIcon="ho3qQy" bigIcon="ho3qQy"
             useIPP="Sequential" IPPLibrary="" extraDefs="AUDIOFFT_FFTW3=1&#10;HISE_USE_EXTENDED_TEMPO_VALUES=1&#10;HI_ENABLE_EXPANSION_EDITING=1&#10;HISE_USE_VS2022=0&#10;HISE_ENABLE_EXPANSIONS=1&#10;HISE_ENABLE_FULL_CONTROL_RATE_PITCH_MOD=1&#10;HISE_SCRIPT_SERVER_TIMEOUT=20000&#10;PERFETTO=0&#10;HISE_INCLUDE_PROFILING_TOOLKIT=0&#10;HISE_USE_SCRIPT_RECTANGLE_OBJECT=1"
             extraCompilerFlags="/bigobj  /cgthreads8 /wd&quot;4100&quot; /wd&quot;4661&quot; /wd&quot;4456&quot; /wd&quot;4244&quot; /wd&quot;4457&quot; /wd&quot;4458&quot; /wd&quot;4127&quot; /vmg&#10; "
             IPP1ALibrary="" extraLinkerFlags="fftw3f.lib">
