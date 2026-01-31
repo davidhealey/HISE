@@ -1106,7 +1106,7 @@ void ScriptingApi::Content::ScriptComponent::AsyncControlCallbackSender::handleA
 	{
 		auto v = parent->getValue();
 
-		if(v.isDouble() || v.isInt() || v.isInt64() || v.isBool())
+		if(parent->isScriptPluginParameter() && (v.isDouble() || v.isInt() || v.isInt64() || v.isBool()))
 		{
 			auto value = (float)v;
 			FloatSanitizers::sanitizeFloatNumber(value);
