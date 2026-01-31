@@ -30,6 +30,8 @@
 *   ===========================================================================
 */
 
+#include <filesystem>
+
 namespace hise { using namespace juce;
 
 #define GET_SETTING(id) dataObject.getSetting(id).toString()
@@ -157,7 +159,9 @@ ValueTree BaseExporter::collectAllSampleMapsInDirectory()
 	return sampleMaps;
 }
 
+bool CompileExporter::skipAudioDriverInitialisation = false;
 bool CompileExporter::globalCommandLineExport = false;
+bool CompileExporter::projectFolderIsWorkingDirectory = false;
 bool CompileExporter::useCIMode = false;
 int CompileExporter::forcedVSTVersion = 0;
 
@@ -462,6 +466,25 @@ int CompileExporter::getBuildOptionPart(const String& argument)
 void CompileExporter::setExportUsingCI(bool shouldUseCIMode)
 {
 	useCIMode = shouldUseCIMode;
+}
+
+File CompileExporter::getCurrentWorkDirectory(bool throwOnInvalidFolder)
+{
+	std::filesystem::path cwd = std::filesystem::current_path();
+	juce::File workDirectory(cwd.u8string());
+
+
+	if (workDirectory.isDirectory())
+	{
+		auto projectInfoExists = workDirectory.getChildFile("project_info.xml").existsAsFile();
+		auto scriptFolderExists = workDirectory.getChildFile("Scripts").isDirectory();
+		auto sampleMapFolderExists = workDirectory.getChildFile("SampleMaps").isDirectory();
+
+		if (throwOnInvalidFolder && !(projectInfoExists || scriptFolderExists || sampleMapFolderExists))
+			throw Result::fail(workDirectory.getFullPathName() + " is not a valid HISE directory. Call this from your HISE project folder");
+	}
+
+	return workDirectory;
 }
 
 CompileExporter::BuildOption CompileExporter::getBuildOptionFromCommandLine(StringArray &args)

@@ -289,7 +289,7 @@ void LibraryTest::testHighAttributeCount()
 
 		int numCallbacks = 0;
 
-		library::Processor::AttributeListener l(r, *this, [&numCallbacks](library::Processor* l, uint16 idx)
+		library::Processor::AttributeListener l(r, *this, [&](library::Processor* l, uint16 idx)
 		{
 			jassert(idx == BigAttributeIndex);
 			numCallbacks++;

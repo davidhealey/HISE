@@ -84,7 +84,7 @@ void ParameterProperties::reset()
 	for(auto& m: modInfo)
 		m = {};
 
-	for(auto p: parameterInfo)
+	for(auto& p: parameterInfo)
 		p = {};
 }
 
@@ -221,7 +221,7 @@ void ParameterProperties::writeToStream(OutputStream& output) const
 
 	ConnectionInfo::writeTo(list, output);
 
-	output.writeByte(60);
+	output.writeByte(ConnectionInfo::BeginMetadata);
 	output.writeCompressedInt(modulationBlocksize);
 }
 
@@ -230,7 +230,7 @@ void ParameterProperties::readFromStream(InputStream& input)
 	auto list = ConnectionInfo::readFrom(input);
 	fromConnectionList(list);
 
-	if(input.readByte() == 60)
+	if(input.readByte() == ConnectionInfo::BeginMetadata)
 		modulationBlocksize = input.readCompressedInt();
 }
 
@@ -284,10 +284,13 @@ void ParameterProperties::setColour(int16 parameterIndex, HiseModulationColours:
 	{
 		auto mi = getModulationChainIndex(parameterIndex);
 
-		if (parameterInfo[parameterIndex].mode != ParameterMode::Disabled)
-			modInfo[mi].colour = newColour;
-		else
-			modInfo[mi].colour = HiseModulationColours::ColourId::ExtraMod;
+		if (mi != -1)
+		{
+			if (parameterInfo[parameterIndex].mode != ParameterMode::Disabled)
+				modInfo[mi].colour = newColour;
+			else
+				modInfo[mi].colour = HiseModulationColours::ColourId::ExtraMod;
+		}
 	}
 }
 

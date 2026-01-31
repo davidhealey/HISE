@@ -1434,6 +1434,9 @@ public:
 		/** Starts a sampling session with the given ID. */
 		void startSampling(const String& sessionId);
 
+		/** Synchronously tests a callback of a given object for automated testing cycles. */
+		void testCallback(var obj, String callbackId, var argList);
+
 		/** Stores the current state of the given data into the current sampling session. */
 		void sample(const String& label, var dataToSample);
 

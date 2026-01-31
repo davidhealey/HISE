@@ -10270,19 +10270,24 @@ void ScriptingObjects::ScriptBuilder::clear()
 	auto thisAsP = dynamic_cast<Processor*>(getScriptProcessor());
 
     auto mc = getScriptProcessor()->getMainController_();
-    SUSPEND_GLOBAL_DISPATCH(mc, "clear from builder");
-    MainController::ScopedBadBabysitter sb(mc);
 
-	mc->getProcessorChangeHandler().sendProcessorChangeMessage(mc->getMainSynthChain(), MainController::ProcessorChangeHandler::EventType::ClearBeforeRebuild, false);
+	SUSPEND_GLOBAL_DISPATCH(mc, "clear from builder");
+	ScopedPointer<MainController::ScopedBadBabysitter> sb;
 
-	MessageManager::callAsync([this]()
+	if (!CompileExporter::shouldSkipAudioDriverInitialisation())
 	{
-		getScriptProcessor()->getScriptingContent()->setIsRebuilding(true);
-	});
-	
+		sb = new MainController::ScopedBadBabysitter(mc);
 
-	Thread::getCurrentThread()->wait(500);
-	dynamic_cast<JavascriptProcessor*>(getScriptProcessor())->getScriptEngine()->extendTimeout(500);
+		mc->getProcessorChangeHandler().sendProcessorChangeMessage(mc->getMainSynthChain(), MainController::ProcessorChangeHandler::EventType::ClearBeforeRebuild, false);
+
+		MessageManager::callAsync([this]()
+		{
+			getScriptProcessor()->getScriptingContent()->setIsRebuilding(true);
+		});
+
+		Thread::getCurrentThread()->wait(500);
+		dynamic_cast<JavascriptProcessor*>(getScriptProcessor())->getScriptEngine()->extendTimeout(500);
+	}
 
 	raw::Builder b(mc);
 

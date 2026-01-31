@@ -246,7 +246,28 @@ public:
 		globalCommandLineExport = true;
 	};
 
+	static void setSkipAudioDriverInitialisation()
+	{
+		skipAudioDriverInitialisation = true;
+	}
+
 	static void setExportUsingCI(bool shouldUseCIMode);
+
+	/** Call this before creating a BackendProcessor instance. */
+	static void setProjectFolderFromWorkingDirectory()
+	{
+		projectFolderIsWorkingDirectory = true;
+	}
+
+	static bool shouldSkipAudioDriverInitialisation() 
+	{ 
+		return skipAudioDriverInitialisation || isExportingFromCommandLine(); 
+	}
+
+	/** Returns the current working directory from the CLI call and verifies that this is a HISE project folder. Throws a Result::fail() when not valid. */
+	static File getCurrentWorkDirectory(bool throwOnInvalidFolder=true);
+
+	static bool isUsingWorkingDirectoryAsProjectFolder() { return projectFolderIsWorkingDirectory; }
 
 	static bool isUsingCIMode() { return useCIMode; }
 
@@ -287,8 +308,9 @@ protected:
 	String configurationName = "Release";
 
 	static bool globalCommandLineExport;
-	
+	static bool skipAudioDriverInitialisation;
 	static bool useCIMode;
+	static bool projectFolderIsWorkingDirectory;
 
 	static int forcedVSTVersion;
 

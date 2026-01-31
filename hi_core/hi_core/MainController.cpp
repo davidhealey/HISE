@@ -943,10 +943,14 @@ Processor *MainController::createProcessor(FactoryType *factory,
 	// Every chain must have a factory type!
 	jassert(factory != nullptr);
 
-	// Create the processor using the factory type of the parent chain
-	Processor *p = factory->createProcessor(factory->getProcessorTypeIndex(typeName), id);
+	if (typeName.toString().containsChar(' '))
+	{
+		auto newId = Identifier(typeName.toString().removeCharacters(" "));
+		return factory->createProcessor(factory->getProcessorTypeIndex(newId), id);
+	}
 
-	return p;
+	// Create the processor using the factory type of the parent chain
+	return factory->createProcessor(factory->getProcessorTypeIndex(typeName), id);
 };
 
 

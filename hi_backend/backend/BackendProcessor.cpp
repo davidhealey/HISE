@@ -300,7 +300,24 @@ BackendProcessor::BackendProcessor(AudioDeviceManager *deviceManager_/*=nullptr*
 		restoreGlobalSettings(this);
 	}
 
-	GET_PROJECT_HANDLER(synthChain).restoreWorkingProjects();
+	if (CompileExporter::isUsingWorkingDirectoryAsProjectFolder())
+	{
+		try
+		{
+			GET_PROJECT_HANDLER(synthChain).setWorkingProject(CompileExporter::getCurrentWorkDirectory());
+		}
+		catch (Result& r)
+		{
+			GET_PROJECT_HANDLER(synthChain).restoreWorkingProjects();
+			jassertfalse;
+		}
+		
+	}
+	else
+	{
+		GET_PROJECT_HANDLER(synthChain).restoreWorkingProjects();
+	}
+	
 
 	initData(this);
 
@@ -935,7 +952,7 @@ hise::JavascriptProcessor* BackendProcessor::createInterface(int width, int heig
 
 	String code = "Content.makeFrontInterface(" + String(width) + ", " + String(width) + ");";
 
-	jsp->getSnippet(0)->replaceContentAsync(code);
+	jsp->getSnippet(0)->replaceContentAsync(code, false);
 	jsp->compileScript();
 
 	midiChain->getHandler()->add(s, nullptr);

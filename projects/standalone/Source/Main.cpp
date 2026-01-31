@@ -169,15 +169,32 @@ public:
         print("create-docs -p:PATH -h:PATH -s:PATH");
         print("Creates the HISE documentation files from the markdown files in the given directory (-p) to the given di.");
 		print("to the HTML directory specified by -h (and optionally rebuilding the snippet examples from -s)");
-		print("load -p:PATH");
+		print("load -p:PATH [-dump_module_tree] [--verbose]");
 		print("");
 		print("Loads the given file (either .xml file or .hip file) and returns the status code");
 		print("You can call Engine.setCommandLineStatus(1) in the onInit callback to report an error");
+		print("The additional flag -dump_module_tree will print a JSON layout of the HISE module tree to the output");
+		print("(Use the --verbose flag to include all parameter values)");
+		print("");
+		print("compile_script -p:PATH [-screenshot:width,height]");
+		print("");
+		print("Compiles the script file and returns the Console output as JSON-formatted string");
+		print("(one item for each console log).");
+		print("This is useful for running HISE with an AI agent that allows a tight feedback loop of");
+		print("compiling / testing the script creation. It basically creates an empty project with a");
+		print("script processor, inserts include(\"PATH\"); as code and compiles the output, then quits HISE.");
+		print("You can also use the -screenshot flag to create a screenshot of the interface after compilation.");
+		print("The additional flag -dump_module_tree will add a JSON object of the HISE module tree to the JSON output");
+		print("(Use the --verbose flag to include all parameter values)");
 		print("");
 		print("compile_networks -c:CONFIG");
 		print("Compiles the DSP networks in the given project folder. Use the -c flag to specify the build");
 		print("configuration ('Debug' or 'Release')");
 		print("");
+		print("create_builder_cache");
+		print("Creates a cache file that contains all relevant properties for the Builder AI agent to work.");
+		print("This includes an updated list of all modules & parameters as well as project-specific assets like samplemaps & audio files");
+		print("Run this whenever the project structure change to ensure that the Builder agent has the correct dataset to work with.");
 		print("run_unit_tests");
 		print("Runs the unit tests. In order for this to work, HISE must be built with the CI configuration");
 
@@ -265,80 +282,242 @@ public:
 		}
 		else throwErrorAndQuit(pd.getFullPathName() + " is not a valid folder");
 	}
+
+	static void dumpRecursive(DynamicObject::Ptr obj, Processor* p, bool includeParameters)
+	{
+		
+
+		std::map<String, Identifier> chainIds;
+
+		chainIds["GainModulation"] = "ChainIndexes.Gain";
+		chainIds["PitchModulation"] = "ChainIndexes.Pitch";
+		chainIds["Midi Processor"] = "ChainIndexes.Midi";
+		chainIds["FX"] = "ChainIndexes.FX";
+		chainIds["Global Modulators"] = "ChainIndexes.GlobalMod";
+
+		obj->setProperty("id", p->getId());
+
+		String fullType;
+
+		if (dynamic_cast<ModulatorSynth*>(p) != nullptr)
+			fullType << "SoundGenerators.";
+		if (dynamic_cast<Modulator*>(p) != nullptr)
+			fullType << "Modulators.";
+		if (dynamic_cast<MidiProcessor*>(p) != nullptr)
+			fullType << "MidiProcessors.";
+		if (dynamic_cast<EffectProcessor*>(p) != nullptr)
+			fullType << "Effects.";
+
+		fullType << p->getType().toString();
+
+
+		obj->setProperty("type", fullType);
+
+		if (auto dh = dynamic_cast<DspNetwork::Holder*>(p))
+		{
+			if (auto n = dh->getActiveNetwork())
+				obj->setProperty("network", n->getId());
+		}
+
+		if (auto mm = dynamic_cast<MatrixModulator*>(p))
+		{
+			obj->setProperty("matrixTargetId", mm->getMatrixTargetId());
+		}
+
+		if (includeParameters)
+		{
+			DynamicObject::Ptr specialParameters = new DynamicObject();
+
+			specialParameters->setProperty("Bypassed", p->isBypassed());
+			
+			if (auto mod = dynamic_cast<Modulation*>(p))
+			{
+				specialParameters->setProperty("Intensity", mod->getDisplayIntensity());
+			}
+			if (auto slot = dynamic_cast<HotswappableProcessor*>(p))
+			{
+				specialParameters->setProperty("SlotId", slot->getCurrentEffectId());
+			}
+
+			obj->setProperty("specialParameters", var(specialParameters.get()));
+
+			DynamicObject::Ptr parameters = new DynamicObject();
+
+			for (int i = 0; i < p->getNumAttributes(); i++)
+			{
+				auto id = p->getIdentifierForParameterIndex(i);
+				auto value = p->getAttribute(i);
+				parameters->setProperty(id, value);
+			}
+
+			obj->setProperty("parameters", var(parameters.get()));
+
+			if (auto eh = dynamic_cast<ExternalDataHolder*>(p))
+			{
+				DynamicObject::Ptr cd = new DynamicObject();
+
+				ExternalData::forEachType([&](ExternalData::DataType dt)
+					{
+						auto numThisType = eh->getNumDataObjects(dt);
+
+						if (numThisType > 0)
+						{
+							Array<var> items;
+
+							for (int i = 0; i < numThisType; i++)
+							{
+								auto ed = eh->getData(dt, i);
+
+								if (ed.obj != nullptr)
+									items.add(ed.obj->toBase64String());
+							}
+
+							auto id = ExternalData::getDataTypeName(dt, true);
+							cd->setProperty(id, var(items));
+						}
+					});
+
+				if (!cd->getProperties().isEmpty())
+					obj->setProperty("complex_data", var(cd.get()));
+			}
+		}
+
+		Array<var> children;
+
+		for (int i = 0; i < p->getNumChildProcessors(); i++)
+		{
+			auto c = p->getChildProcessor(i);
+
+			if (dynamic_cast<ModulatorChain*>(c) != nullptr ||
+				dynamic_cast<MidiProcessorChain*>(c) != nullptr ||
+				dynamic_cast<EffectProcessorChain*>(c) != nullptr)
+			{
+				auto id = c->getId();
+
+				Array<var> mods;
+
+				for (int j = 0; j < c->getNumChildProcessors(); j++)
+				{
+					DynamicObject::Ptr cobj = new DynamicObject();
+					dumpRecursive(cobj, c->getChildProcessor(j), includeParameters);
+					mods.add(var(cobj.get()));
+				}
+
+				if (!mods.isEmpty())
+				{
+					auto idToUse = chainIds[id];
+
+					if(idToUse.isNull())
+						obj->setProperty("ChainIndexes." + String(i), var(mods));
+					else
+					{
+						obj->setProperty(idToUse, var(mods));
+					}
+				}
+
+				continue;
+			}
+			
+			if (auto ms = dynamic_cast<ModulatorSynthChain*>(p))
+			{
+				DynamicObject::Ptr cobj = new DynamicObject();
+
+				dumpRecursive(cobj, c, includeParameters);
+
+				children.add(var(cobj.get()));
+			}
+		}
+
+		if (!children.isEmpty())
+		{
+			obj->setProperty("ChainIndexes.Direct", var(children));
+		}
+	}
 	
 	static int loadPresetFile(const String& commandLine, const std::function<Result(BackendProcessor*)>& additionalFunction = {})
 	{
 		auto args = getCommandLineArgs(commandLine);
 
-		CompileExporter::setExportingFromCommandLine();
-		
-		ScopedPointer<StandaloneProcessor> processor = new StandaloneProcessor();
+CompileExporter::setExportingFromCommandLine();
 
-		auto bp = dynamic_cast<BackendProcessor*>(processor->getCurrentProcessor());
+ScopedPointer<StandaloneProcessor> processor = new StandaloneProcessor();
 
-        dynamic_cast<GlobalSettingManager*>(bp)->getSettingsObject().addTemporaryDefinitions(CompileExporter::getTemporaryDefinitions(commandLine));
-        
-		ModulatorSynthChain* mainSynthChain = bp->getMainSynthChain();
-		File currentProjectFolder = GET_PROJECT_HANDLER(mainSynthChain).getWorkDirectory();
+auto bp = dynamic_cast<BackendProcessor*>(processor->getCurrentProcessor());
 
-		File presetFile = getFilePathArgument(args, bp->getActiveFileHandler()->getRootFolder());
+dynamic_cast<GlobalSettingManager*>(bp)->getSettingsObject().addTemporaryDefinitions(CompileExporter::getTemporaryDefinitions(commandLine));
 
-		CompileExporter::setExportUsingCI(false);
+ModulatorSynthChain* mainSynthChain = bp->getMainSynthChain();
+File currentProjectFolder = GET_PROJECT_HANDLER(mainSynthChain).getWorkDirectory();
 
-		File projectDirectory = presetFile.getParentDirectory().getParentDirectory();
+File presetFile = getFilePathArgument(args, bp->getActiveFileHandler()->getRootFolder());
 
-		if (currentProjectFolder != projectDirectory)
+CompileExporter::setExportUsingCI(false);
+
+File projectDirectory = presetFile.getParentDirectory().getParentDirectory();
+
+if (currentProjectFolder != projectDirectory)
+{
+	GET_PROJECT_HANDLER(mainSynthChain).setWorkingProject(projectDirectory);
+}
+
+std::cout << "Loading the preset...";
+
+try
+{
+	if (presetFile.getFileExtension() == ".hip")
+	{
+		bp->loadPresetFromFile(presetFile, nullptr);
+	}
+	else if (presetFile.getFileExtension() == ".xml")
+	{
+		auto xml = XmlDocument::parse(presetFile);
+
+		if (xml != nullptr)
 		{
-			GET_PROJECT_HANDLER(mainSynthChain).setWorkingProject(projectDirectory);
+			XmlBackupFunctions::addContentFromSubdirectory(*xml, presetFile);
+			String newId = xml->getStringAttribute("ID");
+
+			auto v = ValueTree::fromXml(*xml);
+			XmlBackupFunctions::restoreAllScripts(v, mainSynthChain, newId);
+
+			bp->loadPresetFromValueTree(v);
+
+
 		}
+	}
+}
+catch (hise::CommandLineException& c)
+{
+	throwErrorAndQuit(c.r.getErrorMessage());
+	return 1;
+}
 
-		std::cout << "Loading the preset...";
+std::cout << "DONE" << std::endl << std::endl;
 
-		try
-		{
-			if (presetFile.getFileExtension() == ".hip")
-			{
-				bp->loadPresetFromFile(presetFile, nullptr);
-			}
-			else if (presetFile.getFileExtension() == ".xml")
-			{
-				auto xml = XmlDocument::parse(presetFile);
+if (additionalFunction)
+{
+	auto ok = additionalFunction(bp);
 
-				if (xml != nullptr)
-				{
-					XmlBackupFunctions::addContentFromSubdirectory(*xml, presetFile);
-					String newId = xml->getStringAttribute("ID");
-
-					auto v = ValueTree::fromXml(*xml);
-					XmlBackupFunctions::restoreAllScripts(v, mainSynthChain, newId);
-
-					bp->loadPresetFromValueTree(v);
-				}
-			}
-		}
-		catch (hise::CommandLineException& c)
-		{
-			throwErrorAndQuit(c.r.getErrorMessage());
-			return 1;
-		}
-		
-		std::cout << "DONE" << std::endl << std::endl;
-
-		if (additionalFunction)
-		{
-			auto ok = additionalFunction(bp);
-
-			if (ok.failed())
-			{
-				processor = nullptr;
-				throwErrorAndQuit(ok.getErrorMessage());
-				return 1;
-			}
-		}
-
+	if (ok.failed())
+	{
 		processor = nullptr;
-		
-		return 0;
+		throwErrorAndQuit(ok.getErrorMessage());
+		return 1;
+	}
+}
+
+if (args.contains("-dump_module_tree"))
+{
+	DynamicObject::Ptr no = new DynamicObject();
+	dumpRecursive(no, mainSynthChain, false);
+
+	auto p = JSON::toString(var(no.get()), args.contains("--verbose"));
+	print(p);
+}
+
+processor = nullptr;
+
+return 0;
 	}
 
 	static void compileNetworks(const String& commandLine)
@@ -400,10 +579,838 @@ public:
 			exit(0);
 	}
 
+	struct CLIInstance
+	{
+		CLIInstance()
+		{
+			auto start = Time::getApproximateMillisecondCounter();
+
+			CompileExporter::setSkipAudioDriverInitialisation();
+			CompileExporter::setProjectFolderFromWorkingDirectory();
+
+			sp = new StandaloneProcessor();
+			mc = dynamic_cast<MainController*>(sp->createProcessor());
+			threadSuspender = new MainController::ScopedBadBabysitter(mc);
+
+			auto bp = dynamic_cast<BackendProcessor*>(mc.get());
+
+			{
+				bp->prepareToPlay(44100.0, 512);
+				AudioSampleBuffer ab(2, 512);
+				MidiBuffer mb;
+				bp->processBlock(ab, mb);
+			}
+
+			auto stop = Time::getApproximateMillisecondCounter();
+
+			print("HISE CLI instance with project folder:");
+			print(CompileExporter::getCurrentWorkDirectory(false).getFullPathName());
+			print("Startup time: " + String(stop - start) + "ms");
+		}
+
+		File getProjectRoot() const {
+			return mc->getSampleManager().getProjectHandler().getRootFolder();
+		}
+
+		~CLIInstance()
+		{
+			auto start = Time::getApproximateMillisecondCounter();
+
+			threadSuspender = nullptr;
+			mc = nullptr;
+			sp = nullptr;
+
+			auto stop = Time::getApproximateMillisecondCounter();
+
+			print("Shutdown time: " + String(stop - start) + "ms");
+		}
+
+		ModulatorSynthChain* getMainSynthChain() { return mc->getMainSynthChain(); }
+
+		BackendProcessor* getBackendProcessor() { return dynamic_cast<BackendProcessor*>(mc.get()); }
+
+		ProjectHandler& getProjectHandler() { return mc->getSampleManager().getProjectHandler(); }
+
+	private:
+
+		ScopedPointer<StandaloneProcessor> sp;
+		ScopedPointer<MainController> mc;
+		ScopedPointer<MainController::ScopedBadBabysitter> threadSuspender;
+	};
+
+	static void compileScript(const String& commandLine)
+	{
+		File workDirectory;
+
+		try
+		{
+			workDirectory = CompileExporter::getCurrentWorkDirectory();
+		}
+		catch (Result& fail)
+		{
+			throwErrorAndQuit(fail.getErrorMessage());
+		}
+		
+		auto args = getCommandLineArgs(commandLine);
+
+		auto scriptDirectory = workDirectory.getChildFile("Scripts");
+
+		if (!scriptDirectory.isDirectory())
+			throwErrorAndQuit("Cannot find Scripts subfolder. Are you running this command from the project root?");
+
+		auto sf = scriptDirectory.getChildFile(getArgument(args, "-p:"));
+
+		DynamicObject::Ptr no = new DynamicObject();
+		
+		Array<var> errors;
+
+		no->setProperty("file", sf.getFullPathName());
+
+		if (sf.existsAsFile())
+		{
+			auto fn = sf.getRelativePathFrom(scriptDirectory).replace("\\", "/");
+
+			auto s = getArgument(args, "-screenshot:");
+
+			Rectangle<int> sb;
+
+			if (s.isNotEmpty())
+			{
+				auto w = s.upToFirstOccurrenceOf(",", false, false).getIntValue();
+				auto h = s.fromFirstOccurrenceOf(",", false, false).getIntValue();
+
+				sb = Rectangle<int>(w, h);
+
+				if (sb.isEmpty())
+					throwErrorAndQuit("Invalid screenshot width specified: " + s);
+			}
+
+			String code;
+
+			if (!sb.isEmpty())
+			{
+				code << "Content.makeFrontInterface(" << String(sb.getWidth()) << ", " << String(sb.getHeight()) << ");\n";
+
+				if (sf.loadFileAsString().contains("makeFrontInterface"))
+					throwErrorAndQuit("Your script file already calls makeFrontInterface(), but that interferes with the autogenerated interface size for the screenshot");
+			}
+				
+
+			code << "include(" << fn.quoted() << ");\n";
+
+			StringArray logs;
+
+			CLIInstance instance;
+			
+			auto projectRoot = instance.getProjectRoot();
+
+			if (projectRoot != workDirectory)
+				throwErrorAndQuit("You need to set the current HISE project to work from this directory.\nUse HISE set_project_folder \"-p:" + workDirectory.getFullPathName() + "\"\nand try again");
+
+			{
+				struct CallbackTest: public ReferenceCountedObject
+				{
+					bool ok = false;
+
+					using Ptr = ReferenceCountedObjectPtr<CallbackTest>;
+					using List = ReferenceCountedArray<CallbackTest>;
+
+					int uuid = 0;
+
+					String objectId;
+					String callbackName;
+					StringArray consoleOutput;
+					Array<var> errors;
+					var args;
+
+					String toMessage() const { return "test #" + String(uuid) + ": " + objectId + "." + callbackName; }
+
+					var toJSON() const
+					{
+						DynamicObject::Ptr no = new DynamicObject();
+						no->setProperty("uuid", String("#") + String(uuid));
+						no->setProperty("id", objectId);
+						no->setProperty("callback", callbackName);
+						no->setProperty("args", args);
+						no->setProperty("status", ok ? "ok" : "error");
+						
+
+						Array<var> log;
+						for (auto s : consoleOutput)
+							log.add(var(s));
+
+						no->setProperty("output", var(log));
+						no->setProperty("errors", var(errors));
+
+						return var(no.get());
+					}
+				};
+
+				CallbackTest::List flushedCallbacks;
+				CallbackTest::Ptr currentCallback;
+
+				instance.getBackendProcessor()->getConsoleHandler().setCustomCodeHandler([&](const String& t, int warningLevel, const Processor* p)
+				{
+					if (warningLevel == 0)
+					{
+						if (t.startsWith("BEGIN_CALLBACK_TEST"))
+						{
+							currentCallback = new CallbackTest();
+							currentCallback->uuid = flushedCallbacks.size() + 1;
+
+							auto id = t.fromFirstOccurrenceOf("BEGIN_CALLBACK_TEST", false, false).trim();
+
+							currentCallback->objectId = id.upToFirstOccurrenceOf(".", false, false);
+							currentCallback->callbackName = id.fromFirstOccurrenceOf(".", false, false);
+
+							logs.add(currentCallback->toMessage());
+						}
+						else if (t.startsWith("END_CALLBACK_TEST"))
+						{
+							currentCallback->ok = true;
+							flushedCallbacks.add(currentCallback);
+							currentCallback = nullptr;
+						}
+						else if (t.startsWith("CALLBACK_ARGS"))
+						{
+							if (auto last = flushedCallbacks.getLast())
+								last->args = JSON::parse(t.fromFirstOccurrenceOf(">", false, false));
+						}
+						else if (currentCallback != nullptr)
+							currentCallback->consoleOutput.add(t);
+						else
+							logs.add(t);
+					}
+					else
+					{
+						auto lines = StringArray::fromLines(t);
+
+						DynamicObject::Ptr e = new DynamicObject();
+						e->setProperty("errorMessage", lines[0].upToFirstOccurrenceOf("{{", false, false));
+
+						for (auto& l : lines)
+						{
+							l = l.fromFirstOccurrenceOf(":", false, false).upToFirstOccurrenceOf("{{", false, false).trim();
+
+							
+
+						}
+							
+
+						lines.trim();
+						lines.removeEmptyStrings();
+
+						for (auto& l : lines)
+						{
+							auto lineNumber = l.fromLastOccurrenceOf("(", false, false)
+								.upToFirstOccurrenceOf(")", false, false);
+
+							l = l.upToLastOccurrenceOf("(", false, false).trimEnd()
+								+ " - Line " + String(lineNumber);
+						}
+
+						Array<var> callStack;
+
+						for (auto& l: lines)
+							callStack.add(l);
+
+						e->setProperty("callstack", var(callStack));
+
+						if (currentCallback != nullptr)
+						{
+							currentCallback->errors.add(e.get());
+
+							// cleanup here
+							flushedCallbacks.add(currentCallback);
+							currentCallback = nullptr;
+						}
+						else
+							errors.add(e.get());
+					}
+				});
+
+				auto jsp = JavascriptMidiProcessor::getFirstInterfaceScriptProcessor(instance.getBackendProcessor());
+
+				ScopedPointer<ScriptContentComponent> content;
+
+				if (!sb.isEmpty())
+				{
+					content = new ScriptContentComponent(jsp);
+					content->setSize(sb.getWidth(), sb.getHeight());
+				}
+
+				jsp->getSnippet(0)->replaceAllContent(code);
+
+				auto t = Time::getApproximateMillisecondCounter();
+
+				jsp->compileScript();
+
+				auto now = Time::getApproximateMillisecondCounter();
+
+				Array<var> l;
+
+				for (auto& s : logs)
+					l.add(var(s));
+
+				no->setProperty("status", errors.isEmpty() ? "ok" : "error");
+				no->setProperty("compileTimeMs", now - t);
+
+
+				if (content != nullptr && errors.isEmpty())
+				{
+					auto screenshotFile = sf.withFileExtension(".png");
+					content->setNewContent(jsp->getScriptingContent());
+					content->makeScreenshot(screenshotFile, sb.toFloat());
+					no->setProperty("screenshot", screenshotFile.getFullPathName());
+				}
+				else
+					no->setProperty("screenshot", var());
+
+				if (!flushedCallbacks.isEmpty())
+				{
+					Array<var> list;
+
+					for (auto obj : flushedCallbacks)
+						list.add(obj->toJSON());
+
+					no->setProperty("callback_tests", var(list));
+				}
+
+				no->setProperty("output", var(l));
+
+				if (args.contains("-dump_module_tree"))
+				{
+					DynamicObject::Ptr obj = new DynamicObject();
+					dumpRecursive(obj, instance.getMainSynthChain(), args.contains("--verbose"));
+					no->setProperty("module_tree", var(obj.get()));
+				}
+
+				instance.getBackendProcessor()->getConsoleHandler().setCustomCodeHandler({});
+
+				content = nullptr;
+			}
+			
+			auto outputPath = getArgument(args, "-o:");
+
+			if (outputPath.contains(".hip"))
+			{
+				auto outputFile = instance.getProjectHandler().getSubDirectory(FileHandlerBase::Presets).getChildFile(outputPath);
+
+				instance.getMainSynthChain()->setId(outputFile.getFileNameWithoutExtension());
+				PresetHandler::saveProcessorAsPreset(instance.getMainSynthChain());
+				print("Wrote file " + outputFile.getFullPathName());
+			}
+		}
+		else
+		{
+			no->setProperty("status", "no file");
+			
+		}
+
+		no->setProperty("errors", errors);
+		
+		
+
+		print(JSON::toString(var(no.get()), false));
+	}
+
 	static void getProjectFolder(const String& /*commandLine*/)
 	{
 		print("Current project folder:\n" + getCurrentProjectFolder().getFullPathName());
-		exit(0);
+	}
+
+	static void fetchParameters(const String& commandLine)
+	{
+		auto args = getCommandLineArgs(commandLine);
+
+		auto typeIds = getArgument(args, "-m:");
+
+		if (typeIds.isEmpty())
+			throwErrorAndQuit("No module ID specified. Call fetch_parameters -m:TypeId1,TypeId2 to get the parameter list for the given module");
+
+		CLIInstance instance;
+
+		raw::Builder b(instance.getBackendProcessor());
+
+		auto sine = b.create<SineSynth>(instance.getMainSynthChain());
+
+		auto soundGenerators = instance.getMainSynthChain()->getFactoryType();
+		auto mps = dynamic_cast<Chain*>(sine->getChildProcessor(0))->getFactoryType();
+		auto mods = dynamic_cast<Chain*>(sine->getChildProcessor(1))->getFactoryType();
+		auto effects = dynamic_cast<Chain*>(sine->getChildProcessor(3))->getFactoryType();
+
+		auto idList = StringArray::fromTokens(typeIds, ",;", "");
+
+		DynamicObject::Ptr modules = new DynamicObject();
+
+		for (auto typeId : idList)
+		{
+			print("Fetching parameters for module type " + typeId);
+
+			WeakReference<Processor> p;
+
+			if (soundGenerators->allowType(typeId))
+				p = b.create(instance.getMainSynthChain(), typeId, -1);
+			if (mps->allowType(typeId))
+				p = b.create(sine, typeId, raw::IDs::Chains::Midi);
+			if (mods->allowType(typeId))
+				p = b.create(sine, typeId, raw::IDs::Chains::Gain);
+			if (effects->allowType(typeId))
+				p = b.create(sine, typeId, raw::IDs::Chains::FX);
+
+			if (p != nullptr)
+			{
+				DynamicObject::Ptr parameters = new DynamicObject();
+
+				for (int i = 0; i < p->getNumAttributes(); i++)
+				{
+					DynamicObject::Ptr pobj = new DynamicObject();
+					pobj->setProperty("defaultValue", p->getAttribute(i));
+					parameters->setProperty(p->getIdentifierForParameterIndex(i), var(pobj.get()));
+				}
+
+				ProcessorEditorContainer pc;
+				ProcessorEditor pe(&pc, 0, p, nullptr);
+
+				Component::callRecursive<MacroControlledObject>(&pe, [&](MacroControlledObject* mco)
+				{
+					auto pIndex = mco->getParameter();
+					auto pId = p->getIdentifierForParameterIndex(pIndex);
+
+					if (auto existing = parameters->getProperty(pId).getDynamicObject())
+					{
+						InvertableParameterRange r;
+						r.rng = mco->getRange();
+						RangeHelpers::storeDoubleRange(var(existing), r, scriptnode::RangeHelpers::IdSet::ScriptComponents);
+
+						if ((int)existing->getProperty("stepSize") == 1)
+						{
+
+							existing->setProperty("min", (int)existing->getProperty("min"));
+							existing->setProperty("max", (int)existing->getProperty("max"));
+							existing->setProperty("defaultValue", (int)existing->getProperty("defaultValue"));
+
+							if ((int)existing->getProperty("min") == 0 && (int)existing->getProperty("max") == 1)
+							{
+								existing->setProperty("min", (bool)existing->getProperty("min"));
+								existing->setProperty("max", (bool)existing->getProperty("max"));
+								existing->setProperty("defaultValue", (bool)existing->getProperty("defaultValue"));
+							}
+						}
+
+
+						existing->removeProperty("middlePosition");
+						existing->removeProperty("stepSize");
+						existing->removeProperty("Inverted");
+
+						if (auto s = dynamic_cast<HiSlider*>(mco))
+						{
+							existing->setProperty("mode", s->getModeId());
+							existing->setProperty("valueAsString", s->getTextFromValue(s->getValue()));
+						}
+
+						if (auto cb = dynamic_cast<HiComboBox*>(mco))
+						{
+							existing->setProperty("min", (int)existing->getProperty("min") - 1);
+							existing->setProperty("max", (int)existing->getProperty("max") - 1);
+							existing->setProperty("defaultValue", (int)existing->getProperty("defaultValue") - 1);
+
+							Array<var> items;
+
+							for (int i = 0; i < cb->getNumItems(); i++)
+								items.add(cb->getItemText(i));
+
+							existing->setProperty("items", var(items));
+						}
+					}
+
+					return false;
+				});
+
+				modules->setProperty(Identifier(typeId), var(parameters.get()));
+			}
+			else
+				throwErrorAndQuit("Can't find module with ID " + typeId);
+		}
+
+		print(JSON::toString(var(modules.get())));
+		
+	}
+
+	static void createBuilderCache(const String& commandLine)
+	{
+		print("Building module list...");
+
+		enum class Verbosity
+		{
+			All = 0,
+			NoParameters,
+			NoSlots,
+			NoInterfaces
+		};
+
+		auto args = getCommandLineArgs(commandLine);
+
+		auto filter = getArgument(args, "-filter:").toLowerCase();
+
+		auto verbosity = (Verbosity)getArgument(args, "--verbose:").getIntValue();
+
+		CLIInstance instance;
+
+		raw::Builder b(instance.getBackendProcessor());
+
+		auto sine = b.create<SineSynth>(instance.getMainSynthChain());
+
+		auto soundGenerators = instance.getMainSynthChain()->getFactoryType();
+		auto mps = dynamic_cast<Chain*>(sine->getChildProcessor(0))->getFactoryType();
+		auto mods = dynamic_cast<Chain*>(sine->getChildProcessor(1))->getFactoryType();
+		auto effects = dynamic_cast<Chain*>(sine->getChildProcessor(3))->getFactoryType();
+
+		struct ProcessorInformation
+		{
+			ProcessorInformation(Processor* p_) :
+				p(p_)
+			{
+			}
+
+			var toJSON(Verbosity verbosity) const
+			{
+				DynamicObject::Ptr obj = new DynamicObject();
+
+				obj->setProperty("ID", p->getType().toString());
+				obj->setProperty("PrettyName", p->getName());
+
+				
+				if (p->getType().toString().containsChar(' '))
+				{
+					// ouch, this shouldn't happen!
+					auto id = p->getId();
+					jassertfalse;
+				}
+
+				String builderPath = "Builder.";
+
+
+				
+
+				if (dynamic_cast<ModulatorSynth*>(p.get()) != nullptr)
+				{
+					obj->setProperty("Type", "SoundGenerator");
+					builderPath << "SoundGenerators.";
+				}
+					
+				if (dynamic_cast<VoiceStartModulator*>(p.get()) != nullptr)
+				{
+					obj->setProperty("Type", "VoiceStartModulator");
+					builderPath << "Modulators.";
+				}
+					
+				if (dynamic_cast<TimeVariantModulator*>(p.get()) != nullptr)
+				{
+					obj->setProperty("Type", "TimeVariantModulator");
+					builderPath << "Modulators.";
+				}
+					
+				if (dynamic_cast<EnvelopeModulator*>(p.get()) != nullptr)
+				{
+					obj->setProperty("Type", "EnvelopeModulator");
+					builderPath << "Modulators.";
+				}
+					
+				if (dynamic_cast<VoiceEffectProcessor*>(p.get()) != nullptr)
+				{
+					obj->setProperty("Type", "VoiceEffectProcessor");
+					builderPath << "Effects.";
+				}
+					
+				if (dynamic_cast<MasterEffectProcessor*>(p.get()) != nullptr)
+				{
+					obj->setProperty("Type", "MasterEffectProcessor");
+					builderPath << "Effects.";
+				}
+					
+				builderPath << p->getType().toString();
+
+				obj->setProperty("BuilderPath", builderPath);
+
+				Array<var> specialTypes;
+				Array<var> scriptInterfaces;
+
+				if (dynamic_cast<DspNetwork::Holder*>(p.get()))
+					specialTypes.add("Scriptnode");
+				if (dynamic_cast<HardcodedSwappableEffect*>(p.get()))
+					specialTypes.add("Hardcoded");
+				if (dynamic_cast<SlotFX*>(p.get()))
+					specialTypes.add("SlotFX");
+				if (dynamic_cast<JavascriptProcessor*>(p.get()))
+					specialTypes.add("Script");
+
+#define RETURN_IF_MATCH(Type, PType) if(dynamic_cast<PType*>(p.get()) != nullptr) scriptInterfaces.add(Type::getClassName().toString());
+
+				RETURN_IF_MATCH(ScriptingObjects::ScriptingMidiProcessor, hise::MidiProcessor);
+				RETURN_IF_MATCH(ScriptingObjects::ScriptingModulator, hise::Modulator);
+				RETURN_IF_MATCH(ScriptingObjects::ScriptingSynth, hise::ModulatorSynth);
+				RETURN_IF_MATCH(ScriptingObjects::ScriptingEffect, hise::EffectProcessor);
+				RETURN_IF_MATCH(ScriptingApi::Sampler, hise::ModulatorSampler);
+				RETURN_IF_MATCH(ScriptingObjects::ScriptedMidiPlayer, hise::MidiPlayer);
+				RETURN_IF_MATCH(ScriptingObjects::ScriptRoutingMatrix, hise::Processor);
+				RETURN_IF_MATCH(ScriptingObjects::ScriptingSlotFX, hise::HotswappableProcessor);
+
+#undef RETURN_IF_MATCH
+
+				if (verbosity < Verbosity::NoInterfaces)
+				{
+					if(!specialTypes.isEmpty())
+						obj->setProperty("SlotFXTypes", var(specialTypes));
+
+					obj->setProperty("InterfaceTypes", var(scriptInterfaces));
+				}
+				
+
+				
+				Array<var> children;
+
+				std::map<String, String> namedChainIds;
+				std::map<String, String> parentToChildType;
+
+				namedChainIds["GainModulation"] = "ChainIndexes.Gain";
+				namedChainIds["PitchModulation"] = "ChainIndexes.Pitch";
+				namedChainIds["Midi Processor"] = "ChainIndexes.Midi";
+				namedChainIds["FX"] = "ChainIndexes.FX";
+
+				parentToChildType["MidiProcessorChain"] = "MidiProcessor";
+				parentToChildType["ModulatorChain"] = "Modulator";
+				parentToChildType["EffectChain"] = "FX";
+				
+
+				for (int i = 0; i < p->getNumChildProcessors(); i++)
+				{
+					if (auto ms = dynamic_cast<ModulatorSynth*>(p.get()))
+					{
+						if (isPositiveAndBelow(i, ModulatorSynth::numInternalChains) && ms->isChainDisabled((ModulatorSynth::InternalChains)i))
+							continue;
+					}
+
+					DynamicObject::Ptr cobj = new DynamicObject();
+					auto c = p->getChildProcessor(i);
+
+					auto pid = c->getId();
+					auto ptype = c->getType().toString();
+
+					
+
+					cobj->setProperty("ChainIndex", i);
+					cobj->setProperty("ID", pid);
+					cobj->setProperty("Type", ptype);
+
+					
+
+					if (parentToChildType.find(ptype) != parentToChildType.end())
+						cobj->setProperty("Type", parentToChildType[ptype]);
+
+					if (namedChainIds.find(pid) != namedChainIds.end())
+						cobj->setProperty("ChainIndex", namedChainIds[pid]);
+
+					if (auto cc = dynamic_cast<Chain*>(c))
+					{
+						cobj->setProperty("Allowed", "*");
+
+						if (auto modChain = dynamic_cast<ModulatorChain*>(c))
+						{
+							cobj->setProperty("ID", modChain->getDisplayName());
+
+							Modulation::Mode mode = modChain->getMode();
+
+							StringArray modes =
+							{
+								"Gain",
+								"Pitch",
+								"Pan",
+								"Global",
+								"Offset",
+								"Combined"
+							};
+
+							cobj->setProperty("Mode", modes[(int)mode]);
+
+							if (dynamic_cast<VoiceStartModulatorFactoryType*>(cc->getFactoryType()))
+								cobj->setProperty("Allowed", "VoiceStartModulator");
+						}
+
+						if (auto constrainer = cc->getFactoryType()->getConstrainer())
+							cobj->setProperty("Allowed", constrainer->getDescription());	
+					}
+
+					children.add(cobj.get());
+				}
+
+				if (auto c = dynamic_cast<Chain*>(p.get()))
+				{
+					auto dobj = new DynamicObject();
+					dobj->setProperty("ChainIndex", "ChainIndexes.Direct");
+					dobj->setProperty("ID", p->getId());
+					dobj->setProperty("Type", "SoundGenerator");
+				}
+				
+				
+
+				if (auto eh = dynamic_cast<ExternalDataHolder*>(p.get()))
+				{
+					if(verbosity < Verbosity::NoInterfaces)
+					{
+						ExternalData::forEachType([&](ExternalData::DataType dt)
+						{
+							auto numObjects = eh->getNumDataObjects(dt);
+
+							if (numObjects > 0)
+							{
+
+#define RETURN_IF_MATCH(scriptClass, type) if (dt == type) obj->getProperty("InterfaceTypes").getArray()->addIfNotAlreadyThere(scriptClass::getClassName().toString());
+
+							RETURN_IF_MATCH(ScriptingObjects::ScriptingAudioSampleProcessor, ExternalData::DataType::AudioFile);
+							RETURN_IF_MATCH(ScriptingObjects::ScriptSliderPackProcessor, ExternalData::DataType::SliderPack);
+							RETURN_IF_MATCH(ScriptingObjects::ScriptingTableProcessor, ExternalData::DataType::Table);
+							RETURN_IF_MATCH(ScriptingObjects::ScriptDisplayBufferSource, ExternalData::DataType::DisplayBuffer);
+#undef RETURN_IF_MATCH
+
+								obj->setProperty(ExternalData::getDataTypeName(dt, true), numObjects);
+							}
+						});
+					}
+				}
+
+				if(verbosity < Verbosity::NoSlots)
+					obj->setProperty("Chains", var(children));
+
+				return var(obj.get());
+			}
+
+			WeakReference<Processor> p;
+		};
+
+		DynamicObject::Ptr slots = new DynamicObject();
+
+		DynamicObject::Ptr go = new DynamicObject();
+
+		{
+			Array<var> sgList;
+
+			for (auto sg : soundGenerators->getAllowedTypes())
+			{
+				auto p = b.create(instance.getMainSynthChain(), sg.type, -1);
+
+				if (filter.isNotEmpty() && !p->getId().toLowerCase().contains(filter))
+					continue;
+
+				sgList.add(ProcessorInformation(p).toJSON(verbosity));
+
+			}
+
+			go->setProperty("SoundGenerators", var(sgList));
+		}
+		
+		{
+			Array<var> midiList;
+
+			for (auto mp : mps->getAllowedTypes())
+			{
+				auto p = b.create(sine, mp.type, raw::IDs::Chains::Midi);
+
+				if (filter.isNotEmpty() && !p->getId().toLowerCase().contains(filter))
+					continue;
+
+				midiList.add(ProcessorInformation(p).toJSON(verbosity));
+			}
+
+			go->setProperty("MidiProcessors", var(midiList));
+		}
+
+		{
+			Array<var> modList;
+
+			for (auto mod : mods->getAllowedTypes())
+			{
+				auto p = b.create(sine, mod.type, raw::IDs::Chains::Gain);
+
+				if (filter.isNotEmpty() && !p->getId().toLowerCase().contains(filter))
+					continue;
+
+				modList.add(ProcessorInformation(p).toJSON(verbosity));
+			}
+
+			go->setProperty("Modulators", var(modList));
+		}
+		
+		{
+			Array<var> fxList;
+
+			for (auto fx : effects->getAllowedTypes())
+			{
+				auto p = b.create(sine, fx.type, raw::IDs::Chains::FX);
+
+				if (filter.isNotEmpty() && !p->getId().toLowerCase().contains(filter))
+					continue;
+
+				fxList.add(ProcessorInformation(p).toJSON(verbosity));
+			}
+
+			go->setProperty("FX", var(fxList));
+		}
+
+		auto numHardcodedFXSlots = HISE_GET_PREPROCESSOR(instance.getBackendProcessor(), NUM_HARDCODED_FX_MODS);
+		auto numHardcodedPolyFXSlots = HISE_GET_PREPROCESSOR(instance.getBackendProcessor(), NUM_HARDCODED_POLY_FX_MODS);
+		auto numHardcodedSynthSlots = HISE_GET_PREPROCESSOR(instance.getBackendProcessor(), NUM_HARDCODED_SYNTH_MODS);
+		
+		auto maxSlots = jmax(numHardcodedFXSlots, numHardcodedPolyFXSlots, numHardcodedSynthSlots);
+		
+		HardcodedSwappableEffect* hc[3];
+
+		hc[0] = ProcessorHelpers::getFirstProcessorWithType<HardcodedMasterFX>(instance.getMainSynthChain());
+		hc[1] = ProcessorHelpers::getFirstProcessorWithType<HardcodedPolyphonicFX>(instance.getMainSynthChain());
+		hc[2] = ProcessorHelpers::getFirstProcessorWithType<HardcodedSynthesiser>(instance.getMainSynthChain());
+		
+		jassert(hc[0] != nullptr && hc[1] != nullptr && hc[2] != nullptr);
+
+		HardcodedSwappableEffect* toUse = nullptr;
+
+		if (maxSlots == numHardcodedFXSlots)
+			toUse = hc[0];
+		if (maxSlots == numHardcodedPolyFXSlots)
+			toUse = hc[1];
+		if (maxSlots == numHardcodedSynthSlots)
+			toUse = hc[2];
+
+		if (toUse != nullptr)
+		{
+			auto asP = dynamic_cast<Processor*>(toUse);
+			DynamicObject::Ptr hobj = new DynamicObject();
+
+			auto list = toUse->getModuleList();
+
+			for (auto id : list)
+			{
+				toUse->setEffect(id, false);
+
+				auto n = ProcessorInformation(asP).toJSON(verbosity);
+				n.getDynamicObject()->removeProperty("ID");
+				n.getDynamicObject()->removeProperty("Type");
+				n.getDynamicObject()->removeProperty("InterfaceTypes");
+				n.getDynamicObject()->removeProperty("PrettyName");
+				n.getDynamicObject()->removeProperty("SlotTypes");
+
+				hobj->setProperty(id, n);
+			}
+
+			go->setProperty("HardcodedNetworks", var(hobj.get()));
+		}
+		else
+		{
+			jassertfalse;
+		}
+
+		print(JSON::toString(var(go.get())));
+
+		int x = 5;
 	}
 
 	static void cleanBuildFolder(const String& commandLine)
@@ -748,6 +1755,12 @@ public:
 			quit();
 			return;
 		}
+		else if (commandLine.startsWith("compile_script"))
+		{
+			CommandLineActions::compileScript(commandLine);
+			quit();
+			return;
+		}
 		else if (commandLine.startsWith("run_unit_tests"))
 		{
 #if HI_RUN_UNIT_TESTS
@@ -829,6 +1842,18 @@ public:
 			}
 				
 
+			quit();
+			return;
+		}
+		else if (commandLine.startsWith("create_module_list"))
+		{
+			CommandLineActions::createBuilderCache(commandLine);
+			quit();
+			return;
+		}
+		else if (commandLine.startsWith("fetch_parameters"))
+		{
+			CommandLineActions::fetchParameters(commandLine);
 			quit();
 			return;
 		}

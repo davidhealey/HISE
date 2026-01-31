@@ -2517,7 +2517,9 @@ namespace ScriptingObjects
 
 		// =============================================================================================
 
-		Identifier getObjectName() const override { RETURN_STATIC_IDENTIFIER("DisplayBufferSource"); };
+		static Identifier getClassName() { RETURN_STATIC_IDENTIFIER("DisplayBufferSource"); }
+
+		Identifier getObjectName() const override { return getClassName(); };
 		bool objectDeleted() const override { return source.get() == nullptr; }
 		bool objectExists() const override { return source != nullptr; }
 

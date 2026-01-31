@@ -371,6 +371,64 @@ void MouseCallbackComponent::filesDropped(const StringArray& files, int x, int y
 	sendFileMessage(Action::FileDrop, files, Point<int>(x, y));
 }
 
+Result MouseCallbackComponent::validateEventObject(const var& objectToTest, const String& callbackLevel)
+{
+	auto cl = getCallbackLevel(callbackLevel);
+
+	if (cl == CallbackLevel::NoCallbacks)
+		return Result::fail("allowCallbacks is set to No Callbacks, this will never execute");
+
+	auto e = objectToTest.getDynamicObject();
+
+	if (e == nullptr)
+	{
+		return Result::fail("Must be a JSON object");
+	}
+
+	auto validIds = getCallbackPropertyNames();
+
+	String errorMessage;
+
+	for (const auto& nv : e->getProperties())
+	{
+		if (!validIds.contains(nv.name.toString()))
+		{
+			errorMessage << "invalid property: " << nv.name;
+			errorMessage << " - expected properties: ";
+
+			for (const auto& i : validIds)
+				errorMessage << i << ", ";
+
+			return Result::fail(errorMessage.upToLastOccurrenceOf(", ", false, false));
+		}
+	}
+
+	auto checkAdvancedProperty = [&](const Identifier& id, CallbackLevel expected)
+	{
+		if (e->hasProperty(id) && cl < expected)
+		{
+			String errorMessage;
+			errorMessage << "property '" << id.toString() << "' requires callback level >= " << getCallbackLevels()[(int)CallbackLevel::ClicksAndEnter].quoted();
+			throw Result::fail(errorMessage);
+		}
+	};
+
+	try
+	{
+		checkAdvancedProperty("hover", CallbackLevel::ClicksAndEnter);
+		checkAdvancedProperty("drag", CallbackLevel::Drag);
+		checkAdvancedProperty("insideDrag", CallbackLevel::Drag);
+		checkAdvancedProperty("isDragOnly", CallbackLevel::Drag);
+		checkAdvancedProperty("dragX", CallbackLevel::Drag);
+		checkAdvancedProperty("dragY", CallbackLevel::Drag);
+		return Result::ok();
+	}
+	catch (Result& r)
+	{
+		return r;
+	}
+}
+
 void MouseCallbackComponent::setAllowCallback(const String &newCallbackLevel) noexcept
 {
 	const int index = callbackLevels.indexOf(newCallbackLevel);
@@ -381,6 +439,16 @@ void MouseCallbackComponent::setAllowCallback(const String &newCallbackLevel) no
 MouseCallbackComponent::CallbackLevel MouseCallbackComponent::getCallbackLevel() const
 {
 	return callbackLevel;
+}
+
+MouseCallbackComponent::CallbackLevel MouseCallbackComponent::getCallbackLevel(const String& newCallbackLevel)
+{
+	auto idx = getCallbackLevels(false).indexOf(newCallbackLevel);
+
+	if (idx != -1)
+		return (CallbackLevel)idx;
+
+	return CallbackLevel::NoCallbacks;
 }
 
 void MouseCallbackComponent::mouseMove(const MouseEvent& event)

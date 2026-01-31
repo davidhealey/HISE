@@ -155,6 +155,11 @@ struct SignalSource
 
 struct ConnectionInfo
 {
+	static constexpr char BeginList = 59;
+	static constexpr char BeginConnection = 60;
+	static constexpr char EndList = 61;
+	static constexpr char BeginMetadata = 62;
+
 	using List = std::vector<ConnectionInfo>;
 
 	int16 connectedParameterIndex;
@@ -166,13 +171,16 @@ struct ConnectionInfo
 	{
 		List l;
 
-		if(is.readByte() == 59)
+		if(is.readByte() == BeginList)
 		{
 			while (!is.isExhausted())
 			{
 				auto check = is.readByte();
 
-				if (check == 60)
+				if (check == EndList)
+					break;
+
+				if (check == BeginConnection)
 				{
 					ConnectionInfo ni;
 					ni.connectedParameterIndex = is.readCompressedInt();
@@ -200,16 +208,18 @@ struct ConnectionInfo
 
 	static void writeTo(const List& list, OutputStream& os)
 	{
-		os.writeByte(59);
+		os.writeByte(BeginList);
 
 		for(const auto& info: list)
 		{
-			os.writeByte(60);
+			os.writeByte(BeginConnection);
 			os.writeCompressedInt(info.connectedParameterIndex);
 			os.writeByte(static_cast<char>(info.modulationMode));
 			os.writeByte(static_cast<char>(info.modColour));
 			os.writeByte(static_cast<char>(info.connectionMode));
 		}
+
+		os.writeByte(EndList);
 	}
 };
 

@@ -219,7 +219,7 @@ StandaloneProcessor::StandaloneProcessor()
 	ScopedPointer<XmlElement> xml = AudioProcessorDriver::getSettings();
 
 #if USE_BACKEND
-	if(!CompileExporter::isExportingFromCommandLine())
+	if(!CompileExporter::shouldSkipAudioDriverInitialisation())
 	{
 		if(xml != nullptr)
 		{

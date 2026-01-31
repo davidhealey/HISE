@@ -43,7 +43,7 @@ class HardcodedMasterFX: public MasterEffectProcessor,
 {
 public:
 
-	SET_PROCESSOR_NAME("Hardcoded Master FX", "HardcodedMasterFX", "A master effect wrapper around a compiled DSP network");
+	SET_PROCESSOR_NAME("HardcodedMasterFX", "Hardcoded Master FX", "A master effect wrapper around a compiled DSP network");
 
 	HardcodedMasterFX(MainController* mc, const String& uid);
 	~HardcodedMasterFX() override;
@@ -159,7 +159,7 @@ class HardcodedTimeVariantModulator: public TimeVariantModulator,
 {
 public:
     
-    SET_PROCESSOR_NAME("Hardcoded Timevariant Modulator", "HardcodedTimeVariantModulator", "Atime variant modulator wrapper around a compiled DSP network");
+    SET_PROCESSOR_NAME("HardcodedTimevariantModulator", "Hardcoded Time Variant Modulator", "A time variant modulator wrapper around a compiled DSP network");
 
     HardcodedTimeVariantModulator(MainController* mc, const String& uid, Modulation::Mode m);
     ~HardcodedTimeVariantModulator() override;;
@@ -199,7 +199,7 @@ class HardcodedEnvelopeModulator: public EnvelopeModulator,
 {
 public:
 
-	SET_PROCESSOR_NAME("Hardcoded Envelope Modulator", "HardcodedEnvelopeModulator", "A envelope modulator wrapper around a compiled DLL node");
+	SET_PROCESSOR_NAME("HardcodedEnvelopeModulator", "Hardcoded Envelope Modulator", "A envelope modulator wrapper around a compiled DLL node");
 
 	HardcodedEnvelopeModulator(MainController* mc, const String& id, int numVoices, Modulation::Mode m);
 	~HardcodedEnvelopeModulator() override;
