@@ -5140,6 +5140,37 @@ void ScriptingApi::Content::ScriptPanel::repaintWrapped()
 	}
 }
 
+Result ScriptingApi::Content::ScriptPanel::testCallback(const String& callbackId, const Array<var>& args)
+{
+	if (callbackId == "setMouseCallback")
+	{
+		auto ok = MouseCallbackComponent::validateEventObject(args[0], getScriptObjectProperty(ScriptPanel::allowCallbacks).toString());
+
+		if (!ok.wasOk())
+			return ok;
+
+		return testWithThis(mouseRoutine, args);
+	}
+	if (callbackId == "setPaintRoutine")
+	{
+		var g(new ScriptingObjects::GraphicsObject(getScriptProcessor(), this));
+
+		Array<var> ga;
+		ga.add(g);
+
+		return testWithThis(paintRoutine, ga);
+
+	}
+	if (callbackId == "setTimerCallback")
+		return testWithThis(timerRoutine, args);
+	if (callbackId == "setLoadingCallback")
+		return testWithThis(loadRoutine, args);
+	if (callbackId == "setFileDropCallback")
+		return testWithThis(fileDropRoutine, args);
+
+	return ScriptComponent::testCallback(callbackId, args);
+}
+
 var ScriptingApi::Content::ScriptPanel::addChildPanel()
 {
 	auto s = new ScriptPanel(this);

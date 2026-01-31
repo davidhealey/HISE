@@ -327,6 +327,46 @@ public:
 
 		const ScriptComponent* getParentScriptComponent() const;
 
+		Result testWithThis(WeakCallbackHolder& c, const Array<var>& argList)
+		{
+			juce::var::NativeFunctionArgs args(var(this), argList.begin(), argList.size());
+			return c.callSync(args);
+		}
+
+		Result testWithThis(const var& function, const Array<var>& argList)
+		{
+			if (HiseJavascriptEngine::isJavascriptFunction(function))
+			{
+				WeakCallbackHolder c(getScriptProcessor(), this, function, argList.size());
+				c.incRefCount();
+				c.setThisObject(this);
+
+				return testWithThis(c, argList);
+			}
+			else
+			{
+				return Result::fail("function is not defined");
+			}
+		}
+
+		virtual Result testCallback(const String& callbackId, const Array<var>& argList)
+		{
+			if (callbackId == "setControlCallback")
+			{
+				if (argList[0] != this)
+					return Result::fail("argList[0] must be equal to the obj parameter of the testCallback call");
+
+				if (argList.size() < 2)
+					return Result::fail("testing setControlCallback requires 2 arguments");
+
+				return testWithThis(customControlCallback, argList);
+			}
+			if (callbackId == "setKeyPressCallback")
+				return testWithThis(keyboardCallback, argList);
+
+			return Result::fail("unknown callback ID " + callbackId);
+		}
+
 		virtual void preRecompileCallback() 
 		{
 			controlSender.cancelMessage();
@@ -1946,6 +1986,8 @@ public:
 		String fileDropLevel;
 
 		dispatch::AccumulatedFlowManager flowManager;
+
+		Result testCallback(const String& callbackId, const Array<var>& args) override;
 
 	private:
 

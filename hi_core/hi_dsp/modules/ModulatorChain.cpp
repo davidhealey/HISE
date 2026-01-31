@@ -427,7 +427,7 @@ void ModulatorChain::setInternalAttribute(int i, float x)
 { jassertfalse; }
 
 float ModulatorChain::getAttribute(int i) const
-{ jassertfalse; return -1.0; }
+{ return -1.0; }
 
 float ModulatorChain::getCurrentMonophonicStartValue() const noexcept
 {

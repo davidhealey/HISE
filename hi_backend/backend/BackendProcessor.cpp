@@ -952,7 +952,7 @@ hise::JavascriptProcessor* BackendProcessor::createInterface(int width, int heig
 
 	String code = "Content.makeFrontInterface(" + String(width) + ", " + String(width) + ");";
 
-	jsp->getSnippet(0)->replaceContentAsync(code);
+	jsp->getSnippet(0)->replaceContentAsync(code, false);
 	jsp->compileScript();
 
 	midiChain->getHandler()->add(s, nullptr);

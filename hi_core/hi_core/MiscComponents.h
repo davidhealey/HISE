@@ -229,10 +229,13 @@ public:
 
 	void setEnableFileDrop(const String& newCallbackLevel, const String& allowedWildcards);
 
-
+	/** Checks whether the event object is properly formatted. */
+	static Result validateEventObject(const var& objectToTest, const String& callbackLevel);
 
 	void setAllowCallback(const String &newCallbackLevel) noexcept;
 	CallbackLevel getCallbackLevel() const;
+
+	static CallbackLevel getCallbackLevel(const String& newCallbackLevel);
 
 	/** overwrite this method and update the Component to display the current value of the controlled attribute. */
 	virtual void updateValue(NotificationType /*sendAttributeChange=sendNotification*/);;
