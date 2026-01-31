@@ -24,12 +24,22 @@ Automates complete development environment setup for HISE (Hart Instrument Softw
 - Provides platform-specific guidance
 
 ### 2. Test Mode Operation
-- **Test Mode:** Displays exact commands without executing them
-  - Performs OS compatibility checks (platform detection, OS version)
-  - Skips all installations and modifications
-  - Shows exact commands that would be executed
-  - Output format: `[TEST MODE] Would execute: {command}`
-  - Used for debugging setup workflow
+- **Test Mode:** Validates environment without making changes
+  - **Executes:** All non-modifying commands (read-only operations)
+    - `git --version` (check if Git is installed)
+    - `xcode-select -p` (check Xcode path)
+    - `which gcc` / `gcc --version` (check compiler)
+    - `ls` / `test -f` / `test -d` (check file/directory existence)
+    - Platform detection and OS version checks
+    - Disk space checks
+  - **Skips:** All modifying commands (shows what would be executed)
+    - Installations (`apt-get install`, `brew install`, etc.)
+    - Git operations that change state (`git clone`, `git checkout`, etc.)
+    - File modifications (unzip, write, delete)
+    - Build commands (MSBuild, xcodebuild, make)
+    - PATH modifications
+  - Output format for skipped commands: `[TEST MODE] Would execute: {command}`
+  - Used for debugging setup workflow and validating prerequisites
 - **Normal Mode:** Executes full installation
 
 ### 3. Git Installation & Repository Setup
@@ -266,8 +276,9 @@ If normal mode:
 
 **Test Mode:**
 ```
-[TEST MODE] Step 2: Git Setup
-[TEST MODE] Would check: git --version
+[TEST MODE] Step 3: Git Setup
+[TEST MODE] Executing: git --version
+[TEST MODE] Result: git version X.X.X (or "not installed")
 [TEST MODE] If not installed, would execute: {platform-specific git install command}
 [TEST MODE] Would execute: git clone https://github.com/christophhart/HISE.git
 [TEST MODE] Would execute: cd HISE
@@ -296,8 +307,8 @@ cd JUCE && git checkout juce6 && cd ..
 
 **All platforms:**
 - **Prompt:** "Install Faust DSP programming language? [Y/n]"
-  - Yes: Install based on platform/architecture
-  - No: Skip Faust installation
+  - Yes: Install based on platform/architecture, use `ReleaseWithFaust` build configuration
+  - No: Skip Faust installation, use `Release` build configuration
 
 ### Step 5: IDE & Compiler Setup
 
@@ -309,9 +320,11 @@ cd JUCE && git checkout juce6 && cd ..
 **Test Mode (Windows):**
 ```
 [TEST MODE] Step 5: IDE & Compiler Setup
-[TEST MODE] Would execute: Start installer from https://visualstudio.microsoft.com/downloads/
+[TEST MODE] Executing: where msbuild (checking for Visual Studio)
+[TEST MODE] Executing: test -f "C:\Program Files\Microsoft Visual Studio\18\Community\MSBuild\Current\Bin\MsBuild.exe"
+[TEST MODE] Result: Visual Studio 2026 {installed/not installed}
+[TEST MODE] If not installed, would execute: Start installer from https://visualstudio.microsoft.com/downloads/
 [TEST MODE] Would select: "Desktop development with C++" workload
-[TEST MODE] Would verify: C:\Program Files\Microsoft Visual Studio\18\Community\MSBuild\Current\Bin\MsBuild.exe exists
 ```
 
 **macOS:**
@@ -322,9 +335,12 @@ cd JUCE && git checkout juce6 && cd ..
 **Test Mode (macOS):**
 ```
 [TEST MODE] Step 5: IDE & Compiler Setup
-[TEST MODE] Would execute: xcode-select --install
+[TEST MODE] Executing: xcode-select -p (checking Xcode path)
+[TEST MODE] Executing: which xcodebuild
+[TEST MODE] Executing: xcodebuild -version
+[TEST MODE] Result: Xcode {version} {installed/not installed}
+[TEST MODE] If not installed, would execute: xcode-select --install
 [TEST MODE] Would execute: Accept Xcode license automatically
-[TEST MODE] Would verify: /usr/bin/xcodebuild exists
 ```
 
 **Linux:**
@@ -333,8 +349,12 @@ cd JUCE && git checkout juce6 && cd ..
 **Test Mode (Linux):**
 ```
 [TEST MODE] Step 5: IDE & Compiler Setup
+[TEST MODE] Executing: which gcc
+[TEST MODE] Executing: gcc --version
+[TEST MODE] Executing: which clang
+[TEST MODE] Executing: clang --version
+[TEST MODE] Result: GCC version {X.X} {≤11 OK / >11 ABORT}
 [TEST MODE] Would execute: sudo apt-get -y install build-essential make llvm clang libfreetype6-dev libx11-dev libxinerama-dev libxrandr-dev libxcursor-dev mesa-common-dev libasound2-dev freeglut3-dev libxcomposite-dev libcurl4-gnutls-dev libgtk-3-dev libjack-jackd2-dev libwebkit2gtk-4.0-dev libpthread-stubs0-dev ladspa-sdk
-[TEST MODE] Would check: gcc --version ≤ 11
 ```
 
 **Normal Mode:**
@@ -349,10 +369,12 @@ cd JUCE && git checkout juce6 && cd ..
 **Test Mode:**
 ```
 [TEST MODE] Step 6: SDK Installation
-[TEST MODE] Would verify: tools/SDK/sdk.zip exists
+[TEST MODE] Executing: test -f tools/SDK/sdk.zip (checking SDK archive exists)
+[TEST MODE] Result: SDK archive {found/not found}
+[TEST MODE] Executing: test -d tools/SDK/ASIOSDK2.3 (checking if already extracted)
+[TEST MODE] Executing: test -d "tools/SDK/VST3 SDK" (checking if already extracted)
+[TEST MODE] Result: SDKs {already extracted/need extraction}
 [TEST MODE] Would execute: unzip tools/SDK/sdk.zip -d tools/SDK/
-[TEST MODE] Would verify: tools/SDK/ASIOSDK2.3/common exists
-[TEST MODE] Would verify: tools/SDK/VST3 SDK/public.sdk exists
 ```
 
 **Normal Mode:**
@@ -365,14 +387,20 @@ cd JUCE && git checkout juce6 && cd ..
 **Test Mode:**
 ```
 [TEST MODE] Step 7: JUCE Submodule Verification
-[TEST MODE] Would verify: JUCE submodule is on juce6 branch
-[TEST MODE] Would verify: JUCE/modules/juce_core/system/juce_StandardHeader.h exists
+[TEST MODE] Executing: test -d JUCE (checking JUCE directory exists)
+[TEST MODE] Executing: git -C JUCE branch --show-current (checking current branch)
+[TEST MODE] Executing: test -f JUCE/modules/juce_core/system/juce_StandardHeader.h
+[TEST MODE] Result: JUCE submodule {valid on juce6/needs initialization}
 ```
 
 **Normal Mode:**
 - **High-level log:** "Verifying JUCE submodule configuration..."
 
 ### Step 8: Compile HISE Standalone Application
+
+**Build Configuration Selection:**
+- If Faust was installed (Step 4): Use `ReleaseWithFaust` configuration
+- If Faust was not installed: Use `Release` configuration
 
 **Windows:**
 - Launch Projucer: `{hisePath}/JUCE/Projucer/Projucer.exe`
@@ -383,16 +411,25 @@ cd JUCE && git checkout juce6 && cd ..
 **Test Mode (Windows):**
 ```
 [TEST MODE] Step 8: Compile HISE Standalone Application
+[TEST MODE] Build configuration: {Release|"Release with Faust"} (based on Faust installation)
+[TEST MODE] Executing: test -f "{hisePath}\JUCE\Projucer\Projucer.exe" (checking Projucer exists)
 [TEST MODE] Would execute: "{hisePath}\JUCE\Projucer\Projucer.exe" --resave "projects\standalone\HISE Standalone.jucer"
-[TEST MODE] Would execute: "C:\Program Files\Microsoft Visual Studio\18\Community\MSBuild\Current\Bin\MsBuild.exe" "projects\standalone\Builds\VisualStudio2026\HISE.sln" /p:Configuration=Release /verbosity:minimal
-[TEST MODE] Would verify: projects\standalone\Builds\VisualStudio2026\x64\Release\App\HISE.exe exists
+[TEST MODE] Would execute: "C:\Program Files\Microsoft Visual Studio\18\Community\MSBuild\Current\Bin\MsBuild.exe" "projects\standalone\Builds\VisualStudio2026\HISE.sln" /p:Configuration={Release|"Release with Faust"} /verbosity:minimal
+[TEST MODE] Output path: projects\standalone\Builds\VisualStudio2026\x64\{Release|Release with Faust}\App\HISE.exe
 ```
 
-**Normal Mode (Windows):**
+**Normal Mode (Windows - without Faust):**
 ```batch
 cd projects\standalone
 "{hisePath}\JUCE\Projucer\Projucer.exe" --resave "HISE Standalone.jucer"
 "C:\Program Files\Microsoft Visual Studio\18\Community\MSBuild\Current\Bin\MsBuild.exe" Builds\VisualStudio2026\HISE.sln /p:Configuration=Release /verbosity:minimal
+```
+
+**Normal Mode (Windows - with Faust):**
+```batch
+cd projects\standalone
+"{hisePath}\JUCE\Projucer\Projucer.exe" --resave "HISE Standalone.jucer"
+"C:\Program Files\Microsoft Visual Studio\18\Community\MSBuild\Current\Bin\MsBuild.exe" Builds\VisualStudio2026\HISE.sln /p:Configuration="Release with Faust" /verbosity:minimal
 ```
 
 **macOS:**
@@ -404,16 +441,31 @@ cd projects\standalone
 **Test Mode (macOS):**
 ```
 [TEST MODE] Step 8: Compile HISE Standalone Application
+[TEST MODE] Build configuration: {Release|"Release with Faust"} (based on Faust installation)
+[TEST MODE] Executing: test -f "{hisePath}/JUCE/Projucer/Projucer.app/Contents/MacOS/Projucer" (checking Projucer exists)
+[TEST MODE] Executing: sysctl -n hw.ncpu (detecting CPU cores)
+[TEST MODE] Result: {N} CPU cores detected
 [TEST MODE] Would execute: "{hisePath}/JUCE/Projucer/Projucer.app/Contents/MacOS/Projucer" --resave "projects/standalone/HISE Standalone.jucer"
-[TEST MODE] Would execute: xcodebuild -project "projects/standalone/Builds/MacOSX/HISE.xcodeproj" -configuration Release -jobs 4 | "{hisePath}/tools/Projucer/xcbeautify"
-[TEST MODE] Would verify: projects/standalone/Builds/MacOSX/build/Release/HISE.app exists
+[TEST MODE] Would execute: xcodebuild -project "projects/standalone/Builds/MacOSX/HISE.xcodeproj" -configuration "Release with Faust" -jobs {N} | "{hisePath}/tools/Projucer/xcbeautify"
+[TEST MODE] Output path: projects/standalone/Builds/MacOSX/build/Release with Faust/HISE.app/Contents/MacOS/HISE
 ```
 
-**Normal Mode (macOS):**
+**Normal Mode (macOS - without Faust):**
 ```bash
 cd projects/standalone
 "{hisePath}/JUCE/Projucer/Projucer.app/Contents/MacOS/Projucer" --resave "HISE Standalone.jucer"
-xcodebuild -project Builds/MacOSX/HISE.xcodeproj -configuration Release -jobs 4 | "{hisePath}/tools/Projucer/xcbeautify"
+# Detect CPU cores and use for parallel compilation
+CORES=$(sysctl -n hw.ncpu)
+xcodebuild -project Builds/MacOSX/HISE.xcodeproj -configuration Release -jobs $CORES | "{hisePath}/tools/Projucer/xcbeautify"
+```
+
+**Normal Mode (macOS - with Faust):**
+```bash
+cd projects/standalone
+"{hisePath}/JUCE/Projucer/Projucer.app/Contents/MacOS/Projucer" --resave "HISE Standalone.jucer"
+# Detect CPU cores and use for parallel compilation
+CORES=$(sysctl -n hw.ncpu)
+xcodebuild -project Builds/MacOSX/HISE.xcodeproj -configuration "Release with Faust" -jobs $CORES | "{hisePath}/tools/Projucer/xcbeautify"
 ```
 
 **Linux:**
@@ -424,24 +476,42 @@ xcodebuild -project Builds/MacOSX/HISE.xcodeproj -configuration Release -jobs 4 
 **Test Mode (Linux):**
 ```
 [TEST MODE] Step 8: Compile HISE Standalone Application
+[TEST MODE] Build configuration: {Release|ReleaseWithFaust} (based on Faust installation)
+[TEST MODE] Executing: test -f "{hisePath}/JUCE/Projucer/Projucer" (checking Projucer exists)
+[TEST MODE] Executing: nproc (detecting CPU cores)
+[TEST MODE] Result: {N} CPU cores detected, will use {N-2} for compilation
 [TEST MODE] Would execute: cd projects/standalone
 [TEST MODE] Would execute: "{hisePath}/JUCE/Projucer/Projucer" --resave "HISE Standalone.jucer"
 [TEST MODE] Would execute: cd Builds/LinuxMakefile
-[TEST MODE] Would execute: make CONFIG=Release AR=gcc-ar -j`nproc --ignore=2`
-[TEST MODE] Would verify: projects/standalone/Builds/LinuxMakefile/build/HISE exists
+[TEST MODE] Would execute: make CONFIG=ReleaseWithFaust AR=gcc-ar -j{N-2}
+[TEST MODE] Output path: projects/standalone/Builds/LinuxMakefile/build/HISE
 ```
 
-**Normal Mode (Linux):**
+**Normal Mode (Linux - without Faust):**
 ```bash
 cd projects/standalone
 "{hisePath}/JUCE/Projucer/Projucer" --resave "HISE Standalone.jucer"
 cd Builds/LinuxMakefile
-make CONFIG=Release AR=gcc-ar -j`nproc --ignore=2`
+# Use all cores minus 2 to keep system responsive
+make CONFIG=Release AR=gcc-ar -j$(nproc --ignore=2)
+```
+
+**Normal Mode (Linux - with Faust):**
+```bash
+cd projects/standalone
+"{hisePath}/JUCE/Projucer/Projucer" --resave "HISE Standalone.jucer"
+cd Builds/LinuxMakefile
+# Use all cores minus 2 to keep system responsive
+make CONFIG=ReleaseWithFaust AR=gcc-ar -j$(nproc --ignore=2)
 ```
 
 - **High-level log:** "Compiling HISE Standalone application..."
 
 ### Step 9: Add HISE to PATH
+
+**Path Selection:**
+- If Faust was installed: Use `ReleaseWithFaust` output directory
+- If Faust was not installed: Use `Release` output directory
 
 **Windows:**
 - Add HISE binary location to PATH
@@ -449,47 +519,101 @@ make CONFIG=Release AR=gcc-ar -j`nproc --ignore=2`
 **Test Mode (Windows):**
 ```
 [TEST MODE] Step 9: Add HISE to PATH
-[TEST MODE] Would execute: setx PATH "%PATH%;{hisePath}\projects\standalone\Builds\VisualStudio2026\x64\Release\App"
-[TEST MODE] Would execute: echo %PATH% to verify HISE in PATH
+[TEST MODE] Build configuration used: {Release|"Release with Faust"}
+[TEST MODE] Executing: echo %PATH% (checking current PATH)
+[TEST MODE] Would execute: setx PATH "%PATH%;{hisePath}\projects\standalone\Builds\VisualStudio2026\x64\{Release|Release with Faust}\App"
 ```
 
-**Normal Mode (Windows):**
+**Normal Mode (Windows - without Faust):**
 ```batch
 setx PATH "%PATH%;{hisePath}\projects\standalone\Builds\VisualStudio2026\x64\Release\App"
 ```
 
+**Normal Mode (Windows - with Faust):**
+```batch
+setx PATH "%PATH%;{hisePath}\projects\standalone\Builds\VisualStudio2026\x64\Release with Faust\App"
+```
+
 **macOS:**
 - Add HISE binary location to PATH
+- Detect user's default shell and use appropriate config file
 
 **Test Mode (macOS):**
 ```
 [TEST MODE] Step 9: Add HISE to PATH
-[TEST MODE] Would execute: echo 'export PATH="$PATH:{hisePath}/projects/standalone/Builds/MacOSX/build/Release"' >> ~/.zshrc
-[TEST MODE] Would execute: source ~/.zshrc
-[TEST MODE] Would execute: which HISE to verify PATH
+[TEST MODE] Build configuration used: {Release|"Release with Faust"}
+[TEST MODE] Executing: echo $PATH (checking current PATH)
+[TEST MODE] Executing: basename "$SHELL" (detecting user's shell)
+[TEST MODE] Result: User shell is {zsh|bash}
+[TEST MODE] Shell config file: {~/.zshrc|~/.bash_profile}
+[TEST MODE] Would execute: echo 'export PATH="$PATH:{hisePath}/projects/standalone/Builds/MacOSX/build/{Release|Release with Faust}/HISE.app/Contents/MacOS"' >> {~/.zshrc|~/.bash_profile}
+[TEST MODE] Would execute: source {~/.zshrc|~/.bash_profile}
 ```
 
-**Normal Mode (macOS):**
+**Normal Mode (macOS - without Faust):**
 ```bash
-echo 'export PATH="$PATH:{hisePath}/projects/standalone/Builds/MacOSX/build/Release"' >> ~/.zshrc
-source ~/.zshrc
+# Note: On macOS, the binary is inside the app bundle at HISE.app/Contents/MacOS/HISE
+# Detect shell and use appropriate config file
+if [ "$(basename "$SHELL")" = "zsh" ]; then
+    SHELL_CONFIG="$HOME/.zshrc"
+else
+    SHELL_CONFIG="$HOME/.bash_profile"
+fi
+echo 'export PATH="$PATH:{hisePath}/projects/standalone/Builds/MacOSX/build/Release/HISE.app/Contents/MacOS"' >> "$SHELL_CONFIG"
+source "$SHELL_CONFIG"
+```
+
+**Normal Mode (macOS - with Faust):**
+```bash
+# Note: On macOS, the binary is inside the app bundle at HISE.app/Contents/MacOS/HISE
+# Detect shell and use appropriate config file
+if [ "$(basename "$SHELL")" = "zsh" ]; then
+    SHELL_CONFIG="$HOME/.zshrc"
+else
+    SHELL_CONFIG="$HOME/.bash_profile"
+fi
+echo 'export PATH="$PATH:{hisePath}/projects/standalone/Builds/MacOSX/build/Release with Faust/HISE.app/Contents/MacOS"' >> "$SHELL_CONFIG"
+source "$SHELL_CONFIG"
 ```
 
 **Linux:**
 - Add HISE binary location to PATH
+- Detect user's default shell and use appropriate config file
 
 **Test Mode (Linux):**
 ```
 [TEST MODE] Step 9: Add HISE to PATH
-[TEST MODE] Would execute: echo 'export PATH="$PATH:{hisePath}/projects/standalone/Builds/LinuxMakefile/build"' >> ~/.bashrc
-[TEST MODE] Would execute: source ~/.bashrc
-[TEST MODE] Would execute: which HISE to verify PATH
+[TEST MODE] Build configuration used: {Release|ReleaseWithFaust}
+[TEST MODE] Executing: echo $PATH (checking current PATH)
+[TEST MODE] Executing: basename "$SHELL" (detecting user's shell)
+[TEST MODE] Result: User shell is {bash|zsh}
+[TEST MODE] Shell config file: {~/.bashrc|~/.zshrc}
+[TEST MODE] Would execute: echo 'export PATH="$PATH:{hisePath}/projects/standalone/Builds/LinuxMakefile/build"' >> {~/.bashrc|~/.zshrc}
+[TEST MODE] Would execute: source {~/.bashrc|~/.zshrc}
 ```
 
-**Normal Mode (Linux):**
+**Normal Mode (Linux - without Faust):**
 ```bash
-echo 'export PATH="$PATH:{hisePath}/projects/standalone/Builds/LinuxMakefile/build"' >> ~/.bashrc
-source ~/.bashrc
+# Detect shell and use appropriate config file
+if [ "$(basename "$SHELL")" = "zsh" ]; then
+    SHELL_CONFIG="$HOME/.zshrc"
+else
+    SHELL_CONFIG="$HOME/.bashrc"
+fi
+echo 'export PATH="$PATH:{hisePath}/projects/standalone/Builds/LinuxMakefile/build"' >> "$SHELL_CONFIG"
+source "$SHELL_CONFIG"
+```
+
+**Normal Mode (Linux - with Faust):**
+```bash
+# Detect shell and use appropriate config file
+if [ "$(basename "$SHELL")" = "zsh" ]; then
+    SHELL_CONFIG="$HOME/.zshrc"
+else
+    SHELL_CONFIG="$HOME/.bashrc"
+fi
+echo 'export PATH="$PATH:{hisePath}/projects/standalone/Builds/LinuxMakefile/build"' >> "$SHELL_CONFIG"
+source "$SHELL_CONFIG"
 ```
 
 - **High-level log:** "Adding HISE to PATH environment variable..."
@@ -504,9 +628,10 @@ HISE --help
 **Test Mode:**
 ```
 [TEST MODE] Step 10: Verify Installation
-[TEST MODE] Would execute: HISE --help
-[TEST MODE] Would check for: HISE Command Line Tool output
-[TEST MODE] Would check for: Available commands list
+[TEST MODE] Executing: which HISE (checking if HISE is in PATH - would require PATH update in normal mode)
+[TEST MODE] Executing: test -f {hisePath}/projects/standalone/Builds/{platform}/build/{Release|ReleaseWithFaust}/HISE{.exe|.app|}
+[TEST MODE] Result: HISE binary {found at expected location/not found}
+[TEST MODE] Would execute: HISE --help (skipped - requires built binary)
 ```
 
 **Normal Mode:**
@@ -569,34 +694,74 @@ HISE export_ci "XmlPresetBackups/Demo.xml" -t:standalone -a:x64
 ## Build Configuration Details
 
 ### Default Configuration
-- **Configuration:** Release
+- **Configuration:** Release (without Faust) or ReleaseWithFaust (with Faust)
 - **Architecture:** 64-bit (x64)
 - **JUCE Version:** juce6 (stable)
 - **Visual Studio:** 2026 (default on Windows)
 
+### Build Configuration Selection
+| Faust Installed | Platform | Configuration          | Output Directory                         |
+|-----------------|----------|------------------------|------------------------------------------|
+| No              | Windows  | `Release`              | `.../x64/Release/App/`                   |
+|                 | macOS    | `Release`              | `.../build/Release/`                     |
+|                 | Linux    | `Release`              | `.../build/`                             |
+| Yes             | Windows  | `"Release with Faust"` | `.../x64/Release with Faust/App/`        |
+|                 | macOS    | `"Release with Faust"` | `.../build/Release with Faust/`          |
+|                 | Linux    | `ReleaseWithFaust`     | `.../build/`                             |
+
 ### Platform-Specific Build Commands
 
-**Windows (VS2026 - Default):**
+**Windows (VS2026 - without Faust):**
 ```batch
 cd projects/standalone
 "{hisePath}\JUCE\Projucer\Projucer.exe" --resave "HISE Standalone.jucer"
 "C:\Program Files\Microsoft Visual Studio\18\Community\MSBuild\Current\Bin\MsBuild.exe" Builds\VisualStudio2026\HISE.sln /p:Configuration=Release /verbosity:minimal
 ```
 
-**macOS:**
+**Windows (VS2026 - with Faust):**
+```batch
+cd projects/standalone
+"{hisePath}\JUCE\Projucer\Projucer.exe" --resave "HISE Standalone.jucer"
+"C:\Program Files\Microsoft Visual Studio\18\Community\MSBuild\Current\Bin\MsBuild.exe" Builds\VisualStudio2026\HISE.sln /p:Configuration="Release with Faust" /verbosity:minimal
+```
+
+**macOS (without Faust):**
 ```bash
 cd projects/standalone
 "{hisePath}/JUCE/Projucer/Projucer.app/Contents/MacOS/Projucer" --resave "HISE Standalone.jucer"
-xcodebuild -project Builds/MacOSX/HISE.xcodeproj -configuration Release -jobs 4 | "{hisePath}/tools/Projucer/xcbeautify"
+# Detect CPU cores: sysctl -n hw.ncpu
+CORES=$(sysctl -n hw.ncpu)
+xcodebuild -project Builds/MacOSX/HISE.xcodeproj -configuration Release -jobs $CORES | "{hisePath}/tools/Projucer/xcbeautify"
 ```
 
-**Linux:**
+**macOS (with Faust):**
+```bash
+cd projects/standalone
+"{hisePath}/JUCE/Projucer/Projucer.app/Contents/MacOS/Projucer" --resave "HISE Standalone.jucer"
+# Detect CPU cores: sysctl -n hw.ncpu
+CORES=$(sysctl -n hw.ncpu)
+xcodebuild -project Builds/MacOSX/HISE.xcodeproj -configuration "Release with Faust" -jobs $CORES | "{hisePath}/tools/Projucer/xcbeautify"
+```
+
+**Linux (without Faust):**
 ```bash
 cd projects/standalone
 "{hisePath}/JUCE/Projucer/Projucer" --resave "HISE Standalone.jucer"
 cd Builds/LinuxMakefile
-make CONFIG=Release AR=gcc-ar -j`nproc --ignore=2`
+# Detect CPU cores: nproc (uses all minus 2 to keep system responsive)
+make CONFIG=Release AR=gcc-ar -j$(nproc --ignore=2)
 ```
+
+**Linux (with Faust):**
+```bash
+cd projects/standalone
+"{hisePath}/JUCE/Projucer/Projucer" --resave "HISE Standalone.jucer"
+cd Builds/LinuxMakefile
+# Detect CPU cores: nproc (uses all minus 2 to keep system responsive)
+make CONFIG=ReleaseWithFaust AR=gcc-ar -j$(nproc --ignore=2)
+```
+
+> **Note:** Linux uses `ReleaseWithFaust` (no spaces), while Windows and macOS use `"Release with Faust"` (with spaces). This matches the configuration names in the `.jucer` file.
 
 ---
 
@@ -679,10 +844,21 @@ make CONFIG=Release AR=gcc-ar -j`nproc --ignore=2`
 - Display CLI help output when testing
 
 ### Test Mode Behavior
-- **Performs:** OS platform detection, OS version compatibility check
-- **Skips:** All installations, all system modifications
-- **Shows:** Exact commands with `[TEST MODE]` prefix
-- **Purpose:** Debug and verify setup workflow before execution
+- **Executes (read-only checks):**
+  - OS platform detection, OS version compatibility check
+  - `git --version`, `gcc --version`, `xcodebuild -version` (tool availability)
+  - `which` / `where` commands (path lookups)
+  - `test -f` / `test -d` (file/directory existence checks)
+  - `ls` (directory listing)
+  - Environment variable reads (`echo $PATH`, `echo %PATH%`)
+- **Skips (shows with `[TEST MODE] Would execute:` prefix):**
+  - All installations (`apt-get install`, `brew install`, VS installer, etc.)
+  - Git clone/checkout operations
+  - File extractions (unzip)
+  - Build commands (MSBuild, xcodebuild, make)
+  - PATH modifications (setx, shell config writes)
+  - Any command that modifies system state
+- **Purpose:** Validate prerequisites and debug setup workflow before execution
 
 ### Normal Mode Behavior
 - Automatically install core dependencies
@@ -731,9 +907,18 @@ Agent completes successfully in normal mode when:
 - JUCE Branch: juce6 (stable, only option)
 
 ### Build Artifacts
+
+**Without Faust (Release configuration):**
 - Windows: `projects/standalone/Builds/VisualStudio2026/x64/Release/App/HISE.exe`
-- macOS: `projects/standalone/Builds/MacOSX/build/Release/HISE.app`
+- macOS: `projects/standalone/Builds/MacOSX/build/Release/HISE.app/Contents/MacOS/HISE`
 - Linux: `projects/standalone/Builds/LinuxMakefile/build/HISE`
+
+**With Faust ("Release with Faust" / ReleaseWithFaust configuration):**
+- Windows: `projects/standalone/Builds/VisualStudio2026/x64/Release with Faust/App/HISE.exe`
+- macOS: `projects/standalone/Builds/MacOSX/build/Release with Faust/HISE.app/Contents/MacOS/HISE`
+- Linux: `projects/standalone/Builds/LinuxMakefile/build/HISE`
+
+> **Note:** On macOS, the HISE binary is located inside the `.app` bundle. The PATH must include the full path to `HISE.app/Contents/MacOS` for the `HISE` command to be accessible from the terminal.
 
 ### Environment Variables
 - **PATH:** Includes HISE binary directory for command-line access
