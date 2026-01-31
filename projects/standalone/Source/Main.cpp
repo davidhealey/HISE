@@ -981,7 +981,8 @@ return 0;
 					{
 						InvertableParameterRange r;
 						r.rng = mco->getRange();
-						RangeHelpers::storeDoubleRange(var(existing), r, scriptnode::RangeHelpers::IdSet::ScriptComponents);
+						var existingVar(existing);
+						RangeHelpers::storeDoubleRange(existingVar, r, scriptnode::RangeHelpers::IdSet::ScriptComponents);
 
 						if ((int)existing->getProperty("stepSize") == 1)
 						{
