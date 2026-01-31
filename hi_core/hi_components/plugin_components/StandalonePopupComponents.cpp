@@ -619,7 +619,7 @@ void CustomSettingsWindow::paint(Graphics& g)
 	{
 		if (isOn(id)) 
 		{ 
-			g.drawText(text, 0, y, getWidth() / 2 - 30, 30, Justification::centredRight); 
+			g.drawText(text, 0, y, getWidth() / 2 - 30, 30, Justification::centredLeft); 
 			y += 40;
 		}
 	};
