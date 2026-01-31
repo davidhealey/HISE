@@ -141,7 +141,7 @@ void Processor::restoreFromValueTree(const ValueTree &previouslyExportedProcesso
 
 	const ValueTree &v = previouslyExportedProcessorState;
 
-	jassert(Identifier(v.getProperty("Type", String())) == getType());
+	jassert(Identifier(v.getProperty("Type", String()).toString().removeCharacters(" ")) == getType());
 
 	jassert(v.getProperty("ID", String()) == getId());
 	setBypassed(v.getProperty("Bypassed", false));
