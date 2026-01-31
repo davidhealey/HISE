@@ -261,6 +261,13 @@ void MainController::CodeHandler::writeToConsole(const String &t, int warningLev
         std::cout << t << "\n";
 		return;
 	}
+
+	if (customLogger)
+	{
+		customLogger(t, warningLevel, p);
+		return;
+	}
+
 #endif
 
 	pendingMessages.push({ (WarningLevel)warningLevel, const_cast<Processor*>(p), t });

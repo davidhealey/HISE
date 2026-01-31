@@ -1244,7 +1244,16 @@ public:
 
 		void initialise();
 
+		using CustomLogger = std::function<void(const String& t, int warningLevel, const Processor* p)>;
+
+		void setCustomCodeHandler(const CustomLogger& l)
+		{
+			customLogger = l;
+		}
+
 	private:
+
+		CustomLogger customLogger;
 
 		struct ConsoleMessage
 		{

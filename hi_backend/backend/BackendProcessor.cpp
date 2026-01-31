@@ -300,7 +300,24 @@ BackendProcessor::BackendProcessor(AudioDeviceManager *deviceManager_/*=nullptr*
 		restoreGlobalSettings(this);
 	}
 
-	GET_PROJECT_HANDLER(synthChain).restoreWorkingProjects();
+	if (CompileExporter::isUsingWorkingDirectoryAsProjectFolder())
+	{
+		try
+		{
+			GET_PROJECT_HANDLER(synthChain).setWorkingProject(CompileExporter::getCurrentWorkDirectory());
+		}
+		catch (Result& r)
+		{
+			GET_PROJECT_HANDLER(synthChain).restoreWorkingProjects();
+			jassertfalse;
+		}
+		
+	}
+	else
+	{
+		GET_PROJECT_HANDLER(synthChain).restoreWorkingProjects();
+	}
+	
 
 	initData(this);
 
