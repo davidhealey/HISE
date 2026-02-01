@@ -64,13 +64,15 @@ Automates complete development environment setup for HISE (Hart Instrument Softw
 - Extracts and configures VST3 SDK
 
 **Optional (User Prompted):**
-- **Intel IPP oneAPI:** Performance optimization
-  - User prompted before installation
+- **Intel IPP oneAPI:** Performance optimization (installed after Visual Studio)
+  - User prompted after VS installation
   - Provides option to build without IPP
   - Configures Projucer setting accordingly
+  - Downloads using curl to avoid timeout issues
 - **Faust DSP programming language**
   - User prompted before installation
-  - Download and install to `C:\Program Files\Faust\` from GitHub releases
+  - Download using curl or manually from GitHub releases
+  - Install to `C:\Program Files\Faust\`
   - Requires Faust version 2.54.0+ (recommended)
 
 ### 6. HISE Compilation
@@ -97,6 +99,7 @@ Automates complete development environment setup for HISE (Hart Instrument Softw
   - Download: "Visual Studio Community 2026" (Web Installer)
   - Workload: "Desktop development with C++"
 - **Intel IPP oneAPI 2021.11.0.533:** https://registrationcenter-download.intel.com/akdlm/IRC_NAS/b4adec02-353b-4144-aa21-f2087040f316/w_ipp_oneapi_p_2021.11.0.533.exe
+  - **Download using curl:** `curl -L -o "intel-ipp-installer.exe" "{URL}"`
 - **ASIO SDK 2.3:** https://www.steinberg.net/de/company/developer.html
 
 ### All Platforms
@@ -293,11 +296,6 @@ cd JUCE && git checkout juce6 && cd ..
 
 ### Step 4: User Prompts (Before Installation)
 
-**Windows only:**
-- **Prompt:** "Install Intel IPP oneAPI for performance optimization? (Recommended) [Y/n]"
-  - Yes: Download and install from verified URL
-  - No: Configure Projucer to build without IPP
-
 **All platforms:**
 - **Prompt:** "Install Faust DSP programming language? [Y/n]"
   - Yes: Install based on platform/architecture, use `ReleaseWithFaust` build configuration
@@ -309,25 +307,39 @@ cd JUCE && git checkout juce6 && cd ..
 > **Recommended Version:** 2.54.0 or later
 
 **Windows Faust Installation:**
-1. Direct user to download `Faust-VERSION-win64.exe` from https://github.com/grame-cncm/faust/releases
-2. Instruct user to run the installer and install to default path: `C:\Program Files\Faust\`
-   - **IMPORTANT:** Must use default path - the .jucer file has this path hardcoded
+1. **Option A - Download using curl (automatic):**
+   ```batch
+   curl -L -o "%TEMP%\faust-installer.exe" "https://github.com/grame-cncm/faust/releases/latest/download/Faust-2.54.0-win64.exe"
+   "%TEMP%\faust-installer.exe"
+   ```
+2. **Option B - Manual download:**
+   - Direct user to download `Faust-VERSION-win64.exe` from https://github.com/grame-cncm/faust/releases
+   - Instruct user to run the installer and install to default path: `C:\Program Files\Faust\`
+    - **IMPORTANT:** Must use default path - the .jucer file has this path hardcoded
 3. **WAIT** for user to confirm installation is complete
 4. Verify installation by checking that these paths exist:
-   ```batch
-   if exist "C:\Program Files\Faust\lib\faust.dll" (echo Faust installed successfully) else (echo Faust installation not found)
-   ```
+    ```batch
+    if exist "C:\Program Files\Faust\lib\faust.dll" (echo Faust installed successfully) else (echo Faust installation not found)
+    ```
 5. **If verification fails:** Re-prompt user to complete installation, do NOT proceed
 6. **No .jucer modifications needed** - Windows Faust configurations already include:
-   - Header path: `C:\Program Files\Faust\include`
-   - Library path: `C:\Program Files\Faust\lib`
-   - Post-build command to copy `faust.dll` to output directory
+    - Header path: `C:\Program Files\Faust\include`
+    - Library path: `C:\Program Files\Faust\lib`
+    - Post-build command to copy `faust.dll` to output directory
 
 **Normal Mode (Windows Faust) - Waiting State:**
 ```
 Faust DSP is required for the selected build configuration.
 
-Please complete the following steps:
+Option A - Automatic download using curl:
+Would you like to download and install Faust automatically? [Y/n]
+
+If yes, will execute:
+curl -L -o "%TEMP%\faust-installer.exe" "https://github.com/grame-cncm/faust/releases/latest/download/Faust-2.54.0-win64.exe"
+"%TEMP%\faust-installer.exe"
+
+Option B - Manual installation:
+If you prefer manual installation, please:
 1. Download Faust from: https://github.com/grame-cncm/faust/releases
    - Download file: Faust-X.XX.X-win64.exe (latest version)
 2. Run the installer
@@ -345,7 +357,10 @@ After user confirms, verify installation:
 **Test Mode (Windows Faust):**
 ```
 [TEST MODE] Step 4a: Faust Installation
-[TEST MODE] Would direct user to: https://github.com/grame-cncm/faust/releases
+[TEST MODE] Would offer automatic or manual installation
+[TEST MODE] If automatic, would execute: curl -L -o "%TEMP%\faust-installer.exe" "https://github.com/grame-cncm/faust/releases/latest/download/Faust-2.54.0-win64.exe"
+[TEST MODE] Would execute: "%TEMP%\faust-installer.exe"
+[TEST MODE] If manual, would direct user to: https://github.com/grame-cncm/faust/releases
 [TEST MODE] Would instruct: Download Faust-VERSION-win64.exe
 [TEST MODE] Would instruct: Install to C:\Program Files\Faust\ (MUST use default path)
 [TEST MODE] Would WAIT for user confirmation
@@ -391,6 +406,51 @@ After user confirms, verify installation:
 - **High-level log:** "Checking IDE and compiler tools (REQUIRED)..."
 - **HALT** if compiler not available - do not proceed to next step
 - **NO SKIP OPTION** - user must install required tools to continue
+
+### Step 5a: Intel IPP Installation (Optional)
+
+> **Note:** Intel IPP should be installed AFTER Visual Studio to allow IPP installer to integrate properly with Visual Studio.
+
+**Windows only:**
+- **Prompt:** "Install Intel IPP oneAPI for performance optimization? (Recommended) [Y/n]"
+  - Yes: Download and install from verified URL using curl
+  - No: Configure Projucer to build without IPP
+
+**Intel IPP Download & Installation:**
+1. Download using curl:
+   ```batch
+   curl -L -o "%TEMP%\intel-ipp-installer.exe" "https://registrationcenter-download.intel.com/akdlm/IRC_NAS/b4adec02-353b-4144-aa21-f2087040f316/w_ipp_oneapi_p_2021.11.0.533.exe"
+   ```
+2. Run installer:
+   ```batch
+   "%TEMP%\intel-ipp-installer.exe"
+   ```
+3. **WAIT** for installer to complete
+4. Verify installation:
+   ```batch
+   if exist "C:\Program Files (x86)\Intel\oneAPI\ipp\latest" (echo Intel IPP installed successfully) else (echo Intel IPP installation not found)
+   ```
+
+**Test Mode (Windows IPP):**
+```
+[TEST MODE] Step 5a: Intel IPP Installation
+[TEST MODE] Would execute: curl -L -o "%TEMP%\intel-ipp-installer.exe" "https://registrationcenter-download.intel.com/akdlm/IRC_NAS/b4adec02-353b-4144-aa21-f2087040f316/w_ipp_oneapi_p_2021.11.0.533.exe"
+[TEST MODE] Would execute: "%TEMP%\intel-ipp-installer.exe"
+[TEST MODE] Would WAIT for installer completion
+[TEST MODE] Executing: if exist "C:\Program Files (x86)\Intel\oneAPI\ipp\latest" echo OK
+[TEST MODE] Result: Intel IPP {found|not found}
+```
+
+**Normal Mode (Windows IPP):**
+```batch
+REM Download Intel IPP installer using curl
+curl -L -o "%TEMP%\intel-ipp-installer.exe" "https://registrationcenter-download.intel.com/akdlm/IRC_NAS/b4adec02-353b-4144-aa21-f2087040f316/w_ipp_oneapi_p_2021.11.0.533.exe"
+REM Run installer
+"%TEMP%\intel-ipp-installer.exe"
+REM Wait for user to complete installation
+```
+
+**Note:** The -L flag in curl follows redirects, which is needed for Intel's download server.
 
 ### Step 6: SDK Installation
 - Extract tools/SDK/sdk.zip to tools/SDK/ (automatic)
@@ -613,7 +673,11 @@ cd projects\standalone
 ### Common Issues & Solutions
 
 **Git not found:**
-- Windows: Download from https://git-scm.com/
+- Windows: Download using curl or visit https://git-scm.com/
+  ```batch
+  curl -L -o "%TEMP%\git-installer.exe" "https://github.com/git-for-windows/git/releases/download/v2.43.0.windows.1/Git-2.43.0-64-bit.exe"
+  "%TEMP%\git-installer.exe"
+  ```
 
 **Visual Studio 2026 not found (Windows):**
 - Direct to download page: https://visualstudio.microsoft.com/downloads/
@@ -646,13 +710,23 @@ cd projects\standalone
 - **ABORT** if non-trivial failure
 
 **IPP not found (Windows):**
-- Offer to disable IPP in Projucer
+- Download using curl:
+  ```batch
+  curl -L -o "%TEMP%\intel-ipp-installer.exe" "https://registrationcenter-download.intel.com/akdlm/IRC_NAS/b4adec02-353b-4144-aa21-f2087040f316/w_ipp_oneapi_p_2021.11.0.533.exe"
+  "%TEMP%\intel-ipp-installer.exe"
+  ```
+- Offer to disable IPP in Projucer if download/installation fails
 - Rebuild without IPP
 
 **Faust installation failed (Windows):**
 - Verify `C:\Program Files\Faust\` exists
 - Check that `faust.dll` is present in `C:\Program Files\Faust\lib\`
-- Re-download installer from https://github.com/grame-cncm/faust/releases
+- Re-download using curl:
+  ```batch
+  curl -L -o "%TEMP%\faust-installer.exe" "https://github.com/grame-cncm/faust/releases/latest/download/Faust-2.54.0-win64.exe"
+  "%TEMP%\faust-installer.exe"
+  ```
+- Or download manually from https://github.com/grame-cncm/faust/releases
 - Run installer as Administrator if permission issues occur
 
 **Faust version too old:**
@@ -690,13 +764,14 @@ cd projects\standalone
   - `test -f` / `test -d` (file/directory existence checks)
   - Environment variable reads (`echo %PATH%`)
 - **Skips (shows with `[TEST MODE] Would execute:` prefix):**
-  - All installations (VS installer, downloads)
+  - All installations (VS installer, downloads via curl)
   - Git clone/checkout operations
   - File extractions (unzip)
   - Build commands (MSBuild)
   - PATH modifications (setx)
   - Any command that modifies system state
 - **Purpose:** Validate prerequisites and debug setup workflow before execution
+- **Download Method:** All downloads on Windows use `curl` instead of PowerShell Invoke-WebRequest to avoid timeout issues with large files
 
 ### Normal Mode Behavior
 - Automatically install core dependencies
