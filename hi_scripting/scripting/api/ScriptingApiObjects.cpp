@@ -10238,6 +10238,7 @@ void ScriptingObjects::ScriptBuilder::clear()
 	SUSPEND_GLOBAL_DISPATCH(mc, "clear from builder");
 	ScopedPointer<MainController::ScopedBadBabysitter> sb;
 
+#if USE_BACKEND
 	if (!CompileExporter::shouldSkipAudioDriverInitialisation())
 	{
 		sb = new MainController::ScopedBadBabysitter(mc);
@@ -10252,6 +10253,7 @@ void ScriptingObjects::ScriptBuilder::clear()
 		Thread::getCurrentThread()->wait(500);
 		dynamic_cast<JavascriptProcessor*>(getScriptProcessor())->getScriptEngine()->extendTimeout(500);
 	}
+#endif
 
 	raw::Builder b(mc);
 
