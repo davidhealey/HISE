@@ -114,7 +114,7 @@ public:
 		print("");
 		print("export: builds the project using the default settings");
 		print("export_ci: builds the project using customized behaviour for automated builds");
-		print(" - always use VisualStudio 2017 on Windows" );
+		print(" - always use VisualStudio 2026 on Windows" );
 		print(" - don't copy the plugins to the plugin folders" );
 		print(" - use a relative path for the project file" );
 		print(" - ignore the global HISE path and use the HISE repository folder from the");
@@ -200,6 +200,12 @@ public:
 		print("");
 		print("run_unit_tests");
 		print("Runs the unit tests. In order for this to work, HISE must be built with the CI configuration");
+		print("set_hise_settings [-hisepath:PATH] [vs:20XX] [ipp:X] [-faust:PATH]");
+		print("Changes the HISE compiler settings. All flags are optional and it will only change the provided ones.");
+		print(" -hisepath:PATH - absolute path to the HISE source code repository");
+		print(" -vs:20XX the VisualStudio version (available options: 2022 and 2026). Only used on Windows");
+		print(" -ipp:X - whether IPP should be used globally (either 1 or 0)");
+		print(" -faustpath:PATH - the absolute path to the Faust installation");
 
 		exit(0);
 	}
@@ -1644,6 +1650,14 @@ return 0;
 		auto args = getCommandLineArgs(commandLine);
 		auto hisePath = getFilePathArgument(args);
 
+		setHiseSettings(hisePath);
+	}
+
+	static void setHiseSettings(const File& hisePath, 
+		std::pair<bool, bool> useIpp =    { false, true }, 
+		std::pair<bool, bool> useVS26 =   { false, true }, 
+		std::pair<bool, File> faustPath = { false, File() })
+	{
 		if (!hisePath.isDirectory())
 			throwErrorAndQuit(hisePath.getFullPathName() + " is not a valid directory");
 
@@ -1654,53 +1668,78 @@ return 0;
 
 		auto compilerSettings = NativeFileHandler::getAppDataDirectory(nullptr).getChildFile("compilerSettings.xml");
 
-		ScopedPointer<XmlElement> xml;
-
+		ValueTree v;
+		
 		if (compilerSettings.existsAsFile())
 		{
-			xml = XmlDocument::parse(compilerSettings).release();
-		}
-		else
-		{
-			xml = new XmlElement("CompilerSettings");
-			
-			auto c1 = new XmlElement("HisePath");
-			c1->setAttribute("value", hisePath.getFullPathName());
-			c1->setAttribute("type", "FILE");
-			c1->setAttribute("description", "Path to HISE modules");
-			xml->addChildElement(c1);
+			ScopedPointer<XmlElement> xml = XmlDocument::parse(compilerSettings).release();
+			v = ValueTree::fromXml(*xml);
 
-			auto c2 = new XmlElement("VisualStudioVersion");
-			c2->setAttribute("value", "Visual Studio 2026");
-			c2->setAttribute("type", "LIST");
-			c2->setAttribute("description", "Installed VisualStudio version");
-			c2->setAttribute("options", "Visual Studio 2026&#10;Visual Studio 2022");
-			xml->addChildElement(c2);
+			print("Current HISE compiler settings: ");
 
-			auto c3 = new XmlElement("UseIPP");
-			c3->setAttribute("value", "Yes");
-			c3->setAttribute("type", "LIST");
-			c3->setAttribute("description", "Use IPP");
-			c3->setAttribute("options", "Yes&#10;No");
-			xml->addChildElement(c3);
-		}
-
-		if (xml == nullptr)
-		{
-			throwErrorAndQuit("Compiler Settings can't be loaded");
-		}
-		else
-		{
-			if (auto child = xml->getChildByName("HisePath"))
+			for (auto c : v)
 			{
-				child->setAttribute("value", hisePath.getFullPathName());
-				compilerSettings.replaceWithText(xml->createDocument(""));
-
-				print("HISE SDK path set to " + hisePath.getFullPathName());
-				exit(0);
+				String key = c.getType().toString();
+				String value = c["value"].toString();
+				print(key + ": " + value);
 			}
-			else throwErrorAndQuit("Invalid XML");
+
+			print("------------------------------------");
 		}
+		else
+		{
+			v = ValueTree("CompilerSettings");
+			
+		}
+
+		v.getOrCreateChildWithName("HisePath", nullptr).setProperty("value", hisePath.getFullPathName(), nullptr);
+
+		if (useVS26.first)
+		{
+			auto value = useVS26.second ? "Visual Studio 2026" : "Visual Studio 2022";
+			v.getOrCreateChildWithName("VisualStudioVersion", nullptr).setProperty("value", value, nullptr);
+		}
+
+		if (useIpp.first)
+		{
+#if !USE_IPP
+			if (useIpp.second)
+			{
+				throwErrorAndQuit("Error at setting UseIPP: IPP is not enabled in this HISE build. Recompile HISE with the IPP flag");
+			}
+#endif
+
+			auto value = useIpp.second ? "Yes" : "No";
+			v.getOrCreateChildWithName("UseIPP", nullptr).setProperty("value", value, nullptr);
+		}
+
+		if (faustPath.first)
+		{
+#if !HISE_INCLUDE_FAUST
+			throwErrorAndQuit("Error at setting FaustPath: HISE was not build with Faust enabled. Rebuild HISE with Faust");
+#endif
+
+			if (!faustPath.second.isDirectory())
+				throwErrorAndQuit("Faust path is not a valid directory");
+
+			if (!faustPath.second.getChildFile("lib").isDirectory())
+				throwErrorAndQuit("Faust path is not the Faust install location (/lib subfolder is missing)");
+
+			auto value = faustPath.second.getFullPathName();
+			v.getOrCreateChildWithName("FaustPath", nullptr).setProperty("value", value, nullptr);
+		}
+
+		print("New HISE compiler settings: ");
+
+		for (auto c: v)
+		{
+			String key = c.getType().toString();
+			String value = c["value"].toString();
+			print(key + ": " + value);
+		}
+
+		auto xml = v.createXml();
+		compilerSettings.replaceWithText(xml->createDocument(""));
 	}
 };
 
@@ -1863,6 +1902,12 @@ public:
 		else if (commandLine.startsWith("set_hise_folder"))
 		{
 			CommandLineActions::setHiseFolder(commandLine);
+			quit();
+			return;
+		}
+		else if (commandLine.startsWith("set_hise_settings"))
+		{
+			CommandLineActions::setHiseSettings(commandLine);
 			quit();
 			return;
 		}
