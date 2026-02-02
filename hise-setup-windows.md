@@ -1,42 +1,41 @@
 ---
-name: hise-setup
-description: Setup this computer to work with HISE.
+name: hise-setup-windows
+description: Setup Windows computer to work with HISE.
 ---
 
-# HISE Development Environment Setup Agent
+# HISE Development Environment Setup - Windows
 
 ## Overview
-Automates complete development environment setup for HISE (Hart Instrument Software Environment) on Windows, macOS, or Linux.
+Automates complete development environment setup for HISE (Hart Instrument Software Environment) on Windows.
 
 ## Supported Platforms
-- Windows 7+ (64-bit recommended)
-- macOS 10.7+ (10.13+ for development)
-- Linux (Ubuntu 16.04 LTS tested)
+- **Windows 7+** (64-bit x64 only - **ARM64 not currently supported**)
+
+> **Windows ARM64 Note:** HISE does not currently have native Windows ARM64 build configurations. Windows ARM devices can run the x64 build through emulation, but native ARM64 builds would require modifications to the Projucer project file.
 
 ---
 
 ## Core Capabilities
 
 ### 1. Platform Detection
-- Automatically detects operating system
+- Automatically detects Windows version
 - Verifies OS version compatibility
+- **Detects CPU architecture** (x64, arm64)
 - Adjusts setup workflow based on platform
-- Provides platform-specific guidance
+- **Windows ARM64:** Warns user that native ARM64 builds are not supported; x64 builds will run via emulation
 
 ### 2. Test Mode Operation
 - **Test Mode:** Validates environment without making changes
   - **Executes:** All non-modifying commands (read-only operations)
     - `git --version` (check if Git is installed)
-    - `xcode-select -p` (check Xcode path)
-    - `which gcc` / `gcc --version` (check compiler)
-    - `ls` / `test -f` / `test -d` (check file/directory existence)
+    - `where` / `dir` (check file/directory existence)
     - Platform detection and OS version checks
     - Disk space checks
   - **Skips:** All modifying commands (shows what would be executed)
-    - Installations (`apt-get install`, `brew install`, etc.)
+    - Installations (VS installer, downloads)
     - Git operations that change state (`git clone`, `git checkout`, etc.)
     - File modifications (unzip, write, delete)
-    - Build commands (MSBuild, xcodebuild, make)
+    - Build commands (MSBuild)
     - PATH modifications
   - Output format for skipped commands: `[TEST MODE] Would execute: {command}`
   - Used for debugging setup workflow and validating prerequisites
@@ -44,56 +43,46 @@ Automates complete development environment setup for HISE (Hart Instrument Softw
 
 ### 3. Git Installation & Repository Setup
 - Checks for Git installation
-- Installs Git if missing (platform-specific method)
+- Installs Git if missing
 - Clones HISE repository from **develop branch** (default)
 - Initializes and updates JUCE submodule
 - Uses **juce6 branch only** (stable version)
 
-### 4. IDE & Compiler Installation
+### 4. IDE & Compiler Installation (REQUIRED - NO SKIP)
 
-**Windows:**
-- Detects Visual Studio installation (**VS2026 preferred, default**)
-- Installs VS2026 Community with "Desktop development with C++" workload
-- Verifies MSBuild availability
+> **This step is mandatory.** HISE cannot be compiled without a C++ compiler. The agent must not offer an option to skip this step.
 
-**macOS:**
-- Detects Xcode installation
-- Installs Xcode with Command Line Tools
-- Handles Gatekeeper permission issues
-
-**Linux:**
-- Installs dependencies: build-essential, LLVM/Clang, and GUI libraries
-- Ensures GCC/G++ ≤11 (aborts if newer version detected)
-- Optionally installs mold linker for faster builds
+- Detects Visual Studio installation (**VS2026 required**)
+- If not installed: **HALT** and direct user to install VS2026 Community with "Desktop development with C++" workload
+- Verifies MSBuild availability before proceeding
+- **Cannot proceed without Visual Studio**
 
 ### 5. SDK & Tool Installation
 
 **Required SDKs:**
-- Extracts and configures ASIO SDK 2.3 (Windows: low-latency audio)
-- Extracts and configures VST3 SDK (all platforms)
+- Extracts and configures ASIO SDK 2.3 (low-latency audio)
+- Extracts and configures VST3 SDK
 
 **Optional (User Prompted):**
-- **Intel IPP oneAPI (Windows only):** Performance optimization
-  - User prompted before installation
+- **Intel IPP oneAPI:** Performance optimization (installed after Visual Studio)
+  - User prompted after VS installation
   - Provides option to build without IPP
   - Configures Projucer setting accordingly
+  - Downloads using curl to avoid timeout issues
 - **Faust DSP programming language**
   - User prompted before installation
-  - macOS: architecture-specific (x64/arm64)
-  - Windows: installs to C:\Program Files\Faust\
+  - Download using curl or manually from GitHub releases
+  - Install to `C:\Program Files\Faust\`
+  - Requires Faust version 2.54.0+ (recommended)
 
 ### 6. HISE Compilation
 - Compiles HISE from `projects/standalone/HISE Standalone.jucer`
 - Uses Projucer (from JUCE submodule) to generate IDE project files
-- Compiles HISE:
-  - Windows: Visual Studio 2026 (Release)
-  - macOS: Xcode (Release) using **xcbeautify** for output formatting
-  - Linux: Makefile (Release)
+- Compiles HISE using Visual Studio 2026 (Release)
 - **Aborts on non-trivial build failures**
 
 ### 7. Environment Setup
 - Adds compiled HISE binary to PATH environment variable
-- **macOS only:** Displays code signing certificate setup instructions
 - Verifies HISE is callable from command line
 
 ### 8. Verification
@@ -105,19 +94,17 @@ Automates complete development environment setup for HISE (Hart Instrument Softw
 
 ## Verified Download URLs
 
-### Windows
+### Windows Specific
 - **Visual Studio 2026 Community:** https://visualstudio.microsoft.com/downloads/
   - Download: "Visual Studio Community 2026" (Web Installer)
   - Workload: "Desktop development with C++"
 - **Intel IPP oneAPI 2021.11.0.533:** https://registrationcenter-download.intel.com/akdlm/IRC_NAS/b4adec02-353b-4144-aa21-f2087040f316/w_ipp_oneapi_p_2021.11.0.533.exe
+  - **Download using curl:** `curl -L -o "intel-ipp-installer.exe" "{URL}"`
 - **ASIO SDK 2.3:** https://www.steinberg.net/de/company/developer.html
 
-### macOS
-- **Xcode:** https://developer.apple.com/xcode/
-  - Available from Mac App Store
-
-### Linux
-- Dependencies installed via `apt-get` from Ubuntu repositories
+### All Platforms
+- **Faust DSP Language (2.54.0+):** https://github.com/grame-cncm/faust/releases
+  - Windows: `Faust-VERSION-win64.exe`
 
 ---
 
@@ -128,29 +115,10 @@ Automates complete development environment setup for HISE (Hart Instrument Softw
    - Path: `C:\Program Files\Microsoft Visual Studio\18\Community\MSBuild\Current\Bin\MsBuild.exe`
 
 2. **Projucer** (from JUCE submodule)
-   - Path: `{hisePath}/JUCE/Projucer/Projucer.exe`
+   - Path: `{hisePath}\JUCE\Projucer\Projucer.exe`
 
 3. **Visual Studio Solution**
-   - Path: `{buildPath}/Builds/VisualStudio2026/{project}.sln`
-
-### Linux Build Tools
-1. **Projucer** (from JUCE submodule)
-   - Path: `{hisePath}/JUCE/Projucer/Projucer`
-
-2. **Make** (via build-essential)
-   - Path: `{buildPath}/Builds/LinuxMakefile/`
-
-3. **GCC/Clang** toolchain
-
-### macOS Build Tools
-1. **Projucer** (from JUCE submodule)
-   - Path: `{hisePath}/JUCE/Projucer/Projucer.app/Contents/MacOS/Projucer`
-
-2. **xcodebuild** (from Xcode)
-   - Path: `{buildPath}/Builds/MacOSX/{project}.xcodeproj`
-
-3. **xcbeautify** (output beautifier)
-   - Path: `{hisePath}/tools/Projucer/xcbeautify`
+   - Path: `{buildPath}\Builds\VisualStudio2026\{project}.sln`
 
 ---
 
@@ -175,7 +143,7 @@ Automates complete development environment setup for HISE (Hart Instrument Softw
 - `run_unit_tests` - runs unit tests (requires CI build)
 
 **Usage:**
-```bash
+```batch
 HISE COMMAND [FILE] [OPTIONS]
 ```
 
@@ -193,15 +161,16 @@ HISE COMMAND [FILE] [OPTIONS]
 
 ### Step 0: Installation Location Selection
 
-**Default Installation Paths:**
-- **Windows:** `C:\HISE`
-- **macOS:** `~/HISE`
-- **Linux:** `~/HISE`
+**Default Installation Path:**
+- **Windows:** `C:\HISE` (requires administrator privileges) or `%USERPROFILE%\HISE` (no admin required)
+
+> **Windows Note:** If running without administrator privileges, the agent should detect this and suggest `%USERPROFILE%\HISE` (e.g., `C:\Users\YourName\HISE`) as the default instead of `C:\HISE`.
 
 **Workflow:**
 1. Detect current working directory
 2. Compare with platform-specific default path
-3. If different from default, prompt user:
+3. Check if default path exists and is writable
+4. If different from default or default not accessible, prompt user:
 
 ```
 Current directory: {current_path}
@@ -218,6 +187,11 @@ Where would you like to install HISE?
 [TEST MODE] Step 0: Installation Location Selection
 [TEST MODE] Current directory: {current_path}
 [TEST MODE] Default installation path: {default_path}
+[TEST MODE] Executing: Check if default path exists and is writable
+[TEST MODE] Result: {exists and writable | does not exist | not writable}
+[TEST MODE] Executing: Check if running as Administrator
+[TEST MODE] Result: {Administrator | Standard User}
+[TEST MODE] If Standard User, suggest: %USERPROFILE%\HISE
 [TEST MODE] Would prompt user for installation location choice
 [TEST MODE] Selected installation path: {selected_path}
 ```
@@ -225,6 +199,21 @@ Where would you like to install HISE?
 **Normal Mode:**
 - If current directory equals default path: proceed without prompting
 - If current directory differs: display prompt and wait for user selection
+- **Windows:** Check for administrator privileges and directory accessibility:
+  ```batch
+  REM Check if running as Administrator
+  net session >nul 2>&1
+  if %errorLevel% == 0 (
+      REM Running as Admin - can use C:\HISE
+      set "DEFAULT_PATH=C:\HISE"
+  ) else (
+      REM Standard user - use user profile directory
+      set "DEFAULT_PATH=%USERPROFILE%\HISE"
+  )
+  REM Create directory if it doesn't exist
+  if not exist "%DEFAULT_PATH%" mkdir "%DEFAULT_PATH%"
+  cd /d "%DEFAULT_PATH%"
+  ```
 - Store selected path as `{hisePath}` for all subsequent steps
 - **High-level log:** "Determining HISE installation location..."
 
@@ -235,7 +224,7 @@ Where would you like to install HISE?
 Prompt: "Run in test mode? (y/n)"
 
 If test mode:
-  - Detect OS platform (Windows/macOS/Linux)
+  - Detect Windows version
   - Verify OS version compatibility
   - Skip all installations
   - Display exact commands for each subsequent step
@@ -255,19 +244,26 @@ If normal mode:
   ```
 
 ### Step 2: System Check & Platform Detection
-- Verify OS compatibility
+- Verify Windows compatibility
+- **Detect CPU architecture**
 - Check disk space requirements (~2-5 GB)
 - Detect existing installations
 
+**Architecture Detection Commands:**
+- **Windows:** `echo %PROCESSOR_ARCHITECTURE%` (returns `AMD64` for x64, `ARM64` for ARM)
+
 **Test Mode:**
 ```
-[TEST MODE] Platform detected: {Windows/macOS/Linux}
+[TEST MODE] Platform detected: Windows
 [TEST MODE] OS version: {version} - {COMPATIBLE/NOT COMPATIBLE}
+[TEST MODE] CPU architecture: {x64/arm64}
+[TEST MODE] (Windows ARM64) WARNING: Native ARM64 builds not supported - will build x64 (runs via emulation)
 [TEST MODE] Disk space check: {X GB available} - SUFFICIENT
 ```
 
 **Normal Mode:**
 - **High-level log:** "Detecting platform and checking system requirements..."
+- **Windows ARM64:** Display warning that native ARM64 is not supported, x64 build will be created (runs via Windows x64 emulation)
 
 ### Step 3: Git Setup
 - Verify Git availability
@@ -288,7 +284,7 @@ If normal mode:
 ```
 
 **Normal Mode:**
-```bash
+```batch
 git clone https://github.com/christophhart/HISE.git
 cd HISE
 git checkout develop
@@ -300,65 +296,161 @@ cd JUCE && git checkout juce6 && cd ..
 
 ### Step 4: User Prompts (Before Installation)
 
-**Windows only:**
-- **Prompt:** "Install Intel IPP oneAPI for performance optimization? (Recommended) [Y/n]"
-  - Yes: Download and install from verified URL
-  - No: Configure Projucer to build without IPP
-
 **All platforms:**
 - **Prompt:** "Install Faust DSP programming language? [Y/n]"
   - Yes: Install based on platform/architecture, use `ReleaseWithFaust` build configuration
   - No: Skip Faust installation, use `Release` build configuration
 
-### Step 5: IDE & Compiler Setup
+### Step 4a: Faust Installation (If Selected)
 
-**Windows:**
-- Download/install Visual Studio 2026 Community (automatic)
-- Select "Desktop development with C++" workload (automatic)
+> **Faust Download URL:** https://github.com/grame-cncm/faust/releases
+> **Recommended Version:** 2.54.0 or later
+
+**Windows Faust Installation:**
+1. **Option A - Download using curl (automatic):**
+   ```batch
+   curl -L -o "%TEMP%\faust-installer.exe" "https://github.com/grame-cncm/faust/releases/latest/download/Faust-2.54.0-win64.exe"
+   "%TEMP%\faust-installer.exe"
+   ```
+2. **Option B - Manual download:**
+   - Direct user to download `Faust-VERSION-win64.exe` from https://github.com/grame-cncm/faust/releases
+   - Instruct user to run the installer and install to default path: `C:\Program Files\Faust\`
+    - **IMPORTANT:** Must use default path - the .jucer file has this path hardcoded
+3. **WAIT** for user to confirm installation is complete
+4. Verify installation by checking that these paths exist:
+    ```batch
+    if exist "C:\Program Files\Faust\lib\faust.dll" (echo Faust installed successfully) else (echo Faust installation not found)
+    ```
+5. **If verification fails:** Re-prompt user to complete installation, do NOT proceed
+6. **No .jucer modifications needed** - Windows Faust configurations already include:
+    - Header path: `C:\Program Files\Faust\include`
+    - Library path: `C:\Program Files\Faust\lib`
+    - Post-build command to copy `faust.dll` to output directory
+
+**Normal Mode (Windows Faust) - Waiting State:**
+```
+Faust DSP is required for the selected build configuration.
+
+Option A - Automatic download using curl:
+Would you like to download and install Faust automatically? [Y/n]
+
+If yes, will execute:
+curl -L -o "%TEMP%\faust-installer.exe" "https://github.com/grame-cncm/faust/releases/latest/download/Faust-2.54.0-win64.exe"
+"%TEMP%\faust-installer.exe"
+
+Option B - Manual installation:
+If you prefer manual installation, please:
+1. Download Faust from: https://github.com/grame-cncm/faust/releases
+   - Download file: Faust-X.XX.X-win64.exe (latest version)
+2. Run the installer
+3. IMPORTANT: Install to the default path: C:\Program Files\Faust\
+4. Complete the installation
+
+Press Enter when installation is complete, or type 'skip' to build without Faust...
+```
+
+After user confirms, verify installation:
+- Check: `C:\Program Files\Faust\lib\faust.dll` exists
+- If not found: Display error and re-prompt
+- If found: Proceed with `Release with Faust` build configuration
+
+**Test Mode (Windows Faust):**
+```
+[TEST MODE] Step 4a: Faust Installation
+[TEST MODE] Would offer automatic or manual installation
+[TEST MODE] If automatic, would execute: curl -L -o "%TEMP%\faust-installer.exe" "https://github.com/grame-cncm/faust/releases/latest/download/Faust-2.54.0-win64.exe"
+[TEST MODE] Would execute: "%TEMP%\faust-installer.exe"
+[TEST MODE] If manual, would direct user to: https://github.com/grame-cncm/faust/releases
+[TEST MODE] Would instruct: Download Faust-VERSION-win64.exe
+[TEST MODE] Would instruct: Install to C:\Program Files\Faust\ (MUST use default path)
+[TEST MODE] Would WAIT for user confirmation
+[TEST MODE] Executing: if exist "C:\Program Files\Faust\lib\faust.dll" echo OK
+[TEST MODE] Result: faust.dll {found|not found}
+[TEST MODE] No .jucer modifications required for Windows
+```
+
+**Post-Installation (Windows):**
+- After HISE is built and running, set the `FaustPath` in HISE Settings:
+  - Windows: `C:\Program Files\Faust\`
+- This allows HISE to find Faust libraries for DSP compilation
+
+### Step 5: IDE & Compiler Setup (REQUIRED)
+
+> **IMPORTANT:** This step is **mandatory** and cannot be skipped. HISE requires a C++ compiler to build. The setup process must wait for the IDE/compiler installation to complete before proceeding.
+
+- Check if Visual Studio 2026 is installed
+- If not installed:
+  1. Direct user to download **Visual Studio 2026 Community** from https://visualstudio.microsoft.com/downloads/
+  2. **IMPORTANT:** Must install the standard **Community edition**, NOT Preview/Insider editions
+     - Preview/Insider editions install to different paths and will cause build failures
+  3. Instruct user to select **"Desktop development with C++"** workload during installation
+  4. **WAIT** for user to complete installation before proceeding
+  5. Do NOT offer option to skip this step
 - Verify MSBuild availability at `C:\Program Files\Microsoft Visual Studio\18\Community\MSBuild\Current\Bin\MsBuild.exe`
+- **If MSBuild not found after user confirms installation:**
+  - Check if Preview/Insider edition was installed instead (wrong path)
+  - Re-prompt user to install the standard Community edition
 
 **Test Mode (Windows):**
 ```
-[TEST MODE] Step 5: IDE & Compiler Setup
+[TEST MODE] Step 5: IDE & Compiler Setup (REQUIRED)
 [TEST MODE] Executing: where msbuild (checking for Visual Studio)
 [TEST MODE] Executing: test -f "C:\Program Files\Microsoft Visual Studio\18\Community\MSBuild\Current\Bin\MsBuild.exe"
 [TEST MODE] Result: Visual Studio 2026 {installed/not installed}
-[TEST MODE] If not installed, would execute: Start installer from https://visualstudio.microsoft.com/downloads/
-[TEST MODE] Would select: "Desktop development with C++" workload
-```
-
-**macOS:**
-- Install Xcode from App Store (automatic)
-- Install Command Line Tools (automatic)
-- Accept Xcode license (automatic)
-
-**Test Mode (macOS):**
-```
-[TEST MODE] Step 5: IDE & Compiler Setup
-[TEST MODE] Executing: xcode-select -p (checking Xcode path)
-[TEST MODE] Executing: which xcodebuild
-[TEST MODE] Executing: xcodebuild -version
-[TEST MODE] Result: Xcode {version} {installed/not installed}
-[TEST MODE] If not installed, would execute: xcode-select --install
-[TEST MODE] Would execute: Accept Xcode license automatically
-```
-
-**Linux:**
-- Install dependencies (automatic)
-
-**Test Mode (Linux):**
-```
-[TEST MODE] Step 5: IDE & Compiler Setup
-[TEST MODE] Executing: which gcc
-[TEST MODE] Executing: gcc --version
-[TEST MODE] Executing: which clang
-[TEST MODE] Executing: clang --version
-[TEST MODE] Result: GCC version {X.X} {≤11 OK / >11 ABORT}
-[TEST MODE] Would execute: sudo apt-get -y install build-essential make llvm clang libfreetype6-dev libx11-dev libxinerama-dev libxrandr-dev libxcursor-dev mesa-common-dev libasound2-dev freeglut3-dev libxcomposite-dev libcurl4-gnutls-dev libgtk-3-dev libjack-jackd2-dev libwebkit2gtk-4.0-dev libpthread-stubs0-dev ladspa-sdk
+[TEST MODE] If not installed: HALT and instruct user to install Visual Studio 2026
+[TEST MODE] This step is MANDATORY - do not offer skip option
+[TEST MODE] Required workload: "Desktop development with C++"
 ```
 
 **Normal Mode:**
-- **High-level log:** "Installing IDE and compiler tools..."
+- **High-level log:** "Checking IDE and compiler tools (REQUIRED)..."
+- **HALT** if compiler not available - do not proceed to next step
+- **NO SKIP OPTION** - user must install required tools to continue
+
+### Step 5a: Intel IPP Installation (Optional)
+
+> **Note:** Intel IPP should be installed AFTER Visual Studio to allow IPP installer to integrate properly with Visual Studio.
+
+**Windows only:**
+- **Prompt:** "Install Intel IPP oneAPI for performance optimization? (Recommended) [Y/n]"
+  - Yes: Download and install from verified URL using curl
+  - No: Configure Projucer to build without IPP
+
+**Intel IPP Download & Installation:**
+1. Download using curl:
+   ```batch
+   curl -L -o "%TEMP%\intel-ipp-installer.exe" "https://registrationcenter-download.intel.com/akdlm/IRC_NAS/b4adec02-353b-4144-aa21-f2087040f316/w_ipp_oneapi_p_2021.11.0.533.exe"
+   ```
+2. Run installer:
+   ```batch
+   "%TEMP%\intel-ipp-installer.exe"
+   ```
+3. **WAIT** for installer to complete
+4. Verify installation:
+   ```batch
+   if exist "C:\Program Files (x86)\Intel\oneAPI\ipp\latest" (echo Intel IPP installed successfully) else (echo Intel IPP installation not found)
+   ```
+
+**Test Mode (Windows IPP):**
+```
+[TEST MODE] Step 5a: Intel IPP Installation
+[TEST MODE] Would execute: curl -L -o "%TEMP%\intel-ipp-installer.exe" "https://registrationcenter-download.intel.com/akdlm/IRC_NAS/b4adec02-353b-4144-aa21-f2087040f316/w_ipp_oneapi_p_2021.11.0.533.exe"
+[TEST MODE] Would execute: "%TEMP%\intel-ipp-installer.exe"
+[TEST MODE] Would WAIT for installer completion
+[TEST MODE] Executing: if exist "C:\Program Files (x86)\Intel\oneAPI\ipp\latest" echo OK
+[TEST MODE] Result: Intel IPP {found|not found}
+```
+
+**Normal Mode (Windows IPP):**
+```batch
+REM Download Intel IPP installer using curl
+curl -L -o "%TEMP%\intel-ipp-installer.exe" "https://registrationcenter-download.intel.com/akdlm/IRC_NAS/b4adec02-353b-4144-aa21-f2087040f316/w_ipp_oneapi_p_2021.11.0.533.exe"
+REM Run installer
+"%TEMP%\intel-ipp-installer.exe"
+REM Wait for user to complete installation
+```
+
+**Note:** The -L flag in curl follows redirects, which is needed for Intel's download server.
 
 ### Step 6: SDK Installation
 - Extract tools/SDK/sdk.zip to tools/SDK/ (automatic)
@@ -402,9 +494,15 @@ cd JUCE && git checkout juce6 && cd ..
 - If Faust was installed (Step 4): Use `ReleaseWithFaust` configuration
 - If Faust was not installed: Use `Release` configuration
 
+> **IMPORTANT - Build Timeout:** HISE compilation can take **5-15 minutes** depending on the system.
+> - Set command timeout to at least **600000ms (10 minutes)** for build commands
+> - Do NOT abort the build while the compiler is still running
+> - Monitor build output for progress (compiler messages indicate active compilation)
+> - Only consider the build failed if the command returns a non-zero exit code
+
 **Windows:**
-- Launch Projucer: `{hisePath}/JUCE/Projucer/Projucer.exe`
-- Load project: `projects/standalone/HISE Standalone.jucer`
+- Launch Projucer: `{hisePath}\JUCE\Projucer\Projucer.exe`
+- Load project: `projects\standalone\HISE Standalone.jucer`
 - Save project to generate IDE files
 - Build using MSBuild
 
@@ -422,6 +520,7 @@ cd JUCE && git checkout juce6 && cd ..
 ```batch
 cd projects\standalone
 "{hisePath}\JUCE\Projucer\Projucer.exe" --resave "HISE Standalone.jucer"
+REM Timeout: 600000ms (10 minutes) - compilation takes 5-15 minutes
 "C:\Program Files\Microsoft Visual Studio\18\Community\MSBuild\Current\Bin\MsBuild.exe" Builds\VisualStudio2026\HISE.sln /p:Configuration=Release /verbosity:minimal
 ```
 
@@ -429,80 +528,8 @@ cd projects\standalone
 ```batch
 cd projects\standalone
 "{hisePath}\JUCE\Projucer\Projucer.exe" --resave "HISE Standalone.jucer"
+REM Timeout: 600000ms (10 minutes) - compilation takes 5-15 minutes
 "C:\Program Files\Microsoft Visual Studio\18\Community\MSBuild\Current\Bin\MsBuild.exe" Builds\VisualStudio2026\HISE.sln /p:Configuration="Release with Faust" /verbosity:minimal
-```
-
-**macOS:**
-- Launch Projucer: `{hisePath}/JUCE/Projucer/Projucer.app`
-- Load project: `projects/standalone/HISE Standalone.jucer`
-- Save project to generate IDE files
-- Build using xcodebuild
-
-**Test Mode (macOS):**
-```
-[TEST MODE] Step 8: Compile HISE Standalone Application
-[TEST MODE] Build configuration: {Release|"Release with Faust"} (based on Faust installation)
-[TEST MODE] Executing: test -f "{hisePath}/JUCE/Projucer/Projucer.app/Contents/MacOS/Projucer" (checking Projucer exists)
-[TEST MODE] Executing: sysctl -n hw.ncpu (detecting CPU cores)
-[TEST MODE] Result: {N} CPU cores detected
-[TEST MODE] Would execute: "{hisePath}/JUCE/Projucer/Projucer.app/Contents/MacOS/Projucer" --resave "projects/standalone/HISE Standalone.jucer"
-[TEST MODE] Would execute: xcodebuild -project "projects/standalone/Builds/MacOSX/HISE.xcodeproj" -configuration "Release with Faust" -jobs {N} | "{hisePath}/tools/Projucer/xcbeautify"
-[TEST MODE] Output path: projects/standalone/Builds/MacOSX/build/Release with Faust/HISE.app/Contents/MacOS/HISE
-```
-
-**Normal Mode (macOS - without Faust):**
-```bash
-cd projects/standalone
-"{hisePath}/JUCE/Projucer/Projucer.app/Contents/MacOS/Projucer" --resave "HISE Standalone.jucer"
-# Detect CPU cores and use for parallel compilation
-CORES=$(sysctl -n hw.ncpu)
-xcodebuild -project Builds/MacOSX/HISE.xcodeproj -configuration Release -jobs $CORES | "{hisePath}/tools/Projucer/xcbeautify"
-```
-
-**Normal Mode (macOS - with Faust):**
-```bash
-cd projects/standalone
-"{hisePath}/JUCE/Projucer/Projucer.app/Contents/MacOS/Projucer" --resave "HISE Standalone.jucer"
-# Detect CPU cores and use for parallel compilation
-CORES=$(sysctl -n hw.ncpu)
-xcodebuild -project Builds/MacOSX/HISE.xcodeproj -configuration "Release with Faust" -jobs $CORES | "{hisePath}/tools/Projucer/xcbeautify"
-```
-
-**Linux:**
-- Navigate to projects/standalone
-- Launch Projucer: `{hisePath}/JUCE/Projucer/Projucer --resave "HISE Standalone.jucer"`
-- Build using Make
-
-**Test Mode (Linux):**
-```
-[TEST MODE] Step 8: Compile HISE Standalone Application
-[TEST MODE] Build configuration: {Release|ReleaseWithFaust} (based on Faust installation)
-[TEST MODE] Executing: test -f "{hisePath}/JUCE/Projucer/Projucer" (checking Projucer exists)
-[TEST MODE] Executing: nproc (detecting CPU cores)
-[TEST MODE] Result: {N} CPU cores detected, will use {N-2} for compilation
-[TEST MODE] Would execute: cd projects/standalone
-[TEST MODE] Would execute: "{hisePath}/JUCE/Projucer/Projucer" --resave "HISE Standalone.jucer"
-[TEST MODE] Would execute: cd Builds/LinuxMakefile
-[TEST MODE] Would execute: make CONFIG=ReleaseWithFaust AR=gcc-ar -j{N-2}
-[TEST MODE] Output path: projects/standalone/Builds/LinuxMakefile/build/HISE
-```
-
-**Normal Mode (Linux - without Faust):**
-```bash
-cd projects/standalone
-"{hisePath}/JUCE/Projucer/Projucer" --resave "HISE Standalone.jucer"
-cd Builds/LinuxMakefile
-# Use all cores minus 2 to keep system responsive
-make CONFIG=Release AR=gcc-ar -j$(nproc --ignore=2)
-```
-
-**Normal Mode (Linux - with Faust):**
-```bash
-cd projects/standalone
-"{hisePath}/JUCE/Projucer/Projucer" --resave "HISE Standalone.jucer"
-cd Builds/LinuxMakefile
-# Use all cores minus 2 to keep system responsive
-make CONFIG=ReleaseWithFaust AR=gcc-ar -j$(nproc --ignore=2)
 ```
 
 - **High-level log:** "Compiling HISE Standalone application..."
@@ -534,102 +561,20 @@ setx PATH "%PATH%;{hisePath}\projects\standalone\Builds\VisualStudio2026\x64\Rel
 setx PATH "%PATH%;{hisePath}\projects\standalone\Builds\VisualStudio2026\x64\Release with Faust\App"
 ```
 
-**macOS:**
-- Add HISE binary location to PATH
-- Detect user's default shell and use appropriate config file
-
-**Test Mode (macOS):**
-```
-[TEST MODE] Step 9: Add HISE to PATH
-[TEST MODE] Build configuration used: {Release|"Release with Faust"}
-[TEST MODE] Executing: echo $PATH (checking current PATH)
-[TEST MODE] Executing: basename "$SHELL" (detecting user's shell)
-[TEST MODE] Result: User shell is {zsh|bash}
-[TEST MODE] Shell config file: {~/.zshrc|~/.bash_profile}
-[TEST MODE] Would execute: echo 'export PATH="$PATH:{hisePath}/projects/standalone/Builds/MacOSX/build/{Release|Release with Faust}/HISE.app/Contents/MacOS"' >> {~/.zshrc|~/.bash_profile}
-[TEST MODE] Would execute: source {~/.zshrc|~/.bash_profile}
-```
-
-**Normal Mode (macOS - without Faust):**
-```bash
-# Note: On macOS, the binary is inside the app bundle at HISE.app/Contents/MacOS/HISE
-# Detect shell and use appropriate config file
-if [ "$(basename "$SHELL")" = "zsh" ]; then
-    SHELL_CONFIG="$HOME/.zshrc"
-else
-    SHELL_CONFIG="$HOME/.bash_profile"
-fi
-echo 'export PATH="$PATH:{hisePath}/projects/standalone/Builds/MacOSX/build/Release/HISE.app/Contents/MacOS"' >> "$SHELL_CONFIG"
-source "$SHELL_CONFIG"
-```
-
-**Normal Mode (macOS - with Faust):**
-```bash
-# Note: On macOS, the binary is inside the app bundle at HISE.app/Contents/MacOS/HISE
-# Detect shell and use appropriate config file
-if [ "$(basename "$SHELL")" = "zsh" ]; then
-    SHELL_CONFIG="$HOME/.zshrc"
-else
-    SHELL_CONFIG="$HOME/.bash_profile"
-fi
-echo 'export PATH="$PATH:{hisePath}/projects/standalone/Builds/MacOSX/build/Release with Faust/HISE.app/Contents/MacOS"' >> "$SHELL_CONFIG"
-source "$SHELL_CONFIG"
-```
-
-**Linux:**
-- Add HISE binary location to PATH
-- Detect user's default shell and use appropriate config file
-
-**Test Mode (Linux):**
-```
-[TEST MODE] Step 9: Add HISE to PATH
-[TEST MODE] Build configuration used: {Release|ReleaseWithFaust}
-[TEST MODE] Executing: echo $PATH (checking current PATH)
-[TEST MODE] Executing: basename "$SHELL" (detecting user's shell)
-[TEST MODE] Result: User shell is {bash|zsh}
-[TEST MODE] Shell config file: {~/.bashrc|~/.zshrc}
-[TEST MODE] Would execute: echo 'export PATH="$PATH:{hisePath}/projects/standalone/Builds/LinuxMakefile/build"' >> {~/.bashrc|~/.zshrc}
-[TEST MODE] Would execute: source {~/.bashrc|~/.zshrc}
-```
-
-**Normal Mode (Linux - without Faust):**
-```bash
-# Detect shell and use appropriate config file
-if [ "$(basename "$SHELL")" = "zsh" ]; then
-    SHELL_CONFIG="$HOME/.zshrc"
-else
-    SHELL_CONFIG="$HOME/.bashrc"
-fi
-echo 'export PATH="$PATH:{hisePath}/projects/standalone/Builds/LinuxMakefile/build"' >> "$SHELL_CONFIG"
-source "$SHELL_CONFIG"
-```
-
-**Normal Mode (Linux - with Faust):**
-```bash
-# Detect shell and use appropriate config file
-if [ "$(basename "$SHELL")" = "zsh" ]; then
-    SHELL_CONFIG="$HOME/.zshrc"
-else
-    SHELL_CONFIG="$HOME/.bashrc"
-fi
-echo 'export PATH="$PATH:{hisePath}/projects/standalone/Builds/LinuxMakefile/build"' >> "$SHELL_CONFIG"
-source "$SHELL_CONFIG"
-```
-
 - **High-level log:** "Adding HISE to PATH environment variable..."
 
 ### Step 10: Verify Installation
 
 **Test HISE Command Line:**
-```bash
+```batch
 HISE --help
 ```
 
 **Test Mode:**
 ```
 [TEST MODE] Step 10: Verify Installation
-[TEST MODE] Executing: which HISE (checking if HISE is in PATH - would require PATH update in normal mode)
-[TEST MODE] Executing: test -f {hisePath}/projects/standalone/Builds/{platform}/build/{Release|ReleaseWithFaust}/HISE{.exe|.app|}
+[TEST MODE] Executing: where HISE (checking if HISE is in PATH - would require PATH update in normal mode)
+[TEST MODE] Executing: test -f {hisePath}\projects\standalone\Builds\VisualStudio2026\x64\{Release|Release with Faust}\App\HISE.exe
 [TEST MODE] Result: HISE binary {found at expected location/not found}
 [TEST MODE] Would execute: HISE --help (skipped - requires built binary)
 ```
@@ -643,21 +588,21 @@ HISE --help
 
 ### Step 11: Compile Test Project
 
-**Test Project Location:** `extras/demo_project/`
+**Test Project Location:** `extras\demo_project\`
 
 **Compile Test Project:**
-```bash
-HISE set_project_folder -p:"{hisePath}/extras/demo_project"
-HISE export_ci "XmlPresetBackups/Demo.xml" -t:standalone -a:x64
+```batch
+HISE set_project_folder -p:"{hisePath}\extras\demo_project"
+HISE export_ci "XmlPresetBackups\Demo.xml" -t:standalone -a:x64
 ```
 
 **Test Mode:**
 ```
 [TEST MODE] Step 11: Compile Test Project
-[TEST MODE] Would execute: HISE set_project_folder -p:"{hisePath}/extras/demo_project"
-[TEST MODE] Would execute: HISE export_ci "XmlPresetBackups/Demo.xml" -t:standalone -a:x64
+[TEST MODE] Would execute: HISE set_project_folder -p:"{hisePath}\extras\demo_project"
+[TEST MODE] Would execute: HISE export_ci "XmlPresetBackups\Demo.xml" -t:standalone -a:x64
 [TEST MODE] Would verify: Demo project compiles successfully
-[TEST MODE] Would check for: Compiled binary output in extras/demo_project/Binaries/
+[TEST MODE] Would check for: Compiled binary output in extras\demo_project\Binaries\
 ```
 
 **Normal Mode:**
@@ -669,10 +614,10 @@ HISE export_ci "XmlPresetBackups/Demo.xml" -t:standalone -a:x64
 ### Step 12: Success Verification
 
 **Successful completion criteria:**
-1. HISE compiled from `projects/standalone/HISE Standalone.jucer`
+1. HISE compiled from `projects\standalone\HISE Standalone.jucer`
 2. HISE binary added to PATH
 3. `HISE --help` displays CLI commands
-4. Test project from `extras/demo_project/` compiles successfully
+4. Test project from `extras\demo_project\` compiles successfully
 5. No errors during compilation
 
 **Test Mode:**
@@ -697,71 +642,29 @@ HISE export_ci "XmlPresetBackups/Demo.xml" -t:standalone -a:x64
 - **Configuration:** Release (without Faust) or ReleaseWithFaust (with Faust)
 - **Architecture:** 64-bit (x64)
 - **JUCE Version:** juce6 (stable)
-- **Visual Studio:** 2026 (default on Windows)
+- **Visual Studio:** 2026 (default)
 
 ### Build Configuration Selection
 | Faust Installed | Platform | Configuration          | Output Directory                         |
 |-----------------|----------|------------------------|------------------------------------------|
-| No              | Windows  | `Release`              | `.../x64/Release/App/`                   |
-|                 | macOS    | `Release`              | `.../build/Release/`                     |
-|                 | Linux    | `Release`              | `.../build/`                             |
-| Yes             | Windows  | `"Release with Faust"` | `.../x64/Release with Faust/App/`        |
-|                 | macOS    | `"Release with Faust"` | `.../build/Release with Faust/`          |
-|                 | Linux    | `ReleaseWithFaust`     | `.../build/`                             |
+| No              | Windows  | `Release`              | `...\x64\Release\App\`                   |
+| Yes             | Windows  | `"Release with Faust"` | `...\x64\Release with Faust\App\`        |
 
 ### Platform-Specific Build Commands
 
 **Windows (VS2026 - without Faust):**
 ```batch
-cd projects/standalone
+cd projects\standalone
 "{hisePath}\JUCE\Projucer\Projucer.exe" --resave "HISE Standalone.jucer"
 "C:\Program Files\Microsoft Visual Studio\18\Community\MSBuild\Current\Bin\MsBuild.exe" Builds\VisualStudio2026\HISE.sln /p:Configuration=Release /verbosity:minimal
 ```
 
 **Windows (VS2026 - with Faust):**
 ```batch
-cd projects/standalone
+cd projects\standalone
 "{hisePath}\JUCE\Projucer\Projucer.exe" --resave "HISE Standalone.jucer"
 "C:\Program Files\Microsoft Visual Studio\18\Community\MSBuild\Current\Bin\MsBuild.exe" Builds\VisualStudio2026\HISE.sln /p:Configuration="Release with Faust" /verbosity:minimal
 ```
-
-**macOS (without Faust):**
-```bash
-cd projects/standalone
-"{hisePath}/JUCE/Projucer/Projucer.app/Contents/MacOS/Projucer" --resave "HISE Standalone.jucer"
-# Detect CPU cores: sysctl -n hw.ncpu
-CORES=$(sysctl -n hw.ncpu)
-xcodebuild -project Builds/MacOSX/HISE.xcodeproj -configuration Release -jobs $CORES | "{hisePath}/tools/Projucer/xcbeautify"
-```
-
-**macOS (with Faust):**
-```bash
-cd projects/standalone
-"{hisePath}/JUCE/Projucer/Projucer.app/Contents/MacOS/Projucer" --resave "HISE Standalone.jucer"
-# Detect CPU cores: sysctl -n hw.ncpu
-CORES=$(sysctl -n hw.ncpu)
-xcodebuild -project Builds/MacOSX/HISE.xcodeproj -configuration "Release with Faust" -jobs $CORES | "{hisePath}/tools/Projucer/xcbeautify"
-```
-
-**Linux (without Faust):**
-```bash
-cd projects/standalone
-"{hisePath}/JUCE/Projucer/Projucer" --resave "HISE Standalone.jucer"
-cd Builds/LinuxMakefile
-# Detect CPU cores: nproc (uses all minus 2 to keep system responsive)
-make CONFIG=Release AR=gcc-ar -j$(nproc --ignore=2)
-```
-
-**Linux (with Faust):**
-```bash
-cd projects/standalone
-"{hisePath}/JUCE/Projucer/Projucer" --resave "HISE Standalone.jucer"
-cd Builds/LinuxMakefile
-# Detect CPU cores: nproc (uses all minus 2 to keep system responsive)
-make CONFIG=ReleaseWithFaust AR=gcc-ar -j$(nproc --ignore=2)
-```
-
-> **Note:** Linux uses `ReleaseWithFaust` (no spaces), while Windows and macOS use `"Release with Faust"` (with spaces). This matches the configuration names in the `.jucer` file.
 
 ---
 
@@ -770,46 +673,35 @@ make CONFIG=ReleaseWithFaust AR=gcc-ar -j$(nproc --ignore=2)
 ### Common Issues & Solutions
 
 **Git not found:**
-- Windows: Download from https://git-scm.com/
-- macOS: `xcode-select --install`
-- Linux: `sudo apt-get install git`
+- Windows: Download using curl or visit https://git-scm.com/
+  ```batch
+  curl -L -o "%TEMP%\git-installer.exe" "https://github.com/git-for-windows/git/releases/download/v2.43.0.windows.1/Git-2.43.0-64-bit.exe"
+  "%TEMP%\git-installer.exe"
+  ```
 
 **Visual Studio 2026 not found (Windows):**
 - Direct to download page: https://visualstudio.microsoft.com/downloads/
 - Specify "Visual Studio Community 2026" and "Desktop development with C++" workload
 
-**Xcode not found (macOS):**
-- Direct to Mac App Store
-- Install Command Line Tools
-
-**GCC version >11 (Linux):**
-- **ABORT** with error message
-- Suggest installing GCC 11: `sudo apt-get install gcc-11 g++-11`
-- Provide alias instructions
+**Windows ARM64 detected:**
+- Display warning: Native ARM64 builds not currently supported
+- Proceed with x64 build configuration (will run via Windows x64 emulation)
+- Ensure Visual Studio includes x64 build tools (should be included by default)
+- The resulting HISE.exe will be x64 and run through emulation on ARM64 Windows
 
 **Projucer not found:**
 - Verify JUCE submodule initialized
-- Check path: `{hisePath}/JUCE/Projucer/Projucer`
+- Check path: `{hisePath}\JUCE\Projucer\Projucer.exe`
 - Run: `git submodule update --init --recursive`
 
 **SDK extraction failed:**
-- Verify tools/SDK/sdk.zip exists
+- Verify tools\SDK\sdk.zip exists
 - Check write permissions
 - Manually guide extraction
 
-**xcbeautify not found (macOS):**
-- Verify HISE repository cloned completely
-- Check path: `{hisePath}/tools/Projucer/xcbeautify`
-- Verify executable permissions
-
-**Projucer blocked by Gatekeeper (macOS):**
-- Guide user to Security & Privacy settings
-- Click "Open Anyway"
-
 **HISE not in PATH after setup:**
 - Check PATH configuration
-- Verify shell configuration file (`.zshrc`, `.bashrc`)
-- Restart shell or source configuration file
+- Restart shell to apply changes
 
 **Build failures:**
 - Check compiler versions
@@ -818,11 +710,32 @@ make CONFIG=ReleaseWithFaust AR=gcc-ar -j$(nproc --ignore=2)
 - **ABORT** if non-trivial failure
 
 **IPP not found (Windows):**
-- Offer to disable IPP in Projucer
+- Download using curl:
+  ```batch
+  curl -L -o "%TEMP%\intel-ipp-installer.exe" "https://registrationcenter-download.intel.com/akdlm/IRC_NAS/b4adec02-353b-4144-aa21-f2087040f316/w_ipp_oneapi_p_2021.11.0.533.exe"
+  "%TEMP%\intel-ipp-installer.exe"
+  ```
+- Offer to disable IPP in Projucer if download/installation fails
 - Rebuild without IPP
 
+**Faust installation failed (Windows):**
+- Verify `C:\Program Files\Faust\` exists
+- Check that `faust.dll` is present in `C:\Program Files\Faust\lib\`
+- Re-download using curl:
+  ```batch
+  curl -L -o "%TEMP%\faust-installer.exe" "https://github.com/grame-cncm/faust/releases/latest/download/Faust-2.54.0-win64.exe"
+  "%TEMP%\faust-installer.exe"
+  ```
+- Or download manually from https://github.com/grame-cncm/faust/releases
+- Run installer as Administrator if permission issues occur
+
+**Faust version too old:**
+- HISE requires Faust 2.54.0 or later
+- If using older version (e.g., 2.50.6), enable `HI_FAUST_NO_WARNING_MESSAGES` flag in Projucer
+- Recommended: Update to latest Faust release
+
 **Test project compilation fails:**
-- Verify demo project exists at `extras/demo_project/`
+- Verify demo project exists at `extras\demo_project\`
 - Check all SDK paths
 - Review error messages
 - Provide specific troubleshooting steps
@@ -846,19 +759,19 @@ make CONFIG=ReleaseWithFaust AR=gcc-ar -j$(nproc --ignore=2)
 ### Test Mode Behavior
 - **Executes (read-only checks):**
   - OS platform detection, OS version compatibility check
-  - `git --version`, `gcc --version`, `xcodebuild -version` (tool availability)
-  - `which` / `where` commands (path lookups)
+  - `git --version` (tool availability)
+  - `where` / `dir` commands (path lookups)
   - `test -f` / `test -d` (file/directory existence checks)
-  - `ls` (directory listing)
-  - Environment variable reads (`echo $PATH`, `echo %PATH%`)
+  - Environment variable reads (`echo %PATH%`)
 - **Skips (shows with `[TEST MODE] Would execute:` prefix):**
-  - All installations (`apt-get install`, `brew install`, VS installer, etc.)
+  - All installations (VS installer, downloads via curl)
   - Git clone/checkout operations
   - File extractions (unzip)
-  - Build commands (MSBuild, xcodebuild, make)
-  - PATH modifications (setx, shell config writes)
+  - Build commands (MSBuild)
+  - PATH modifications (setx)
   - Any command that modifies system state
 - **Purpose:** Validate prerequisites and debug setup workflow before execution
+- **Download Method:** All downloads on Windows use `curl` instead of PowerShell Invoke-WebRequest to avoid timeout issues with large files
 
 ### Normal Mode Behavior
 - Automatically install core dependencies
@@ -880,49 +793,46 @@ Agent completes successfully in test mode when:
 ### Normal Mode Completion Criteria
 Agent completes successfully in normal mode when:
 1. Git is installed and repository cloned
-2. IDE/compiler is installed and functional (VS2026/Xcode/Linux tools)
+2. IDE/compiler is installed and functional (VS2026)
 3. JUCE submodule is initialized with **juce6 branch**
 4. Required SDKs are extracted and configured
-5. HISE compiles from `projects/standalone/HISE Standalone.jucer` without errors
+5. HISE compiles from `projects\standalone\HISE Standalone.jucer` without errors
 6. HISE binary is added to PATH environment variable
 7. `HISE --help` displays available CLI commands
-8. Test project from `extras/demo_project/` compiles successfully
+8. Test project from `extras\demo_project\` compiles successfully
 9. System is fully ready for HISE development
 
 ---
 
 ## Technical Notes
 
+### Build Timeouts
+- **HISE compilation takes 5-15 minutes** depending on system specifications
+- **Recommended timeout for build commands: 600000ms (10 minutes)**
+- Do NOT abort build commands while compiler output is still being generated
+- Build is only failed if the command returns a non-zero exit code
+- Projucer `--resave` command is fast (< 30 seconds)
+
 ### Compiler Requirements
 - C++17 standard
-- libc++ (LLVM C++ Standard Library)
-- Windows: MSVC via Visual Studio 2026 (default)
-- macOS: Clang via Xcode
-- Linux: GCC ≤11 or Clang
+- MSVC via Visual Studio 2026 (default)
 
 ### Project Files
-- HISE Standalone: `projects/standalone/HISE Standalone.jucer`
-- Test Project: `extras/demo_project/XmlPresetBackups/Demo.xml`
+- HISE Standalone: `projects\standalone\HISE Standalone.jucer`
+- Test Project: `extras\demo_project\XmlPresetBackups\Demo.xml`
 - Build Tool: Projucer (from JUCE submodule)
 - JUCE Branch: juce6 (stable, only option)
 
 ### Build Artifacts
 
 **Without Faust (Release configuration):**
-- Windows: `projects/standalone/Builds/VisualStudio2026/x64/Release/App/HISE.exe`
-- macOS: `projects/standalone/Builds/MacOSX/build/Release/HISE.app/Contents/MacOS/HISE`
-- Linux: `projects/standalone/Builds/LinuxMakefile/build/HISE`
+- Windows: `projects\standalone\Builds\VisualStudio2026\x64\Release\App\HISE.exe`
 
 **With Faust ("Release with Faust" / ReleaseWithFaust configuration):**
-- Windows: `projects/standalone/Builds/VisualStudio2026/x64/Release with Faust/App/HISE.exe`
-- macOS: `projects/standalone/Builds/MacOSX/build/Release with Faust/HISE.app/Contents/MacOS/HISE`
-- Linux: `projects/standalone/Builds/LinuxMakefile/build/HISE`
-
-> **Note:** On macOS, the HISE binary is located inside the `.app` bundle. The PATH must include the full path to `HISE.app/Contents/MacOS` for the `HISE` command to be accessible from the terminal.
+- Windows: `projects\standalone\Builds\VisualStudio2026\x64\Release with Faust\App\HISE.exe`
 
 ### Environment Variables
 - **PATH:** Includes HISE binary directory for command-line access
-- **Compiler Settings:** Stored in compilerSettings.xml (macOS) or equivalent
 - **Visual Studio Version:** Default set to 2026 on Windows
 
 ### Optional Features
@@ -944,7 +854,14 @@ Agent completes successfully in normal mode when:
 ## Limitations
 - Requires internet connection for downloads
 - Requires admin/sudo privileges for installations
-- Does not handle code signing certificates automatically
+- **Windows:** Creating directories in `C:\` root requires administrator privileges. Either:
+  - Run the terminal/agent as Administrator, OR
+  - Choose a user-writable location like `%USERPROFILE%\HISE` (e.g., `C:\Users\YourName\HISE`)
+- **Windows ARM64:** Native ARM64 builds are not currently supported
+  - The HISE Projucer project only includes x64 configurations
+  - On Windows ARM devices, the x64 build will be created and runs via Windows x64 emulation
+  - Performance may be reduced compared to native ARM64 builds
+  - Native ARM64 support would require adding ARM64 configurations to the `.jucer` file
 - Does not handle licensing (GPL v3)
 - Does not create installers (focus on development environment)
 - JUCE branch is fixed to juce6 (stable)

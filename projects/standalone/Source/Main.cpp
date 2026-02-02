@@ -195,6 +195,9 @@ public:
 		print("Creates a cache file that contains all relevant properties for the Builder AI agent to work.");
 		print("This includes an updated list of all modules & parameters as well as project-specific assets like samplemaps & audio files");
 		print("Run this whenever the project structure change to ensure that the Builder agent has the correct dataset to work with.");
+		print("get_build_flags");
+		print("Prints out the build flags that were used when compiling HISE.");
+		print("");
 		print("run_unit_tests");
 		print("Runs the unit tests. In order for this to work, HISE must be built with the CI configuration");
 
@@ -1579,6 +1582,63 @@ return 0;
 		}
     }
     
+	static void getBuildFlags(const String& /*commandLine*/)
+	{
+		print("");
+		print("HISE Build Flags");
+		print("----------------");
+		print("");
+
+		// Version information
+		print("HISE Version: " + String(ProjectInfo::versionString));
+		print("JUCE Version: " + String(JUCE_MAJOR_VERSION) + "." + String(JUCE_MINOR_VERSION) + "." + String(JUCE_BUILDNUMBER));
+		print("");
+
+		// Build configuration
+#if JUCE_DEBUG
+		print("Build Configuration: Debug");
+#else
+		print("Build Configuration: Release");
+#endif
+
+		// Feature flags
+#if HISE_INCLUDE_FAUST
+		print("Faust Support: Enabled");
+#else
+		print("Faust Support: Disabled");
+#endif
+
+#if USE_IPP
+		print("IPP Support: Enabled");
+#else
+		print("IPP Support: Disabled");
+#endif
+
+#if HISE_INCLUDE_RLOTTIE
+		print("Rlottie Support: Enabled");
+#else
+		print("Rlottie Support: Disabled");
+#endif
+
+#if HISE_INCLUDE_LORIS
+		print("Loris Support: Enabled");
+#else
+		print("Loris Support: Disabled");
+#endif
+
+#if HISE_INCLUDE_RT_NEURAL
+		print("RT Neural Support: Enabled");
+#else
+		print("RT Neural Support: Disabled");
+#endif
+
+		print("");
+		print("Git Commit: " + String(PREVIOUS_HISE_COMMIT));
+		print("");
+
+		exit(0);
+	}
+
 	static void setHiseFolder(const String& commandLine)
 	{
 		auto args = getCommandLineArgs(commandLine);
@@ -1862,6 +1922,12 @@ public:
 		{
 			CommandLineActions::compileNetworks(commandLine);
 
+			quit();
+			return;
+		}
+		else if (commandLine.startsWith("get_build_flags"))
+		{
+			CommandLineActions::getBuildFlags(commandLine);
 			quit();
 			return;
 		}
