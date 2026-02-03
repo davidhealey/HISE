@@ -119,29 +119,32 @@ public:
 		print(" - use a relative path for the project file" );
 		print(" - ignore the global HISE path and use the HISE repository folder from the");
 		print("   current HISE executable");
-		print("full_exp -p:PATH: exports the project as Full Instrument Expansion (aka HISE Player Library)");
-		print(" - you must supply the absolute path to the .XML file with the '-p:' argument.");
-		print("compress_samples -p:PATH: collects all HLAC files into a hr1 archive");
-		print(" - if an info.hxi file is found in the current work directory, it will embed it into the");
-		print("   archive. You must supply a XML project file with the `-p:` argument that will be");
-		print("   loaded during the export.");
-		print("Arguments: " );
-		print("FILE      The path to the project file (either .xml or .hip you want to export)." );
+		print("Arguments: ");
+		print("FILE      The path to the project file (either .xml or .hip you want to export).");
 		print("          In CI mode, this will be the relative path from the current project folder");
 		print("          In standard mode, it must be an absolute path");
-		print("-h:{TEXT} sets the HISE path. Use this if you don't have compiler settings set." );
-		print("-ipp      enables Intel Performance Primitives for fast convolution." );
+		print("-h:{TEXT} sets the HISE path. Use this if you don't have compiler settings set.");
+		print("-ipp      enables Intel Performance Primitives for fast convolution.");
 		print("-l        This can be used to compile a version that runs on legacy CPU models.");
-		print("-t:{TEXT} sets the project type ('standalone' | 'instrument' | 'effect' | 'midi')" );
-		print("-p:{TEXT} sets the plugin type ('VST'  | 'AU'   | 'VST_AU' | 'AAX' |)" );
+		print("-t:{TEXT} sets the project type ('standalone' | 'instrument' | 'effect' | 'midi')");
+		print("-p:{TEXT} sets the plugin type ('VST'  | 'AU'   | 'VST_AU' | 'AAX' |)");
 		print("                                'ALL'  | 'VST2' | 'VST3'   | 'VST23AU' )");
 		print("          (Leave empty for standalone export). Note that if you use the VST2, VST3,");
 		print("           VST23AU it will override the project settings so you can export both versions).");
 		print("           Note: The VST23AU flag will skip AU on Windows and build only VST2 and VST3.");
-        print("-nolto    deactivates link time optimisation. The resulting binary is not as optimized");
-        print("          but the build time is much shorter");
-        print("-D:NAME=VALUE Adds a temporary preprocessor definition to the extra definitions.");
-        print("              You can use multiple definitions by using this flag multiple times.");
+		print("-nolto    deactivates link time optimisation. The resulting binary is not as optimized");
+		print("          but the build time is much shorter");
+		print("-D:NAME=VALUE Adds a temporary preprocessor definition to the extra definitions.");
+		print("              You can use multiple definitions by using this flag multiple times.");
+		print("");
+		print("full_exp -p:PATH: exports the project as Full Instrument Expansion (aka HISE Player Library)");
+		print(" - you must supply the absolute path to the .XML file with the '-p:' argument.");
+		print("");
+		print("compress_samples -p:PATH: collects all HLAC files into a hr1 archive");
+		print(" - if an info.hxi file is found in the current work directory, it will embed it into the");
+		print("   archive. You must supply a XML project file with the `-p:` argument that will be");
+		print("   loaded during the export.");
+		print("");
 		print("--test [PLUGIN_FILE]" );
 		print("Tests the given plugin" );
 		print("");
@@ -150,6 +153,7 @@ public:
 		print("");
 		print("set_hise_folder -p:PATH");
 		print("Sets the location for the HISE source code folder.");
+		print("");
 		print("get_project_folder" );
 		print("Returns the current project folder." );
 		print("");
@@ -177,7 +181,6 @@ public:
 		print("(Use the --verbose flag to include all parameter values)");
 		print("");
 		print("compile_script -p:PATH [-screenshot:width,height]");
-		print("");
 		print("Compiles the script file and returns the Console output as JSON-formatted string");
 		print("(one item for each console log).");
 		print("This is useful for running HISE with an AI agent that allows a tight feedback loop of");
@@ -195,17 +198,25 @@ public:
 		print("Creates a cache file that contains all relevant properties for the Builder AI agent to work.");
 		print("This includes an updated list of all modules & parameters as well as project-specific assets like samplemaps & audio files");
 		print("Run this whenever the project structure change to ensure that the Builder agent has the correct dataset to work with.");
+		print("");
 		print("get_build_flags");
 		print("Prints out the build flags that were used when compiling HISE.");
 		print("");
 		print("run_unit_tests");
 		print("Runs the unit tests. In order for this to work, HISE must be built with the CI configuration");
+		print("");
 		print("set_hise_settings [-hisepath:PATH] [vs:20XX] [ipp:X] [-faust:PATH]");
 		print("Changes the HISE compiler settings. All flags are optional and it will only change the provided ones.");
 		print(" -hisepath:PATH - absolute path to the HISE source code repository");
 		print(" -vs:20XX the VisualStudio version (available options: 2022 and 2026). Only used on Windows");
 		print(" -ipp:X - whether IPP should be used globally (either 1 or 0)");
 		print(" -faustpath:PATH - the absolute path to the Faust installation");
+		print("");
+		print("get_update_info");
+		print("outputs (and copies to the clipboard) a string that is used by the HISE install wizard to setup the update procedure");
+		print("Format: <hisepath>|<status:valid|invalid>|<faust|nofaust>[|<architecture:arm64|x64>]");
+		print("Example: > C:\\HISE,valid,faust,x64");
+		print("");
 
 		exit(0);
 	}
@@ -1669,15 +1680,82 @@ return 0;
 			{ fp.isNotEmpty(), File(fp) });
 	}
 
+	static void getUpdateInfo(const String& commandLine)
+	{
+		auto compilerSettings = NativeFileHandler::getAppDataDirectory(nullptr).getChildFile("compilerSettings.xml");
+
+		ValueTree v;
+
+		if (compilerSettings.existsAsFile())
+		{
+			ScopedPointer<XmlElement> xml = XmlDocument::parse(compilerSettings).release();
+			v = ValueTree::fromXml(*xml);
+
+			auto hisePath = v.getChildWithName("HisePath")["value"].toString();
+			auto fp = v.getChildWithName("FaustPath")["value"].toString();
+			
+			String output;
+
+			if (hisePath.isNotEmpty())
+			{
+				output << hisePath.unquoted();
+
+				if (File(hisePath).getChildFile(".git").isDirectory())
+					output << "|valid";
+				else
+					output << "|invalid";
+			}
+			else
+			{
+				throwErrorAndQuit("HISE path must be set");
+			}
+
+#if HISE_INCLUDE_FAUST
+			output << "|faust";
+#else
+			output << "|nofaust";
+#endif
+
+#if JUCE_MAC
+#if JUCE_ARM
+			output << "|arm64";
+#else
+			output << "|x64";
+#endif
+#else
+			output << "|x64";
+#endif
+
+			SystemClipboard::copyTextToClipboard(output);
+
+			print("Copied to clipboard: " + output);
+		}
+		else
+		{
+			throwErrorAndQuit("Can't find HISE settings");
+		}
+	}
+
 	static void setHiseSettingsInternal(const File& hisePath, 
 		std::pair<bool, bool> useIpp =    { false, true }, 
 		std::pair<bool, bool> useVS26 =   { false, true }, 
 		std::pair<bool, File> faustPath = { false, File() })
 	{
-		if (!hisePath.isDirectory())
-			throwErrorAndQuit(hisePath.getFullPathName() + " is not a valid directory");
 
-		if (!hisePath.getChildFile("hi_core/").isDirectory())
+
+		if (!hisePath.isDirectory())
+		{
+			if (!useIpp.first && !useVS26.first && !faustPath.first)
+			{
+				// user wants to set HISE path, fail hard...
+				throwErrorAndQuit(hisePath.getFullPathName() + " is not a valid directory");
+			}
+			else
+				print("HISE path not provided, set other settings");
+		}
+		
+		// check only if the path is provided
+		if (hisePath.isDirectory() && !hisePath.getChildFile("hi_core/").isDirectory())
 		{
 			throwErrorAndQuit(hisePath.getFullPathName() + " is not HISE source folder");
 		}
@@ -1918,6 +1996,12 @@ public:
 		else if (commandLine.startsWith("set_hise_folder"))
 		{
 			CommandLineActions::setHiseFolder(commandLine);
+			quit();
+			return;
+		}
+		else if (commandLine.startsWith("get_update_info"))
+		{
+			CommandLineActions::getUpdateInfo(commandLine);
 			quit();
 			return;
 		}
