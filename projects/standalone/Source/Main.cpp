@@ -1650,10 +1650,26 @@ return 0;
 		auto args = getCommandLineArgs(commandLine);
 		auto hisePath = getFilePathArgument(args);
 
-		setHiseSettings(hisePath);
+		setHiseSettingsInternal(hisePath);
 	}
 
-	static void setHiseSettings(const File& hisePath, 
+	static void setHiseSettings(const String& commandLine)
+	{
+		auto args = getCommandLineArgs(commandLine);
+
+		auto hp = getArgument(args, "-hisepath:").unquoted();
+
+		auto ipp = getArgument(args, "-ipp:");
+		auto vs = getArgument(args, "-vs:").getIntValue();
+		auto fp = getArgument(args, "-faustpath:").unquoted();
+
+		setHiseSettingsInternal(File(hp),
+			{ ipp.isNotEmpty(), (bool)ipp.getIntValue() },
+			{ vs != 0, vs == 2026 },
+			{ fp.isNotEmpty(), File(fp) });
+	}
+
+	static void setHiseSettingsInternal(const File& hisePath, 
 		std::pair<bool, bool> useIpp =    { false, true }, 
 		std::pair<bool, bool> useVS26 =   { false, true }, 
 		std::pair<bool, File> faustPath = { false, File() })
