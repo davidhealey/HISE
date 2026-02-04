@@ -123,6 +123,103 @@ public:
     using RouteHandler = std::function<Response(const Request&)>;
 
     //==============================================================================
+    /** A reference-counted async request object for coordinating work across threads.
+        
+        Use this with addAsyncRoute() when you need to dispatch work to another thread
+        (e.g., via killVoicesAndCall) and block the HTTP response until complete.
+        
+        @code
+        server.addAsyncRoute(RestServer::GET, "/api/recompile", [this](RestServer::AsyncRequest::Ptr asyncReq)
+        {
+            ProcessorFunction pf = [asyncReq](Processor* proc)
+            {
+                // Do work on the target thread...
+                asyncReq->complete(RestServer::Response::ok(result));
+                return SafeFunctionCall::OK;
+            };
+            
+            getKillStateHandler().killVoicesAndCall(getMainSynthChain(), pf, 
+                KillStateHandler::TargetThread::SampleLoadingThread);
+            
+            return asyncReq->waitForResponse();
+        });
+        @endcode
+    */
+    class AsyncRequest : public juce::ReferenceCountedObject
+    {
+    public:
+        using Ptr = ReferenceCountedObjectPtr<AsyncRequest>;
+
+        /** Creates an AsyncRequest wrapping the given HTTP request. */
+        AsyncRequest(const Request& r) : request(r) {}
+
+        /** Returns the original HTTP request. */
+        const Request& getRequest() const { return request; }
+
+        /** Call this from the target thread when work is complete.
+            @param r The response to send back to the HTTP client.
+        */
+        void complete(const Response& r)
+        {
+            response = r;
+            completed.store(true);
+        }
+
+        /** Completes the request with an error and returns the response.
+            
+            Use this for preflight checks before dispatching to another thread,
+            or for errors that occur during async execution.
+            
+            @param statusCode HTTP status code (e.g., 400, 404, 500)
+            @param message    Error message to include in the response.
+            @returns          The error response (for immediate return from handler).
+            
+            @code
+            // Preflight check - no need to kill voices
+            if (module == nullptr)
+                return asyncReq->fail(404, "Module not found");
+            
+            // Otherwise dispatch to another thread...
+            @endcode
+        */
+        Response fail(int statusCode, const String& message)
+        {
+            complete(Response::error(statusCode, message));
+            return waitForResponse();
+        }
+
+        /** Blocks until complete() is called or timeout expires.
+            @param timeoutMs Maximum time to wait in milliseconds (default 30 seconds).
+            @returns The response set via complete(), or a 504 timeout error.
+        */
+        Response waitForResponse(int timeoutMs = 30000)
+        {
+            auto startTime = Time::getMillisecondCounter();
+
+            while (!completed.load())
+            {
+                if (Time::getMillisecondCounter() - startTime > (uint32)timeoutMs)
+                    return Response::error(504, "Operation timed out");
+
+                Thread::sleep(50);
+            }
+
+            return response;
+        }
+
+    private:
+        Request request;
+        std::atomic<bool> completed{false};
+        Response response;
+
+        JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(AsyncRequest)
+    };
+
+    //==============================================================================
+    /** Callback type for async route handlers. */
+    using AsyncRouteHandler = std::function<Response(AsyncRequest::Ptr)>;
+
+    //==============================================================================
     /** Listener interface for server events.
         
         @note Listeners are called on the server thread, not the message thread.
@@ -166,6 +263,23 @@ public:
         @note Call this before start(). Adding routes while running is not supported.
     */
     void addRoute(Method method, const String& path, RouteHandler handler);
+
+    /** Register an async route handler for operations that dispatch to other threads.
+        
+        This is a convenience method that wraps the handler with AsyncRequest creation.
+        Use this when you need to dispatch work via killVoicesAndCall() or similar
+        and block until the operation completes.
+        
+        @param method   The HTTP method (GET, POST, PUT, DELETE)
+        @param path     Path pattern, may include :param placeholders.
+        @param handler  Function that receives an AsyncRequest::Ptr. Must call
+                        asyncReq->complete() and return asyncReq->waitForResponse().
+        
+        @note Call this before start(). Adding routes while running is not supported.
+        
+        @see AsyncRequest
+    */
+    void addAsyncRoute(Method method, const String& path, AsyncRouteHandler handler);
 
     //==============================================================================
     /** Start listening for connections.

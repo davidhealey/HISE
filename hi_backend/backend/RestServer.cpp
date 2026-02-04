@@ -392,6 +392,15 @@ void RestServer::addRoute(Method method, const String& path, RouteHandler handle
     pimpl->addRoute(method, path, std::move(handler));
 }
 
+void RestServer::addAsyncRoute(Method method, const String& path, AsyncRouteHandler handler)
+{
+    addRoute(method, path, [handler](const Request& req) -> Response
+    {
+        AsyncRequest::Ptr asyncReq = new AsyncRequest(req);
+        return handler(asyncReq);
+    });
+}
+
 bool RestServer::start(int port, const String& bindAddress)
 {
     return pimpl->startServer(port, bindAddress);
