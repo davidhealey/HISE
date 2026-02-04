@@ -276,6 +276,16 @@ BackendProcessor::BackendProcessor(AudioDeviceManager *deviceManager_/*=nullptr*
 {
 	//printData();
     
+	// Response(const Request&)
+	hise::RestServer::RouteHandler r = [this](const hise::RestServer::Request& req)
+	{
+		var x("noice");
+		return hise::RestServer::Response::ok(x);
+	};
+
+	restServer.addRoute(hise::RestServer::Method::GET, "/recompile", r);
+
+	auto ok = restServer.start(1900);
 	ExtendedApiDocumentation::init();
 
     synthChain = new ModulatorSynthChain(this, "Master Chain", NUM_POLYPHONIC_VOICES);
