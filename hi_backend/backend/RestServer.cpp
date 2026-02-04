@@ -60,10 +60,30 @@ static String createErrorJson(const String& message)
 
 //==============================================================================
 // Request implementation
+String RestServer::Request::getParameter(const String& name, const String& defaultValue) const
+{
+    auto& names = url.getParameterNames();
+    auto& values = url.getParameterValues();
+    
+    // Search from end to get last occurrence (request params override defaults)
+    for (int i = names.size() - 1; i >= 0; --i)
+    {
+        if (names[i] == name)
+            return values[i];
+    }
+    
+    return defaultValue;
+}
+
 var RestServer::Request::getJsonBody() const
 {
     var result;
-    auto parseResult = JSON::parse(body, result);
+    auto postData = url.getPostData();
+    
+    if (postData.isEmpty())
+        return var::undefined();
+    
+    auto parseResult = JSON::parse(postData, result);
     
     if (parseResult.failed())
         return var::undefined();
@@ -118,25 +138,31 @@ public:
     //==============================================================================
     struct RouteInfo
     {
-        String originalPath;
-        String regexPattern;
-        StringArray paramNames;
+        String path;                    // Just the path (e.g., "/api/recompile")
+        StringPairArray defaultParams;  // Default parameter values from route URL
         RouteHandler handler;
     };
 
     //==============================================================================
-    void addRoute(Method method, const String& path, RouteHandler handler)
+    void addRoute(Method method, const URL& routeUrl, RouteHandler handler)
     {
         RouteInfo info;
-        info.originalPath = path;
+        
+        // Extract path from URL, prepending "/" since getSubPath() doesn't include it
+        String subPath = routeUrl.getSubPath(false);
+        info.path = subPath.isEmpty() ? "/" : ("/" + subPath);
+        
         info.handler = std::move(handler);
         
-        // Convert :param to regex capture groups and extract param names
-        parsePathPattern(path, info.regexPattern, info.paramNames);
+        // Extract default parameters from route URL
+        auto& names = routeUrl.getParameterNames();
+        auto& values = routeUrl.getParameterValues();
+        for (int i = 0; i < names.size(); ++i)
+            info.defaultParams.set(names[i], values[i]);
         
-        DBG("RestServer::addRoute - method: " + String(method) + ", path: " + path + ", regex: " + info.regexPattern);
+        DBG("RestServer::addRoute - method: " + String(method) + ", path: " + info.path);
         
-        routes[{method, info.regexPattern}] = std::move(info);
+        routes[{method, info.path}] = std::move(info);
         
         DBG("RestServer::addRoute - routes count: " + String(routes.size()));
     }
@@ -162,10 +188,10 @@ public:
         for (auto& pair : routes)
         {
             auto method = pair.first.first;
-            auto& regexPattern = pair.first.second;
+            auto& routePath = pair.first.second;
             auto& routeInfo = pair.second;
 
-            DBG("RestServer::startServer - registering route: " + regexPattern + " (method: " + String(method) + ")");
+            DBG("RestServer::startServer - registering route: " + routePath + " (method: " + String(method) + ")");
 
             auto wrappedHandler = [this, routeInfo](const httplib::Request& req, httplib::Response& res)
             {
@@ -173,14 +199,14 @@ public:
                 handleRequest(routeInfo, req, res);
             };
 
-            std::string pattern = regexPattern.toStdString();
+            std::string pathStr = routePath.toStdString();
 
             switch (method)
             {
-                case GET:    server->Get(pattern, wrappedHandler); break;
-                case POST:   server->Post(pattern, wrappedHandler); break;
-                case PUT:    server->Put(pattern, wrappedHandler); break;
-                case DELETE: server->Delete(pattern, wrappedHandler); break;
+                case GET:    server->Get(pathStr, wrappedHandler); break;
+                case POST:   server->Post(pathStr, wrappedHandler); break;
+                case PUT:    server->Put(pathStr, wrappedHandler); break;
+                case DELETE: server->Delete(pathStr, wrappedHandler); break;
             }
         }
 
@@ -247,64 +273,9 @@ public:
 
 private:
     //==============================================================================
-    void parsePathPattern(const String& path, String& regexPattern, StringArray& paramNames)
-    {
-        // Convert "/api/script/:id/compile" to "/api/script/([^/]+)/compile"
-        // and extract ["id"] as param names
-        
-        StringArray parts;
-        parts.addTokens(path, "/", "");
-        parts.removeEmptyStrings();
-
-        String result;
-        
-        for (auto& part : parts)
-        {
-            result += "/";
-            
-            if (part.startsWith(":"))
-            {
-                // This is a parameter
-                paramNames.add(part.substring(1));
-                result += "([^/]+)";
-            }
-            else
-            {
-                // Escape any regex special characters in literal parts
-                result += escapeRegex(part);
-            }
-        }
-
-        // If original path was just "/", result would be empty
-        if (result.isEmpty())
-            result = "/";
-
-        regexPattern = result;
-    }
-
-    //==============================================================================
-    String escapeRegex(const String& text)
-    {
-        String result;
-        
-        for (int i = 0; i < text.length(); ++i)
-        {
-            auto c = text[i];
-            
-            // Escape regex special characters
-            if (String("[]{}()^$.|*+?\\").containsChar(c))
-                result += "\\";
-            
-            result += c;
-        }
-        
-        return result;
-    }
-
-    //==============================================================================
     void handleRequest(const RouteInfo& routeInfo, const httplib::Request& req, httplib::Response& res)
     {
-        DBG("RestServer::handleRequest - path: " + String(req.path.c_str()) + ", route: " + routeInfo.originalPath);
+        DBG("RestServer::handleRequest - path: " + String(req.path.c_str()) + ", route: " + routeInfo.path);
         
         // Notify listeners
         String methodStr;
@@ -318,28 +289,32 @@ private:
         
         listeners.call(&RestServer::Listener::requestReceived, methodStr, String(req.path));
 
-        // Build our Request object
+        // Build URL with path
+        URL url("http://localhost:" + String(currentPort) + String(req.path.c_str()));
+        
+        // First add default parameters from route definition
+        for (int i = 0; i < routeInfo.defaultParams.size(); ++i)
+        {
+            auto key = routeInfo.defaultParams.getAllKeys()[i];
+            auto value = routeInfo.defaultParams.getAllValues()[i];
+            url = url.withParameter(key, value);
+        }
+        
+        // Then override with incoming request parameters
+        for (auto& param : req.params)
+            url = url.withParameter(String(param.first), String(param.second));
+        
+        // Add POST data if present
+        if (!req.body.empty())
+            url = url.withPOSTData(String(req.body));
+        
+        // Build Request object
         Request request;
-        request.path = String(req.path);
-        request.body = String(req.body);
-
+        request.url = url;
+        
         // Copy headers
         for (auto& header : req.headers)
             request.headers.set(String(header.first), String(header.second));
-
-        // Copy query params
-        for (auto& param : req.params)
-            request.queryParams.set(String(param.first), String(param.second));
-
-        // Extract path params from regex matches
-        for (int i = 0; i < routeInfo.paramNames.size(); ++i)
-        {
-            if (i < (int)req.matches.size() - 1)  // matches[0] is full match
-            {
-                request.pathParams.set(routeInfo.paramNames[i], 
-                                       String(req.matches[i + 1].str()));
-            }
-        }
 
         // Call handler with exception safety
         Response response;
@@ -387,14 +362,20 @@ RestServer::~RestServer()
     stop();
 }
 
-void RestServer::addRoute(Method method, const String& path, RouteHandler handler)
+URL RestServer::getBaseURL() const
 {
-    pimpl->addRoute(method, path, std::move(handler));
+    int port = pimpl->getServerPort();  // Returns 0 if not running
+    return URL("http://localhost:" + String(port));
 }
 
-void RestServer::addAsyncRoute(Method method, const String& path, AsyncRouteHandler handler)
+void RestServer::addRoute(Method method, const URL& routeUrl, RouteHandler handler)
 {
-    addRoute(method, path, [handler](const Request& req) -> Response
+    pimpl->addRoute(method, routeUrl, std::move(handler));
+}
+
+void RestServer::addAsyncRoute(Method method, const URL& routeUrl, AsyncRouteHandler handler)
+{
+    addRoute(method, routeUrl, [handler](const Request& req) -> Response
     {
         AsyncRequest::Ptr asyncReq = new AsyncRequest(req);
         return handler(asyncReq);

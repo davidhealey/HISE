@@ -45,24 +45,32 @@ namespace hise { using namespace juce;
           Use MessageManager::callAsync() or your own synchronization if you need
           to interact with JUCE components or HISE internals.
     
-    Path Parameters:
-        Supports :param syntax for path parameters.
-        Example: "/api/script/:scriptId/compile"
-        Access via request.pathParams["scriptId"]
+    Routes are defined using juce::URL objects, which handle query parameters.
+    Use getBaseURL() to get a starting URL, then chain getChildURL() and
+    withParameter() to define your route.
     
     @code
     RestServer server;
     
-    server.addRoute(RestServer::GET, "/api/status", [](const RestServer::Request& req) {
-        DynamicObject::Ptr json = new DynamicObject();
-        json->setProperty("status", "running");
-        return RestServer::Response::ok(json.get());
-    });
-    
-    server.addRoute(RestServer::POST, "/api/script/:id/compile", 
+    // Simple route
+    server.addRoute(RestServer::GET, 
+        server.getBaseURL().getChildURL("api/status"),
         [](const RestServer::Request& req) {
-            auto scriptId = req.pathParams["id"];
-            return RestServer::Response::ok({{"compiled", scriptId}});
+            DynamicObject::Ptr json = new DynamicObject();
+            json->setProperty("status", "running");
+            return RestServer::Response::ok(json.get());
+        });
+    
+    // Route with parameters (accessed via query string: ?moduleId=value)
+    server.addRoute(RestServer::GET, 
+        server.getBaseURL()
+            .getChildURL("api/recompile")
+            .withParameter("moduleId", ""),  // empty default = required
+        [](const RestServer::Request& req) {
+            auto moduleId = req.getParameter("moduleId");
+            if (moduleId.isEmpty())
+                return RestServer::Response::badRequest("moduleId is required");
+            return RestServer::Response::ok("Recompiling " + moduleId);
         });
     
     server.start(5000);
@@ -78,13 +86,17 @@ public:
     /** Represents an incoming HTTP request. */
     struct Request
     {
-        String path;                    //< The matched path
-        String body;                    //< Request body (for POST/PUT)
+        URL url;                        //< Full URL with path, query params, and POST data
         StringPairArray headers;        //< HTTP headers
-        StringPairArray queryParams;    //< ?key=value query parameters
-        StringPairArray pathParams;     //< :param extracted values
 
-        /** Parse body as JSON. Returns undefined var on parse failure. */
+        /** Get a query parameter value, with optional default.
+            @param name         Parameter name
+            @param defaultValue Value to return if parameter not present
+            @returns            Parameter value or defaultValue
+        */
+        String getParameter(const String& name, const String& defaultValue = {}) const;
+
+        /** Parse POST body as JSON. Returns undefined var on parse failure. */
         var getJsonBody() const;
     };
 
@@ -253,16 +265,33 @@ public:
     ~RestServer();
 
     //==============================================================================
+    /** Returns a base URL for building route definitions.
+        
+        Use this with getChildURL() and withParameter() to define routes.
+        
+        @code
+        server.addRoute(RestServer::GET, 
+            server.getBaseURL()
+                .getChildURL("api/recompile")
+                .withParameter("moduleId", ""),
+            handler);
+        @endcode
+        
+        @returns URL with "http://localhost:PORT" where PORT is the server port,
+                 or 0 if not yet started.
+    */
+    URL getBaseURL() const;
+
     /** Register a route handler.
         
         @param method   The HTTP method (GET, POST, PUT, DELETE)
-        @param path     Path pattern, may include :param placeholders.
-                        Examples: "/api/status", "/api/script/:id/compile"
+        @param routeUrl URL defining the path and default parameter values.
+                        Use getBaseURL().getChildURL().withParameter() to build.
         @param handler  Function called when route matches. Called on server thread!
         
         @note Call this before start(). Adding routes while running is not supported.
     */
-    void addRoute(Method method, const String& path, RouteHandler handler);
+    void addRoute(Method method, const URL& routeUrl, RouteHandler handler);
 
     /** Register an async route handler for operations that dispatch to other threads.
         
@@ -271,7 +300,8 @@ public:
         and block until the operation completes.
         
         @param method   The HTTP method (GET, POST, PUT, DELETE)
-        @param path     Path pattern, may include :param placeholders.
+        @param routeUrl URL defining the path and default parameter values.
+                        Use getBaseURL().getChildURL().withParameter() to build.
         @param handler  Function that receives an AsyncRequest::Ptr. Must call
                         asyncReq->complete() and return asyncReq->waitForResponse().
         
@@ -279,7 +309,7 @@ public:
         
         @see AsyncRequest
     */
-    void addAsyncRoute(Method method, const String& path, AsyncRouteHandler handler);
+    void addAsyncRoute(Method method, const URL& routeUrl, AsyncRouteHandler handler);
 
     //==============================================================================
     /** Start listening for connections.
