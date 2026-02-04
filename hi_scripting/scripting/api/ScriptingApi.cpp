@@ -1,3 +1,4 @@
+#include "ScriptingApi.h"
 /*  ===========================================================================
 *
 *   This file is part of HISE.
@@ -6640,6 +6641,7 @@ struct ScriptingApi::Console::Wrapper
 	API_VOID_METHOD_WRAPPER_1(Console, assertIsObjectOrArray);
 	API_VOID_METHOD_WRAPPER_1(Console, assertLegalNumber);
 	API_VOID_METHOD_WRAPPER_1(Console, assertNoString);
+	API_VOID_METHOD_WRAPPER_2(Console, assertWithMessage);
 	API_VOID_METHOD_WRAPPER_0(Console, breakInDebugger);
 	API_VOID_METHOD_WRAPPER_0(Console, blink);
 	API_VOID_METHOD_WRAPPER_1(Console, startSampling);
@@ -6664,6 +6666,7 @@ startTime(0.0)
 	ADD_API_METHOD_1(assertIsDefined);
 	ADD_API_METHOD_1(assertIsObjectOrArray);
 	ADD_API_METHOD_1(assertLegalNumber);
+	ADD_API_METHOD_2(assertWithMessage);
 
 	ADD_API_METHOD_0(breakInDebugger);
 	ADD_API_METHOD_1(assertNoString);
@@ -6872,6 +6875,14 @@ void ScriptingApi::Console::assertNoString(var value)
 	if (value.isString())
 	{
 		reportScriptError("Assertion failure: " + value.toString());
+	}
+}
+
+void ScriptingApi::Console::assertWithMessage(bool condition, String errorMessage)
+{
+	if (!condition)
+	{
+		reportScriptError("Assertion failure: " + errorMessage);
 	}
 }
 
