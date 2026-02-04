@@ -3056,6 +3056,35 @@ void BackendCommandTarget::Actions::copyUpdateInfo(BackendRootWindow* bpe)
 {
 	auto hisePath = GET_HISE_SETTING(bpe->getBackendProcessor()->getMainSynthChain(), HiseSettings::Compiler::HisePath).toString();
 
+
+
+	StringPairArray params;
+
+	params.set("path", File(hisePath).getFullPathName().replace("\\", "/"));
+	params.set("status", File(hisePath).getChildFile(".git").isDirectory() ? "valid" : "invalid");
+	
+
+#if HISE_INCLUDE_FAUST
+	params.set("faust", "1");
+#else
+	params.set("faust", "0");
+#endif
+
+#if JUCE_MAC && JUCE_ARM
+	params.set("arch", "arm64");
+#else
+	params.set("arch", "x64");
+#endif
+
+	params.set("commit", String(PREVIOUS_HISE_COMMIT));
+	params.set("commit", String("2d14c3235865ff5510ca6902b6ce636306666857"));
+
+	URL baseURL("https://hise-install-wizard.vercel.app/");
+
+	auto url = baseURL.getChildURL("api/check-update").withParameters(params);
+	
+	debugToConsole(bpe->getBackendProcessor()->getMainSynthChain(), "\tChecking for updates on server...");
+
 	String output;
 
 	output << hisePath;
@@ -3079,18 +3108,46 @@ void BackendCommandTarget::Actions::copyUpdateInfo(BackendRootWindow* bpe)
 
 	output << "|" << String(PREVIOUS_HISE_COMMIT);
 
+	debugToConsole(bpe->getBackendProcessor()->getMainSynthChain(), "HISE stats: " + output);
+
 	SystemClipboard::copyTextToClipboard(output);
 
-	String message;
-
-	message << "Press OK to launch the HISE updater in your browser.  \n> You can paste the current clipboard content in the field";
-
-	if (PresetHandler::showYesNoWindow("Run HISE update wizard", message))
+	Thread::launch([url, baseURL]()
 	{
-		URL("https://hise-install-wizard.vercel.app/update").launchInDefaultBrowser();
-	}
+		auto response = url.readEntireTextStream(false);
+		auto obj = JSON::parse(response);
 
-	//PresetHandler::showMessageWindow("HISE Info copied", "The following string was copied to the clipboard:\n> `" + output + "\n\nClose HISE now and paste this in the setup wizard to proceed with updating HISE.");
+		if (obj["error"])
+		{
+			PresetHandler::showMessageWindow("Update error", obj["message"].toString(), PresetHandler::IconType::Error);
+		}
+		else
+		{
+			if (obj["updateAvailable"])
+			{
+				auto updateUrl = obj["updateUrl"].toString();
+
+				auto u = URL(baseURL).getChildURL(updateUrl);
+
+				MessageManager::callAsync([u]()
+				{
+					if (PresetHandler::showYesNoWindow("Update available", "Press OK to close HISE and show the update wizard in your default browser."))
+					{
+						u.launchInDefaultBrowser();
+						JUCEApplication::quit();
+					}
+				});
+			}
+			else
+			{
+				MessageManager::callAsync([]()
+				{
+					PresetHandler::showMessageWindow("Everything up to date", "Noicenoicenoice");
+				});
+			}
+		}
+	});
+
 }
 
 void BackendCommandTarget::Actions::createThirdPartyNode(BackendRootWindow* bpe)
