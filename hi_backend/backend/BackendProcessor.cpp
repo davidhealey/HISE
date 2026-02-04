@@ -267,6 +267,309 @@ void PluginParameterRamp::bump(PluginParameterSimulatorInfo& info, double milliS
 	info.performChange();
 }
 
+bool BackendProcessor::registerAsyncRestApi(const URL& url, RestServer::Method m)
+{
+	if (restServer.isRunning())
+	{
+		jassertfalse;
+		return false;
+	}
+
+	restServer.addAsyncRoute(
+		m,
+		url,
+		BIND_MEMBER_FUNCTION_1(BackendProcessor::onAsyncRequest));
+
+	return true;
+}
+
+
+struct RestHelpers
+{
+	struct ScopedConsoleHandler : public ControlledObject
+	{
+		ScopedConsoleHandler(MainController* mc, RestServer::AsyncRequest::Ptr request_) :
+			ControlledObject(mc),
+			request(request_)
+		{
+			debugToConsole(getMainController()->getMainSynthChain(), "> create console pipe");
+			getMainController()->getConsoleHandler().setCustomCodeHandler(BIND_MEMBER_FUNCTION_3(ScopedConsoleHandler::onMessage));
+		}
+
+		~ScopedConsoleHandler()
+		{
+			getMainController()->getConsoleHandler().setCustomCodeHandler({});
+			debugToConsole(getMainController()->getMainSynthChain(), "> close console pipe");
+		}
+
+		void onMessage(const String& message, int warning, const Processor* p)
+		{
+			if (warning == 0)
+				request->appendLog(message);
+			else
+			{
+				auto lines = StringArray::fromLines(message);
+
+				auto scriptRoot = getMainController()->getSampleManager().getProjectHandler().getSubDirectory(FileHandlerBase::Scripts);
+				auto moduleId = p->getId();
+
+				auto error = parseError(lines[0], scriptRoot, moduleId);
+
+				lines.remove(0);
+
+				StringArray callstack;
+				for (auto& entry : lines)
+				{
+					auto p = parseError(entry, scriptRoot, moduleId);
+					if (p.location.isNotEmpty())
+						callstack.add(p.toCallstackString());
+				}
+
+				request->appendError(error.message, callstack);
+			}
+		}
+
+	private:
+
+		struct ParsedError
+		{
+			String message;      // "API call with undefined parameter 0"
+			String location;     // "Scripts/funky.js:9:16"
+			String functionName; // "dudel" (empty if not a callstack entry)
+
+			/** Returns formatted callstack entry: "dudel() at Scripts/funky.js:9:16"
+				or just location if no function name. */
+			String toCallstackString() const
+			{
+				if (functionName.isEmpty())
+					return location;
+				return functionName + "() at " + location;
+			}
+		};
+		/** Parses an error string and extracts message, location, and optional function name.
+
+			Handles both formats:
+			- Error message: "API call with undefined parameter 0 {{SW50ZXJm...}}"
+			- Callstack entry: ":\t\t\tdudel() - funky.js (9)\t{{SW50ZXJm...}}"
+
+			@param errorString   The full error/callstack string
+			@param scriptRoot    The project's Scripts folder for resolving full paths
+			@param moduleId      The script processor's module ID - used as fallback filename
+
+			@returns ParsedError with message, location, and optional functionName
+		*/
+		static ParsedError parseError(const String& errorString,
+			const File& scriptRoot,
+			const String& moduleId)
+		{
+			ParsedError result;
+
+			String working = errorString.trim();
+
+			// Strip leading ":\t\t\t" from callstack entries
+			if (working.startsWith(":"))
+				working = working.fromFirstOccurrenceOf(":", false, false).trim();
+
+			// Check if this is a callstack entry with function name: "funcName() - ..."
+			if (working.contains("() - "))
+			{
+				result.functionName = working.upToFirstOccurrenceOf("()", false, false).trim();
+				working = working.fromFirstOccurrenceOf("() - ", false, false);
+			}
+
+			// Extract message (everything before the encoded location)
+			result.message = working.upToFirstOccurrenceOf("{{", false, false)
+				.upToFirstOccurrenceOf("\t", false, false)
+				.trim();
+
+			// Extract and decode the Base64 location
+			String encoded = working.fromFirstOccurrenceOf("{{", false, false)
+				.upToFirstOccurrenceOf("}}", false, false);
+
+			if (encoded.isNotEmpty())
+			{
+				MemoryOutputStream mos;
+				if (Base64::convertFromBase64(mos, encoded))
+				{
+					String decoded(static_cast<const char*>(mos.getData()), mos.getDataSize());
+					StringArray parts = StringArray::fromTokens(decoded, "|", "");
+
+					if (parts.size() >= 5)
+					{
+						// Format: "processorId|relativePath|charIndex|line|col"
+						String path = parts[1];
+						int line = parts[3].getIntValue();
+						int col = parts[4].getIntValue();
+
+						// Build the path
+						String fullPath;
+
+						if (path.isEmpty() || path.contains("()"))
+						{
+							// Inline callback - use moduleId as filename
+							fullPath = moduleId + ".js";
+						}
+						else
+						{
+							// External file
+							File f = scriptRoot.getChildFile(path);
+							if (f.existsAsFile())
+								fullPath = f.getRelativePathFrom(scriptRoot.getParentDirectory()).replaceCharacter('\\', '/');
+							else
+								fullPath = path;
+						}
+
+						result.location = fullPath + ":" + String(line) + ":" + String(col);
+					}
+				}
+			}
+
+			return result;
+		}
+
+		RestServer::AsyncRequest::Ptr request;
+	};
+
+	static JavascriptProcessor* getScriptProcessor(MainController* mc, RestServer::AsyncRequest::Ptr req)
+	{
+		String moduleId = req->getRequest()["moduleId"];
+
+		if (moduleId.isEmpty())
+			return nullptr;
+
+		return dynamic_cast<JavascriptProcessor*>(ProcessorHelpers::getFirstProcessorWithName(mc->getMainSynthChain(), moduleId));
+	}
+
+	static RestServer::Response compile(MainController* mc, ScopedConsoleHandler& sch, RestServer::AsyncRequest::Ptr req)
+	{
+		if (auto jp = getScriptProcessor(mc, req))
+		{
+			mc->getKillStateHandler().killVoicesAndCall(dynamic_cast<Processor*>(jp), [req, &sch](Processor* p)
+			{
+				JavascriptProcessor::ResultFunction rf = [req, &sch](const JavascriptProcessor::SnippetResult& result)
+				{
+					DynamicObject::Ptr r = new DynamicObject();
+					r->setProperty("success", result.r.wasOk());
+					r->setProperty("result", result.r.wasOk() ? "Recompiled OK" : "Compilation / Runtime Error");
+
+					req->complete(RestServer::Response::ok(var(r.get())));
+				};
+
+				dynamic_cast<JavascriptProcessor*>(p)->compileScript(rf);
+				return SafeFunctionCall::OK;
+			}, MainController::KillStateHandler::TargetThread::ScriptingThread);
+		}
+		else
+		{
+			req->fail(404, "moduleId is not a valid script processor");
+		}
+
+		return req->waitForResponse();
+	}
+};
+
+
+RestServer::Response BackendProcessor::onAsyncRequest(RestServer::AsyncRequest::Ptr req)
+{
+	debugToConsole(getMainSynthChain(), "\tincoming HTTP request: " + req->getRequest().url.toString(true));
+
+	RestHelpers::ScopedConsoleHandler sch(this, req);
+
+	auto subURL = req->getRequest().url.getSubPath(false);
+
+	if (subURL == "api/recompile")
+	{
+		return RestHelpers::compile(this, sch, req);
+	}
+	
+	if (subURL == "api/get_script")
+	{
+		if (auto jp = RestHelpers::getScriptProcessor(this, req))
+		{
+			auto callback = req->getRequest()["callback"];
+
+			if (callback.isNotEmpty())
+			{
+				if (auto cb = jp->getSnippet(Identifier(callback)))
+				{
+					DynamicObject::Ptr result = new DynamicObject();
+					result->setProperty("success", true);
+					result->setProperty("moduleId", dynamic_cast<Processor*>(jp)->getId());
+					result->setProperty("callback", callback);
+
+					// onInit is special - it's raw content, not wrapped in function
+					if (callback == "onInit")
+						result->setProperty("script", cb->getAllContent());
+					else
+						result->setProperty("script", cb->getSnippetAsFunction());
+
+					result->setProperty("logs", Array<var>());
+					result->setProperty("errors", Array<var>());
+
+					return RestServer::Response::ok(var(result.get()));
+				}
+					
+				else
+					return RestServer::Response::error(404, "callback " + callback + " not found");
+			}
+			else
+			{
+				String x;
+				jp->mergeCallbacksToScript(x);
+				DynamicObject::Ptr result = new DynamicObject();
+				result->setProperty("success", true);
+				result->setProperty("moduleId", dynamic_cast<Processor*>(jp)->getId());
+				result->setProperty("script", x);
+				result->setProperty("logs", Array<var>());
+				result->setProperty("errors", Array<var>());
+				return RestServer::Response::ok(var(result.get()));
+			}
+		}
+	}
+
+	if (subURL == "api/set_script")
+	{
+		if(auto jp = RestHelpers::getScriptProcessor(this, req))
+		{ 
+			
+			auto obj = req->getRequest().getJsonBody();
+
+			auto callback = obj["callback"].toString();
+			auto script = obj["script"].toString();
+
+			if (callback.isNotEmpty())
+			{
+				if (auto cb = jp->getSnippet(Identifier(callback)))
+				{
+					MessageManagerLock mm;
+					cb->replaceContentAsync(script, false);
+				}
+				else
+					return RestServer::Response::error(404, "callback not found: " + callback);
+			}
+			else
+			{
+				auto ok = jp->parseSnippetsFromString(script, false);
+
+				if (!ok)
+					return RestServer::Response::error(400, "Error at parsing script");
+			}
+
+			if (obj["compile"])
+				return RestHelpers::compile(this, sch, req);
+
+			return RestServer::Response::ok("updated script");
+		}
+		else
+		{
+			return RestServer::Response::error(404, "module not found");
+		}
+	}
+
+	return req->fail(404, "missing API method " + subURL);
+}
+
+
 BackendProcessor::BackendProcessor(AudioDeviceManager *deviceManager_/*=nullptr*/, AudioProcessorPlayer *callback_/*=nullptr*/) :
   MainController(),
   AudioProcessorDriver(deviceManager_, callback_),
@@ -274,16 +577,17 @@ BackendProcessor::BackendProcessor(AudioDeviceManager *deviceManager_/*=nullptr*
   autosaver(this),
   pluginParameterRamp(this)
 {
-	//printData();
-    
-	// Response(const Request&)
-	hise::RestServer::RouteHandler r = [this](const hise::RestServer::Request& req)
-	{
-		var x("noice");
-		return hise::RestServer::Response::ok(x);
-	};
+	auto url = restServer.getBaseURL();
 
-	restServer.addRoute(hise::RestServer::Method::GET, "/recompile", r);
+	registerAsyncRestApi(url.getChildURL("api/recompile").withParameter("moduleId", ""));
+	registerAsyncRestApi(url.getChildURL("api/get_script").withParameter("moduleId", "").withParameter("callback", ""));
+
+	registerAsyncRestApi(url.getChildURL("api/set_script")
+							.withParameter("moduleId", "")
+							.withParameter("callback", "")
+							.withParameter("script", "")
+							.withParameter("compile", "false"),
+						 RestServer::Method::POST);
 
 	auto ok = restServer.start(1900);
 	ExtendedApiDocumentation::init();
@@ -915,6 +1219,8 @@ AudioProcessorEditor* BackendProcessor::createEditor()
     return d;
 #endif
 }
+
+
 
 
 

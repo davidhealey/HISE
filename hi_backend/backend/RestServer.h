@@ -96,6 +96,8 @@ public:
         */
         String getParameter(const String& name, const String& defaultValue = {}) const;
 
+        String operator[](const String& name) const { return getParameter(name); }
+
         /** Parse POST body as JSON. Returns undefined var on parse failure. */
         var getJsonBody() const;
     };
@@ -162,18 +164,42 @@ public:
     public:
         using Ptr = ReferenceCountedObjectPtr<AsyncRequest>;
 
+        /** Represents an error with optional callstack information. */
+        struct ErrorEntry
+        {
+            String errorMessage;
+            StringArray callstack;
+            int64 hash = 0;  // For internal deduplication (not serialized)
+        };
+
         /** Creates an AsyncRequest wrapping the given HTTP request. */
         AsyncRequest(const Request& r) : request(r) {}
 
         /** Returns the original HTTP request. */
         const Request& getRequest() const { return request; }
 
+        /** Append a log message (thread-safe).
+            @param message The message to add to the log.
+        */
+        void appendLog(const String& message);
+
+        /** Append an error with optional callstack (thread-safe).
+            @param errorMessage The error message.
+            @param callstack    Optional callstack frames (e.g., "functionName() - Line 7, column 16").
+        */
+        void appendError(const String& errorMessage, const StringArray& callstack = {});
+
         /** Call this from the target thread when work is complete.
+            
+            This will merge any collected logs and errors into the response body
+            before making it available to the waiting HTTP thread.
+            
             @param r The response to send back to the HTTP client.
         */
         void complete(const Response& r)
         {
             response = r;
+            mergeLogsIntoResponse();
             completed.store(true);
         }
 
@@ -220,9 +246,16 @@ public:
         }
 
     private:
+        /** Merges collected logs and errors into the response body as JSON. */
+        void mergeLogsIntoResponse();
+
         Request request;
         std::atomic<bool> completed{false};
         Response response;
+
+        CriticalSection logLock;
+        StringArray logs;
+        Array<ErrorEntry> errors;
 
         JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(AsyncRequest)
     };

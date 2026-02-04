@@ -124,6 +124,84 @@ RestServer::Response RestServer::Response::error(int statusCode, const String& m
 }
 
 //==============================================================================
+// AsyncRequest implementation
+
+void RestServer::AsyncRequest::appendLog(const String& message)
+{
+    ScopedLock sl(logLock);
+    logs.add(message);
+}
+
+void RestServer::AsyncRequest::appendError(const String& errorMessage, const StringArray& callstack)
+{
+    ScopedLock sl(logLock);
+    
+    int64 hash = errorMessage.hashCode64();
+    
+    // Check for duplicate
+    for (const auto& existing : errors)
+    {
+        if (existing.hash == hash)
+            return;
+    }
+    
+    errors.add({ errorMessage, callstack, hash });
+}
+
+void RestServer::AsyncRequest::mergeLogsIntoResponse()
+{
+    ScopedLock sl(logLock);
+    
+    // Parse existing response body as JSON
+    var existingJson;
+    auto parseResult = JSON::parse(response.body, existingJson);
+    
+    DynamicObject::Ptr rootObj;
+    
+    if (parseResult.wasOk() && existingJson.getDynamicObject() != nullptr)
+    {
+        // Clone the existing object so we can modify it
+        rootObj = existingJson.getDynamicObject()->clone();
+    }
+    else
+    {
+        // Wrap non-JSON or non-object response
+        rootObj = new DynamicObject();
+        
+        if (response.body.isNotEmpty())
+            rootObj->setProperty("result", response.body);
+    }
+    
+    // Build logs array
+    Array<var> logsArray;
+    for (const auto& log : logs)
+        logsArray.add(log);
+    
+    rootObj->setProperty("logs", logsArray);
+    
+    // Build errors array
+    Array<var> errorsArray;
+    for (const auto& err : errors)
+    {
+        DynamicObject::Ptr errObj = new DynamicObject();
+        errObj->setProperty("errorMessage", err.errorMessage);
+        
+        Array<var> callstackArray;
+        for (const auto& frame : err.callstack)
+            callstackArray.add(frame);
+        
+        errObj->setProperty("callstack", callstackArray);
+        errorsArray.add(var(errObj.get()));
+    }
+    
+    rootObj->setProperty("errors", errorsArray);
+    
+    // Update response
+    response.body = JSON::toString(var(rootObj.get()), false);
+    response.contentType = "application/json";
+}
+
+//==============================================================================
 // Internal implementation class
 class RestServer::Impl : public Thread
 {
