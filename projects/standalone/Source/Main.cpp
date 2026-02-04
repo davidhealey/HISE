@@ -214,8 +214,8 @@ public:
 		print("");
 		print("get_update_info");
 		print("outputs (and copies to the clipboard) a string that is used by the HISE install wizard to setup the update procedure");
-		print("Format: <hisepath>|<status:valid|invalid>|<faust|nofaust>[|<architecture:arm64|x64>]");
-		print("Example: > C:\\HISE,valid,faust,x64");
+		print("Format: <hisepath>|<status:valid|invalid>|<faust|nofaust>|<architecture:arm64|x64><PREV_GIT_HASH>");
+		print("Example: > C:\\HISE,valid,faust,x64|d385f6a01ca50ef673c1ff0021e9d486a06816c7");
 		print("");
 
 		exit(0);
