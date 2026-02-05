@@ -271,7 +271,8 @@ RestServer::Response BackendProcessor::onAsyncRequest(RestServer::AsyncRequest::
 {
 	debugToConsole(getMainSynthChain(), "\tincoming HTTP request: " + req->getRequest().url.toString(true));
 
-	RestHelpers::ScopedConsoleHandler sch(this, req);
+	// Attach console handler to request (lifetime tied to request, not stack frame)
+	req->setConsoleCapture(std::make_unique<RestHelpers::ScopedConsoleHandler>(this, req));
 
 	auto subURL = req->getRequest().url.getSubPath(false);
 	auto route = RestHelpers::findRoute(subURL);
@@ -285,13 +286,13 @@ RestServer::Response BackendProcessor::onAsyncRequest(RestServer::AsyncRequest::
 			return RestHelpers::handleStatus(this, req);
 			
 		case RestHelpers::ApiRoute::GetScript:
-			return RestHelpers::handleGetScript(this, req, sch);
+			return RestHelpers::handleGetScript(this, req);
 			
 		case RestHelpers::ApiRoute::SetScript:
-			return RestHelpers::handleSetScript(this, req, sch);
+			return RestHelpers::handleSetScript(this, req);
 			
 		case RestHelpers::ApiRoute::Recompile:
-			return RestHelpers::compile(this, sch, req);
+			return RestHelpers::handleRecompile(this, req);
 			
 		case RestHelpers::ApiRoute::ListComponents:
 			return RestHelpers::handleListComponents(this, req);
@@ -303,7 +304,7 @@ RestServer::Response BackendProcessor::onAsyncRequest(RestServer::AsyncRequest::
 			return RestHelpers::handleGetComponentValue(this, req);
 			
 		case RestHelpers::ApiRoute::SetComponentValue:
-			return RestHelpers::handleSetComponentValue(this, req, sch);
+			return RestHelpers::handleSetComponentValue(this, req);
 			
 		default:
 			return req->fail(404, "Unknown API endpoint: " + subURL);
