@@ -49,7 +49,6 @@ namespace RestApiIds
     DECLARE_ID(script);
     DECLARE_ID(compile);
     DECLARE_ID(hierarchy);
-    DECLARE_ID(componentId);
     
     // Common response fields
     DECLARE_ID(success);
@@ -110,6 +109,14 @@ namespace RestApiIds
     // Debug parameters
     DECLARE_ID(forceSynchronousExecution);
     DECLARE_ID(warning);
+    
+    // set_component_property
+    DECLARE_ID(changes);
+    DECLARE_ID(force);
+    DECLARE_ID(applied);
+    DECLARE_ID(locked);
+    DECLARE_ID(property);
+    DECLARE_ID(recompileRequired);
 }
 
 #undef DECLARE_ID
@@ -138,6 +145,7 @@ struct RestHelpers
         GetComponentProperties, ///< GET  /api/get_component_properties - Get component properties
         GetComponentValue,      ///< GET  /api/get_component_value - Get component runtime value
         SetComponentValue,      ///< POST /api/set_component_value - Set component runtime value
+        SetComponentProperties, ///< POST /api/set_component_properties - Set component properties
         numRoutes
     };
     
@@ -371,6 +379,10 @@ struct RestHelpers
     /** Handler for POST /api/set_component_value - Set component runtime value. */
     static RestServer::Response handleSetComponentValue(MainController* mc, 
                                                         RestServer::AsyncRequest::Ptr req);
+    
+    /** Handler for POST /api/set_component_properties - Set component properties. */
+    static RestServer::Response handleSetComponentProperties(MainController* mc, 
+                                                             RestServer::AsyncRequest::Ptr req);
 };
 
 } // namespace hise

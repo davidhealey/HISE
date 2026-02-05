@@ -329,7 +329,7 @@ const Array<RestHelpers::RouteMetadata>& RestHelpers::getRouteMetadata()
 			.withDescription("Get all properties for a specific UI component")
 			.withReturns("Component type and array of properties with id, value, isDefault, and options")
 			.withModuleIdParam()
-			.withQueryParam(RouteParameter(RestApiIds::componentId, "The component's ID (e.g., Button1, Panel1)")));
+			.withQueryParam(RouteParameter(RestApiIds::id, "The component's ID (e.g., Button1, Panel1)")));
 		
 		// ApiRoute::GetComponentValue
 		m.add(RouteMetadata(ApiRoute::GetComponentValue, "api/get_component_value")
@@ -337,7 +337,7 @@ const Array<RestHelpers::RouteMetadata>& RestHelpers::getRouteMetadata()
 			.withDescription("Get the current runtime value of a UI component")
 			.withReturns("Component type, current value, and min/max range")
 			.withModuleIdParam()
-			.withQueryParam(RouteParameter(RestApiIds::componentId, "The component's ID (e.g., GainKnob, BypassButton)")));
+			.withQueryParam(RouteParameter(RestApiIds::id, "The component's ID (e.g., GainKnob, BypassButton)")));
 		
 		// ApiRoute::SetComponentValue
 		m.add(RouteMetadata(ApiRoute::SetComponentValue, "api/set_component_value")
@@ -346,10 +346,20 @@ const Array<RestHelpers::RouteMetadata>& RestHelpers::getRouteMetadata()
 			.withDescription("Set the runtime value of a UI component (triggers control callback)")
 			.withReturns("Success status")
 			.withBodyParam(RouteParameter(RestApiIds::moduleId, "The script processor's module ID"))
-			.withBodyParam(RouteParameter(RestApiIds::componentId, "The component's ID"))
+			.withBodyParam(RouteParameter(RestApiIds::id, "The component's ID"))
 			.withBodyParam(RouteParameter(RestApiIds::value, "The value to set"))
 			.withBodyParam(RouteParameter(RestApiIds::validateRange, "If true, validates value is within component's min/max range").withDefault("false"))
 			.withBodyParam(RouteParameter(RestApiIds::forceSynchronousExecution, "Debug tool: Bypass threading model for synchronous execution. WARNING: May cause crashes due to race conditions - use only as last resort after saving.").withDefault("false")));
+		
+		// ApiRoute::SetComponentProperties
+		m.add(RouteMetadata(ApiRoute::SetComponentProperties, "api/set_component_properties")
+			.withMethod(RestServer::POST)
+			.withCategory("ui")
+			.withDescription("Set properties on one or more UI components (like Interface Designer)")
+			.withReturns("Success with applied changes, or error with locked properties if any are script-controlled")
+			.withBodyParam(RouteParameter(RestApiIds::moduleId, "The script processor's module ID"))
+			.withBodyParam(RouteParameter(RestApiIds::changes, "Array of {id, properties: {...}} objects"))
+			.withBodyParam(RouteParameter(RestApiIds::force, "If true, bypasses script-lock check and sets all properties").withDefault("false")));
 		
 		// Verify count matches enum
 		jassert(m.size() == (int)ApiRoute::numRoutes);
@@ -705,18 +715,18 @@ RestServer::Response RestHelpers::handleGetComponentProperties(MainController* m
 {
 	if (auto jp = getScriptProcessor(mc, req))
 	{
-		auto componentId = req->getRequest()[RestApiIds::componentId];
+		auto componentId = req->getRequest()[RestApiIds::id];
 		auto c = dynamic_cast<ProcessorWithScriptingContent*>(jp)->getScriptingContent();
 
 		if (componentId.isEmpty())
-			return req->fail(400, "componentId parameter is required");
+			return req->fail(400, "id parameter is required");
 
 		if (auto sc = c->getComponentWithName(Identifier(componentId)))
 		{
 			DynamicObject::Ptr result = new DynamicObject();
 			result->setProperty(RestApiIds::success, true);
 			result->setProperty(RestApiIds::moduleId, dynamic_cast<Processor*>(jp)->getId());
-			result->setProperty(RestApiIds::componentId, componentId);
+			result->setProperty(RestApiIds::id, componentId);
 			result->setProperty(RestApiIds::type, sc->getObjectName().toString());
 
 			Array<var> properties;
@@ -769,18 +779,18 @@ RestServer::Response RestHelpers::handleGetComponentValue(MainController* mc, Re
 {
 	if (auto jp = getScriptProcessor(mc, req))
 	{
-		auto componentId = req->getRequest()[RestApiIds::componentId];
+		auto componentId = req->getRequest()[RestApiIds::id];
 		auto c = dynamic_cast<ProcessorWithScriptingContent*>(jp)->getScriptingContent();
 
 		if (componentId.isEmpty())
-			return req->fail(400, "componentId parameter is required");
+			return req->fail(400, "id parameter is required");
 
 		if (auto sc = c->getComponentWithName(Identifier(componentId)))
 		{
 			DynamicObject::Ptr result = new DynamicObject();
 			result->setProperty(RestApiIds::success, true);
 			result->setProperty(RestApiIds::moduleId, dynamic_cast<Processor*>(jp)->getId());
-			result->setProperty(RestApiIds::componentId, componentId);
+			result->setProperty(RestApiIds::id, componentId);
 			result->setProperty(RestApiIds::type, sc->getObjectName().toString());
 			
 			result->setProperty(RestApiIds::value, sc->getValue());
@@ -825,9 +835,9 @@ RestServer::Response RestHelpers::handleSetComponentValue(MainController* mc, Re
 	if (jp == nullptr)
 		return req->fail(404, "module not found: " + moduleId);
 	
-	auto componentId = obj[RestApiIds::componentId].toString();
+	auto componentId = obj[RestApiIds::id].toString();
 	if (componentId.isEmpty())
-		return req->fail(400, "componentId is required in request body");
+		return req->fail(400, "id is required in request body");
 	
 	if (!obj.hasProperty(RestApiIds::value))
 		return req->fail(400, "value is required in request body");
@@ -859,7 +869,7 @@ RestServer::Response RestHelpers::handleSetComponentValue(MainController* mc, Re
 		DynamicObject::Ptr result = new DynamicObject();
 		result->setProperty(RestApiIds::success, true);
 		result->setProperty(RestApiIds::moduleId, moduleId);
-		result->setProperty(RestApiIds::componentId, componentId);
+		result->setProperty(RestApiIds::id, componentId);
 		result->setProperty(RestApiIds::type, sc->getObjectName().toString());
 		result->setProperty(RestApiIds::forceSynchronousExecution, forceSync);
 		
@@ -871,6 +881,173 @@ RestServer::Response RestHelpers::handleSetComponentValue(MainController* mc, Re
 	}
 	else
 		return req->fail(404, "component not found: " + componentId);
+}
+
+RestServer::Response RestHelpers::handleSetComponentProperties(MainController* mc, RestServer::AsyncRequest::Ptr req)
+{
+	auto obj = req->getRequest().getJsonBody();
+	
+	// Get moduleId
+	auto moduleId = obj[RestApiIds::moduleId].toString();
+	if (moduleId.isEmpty())
+		return req->fail(400, "moduleId is required in request body");
+	
+	auto jp = dynamic_cast<JavascriptProcessor*>(
+		ProcessorHelpers::getFirstProcessorWithName(mc->getMainSynthChain(), moduleId));
+	
+	if (jp == nullptr)
+		return req->fail(404, "module not found: " + moduleId);
+	
+	auto content = dynamic_cast<ProcessorWithScriptingContent*>(jp)->getScriptingContent();
+	
+	// Parse changes array
+	auto changesVar = obj[RestApiIds::changes];
+	if (!changesVar.isArray() || changesVar.size() == 0)
+		return req->fail(400, "changes must be a non-empty array");
+	
+	bool force = (bool)obj.getProperty(RestApiIds::force, false);
+	
+	// Phase 1: Validation - collect all locked properties if force=false
+	Array<var> lockedProperties;
+	static const Identifier parentComponentId("parentComponent");
+	
+	for (int i = 0; i < changesVar.size(); i++)
+	{
+		auto change = changesVar[i];
+		auto componentId = change[RestApiIds::id].toString();
+		
+		if (componentId.isEmpty())
+			return req->fail(400, "changes[" + String(i) + "].id is required");
+		
+		auto sc = content->getComponentWithName(Identifier(componentId));
+		if (sc == nullptr)
+			return req->fail(404, "component not found: " + componentId);
+		
+		auto propsVar = change[RestApiIds::properties];
+		if (!propsVar.getDynamicObject())
+			return req->fail(400, "changes[" + String(i) + "].properties must be an object");
+		
+		auto props = propsVar.getDynamicObject()->getProperties();
+		
+		for (int j = 0; j < props.size(); j++)
+		{
+			auto propId = props.getName(j);
+			
+			// Validate property exists
+			if (!sc->hasProperty(propId))
+				return req->fail(400, "property '" + propId.toString() + 
+								 "' does not exist on component '" + componentId + "'");
+			
+			// Check for script-lock (unless force=true)
+			if (!force && sc->isPropertyOverwrittenByScript(propId))
+			{
+				DynamicObject::Ptr lockedEntry = new DynamicObject();
+				lockedEntry->setProperty(RestApiIds::id, componentId);
+				lockedEntry->setProperty(RestApiIds::property, propId.toString());
+				lockedProperties.add(var(lockedEntry.get()));
+			}
+			
+			// Validate parentComponent target exists
+			if (propId == parentComponentId)
+			{
+				auto targetParent = props.getValueAt(j).toString();
+				if (targetParent.isNotEmpty())
+				{
+					if (content->getComponentWithName(Identifier(targetParent)) == nullptr)
+					{
+						return req->fail(400, "parentComponent target '" + targetParent + 
+										 "' does not exist for component '" + componentId + "'");
+					}
+				}
+			}
+		}
+	}
+	
+	// If any properties are locked, fail with details
+	if (lockedProperties.size() > 0)
+	{
+		DynamicObject::Ptr result = new DynamicObject();
+		result->setProperty(RestApiIds::success, false);
+		result->setProperty(RestApiIds::errorMessage, "Properties are locked by script (use force=true to override)");
+		result->setProperty(RestApiIds::locked, var(lockedProperties));
+		
+		RestServer::Response response;
+		response.statusCode = 400;
+		response.contentType = "application/json";
+		response.body = JSON::toString(var(result.get()));
+		
+		req->complete(response);
+		return req->waitForResponse();
+	}
+	
+	// Phase 2: Apply all changes
+	Array<var> appliedChanges;
+	bool recompileRequired = false;
+	
+	ValueTreeUpdateWatcher::ScopedDelayer sd(content->getUpdateWatcher(), true);
+
+	for (int i = 0; i < changesVar.size(); i++)
+	{
+		auto change = changesVar[i];
+		auto componentId = change[RestApiIds::id].toString();
+		auto sc = content->getComponentWithName(Identifier(componentId));
+		auto props = change[RestApiIds::properties].getDynamicObject()->getProperties();
+		
+		// Use ScopedPropertyEnabler to bypass script tracking (like paste action)
+		ScriptComponent::ScopedPropertyEnabler spe(sc);
+		
+		Array<var> appliedProps;
+		
+		for (int j = 0; j < props.size(); j++)
+		{
+			auto propId = props.getName(j);
+			auto newValue = props.getValueAt(j);
+			
+			// Track parentComponent changes
+			if (propId == parentComponentId)
+				recompileRequired = true;
+			
+			// Handle colour conversion if needed
+			if (propId.toString().toLowerCase().contains("colour"))
+			{
+				auto colour = ApiHelpers::getColourFromVar(newValue);
+				newValue = (int64)colour.getARGB();
+			}
+			
+			DBG("Setting property " + propId.toString() + " to: '" + newValue.toString() + "' (type: " + String(newValue.isString() ? "string" : newValue.isVoid() ? "void" : "other") + ")");
+			
+			sc->setScriptObjectPropertyWithChangeMessage(propId, newValue, sendNotificationAsync);
+			appliedProps.add(propId.toString());
+		}
+		
+		DynamicObject::Ptr appliedEntry = new DynamicObject();
+		appliedEntry->setProperty(RestApiIds::id, componentId);
+		appliedEntry->setProperty(RestApiIds::properties, var(appliedProps));
+		appliedChanges.add(var(appliedEntry.get()));
+	}
+	
+#if 0
+	// Phase 3: Rebuild if parentComponent was changed (must run on message thread)
+	if (recompileRequired)
+	{
+		SafeAsyncCall::callAsyncIfNotOnMessageThread<ScriptingApi::Content>(*content, [](ScriptingApi::Content& c)
+		{
+			c.valueTreeNeedsUpdate();
+		});
+	}
+#endif
+	
+	// Build success response
+	DynamicObject::Ptr result = new DynamicObject();
+	result->setProperty(RestApiIds::success, true);
+	result->setProperty(RestApiIds::moduleId, moduleId);
+	result->setProperty(RestApiIds::applied, var(appliedChanges));
+	result->setProperty(RestApiIds::recompileRequired, recompileRequired);
+	result->setProperty(RestApiIds::logs, Array<var>());
+	result->setProperty(RestApiIds::errors, Array<var>());
+	
+	req->complete(RestServer::Response::ok(var(result.get())));
+	return req->waitForResponse();
 }
 
 } // namespace hise

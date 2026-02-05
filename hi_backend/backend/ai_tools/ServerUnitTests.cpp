@@ -69,6 +69,16 @@ public:
         testFloatNormalizationUnit();
         testFloatNormalization();
         testForceSynchronousExecution();
+        testSetComponentPropertiesBasic();
+        testSetComponentPropertiesMultiple();
+        testSetComponentPropertiesLockedRejection();
+        testSetComponentPropertiesForceMode();
+        testSetComponentPropertiesInvalidComponent();
+        testSetComponentPropertiesInvalidProperty();
+        testSetComponentPropertiesColour();
+        testSetComponentPropertiesParentComponent();
+        testSetComponentPropertiesRemoveFromParent();
+        testSetComponentPropertiesInvalidParent();
         
         // Verify all endpoints were tested
         verifyAllEndpointsTested();
@@ -516,11 +526,11 @@ private:
                      "PropKnob.set(\"max\", 24);\n"
                      "PropKnob.set(\"mode\", \"Decibel\");");
         
-        auto response = ctx->httpGet("/api/get_component_properties?moduleId=Interface&componentId=PropKnob");
+        auto response = ctx->httpGet("/api/get_component_properties?moduleId=Interface&id=PropKnob");
         var json = ctx->parseJson(response);
         
         expect((bool)json["success"], "Should succeed");
-        expect(json["componentId"].toString() == "PropKnob", "Should return correct componentId");
+        expect(json["id"].toString() == "PropKnob", "Should return correct id");
         expect(json["type"].toString() == "ScriptSlider", "Should return correct type");
         
         auto properties = json["properties"];
@@ -683,12 +693,12 @@ private:
                      "TestKnob.set(\"max\", 12);\n"
                      "TestKnob.setValue(0.5);");
         
-        auto response = ctx->httpGet("/api/get_component_value?moduleId=Interface&componentId=TestKnob");
+        auto response = ctx->httpGet("/api/get_component_value?moduleId=Interface&id=TestKnob");
         var json = ctx->parseJson(response);
         
         expect((bool)json["success"], "Should succeed");
         expect(json["moduleId"].toString() == "Interface", "Should return correct moduleId");
-        expect(json["componentId"].toString() == "TestKnob", "Should return correct componentId");
+        expect(json["id"].toString() == "TestKnob", "Should return correct id");
         expect(json["type"].toString() == "ScriptSlider", "Should return correct type");
         expect(json.hasProperty("value"), "Should have value property");
         expect(json.hasProperty("min"), "Should have min property");
@@ -714,7 +724,7 @@ private:
         {
             DynamicObject::Ptr bodyObj = new DynamicObject();
             bodyObj->setProperty("moduleId", "Interface");
-            bodyObj->setProperty("componentId", "TestKnob");
+            bodyObj->setProperty("id", "TestKnob");
             bodyObj->setProperty("value", 5.0);
             
             auto response = ctx->httpPost("/api/set_component_value",
@@ -723,7 +733,7 @@ private:
             
             expect((bool)json["success"], "Should succeed");
             expect(json["moduleId"].toString() == "Interface", "Should return correct moduleId");
-            expect(json["componentId"].toString() == "TestKnob", "Should return correct componentId");
+            expect(json["id"].toString() == "TestKnob", "Should return correct id");
             expect(json["type"].toString() == "ScriptSlider", "Should return correct type");
         }
         
@@ -731,7 +741,7 @@ private:
         {
             DynamicObject::Ptr bodyObj = new DynamicObject();
             bodyObj->setProperty("moduleId", "Interface");
-            bodyObj->setProperty("componentId", "TestKnob");
+            bodyObj->setProperty("id", "TestKnob");
             bodyObj->setProperty("value", 7.5);
             bodyObj->setProperty("validateRange", true);
             
@@ -746,7 +756,7 @@ private:
         {
             DynamicObject::Ptr bodyObj = new DynamicObject();
             bodyObj->setProperty("moduleId", "Interface");
-            bodyObj->setProperty("componentId", "TestKnob");
+            bodyObj->setProperty("id", "TestKnob");
             bodyObj->setProperty("value", 15.0);  // Out of range [0, 10]
             bodyObj->setProperty("validateRange", true);
             
@@ -761,7 +771,7 @@ private:
         {
             DynamicObject::Ptr bodyObj = new DynamicObject();
             bodyObj->setProperty("moduleId", "Interface");
-            bodyObj->setProperty("componentId", "TestKnob");
+            bodyObj->setProperty("id", "TestKnob");
             bodyObj->setProperty("value", 15.0);  // Out of range but validateRange is false
             bodyObj->setProperty("validateRange", false);
             
@@ -794,7 +804,7 @@ private:
         // Set value via API
         DynamicObject::Ptr bodyObj = new DynamicObject();
         bodyObj->setProperty("moduleId", "Interface");
-        bodyObj->setProperty("componentId", "TestKnob");
+        bodyObj->setProperty("id", "TestKnob");
         bodyObj->setProperty("value", 0.75);
         
         auto response = ctx->httpPost("/api/set_component_value",
@@ -844,7 +854,7 @@ private:
         // Now trigger the callback via set_component_value
         DynamicObject::Ptr bodyObj = new DynamicObject();
         bodyObj->setProperty("moduleId", "Interface");
-        bodyObj->setProperty("componentId", "TestKnob");
+        bodyObj->setProperty("id", "TestKnob");
         bodyObj->setProperty("value", 0.5);
         
         auto response = ctx->httpPost("/api/set_component_value",
@@ -898,7 +908,7 @@ private:
         // which then triggers Knob2's callback
         DynamicObject::Ptr bodyObj = new DynamicObject();
         bodyObj->setProperty("moduleId", "Interface");
-        bodyObj->setProperty("componentId", "Knob1");
+        bodyObj->setProperty("id", "Knob1");
         bodyObj->setProperty("value", 0.3);
         
         auto response = ctx->httpPost("/api/set_component_value",
@@ -1037,7 +1047,7 @@ private:
         
         DynamicObject::Ptr bodyObj = new DynamicObject();
         bodyObj->setProperty("moduleId", "Interface");
-        bodyObj->setProperty("componentId", "TestKnob");
+        bodyObj->setProperty("id", "TestKnob");
         bodyObj->setProperty("value", 0.1);
         
         auto response = ctx->httpPost("/api/set_component_value",
@@ -1081,7 +1091,7 @@ private:
         // Test with forceSynchronousExecution: true
         DynamicObject::Ptr bodyObj = new DynamicObject();
         bodyObj->setProperty("moduleId", "Interface");
-        bodyObj->setProperty("componentId", "TestKnob");
+        bodyObj->setProperty("id", "TestKnob");
         bodyObj->setProperty("value", 0.5);
         bodyObj->setProperty("forceSynchronousExecution", true);
         
@@ -1106,6 +1116,459 @@ private:
                 callbackExecuted = true;
         }
         expect(callbackExecuted, "Callback should still execute in sync mode");
+    }
+    
+    //==========================================================================
+    void testSetComponentPropertiesBasic()
+    {
+        beginTest("POST /api/set_component_properties (basic)");
+        
+        ctx->reset();
+        
+        // Create a knob
+        ctx->compile("Content.makeFrontInterface(600, 400);\n"
+                     "const var TestKnob = Content.addKnob(\"TestKnob\", 10, 10);");
+        
+        // Set a single property
+        DynamicObject::Ptr change = new DynamicObject();
+        change->setProperty("id", "TestKnob");
+        DynamicObject::Ptr props = new DynamicObject();
+        props->setProperty("x", 100);
+        props->setProperty("text", "New Label");
+        change->setProperty("properties", var(props.get()));
+        
+        Array<var> changes;
+        changes.add(var(change.get()));
+        
+        DynamicObject::Ptr bodyObj = new DynamicObject();
+        bodyObj->setProperty("moduleId", "Interface");
+        bodyObj->setProperty("changes", var(changes));
+        
+        auto response = ctx->httpPost("/api/set_component_properties",
+                                      JSON::toString(var(bodyObj.get())));
+        var json = ctx->parseJson(response);
+        
+        expect((bool)json["success"], "Should succeed: " + response);
+        expect(json["moduleId"].toString() == "Interface", "Should return correct moduleId");
+        expect(!(bool)json["recompileRequired"], "Should not require recompile for simple props");
+        
+        auto applied = json["applied"];
+        expect(applied.isArray(), "applied should be array");
+        expect(applied.size() == 1, "Should have 1 applied change");
+        expect(applied[0]["id"].toString() == "TestKnob", "Should have correct component id");
+        
+        // Verify properties were actually changed
+        auto getResponse = ctx->httpGet("/api/get_component_properties?moduleId=Interface&id=TestKnob");
+        var getJson = ctx->parseJson(getResponse);
+        auto properties = getJson["properties"];
+        
+        bool foundX = false, foundText = false;
+        for (int i = 0; i < properties.size(); i++)
+        {
+            if (properties[i]["id"].toString() == "x")
+            {
+                foundX = true;
+                expect((int)properties[i]["value"] == 100, "x should be 100");
+            }
+            if (properties[i]["id"].toString() == "text")
+            {
+                foundText = true;
+                expect(properties[i]["value"].toString() == "New Label", "text should be 'New Label'");
+            }
+        }
+        expect(foundX, "Should have x property");
+        expect(foundText, "Should have text property");
+    }
+    
+    //==========================================================================
+    void testSetComponentPropertiesMultiple()
+    {
+        beginTest("POST /api/set_component_properties (multiple components)");
+        
+        ctx->reset();
+        
+        // Create multiple components
+        ctx->compile("Content.makeFrontInterface(600, 400);\n"
+                     "const var Knob1 = Content.addKnob(\"Knob1\", 10, 10);\n"
+                     "const var Knob2 = Content.addKnob(\"Knob2\", 150, 10);");
+        
+        // Set properties on both
+        DynamicObject::Ptr change1 = new DynamicObject();
+        change1->setProperty("id", "Knob1");
+        DynamicObject::Ptr props1 = new DynamicObject();
+        props1->setProperty("x", 50);
+        change1->setProperty("properties", var(props1.get()));
+        
+        DynamicObject::Ptr change2 = new DynamicObject();
+        change2->setProperty("id", "Knob2");
+        DynamicObject::Ptr props2 = new DynamicObject();
+        props2->setProperty("x", 200);
+        props2->setProperty("text", "Second");
+        change2->setProperty("properties", var(props2.get()));
+        
+        Array<var> changes;
+        changes.add(var(change1.get()));
+        changes.add(var(change2.get()));
+        
+        DynamicObject::Ptr bodyObj = new DynamicObject();
+        bodyObj->setProperty("moduleId", "Interface");
+        bodyObj->setProperty("changes", var(changes));
+        
+        auto response = ctx->httpPost("/api/set_component_properties",
+                                      JSON::toString(var(bodyObj.get())));
+        var json = ctx->parseJson(response);
+        
+        expect((bool)json["success"], "Should succeed");
+        
+        auto applied = json["applied"];
+        expect(applied.size() == 2, "Should have 2 applied changes");
+    }
+    
+    //==========================================================================
+    void testSetComponentPropertiesLockedRejection()
+    {
+        beginTest("POST /api/set_component_properties (locked property rejection)");
+        
+        ctx->reset();
+        
+        // Create a knob where script sets x property
+        ctx->compile("Content.makeFrontInterface(600, 400);\n"
+                     "const var TestKnob = Content.addKnob(\"TestKnob\", 10, 10);\n"
+                     "TestKnob.set(\"x\", 50);");  // This locks 'x'
+        
+        // Try to set x via API without force
+        DynamicObject::Ptr change = new DynamicObject();
+        change->setProperty("id", "TestKnob");
+        DynamicObject::Ptr props = new DynamicObject();
+        props->setProperty("x", 100);  // x is locked by script
+        change->setProperty("properties", var(props.get()));
+        
+        Array<var> changes;
+        changes.add(var(change.get()));
+        
+        DynamicObject::Ptr bodyObj = new DynamicObject();
+        bodyObj->setProperty("moduleId", "Interface");
+        bodyObj->setProperty("changes", var(changes));
+        bodyObj->setProperty("force", false);
+        
+        auto response = ctx->httpPost("/api/set_component_properties",
+                                      JSON::toString(var(bodyObj.get())));
+        var json = ctx->parseJson(response);
+        
+        expect(!(bool)json["success"], "Should fail when property is locked");
+        expect(json.hasProperty("locked"), "Should have locked array");
+        
+        auto locked = json["locked"];
+        expect(locked.isArray(), "locked should be array");
+        expect(locked.size() >= 1, "Should have at least one locked property");
+        expect(locked[0]["id"].toString() == "TestKnob", "Should identify correct component");
+        expect(locked[0]["property"].toString() == "x", "Should identify correct property");
+    }
+    
+    //==========================================================================
+    void testSetComponentPropertiesForceMode()
+    {
+        beginTest("POST /api/set_component_properties (force mode)");
+        
+        ctx->reset();
+        
+        // Create a knob where script sets x property
+        ctx->compile("Content.makeFrontInterface(600, 400);\n"
+                     "const var TestKnob = Content.addKnob(\"TestKnob\", 10, 10);\n"
+                     "TestKnob.set(\"x\", 50);");  // This locks 'x'
+        
+        // Set x via API WITH force=true
+        DynamicObject::Ptr change = new DynamicObject();
+        change->setProperty("id", "TestKnob");
+        DynamicObject::Ptr props = new DynamicObject();
+        props->setProperty("x", 200);  // x is locked but we force
+        change->setProperty("properties", var(props.get()));
+        
+        Array<var> changes;
+        changes.add(var(change.get()));
+        
+        DynamicObject::Ptr bodyObj = new DynamicObject();
+        bodyObj->setProperty("moduleId", "Interface");
+        bodyObj->setProperty("changes", var(changes));
+        bodyObj->setProperty("force", true);
+        
+        auto response = ctx->httpPost("/api/set_component_properties",
+                                      JSON::toString(var(bodyObj.get())));
+        var json = ctx->parseJson(response);
+        
+        expect((bool)json["success"], "Should succeed with force=true");
+        
+        // Verify property was actually changed
+        auto getResponse = ctx->httpGet("/api/get_component_properties?moduleId=Interface&id=TestKnob");
+        var getJson = ctx->parseJson(getResponse);
+        auto properties = getJson["properties"];
+        
+        for (int i = 0; i < properties.size(); i++)
+        {
+            if (properties[i]["id"].toString() == "x")
+            {
+                expect((int)properties[i]["value"] == 200, "x should be 200 after force");
+            }
+        }
+    }
+    
+    //==========================================================================
+    void testSetComponentPropertiesInvalidComponent()
+    {
+        beginTest("POST /api/set_component_properties (invalid component)");
+        
+        ctx->reset();
+        
+        ctx->compile("Content.makeFrontInterface(600, 400);");
+        
+        DynamicObject::Ptr change = new DynamicObject();
+        change->setProperty("id", "NonExistent");
+        DynamicObject::Ptr props = new DynamicObject();
+        props->setProperty("x", 100);
+        change->setProperty("properties", var(props.get()));
+        
+        Array<var> changes;
+        changes.add(var(change.get()));
+        
+        DynamicObject::Ptr bodyObj = new DynamicObject();
+        bodyObj->setProperty("moduleId", "Interface");
+        bodyObj->setProperty("changes", var(changes));
+        
+        auto response = ctx->httpPost("/api/set_component_properties",
+                                      JSON::toString(var(bodyObj.get())));
+        var json = ctx->parseJson(response);
+        
+        expect(!(bool)json["success"], "Should fail for non-existent component");
+    }
+    
+    //==========================================================================
+    void testSetComponentPropertiesInvalidProperty()
+    {
+        beginTest("POST /api/set_component_properties (invalid property)");
+        
+        ctx->reset();
+        
+        ctx->compile("Content.makeFrontInterface(600, 400);\n"
+                     "const var TestKnob = Content.addKnob(\"TestKnob\", 10, 10);");
+        
+        DynamicObject::Ptr change = new DynamicObject();
+        change->setProperty("id", "TestKnob");
+        DynamicObject::Ptr props = new DynamicObject();
+        props->setProperty("nonExistentProperty", 100);
+        change->setProperty("properties", var(props.get()));
+        
+        Array<var> changes;
+        changes.add(var(change.get()));
+        
+        DynamicObject::Ptr bodyObj = new DynamicObject();
+        bodyObj->setProperty("moduleId", "Interface");
+        bodyObj->setProperty("changes", var(changes));
+        
+        auto response = ctx->httpPost("/api/set_component_properties",
+                                      JSON::toString(var(bodyObj.get())));
+        var json = ctx->parseJson(response);
+        
+        expect(!(bool)json["success"], "Should fail for non-existent property");
+    }
+    
+    //==========================================================================
+    void testSetComponentPropertiesColour()
+    {
+        beginTest("POST /api/set_component_properties (colour conversion)");
+        
+        ctx->reset();
+        
+        ctx->compile("Content.makeFrontInterface(600, 400);\n"
+                     "const var TestKnob = Content.addKnob(\"TestKnob\", 10, 10);");
+        
+        // Set bgColour using hex string format
+        DynamicObject::Ptr change = new DynamicObject();
+        change->setProperty("id", "TestKnob");
+        DynamicObject::Ptr props = new DynamicObject();
+        props->setProperty("bgColour", "0xFF00FF00");  // Green
+        change->setProperty("properties", var(props.get()));
+        
+        Array<var> changes;
+        changes.add(var(change.get()));
+        
+        DynamicObject::Ptr bodyObj = new DynamicObject();
+        bodyObj->setProperty("moduleId", "Interface");
+        bodyObj->setProperty("changes", var(changes));
+        
+        auto response = ctx->httpPost("/api/set_component_properties",
+                                      JSON::toString(var(bodyObj.get())));
+        var json = ctx->parseJson(response);
+        
+        expect((bool)json["success"], "Should succeed with hex colour string");
+        
+        // Verify colour was set
+        auto getResponse = ctx->httpGet("/api/get_component_properties?moduleId=Interface&id=TestKnob");
+        var getJson = ctx->parseJson(getResponse);
+        auto properties = getJson["properties"];
+        
+        for (int i = 0; i < properties.size(); i++)
+        {
+            if (properties[i]["id"].toString() == "bgColour")
+            {
+                expect(properties[i]["value"].toString() == "0xFF00FF00", 
+                       "bgColour should be green (0xFF00FF00)");
+            }
+        }
+    }
+    
+    //==========================================================================
+    void testSetComponentPropertiesParentComponent()
+    {
+        beginTest("POST /api/set_component_properties (parentComponent triggers rebuild)");
+        
+        ctx->reset();
+        
+        // Create panel and knob
+        ctx->compile("Content.makeFrontInterface(600, 400);\n"
+                     "const var Panel1 = Content.addPanel(\"Panel1\", 10, 10);\n"
+                     "Panel1.set(\"width\", 200);\n"
+                     "Panel1.set(\"height\", 200);\n"
+                     "const var TestKnob = Content.addKnob(\"TestKnob\", 250, 10);");
+        
+        // Move knob into panel by setting parentComponent
+        DynamicObject::Ptr change = new DynamicObject();
+        change->setProperty("id", "TestKnob");
+        DynamicObject::Ptr props = new DynamicObject();
+        props->setProperty("parentComponent", "Panel1");
+        change->setProperty("properties", var(props.get()));
+        
+        Array<var> changes;
+        changes.add(var(change.get()));
+        
+        DynamicObject::Ptr bodyObj = new DynamicObject();
+        bodyObj->setProperty("moduleId", "Interface");
+        bodyObj->setProperty("changes", var(changes));
+        
+        auto response = ctx->httpPost("/api/set_component_properties",
+                                      JSON::toString(var(bodyObj.get())));
+        var json = ctx->parseJson(response);
+        
+        expect((bool)json["success"], "Should succeed");
+        expect((bool)json["recompileRequired"], "Should indicate recompile required");
+    }
+    
+    //==========================================================================
+    void testSetComponentPropertiesRemoveFromParent()
+    {
+        beginTest("POST /api/set_component_properties (remove from parent with empty string)");
+        
+        ctx->reset();
+        
+        // Create panel and knob, with knob inside panel
+        ctx->compile("Content.makeFrontInterface(600, 400);\n"
+                     "const var Panel1 = Content.addPanel(\"Panel1\", 10, 10);\n"
+                     "Panel1.set(\"width\", 200);\n"
+                     "Panel1.set(\"height\", 200);\n"
+                     "const var TestKnob = Content.addKnob(\"TestKnob\", 20, 20);\n"
+                     "TestKnob.set(\"parentComponent\", \"Panel1\");");
+        
+        // Verify knob is in panel
+        auto hierarchyBefore = ctx->httpGet("/api/list_components?moduleId=Interface&hierarchy=true");
+        var jsonBefore = ctx->parseJson(hierarchyBefore);
+        auto componentsBefore = jsonBefore["components"];
+        
+        bool knobInPanelBefore = false;
+        for (int i = 0; i < componentsBefore.size(); i++)
+        {
+            if (componentsBefore[i]["id"].toString() == "Panel1")
+            {
+                auto children = componentsBefore[i]["childComponents"];
+                for (int j = 0; j < children.size(); j++)
+                {
+                    if (children[j]["id"].toString() == "TestKnob")
+                        knobInPanelBefore = true;
+                }
+            }
+        }
+        expect(knobInPanelBefore, "Knob should be inside Panel1 initially");
+        
+        // Remove knob from panel by setting parentComponent to empty string
+        DynamicObject::Ptr change = new DynamicObject();
+        change->setProperty("id", "TestKnob");
+        DynamicObject::Ptr props = new DynamicObject();
+        props->setProperty("parentComponent", "");
+        change->setProperty("properties", var(props.get()));
+        
+        Array<var> changes;
+        changes.add(var(change.get()));
+        
+        DynamicObject::Ptr bodyObj = new DynamicObject();
+        bodyObj->setProperty("moduleId", "Interface");
+        bodyObj->setProperty("changes", var(changes));
+        bodyObj->setProperty("force", true);
+        
+        auto jmp = ProcessorHelpers::getFirstProcessorWithType<JavascriptMidiProcessor>(ctx->bp->getMainSynthChain());
+        auto sc = jmp->getContent()->getComponentWithName("TestKnob");
+
+        auto response = ctx->httpPost("/api/set_component_properties",
+                                      JSON::toString(var(bodyObj.get())));
+        var json = ctx->parseJson(response);
+
+        expect((bool)json["success"], "Should succeed");
+
+        // Verify knob is now at root level (not inside panel)
+        auto hierarchyAfter = ctx->httpGet("/api/list_components?moduleId=Interface&hierarchy=true");
+
+        var jsonAfter = ctx->parseJson(hierarchyAfter);
+        auto componentsAfter = jsonAfter["components"];
+        
+        bool knobAtRoot = false;
+        bool knobStillInPanel = false;
+        
+        for (int i = 0; i < componentsAfter.size(); i++)
+        {
+            if (componentsAfter[i]["id"].toString() == "TestKnob")
+                knobAtRoot = true;
+            
+            if (componentsAfter[i]["id"].toString() == "Panel1")
+            {
+                auto children = componentsAfter[i]["childComponents"];
+                for (int j = 0; j < children.size(); j++)
+                {
+                    if (children[j]["id"].toString() == "TestKnob")
+                        knobStillInPanel = true;
+                }
+            }
+        }
+        
+        expect(knobAtRoot, "Knob should be at root level after setting parentComponent to empty");
+        expect(!knobStillInPanel, "Knob should NOT be inside Panel1 after removal");
+    }
+    
+    //==========================================================================
+    void testSetComponentPropertiesInvalidParent()
+    {
+        beginTest("POST /api/set_component_properties (invalid parentComponent target)");
+        
+        ctx->reset();
+        
+        ctx->compile("Content.makeFrontInterface(600, 400);\n"
+                     "const var TestKnob = Content.addKnob(\"TestKnob\", 10, 10);");
+        
+        // Try to set parentComponent to non-existent panel
+        DynamicObject::Ptr change = new DynamicObject();
+        change->setProperty("id", "TestKnob");
+        DynamicObject::Ptr props = new DynamicObject();
+        props->setProperty("parentComponent", "NonExistentPanel");
+        change->setProperty("properties", var(props.get()));
+        
+        Array<var> changes;
+        changes.add(var(change.get()));
+        
+        DynamicObject::Ptr bodyObj = new DynamicObject();
+        bodyObj->setProperty("moduleId", "Interface");
+        bodyObj->setProperty("changes", var(changes));
+        
+        auto response = ctx->httpPost("/api/set_component_properties",
+                                      JSON::toString(var(bodyObj.get())));
+        var json = ctx->parseJson(response);
+        
+        expect(!(bool)json["success"], "Should fail for non-existent parent");
     }
 };
 
