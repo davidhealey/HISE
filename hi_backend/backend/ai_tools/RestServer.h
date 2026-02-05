@@ -139,6 +139,19 @@ public:
     using RouteHandler = std::function<Response(const Request&)>;
 
     //==============================================================================
+    /** Formats a double to a clean string, rounded to maxDecimalPlaces.
+        Eliminates floating point noise (e.g., 0.300000011920929 -> "0.3").
+    */
+    static String formatFloat(double value, int maxDecimalPlaces = 4);
+
+    /** Recursively normalizes all floating point values in a var tree.
+        - Doubles are rounded to maxDecimalPlaces
+        - Strings have embedded numbers cleaned up (5+ decimal places)
+        - Arrays and objects are recursed into
+    */
+    static void normalizeFloatsInVar(var& v, int maxDecimalPlaces = 4);
+
+    //==============================================================================
     /** A reference-counted async request object for coordinating work across threads.
         
         Use this with addAsyncRoute() when you need to dispatch work to another thread

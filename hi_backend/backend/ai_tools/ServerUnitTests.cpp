@@ -65,6 +65,9 @@ public:
         testSetComponentValue();
         testSetComponentValueTriggersCallback();
         testSetComponentValueCallbackRuntimeError();
+        testNestedControlCallbacks();
+        testFloatNormalizationUnit();
+        testFloatNormalization();
         
         // Verify all endpoints were tested
         verifyAllEndpointsTested();
@@ -861,6 +864,199 @@ private:
             expect(firstError["errorMessage"].toString().containsIgnoreCase("undefined"),
                    "Error message should mention 'undefined'");
         }
+    }
+    
+    //==========================================================================
+    void testNestedControlCallbacks()
+    {
+        beginTest("POST /api/set_component_value captures nested callback logs");
+        
+        ctx->reset();
+        
+        // Create two knobs where Knob1's callback triggers Knob2's callback
+        ctx->compile("Content.makeFrontInterface(600, 400);\n"
+                     "const var Knob1 = Content.addKnob(\"Knob1\", 10, 10);\n"
+                     "const var Knob2 = Content.addKnob(\"Knob2\", 150, 10);\n"
+                     "\n"
+                     "inline function onKnob1Changed(component, value)\n"
+                     "{\n"
+                     "    Console.print(\"Knob1 callback: \" + value);\n"
+                     "    Knob2.setValue(1.0 - value);\n"
+                     "    Knob2.changed();\n"
+                     "}\n"
+                     "\n"
+                     "inline function onKnob2Changed(component, value)\n"
+                     "{\n"
+                     "    Console.print(\"Knob2 callback: \" + value);\n"
+                     "}\n"
+                     "\n"
+                     "Knob1.setControlCallback(onKnob1Changed);\n"
+                     "Knob2.setControlCallback(onKnob2Changed);");
+        
+        // Set value on Knob1 - this should trigger Knob1's callback,
+        // which then triggers Knob2's callback
+        DynamicObject::Ptr bodyObj = new DynamicObject();
+        bodyObj->setProperty("moduleId", "Interface");
+        bodyObj->setProperty("componentId", "Knob1");
+        bodyObj->setProperty("value", 0.3);
+        
+        auto response = ctx->httpPost("/api/set_component_value",
+                                      JSON::toString(var(bodyObj.get())));
+        var json = ctx->parseJson(response);
+        
+        expect((bool)json["success"], "Should succeed");
+        
+        auto logs = json["logs"];
+        
+        // Verify BOTH callbacks' output appears in logs
+        // Float normalization should clean up values (0.300000011920929 -> 0.3)
+        bool hasKnob1Log = false;
+        bool hasKnob2Log = false;
+        
+        for (int i = 0; i < logs.size(); i++)
+        {
+            String logEntry = logs[i].toString();
+            if (logEntry.contains("Knob1 callback: 0.3"))
+                hasKnob1Log = true;
+            if (logEntry.contains("Knob2 callback: 0.7"))
+                hasKnob2Log = true;
+        }
+        
+        expect(hasKnob1Log, "Should capture Knob1's direct callback log");
+        expect(hasKnob2Log, "Should capture Knob2's chained callback log (triggered via .changed())");
+    }
+    
+    //==========================================================================
+    void testFloatNormalizationUnit()
+    {
+        beginTest("Float normalization utility");
+        
+        // Test 1: Double with FP noise
+        {
+            var v = 0.300000011920929;
+            RestServer::normalizeFloatsInVar(v);
+            expectEquals((double)v, 0.3, "Should round 0.300000011920929 to 0.3");
+        }
+        
+        // Test 2: Clean double
+        {
+            var v = 0.5;
+            RestServer::normalizeFloatsInVar(v);
+            expectEquals((double)v, 0.5, "Should preserve clean 0.5");
+        }
+        
+        // Test 3: Integer-valued double
+        {
+            var v = 42.0;
+            RestServer::normalizeFloatsInVar(v);
+            expectEquals((double)v, 42.0, "Should preserve 42.0");
+        }
+        
+        // Test 4: String with embedded FP noise
+        {
+            var v = "Value: 0.300000011920929";
+            RestServer::normalizeFloatsInVar(v);
+            expectEquals(v.toString(), String("Value: 0.3"), "Should clean FP noise in string");
+        }
+        
+        // Test 5: String with multiple numbers
+        {
+            var v = "From 0.100000001 to 0.899999999";
+            RestServer::normalizeFloatsInVar(v);
+            expectEquals(v.toString(), String("From 0.1 to 0.9"), "Should clean multiple numbers");
+        }
+        
+        // Test 6: String with short decimals (< 5) - unchanged
+        {
+            var v = "Value: 0.123";
+            RestServer::normalizeFloatsInVar(v);
+            expectEquals(v.toString(), String("Value: 0.123"), "Should preserve < 5 decimals");
+        }
+        
+        // Test 7: Array of mixed values
+        {
+            Array<var> arr;
+            arr.add(0.300000011920929);
+            arr.add("Text: 0.700000001");
+            arr.add(42);
+            var v = arr;
+            RestServer::normalizeFloatsInVar(v);
+            
+            expectEquals((double)v[0], 0.3, "Array double normalized");
+            expectEquals(v[1].toString(), String("Text: 0.7"), "Array string normalized");
+            expectEquals((int)v[2], 42, "Array int unchanged");
+        }
+        
+        // Test 8: Nested object
+        {
+            DynamicObject::Ptr obj = new DynamicObject();
+            obj->setProperty("value", 0.300000011920929);
+            obj->setProperty("message", "Got 0.999999999");
+            obj->setProperty("count", 5);
+            var v = var(obj.get());
+            RestServer::normalizeFloatsInVar(v);
+            
+            auto* result = v.getDynamicObject();
+            expectEquals((double)result->getProperty("value"), 0.3, "Object double normalized");
+            expectEquals(result->getProperty("message").toString(), String("Got 1.0"), "Object string normalized");
+            expectEquals((int)result->getProperty("count"), 5, "Object int unchanged");
+        }
+        
+        // Test 9: Negative value
+        {
+            var v = -0.300000011920929;
+            RestServer::normalizeFloatsInVar(v);
+            expectEquals((double)v, -0.3, "Should handle negative values");
+        }
+        
+        // Test 10: Very small value
+        {
+            var v = 0.00009999999;
+            RestServer::normalizeFloatsInVar(v);
+            expectEquals((double)v, 0.0001, "Should round very small values");
+        }
+    }
+    
+    //==========================================================================
+    void testFloatNormalization()
+    {
+        beginTest("REST API normalizes floating point values");
+        
+        ctx->reset();
+        
+        ctx->compile("Content.makeFrontInterface(600, 400);\n"
+                     "const var TestKnob = Content.addKnob(\"TestKnob\", 10, 10);\n"
+                     "\n"
+                     "inline function onTestKnobChanged(component, value)\n"
+                     "{\n"
+                     "    Console.print(\"Value: \" + value);\n"
+                     "}\n"
+                     "\n"
+                     "TestKnob.setControlCallback(onTestKnobChanged);");
+        
+        DynamicObject::Ptr bodyObj = new DynamicObject();
+        bodyObj->setProperty("moduleId", "Interface");
+        bodyObj->setProperty("componentId", "TestKnob");
+        bodyObj->setProperty("value", 0.1);
+        
+        auto response = ctx->httpPost("/api/set_component_value",
+                                      JSON::toString(var(bodyObj.get())));
+        
+        expect(!response.contains("0.10000000"), 
+               "Response should not contain FP noise");
+        expect(!response.contains("0.0999999"),
+               "Response should not contain FP noise");
+        
+        var json = ctx->parseJson(response);
+        auto logs = json["logs"];
+        
+        bool hasCleanValue = false;
+        for (int i = 0; i < logs.size(); i++)
+        {
+            if (logs[i].toString() == "Value: 0.1")
+                hasCleanValue = true;
+        }
+        expect(hasCleanValue, "Log should contain clean 'Value: 0.1'");
     }
 };
 

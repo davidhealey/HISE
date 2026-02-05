@@ -34,6 +34,7 @@
 #define NOMINMAX
 
 #include "httplib.h"
+#include <regex>
 
 // Remove Windows GDI Rectangle to avoid conflict with juce::Rectangle
 #ifdef _WIN32
@@ -56,6 +57,77 @@ static String createErrorJson(const String& message)
     obj->setProperty("error", true);
     obj->setProperty("message", message);
     return varToJsonString(obj.get());
+}
+
+//==============================================================================
+// Floating point normalization
+
+String RestServer::formatFloat(double value, int maxDecimalPlaces)
+{
+    double multiplier = std::pow(10.0, maxDecimalPlaces);
+    double rounded = std::round(value * multiplier) / multiplier;
+    
+    if (std::fmod(rounded, 1.0) == 0.0)
+        return String((int64)rounded) + ".0";
+    
+    String s = String(rounded, maxDecimalPlaces);
+    s = s.trimCharactersAtEnd("0");
+    
+    if (s.endsWithChar('.'))
+        s << "0";
+    
+    return s;
+}
+
+void RestServer::normalizeFloatsInVar(var& v, int maxDecimalPlaces)
+{
+    if (v.isDouble())
+    {
+        double multiplier = std::pow(10.0, maxDecimalPlaces);
+        v = std::round((double)v * multiplier) / multiplier;
+    }
+    else if (v.isString())
+    {
+        // Clean up floating point numbers embedded in strings (e.g., log messages)
+        // Matches numbers with 5+ decimal places (likely FP noise)
+        static const std::regex fpRegex(R"((\d+\.\d{5,}))");
+        
+        std::string str = v.toString().toStdString();
+        std::string result;
+        std::sregex_iterator it(str.begin(), str.end(), fpRegex);
+        std::sregex_iterator end;
+        
+        size_t lastPos = 0;
+        while (it != end)
+        {
+            result += str.substr(lastPos, it->position() - lastPos);
+            double val = std::stod(it->str());
+            result += formatFloat(val, maxDecimalPlaces).toStdString();
+            lastPos = it->position() + it->length();
+            ++it;
+        }
+        result += str.substr(lastPos);
+        
+        v = String(result);
+    }
+    else if (v.isArray())
+    {
+        for (int i = 0; i < v.size(); i++)
+        {
+            var item = v[i];
+            normalizeFloatsInVar(item, maxDecimalPlaces);
+            v.getArray()->set(i, item);
+        }
+    }
+    else if (auto* obj = v.getDynamicObject())
+    {
+        for (const auto& prop : obj->getProperties())
+        {
+            var value = prop.value;
+            normalizeFloatsInVar(value, maxDecimalPlaces);
+            obj->setProperty(prop.name, value);
+        }
+    }
 }
 
 //==============================================================================
@@ -197,8 +269,12 @@ void RestServer::AsyncRequest::mergeLogsIntoResponse()
     
     rootObj->setProperty("errors", errorsArray);
     
+    // Normalize floating point values for clean JSON output (4 decimal places)
+    var rootVar(rootObj.get());
+    normalizeFloatsInVar(rootVar);
+    
     // Update response
-    response.body = JSON::toString(var(rootObj.get()), false);
+    response.body = JSON::toString(rootVar, false);
     response.contentType = "application/json";
 }
 
