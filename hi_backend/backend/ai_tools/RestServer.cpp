@@ -317,24 +317,14 @@ public:
         for (int i = 0; i < names.size(); ++i)
             info.defaultParams.set(names[i], values[i]);
         
-        DBG("RestServer::addRoute - method: " + String(method) + ", path: " + info.path);
-        
         routes[{method, info.path}] = std::move(info);
-        
-        DBG("RestServer::addRoute - routes count: " + String(routes.size()));
     }
 
     //==============================================================================
     bool startServer(int port, const String& bindAddress)
     {
-        DBG("RestServer::startServer - port: " + String(port) + ", bindAddress: " + bindAddress);
-        DBG("RestServer::startServer - routes count before registration: " + String(routes.size()));
-        
         if (isThreadRunning())
-        {
-            DBG("RestServer::startServer - already running, returning false");
             return false;
-        }
 
         currentPort = port;
         currentBindAddress = bindAddress;
@@ -348,11 +338,8 @@ public:
             auto& routePath = pair.first.second;
             auto& routeInfo = pair.second;
 
-            DBG("RestServer::startServer - registering route: " + routePath + " (method: " + String(method) + ")");
-
             auto wrappedHandler = [this, routeInfo](const httplib::Request& req, httplib::Response& res)
             {
-                DBG("RestServer - handler invoked for path: " + String(req.path.c_str()));
                 handleRequest(routeInfo, req, res);
             };
 
@@ -367,8 +354,6 @@ public:
             }
         }
 
-        DBG("RestServer::startServer - starting server thread");
-        
         // Start the server thread
         startThread();
 
@@ -432,8 +417,6 @@ private:
     //==============================================================================
     void handleRequest(const RouteInfo& routeInfo, const httplib::Request& req, httplib::Response& res)
     {
-        DBG("RestServer::handleRequest - path: " + String(req.path.c_str()) + ", route: " + routeInfo.path);
-        
         // Notify listeners
         String methodStr;
         switch (routeInfo.method)

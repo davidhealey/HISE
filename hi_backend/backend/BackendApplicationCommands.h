@@ -178,6 +178,7 @@ public:
 		MenuToolsCheckCyclicReferences,
 		MenuToolsConvertSVGToPathData,
 		MenuToolsBroadcasterWizard,
+		MenuToolsToggleRestServer,
 		MenuToolsCreateExternalScriptFile,
 		
 		// ---------------------------------

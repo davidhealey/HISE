@@ -311,6 +311,27 @@ RestServer::Response BackendProcessor::onAsyncRequest(RestServer::AsyncRequest::
 	}
 }
 
+void BackendProcessor::serverStarted(int port)
+{
+	debugToConsole(getMainSynthChain(), "REST API Server started on port " + String(port));
+}
+
+void BackendProcessor::serverStopped()
+{
+	debugToConsole(getMainSynthChain(), "REST API Server stopped");
+}
+
+void BackendProcessor::requestReceived(const String& method, const String& path)
+{
+	// Request details are already logged in onAsyncRequest via debugToConsole
+	ignoreUnused(method, path);
+}
+
+void BackendProcessor::serverError(const String& message)
+{
+	debugToConsole(getMainSynthChain(), "REST API Server error: " + message);
+}
+
 
 BackendProcessor::BackendProcessor(AudioDeviceManager *deviceManager_/*=nullptr*/, AudioProcessorPlayer *callback_/*=nullptr*/) :
   MainController(),
@@ -332,6 +353,8 @@ BackendProcessor::BackendProcessor(AudioDeviceManager *deviceManager_/*=nullptr*
 		restServer.addAsyncRoute(route.method, routeUrl,
 			BIND_MEMBER_FUNCTION_1(BackendProcessor::onAsyncRequest));
 	}
+
+	restServer.addListener(this);
 
 	ExtendedApiDocumentation::init();
 

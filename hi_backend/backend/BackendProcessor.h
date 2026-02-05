@@ -370,7 +370,8 @@ class BackendProcessor: public AudioProcessorDriver,
 						public ProjectHandler::Listener,
 						public MarkdownDatabaseHolder,
 						public ExpansionHandler::Listener,
-						public SimpleRingBuffer::WriterBase
+						public SimpleRingBuffer::WriterBase,
+						public RestServer::Listener
 {
 public:
 	BackendProcessor(AudioDeviceManager *deviceManager_=nullptr, AudioProcessorPlayer *callback_=nullptr);
@@ -410,6 +411,12 @@ public:
 	bool producesMidi() const {return false;};
 	
 	RestServer::Response onAsyncRequest(RestServer::AsyncRequest::Ptr req);
+
+	// RestServer::Listener callbacks
+	void serverStarted(int port) override;
+	void serverStopped() override;
+	void requestReceived(const String& method, const String& path) override;
+	void serverError(const String& message) override;
 
 	double getTailLengthSeconds() const {return 0.0;};
 

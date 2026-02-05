@@ -146,6 +146,7 @@ void BackendCommandTarget::getAllCommands(Array<CommandID>& commands)
         MenuExportCheckPluginParameters,
 		MenuToolsConvertSVGToPathData,
         MenuToolsBroadcasterWizard,
+		MenuToolsToggleRestServer,
 		MenuExportRestoreToDefault,
 		MenuExportValidateUserPresets,
 		MenuExportCheckAllSampleMaps,
@@ -505,6 +506,11 @@ void BackendCommandTarget::getCommandInfo(CommandID commandID, ApplicationComman
 		setCommandTarget(result, "Show Broadcaster Wizard", true, false, 'X', false);
 		result.categoryName = "Tools";
 		break;
+	case MenuToolsToggleRestServer:
+		setCommandTarget(result, "Toggle REST API Server", true, 
+			bpe->getBackendProcessor()->getRestServer().isRunning(), 'X', false);
+		result.categoryName = "Tools";
+		break;
 	case MenuToolsCreateExternalScriptFile:
 		setCommandTarget(result, "Create external script file", true, false, 'X', false);
 		result.categoryName = "Tools";
@@ -785,6 +791,21 @@ bool BackendCommandTarget::perform(const InvocationInfo &info)
         s->setModalBaseWindowComponent(bpe);
         return true;
     }
+	case MenuToolsToggleRestServer:
+	{
+		auto& server = bpe->getBackendProcessor()->getRestServer();
+		if (server.isRunning())
+		{
+			server.stop();
+		}
+		else
+		{
+			int port = (int)bpe->getBackendProcessor()->getSettingsObject().getSetting(HiseSettings::Scripting::RestApiPort);
+			server.start(port);
+		}
+		updateCommands();
+		return true;
+	}
 	case MenuToolsEditShortcuts:		Actions::editShortcuts(bpe); return true;
 	case MenuViewReset:				    bpe->resetInterface(); updateCommands(); return true;
 	case MenuViewRotate:
@@ -1126,6 +1147,7 @@ PopupMenu BackendCommandTarget::getMenuForIndex(int topLevelMenuIndex, const Str
             ADD_MENU_ITEM(MenuToolsRecompile);
             ADD_MENU_ITEM(MenuToolsConvertSVGToPathData);
             ADD_MENU_ITEM(MenuToolsBroadcasterWizard);
+            ADD_MENU_ITEM(MenuToolsToggleRestServer);
             p.addSeparator();
             ADD_MENU_ITEM(MenuToolsShowDspNetworkDllInfo);
             ADD_MENU_ITEM(MenuToolsRecordOneSecond);
@@ -1140,6 +1162,7 @@ PopupMenu BackendCommandTarget::getMenuForIndex(int topLevelMenuIndex, const Str
 			ADD_MENU_ITEM(MenuToolsCheckCyclicReferences);
 			ADD_MENU_ITEM(MenuToolsConvertSVGToPathData);
             ADD_MENU_ITEM(MenuToolsBroadcasterWizard);
+            ADD_MENU_ITEM(MenuToolsToggleRestServer);
             
 			p.addSeparator();
 			p.addSectionHeader("Sample Management");
