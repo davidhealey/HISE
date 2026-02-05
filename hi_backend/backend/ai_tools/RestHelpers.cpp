@@ -356,7 +356,7 @@ const Array<RestHelpers::RouteMetadata>& RestHelpers::getRouteMetadata()
 			.withMethod(RestServer::POST)
 			.withCategory("ui")
 			.withDescription("Set properties on one or more UI components (like Interface Designer)")
-			.withReturns("Success with applied changes, or error with locked properties if any are script-controlled")
+			.withReturns("Success with applied changes (recompileRequired=true if parentComponent changed), or error with locked properties if any are script-controlled")
 			.withBodyParam(RouteParameter(RestApiIds::moduleId, "The script processor's module ID"))
 			.withBodyParam(RouteParameter(RestApiIds::changes, "Array of {id, properties: {...}} objects"))
 			.withBodyParam(RouteParameter(RestApiIds::force, "If true, bypasses script-lock check and sets all properties").withDefault("false")));

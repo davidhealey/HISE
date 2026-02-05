@@ -447,11 +447,11 @@ Returns all properties for a specific UI component.
 | Parameter | Required | Description |
 |-----------|----------|-------------|
 | `moduleId` | Yes | The processor's module ID |
-| `componentId` | Yes | The component's ID (e.g., `"Button1"`, `"Panel1"`) |
+| `id` | Yes | The component's ID (e.g., `"Button1"`, `"Panel1"`) |
 
 **Example Request**:
 ```bash
-curl "http://localhost:1900/api/get_component_properties?moduleId=Interface&componentId=Button1"
+curl "http://localhost:1900/api/get_component_properties?moduleId=Interface&id=Button1"
 ```
 
 **Response**:
@@ -459,7 +459,7 @@ curl "http://localhost:1900/api/get_component_properties?moduleId=Interface&comp
 {
   "success": true,
   "moduleId": "Interface",
-  "componentId": "Button1",
+  "id": "Button1",
   "type": "ScriptButton",
   "properties": [
     { "id": "x", "value": 159, "isDefault": true },
@@ -501,6 +501,195 @@ curl "http://localhost:1900/api/get_component_properties?moduleId=Interface&comp
 
 ---
 
+### POST /api/set_component_properties
+
+Set properties on one or more UI components, similar to editing in the Interface Designer. This is the recommended way to handle layout and positioning separately from script compilation.
+
+**JSON Body**:
+| Field | Required | Default | Description |
+|-------|----------|---------|-------------|
+| `moduleId` | Yes | - | The processor's module ID |
+| `changes` | Yes | - | Array of `{id, properties: {...}}` objects |
+| `force` | No | `false` | If true, bypasses script-lock check and sets all properties |
+
+**Example: Set position of a single component**
+```bash
+curl -X POST "http://localhost:1900/api/set_component_properties" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "moduleId": "Interface",
+    "changes": [
+      {
+        "id": "Knob1",
+        "properties": {
+          "x": 100,
+          "y": 50,
+          "width": 80,
+          "height": 80
+        }
+      }
+    ]
+  }'
+```
+
+**Example: Batch update multiple components**
+```bash
+curl -X POST "http://localhost:1900/api/set_component_properties" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "moduleId": "Interface",
+    "changes": [
+      {
+        "id": "Knob1",
+        "properties": { "x": 100, "y": 50 }
+      },
+      {
+        "id": "Knob2", 
+        "properties": { "x": 200, "y": 50 }
+      },
+      {
+        "id": "Label1",
+        "properties": { "x": 100, "y": 140, "text": "Volume" }
+      }
+    ]
+  }'
+```
+
+**Example: Set parent component (create hierarchy)**
+```bash
+curl -X POST "http://localhost:1900/api/set_component_properties" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "moduleId": "Interface",
+    "changes": [
+      {
+        "id": "ChildKnob",
+        "properties": {
+          "parentComponent": "ParentPanel",
+          "x": 10,
+          "y": 10
+        }
+      }
+    ]
+  }'
+```
+
+**Response (success)**:
+```json
+{
+  "success": true,
+  "moduleId": "Interface",
+  "applied": [
+    {
+      "id": "Knob1",
+      "properties": ["x", "y", "width", "height"]
+    }
+  ],
+  "recompileRequired": false,
+  "logs": [],
+  "errors": []
+}
+```
+
+**Response (properties locked by script)**:
+```json
+{
+  "success": false,
+  "errorMessage": "Properties are locked by script (use force=true to override)",
+  "locked": [
+    { "id": "Knob1", "property": "x" },
+    { "id": "Knob1", "property": "y" }
+  ],
+  "logs": [],
+  "errors": []
+}
+```
+
+When a property is set in the script (e.g., `Knob1.set("x", 100);`), it becomes "locked" and cannot be changed via this endpoint without using `force: true`.
+
+**Example: Force override script-controlled properties**
+```bash
+curl -X POST "http://localhost:1900/api/set_component_properties" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "moduleId": "Interface",
+    "changes": [
+      {
+        "id": "Knob1",
+        "properties": { "x": 100, "y": 50 }
+      }
+    ],
+    "force": true
+  }'
+```
+
+**Key Fields**:
+| Field | Description |
+|-------|-------------|
+| `applied` | Array of components and properties that were successfully set |
+| `locked` | (Error only) Array of components/properties that are controlled by script |
+| `recompileRequired` | `true` if `parentComponent` was changed - call `/api/recompile` to apply hierarchy changes |
+
+**Important**: When `recompileRequired` is `true`, you must call `POST /api/recompile` for the `parentComponent` changes to take effect.
+
+#### Recommended Workflow: Separating Script from Layout
+
+For the best development experience, separate your script logic from layout/positioning:
+
+**1. Script compilation step** - Create components without position parameters:
+
+```javascript
+// In onInit - create components WITHOUT position arguments
+Content.makeFrontInterface(600, 500);
+
+const var MainPanel = Content.addPanel("MainPanel");
+const var VolumeKnob = Content.addKnob("VolumeKnob");
+const var PanKnob = Content.addKnob("PanKnob");
+const var TitleLabel = Content.addLabel("TitleLabel");
+
+// Set up callbacks, paint routines, and logic here
+VolumeKnob.setControlCallback(onVolumeChanged);
+MainPanel.setPaintRoutine(function(g) {
+    g.fillAll(Colours.darkgrey);
+});
+```
+
+**2. Layout step** - Use `set_component_properties` for all positioning:
+
+```bash
+curl -X POST "http://localhost:1900/api/set_component_properties" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "moduleId": "Interface",
+    "changes": [
+      {
+        "id": "MainPanel",
+        "properties": { "x": 10, "y": 10, "width": 580, "height": 480 }
+      },
+      {
+        "id": "VolumeKnob",
+        "properties": { "parentComponent": "MainPanel", "x": 50, "y": 100, "width": 100, "height": 100 }
+      },
+      {
+        "id": "PanKnob",
+        "properties": { "parentComponent": "MainPanel", "x": 200, "y": 100, "width": 100, "height": 100 }
+      },
+      {
+        "id": "TitleLabel",
+        "properties": { "parentComponent": "MainPanel", "x": 50, "y": 20, "width": 200, "height": 30, "text": "My Synth" }
+      }
+    ]
+  }'
+```
+
+**Benefits of this approach**:
+- **No position reset on recompile**: When the script is recompiled, positions are preserved because they're not set in the script
+- **Layout iteration without recompilation**: Adjust positions, sizes, and hierarchy without triggering script recompilation
+- **Clean separation**: Script handles logic and behavior; `set_component_properties` handles presentation
+- **Batch efficiency**: Update many components in a single API call
+
+---
+
 ### GET /api/get_component_value
 
 Get the current runtime value of a UI component.
@@ -509,11 +698,11 @@ Get the current runtime value of a UI component.
 | Parameter | Required | Description |
 |-----------|----------|-------------|
 | `moduleId` | Yes | The processor's module ID |
-| `componentId` | Yes | The component's ID (e.g., `"GainKnob"`, `"BypassButton"`) |
+| `id` | Yes | The component's ID (e.g., `"GainKnob"`, `"BypassButton"`) |
 
 **Example Request**:
 ```bash
-curl "http://localhost:1900/api/get_component_value?moduleId=Interface&componentId=GainKnob"
+curl "http://localhost:1900/api/get_component_value?moduleId=Interface&id=GainKnob"
 ```
 
 **Response**:
@@ -521,7 +710,7 @@ curl "http://localhost:1900/api/get_component_value?moduleId=Interface&component
 {
   "success": true,
   "moduleId": "Interface",
-  "componentId": "GainKnob",
+  "id": "GainKnob",
   "type": "ScriptSlider",
   "value": -3.5,
   "min": -12.0,
@@ -554,7 +743,7 @@ Set the runtime value of a UI component programmatically.
 | Field | Required | Default | Description |
 |-------|----------|---------|-------------|
 | `moduleId` | Yes | - | The processor's module ID |
-| `componentId` | Yes | - | The component's ID |
+| `id` | Yes | - | The component's ID |
 | `value` | Yes | - | The value to set |
 | `validateRange` | No | `false` | If `true`, validates value is within component's min/max range |
 | `forceSynchronousExecution` | No | `false` | Debug tool: Bypass threading model. **WARNING: May crash.** See [Advanced Debugging](#advanced-debugging-forcesynchronousexecution). |
@@ -563,14 +752,14 @@ Set the runtime value of a UI component programmatically.
 ```bash
 curl -X POST "http://localhost:1900/api/set_component_value" \
   -H "Content-Type: application/json" \
-  -d '{"moduleId": "Interface", "componentId": "GainKnob", "value": 6.0}'
+  -d '{"moduleId": "Interface", "id": "GainKnob", "value": 6.0}'
 ```
 
 **Example with validation**:
 ```bash
 curl -X POST "http://localhost:1900/api/set_component_value" \
   -H "Content-Type: application/json" \
-  -d '{"moduleId": "Interface", "componentId": "GainKnob", "value": 6.0, "validateRange": true}'
+  -d '{"moduleId": "Interface", "id": "GainKnob", "value": 6.0, "validateRange": true}'
 ```
 
 **Response (success)**:
@@ -578,7 +767,7 @@ curl -X POST "http://localhost:1900/api/set_component_value" \
 {
   "success": true,
   "moduleId": "Interface",
-  "componentId": "GainKnob",
+  "id": "GainKnob",
   "type": "ScriptSlider",
   "logs": [],
   "errors": []
@@ -992,7 +1181,7 @@ WHILE errors is not empty:
 Use `/api/get_component_properties` to discover property names and values without modifying scripts:
 
 ```bash
-curl "http://localhost:1900/api/get_component_properties?moduleId=Interface&componentId=Button1"
+curl "http://localhost:1900/api/get_component_properties?moduleId=Interface&id=Button1"
 ```
 
 This returns all properties with their correct names, current values, and available options - eliminating guesswork about property names like `bgColour` vs `colour`.
@@ -1163,14 +1352,14 @@ You might suspect a threading issue if:
 ```bash
 curl -X POST "http://localhost:1900/api/set_component_value" \
   -H "Content-Type: application/json" \
-  -d '{"moduleId": "Interface", "componentId": "Knob1", "value": 0.5}'
+  -d '{"moduleId": "Interface", "id": "Knob1", "value": 0.5}'
 ```
 
 **Debug request (forced synchronous execution):**
 ```bash
 curl -X POST "http://localhost:1900/api/set_component_value" \
   -H "Content-Type: application/json" \
-  -d '{"moduleId": "Interface", "componentId": "Knob1", "value": 0.5, "forceSynchronousExecution": true}'
+  -d '{"moduleId": "Interface", "id": "Knob1", "value": 0.5, "forceSynchronousExecution": true}'
 ```
 
 ### Response When Using `forceSynchronousExecution`
@@ -1181,7 +1370,7 @@ When `forceSynchronousExecution: true` is used, the response includes additional
 {
   "success": true,
   "moduleId": "Interface",
-  "componentId": "Knob1",
+  "id": "Knob1",
   "type": "ScriptSlider",
   "forceSynchronousExecution": true,
   "warning": "Executed in unsafe synchronous mode - threading checks bypassed",
