@@ -468,6 +468,38 @@ struct RestHelpers
 	}
 };
 
+static DynamicObject::Ptr createRecursivePropertyTree(ScriptComponent* sc)
+{
+	DynamicObject::Ptr obj = new DynamicObject();
+
+	obj->setProperty("id", sc->getName().toString());
+	obj->setProperty("type", sc->getObjectName().toString());
+	obj->setProperty("visible", sc->getScriptObjectProperty(ScriptComponent::visible));
+	obj->setProperty("enabled", sc->getScriptObjectProperty(ScriptComponent::enabled));
+	obj->setProperty("x", sc->getScriptObjectProperty(ScriptComponent::x));
+	obj->setProperty("y", sc->getScriptObjectProperty(ScriptComponent::y));
+	obj->setProperty("width", sc->getScriptObjectProperty(ScriptComponent::width));
+	obj->setProperty("height", sc->getScriptObjectProperty(ScriptComponent::height));
+
+	Array<var> children;
+
+	ScriptComponent::ChildIterator<ScriptComponent> ci(sc);
+
+	auto v = sc->getPropertyValueTree();
+
+	for (auto c : v)
+	{
+		if (auto child = sc->getScriptProcessor()->getScriptingContent()->getComponentWithName(c["id"].toString()))
+		{
+			auto cobj = createRecursivePropertyTree(child);
+			children.add(var(cobj.get()));
+		}
+	}
+
+	obj->setProperty("childComponents", var(children));
+
+	return obj;
+}
 
 RestServer::Response BackendProcessor::onAsyncRequest(RestServer::AsyncRequest::Ptr req)
 {
@@ -566,6 +598,205 @@ RestServer::Response BackendProcessor::onAsyncRequest(RestServer::AsyncRequest::
 		}
 	}
 
+	if (subURL == "api/status")
+	{
+		DynamicObject::Ptr result = new DynamicObject();
+		result->setProperty("success", true);
+
+		// Server info
+		DynamicObject::Ptr server = new DynamicObject();
+		server->setProperty("version", "1.0.0");
+		result->setProperty("server", var(server.get()));
+
+		// Project info
+		DynamicObject::Ptr project = new DynamicObject();
+
+		// TODO: Get project name from settings/project handler
+		project->setProperty("name", GET_HISE_SETTING(getMainSynthChain(), HiseSettings::Project::Name));
+
+		auto& projectHandler = getSampleManager().getProjectHandler();
+		auto projectFolder = projectHandler.getWorkDirectory().getFullPathName().replace("\\", "/");
+		auto scriptsFolder = projectHandler.getSubDirectory(FileHandlerBase::Scripts).getFullPathName().replace("\\", "/");
+
+		project->setProperty("projectFolder", projectFolder);
+		project->setProperty("scriptsFolder", scriptsFolder);
+		result->setProperty("project", var(project.get()));
+
+		// Script processors
+		Array<var> processors;
+
+		Processor::Iterator<JavascriptProcessor> iter(getMainSynthChain());
+
+		while (auto jp = iter.getNextProcessor())
+		{
+			auto asP = dynamic_cast<Processor*>(jp);
+			DynamicObject::Ptr proc = new DynamicObject();
+			proc->setProperty("moduleId", dynamic_cast<Processor*>(jp)->getId());
+		
+			if (auto jmp = dynamic_cast<JavascriptMidiProcessor*>(jp))
+				proc->setProperty("isMainInterface", jmp->isFront() ? true : false);
+			else
+				proc->setProperty("isMainInterface", false);
+			
+		    // External files
+		    Array<var> externalFiles;
+
+			for (int i = 0; i < jp->getNumWatchedFiles(); i++)
+			{
+				auto fp = jp->getWatchedFile(i);
+				auto rp = fp.getRelativePathFrom(scriptsFolder).replaceCharacter('\\', '/');
+				externalFiles.add(rp);
+			}
+
+		    proc->setProperty("externalFiles", externalFiles);
+		
+		    Array<var> callbacks;
+		    for (int i = 0; i < jp->getNumSnippets(); i++)
+		    {
+		        if (auto snippet = jp->getSnippet(i))
+		        {
+		            DynamicObject::Ptr cb = new DynamicObject();
+		            cb->setProperty("id", snippet->getCallbackName().toString());
+		
+		            // TODO: Check if callback is empty
+		            cb->setProperty("empty", snippet->isSnippetEmpty());
+		
+		            callbacks.add(var(cb.get()));
+		        }
+		    }
+		    proc->setProperty("callbacks", callbacks);
+		
+		    processors.add(var(proc.get()));
+		}
+
+		result->setProperty("scriptProcessors", processors);
+		result->setProperty("logs", Array<var>());
+		result->setProperty("errors", Array<var>());
+
+		return RestServer::Response::ok(var(result.get()));
+	}
+
+	if (subURL == "api/list_components")
+	{
+		if (auto jp = RestHelpers::getScriptProcessor(this, req))
+		{
+			auto ps = dynamic_cast<ProcessorWithScriptingContent*>(jp);
+			auto hierarchyParam = req->getRequest()["hierarchy"];
+			auto useHierarchy = (hierarchyParam == "true" || hierarchyParam == "1");
+
+			DynamicObject::Ptr result = new DynamicObject();
+			result->setProperty("success", true);
+			result->setProperty("moduleId", dynamic_cast<Processor*>(jp)->getId());
+
+			Array<var> components;
+
+			auto c = ps->getScriptingContent();
+
+			if (useHierarchy)
+			{
+				for (int i = 0; i < c->getNumComponents(); i++)
+				{
+					auto sc = c->getComponent(i);
+					if (sc->getParentScriptComponent() == nullptr)
+					{
+						auto obj = createRecursivePropertyTree(sc);
+						components.add(obj.get());
+					}
+				}
+			}
+			else
+			{
+				// Flat list: id and type only
+				for(int i = 0; i < c->getNumComponents(); i++)
+				{
+					auto sc = c->getComponent(i);
+					DynamicObject::Ptr comp = new DynamicObject();
+					comp->setProperty("id", sc->getName().toString());
+					comp->setProperty("type", sc->getObjectName().toString());
+					components.add(var(comp.get()));
+				}
+			}
+
+			result->setProperty("components", components);
+			result->setProperty("logs", Array<var>());
+			result->setProperty("errors", Array<var>());
+
+			return RestServer::Response::ok(var(result.get()));
+		}
+		else
+		{
+			return RestServer::Response::error(404, "moduleId is not a valid script processor");
+		}
+	}
+
+	if (subURL == "api/get_component_properties")
+	{
+		if (auto jp = RestHelpers::getScriptProcessor(this, req))
+		{
+			auto componentId = req->getRequest()["componentId"];
+
+			auto c = dynamic_cast<ProcessorWithScriptingContent*>(jp)->getScriptingContent();
+
+			if (componentId.isEmpty())
+				return RestServer::Response::error(400, "componentId parameter is required");
+
+			if (auto sc = c->getComponentWithName(Identifier(componentId)))
+			{
+				DynamicObject::Ptr result = new DynamicObject();
+				result->setProperty("success", true);
+				result->setProperty("moduleId", dynamic_cast<Processor*>(jp)->getId());
+				result->setProperty("componentId", componentId);
+
+				result->setProperty("type", sc->getObjectName().toString() /* component type as string */);
+
+				Array<var> properties;
+
+				for (int i = 0; i < sc->getNumIds(); i++)
+				{
+					DynamicObject::Ptr po = new DynamicObject();
+
+					auto id = sc->getIdFor(i);
+					auto v = sc->getScriptObjectProperty(i);
+
+					auto nonDefault = sc->getNonDefaultScriptObjectProperties();
+
+					if (id.toString().toLowerCase().contains("colour"))
+						v = "0x" + ApiHelpers::getColourFromVar(v).toDisplayString(true);
+
+					auto options = sc->getOptionsFor(id);
+
+					po->setProperty("id", id.toString());
+					po->setProperty("value", v);
+					po->setProperty("isDefault", !nonDefault.hasProperty(id));
+
+					if (!options.isEmpty())
+					{
+						Array<var> ol;
+
+						for (auto o : options)
+							ol.add(var(o));
+
+						po->setProperty("options", var(ol));
+					}
+
+					properties.add(po.get());
+				}
+
+				result->setProperty("properties", var(properties));
+				result->setProperty("logs", Array<var>());
+				result->setProperty("errors", Array<var>());
+
+				return RestServer::Response::ok(var(result.get()));
+			}
+			else
+				return RestServer::Response::error(404, "component not found: " + componentId);
+		}
+		else
+		{
+			return RestServer::Response::error(404, "moduleId is not a valid script processor");
+		}
+	}
+
 	return req->fail(404, "missing API method " + subURL);
 }
 
@@ -588,6 +819,16 @@ BackendProcessor::BackendProcessor(AudioDeviceManager *deviceManager_/*=nullptr*
 							.withParameter("script", "")
 							.withParameter("compile", "false"),
 						 RestServer::Method::POST);
+
+	registerAsyncRestApi(url.getChildURL("api/status"));
+
+	registerAsyncRestApi(url.getChildURL("api/list_components")
+							.withParameter("moduleId", "")
+							.withParameter("hierarchy", "false"));
+
+	registerAsyncRestApi(url.getChildURL("api/get_component_properties")
+							.withParameter("moduleId", "")
+							.withParameter("componentId", ""));
 
 	auto ok = restServer.start(1900);
 	ExtendedApiDocumentation::init();
