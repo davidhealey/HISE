@@ -192,15 +192,28 @@ void RestHelpers::waitForPendingCallbacks(ScriptComponent* sc, int timeoutMs)
 
 RestServer::Response RestHelpers::handleRecompile(MainController* mc, RestServer::AsyncRequest::Ptr req)
 {
+	auto obj = req->getRequest().getJsonBody();
+	bool forceSync = (bool)obj.getProperty(RestApiIds::forceSynchronousExecution, false);
+	
+	// Create ScopedBadBabysitter if forceSynchronousExecution is requested
+	// This bypasses all threading checks and executes everything synchronously
+	std::unique_ptr<MainController::ScopedBadBabysitter> syncMode;
+	if (forceSync)
+		syncMode = std::make_unique<MainController::ScopedBadBabysitter>(mc);
+
 	if (auto jp = getScriptProcessor(mc, req))
 	{
-		mc->getKillStateHandler().killVoicesAndCall(dynamic_cast<Processor*>(jp), [req](Processor* p)
+		mc->getKillStateHandler().killVoicesAndCall(dynamic_cast<Processor*>(jp), [req, forceSync](Processor* p)
 		{
-			JavascriptProcessor::ResultFunction rf = [req](const JavascriptProcessor::SnippetResult& result)
+			JavascriptProcessor::ResultFunction rf = [req, forceSync](const JavascriptProcessor::SnippetResult& result)
 			{
 				DynamicObject::Ptr r = new DynamicObject();
 				r->setProperty(RestApiIds::success, result.r.wasOk());
 				r->setProperty(RestApiIds::result, result.r.wasOk() ? "Recompiled OK" : "Compilation / Runtime Error");
+				r->setProperty(RestApiIds::forceSynchronousExecution, forceSync);
+				
+				if (forceSync)
+					r->setProperty(RestApiIds::warning, "Executed in unsafe synchronous mode - threading checks bypassed");
 
 				req->complete(RestServer::Response::ok(var(r.get())));
 			};
@@ -290,7 +303,8 @@ const Array<RestHelpers::RouteMetadata>& RestHelpers::getRouteMetadata()
 			.withBodyParam(RouteParameter(RestApiIds::moduleId, "The script processor's module ID"))
 			.withBodyParam(RouteParameter(RestApiIds::callback, "Specific callback to update. If omitted, script is treated as merged content.").asOptional())
 			.withBodyParam(RouteParameter(RestApiIds::script, "The script content"))
-			.withBodyParam(RouteParameter(RestApiIds::compile, "Whether to compile after setting").withDefault("true")));
+			.withBodyParam(RouteParameter(RestApiIds::compile, "Whether to compile after setting").withDefault("true"))
+			.withBodyParam(RouteParameter(RestApiIds::forceSynchronousExecution, "Debug tool: Bypass threading model for synchronous execution. WARNING: May cause crashes due to race conditions - use only as last resort after saving.").withDefault("false")));
 		
 		// ApiRoute::Recompile
 		m.add(RouteMetadata(ApiRoute::Recompile, "api/recompile")
@@ -298,7 +312,8 @@ const Array<RestHelpers::RouteMetadata>& RestHelpers::getRouteMetadata()
 			.withCategory("scripting")
 			.withDescription("Recompile a processor (restores preset values, triggering callbacks for saveInPreset components)")
 			.withReturns("Compilation result with success status, logs, and errors")
-			.withBodyParam(RouteParameter(RestApiIds::moduleId, "The script processor's module ID")));
+			.withBodyParam(RouteParameter(RestApiIds::moduleId, "The script processor's module ID"))
+			.withBodyParam(RouteParameter(RestApiIds::forceSynchronousExecution, "Debug tool: Bypass threading model for synchronous execution. WARNING: May cause crashes due to race conditions - use only as last resort after saving.").withDefault("false")));
 		
 		// ApiRoute::ListComponents
 		m.add(RouteMetadata(ApiRoute::ListComponents, "api/list_components")
@@ -333,7 +348,8 @@ const Array<RestHelpers::RouteMetadata>& RestHelpers::getRouteMetadata()
 			.withBodyParam(RouteParameter(RestApiIds::moduleId, "The script processor's module ID"))
 			.withBodyParam(RouteParameter(RestApiIds::componentId, "The component's ID"))
 			.withBodyParam(RouteParameter(RestApiIds::value, "The value to set"))
-			.withBodyParam(RouteParameter(RestApiIds::validateRange, "If true, validates value is within component's min/max range").withDefault("false")));
+			.withBodyParam(RouteParameter(RestApiIds::validateRange, "If true, validates value is within component's min/max range").withDefault("false"))
+			.withBodyParam(RouteParameter(RestApiIds::forceSynchronousExecution, "Debug tool: Bypass threading model for synchronous execution. WARNING: May cause crashes due to race conditions - use only as last resort after saving.").withDefault("false")));
 		
 		// Verify count matches enum
 		jassert(m.size() == (int)ApiRoute::numRoutes);
@@ -580,6 +596,13 @@ RestServer::Response RestHelpers::handleSetScript(MainController* mc, RestServer
 {
 	auto obj = req->getRequest().getJsonBody();
 	
+	// Check for forceSynchronousExecution debug mode
+	bool forceSync = (bool)obj.getProperty(RestApiIds::forceSynchronousExecution, false);
+	
+	std::unique_ptr<MainController::ScopedBadBabysitter> syncMode;
+	if (forceSync)
+		syncMode = std::make_unique<MainController::ScopedBadBabysitter>(mc);
+	
 	// Read moduleId from JSON body (unified POST parameter handling)
 	auto moduleId = obj[RestApiIds::moduleId].toString();
 	
@@ -785,6 +808,13 @@ RestServer::Response RestHelpers::handleSetComponentValue(MainController* mc, Re
 {
 	auto obj = req->getRequest().getJsonBody();
 	
+	// Check for forceSynchronousExecution debug mode
+	bool forceSync = (bool)obj.getProperty(RestApiIds::forceSynchronousExecution, false);
+	
+	std::unique_ptr<MainController::ScopedBadBabysitter> syncMode;
+	if (forceSync)
+		syncMode = std::make_unique<MainController::ScopedBadBabysitter>(mc);
+	
 	auto moduleId = obj[RestApiIds::moduleId].toString();
 	if (moduleId.isEmpty())
 		return req->fail(400, "moduleId is required in request body");
@@ -831,6 +861,10 @@ RestServer::Response RestHelpers::handleSetComponentValue(MainController* mc, Re
 		result->setProperty(RestApiIds::moduleId, moduleId);
 		result->setProperty(RestApiIds::componentId, componentId);
 		result->setProperty(RestApiIds::type, sc->getObjectName().toString());
+		result->setProperty(RestApiIds::forceSynchronousExecution, forceSync);
+		
+		if (forceSync)
+			result->setProperty(RestApiIds::warning, "Executed in unsafe synchronous mode - threading checks bypassed");
 
 		req->complete(RestServer::Response::ok(var(result.get())));
 		return req->waitForResponse();

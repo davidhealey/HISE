@@ -106,6 +106,10 @@ namespace RestApiIds
     DECLARE_ID(min);
     DECLARE_ID(max);
     DECLARE_ID(validateRange);
+    
+    // Debug parameters
+    DECLARE_ID(forceSynchronousExecution);
+    DECLARE_ID(warning);
 }
 
 #undef DECLARE_ID

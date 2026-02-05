@@ -254,6 +254,7 @@ Update script content in a processor.
 | `callback` | No | - | Specific callback to update. If omitted, `script` is treated as merged content. |
 | `script` | Yes | - | The script content |
 | `compile` | No | `true` | Whether to compile after setting |
+| `forceSynchronousExecution` | No | `false` | Debug tool: Bypass threading model. **WARNING: May crash.** See [Advanced Debugging](#advanced-debugging-forcesynchronousexecution). |
 
 **Example: Set single callback**
 ```bash
@@ -325,9 +326,10 @@ curl -X POST "http://localhost:1900/api/set_script" \
 Recompile a processor without changing its script content.
 
 **JSON Body**:
-| Field | Required | Description |
-|-------|----------|-------------|
-| `moduleId` | Yes | The processor's module ID |
+| Field | Required | Default | Description |
+|-------|----------|---------|-------------|
+| `moduleId` | Yes | - | The processor's module ID |
+| `forceSynchronousExecution` | No | `false` | Debug tool: Bypass threading model. **WARNING: May crash.** See [Advanced Debugging](#advanced-debugging-forcesynchronousexecution). |
 
 **Example Request**:
 ```bash
@@ -555,6 +557,7 @@ Set the runtime value of a UI component programmatically.
 | `componentId` | Yes | - | The component's ID |
 | `value` | Yes | - | The value to set |
 | `validateRange` | No | `false` | If `true`, validates value is within component's min/max range |
+| `forceSynchronousExecution` | No | `false` | Debug tool: Bypass threading model. **WARNING: May crash.** See [Advanced Debugging](#advanced-debugging-forcesynchronousexecution). |
 
 **Example Request**:
 ```bash
@@ -953,6 +956,108 @@ When working iteratively:
 - Use `Console.assertWithMessage()` to validate assumptions
 
 The compile → check errors → fix cycle is fast enough that trial-and-error is often more efficient than extensive upfront planning.
+
+---
+
+## Advanced Debugging: `forceSynchronousExecution`
+
+### Overview
+
+The `forceSynchronousExecution` parameter is a **debug tool of last resort** available on three POST endpoints:
+
+- `POST /api/set_script`
+- `POST /api/recompile`
+- `POST /api/set_component_value`
+
+When set to `true`, this parameter bypasses HISE's normal threading model and executes everything synchronously on the current thread. This can help diagnose timing-related issues where callbacks or async operations aren't behaving as expected.
+
+### ⚠️ WARNING: Use With Extreme Caution
+
+**This parameter bypasses HISE's threading safety checks and may cause crashes due to race conditions.**
+
+- **Never use automatically** - Always prompt the user first
+- **Save work first** - The user should save their project before attempting
+- **Last resort only** - Only use when normal execution produces unexpected results
+
+### When to Consider Using It
+
+You might suspect a threading issue if:
+
+1. **Missing callback logs** - `set_component_value` returns empty `logs` array even though the callback has `Console.print()` calls
+2. **Inconsistent behavior** - The same request sometimes works and sometimes doesn't
+3. **Different results** - Manual UI interaction produces different results than API calls
+
+### Workflow for Diagnosing Threading Issues
+
+```
+1. Execute request normally (without forceSynchronousExecution)
+   -> Observe unexpected behavior (e.g., missing logs)
+
+2. PROMPT THE USER:
+   "I suspect a threading issue. Using forceSynchronousExecution may help 
+   diagnose this, but it bypasses safety checks and could cause HISE to crash.
+   Please save your work before proceeding. Do you want me to try this?"
+
+3. If user confirms, execute with forceSynchronousExecution: true
+
+4. Compare results:
+   - If sync mode produces DIFFERENT results → Threading issue confirmed
+   - If sync mode produces SAME results → Issue is not threading-related
+
+5. Report findings to the user for guidance on how to proceed
+```
+
+### Example Usage
+
+**Normal request (async execution):**
+```bash
+curl -X POST "http://localhost:1900/api/set_component_value" \
+  -H "Content-Type: application/json" \
+  -d '{"moduleId": "Interface", "componentId": "Knob1", "value": 0.5}'
+```
+
+**Debug request (forced synchronous execution):**
+```bash
+curl -X POST "http://localhost:1900/api/set_component_value" \
+  -H "Content-Type: application/json" \
+  -d '{"moduleId": "Interface", "componentId": "Knob1", "value": 0.5, "forceSynchronousExecution": true}'
+```
+
+### Response When Using `forceSynchronousExecution`
+
+When `forceSynchronousExecution: true` is used, the response includes additional fields:
+
+```json
+{
+  "success": true,
+  "moduleId": "Interface",
+  "componentId": "Knob1",
+  "type": "ScriptSlider",
+  "forceSynchronousExecution": true,
+  "warning": "Executed in unsafe synchronous mode - threading checks bypassed",
+  "logs": ["Callback executed: 0.5"],
+  "errors": []
+}
+```
+
+| Field | Description |
+|-------|-------------|
+| `forceSynchronousExecution` | Confirms sync mode was used (`true`) or not (`false`) |
+| `warning` | Present only when sync mode was used - reminder that safety was bypassed |
+
+### What This Tool Does NOT Do
+
+- **Does not fix threading issues** - It's a diagnostic tool only
+- **Does not make code thread-safe** - If sync mode works but async doesn't, there's an underlying issue
+- **Does not replace proper async handling** - The user/developer needs to address the root cause
+
+### Reporting Threading Issues
+
+If you discover that `forceSynchronousExecution: true` produces different results than normal execution, report this to the user with:
+
+1. The specific endpoint and parameters that exhibited the issue
+2. The difference in behavior (e.g., "logs were empty without sync mode but contained expected output with sync mode")
+3. A recommendation to investigate the callback code for potential threading issues
 
 ---
 

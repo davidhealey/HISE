@@ -68,6 +68,7 @@ public:
         testNestedControlCallbacks();
         testFloatNormalizationUnit();
         testFloatNormalization();
+        testForceSynchronousExecution();
         
         // Verify all endpoints were tested
         verifyAllEndpointsTested();
@@ -1057,6 +1058,54 @@ private:
                 hasCleanValue = true;
         }
         expect(hasCleanValue, "Log should contain clean 'Value: 0.1'");
+    }
+    
+    //==========================================================================
+    void testForceSynchronousExecution()
+    {
+        beginTest("forceSynchronousExecution parameter");
+        
+        ctx->reset();
+        
+        // Create a knob with control callback
+        ctx->compile("Content.makeFrontInterface(600, 400);\n"
+                     "const var TestKnob = Content.addKnob(\"TestKnob\", 10, 10);\n"
+                     "\n"
+                     "inline function onTestKnobChanged(component, value)\n"
+                     "{\n"
+                     "    Console.print(\"Callback executed: \" + value);\n"
+                     "}\n"
+                     "\n"
+                     "TestKnob.setControlCallback(onTestKnobChanged);");
+        
+        // Test with forceSynchronousExecution: true
+        DynamicObject::Ptr bodyObj = new DynamicObject();
+        bodyObj->setProperty("moduleId", "Interface");
+        bodyObj->setProperty("componentId", "TestKnob");
+        bodyObj->setProperty("value", 0.5);
+        bodyObj->setProperty("forceSynchronousExecution", true);
+        
+        auto response = ctx->httpPost("/api/set_component_value",
+                                      JSON::toString(var(bodyObj.get())));
+        var json = ctx->parseJson(response);
+        
+        expect((bool)json["success"], "Should succeed");
+        expect((bool)json["forceSynchronousExecution"], 
+               "Response should indicate sync mode was used");
+        expect(json["warning"].toString().isNotEmpty(), 
+               "Response should include warning when sync mode is used");
+        expect(json["warning"].toString().contains("unsafe"), 
+               "Warning should mention 'unsafe'");
+        
+        // Verify callback was still executed
+        auto logs = json["logs"];
+        bool callbackExecuted = false;
+        for (int i = 0; i < logs.size(); i++)
+        {
+            if (logs[i].toString().contains("Callback executed"))
+                callbackExecuted = true;
+        }
+        expect(callbackExecuted, "Callback should still execute in sync mode");
     }
 };
 
