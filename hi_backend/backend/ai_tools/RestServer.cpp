@@ -60,19 +60,20 @@ static String createErrorJson(const String& message)
 
 //==============================================================================
 // Request implementation
-String RestServer::Request::getParameter(const String& name, const String& defaultValue) const
+String RestServer::Request::operator[](const Identifier& name) const
 {
+    auto nameStr = name.toString();
     auto& names = url.getParameterNames();
     auto& values = url.getParameterValues();
     
     // Search from end to get last occurrence (request params override defaults)
     for (int i = names.size() - 1; i >= 0; --i)
     {
-        if (names[i] == name)
+        if (names[i] == nameStr)
             return values[i];
     }
     
-    return defaultValue;
+    return {};
 }
 
 var RestServer::Request::getJsonBody() const
@@ -216,6 +217,7 @@ public:
     //==============================================================================
     struct RouteInfo
     {
+        Method method = GET;            // HTTP method
         String path;                    // Just the path (e.g., "/api/recompile")
         StringPairArray defaultParams;  // Default parameter values from route URL
         RouteHandler handler;
@@ -225,6 +227,7 @@ public:
     void addRoute(Method method, const URL& routeUrl, RouteHandler handler)
     {
         RouteInfo info;
+        info.method = method;
         
         // Extract path from URL, prepending "/" since getSubPath() doesn't include it
         String subPath = routeUrl.getSubPath(false);
@@ -357,7 +360,7 @@ private:
         
         // Notify listeners
         String methodStr;
-        switch (routes.begin()->first.first)  // Bit of a hack to get method
+        switch (routeInfo.method)
         {
             case GET:    methodStr = "GET"; break;
             case POST:   methodStr = "POST"; break;
@@ -388,6 +391,7 @@ private:
         
         // Build Request object
         Request request;
+        request.method = routeInfo.method;
         request.url = url;
         
         // Copy headers

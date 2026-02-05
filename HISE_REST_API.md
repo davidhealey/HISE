@@ -29,28 +29,97 @@ This document describes the REST API available in HISE for enabling AI agents to
 
 ## Quick Start
 
-1. **Check if HISE is running** and discover the project structure:
+1. **Discover available API methods** (optional but useful):
+   ```bash
+   curl "http://localhost:1900/"
+   ```
+
+2. **Check if HISE is running** and discover the project structure:
    ```bash
    curl "http://localhost:1900/api/status"
    ```
 
-2. **Get current script** from a processor:
+3. **Get current script** from a processor:
    ```bash
    curl "http://localhost:1900/api/get_script?moduleId=Interface&callback=onInit"
    ```
 
-3. **Modify and compile**:
+4. **Modify and compile**:
    ```bash
-   curl -X POST "http://localhost:1900/api/set_script?moduleId=Interface" \
+   curl -X POST "http://localhost:1900/api/set_script" \
      -H "Content-Type: application/json" \
-     -d '{"callback": "onInit", "script": "Console.print(\"Hello\");", "compile": true}'
+     -d '{"moduleId": "Interface", "callback": "onInit", "script": "Console.print(\"Hello\");", "compile": true}'
    ```
 
-4. **Check for errors** in the response's `errors` array, fix, and repeat.
+5. **Check for errors** in the response's `errors` array, fix, and repeat.
 
 ---
 
 ## API Reference
+
+### GET /
+
+List all available API methods with their parameters and descriptions. This is the self-documenting discovery endpoint.
+
+**Parameters**: None
+
+**Example Request**:
+```bash
+curl "http://localhost:1900/"
+```
+
+**Example Response**:
+```json
+{
+  "success": true,
+  "methods": [
+    {
+      "path": "/api/get_script",
+      "method": "GET",
+      "category": "scripting",
+      "description": "Read script content from a processor",
+      "returns": "Script content for the specified callback (or all callbacks merged)",
+      "queryParameters": [
+        { "name": "moduleId", "description": "The script processor's module ID", "required": true },
+        { "name": "callback", "description": "Specific callback name (e.g., onInit). If omitted, returns all callbacks merged.", "required": false }
+      ]
+    },
+    {
+      "path": "/api/set_script",
+      "method": "POST",
+      "category": "scripting",
+      "description": "Update script content and optionally compile",
+      "returns": "Compilation result with success status, logs, and errors",
+      "bodyParameters": [
+        { "name": "moduleId", "description": "The script processor's module ID", "required": true },
+        { "name": "callback", "description": "Specific callback to update. If omitted, script is treated as merged content.", "required": false },
+        { "name": "script", "description": "The script content", "required": true },
+        { "name": "compile", "description": "Whether to compile after setting", "required": false, "defaultValue": "true" }
+      ]
+    }
+  ],
+  "logs": [],
+  "errors": []
+}
+```
+
+**Key Fields**:
+| Field | Description |
+|-------|-------------|
+| `methods[].path` | The endpoint path (e.g., `/api/status`) |
+| `methods[].method` | HTTP method (`GET` or `POST`) |
+| `methods[].category` | Category: `status`, `scripting`, or `ui` |
+| `methods[].description` | One-line description of the endpoint |
+| `methods[].returns` | One-line description of what the endpoint returns |
+| `methods[].queryParameters` | For GET requests: array of query parameter definitions |
+| `methods[].bodyParameters` | For POST requests: array of JSON body parameter definitions |
+
+**Use cases**:
+- Discover all available endpoints programmatically
+- Generate MCP tool definitions automatically
+- Keep agent instructions in sync with the API
+
+---
 
 ### GET /api/status
 
@@ -172,23 +241,20 @@ curl "http://localhost:1900/api/get_script?moduleId=Interface"
 
 Update script content in a processor.
 
-**Parameters**:
-| Parameter | Required | Description |
-|-----------|----------|-------------|
-| `moduleId` | Yes | The processor's module ID |
-
-**JSON Body**:
+**JSON Body** (all parameters in request body):
 | Field | Required | Default | Description |
 |-------|----------|---------|-------------|
+| `moduleId` | Yes | - | The processor's module ID |
 | `callback` | No | - | Specific callback to update. If omitted, `script` is treated as merged content. |
 | `script` | Yes | - | The script content |
 | `compile` | No | `true` | Whether to compile after setting |
 
 **Example: Set single callback**
 ```bash
-curl -X POST "http://localhost:1900/api/set_script?moduleId=Interface" \
+curl -X POST "http://localhost:1900/api/set_script" \
   -H "Content-Type: application/json" \
   -d '{
+    "moduleId": "Interface",
     "callback": "onInit",
     "script": "Content.makeFrontInterface(600, 500);\nConsole.print(123);",
     "compile": true
@@ -197,9 +263,10 @@ curl -X POST "http://localhost:1900/api/set_script?moduleId=Interface" \
 
 **Example: Set all callbacks (merged script)**
 ```bash
-curl -X POST "http://localhost:1900/api/set_script?moduleId=Interface" \
+curl -X POST "http://localhost:1900/api/set_script" \
   -H "Content-Type: application/json" \
   -d '{
+    "moduleId": "Interface",
     "script": "Content.makeFrontInterface(600, 500);\n\nfunction onNoteOn()\n{\n\tMessage.makeArtificial();\n}\n\nfunction onNoteOff()\n{\n}\n\nfunction onController()\n{\n}\n\nfunction onTimer()\n{\n}\n\nfunction onControl(number, value)\n{\n}",
     "compile": true
   }'
@@ -207,9 +274,10 @@ curl -X POST "http://localhost:1900/api/set_script?moduleId=Interface" \
 
 **Example: Set without compiling**
 ```bash
-curl -X POST "http://localhost:1900/api/set_script?moduleId=Interface" \
+curl -X POST "http://localhost:1900/api/set_script" \
   -H "Content-Type: application/json" \
   -d '{
+    "moduleId": "Interface",
     "callback": "onNoteOn",
     "script": "function onNoteOn()\n{\n\tConsole.print(Message.getNoteNumber());\n}",
     "compile": false
@@ -468,10 +536,10 @@ SCRIPT=$(curl -s "http://localhost:1900/api/get_script?moduleId=Interface&callba
 # 2. Modify script (example: agent modifies $SCRIPT here)
 MODIFIED_SCRIPT="..."
 
-# 3. Set and compile
-curl -X POST "http://localhost:1900/api/set_script?moduleId=Interface" \
+# 3. Set and compile (all params in JSON body)
+curl -X POST "http://localhost:1900/api/set_script" \
   -H "Content-Type: application/json" \
-  -d "{\"callback\": \"onInit\", \"script\": \"$MODIFIED_SCRIPT\", \"compile\": true}"
+  -d "{\"moduleId\": \"Interface\", \"callback\": \"onInit\", \"script\": \"$MODIFIED_SCRIPT\", \"compile\": true}"
 
 # 4. Check response for errors, fix if needed, repeat
 ```

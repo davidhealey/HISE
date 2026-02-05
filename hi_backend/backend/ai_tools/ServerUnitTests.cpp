@@ -52,6 +52,7 @@ public:
         ctx = std::make_unique<TestContext>(*this);
         
         testServerStartStop();
+        testListMethods();
         testStatusEndpoint();
         testListComponentsFlat();
         testListComponentsHierarchy();
@@ -60,6 +61,9 @@ public:
         testSetScriptCompileError();
         testGetScript();
         testRecompile();
+        
+        // Verify all endpoints were tested
+        verifyAllEndpointsTested();
         
         // Clean up
         ctx.reset();
@@ -72,9 +76,13 @@ private:
         
         This follows the same initialization pattern as CLIInstance in Main.cpp
         to ensure proper setup of the BackendProcessor and all its subsystems.
+        
+        Also tracks which endpoints have been called for coverage verification.
     */
     struct TestContext
     {
+        StringArray touchedEndpoints;
+        
         TestContext(UnitTest& parentTest) : test(parentTest)
         {
             // Skip audio driver initialization for headless testing
@@ -122,6 +130,10 @@ private:
         /** Make a GET request to the test server (runs on background thread, pumps message loop). */
         String httpGet(const String& endpoint)
         {
+            // Track the endpoint path (without query params) for coverage
+            auto path = endpoint.upToFirstOccurrenceOf("?", false, false);
+            touchedEndpoints.addIfNotAlreadyThere(path);
+            
             return httpRequestWithMessagePump([endpoint]()
             {
                 URL url("http://localhost:" + String(TEST_PORT) + endpoint);
@@ -132,6 +144,10 @@ private:
         /** Make a POST request with JSON body to the test server (runs on background thread, pumps message loop). */
         String httpPost(const String& endpoint, const String& jsonBody)
         {
+            // Track the endpoint path (without query params) for coverage
+            auto path = endpoint.upToFirstOccurrenceOf("?", false, false);
+            touchedEndpoints.addIfNotAlreadyThere(path);
+            
             return httpRequestWithMessagePump([endpoint, jsonBody]()
             {
                 URL url = URL("http://localhost:" + String(TEST_PORT) + endpoint)
@@ -192,12 +208,14 @@ private:
                     const String& callback = "onInit",
                     bool expectSuccess = true)
         {
+            // All POST parameters go in the JSON body (unified approach)
             DynamicObject::Ptr bodyObj = new DynamicObject();
+            bodyObj->setProperty("moduleId", moduleId);
             bodyObj->setProperty("callback", callback);
             bodyObj->setProperty("script", code);
             bodyObj->setProperty("compile", true);
             
-            auto response = httpPost("/api/set_script?moduleId=" + moduleId, 
+            auto response = httpPost("/api/set_script", 
                                      JSON::toString(var(bodyObj.get())));
             var json = parseJson(response);
             
@@ -226,6 +244,118 @@ private:
         
         expect(ctx->bp->getRestServer().isRunning(), "Server should be running");
         expect(ctx->bp->getRestServer().getPort() == TEST_PORT, "Should use test port");
+    }
+    
+    //==========================================================================
+    void testListMethods()
+    {
+        beginTest("GET / (list_methods)");
+        
+        auto response = ctx->httpGet("/");
+        expect(response.isNotEmpty(), "Should return response");
+        
+        var json = ctx->parseJson(response);
+        expect((bool)json["success"], "success should be true");
+        
+        auto methods = json["methods"];
+        expect(methods.isArray(), "methods should be array");
+        expect(methods.size() == (int)RestHelpers::ApiRoute::numRoutes, 
+               "Should have all " + String((int)RestHelpers::ApiRoute::numRoutes) + " routes");
+        
+        // Verify sorted by category then path
+        String lastCategory;
+        String lastPath;
+        for (int i = 0; i < methods.size(); i++)
+        {
+            auto cat = methods[i]["category"].toString();
+            auto path = methods[i]["path"].toString();
+            
+            if (cat != lastCategory)
+            {
+                // New category - should be alphabetically >= last category
+                expect(lastCategory.isEmpty() || cat.compare(lastCategory) >= 0,
+                       "Categories should be sorted: " + lastCategory + " -> " + cat);
+                lastCategory = cat;
+                lastPath = "";
+            }
+            
+            // Within same category, paths should be sorted
+            expect(lastPath.isEmpty() || path.compare(lastPath) >= 0,
+                   "Paths should be sorted within category: " + lastPath + " -> " + path);
+            lastPath = path;
+        }
+        
+        // Verify status endpoint structure
+        bool foundStatus = false;
+        for (int i = 0; i < methods.size(); i++)
+        {
+            if (methods[i]["path"].toString() == "/api/status")
+            {
+                foundStatus = true;
+                expect(methods[i]["method"].toString() == "GET", "status should be GET");
+                expect(methods[i]["category"].toString() == "status", "status should have 'status' category");
+                expect(methods[i]["description"].toString().isNotEmpty(), "status should have description");
+                expect(methods[i]["returns"].toString().isNotEmpty(), "status should have returns");
+                break;
+            }
+        }
+        expect(foundStatus, "Should include /api/status endpoint");
+        
+        // Verify POST endpoint has bodyParameters
+        for (int i = 0; i < methods.size(); i++)
+        {
+            if (methods[i]["path"].toString() == "/api/set_script")
+            {
+                expect(methods[i]["method"].toString() == "POST", "set_script should be POST");
+                auto bodyParams = methods[i]["bodyParameters"];
+                expect(bodyParams.isArray(), "set_script should have bodyParameters");
+                expect(bodyParams.size() >= 3, "set_script should have at least 3 body params");
+                
+                // Verify moduleId is in body params
+                bool hasModuleId = false;
+                for (int j = 0; j < bodyParams.size(); j++)
+                {
+                    if (bodyParams[j]["name"].toString() == "moduleId")
+                    {
+                        hasModuleId = true;
+                        expect((bool)bodyParams[j]["required"], "moduleId should be required");
+                    }
+                }
+                expect(hasModuleId, "set_script should have moduleId in bodyParameters");
+                break;
+            }
+        }
+        
+        // Verify GET endpoint has queryParameters
+        for (int i = 0; i < methods.size(); i++)
+        {
+            if (methods[i]["path"].toString() == "/api/get_script")
+            {
+                auto queryParams = methods[i]["queryParameters"];
+                expect(queryParams.isArray(), "get_script should have queryParameters");
+                expect(queryParams.size() >= 1, "get_script should have at least 1 query param");
+                break;
+            }
+        }
+    }
+    
+    //==========================================================================
+    void verifyAllEndpointsTested()
+    {
+        beginTest("All endpoints tested");
+        
+        // Verify metadata count matches enum
+        const auto& metadata = RestHelpers::getRouteMetadata();
+        expect(metadata.size() == (int)RestHelpers::ApiRoute::numRoutes,
+               "Metadata count must match RestHelpers::ApiRoute::numRoutes");
+        
+        // Verify all endpoints were touched during tests
+        for (const auto& route : metadata)
+        {
+            auto fullPath = "/" + route.path;
+            expect(ctx->touchedEndpoints.contains(fullPath),
+                   "Endpoint not tested: " + fullPath);
+        }
     }
     
     //==========================================================================

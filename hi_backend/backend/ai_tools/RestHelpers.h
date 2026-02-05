@@ -32,16 +32,204 @@
 
 #pragma once
 
-namespace hise {
+namespace hise { using namespace juce;
+
+//==============================================================================
+/** Identifiers for REST API parameter names and JSON response keys.
+    Using Identifiers instead of string literals provides compile-time safety
+    and better performance for property lookups.
+*/
+#define DECLARE_ID(x) const Identifier x(#x);
+
+namespace RestApiIds
+{
+    // Request/body parameters
+    DECLARE_ID(moduleId);
+    DECLARE_ID(callback);
+    DECLARE_ID(script);
+    DECLARE_ID(compile);
+    DECLARE_ID(hierarchy);
+    DECLARE_ID(componentId);
+    
+    // Common response fields
+    DECLARE_ID(success);
+    DECLARE_ID(result);
+    DECLARE_ID(logs);
+    DECLARE_ID(errors);
+    DECLARE_ID(errorMessage);
+    DECLARE_ID(callstack);
+    
+    // list_methods response
+    DECLARE_ID(methods);
+    DECLARE_ID(path);
+    DECLARE_ID(method);
+    DECLARE_ID(category);
+    DECLARE_ID(description);
+    DECLARE_ID(returns);
+    DECLARE_ID(queryParameters);
+    DECLARE_ID(bodyParameters);
+    DECLARE_ID(name);
+    DECLARE_ID(required);
+    DECLARE_ID(defaultValue);
+    
+    // status response
+    DECLARE_ID(server);
+    DECLARE_ID(version);
+    DECLARE_ID(project);
+    DECLARE_ID(projectFolder);
+    DECLARE_ID(scriptsFolder);
+    DECLARE_ID(scriptProcessors);
+    DECLARE_ID(isMainInterface);
+    DECLARE_ID(externalFiles);
+    DECLARE_ID(callbacks);
+    DECLARE_ID(id);
+    DECLARE_ID(type);
+    DECLARE_ID(empty);
+    
+    // list_components response
+    DECLARE_ID(components);
+    DECLARE_ID(childComponents);
+    DECLARE_ID(visible);
+    DECLARE_ID(enabled);
+    DECLARE_ID(x);
+    DECLARE_ID(y);
+    DECLARE_ID(width);
+    DECLARE_ID(height);
+    
+    // get_component_properties response
+    DECLARE_ID(properties);
+    DECLARE_ID(value);
+    DECLARE_ID(isDefault);
+    DECLARE_ID(options);
+}
+
+#undef DECLARE_ID
 
 /** Helper utilities for REST API request handling.
     
     This struct contains utilities for handling REST API requests that interact
     with HISE's scripting system, including console output capture, error parsing,
-    and script compilation.
+    and script compilation. It also provides the central registry of all API routes
+    and their handler implementations.
 */
 struct RestHelpers
 {
+    //==========================================================================
+    // Route types (nested to avoid polluting hise namespace)
+    
+    /** Identifies REST API endpoints. The enum value is the index into getRouteMetadata(). */
+    enum class ApiRoute
+    {
+        ListMethods,            ///< GET  /           - List all available API methods
+        Status,                 ///< GET  /api/status - Get project status
+        GetScript,              ///< GET  /api/get_script - Read script content
+        SetScript,              ///< POST /api/set_script - Update script content
+        Recompile,              ///< GET  /api/recompile - Recompile a processor
+        ListComponents,         ///< GET  /api/list_components - List UI components
+        GetComponentProperties, ///< GET  /api/get_component_properties - Get component properties
+        numRoutes
+    };
+    
+    /** Metadata for a REST API route parameter. Uses fluent builder pattern. */
+    struct RouteParameter
+    {
+        Identifier name;
+        String description;
+        String defaultValue;  ///< Empty = no default
+        bool required = true;
+        
+        /** Constructor with required fields. */
+        RouteParameter(const Identifier& name_, const String& desc_)
+            : name(name_), description(desc_) {}
+        
+        /** Set a default value (implies optional). */
+        RouteParameter withDefault(const String& def) const
+        {
+            auto copy = *this;
+            copy.defaultValue = def;
+            copy.required = false;
+            return copy;
+        }
+        
+        /** Mark as optional without a default value. */
+        RouteParameter asOptional() const
+        {
+            auto copy = *this;
+            copy.required = false;
+            return copy;
+        }
+    };
+    
+    /** Metadata for a registered REST API route. Uses fluent builder pattern. */
+    struct RouteMetadata
+    {
+        ApiRoute id = ApiRoute::numRoutes;
+        String path;              ///< e.g., "api/status" (without leading /)
+        RestServer::Method method = RestServer::GET;
+        String category;          ///< "status", "scripting", "ui"
+        String description;       ///< One-liner description
+        String returns;           ///< One-liner describing response
+        Array<RouteParameter> queryParameters;   ///< For GET requests
+        Array<RouteParameter> bodyParameters;    ///< For POST requests (JSON body)
+        
+        /** Default constructor for juce::Array compatibility. */
+        RouteMetadata() = default;
+        
+        /** Constructor with required fields. */
+        RouteMetadata(ApiRoute id_, const String& path_)
+            : id(id_), path(path_) {}
+        
+        RouteMetadata withMethod(RestServer::Method m) const
+        {
+            auto copy = *this;
+            copy.method = m;
+            return copy;
+        }
+        
+        RouteMetadata withCategory(const String& cat) const
+        {
+            auto copy = *this;
+            copy.category = cat;
+            return copy;
+        }
+        
+        RouteMetadata withDescription(const String& desc) const
+        {
+            auto copy = *this;
+            copy.description = desc;
+            return copy;
+        }
+        
+        RouteMetadata withReturns(const String& ret) const
+        {
+            auto copy = *this;
+            copy.returns = ret;
+            return copy;
+        }
+        
+        RouteMetadata withQueryParam(const RouteParameter& p) const
+        {
+            auto copy = *this;
+            copy.queryParameters.add(p);
+            return copy;
+        }
+        
+        RouteMetadata withBodyParam(const RouteParameter& p) const
+        {
+            auto copy = *this;
+            copy.bodyParameters.add(p);
+            return copy;
+        }
+        
+        /** Convenience: adds standard moduleId query parameter. */
+        RouteMetadata withModuleIdParam() const
+        {
+            return withQueryParam(RouteParameter(RestApiIds::moduleId, "The script processor's module ID"));
+        }
+    };
+    
+    //==========================================================================
+    
     /** Scoped handler that captures console output during request processing.
         
         While this object exists, any Console.print() calls or error messages
@@ -120,6 +308,49 @@ struct RestHelpers
         @returns    DynamicObject with id, type, position, size, and childComponents
     */
     static DynamicObject::Ptr createRecursivePropertyTree(ScriptComponent* sc);
+    
+    //==========================================================================
+    // Route metadata registry
+    
+    /** Returns metadata for all registered API routes.
+        The array index corresponds to the ApiRoute enum value.
+    */
+    static const Array<RouteMetadata>& getRouteMetadata();
+    
+    /** Get the path string for a route. */
+    static String getRoutePath(ApiRoute route);
+    
+    /** Find route by subURL path. Returns ApiRoute::numRoutes if not found. */
+    static ApiRoute findRoute(const String& subURL);
+    
+    //==========================================================================
+    // Route handlers (static methods called from BackendProcessor::onAsyncRequest)
+    
+    /** Handler for GET / - List all available API methods. */
+    static RestServer::Response handleListMethods(MainController* mc, 
+                                                  RestServer::AsyncRequest::Ptr req);
+    
+    /** Handler for GET /api/status - Get project status. */
+    static RestServer::Response handleStatus(MainController* mc, 
+                                             RestServer::AsyncRequest::Ptr req);
+    
+    /** Handler for GET /api/get_script - Read script content. */
+    static RestServer::Response handleGetScript(MainController* mc, 
+                                                RestServer::AsyncRequest::Ptr req,
+                                                ScopedConsoleHandler& sch);
+    
+    /** Handler for POST /api/set_script - Update script content. */
+    static RestServer::Response handleSetScript(MainController* mc, 
+                                                RestServer::AsyncRequest::Ptr req,
+                                                ScopedConsoleHandler& sch);
+    
+    /** Handler for GET /api/list_components - List UI components. */
+    static RestServer::Response handleListComponents(MainController* mc, 
+                                                     RestServer::AsyncRequest::Ptr req);
+    
+    /** Handler for GET /api/get_component_properties - Get component properties. */
+    static RestServer::Response handleGetComponentProperties(MainController* mc, 
+                                                             RestServer::AsyncRequest::Ptr req);
 };
 
 } // namespace hise

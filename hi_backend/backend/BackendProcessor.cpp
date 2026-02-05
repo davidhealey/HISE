@@ -267,22 +267,6 @@ void PluginParameterRamp::bump(PluginParameterSimulatorInfo& info, double milliS
 	info.performChange();
 }
 
-bool BackendProcessor::registerAsyncRestApi(const URL& url, RestServer::Method m)
-{
-	if (restServer.isRunning())
-	{
-		jassertfalse;
-		return false;
-	}
-
-	restServer.addAsyncRoute(
-		m,
-		url,
-		BIND_MEMBER_FUNCTION_1(BackendProcessor::onAsyncRequest));
-
-	return true;
-}
-
 RestServer::Response BackendProcessor::onAsyncRequest(RestServer::AsyncRequest::Ptr req)
 {
 	debugToConsole(getMainSynthChain(), "\tincoming HTTP request: " + req->getRequest().url.toString(true));
@@ -290,295 +274,34 @@ RestServer::Response BackendProcessor::onAsyncRequest(RestServer::AsyncRequest::
 	RestHelpers::ScopedConsoleHandler sch(this, req);
 
 	auto subURL = req->getRequest().url.getSubPath(false);
+	auto route = RestHelpers::findRoute(subURL);
 
-	if (subURL == "api/recompile")
+	switch (route)
 	{
-		return RestHelpers::compile(this, sch, req);
-	}
-	
-	if (subURL == "api/get_script")
-	{
-		if (auto jp = RestHelpers::getScriptProcessor(this, req))
-		{
-			auto callback = req->getRequest()["callback"];
-
-			if (callback.isNotEmpty())
-			{
-				if (auto cb = jp->getSnippet(Identifier(callback)))
-				{
-					DynamicObject::Ptr result = new DynamicObject();
-					result->setProperty("success", true);
-					result->setProperty("moduleId", dynamic_cast<Processor*>(jp)->getId());
-					result->setProperty("callback", callback);
-
-					// onInit is special - it's raw content, not wrapped in function
-					if (callback == "onInit")
-						result->setProperty("script", cb->getAllContent());
-					else
-						result->setProperty("script", cb->getSnippetAsFunction());
-
-					result->setProperty("logs", Array<var>());
-					result->setProperty("errors", Array<var>());
-
-					return RestServer::Response::ok(var(result.get()));
-				}
-					
-				else
-					return RestServer::Response::error(404, "callback " + callback + " not found");
-			}
-			else
-			{
-				String x;
-				jp->mergeCallbacksToScript(x);
-				DynamicObject::Ptr result = new DynamicObject();
-				result->setProperty("success", true);
-				result->setProperty("moduleId", dynamic_cast<Processor*>(jp)->getId());
-				result->setProperty("script", x);
-				result->setProperty("logs", Array<var>());
-				result->setProperty("errors", Array<var>());
-				return RestServer::Response::ok(var(result.get()));
-			}
-		}
-	}
-
-	if (subURL == "api/set_script")
-	{
-		if(auto jp = RestHelpers::getScriptProcessor(this, req))
-		{ 
+		case RestHelpers::ApiRoute::ListMethods:
+			return RestHelpers::handleListMethods(this, req);
 			
-			auto obj = req->getRequest().getJsonBody();
-
-			auto callback = obj["callback"].toString();
-			auto script = obj["script"].toString();
-
-			if (callback.isNotEmpty())
-			{
-				if (auto cb = jp->getSnippet(Identifier(callback)))
-				{
-					cb->replaceContentAsync(script);
-				}
-				else
-					return RestServer::Response::error(404, "callback not found: " + callback);
-			}
-			else
-			{
-				auto ok = jp->parseSnippetsFromString(script, false);
-
-				if (!ok)
-					return RestServer::Response::error(400, "Error at parsing script");
-			}
-
-			if (obj["compile"])
-				return RestHelpers::compile(this, sch, req);
-
-			return RestServer::Response::ok("updated script");
-		}
-		else
-		{
-			return RestServer::Response::error(404, "module not found");
-		}
-	}
-
-	if (subURL == "api/status")
-	{
-		DynamicObject::Ptr result = new DynamicObject();
-		result->setProperty("success", true);
-
-		// Server info
-		DynamicObject::Ptr server = new DynamicObject();
-		server->setProperty("version", "1.0.0");
-		result->setProperty("server", var(server.get()));
-
-		// Project info
-		DynamicObject::Ptr project = new DynamicObject();
-
-		// TODO: Get project name from settings/project handler
-		project->setProperty("name", GET_HISE_SETTING(getMainSynthChain(), HiseSettings::Project::Name));
-
-		auto& projectHandler = getSampleManager().getProjectHandler();
-		auto projectFolder = projectHandler.getWorkDirectory().getFullPathName().replace("\\", "/");
-		auto scriptsFolder = projectHandler.getSubDirectory(FileHandlerBase::Scripts).getFullPathName().replace("\\", "/");
-
-		project->setProperty("projectFolder", projectFolder);
-		project->setProperty("scriptsFolder", scriptsFolder);
-		result->setProperty("project", var(project.get()));
-
-		// Script processors
-		Array<var> processors;
-
-		Processor::Iterator<JavascriptProcessor> iter(getMainSynthChain());
-
-		while (auto jp = iter.getNextProcessor())
-		{
-			auto asP = dynamic_cast<Processor*>(jp);
-			DynamicObject::Ptr proc = new DynamicObject();
-			proc->setProperty("moduleId", dynamic_cast<Processor*>(jp)->getId());
-		
-			if (auto jmp = dynamic_cast<JavascriptMidiProcessor*>(jp))
-				proc->setProperty("isMainInterface", jmp->isFront() ? true : false);
-			else
-				proc->setProperty("isMainInterface", false);
+		case RestHelpers::ApiRoute::Status:
+			return RestHelpers::handleStatus(this, req);
 			
-		    // External files
-		    Array<var> externalFiles;
-
-			for (int i = 0; i < jp->getNumWatchedFiles(); i++)
-			{
-				auto fp = jp->getWatchedFile(i);
-				auto rp = fp.getRelativePathFrom(scriptsFolder).replaceCharacter('\\', '/');
-				externalFiles.add(rp);
-			}
-
-		    proc->setProperty("externalFiles", externalFiles);
-		
-		    Array<var> callbacks;
-		    for (int i = 0; i < jp->getNumSnippets(); i++)
-		    {
-		        if (auto snippet = jp->getSnippet(i))
-		        {
-		            DynamicObject::Ptr cb = new DynamicObject();
-		            cb->setProperty("id", snippet->getCallbackName().toString());
-		
-		            // TODO: Check if callback is empty
-		            cb->setProperty("empty", snippet->isSnippetEmpty());
-		
-		            callbacks.add(var(cb.get()));
-		        }
-		    }
-		    proc->setProperty("callbacks", callbacks);
-		
-		    processors.add(var(proc.get()));
-		}
-
-		result->setProperty("scriptProcessors", processors);
-		result->setProperty("logs", Array<var>());
-		result->setProperty("errors", Array<var>());
-
-		return RestServer::Response::ok(var(result.get()));
+		case RestHelpers::ApiRoute::GetScript:
+			return RestHelpers::handleGetScript(this, req, sch);
+			
+		case RestHelpers::ApiRoute::SetScript:
+			return RestHelpers::handleSetScript(this, req, sch);
+			
+		case RestHelpers::ApiRoute::Recompile:
+			return RestHelpers::compile(this, sch, req);
+			
+		case RestHelpers::ApiRoute::ListComponents:
+			return RestHelpers::handleListComponents(this, req);
+			
+		case RestHelpers::ApiRoute::GetComponentProperties:
+			return RestHelpers::handleGetComponentProperties(this, req);
+			
+		default:
+			return req->fail(404, "Unknown API endpoint: " + subURL);
 	}
-
-	if (subURL == "api/list_components")
-	{
-		if (auto jp = RestHelpers::getScriptProcessor(this, req))
-		{
-			auto ps = dynamic_cast<ProcessorWithScriptingContent*>(jp);
-			auto hierarchyParam = req->getRequest()["hierarchy"];
-			auto useHierarchy = (hierarchyParam == "true" || hierarchyParam == "1");
-
-			DynamicObject::Ptr result = new DynamicObject();
-			result->setProperty("success", true);
-			result->setProperty("moduleId", dynamic_cast<Processor*>(jp)->getId());
-
-			Array<var> components;
-
-			auto c = ps->getScriptingContent();
-
-			if (useHierarchy)
-			{
-				for (int i = 0; i < c->getNumComponents(); i++)
-				{
-					auto sc = c->getComponent(i);
-					if (sc->getParentScriptComponent() == nullptr)
-					{
-						auto obj = RestHelpers::createRecursivePropertyTree(sc);
-						components.add(obj.get());
-					}
-				}
-			}
-			else
-			{
-				// Flat list: id and type only
-				for(int i = 0; i < c->getNumComponents(); i++)
-				{
-					auto sc = c->getComponent(i);
-					DynamicObject::Ptr comp = new DynamicObject();
-					comp->setProperty("id", sc->getName().toString());
-					comp->setProperty("type", sc->getObjectName().toString());
-					components.add(var(comp.get()));
-				}
-			}
-
-			result->setProperty("components", components);
-			result->setProperty("logs", Array<var>());
-			result->setProperty("errors", Array<var>());
-
-			return RestServer::Response::ok(var(result.get()));
-		}
-		else
-		{
-			return RestServer::Response::error(404, "moduleId is not a valid script processor");
-		}
-	}
-
-	if (subURL == "api/get_component_properties")
-	{
-		if (auto jp = RestHelpers::getScriptProcessor(this, req))
-		{
-			auto componentId = req->getRequest()["componentId"];
-
-			auto c = dynamic_cast<ProcessorWithScriptingContent*>(jp)->getScriptingContent();
-
-			if (componentId.isEmpty())
-				return RestServer::Response::error(400, "componentId parameter is required");
-
-			if (auto sc = c->getComponentWithName(Identifier(componentId)))
-			{
-				DynamicObject::Ptr result = new DynamicObject();
-				result->setProperty("success", true);
-				result->setProperty("moduleId", dynamic_cast<Processor*>(jp)->getId());
-				result->setProperty("componentId", componentId);
-
-				result->setProperty("type", sc->getObjectName().toString() /* component type as string */);
-
-				Array<var> properties;
-
-				for (int i = 0; i < sc->getNumIds(); i++)
-				{
-					DynamicObject::Ptr po = new DynamicObject();
-
-					auto id = sc->getIdFor(i);
-					auto v = sc->getScriptObjectProperty(i);
-
-					auto nonDefault = sc->getNonDefaultScriptObjectProperties();
-
-					if (id.toString().toLowerCase().contains("colour"))
-						v = "0x" + ApiHelpers::getColourFromVar(v).toDisplayString(true);
-
-					auto options = sc->getOptionsFor(id);
-
-					po->setProperty("id", id.toString());
-					po->setProperty("value", v);
-					po->setProperty("isDefault", !nonDefault.hasProperty(id));
-
-					if (!options.isEmpty())
-					{
-						Array<var> ol;
-
-						for (auto o : options)
-							ol.add(var(o));
-
-						po->setProperty("options", var(ol));
-					}
-
-					properties.add(po.get());
-				}
-
-				result->setProperty("properties", var(properties));
-				result->setProperty("logs", Array<var>());
-				result->setProperty("errors", Array<var>());
-
-				return RestServer::Response::ok(var(result.get()));
-			}
-			else
-				return RestServer::Response::error(404, "component not found: " + componentId);
-		}
-		else
-		{
-			return RestServer::Response::error(404, "moduleId is not a valid script processor");
-		}
-	}
-
-	return req->fail(404, "missing API method " + subURL);
 }
 
 
@@ -589,27 +312,19 @@ BackendProcessor::BackendProcessor(AudioDeviceManager *deviceManager_/*=nullptr*
   autosaver(this),
   pluginParameterRamp(this)
 {
-	auto url = restServer.getBaseURL();
-
-	registerAsyncRestApi(url.getChildURL("api/recompile").withParameter("moduleId", ""));
-	registerAsyncRestApi(url.getChildURL("api/get_script").withParameter("moduleId", "").withParameter("callback", ""));
-
-	registerAsyncRestApi(url.getChildURL("api/set_script")
-							.withParameter("moduleId", "")
-							.withParameter("callback", "")
-							.withParameter("script", "")
-							.withParameter("compile", "false"),
-						 RestServer::Method::POST);
-
-	registerAsyncRestApi(url.getChildURL("api/status"));
-
-	registerAsyncRestApi(url.getChildURL("api/list_components")
-							.withParameter("moduleId", "")
-							.withParameter("hierarchy", "false"));
-
-	registerAsyncRestApi(url.getChildURL("api/get_component_properties")
-							.withParameter("moduleId", "")
-							.withParameter("componentId", ""));
+	// Register all REST API routes from the centralized metadata
+	const auto& routes = RestHelpers::getRouteMetadata();
+	for (const auto& route : routes)
+	{
+		auto routeUrl = restServer.getBaseURL().getChildURL(route.path);
+		
+		// Add query parameters with their default values
+		for (const auto& param : route.queryParameters)
+			routeUrl = routeUrl.withParameter(param.name.toString(), param.defaultValue);
+		
+		restServer.addAsyncRoute(route.method, routeUrl,
+			BIND_MEMBER_FUNCTION_1(BackendProcessor::onAsyncRequest));
+	}
 
 	ExtendedApiDocumentation::init();
 

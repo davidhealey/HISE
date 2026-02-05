@@ -67,7 +67,7 @@ namespace hise { using namespace juce;
             .getChildURL("api/recompile")
             .withParameter("moduleId", ""),  // empty default = required
         [](const RestServer::Request& req) {
-            auto moduleId = req.getParameter("moduleId");
+            auto moduleId = req[Identifier("moduleId")];
             if (moduleId.isEmpty())
                 return RestServer::Response::badRequest("moduleId is required");
             return RestServer::Response::ok("Recompiling " + moduleId);
@@ -90,17 +90,15 @@ public:
     /** Represents an incoming HTTP request. */
     struct Request
     {
+        Method method = GET;            //< HTTP method (GET, POST, etc.)
         URL url;                        //< Full URL with path, query params, and POST data
         StringPairArray headers;        //< HTTP headers
 
-        /** Get a query parameter value, with optional default.
-            @param name         Parameter name
-            @param defaultValue Value to return if parameter not present
-            @returns            Parameter value or defaultValue
+        /** Get a query parameter value by Identifier.
+            @param name  Parameter name as Identifier
+            @returns     Parameter value, or empty string if not present
         */
-        String getParameter(const String& name, const String& defaultValue = {}) const;
-
-        String operator[](const String& name) const { return getParameter(name); }
+        String operator[](const Identifier& name) const;
 
         /** Parse POST body as JSON. Returns undefined var on parse failure. */
         var getJsonBody() const;

@@ -409,8 +409,6 @@ public:
 	bool acceptsMidi() const {return true;};
 	bool producesMidi() const {return false;};
 	
-	bool registerAsyncRestApi(const URL& url, RestServer::Method m=RestServer::Method::GET);
-
 	RestServer::Response onAsyncRequest(RestServer::AsyncRequest::Ptr req);
 
 	double getTailLengthSeconds() const {return 0.0;};
