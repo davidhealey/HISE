@@ -87,6 +87,7 @@ public:
         testScreenshotPixelVerificationScaled();
         testScreenshotFileOutput();
         testScreenshotFileOutputErrors();
+        testGetSelectedComponents();
         
         // Verify all endpoints were tested
         verifyAllEndpointsTested();
@@ -1831,6 +1832,33 @@ private:
             
             expect(!(bool)json["success"], "Should fail for non-existent parent directory");
             expect(json["error"].toString().containsIgnoreCase("directory"), "Error should mention directory");
+        }
+    }
+    
+    void testGetSelectedComponents()
+    {
+        beginTest("GET /api/get_selected_components");
+        
+        ctx->reset();
+        
+        ctx->compile("Content.makeFrontInterface(600, 400);\n"
+                     "const var Button1 = Content.addButton(\"Button1\", 10, 10);\n"
+                     "const var Button2 = Content.addButton(\"Button2\", 100, 10);");
+        
+        // Test: Empty selection (no components selected in Interface Designer)
+        // Note: Programmatic selection would require ScriptComponentEditBroadcaster manipulation,
+        // which needs to be done on the message thread. Testing with actual selection requires
+        // Christoph's help or complex async coordination. For now, we verify the endpoint works
+        // and touches the coverage system correctly.
+        {
+            auto response = ctx->httpGet("/api/get_selected_components?moduleId=Interface");
+            var json = ctx->parseJson(response);
+            
+            expect((bool)json["success"], "Should succeed even with empty selection");
+            expectEquals<int>(json["selectionCount"], 0, "Should have 0 selected components when Interface Designer is not open or nothing is selected");
+            expect(json["components"].isArray(), "Should have components array");
+            expectEquals<int>(json["components"].size(), 0, "Components array should be empty with no selection");
+            expect(json["moduleId"].toString() == "Interface", "Should return the moduleId");
         }
     }
 };

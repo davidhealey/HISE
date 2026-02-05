@@ -371,6 +371,13 @@ const Array<RestHelpers::RouteMetadata>& RestHelpers::getRouteMetadata()
 			.withQueryParam(RouteParameter(RestApiIds::scale, "Scale factor (0.5 or 1.0)").withDefault("1.0"))
 			.withQueryParam(RouteParameter(RestApiIds::outputPath, "File path to save PNG (must end with .png). If provided, writes to file instead of returning Base64").asOptional()));
 		
+		// ApiRoute::GetSelectedComponents
+		m.add(RouteMetadata(ApiRoute::GetSelectedComponents, "api/get_selected_components")
+			.withCategory("ui")
+			.withDescription("Get the currently selected UI components from the Interface Designer")
+			.withReturns("Selection count and array of selected components with all properties")
+			.withQueryParam(RouteParameter(RestApiIds::moduleId, "The script processor's module ID").withDefault("Interface")));
+		
 		// Verify count matches enum
 		jassert(m.size() == (int)ApiRoute::numRoutes);
 		
@@ -1206,6 +1213,83 @@ RestServer::Response RestHelpers::handleScreenshot(MainController* mc, RestServe
 		result->setProperty(RestApiIds::imageData, base64);
 	}
 	
+	result->setProperty(RestApiIds::logs, Array<var>());
+	result->setProperty(RestApiIds::errors, Array<var>());
+	
+	req->complete(RestServer::Response::ok(var(result.get())));
+	return req->waitForResponse();
+}
+
+RestServer::Response RestHelpers::handleGetSelectedComponents(MainController* mc, RestServer::AsyncRequest::Ptr req)
+{
+	// Get moduleId (default to "Interface")
+	auto moduleId = req->getRequest()[RestApiIds::moduleId];
+	if (moduleId.isEmpty())
+		moduleId = "Interface";
+	
+	auto jp = dynamic_cast<JavascriptProcessor*>(
+		ProcessorHelpers::getFirstProcessorWithName(mc->getMainSynthChain(), moduleId));
+	
+	if (jp == nullptr)
+		return req->fail(404, "module not found: " + moduleId);
+	
+	// Get the selection from the broadcaster
+	auto broadcaster = mc->getScriptComponentEditBroadcaster();
+	auto selection = broadcaster->getSelection();
+	
+	// Build response
+	DynamicObject::Ptr result = new DynamicObject();
+	result->setProperty(RestApiIds::success, true);
+	result->setProperty(RestApiIds::moduleId, moduleId);
+	result->setProperty(RestApiIds::selectionCount, selection.size());
+	
+	Array<var> components;
+	
+	for (auto sc : selection)
+	{
+		if (sc == nullptr)
+			continue;
+		
+		DynamicObject::Ptr comp = new DynamicObject();
+		comp->setProperty(RestApiIds::id, sc->getName().toString());
+		comp->setProperty(RestApiIds::type, sc->getObjectName().toString());
+		
+		// Include all properties (same format as get_component_properties)
+		Array<var> properties;
+		
+		for (int i = 0; i < sc->getNumIds(); i++)
+		{
+			DynamicObject::Ptr po = new DynamicObject();
+			
+			auto propId = sc->getIdFor(i);
+			auto v = sc->getScriptObjectProperty(i);
+			auto nonDefault = sc->getNonDefaultScriptObjectProperties();
+			
+			if (propId.toString().toLowerCase().contains("colour"))
+				v = "0x" + ApiHelpers::getColourFromVar(v).toDisplayString(true);
+			
+			auto opts = sc->getOptionsFor(propId);
+			
+			po->setProperty(RestApiIds::id, propId.toString());
+			po->setProperty(RestApiIds::value, v);
+			po->setProperty(RestApiIds::isDefault, !nonDefault.hasProperty(propId));
+			
+			if (!opts.isEmpty())
+			{
+				Array<var> ol;
+				for (auto o : opts)
+					ol.add(var(o));
+				po->setProperty(RestApiIds::options, var(ol));
+			}
+			
+			properties.add(po.get());
+		}
+		
+		comp->setProperty(RestApiIds::properties, var(properties));
+		components.add(var(comp.get()));
+	}
+	
+	result->setProperty(RestApiIds::components, components);
 	result->setProperty(RestApiIds::logs, Array<var>());
 	result->setProperty(RestApiIds::errors, Array<var>());
 	

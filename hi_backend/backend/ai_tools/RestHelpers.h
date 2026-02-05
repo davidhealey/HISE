@@ -123,6 +123,7 @@ namespace RestApiIds
     DECLARE_ID(imageData);
     DECLARE_ID(outputPath);
     DECLARE_ID(filePath);
+    DECLARE_ID(selectionCount);
 }
 
 #undef DECLARE_ID
@@ -153,6 +154,7 @@ struct RestHelpers
         SetComponentValue,      ///< POST /api/set_component_value - Set component runtime value
         SetComponentProperties, ///< POST /api/set_component_properties - Set component properties
         Screenshot,             ///< GET  /api/screenshot - Capture UI screenshot
+        GetSelectedComponents,  ///< GET  /api/get_selected_components - Get selected UI components
         numRoutes
     };
     
@@ -394,6 +396,10 @@ struct RestHelpers
     /** Handler for GET /api/screenshot - Capture UI screenshot. */
     static RestServer::Response handleScreenshot(MainController* mc, 
                                                  RestServer::AsyncRequest::Ptr req);
+    
+    /** Handler for GET /api/get_selected_components - Get selected UI components. */
+    static RestServer::Response handleGetSelectedComponents(MainController* mc, 
+                                                            RestServer::AsyncRequest::Ptr req);
 };
 
 } // namespace hise

@@ -911,6 +911,87 @@ curl "http://localhost:1900/api/screenshot?moduleId=Interface&outputPath=C:/temp
 
 ---
 
+### GET /api/get_selected_components
+
+Get the currently selected UI components from HISE's Interface Designer. This enables AI-assisted workflows where the user selects components in the visual editor and asks the AI to perform operations on them.
+
+**Parameters**:
+| Parameter | Required | Default | Description |
+|-----------|----------|---------|-------------|
+| `moduleId` | No | `Interface` | The processor's module ID |
+
+**Example Request**:
+```bash
+curl "http://localhost:1900/api/get_selected_components?moduleId=Interface"
+```
+
+**Response (with components selected)**:
+```json
+{
+  "success": true,
+  "moduleId": "Interface",
+  "selectionCount": 4,
+  "components": [
+    {
+      "id": "Button1",
+      "type": "ScriptButton",
+      "properties": [
+        { "id": "text", "value": "Button1", "isDefault": true },
+        { "id": "x", "value": 162, "isDefault": true },
+        { "id": "y", "value": 113, "isDefault": true },
+        { "id": "width", "value": 128, "isDefault": true },
+        { "id": "height", "value": 28, "isDefault": true },
+        { "id": "visible", "value": true, "isDefault": true },
+        { "id": "enabled", "value": true, "isDefault": true },
+        { "id": "parentComponent", "value": "", "isDefault": true, "options": ["", "Panel1"] }
+      ]
+    },
+    {
+      "id": "Button2",
+      "type": "ScriptButton",
+      "properties": [...]
+    }
+  ],
+  "logs": [],
+  "errors": []
+}
+```
+
+**Response (no selection)**:
+```json
+{
+  "success": true,
+  "moduleId": "Interface",
+  "selectionCount": 0,
+  "components": [],
+  "logs": [],
+  "errors": []
+}
+```
+
+**Key Fields**:
+| Field | Description |
+|-------|-------------|
+| `selectionCount` | Number of currently selected components |
+| `components` | Array of selected components with full property details |
+| `components[].id` | Component ID |
+| `components[].type` | Component type (e.g., `ScriptButton`, `ScriptSlider`, `ScriptPanel`) |
+| `components[].properties` | All properties with values, default status, and options (same format as `get_component_properties`) |
+
+**Notes**:
+- Components are returned in **selection order** (the order the user clicked them)
+- All properties are included for each component, enabling complex operations without additional API calls
+- An empty selection returns `success: true` with an empty `components` array (not an error)
+- Selection is cleared when the script is recompiled
+
+**Use cases**:
+- Bulk layout operations: "Align these 8 buttons horizontally"
+- Batch property changes: "Make all selected buttons the same size"
+- Code generation: "Add control callbacks to all selected components"
+- Parent/child relationships: "Put all selected buttons inside this panel"
+
+---
+
 ## Component Lifecycle & Callbacks
 
 ### When Control Callbacks Fire
@@ -1115,6 +1196,93 @@ curl "http://localhost:1900/api/screenshot?moduleId=Interface&id=MyPanel&outputP
 - Use the `id` parameter to capture specific components instead of the full interface
 - Use `scale=0.5` for faster iteration when pixel-perfect accuracy isn't needed
 - The same output path can be reused - files are automatically overwritten
+
+---
+
+### Working with Interface Designer Selection
+
+Use `/api/get_selected_components` to enable AI-assisted workflows where the user selects components visually and the AI performs operations on them. This is particularly useful for layout tasks, batch property changes, and code generation.
+
+**Workflow:**
+
+```
+1. User selects components in HISE's Interface Designer (shift-click to multi-select)
+
+2. GET /api/get_selected_components
+   -> Get all selected components with their properties
+
+3. Analyze selection and perform requested operation:
+   - Layout: Calculate new positions, use set_component_properties
+   - Code: Generate callbacks, use set_script
+   - Hierarchy: Set parentComponent, use set_component_properties
+
+4. Optionally verify with GET /api/screenshot
+```
+
+**Example: Align selected buttons horizontally**
+
+User prompt: *"I've selected 4 buttons. Please align them horizontally with even spacing."*
+
+```bash
+# 1. Get the selected components
+curl -s "http://localhost:1900/api/get_selected_components?moduleId=Interface"
+```
+
+Response shows 4 buttons with positions:
+- Button1: x=162, y=113
+- Button2: x=170, y=170  
+- Button3: x=180, y=220
+- Button4: x=220, y=270
+
+```bash
+# 2. Calculate new positions (same y, evenly spaced x)
+# Starting at x=50, spacing of 150px
+
+# 3. Apply the new layout
+curl -X POST "http://localhost:1900/api/set_component_properties" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "moduleId": "Interface",
+    "changes": [
+      { "id": "Button1", "properties": { "x": 50, "y": 100 } },
+      { "id": "Button2", "properties": { "x": 200, "y": 100 } },
+      { "id": "Button3", "properties": { "x": 350, "y": 100 } },
+      { "id": "Button4", "properties": { "x": 500, "y": 100 } }
+    ]
+  }'
+```
+
+**Example: Create a panel and parent selected buttons to it**
+
+User prompt: *"Create a background panel and put all selected buttons inside it."*
+
+```bash
+# 1. Get selected components to know their bounds
+curl -s "http://localhost:1900/api/get_selected_components?moduleId=Interface"
+
+# 2. Get current script
+curl -s "http://localhost:1900/api/get_script?moduleId=Interface"
+
+# 3. Modify script to add a panel and set parent relationships
+curl -X POST "http://localhost:1900/api/set_script" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "moduleId": "Interface",
+    "script": "Content.makeFrontInterface(600, 600);\n\nconst var bgPanel = Content.addPanel(\"BackgroundPanel\", 0, 0);\nbgPanel.set(\"width\", 600);\nbgPanel.set(\"height\", 600);\nbgPanel.set(\"bgColour\", 0xFF333333);\n\nconst var Button1 = Content.addButton(\"Button1\", 50, 50);\nButton1.set(\"parentComponent\", \"BackgroundPanel\");\n\nconst var Button2 = Content.addButton(\"Button2\", 50, 100);\nButton2.set(\"parentComponent\", \"BackgroundPanel\");\n\nconst var Button3 = Content.addButton(\"Button3\", 50, 150);\nButton3.set(\"parentComponent\", \"BackgroundPanel\");\n\nconst var Button4 = Content.addButton(\"Button4\", 50, 200);\nButton4.set(\"parentComponent\", \"BackgroundPanel\");\n\nfunction onNoteOn() {}\nfunction onNoteOff() {}\nfunction onController() {}\nfunction onTimer() {}\n\nfunction onControl(number, value)\n{\n    if (number == Button1) Console.print(\"Button 1 clicked (index 0)\");\n    else if (number == Button2) Console.print(\"Button 2 clicked (index 1)\");\n    else if (number == Button3) Console.print(\"Button 3 clicked (index 2)\");\n    else if (number == Button4) Console.print(\"Button 4 clicked (index 3)\");\n}",
+    "compile": true
+  }'
+
+# 4. Verify the hierarchy
+curl -s "http://localhost:1900/api/list_components?moduleId=Interface&hierarchy=true"
+```
+
+**Tips:**
+
+- Selection order matters: Components are returned in the order they were selected, which can be useful for operations like "number these from left to right"
+- Use `set_component_properties` for layout changes (doesn't require recompilation)
+- Use `set_script` when adding callbacks or creating new components
+- The selection is cleared on recompile, so capture it before making script changes
+- Combine with `/api/screenshot` to verify visual results
 
 ---
 
