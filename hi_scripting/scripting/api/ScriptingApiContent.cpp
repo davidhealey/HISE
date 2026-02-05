@@ -55,8 +55,9 @@
 namespace hise { using namespace juce;
 
 
-ValueTreeUpdateWatcher::ScopedDelayer::ScopedDelayer(ValueTreeUpdateWatcher* watcher_) :
-	watcher(watcher_)
+ValueTreeUpdateWatcher::ScopedDelayer::ScopedDelayer(ValueTreeUpdateWatcher* watcher_, bool forceMessageThread_) :
+	watcher(watcher_),
+    forceMessageThread(forceMessageThread_)
 {
 	if (watcher != nullptr)
 		watcher->delayCalls = true;
@@ -69,7 +70,19 @@ ValueTreeUpdateWatcher::ScopedDelayer::~ScopedDelayer()
 		watcher->delayCalls = false;
 
 		if (watcher->shouldCallAfterDelay)
-			watcher->callListener();
+		{
+			if (forceMessageThread)
+			{
+				SafeAsyncCall::callAsyncIfNotOnMessageThread<ValueTreeUpdateWatcher>(*watcher, [](ValueTreeUpdateWatcher& w)
+				{
+					w.callListener();
+				});
+			}
+			else
+			{
+				watcher->callListener();
+			}
+		}
 	}
 }
 
