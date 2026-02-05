@@ -61,6 +61,10 @@ public:
         testSetScriptCompileError();
         testGetScript();
         testRecompile();
+        testGetComponentValue();
+        testSetComponentValue();
+        testSetComponentValueTriggersCallback();
+        testSetComponentValueCallbackRuntimeError();
         
         // Verify all endpoints were tested
         verifyAllEndpointsTested();
@@ -631,7 +635,7 @@ private:
     //==========================================================================
     void testRecompile()
     {
-        beginTest("GET /api/recompile");
+        beginTest("POST /api/recompile");
         
         ctx->reset();
         
@@ -639,8 +643,12 @@ private:
         ctx->compile("Content.makeFrontInterface(600, 400);\n"
                      "Console.print(\"Recompile test\");");
         
-        // Recompile without changes
-        auto response = ctx->httpGet("/api/recompile?moduleId=Interface");
+        // Recompile without changes - now POST with JSON body
+        DynamicObject::Ptr bodyObj = new DynamicObject();
+        bodyObj->setProperty("moduleId", "Interface");
+        
+        auto response = ctx->httpPost("/api/recompile", 
+                                      JSON::toString(var(bodyObj.get())));
         var json = ctx->parseJson(response);
         
         expect((bool)json["success"], "Recompile should succeed");
@@ -655,6 +663,204 @@ private:
                 foundOutput = true;
         }
         expect(foundOutput, "Recompile should execute onInit again");
+    }
+    
+    //==========================================================================
+    void testGetComponentValue()
+    {
+        beginTest("GET /api/get_component_value");
+        
+        ctx->reset();
+        
+        // Create a knob with specific range
+        ctx->compile("Content.makeFrontInterface(600, 400);\n"
+                     "const var TestKnob = Content.addKnob(\"TestKnob\", 10, 10);\n"
+                     "TestKnob.set(\"min\", -12);\n"
+                     "TestKnob.set(\"max\", 12);\n"
+                     "TestKnob.setValue(0.5);");
+        
+        auto response = ctx->httpGet("/api/get_component_value?moduleId=Interface&componentId=TestKnob");
+        var json = ctx->parseJson(response);
+        
+        expect((bool)json["success"], "Should succeed");
+        expect(json["moduleId"].toString() == "Interface", "Should return correct moduleId");
+        expect(json["componentId"].toString() == "TestKnob", "Should return correct componentId");
+        expect(json["type"].toString() == "ScriptSlider", "Should return correct type");
+        expect(json.hasProperty("value"), "Should have value property");
+        expect(json.hasProperty("min"), "Should have min property");
+        expect(json.hasProperty("max"), "Should have max property");
+        expect((double)json["min"] == -12.0, "min should be -12");
+        expect((double)json["max"] == 12.0, "max should be 12");
+    }
+    
+    //==========================================================================
+    void testSetComponentValue()
+    {
+        beginTest("POST /api/set_component_value");
+        
+        ctx->reset();
+        
+        // Create a knob with specific range
+        ctx->compile("Content.makeFrontInterface(600, 400);\n"
+                     "const var TestKnob = Content.addKnob(\"TestKnob\", 10, 10);\n"
+                     "TestKnob.set(\"min\", 0);\n"
+                     "TestKnob.set(\"max\", 10);");
+        
+        // Test 1: Set value without validation
+        {
+            DynamicObject::Ptr bodyObj = new DynamicObject();
+            bodyObj->setProperty("moduleId", "Interface");
+            bodyObj->setProperty("componentId", "TestKnob");
+            bodyObj->setProperty("value", 5.0);
+            
+            auto response = ctx->httpPost("/api/set_component_value",
+                                          JSON::toString(var(bodyObj.get())));
+            var json = ctx->parseJson(response);
+            
+            expect((bool)json["success"], "Should succeed");
+            expect(json["moduleId"].toString() == "Interface", "Should return correct moduleId");
+            expect(json["componentId"].toString() == "TestKnob", "Should return correct componentId");
+            expect(json["type"].toString() == "ScriptSlider", "Should return correct type");
+        }
+        
+        // Test 2: Set value with validation - valid value
+        {
+            DynamicObject::Ptr bodyObj = new DynamicObject();
+            bodyObj->setProperty("moduleId", "Interface");
+            bodyObj->setProperty("componentId", "TestKnob");
+            bodyObj->setProperty("value", 7.5);
+            bodyObj->setProperty("validateRange", true);
+            
+            auto response = ctx->httpPost("/api/set_component_value",
+                                          JSON::toString(var(bodyObj.get())));
+            var json = ctx->parseJson(response);
+            
+            expect((bool)json["success"], "Should succeed with valid value");
+        }
+        
+        // Test 3: Set value with validation - out of range (should fail)
+        {
+            DynamicObject::Ptr bodyObj = new DynamicObject();
+            bodyObj->setProperty("moduleId", "Interface");
+            bodyObj->setProperty("componentId", "TestKnob");
+            bodyObj->setProperty("value", 15.0);  // Out of range [0, 10]
+            bodyObj->setProperty("validateRange", true);
+            
+            auto response = ctx->httpPost("/api/set_component_value",
+                                          JSON::toString(var(bodyObj.get())));
+            var json = ctx->parseJson(response);
+            
+            expect(!(bool)json["success"], "Should fail with out-of-range value when validateRange is true");
+        }
+        
+        // Test 4: Out of range without validation (should succeed - no validation)
+        {
+            DynamicObject::Ptr bodyObj = new DynamicObject();
+            bodyObj->setProperty("moduleId", "Interface");
+            bodyObj->setProperty("componentId", "TestKnob");
+            bodyObj->setProperty("value", 15.0);  // Out of range but validateRange is false
+            bodyObj->setProperty("validateRange", false);
+            
+            auto response = ctx->httpPost("/api/set_component_value",
+                                          JSON::toString(var(bodyObj.get())));
+            var json = ctx->parseJson(response);
+            
+            expect((bool)json["success"], "Should succeed without validation even if out of range");
+        }
+    }
+    
+    //==========================================================================
+    void testSetComponentValueTriggersCallback()
+    {
+        beginTest("POST /api/set_component_value triggers control callback");
+        
+        ctx->reset();
+        
+        // Create a knob with a dedicated control callback using setControlCallback
+        ctx->compile("Content.makeFrontInterface(600, 400);\n"
+                     "const var TestKnob = Content.addKnob(\"TestKnob\", 10, 10);\n"
+                     "\n"
+                     "inline function onTestKnobChanged(component, value)\n"
+                     "{\n"
+                     "    Console.print(\"CALLBACK_TRIGGERED:\" + value);\n"
+                     "}\n"
+                     "\n"
+                     "TestKnob.setControlCallback(onTestKnobChanged);");
+        
+        // Set value via API
+        DynamicObject::Ptr bodyObj = new DynamicObject();
+        bodyObj->setProperty("moduleId", "Interface");
+        bodyObj->setProperty("componentId", "TestKnob");
+        bodyObj->setProperty("value", 0.75);
+        
+        auto response = ctx->httpPost("/api/set_component_value",
+                                      JSON::toString(var(bodyObj.get())));
+        var json = ctx->parseJson(response);
+        
+        expect((bool)json["success"], "Should succeed");
+        
+        // Verify callback was triggered with correct value
+        auto logs = json["logs"];
+        bool callbackTriggeredWithCorrectValue = false;
+        for (int i = 0; i < logs.size(); i++)
+        {
+            if (logs[i].toString().contains("CALLBACK_TRIGGERED:0.75"))
+                callbackTriggeredWithCorrectValue = true;
+        }
+        expect(callbackTriggeredWithCorrectValue, 
+               "Control callback should be triggered with value 0.75 when setting via API");
+    }
+    
+    //==========================================================================
+    void testSetComponentValueCallbackRuntimeError()
+    {
+        beginTest("POST /api/set_component_value reports callback runtime errors");
+        
+        ctx->reset();
+        
+        // Create a knob with a callback that will cause a runtime error
+        // Console.print(undefined) compiles fine but fails at runtime
+        auto compileResult = ctx->compile(
+            "Content.makeFrontInterface(600, 400);\n"
+            "const var TestKnob = Content.addKnob(\"TestKnob\", 10, 10);\n"
+            "TestKnob.set(\"saveInPreset\", false);\n"
+            "\n"
+            "inline function onTestKnobChanged(component, value)\n"
+            "{\n"
+            "    Console.print(undefined);\n"
+            "}\n"
+            "\n"
+            "TestKnob.setControlCallback(onTestKnobChanged);");
+        
+        // Compilation should succeed (runtime error hasn't happened yet)
+        expect((bool)compileResult["success"], "Compilation should succeed");
+        auto compileErrors = compileResult["errors"];
+        expect(compileErrors.size() == 0, "Should have no compile errors");
+        
+        // Now trigger the callback via set_component_value
+        DynamicObject::Ptr bodyObj = new DynamicObject();
+        bodyObj->setProperty("moduleId", "Interface");
+        bodyObj->setProperty("componentId", "TestKnob");
+        bodyObj->setProperty("value", 0.5);
+        
+        auto response = ctx->httpPost("/api/set_component_value",
+                                      JSON::toString(var(bodyObj.get())));
+        var json = ctx->parseJson(response);
+        
+        // The API call itself should still succeed (value was set)
+        // but the errors array should contain the runtime error from the callback
+        auto errors = json["errors"];
+        expect(errors.isArray(), "errors should be array");
+        expect(errors.size() >= 1, "Should have at least one runtime error from callback");
+        
+        if (errors.size() > 0)
+        {
+            auto firstError = errors[0];
+            expect(firstError.hasProperty("errorMessage"), "Error should have errorMessage");
+            // The error should mention something about undefined
+            expect(firstError["errorMessage"].toString().containsIgnoreCase("undefined"),
+                   "Error message should mention 'undefined'");
+        }
     }
 };
 

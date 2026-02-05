@@ -299,6 +299,12 @@ RestServer::Response BackendProcessor::onAsyncRequest(RestServer::AsyncRequest::
 		case RestHelpers::ApiRoute::GetComponentProperties:
 			return RestHelpers::handleGetComponentProperties(this, req);
 			
+		case RestHelpers::ApiRoute::GetComponentValue:
+			return RestHelpers::handleGetComponentValue(this, req);
+			
+		case RestHelpers::ApiRoute::SetComponentValue:
+			return RestHelpers::handleSetComponentValue(this, req, sch);
+			
 		default:
 			return req->fail(404, "Unknown API endpoint: " + subURL);
 	}

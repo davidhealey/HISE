@@ -1052,7 +1052,9 @@ void ScriptingApi::Content::ScriptComponent::changed()
 		return;
 	}
 
-	ScopedValueSetter<bool> svs(getScriptProcessor()->getMainController_()->getDeferNotifyHostFlag(), true);
+	auto mc = getScriptProcessor()->getMainController_();
+
+	ScopedValueSetter<bool> svs(mc->getDeferNotifyHostFlag(), true);
 	
 	controlSender.sendControlCallbackMessage();
 	sendValueListenerMessage();
@@ -1062,7 +1064,9 @@ void ScriptingApi::Content::ScriptComponent::changed()
 		// We need to throw an error again to stop the execution of the script
 		// (a recursive function call to this method will not be terminated because
 		// (the error is already consumed by the control callback handling).
-		if (!jp->getLastErrorMessage().wasOk())
+		// Note: In flaky threading mode, we don't throw an error as this exception might
+		// not be handled by the callstack...
+		if (!jp->getLastErrorMessage().wasOk() && !mc->isFlakyThreadingAllowed())
 			reportScriptError("Aborting script execution after error occured during changed() callback");
 	}
 }

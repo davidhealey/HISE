@@ -101,6 +101,11 @@ namespace RestApiIds
     DECLARE_ID(value);
     DECLARE_ID(isDefault);
     DECLARE_ID(options);
+    
+    // get/set_component_value
+    DECLARE_ID(min);
+    DECLARE_ID(max);
+    DECLARE_ID(validateRange);
 }
 
 #undef DECLARE_ID
@@ -124,9 +129,11 @@ struct RestHelpers
         Status,                 ///< GET  /api/status - Get project status
         GetScript,              ///< GET  /api/get_script - Read script content
         SetScript,              ///< POST /api/set_script - Update script content
-        Recompile,              ///< GET  /api/recompile - Recompile a processor
+        Recompile,              ///< POST /api/recompile - Recompile a processor
         ListComponents,         ///< GET  /api/list_components - List UI components
         GetComponentProperties, ///< GET  /api/get_component_properties - Get component properties
+        GetComponentValue,      ///< GET  /api/get_component_value - Get component runtime value
+        SetComponentValue,      ///< POST /api/set_component_value - Set component runtime value
         numRoutes
     };
     
@@ -351,6 +358,15 @@ struct RestHelpers
     /** Handler for GET /api/get_component_properties - Get component properties. */
     static RestServer::Response handleGetComponentProperties(MainController* mc, 
                                                              RestServer::AsyncRequest::Ptr req);
+    
+    /** Handler for GET /api/get_component_value - Get component runtime value. */
+    static RestServer::Response handleGetComponentValue(MainController* mc, 
+                                                        RestServer::AsyncRequest::Ptr req);
+    
+    /** Handler for POST /api/set_component_value - Set component runtime value. */
+    static RestServer::Response handleSetComponentValue(MainController* mc, 
+                                                        RestServer::AsyncRequest::Ptr req,
+                                                        ScopedConsoleHandler& sch);
 };
 
 } // namespace hise

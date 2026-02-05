@@ -282,10 +282,11 @@ const Array<RestHelpers::RouteMetadata>& RestHelpers::getRouteMetadata()
 		
 		// ApiRoute::Recompile
 		m.add(RouteMetadata(ApiRoute::Recompile, "api/recompile")
+			.withMethod(RestServer::POST)
 			.withCategory("scripting")
-			.withDescription("Recompile a processor without changing its script content")
+			.withDescription("Recompile a processor (restores preset values, triggering callbacks for saveInPreset components)")
 			.withReturns("Compilation result with success status, logs, and errors")
-			.withModuleIdParam());
+			.withBodyParam(RouteParameter(RestApiIds::moduleId, "The script processor's module ID")));
 		
 		// ApiRoute::ListComponents
 		m.add(RouteMetadata(ApiRoute::ListComponents, "api/list_components")
@@ -302,6 +303,25 @@ const Array<RestHelpers::RouteMetadata>& RestHelpers::getRouteMetadata()
 			.withReturns("Component type and array of properties with id, value, isDefault, and options")
 			.withModuleIdParam()
 			.withQueryParam(RouteParameter(RestApiIds::componentId, "The component's ID (e.g., Button1, Panel1)")));
+		
+		// ApiRoute::GetComponentValue
+		m.add(RouteMetadata(ApiRoute::GetComponentValue, "api/get_component_value")
+			.withCategory("ui")
+			.withDescription("Get the current runtime value of a UI component")
+			.withReturns("Component type, current value, and min/max range")
+			.withModuleIdParam()
+			.withQueryParam(RouteParameter(RestApiIds::componentId, "The component's ID (e.g., GainKnob, BypassButton)")));
+		
+		// ApiRoute::SetComponentValue
+		m.add(RouteMetadata(ApiRoute::SetComponentValue, "api/set_component_value")
+			.withMethod(RestServer::POST)
+			.withCategory("ui")
+			.withDescription("Set the runtime value of a UI component (triggers control callback)")
+			.withReturns("Success status")
+			.withBodyParam(RouteParameter(RestApiIds::moduleId, "The script processor's module ID"))
+			.withBodyParam(RouteParameter(RestApiIds::componentId, "The component's ID"))
+			.withBodyParam(RouteParameter(RestApiIds::value, "The value to set"))
+			.withBodyParam(RouteParameter(RestApiIds::validateRange, "If true, validates value is within component's min/max range").withDefault("false")));
 		
 		// Verify count matches enum
 		jassert(m.size() == (int)ApiRoute::numRoutes);
@@ -710,6 +730,104 @@ RestServer::Response RestHelpers::handleGetComponentProperties(MainController* m
 	{
 		return req->fail(404, "moduleId is not a valid script processor");
 	}
+}
+
+RestServer::Response RestHelpers::handleGetComponentValue(MainController* mc, RestServer::AsyncRequest::Ptr req)
+{
+	if (auto jp = getScriptProcessor(mc, req))
+	{
+		auto componentId = req->getRequest()[RestApiIds::componentId];
+		auto c = dynamic_cast<ProcessorWithScriptingContent*>(jp)->getScriptingContent();
+
+		if (componentId.isEmpty())
+			return req->fail(400, "componentId parameter is required");
+
+		if (auto sc = c->getComponentWithName(Identifier(componentId)))
+		{
+			DynamicObject::Ptr result = new DynamicObject();
+			result->setProperty(RestApiIds::success, true);
+			result->setProperty(RestApiIds::moduleId, dynamic_cast<Processor*>(jp)->getId());
+			result->setProperty(RestApiIds::componentId, componentId);
+			result->setProperty(RestApiIds::type, sc->getObjectName().toString());
+			
+			result->setProperty(RestApiIds::value, sc->getValue());
+			
+			// Include min/max range
+			result->setProperty(RestApiIds::min, sc->getScriptObjectProperty(ScriptComponent::min));
+			result->setProperty(RestApiIds::max, sc->getScriptObjectProperty(ScriptComponent::max));
+			
+			result->setProperty(RestApiIds::logs, Array<var>());
+			result->setProperty(RestApiIds::errors, Array<var>());
+
+			req->complete(RestServer::Response::ok(var(result.get())));
+			return req->waitForResponse();
+		}
+		else
+			return req->fail(404, "component not found: " + componentId);
+	}
+	else
+	{
+		return req->fail(404, "moduleId is not a valid script processor");
+	}
+}
+
+RestServer::Response RestHelpers::handleSetComponentValue(MainController* mc, RestServer::AsyncRequest::Ptr req, ScopedConsoleHandler& sch)
+{
+	ignoreUnused(sch);
+	
+	auto obj = req->getRequest().getJsonBody();
+	
+	auto moduleId = obj[RestApiIds::moduleId].toString();
+	if (moduleId.isEmpty())
+		return req->fail(400, "moduleId is required in request body");
+	
+	auto jp = dynamic_cast<JavascriptProcessor*>(
+		ProcessorHelpers::getFirstProcessorWithName(mc->getMainSynthChain(), moduleId));
+	
+	if (jp == nullptr)
+		return req->fail(404, "module not found: " + moduleId);
+	
+	auto componentId = obj[RestApiIds::componentId].toString();
+	if (componentId.isEmpty())
+		return req->fail(400, "componentId is required in request body");
+	
+	if (!obj.hasProperty(RestApiIds::value))
+		return req->fail(400, "value is required in request body");
+	
+	auto c = dynamic_cast<ProcessorWithScriptingContent*>(jp)->getScriptingContent();
+	
+	if (auto sc = c->getComponentWithName(Identifier(componentId)))
+	{
+		auto newValue = obj[RestApiIds::value];
+		auto validateRange = obj.getProperty(RestApiIds::validateRange, false);
+		
+		if ((bool)validateRange)
+		{
+			double minVal = (double)sc->getScriptObjectProperty(ScriptComponent::min);
+			double maxVal = (double)sc->getScriptObjectProperty(ScriptComponent::max);
+			double val = (double)newValue;
+			
+			if (val < minVal || val > maxVal)
+				return req->fail(400, "Value " + String(val) + " is out of range [" + 
+								 String(minVal) + ", " + String(maxVal) + "] for component " + componentId);
+		}
+		
+		sc->setValue(newValue);
+		sc->changed();
+
+		DynamicObject::Ptr result = new DynamicObject();
+		result->setProperty(RestApiIds::success, true);
+		result->setProperty(RestApiIds::moduleId, moduleId);
+		result->setProperty(RestApiIds::componentId, componentId);
+		result->setProperty(RestApiIds::type, sc->getObjectName().toString());
+		result->setProperty(RestApiIds::logs, Array<var>());
+		result->setProperty(RestApiIds::errors, Array<var>());
+
+		req->complete(RestServer::Response::ok(var(result.get())));
+		return req->waitForResponse();
+	}
+	else
+		return req->fail(404, "component not found: " + componentId);
 }
 
 } // namespace hise

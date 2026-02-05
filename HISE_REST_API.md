@@ -314,18 +314,20 @@ curl -X POST "http://localhost:1900/api/set_script" \
 
 ---
 
-### GET /api/recompile
+### POST /api/recompile
 
 Recompile a processor without changing its script content.
 
-**Parameters**:
-| Parameter | Required | Description |
-|-----------|----------|-------------|
+**JSON Body**:
+| Field | Required | Description |
+|-------|----------|-------------|
 | `moduleId` | Yes | The processor's module ID |
 
 **Example Request**:
 ```bash
-curl "http://localhost:1900/api/recompile?moduleId=Interface"
+curl -X POST "http://localhost:1900/api/recompile" \
+  -H "Content-Type: application/json" \
+  -d '{"moduleId": "Interface"}'
 ```
 
 **Response**: Same format as `set_script` compile response.
@@ -488,6 +490,176 @@ curl "http://localhost:1900/api/get_component_properties?moduleId=Interface&comp
 - Query component dimensions for layout calculations
 - Verify property values after setting them
 - Find available options for enum properties
+
+---
+
+### GET /api/get_component_value
+
+Get the current runtime value of a UI component.
+
+**Parameters**:
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `moduleId` | Yes | The processor's module ID |
+| `componentId` | Yes | The component's ID (e.g., `"GainKnob"`, `"BypassButton"`) |
+
+**Example Request**:
+```bash
+curl "http://localhost:1900/api/get_component_value?moduleId=Interface&componentId=GainKnob"
+```
+
+**Response**:
+```json
+{
+  "success": true,
+  "moduleId": "Interface",
+  "componentId": "GainKnob",
+  "type": "ScriptSlider",
+  "value": -3.5,
+  "min": -12.0,
+  "max": 12.0,
+  "logs": [],
+  "errors": []
+}
+```
+
+**Key Fields**:
+| Field | Description |
+|-------|-------------|
+| `value` | The current runtime value of the component |
+| `min` | The minimum value for the component's range |
+| `max` | The maximum value for the component's range |
+
+**Use cases**:
+- Verify component state during testing
+- Read current knob/slider position
+- Check button toggle state
+- Get range information for validation
+
+---
+
+### POST /api/set_component_value
+
+Set the runtime value of a UI component programmatically.
+
+**JSON Body**:
+| Field | Required | Default | Description |
+|-------|----------|---------|-------------|
+| `moduleId` | Yes | - | The processor's module ID |
+| `componentId` | Yes | - | The component's ID |
+| `value` | Yes | - | The value to set |
+| `validateRange` | No | `false` | If `true`, validates value is within component's min/max range |
+
+**Example Request**:
+```bash
+curl -X POST "http://localhost:1900/api/set_component_value" \
+  -H "Content-Type: application/json" \
+  -d '{"moduleId": "Interface", "componentId": "GainKnob", "value": 6.0}'
+```
+
+**Example with validation**:
+```bash
+curl -X POST "http://localhost:1900/api/set_component_value" \
+  -H "Content-Type: application/json" \
+  -d '{"moduleId": "Interface", "componentId": "GainKnob", "value": 6.0, "validateRange": true}'
+```
+
+**Response (success)**:
+```json
+{
+  "success": true,
+  "moduleId": "Interface",
+  "componentId": "GainKnob",
+  "type": "ScriptSlider",
+  "logs": [],
+  "errors": []
+}
+```
+
+**Response (validation failure)**:
+```json
+{
+  "success": false,
+  "error": "Value 15.0 is out of range [-12.0, 12.0] for component GainKnob"
+}
+```
+
+**Use cases**:
+- Test UI state programmatically
+- Simulate user adjusting a control
+- Set initial values during automated testing
+- Validate values before setting with `validateRange: true`
+
+**Important: Callback Triggering**
+
+Setting a component's value via this endpoint triggers the component's control callback, just as if the user had interacted with the control. Any `Console.print()` output from the callback will appear in the `logs` array of the response.
+
+> **Note**: Callbacks also fire during compilation for `saveInPreset: true` components. See [Component Lifecycle & Callbacks](#component-lifecycle--callbacks) for details on when callbacks are triggered and how `saveInPreset` affects this behavior.
+
+**Best Practice: Using `setControlCallback`**
+
+Instead of relying on the global `onControl(component, value)` callback, assign a dedicated inline function to each component using `setControlCallback`. This is cleaner and allows you to reuse the same callback for multiple related components:
+
+```javascript
+// Get a reference to the UI component
+const var MyButton = Content.getComponent("MyButton");
+
+// Create an inline function with two parameters
+// Important: must be inline because of realtime performance constraints!
+inline function onMyButtonChanged(component, value)
+{
+    Console.print("Button changed to: " + value);
+    
+    // You can verify which component triggered this
+    Console.assertWithMessage(component == MyButton, "points to the same object");
+    Console.assertWithMessage(value == MyButton.getValue(), "value == getValue()");
+}
+
+// Assign this function to be executed whenever the component value changes
+// Note: you can assign the same callback to multiple components and use
+// component properties to distinguish them (e.g., for page buttons)
+MyButton.setControlCallback(onMyButtonChanged);
+```
+
+---
+
+## Component Lifecycle & Callbacks
+
+### When Control Callbacks Fire
+
+Control callbacks (assigned via `setControlCallback` or the global `onControl`) are triggered when:
+
+1. **During compilation/recompilation** - For components with `saveInPreset: true` (the default), values are restored from the preset state, which triggers callbacks
+2. **When the user interacts** with the control in the UI
+3. **When calling `set_component_value`** via the REST API
+
+### The `saveInPreset` Property
+
+The `saveInPreset` property determines whether a component's value is saved/restored with user presets:
+
+| Value | Behavior |
+|-------|----------|
+| `true` (default) | Value is persisted in presets. Callback fires during compilation when the value is restored. |
+| `false` | Value is NOT persisted. Callback does NOT fire during compilation. |
+
+**Important**: Set `saveInPreset` based on your plugin's preset requirements, NOT to control callback timing. Components that should be part of user presets MUST have `saveInPreset: true`.
+
+Examples of components that typically have `saveInPreset: false`:
+- UI state indicators (e.g., current page, animation state)
+- Temporary display elements
+- Controls that derive their value from other sources
+
+### Implications for Runtime Errors
+
+If a callback contains a runtime error (e.g., accessing an undefined variable), the error will appear:
+
+| Scenario | When error appears |
+|----------|-------------------|
+| `saveInPreset: true` component | During `set_script`/`recompile` (when value is restored) |
+| `saveInPreset: false` component | During `set_component_value` (when explicitly triggered) |
+| Any component | During `set_component_value` (when explicitly triggered) |
+
+This means runtime errors in callbacks for `saveInPreset: true` components may appear in the compilation response, even though the script syntax itself is valid. The `success` field will reflect the compilation status, while the `errors` array will contain any runtime errors that occurred during callback execution.
 
 ---
 
