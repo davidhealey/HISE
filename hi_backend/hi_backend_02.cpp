@@ -34,5 +34,5 @@
 #include <juce_data_structures/juce_data_structures.h>
 #include <juce_events/juce_events.h>
 
-#include "backend/RestServer.h"
-#include "backend/RestServer.cpp"
+#include "backend/ai_tools/RestServer.h"
+#include "backend/ai_tools/RestServer.cpp"

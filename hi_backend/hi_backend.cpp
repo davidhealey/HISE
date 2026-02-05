@@ -67,6 +67,13 @@
 
 #include "backend/PostDebugComponents.cpp"
 
+#include "backend/ai_tools/RestHelpers.h"
+#include "backend/ai_tools/RestHelpers.cpp"
+
+#if HI_RUN_UNIT_TESTS
+#include "backend/ai_tools/ServerUnitTests.cpp"
+#endif
+
 #include "backend/BackendProcessor.cpp"
 #include "backend/BackendComponents.cpp"
 #include "backend/BackendToolbar.cpp"

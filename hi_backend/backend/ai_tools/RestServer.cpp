@@ -453,9 +453,10 @@ void RestServer::addRoute(Method method, const URL& routeUrl, RouteHandler handl
 
 void RestServer::addAsyncRoute(Method method, const URL& routeUrl, AsyncRouteHandler handler)
 {
-    addRoute(method, routeUrl, [handler](const Request& req) -> Response
+    addRoute(method, routeUrl, [this, handler](const Request& req) -> Response
     {
         AsyncRequest::Ptr asyncReq = new AsyncRequest(req);
+        asyncReq->setTestMode(isTestMode());
         return handler(asyncReq);
     });
 }

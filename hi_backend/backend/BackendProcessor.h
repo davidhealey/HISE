@@ -515,7 +515,7 @@ public:
 #endif
 	}
 
-	JavascriptProcessor* createInterface(int width, int height);;
+	JavascriptProcessor* createInterface(int width, int height, bool compile=true);;
 
 	void setEditorData(var editorState);
 
@@ -523,6 +523,8 @@ public:
 	{
 		return &scriptUnlocker;
 	}
+
+	RestServer& getRestServer() { return restServer; }
 
 	LambdaBroadcaster<bool> pluginParameterRefreshBroadcaster;
 

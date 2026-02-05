@@ -80,6 +80,10 @@ class RestServer
 {
 public:
     //==============================================================================
+    /** Port used for unit testing. When running on this port, async requests execute synchronously. */
+    static constexpr int TestPort = 1901;
+    
+    //==============================================================================
     enum Method { GET, POST, PUT, DELETE };
 
     //==============================================================================
@@ -245,6 +249,12 @@ public:
             return response;
         }
 
+        /** Returns true if running in test mode (synchronous execution). */
+        bool isTestMode() const { return testMode; }
+
+        /** Sets test mode for synchronous execution. Called internally by addAsyncRoute. */
+        void setTestMode(bool shouldBeSync) { testMode = shouldBeSync; }
+
     private:
         /** Merges collected logs and errors into the response body as JSON. */
         void mergeLogsIntoResponse();
@@ -252,6 +262,7 @@ public:
         Request request;
         std::atomic<bool> completed{false};
         Response response;
+        bool testMode = false;
 
         CriticalSection logLock;
         StringArray logs;
@@ -365,6 +376,9 @@ public:
 
     /** Returns the port the server is listening on, or 0 if not running. */
     int getPort() const;
+
+    /** Returns true if server is running on the test port (synchronous async execution). */
+    bool isTestMode() const { return getPort() == TestPort; }
 
     //==============================================================================
     void addListener(Listener* listener);
