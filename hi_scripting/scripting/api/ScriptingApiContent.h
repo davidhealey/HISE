@@ -476,6 +476,11 @@ public:
 
 		virtual bool isShowing(bool checkParentComponentVisibility = true) const;
 
+		/** Returns true if the control callback is pending execution. 
+		    Used by REST API to wait for callbacks to complete before returning.
+		*/
+		bool isControlCallbackPending() const { return controlSender.isChangePending(); }
+
 		template <class ChildType> class ChildIterator
 		{
 		public:
@@ -858,6 +863,9 @@ public:
 			void sendControlCallbackMessage();
 
 			void cancelMessage();
+
+			/** Returns true if a callback is pending (posted but not yet executed). */
+			bool isChangePending() const { return changePending; }
 
 		private:
 

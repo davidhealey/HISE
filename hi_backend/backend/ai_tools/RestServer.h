@@ -266,7 +266,23 @@ public:
         /** Sets test mode for synchronous execution. Called internally by addAsyncRoute. */
         void setTestMode(bool shouldBeSync) { testMode = shouldBeSync; }
 
+        /** Opaque interface for console capture (implemented by HISE-specific code).
+            Allows the RestServer to hold a console handler without knowing HISE internals.
+        */
+        struct IConsoleCapture {
+            virtual ~IConsoleCapture() = default;
+        };
+        using ConsoleCapturePtr = std::unique_ptr<IConsoleCapture>;
+        
+        /** Attach a console capture handler to this request.
+            The handler lives until the request is destroyed.
+        */
+        void setConsoleCapture(ConsoleCapturePtr capture) { 
+            consoleCapture = std::move(capture); 
+        }
+
     private:
+        ConsoleCapturePtr consoleCapture;
         /** Merges collected logs and errors into the response body as JSON. */
         void mergeLogsIntoResponse();
 

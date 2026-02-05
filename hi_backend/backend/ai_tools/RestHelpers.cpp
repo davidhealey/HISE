@@ -37,7 +37,7 @@ namespace hise { using namespace juce;
 
 RestHelpers::ScopedConsoleHandler::ScopedConsoleHandler(MainController* mc, RestServer::AsyncRequest::Ptr request_) :
 	ControlledObject(mc),
-	request(request_)
+	request(*request_)
 {
 	debugToConsole(getMainController()->getMainSynthChain(), "> create console pipe");
 	getMainController()->getConsoleHandler().setCustomCodeHandler(BIND_MEMBER_FUNCTION_3(ScopedConsoleHandler::onMessage));
@@ -52,7 +52,7 @@ RestHelpers::ScopedConsoleHandler::~ScopedConsoleHandler()
 void RestHelpers::ScopedConsoleHandler::onMessage(const String& message, int warning, const Processor* p)
 {
 	if (warning == 0)
-		request->appendLog(message);
+		request.appendLog(message);
 	else
 	{
 		auto lines = StringArray::fromLines(message);
@@ -72,7 +72,7 @@ void RestHelpers::ScopedConsoleHandler::onMessage(const String& message, int war
 				callstack.add(parsed.toCallstackString());
 		}
 
-		request->appendError(error.message, callstack);
+		request.appendError(error.message, callstack);
 	}
 }
 
@@ -178,13 +178,25 @@ JavascriptProcessor* RestHelpers::getScriptProcessor(MainController* mc, RestSer
 	return dynamic_cast<JavascriptProcessor*>(ProcessorHelpers::getFirstProcessorWithName(mc->getMainSynthChain(), moduleId));
 }
 
-RestServer::Response RestHelpers::compile(MainController* mc, ScopedConsoleHandler& sch, RestServer::AsyncRequest::Ptr req)
+void RestHelpers::waitForPendingCallbacks(ScriptComponent* sc, int timeoutMs)
+{
+	const int intervalMs = 5;
+	int waited = 0;
+	
+	while (sc->isControlCallbackPending() && waited < timeoutMs)
+	{
+		Thread::sleep(intervalMs);
+		waited += intervalMs;
+	}
+}
+
+RestServer::Response RestHelpers::handleRecompile(MainController* mc, RestServer::AsyncRequest::Ptr req)
 {
 	if (auto jp = getScriptProcessor(mc, req))
 	{
-		mc->getKillStateHandler().killVoicesAndCall(dynamic_cast<Processor*>(jp), [req, &sch](Processor* p)
+		mc->getKillStateHandler().killVoicesAndCall(dynamic_cast<Processor*>(jp), [req](Processor* p)
 		{
-			JavascriptProcessor::ResultFunction rf = [req, &sch](const JavascriptProcessor::SnippetResult& result)
+			JavascriptProcessor::ResultFunction rf = [req](const JavascriptProcessor::SnippetResult& result)
 			{
 				DynamicObject::Ptr r = new DynamicObject();
 				r->setProperty(RestApiIds::success, result.r.wasOk());
@@ -515,10 +527,8 @@ RestServer::Response RestHelpers::handleStatus(MainController* mc, RestServer::A
 	return req->waitForResponse();
 }
 
-RestServer::Response RestHelpers::handleGetScript(MainController* mc, RestServer::AsyncRequest::Ptr req, ScopedConsoleHandler& sch)
+RestServer::Response RestHelpers::handleGetScript(MainController* mc, RestServer::AsyncRequest::Ptr req)
 {
-	ignoreUnused(sch);
-	
 	if (auto jp = getScriptProcessor(mc, req))
 	{
 		auto callbackParam = req->getRequest()[RestApiIds::callback];
@@ -566,7 +576,7 @@ RestServer::Response RestHelpers::handleGetScript(MainController* mc, RestServer
 	return req->fail(404, "moduleId is not a valid script processor");
 }
 
-RestServer::Response RestHelpers::handleSetScript(MainController* mc, RestServer::AsyncRequest::Ptr req, ScopedConsoleHandler& sch)
+RestServer::Response RestHelpers::handleSetScript(MainController* mc, RestServer::AsyncRequest::Ptr req)
 {
 	auto obj = req->getRequest().getJsonBody();
 	
@@ -608,7 +618,7 @@ RestServer::Response RestHelpers::handleSetScript(MainController* mc, RestServer
 		shouldCompile = (bool)obj[RestApiIds::compile];
 
 	if (shouldCompile)
-		return compile(mc, sch, req);
+		return handleRecompile(mc, req);
 
 	req->complete(RestServer::Response::ok("updated script"));
 	return req->waitForResponse();
@@ -771,10 +781,8 @@ RestServer::Response RestHelpers::handleGetComponentValue(MainController* mc, Re
 	}
 }
 
-RestServer::Response RestHelpers::handleSetComponentValue(MainController* mc, RestServer::AsyncRequest::Ptr req, ScopedConsoleHandler& sch)
+RestServer::Response RestHelpers::handleSetComponentValue(MainController* mc, RestServer::AsyncRequest::Ptr req)
 {
-	ignoreUnused(sch);
-	
 	auto obj = req->getRequest().getJsonBody();
 	
 	auto moduleId = obj[RestApiIds::moduleId].toString();
@@ -814,14 +822,15 @@ RestServer::Response RestHelpers::handleSetComponentValue(MainController* mc, Re
 		
 		sc->setValue(newValue);
 		sc->changed();
+		
+		// Wait for callback to complete (pumps message loop)
+		waitForPendingCallbacks(sc);
 
 		DynamicObject::Ptr result = new DynamicObject();
 		result->setProperty(RestApiIds::success, true);
 		result->setProperty(RestApiIds::moduleId, moduleId);
 		result->setProperty(RestApiIds::componentId, componentId);
 		result->setProperty(RestApiIds::type, sc->getObjectName().toString());
-		result->setProperty(RestApiIds::logs, Array<var>());
-		result->setProperty(RestApiIds::errors, Array<var>());
 
 		req->complete(RestServer::Response::ok(var(result.get())));
 		return req->waitForResponse();

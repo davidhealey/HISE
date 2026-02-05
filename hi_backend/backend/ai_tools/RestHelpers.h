@@ -242,8 +242,12 @@ struct RestHelpers
         While this object exists, any Console.print() calls or error messages
         will be captured and added to the AsyncRequest's logs/errors arrays,
         which are then merged into the JSON response.
+        
+        Inherits from IConsoleCapture so it can be attached to AsyncRequest
+        with proper lifetime management (destroyed when request completes).
     */
-    struct ScopedConsoleHandler : public ControlledObject
+    struct ScopedConsoleHandler : public ControlledObject,
+                                  public RestServer::AsyncRequest::IConsoleCapture
     {
         ScopedConsoleHandler(MainController* mc, RestServer::AsyncRequest::Ptr request_);
         ~ScopedConsoleHandler();
@@ -278,7 +282,9 @@ struct RestHelpers
                                       const File& scriptRoot,
                                       const String& moduleId);
         
-        RestServer::AsyncRequest::Ptr request;
+        // Reference - safe because AsyncRequest owns this ScopedConsoleHandler,
+        // so AsyncRequest always outlives this object
+        RestServer::AsyncRequest& request;
     };
     
     /** Gets a JavascriptProcessor from the request's moduleId parameter.
@@ -290,19 +296,12 @@ struct RestHelpers
     static JavascriptProcessor* getScriptProcessor(MainController* mc, 
                                                    RestServer::AsyncRequest::Ptr req);
     
-    /** Compiles a script processor and returns the response.
+    /** Waits for any pending control callbacks to complete by pumping the message loop.
         
-        This triggers an asynchronous compilation and waits for the result.
-        The ScopedConsoleHandler captures any console output and errors.
-        
-        @param mc   The MainController
-        @param sch  The scoped console handler for capturing output
-        @param req  The async request
-        @returns    Response with compilation result, logs, and errors
+        @param sc        The component to wait for
+        @param timeoutMs Maximum time to wait (default 200ms)
     */
-    static RestServer::Response compile(MainController* mc, 
-                                        ScopedConsoleHandler& sch, 
-                                        RestServer::AsyncRequest::Ptr req);
+    static void waitForPendingCallbacks(ScriptComponent* sc, int timeoutMs = 200);
     
     /** Builds a hierarchical property tree for a UI component.
         
@@ -343,13 +342,15 @@ struct RestHelpers
     
     /** Handler for GET /api/get_script - Read script content. */
     static RestServer::Response handleGetScript(MainController* mc, 
-                                                RestServer::AsyncRequest::Ptr req,
-                                                ScopedConsoleHandler& sch);
+                                                RestServer::AsyncRequest::Ptr req);
     
     /** Handler for POST /api/set_script - Update script content. */
     static RestServer::Response handleSetScript(MainController* mc, 
-                                                RestServer::AsyncRequest::Ptr req,
-                                                ScopedConsoleHandler& sch);
+                                                RestServer::AsyncRequest::Ptr req);
+    
+    /** Handler for POST /api/recompile - Recompile a script processor. */
+    static RestServer::Response handleRecompile(MainController* mc, 
+                                                RestServer::AsyncRequest::Ptr req);
     
     /** Handler for GET /api/list_components - List UI components. */
     static RestServer::Response handleListComponents(MainController* mc, 
@@ -365,8 +366,7 @@ struct RestHelpers
     
     /** Handler for POST /api/set_component_value - Set component runtime value. */
     static RestServer::Response handleSetComponentValue(MainController* mc, 
-                                                        RestServer::AsyncRequest::Ptr req,
-                                                        ScopedConsoleHandler& sch);
+                                                        RestServer::AsyncRequest::Ptr req);
 };
 
 } // namespace hise
