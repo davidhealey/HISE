@@ -309,6 +309,9 @@ RestServer::Response BackendProcessor::onAsyncRequest(RestServer::AsyncRequest::
 		case RestHelpers::ApiRoute::SetComponentProperties:
 			return RestHelpers::handleSetComponentProperties(this, req);
 			
+		case RestHelpers::ApiRoute::Screenshot:
+			return RestHelpers::handleScreenshot(this, req);
+			
 		default:
 			return req->fail(404, "Unknown API endpoint: " + subURL);
 	}

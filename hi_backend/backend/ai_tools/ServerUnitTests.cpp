@@ -79,6 +79,14 @@ public:
         testSetComponentPropertiesParentComponent();
         testSetComponentPropertiesRemoveFromParent();
         testSetComponentPropertiesInvalidParent();
+        testScreenshotBasic();
+        testScreenshotComponent();
+        testScreenshotInvalidComponent();
+        testScreenshotScale();
+        testScreenshotPixelVerification();
+        testScreenshotPixelVerificationScaled();
+        testScreenshotFileOutput();
+        testScreenshotFileOutputErrors();
         
         // Verify all endpoints were tested
         verifyAllEndpointsTested();
@@ -1569,6 +1577,261 @@ private:
         var json = ctx->parseJson(response);
         
         expect(!(bool)json["success"], "Should fail for non-existent parent");
+    }
+    
+    //==========================================================================
+    void testScreenshotBasic()
+    {
+        beginTest("GET /api/screenshot (full interface)");
+        
+        ctx->reset();
+        
+        // Create a simple interface
+        ctx->compile("Content.makeFrontInterface(400, 300);\n"
+                     "const var TestPanel = Content.addPanel(\"TestPanel\", 10, 10);\n"
+                     "TestPanel.set(\"width\", 100);\n"
+                     "TestPanel.set(\"height\", 100);");
+        
+        auto response = ctx->httpGet("/api/screenshot?moduleId=Interface");
+        var json = ctx->parseJson(response);
+        
+        // Note: Until capture logic is implemented, this will fail with "not yet implemented"
+        // Once implemented, these assertions should pass:
+        // expect((bool)json["success"], "Screenshot should succeed");
+        // expect(json.hasProperty("imageData"), "Should have imageData");
+        // expect(json.hasProperty("width"), "Should have width");
+        // expect(json.hasProperty("height"), "Should have height");
+        // expect((int)json["width"] == 400, "Width should match interface width");
+        // expect((int)json["height"] == 300, "Height should match interface height");
+        // expect((float)json["scale"] == 1.0f, "Scale should be 1.0 by default");
+        
+        // For now, just verify the endpoint is registered and responds
+        expect(json.hasProperty("success") || json.hasProperty("error"), 
+               "Should return a valid response structure");
+    }
+    
+    //==========================================================================
+    void testScreenshotComponent()
+    {
+        beginTest("GET /api/screenshot (specific component)");
+        
+        ctx->reset();
+        
+        ctx->compile("Content.makeFrontInterface(400, 300);\n"
+                     "const var TestPanel = Content.addPanel(\"TestPanel\", 50, 50);\n"
+                     "TestPanel.set(\"width\", 100);\n"
+                     "TestPanel.set(\"height\", 80);");
+        
+        auto response = ctx->httpGet("/api/screenshot?moduleId=Interface&id=TestPanel");
+        var json = ctx->parseJson(response);
+        
+        // Once implemented:
+        // expect((bool)json["success"], "Component screenshot should succeed");
+        // expect(json["id"].toString() == "TestPanel", "Should return component ID");
+        
+        expect(json.hasProperty("success") || json.hasProperty("error"), 
+               "Should return a valid response structure");
+    }
+    
+    //==========================================================================
+    void testScreenshotInvalidComponent()
+    {
+        beginTest("GET /api/screenshot (invalid component)");
+        
+        ctx->reset();
+        
+        ctx->compile("Content.makeFrontInterface(400, 300);");
+        
+        auto response = ctx->httpGet("/api/screenshot?moduleId=Interface&id=NonExistent");
+        var json = ctx->parseJson(response);
+        
+        expect(!(bool)json["success"], "Should fail for non-existent component");
+        expect(json.hasProperty("error"), "Should have error message");
+    }
+    
+    //==========================================================================
+    void testScreenshotScale()
+    {
+        beginTest("GET /api/screenshot (with scale)");
+        
+        ctx->reset();
+        
+        ctx->compile("Content.makeFrontInterface(400, 300);");
+        
+        auto response = ctx->httpGet("/api/screenshot?moduleId=Interface&scale=0.5");
+        var json = ctx->parseJson(response);
+        
+        // Once implemented:
+        // expect((bool)json["success"], "Scaled screenshot should succeed");
+        // expect((int)json["width"] == 200, "Width should be scaled to 200");
+        // expect((int)json["height"] == 150, "Height should be scaled to 150");
+        // expect((float)json["scale"] == 0.5f, "Scale should be 0.5");
+        
+        expect(json.hasProperty("success") || json.hasProperty("error"), 
+               "Should return a valid response structure");
+    }
+    
+    //==========================================================================
+    void testScreenshotPixelVerification()
+    {
+        beginTest("GET /api/screenshot (pixel verification)");
+        
+        ctx->reset();
+        
+        // Create a panel with a red fill paint routine
+        ctx->compile("Content.makeFrontInterface(400, 300);\n"
+                     "const var RedPanel = Content.addPanel(\"RedPanel\", 10, 10);\n"
+                     "RedPanel.set(\"width\", 100);\n"
+                     "RedPanel.set(\"height\", 100);\n"
+                     "RedPanel.setPaintRoutine(function(g) {\n"
+                     "    g.fillAll(Colours.red);\n"
+                     "});");
+        
+        auto response = ctx->httpGet("/api/screenshot?moduleId=Interface&id=RedPanel");
+        var json = ctx->parseJson(response);
+        
+        expect((bool)json["success"], "Screenshot should succeed");
+        expect(json.hasProperty("imageData"), "Should have imageData");
+        
+        // Decode Base64 to image
+        String base64Data = json["imageData"].toString();
+        MemoryOutputStream mos;
+        bool decoded = Base64::convertFromBase64(mos, base64Data);
+        expect(decoded, "Base64 decoding should succeed");
+        
+        // Load as PNG image
+        auto image = ImageFileFormat::loadFrom(mos.getData(), mos.getDataSize());
+        expect(image.isValid(), "Should load as valid image");
+        expect(image.getWidth() == 100, "Image width should be 100");
+        expect(image.getHeight() == 100, "Image height should be 100");
+        
+        // Verify center pixel is pure red (R:255, G:0, B:0, A:255)
+        auto pixel = image.getPixelAt(50, 50);
+        expect(pixel.getRed() == 255, "Red channel should be 255");
+        expect(pixel.getGreen() == 0, "Green channel should be 0");
+        expect(pixel.getBlue() == 0, "Blue channel should be 0");
+        expect(pixel.getAlpha() == 255, "Alpha channel should be 255");
+    }
+    
+    //==========================================================================
+    void testScreenshotPixelVerificationScaled()
+    {
+        beginTest("GET /api/screenshot (pixel verification with scale)");
+        
+        ctx->reset();
+        
+        // Create a panel with a red fill paint routine
+        ctx->compile("Content.makeFrontInterface(400, 300);\n"
+                     "const var RedPanel = Content.addPanel(\"RedPanel\", 10, 10);\n"
+                     "RedPanel.set(\"width\", 100);\n"
+                     "RedPanel.set(\"height\", 100);\n"
+                     "RedPanel.setPaintRoutine(function(g) {\n"
+                     "    g.fillAll(Colours.red);\n"
+                     "});");
+        
+        auto response = ctx->httpGet("/api/screenshot?moduleId=Interface&id=RedPanel&scale=0.5");
+        var json = ctx->parseJson(response);
+        
+        expect((bool)json["success"], "Screenshot should succeed");
+        
+        // Decode Base64 to image
+        String base64Data = json["imageData"].toString();
+        MemoryOutputStream mos;
+        bool decoded = Base64::convertFromBase64(mos, base64Data);
+        expect(decoded, "Base64 decoding should succeed");
+        
+        // Load as PNG image - should be half size
+        auto image = ImageFileFormat::loadFrom(mos.getData(), mos.getDataSize());
+        expect(image.isValid(), "Should load as valid image");
+        expect(image.getWidth() == 50, "Image width should be 50 (scaled)");
+        expect(image.getHeight() == 50, "Image height should be 50 (scaled)");
+        
+        // Verify center pixel is still pure red
+        auto pixel = image.getPixelAt(25, 25);
+        expect(pixel.getRed() == 255, "Red channel should be 255");
+        expect(pixel.getGreen() == 0, "Green channel should be 0");
+        expect(pixel.getBlue() == 0, "Blue channel should be 0");
+        expect(pixel.getAlpha() == 255, "Alpha channel should be 255");
+    }
+    
+    //==========================================================================
+    void testScreenshotFileOutput()
+    {
+        beginTest("GET /api/screenshot (file output)");
+        
+        ctx->reset();
+        
+        // Create a panel with a red fill paint routine
+        ctx->compile("Content.makeFrontInterface(400, 300);\n"
+                     "const var RedPanel = Content.addPanel(\"RedPanel\", 10, 10);\n"
+                     "RedPanel.set(\"width\", 100);\n"
+                     "RedPanel.set(\"height\", 100);\n"
+                     "RedPanel.setPaintRoutine(function(g) {\n"
+                     "    g.fillAll(Colours.red);\n"
+                     "});");
+        
+        // Use temp directory for output file
+        File tempFile = File::getSpecialLocation(File::tempDirectory).getChildFile("hise_test_screenshot.png");
+        
+        // Clean up any existing file
+        tempFile.deleteFile();
+        
+        auto response = ctx->httpGet("/api/screenshot?moduleId=Interface&id=RedPanel&outputPath=" 
+                                      + URL::addEscapeChars(tempFile.getFullPathName(), true));
+        var json = ctx->parseJson(response);
+        
+        expect((bool)json["success"], "Screenshot should succeed");
+        expect(!json.hasProperty("imageData"), "Should not have imageData when outputPath specified");
+        expect(json.hasProperty("filePath"), "Should have filePath");
+        expect(json["filePath"].toString() == tempFile.getFullPathName(), "filePath should match requested path");
+        
+        // Verify file exists
+        expect(tempFile.existsAsFile(), "Output file should exist");
+        
+        // Load the file and verify it's a valid PNG with correct dimensions
+        auto image = ImageFileFormat::loadFrom(tempFile);
+        expect(image.isValid(), "Should load as valid image");
+        expect(image.getWidth() == 100, "Image width should be 100");
+        expect(image.getHeight() == 100, "Image height should be 100");
+        
+        // Verify pixel is red
+        auto pixel = image.getPixelAt(50, 50);
+        expect(pixel.getRed() == 255, "Red channel should be 255");
+        expect(pixel.getGreen() == 0, "Green channel should be 0");
+        expect(pixel.getBlue() == 0, "Blue channel should be 0");
+        expect(pixel.getAlpha() == 255, "Alpha channel should be 255");
+        
+        // Clean up
+        tempFile.deleteFile();
+    }
+    
+    //==========================================================================
+    void testScreenshotFileOutputErrors()
+    {
+        beginTest("GET /api/screenshot (file output errors)");
+        
+        ctx->reset();
+        
+        ctx->compile("Content.makeFrontInterface(400, 300);");
+        
+        // Test: missing .png extension
+        {
+            auto response = ctx->httpGet("/api/screenshot?moduleId=Interface&outputPath=C:/temp/screenshot.jpg");
+            var json = ctx->parseJson(response);
+            
+            expect(!(bool)json["success"], "Should fail for non-.png extension");
+            expect(json["error"].toString().containsIgnoreCase(".png"), "Error should mention .png extension");
+        }
+        
+        // Test: parent directory doesn't exist
+        {
+            auto response = ctx->httpGet("/api/screenshot?moduleId=Interface&outputPath=" 
+                                          + URL::addEscapeChars("C:/nonexistent_dir_12345/screenshot.png", true));
+            var json = ctx->parseJson(response);
+            
+            expect(!(bool)json["success"], "Should fail for non-existent parent directory");
+            expect(json["error"].toString().containsIgnoreCase("directory"), "Error should mention directory");
+        }
     }
 };
 

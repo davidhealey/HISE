@@ -361,6 +361,16 @@ const Array<RestHelpers::RouteMetadata>& RestHelpers::getRouteMetadata()
 			.withBodyParam(RouteParameter(RestApiIds::changes, "Array of {id, properties: {...}} objects"))
 			.withBodyParam(RouteParameter(RestApiIds::force, "If true, bypasses script-lock check and sets all properties").withDefault("false")));
 		
+		// ApiRoute::Screenshot
+		m.add(RouteMetadata(ApiRoute::Screenshot, "api/screenshot")
+			.withCategory("ui")
+			.withDescription("Capture screenshot of interface or specific component")
+			.withReturns("Base64-encoded PNG image data with dimensions, or file path if outputPath is specified")
+			.withQueryParam(RouteParameter(RestApiIds::moduleId, "Script processor ID").withDefault("Interface"))
+			.withQueryParam(RouteParameter(RestApiIds::id, "Component ID to capture (omit for full interface)").asOptional())
+			.withQueryParam(RouteParameter(RestApiIds::scale, "Scale factor (0.5 or 1.0)").withDefault("1.0"))
+			.withQueryParam(RouteParameter(RestApiIds::outputPath, "File path to save PNG (must end with .png). If provided, writes to file instead of returning Base64").asOptional()));
+		
 		// Verify count matches enum
 		jassert(m.size() == (int)ApiRoute::numRoutes);
 		
@@ -1014,8 +1024,6 @@ RestServer::Response RestHelpers::handleSetComponentProperties(MainController* m
 				newValue = (int64)colour.getARGB();
 			}
 			
-			DBG("Setting property " + propId.toString() + " to: '" + newValue.toString() + "' (type: " + String(newValue.isString() ? "string" : newValue.isVoid() ? "void" : "other") + ")");
-			
 			sc->setScriptObjectPropertyWithChangeMessage(propId, newValue, sendNotificationAsync);
 			appliedProps.add(propId.toString());
 		}
@@ -1026,23 +1034,178 @@ RestServer::Response RestHelpers::handleSetComponentProperties(MainController* m
 		appliedChanges.add(var(appliedEntry.get()));
 	}
 	
-#if 0
-	// Phase 3: Rebuild if parentComponent was changed (must run on message thread)
-	if (recompileRequired)
-	{
-		SafeAsyncCall::callAsyncIfNotOnMessageThread<ScriptingApi::Content>(*content, [](ScriptingApi::Content& c)
-		{
-			c.valueTreeNeedsUpdate();
-		});
-	}
-#endif
-	
 	// Build success response
 	DynamicObject::Ptr result = new DynamicObject();
 	result->setProperty(RestApiIds::success, true);
 	result->setProperty(RestApiIds::moduleId, moduleId);
 	result->setProperty(RestApiIds::applied, var(appliedChanges));
 	result->setProperty(RestApiIds::recompileRequired, recompileRequired);
+	result->setProperty(RestApiIds::logs, Array<var>());
+	result->setProperty(RestApiIds::errors, Array<var>());
+	
+	req->complete(RestServer::Response::ok(var(result.get())));
+	return req->waitForResponse();
+}
+
+RestServer::Response RestHelpers::handleScreenshot(MainController* mc, RestServer::AsyncRequest::Ptr req)
+{
+	// Parse parameters
+	auto moduleId = req->getRequest()[RestApiIds::moduleId];
+	if (moduleId.isEmpty())
+		moduleId = "Interface";
+	
+	auto componentId = req->getRequest()[RestApiIds::id];
+	
+	auto scaleStr = req->getRequest()[RestApiIds::scale];
+	float scale = scaleStr.isNotEmpty() ? scaleStr.getFloatValue() : 1.0f;
+	
+	// Validate scale (only 0.5 or 1.0 allowed)
+	if (scale != 0.5f && scale != 1.0f)
+		scale = 1.0f;
+	
+	// Parse optional outputPath for file output mode
+	auto outputPath = req->getRequest()[RestApiIds::outputPath];
+	
+	if (outputPath.isNotEmpty())
+	{
+		// Validate .png extension (case-insensitive)
+		if (!outputPath.endsWithIgnoreCase(".png"))
+			return req->fail(400, "outputPath must end with .png extension");
+		
+		// Validate parent directory exists
+		File outputFile(outputPath);
+		File parentDir = outputFile.getParentDirectory();
+		
+		if (!parentDir.isDirectory())
+			return req->fail(400, "Parent directory does not exist: " + parentDir.getFullPathName());
+	}
+	
+	// Find the script processor
+	auto jp = dynamic_cast<JavascriptProcessor*>(
+		ProcessorHelpers::getFirstProcessorWithName(mc->getMainSynthChain(), moduleId));
+	
+	if (jp == nullptr)
+		return req->fail(404, "module not found: " + moduleId);
+	
+	auto content = dynamic_cast<ProcessorWithScriptingContent*>(jp)->getScriptingContent();
+	
+	// If component ID specified, validate it exists
+	Rectangle<int> cropBounds;
+	Rectangle<int> fullBounds = { 0, 0, content->getContentWidth(), content->getContentHeight() };
+	bool cropToComponent = false;
+	
+	if (componentId.isNotEmpty())
+	{
+		auto sc = content->getComponentWithName(Identifier(componentId));
+
+		if (sc == nullptr)
+			return req->fail(404, "component not found: " + componentId);
+		
+		auto x = sc->getGlobalPositionX();
+		auto y = sc->getGlobalPositionY();
+
+		cropBounds = { x, y, (int)sc->getScriptObjectProperty("width"), sc->getScriptObjectProperty("height") };
+		cropToComponent = true;
+	}
+	else
+	{
+		cropBounds = fullBounds;
+	}
+	
+#if 0
+	 ============================================
+	 TODO: Christoph implements capture logic here
+	 ============================================
+	 
+	 Requirements:
+	 - Find the ScriptContentComponent (the actual UI component on screen)
+	 - Marshal to message thread for capture
+	 - Use Component::createComponentSnapshot(bounds, true, scale)
+	 - If componentId specified, crop to that component's bounds
+	 - 1 second timeout - return error if exceeded
+	 - Handle case where UI is mid-compilation gracefully
+	
+	 Suggested structure:
+#endif
+	
+	Image capturedImage;
+	bool captureSuccess = false;
+	WaitableEvent captureComplete;
+	
+	auto sp = dynamic_cast<ProcessorWithScriptingContent*>(jp);
+
+	SafeAsyncCall::callAsyncIfNotOnMessageThread<ProcessorWithScriptingContent>(*sp, [&](ProcessorWithScriptingContent& spp)
+	{
+		hise::ScriptContentComponent component(&spp);
+		component.setBounds(fullBounds);
+		capturedImage = component.createComponentSnapshot(cropBounds, true, scale);
+		captureSuccess = capturedImage.isValid();
+		captureComplete.signal();
+	});
+	
+	if (!captureComplete.wait(1000))
+	    return req->fail(500, "screenshot capture timed out");
+	
+	if (!captureSuccess)
+	    return req->fail(500, "failed to capture screenshot");
+	
+	// ============================================
+	// End of Christoph's section
+	// ============================================
+	
+	if (!captureSuccess)
+		return req->fail(500, "screenshot capture not yet implemented");
+	
+	if (!capturedImage.isValid())
+		return req->fail(500, "failed to capture screenshot");
+	
+	// Build response
+	DynamicObject::Ptr result = new DynamicObject();
+	result->setProperty(RestApiIds::success, true);
+	result->setProperty(RestApiIds::moduleId, moduleId);
+	
+	if (componentId.isNotEmpty())
+		result->setProperty(RestApiIds::id, componentId);
+	
+	result->setProperty(RestApiIds::width, capturedImage.getWidth());
+	result->setProperty(RestApiIds::height, capturedImage.getHeight());
+	result->setProperty(RestApiIds::scale, scale);
+	
+	if (outputPath.isNotEmpty())
+	{
+		// File output mode: write PNG to file
+		File outputFile(outputPath);
+		
+		// Delete existing file to ensure clean overwrite (FileOutputStream doesn't truncate)
+		if (outputFile.existsAsFile())
+			outputFile.deleteFile();
+		
+		FileOutputStream fos(outputFile);
+		
+		if (fos.failedToOpen())
+			return req->fail(500, "failed to open output file: " + outputPath);
+		
+		PNGImageFormat pngFormat;
+		if (!pngFormat.writeImageToStream(capturedImage, fos))
+			return req->fail(500, "failed to write PNG to file");
+		
+		result->setProperty(RestApiIds::filePath, outputFile.getFullPathName());
+	}
+	else
+	{
+		// Base64 output mode: encode to base64 PNG
+		MemoryBlock mb;
+		{
+			MemoryOutputStream mos(mb, false);
+			PNGImageFormat pngFormat;
+			if (!pngFormat.writeImageToStream(capturedImage, mos))
+				return req->fail(500, "failed to encode PNG");
+		}
+		
+		auto base64 = Base64::toBase64(mb.getData(), mb.getSize());
+		result->setProperty(RestApiIds::imageData, base64);
+	}
+	
 	result->setProperty(RestApiIds::logs, Array<var>());
 	result->setProperty(RestApiIds::errors, Array<var>());
 	

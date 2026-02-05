@@ -117,6 +117,12 @@ namespace RestApiIds
     DECLARE_ID(locked);
     DECLARE_ID(property);
     DECLARE_ID(recompileRequired);
+    
+    // screenshot
+    DECLARE_ID(scale);
+    DECLARE_ID(imageData);
+    DECLARE_ID(outputPath);
+    DECLARE_ID(filePath);
 }
 
 #undef DECLARE_ID
@@ -146,6 +152,7 @@ struct RestHelpers
         GetComponentValue,      ///< GET  /api/get_component_value - Get component runtime value
         SetComponentValue,      ///< POST /api/set_component_value - Set component runtime value
         SetComponentProperties, ///< POST /api/set_component_properties - Set component properties
+        Screenshot,             ///< GET  /api/screenshot - Capture UI screenshot
         numRoutes
     };
     
@@ -383,6 +390,10 @@ struct RestHelpers
     /** Handler for POST /api/set_component_properties - Set component properties. */
     static RestServer::Response handleSetComponentProperties(MainController* mc, 
                                                              RestServer::AsyncRequest::Ptr req);
+    
+    /** Handler for GET /api/screenshot - Capture UI screenshot. */
+    static RestServer::Response handleScreenshot(MainController* mc, 
+                                                 RestServer::AsyncRequest::Ptr req);
 };
 
 } // namespace hise

@@ -632,6 +632,96 @@ MyButton.setControlCallback(onMyButtonChanged);
 
 ---
 
+### GET /api/screenshot
+
+Capture a screenshot of the interface or a specific component.
+
+**Parameters**:
+| Parameter | Required | Default | Description |
+|-----------|----------|---------|-------------|
+| `moduleId` | No | `Interface` | The processor's module ID |
+| `id` | No | - | Component ID to capture (omit for full interface) |
+| `scale` | No | `1.0` | Scale factor (`0.5` or `1.0`) |
+| `outputPath` | No | - | File path to save PNG (must end with `.png`). If provided, writes to file instead of returning Base64 |
+
+**Example: Full interface screenshot**
+```bash
+curl "http://localhost:1900/api/screenshot?moduleId=Interface"
+```
+
+**Example: Specific component screenshot**
+```bash
+curl "http://localhost:1900/api/screenshot?moduleId=Interface&id=AmpPanel"
+```
+
+**Example: Half-scale screenshot**
+```bash
+curl "http://localhost:1900/api/screenshot?moduleId=Interface&scale=0.5"
+```
+
+**Example: Save to file**
+```bash
+curl "http://localhost:1900/api/screenshot?moduleId=Interface&outputPath=C:/temp/screenshot.png"
+```
+
+**Response (Base64 mode - default)**:
+```json
+{
+  "success": true,
+  "moduleId": "Interface",
+  "id": "AmpPanel",
+  "width": 320,
+  "height": 310,
+  "scale": 1.0,
+  "imageData": "iVBORw0KGgoAAAANSUhEUgAA...",
+  "logs": [],
+  "errors": []
+}
+```
+
+**Response (file output mode - when outputPath specified)**:
+```json
+{
+  "success": true,
+  "moduleId": "Interface",
+  "id": "AmpPanel",
+  "width": 320,
+  "height": 310,
+  "scale": 1.0,
+  "filePath": "C:/temp/screenshot.png",
+  "logs": [],
+  "errors": []
+}
+```
+
+**Key Fields**:
+| Field | Description |
+|-------|-------------|
+| `width` | Width of the captured image in pixels |
+| `height` | Height of the captured image in pixels |
+| `scale` | The scale factor that was applied |
+| `imageData` | Base64-encoded PNG image data (only when `outputPath` not specified) |
+| `filePath` | Full path to saved PNG file (only when `outputPath` specified) |
+| `id` | Component ID (only present if a specific component was captured) |
+
+**Use cases**:
+- Verify UI layout matches design mockups
+- Automated visual regression testing
+- AI-assisted UI development (capture → compare → refine)
+- Documentation screenshots
+
+**Notes**:
+- When capturing a specific component, the screenshot is cropped to that component's bounds within the full interface render (preserving visual context like parent backgrounds)
+- The `scale` parameter is useful for reducing payload size during iterative development (use `0.5` for quick comparisons, `1.0` for final verification)
+- Returns error if component ID doesn't exist
+- When using `outputPath`:
+  - File path must end with `.png` (case-insensitive)
+  - Parent directory must exist
+  - Existing files are silently overwritten
+  - Response contains `filePath` instead of `imageData`
+
+---
+
 ## Component Lifecycle & Callbacks
 
 ### When Control Callbacks Fire
@@ -776,6 +866,66 @@ curl "http://localhost:1900/api/recompile?moduleId=Interface"
 
 # 4. Check for errors in response
 ```
+
+---
+
+### Visual Development Loop with Screenshots
+
+Use the screenshot endpoint to create a visual feedback loop for UI development. This enables an iterative workflow: modify script → capture screenshot → verify visually → refine.
+
+**Workflow:**
+
+```
+1. POST /api/set_script
+   -> Create/modify UI components with paint routines
+
+2. GET /api/screenshot?outputPath=/path/to/screenshot.png
+   -> Capture the result to a file
+
+3. Inspect the image file
+   -> Verify the UI looks correct
+
+4. If changes needed, go back to step 1
+```
+
+**Example: Create and verify a colored panel**
+
+```bash
+# 1. Create a panel with a blue fill
+curl -X POST "http://localhost:1900/api/set_script" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "moduleId": "Interface",
+    "callback": "onInit",
+    "script": "Content.makeFrontInterface(400, 300);\nconst var MyPanel = Content.addPanel(\"MyPanel\", 10, 10);\nMyPanel.set(\"width\", 100);\nMyPanel.set(\"height\", 100);\nMyPanel.setPaintRoutine(function(g) {\n    g.fillAll(Colours.blue);\n});",
+    "compile": true
+  }'
+
+# 2. Capture screenshot of the panel
+curl "http://localhost:1900/api/screenshot?moduleId=Interface&id=MyPanel&outputPath=/path/to/screenshot.png"
+
+# 3. Inspect the image - should show a 100x100 blue square
+
+# 4. Change to green and verify
+curl -X POST "http://localhost:1900/api/set_script" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "moduleId": "Interface",
+    "callback": "onInit",
+    "script": "Content.makeFrontInterface(400, 300);\nconst var MyPanel = Content.addPanel(\"MyPanel\", 10, 10);\nMyPanel.set(\"width\", 100);\nMyPanel.set(\"height\", 100);\nMyPanel.setPaintRoutine(function(g) {\n    g.fillAll(Colours.green);\n});",
+    "compile": true
+  }'
+
+# 5. Capture again - should now show green
+curl "http://localhost:1900/api/screenshot?moduleId=Interface&id=MyPanel&outputPath=/path/to/screenshot.png"
+```
+
+**Tips:**
+
+- Use `outputPath` to save screenshots to a known location for easy file access
+- Use the `id` parameter to capture specific components instead of the full interface
+- Use `scale=0.5` for faster iteration when pixel-perfect accuracy isn't needed
+- The same output path can be reused - files are automatically overwritten
 
 ---
 
