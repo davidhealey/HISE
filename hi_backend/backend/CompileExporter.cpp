@@ -30,7 +30,6 @@
 *   ===========================================================================
 */
 
-#include <filesystem>
 
 namespace hise { using namespace juce;
 
@@ -470,9 +469,7 @@ void CompileExporter::setExportUsingCI(bool shouldUseCIMode)
 
 File CompileExporter::getCurrentWorkDirectory(bool throwOnInvalidFolder)
 {
-	std::filesystem::path cwd = std::filesystem::current_path();
-	juce::File workDirectory(cwd.u8string());
-
+	auto workDirectory = File::getCurrentWorkingDirectory();
 
 	if (workDirectory.isDirectory())
 	{
