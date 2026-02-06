@@ -399,6 +399,14 @@ private:
         expect(json.hasProperty("scriptProcessors"), "Should have processors");
         expect(json.hasProperty("server"), "Should have server info");
         
+        // Check server info
+        auto server = json["server"];
+        expect(server.hasProperty("version"), "server should have version");
+        expect(server["version"].toString().isNotEmpty(), "version should not be empty");
+        expect(server["version"].toString() != "1.0.0", "version should be actual HISE version, not hardcoded 1.0.0");
+        expect(server.hasProperty("compileTimeout"), "server should have compileTimeout");
+        expect((double)server["compileTimeout"] > 0, "compileTimeout should be positive");
+        
         // Check that Interface processor exists
         auto processors = json["scriptProcessors"];
         expect(processors.isArray(), "scriptProcessors should be array");

@@ -284,7 +284,7 @@ const Array<RestHelpers::RouteMetadata>& RestHelpers::getRouteMetadata()
 		m.add(RouteMetadata(ApiRoute::Status, "api/status")
 			.withCategory("status")
 			.withDescription("Get project status and discover available script processors")
-			.withReturns("Project info, scriptsFolder path, and scriptProcessors with their callbacks"));
+			.withReturns("Server info (version, compileTimeout in seconds), project info, scriptsFolder path, and scriptProcessors with their callbacks"));
 		
 		// ApiRoute::GetScript
 		m.add(RouteMetadata(ApiRoute::GetScript, "api/get_script")
@@ -508,7 +508,8 @@ RestServer::Response RestHelpers::handleStatus(MainController* mc, RestServer::A
 
 	// Server info
 	DynamicObject::Ptr server = new DynamicObject();
-	server->setProperty(RestApiIds::version, "1.0.0");
+	server->setProperty(RestApiIds::version, PresetHandler::getVersionString());
+	server->setProperty(RestApiIds::compileTimeout, (double)mc->getSettingsObject().getSetting(HiseSettings::Scripting::CompileTimeout));
 	result->setProperty(RestApiIds::server, var(server.get()));
 
 	// Project info

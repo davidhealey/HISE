@@ -74,6 +74,7 @@ namespace RestApiIds
     // status response
     DECLARE_ID(server);
     DECLARE_ID(version);
+    DECLARE_ID(compileTimeout);
     DECLARE_ID(project);
     DECLARE_ID(projectFolder);
     DECLARE_ID(scriptsFolder);
