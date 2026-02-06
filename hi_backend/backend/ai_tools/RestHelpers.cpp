@@ -509,7 +509,7 @@ RestServer::Response RestHelpers::handleStatus(MainController* mc, RestServer::A
 	// Server info
 	DynamicObject::Ptr server = new DynamicObject();
 	server->setProperty(RestApiIds::version, PresetHandler::getVersionString());
-	server->setProperty(RestApiIds::compileTimeout, (double)mc->getSettingsObject().getSetting(HiseSettings::Scripting::CompileTimeout));
+	server->setProperty(RestApiIds::compileTimeout, GET_HISE_SETTING(mc->getMainSynthChain(), HiseSettings::Scripting::CompileTimeout));
 	result->setProperty(RestApiIds::server, var(server.get()));
 
 	// Project info

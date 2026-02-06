@@ -1829,7 +1829,7 @@ private:
             var json = ctx->parseJson(response);
             
             expect(!(bool)json["success"], "Should fail for non-.png extension");
-            expect(json["error"].toString().containsIgnoreCase(".png"), "Error should mention .png extension");
+            expect(json["message"].toString().containsIgnoreCase(".png"), "Error should mention .png extension");
         }
         
         // Test: parent directory doesn't exist
@@ -1839,7 +1839,7 @@ private:
             var json = ctx->parseJson(response);
             
             expect(!(bool)json["success"], "Should fail for non-existent parent directory");
-            expect(json["error"].toString().containsIgnoreCase("directory"), "Error should mention directory");
+            expect(json["message"].toString().containsIgnoreCase("directory"), "Error should mention directory");
         }
     }
     

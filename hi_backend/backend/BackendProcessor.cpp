@@ -498,6 +498,9 @@ BackendProcessor::BackendProcessor(AudioDeviceManager *deviceManager_/*=nullptr*
 
 BackendProcessor::~BackendProcessor()
 {
+	restServer.removeListener(this);
+	restServer.stop();
+
 #if IS_STANDALONE_APP
 	for(auto p: getParameters())
     {
