@@ -59,7 +59,11 @@ public:
         testGetComponentProperties();
         testSetScriptSuccess();
         testSetScriptCompileError();
+        testSetScriptUnknownCallback();
+        testSetScriptMultipleCallbacks();
+        testSetScriptEmptyCallbacks();
         testGetScript();
+        testGetScriptExternalFiles();
         testRecompile();
         testGetComponentValue();
         testSetComponentValue();
@@ -235,11 +239,13 @@ private:
                     const String& callback = "onInit",
                     bool expectSuccess = true)
         {
-            // All POST parameters go in the JSON body (unified approach)
+            // Use callbacks object format
             DynamicObject::Ptr bodyObj = new DynamicObject();
             bodyObj->setProperty("moduleId", moduleId);
-            bodyObj->setProperty("callback", callback);
-            bodyObj->setProperty("script", code);
+            
+            DynamicObject::Ptr callbacks = new DynamicObject();
+            callbacks->setProperty(callback, code);
+            bodyObj->setProperty("callbacks", var(callbacks.get()));
             bodyObj->setProperty("compile", true);
             
             auto response = httpPost("/api/set_script", 
@@ -591,10 +597,28 @@ private:
         
         ctx->reset();
         
-        var json = ctx->compile("Content.makeFrontInterface(600, 400);\n"
-                                "Console.print(\"Test output\");");
+        DynamicObject::Ptr bodyObj = new DynamicObject();
+        bodyObj->setProperty("moduleId", "Interface");
         
-        expect(json["result"].toString() == "Recompiled OK", "Result should be 'Recompiled OK'");
+        DynamicObject::Ptr callbacks = new DynamicObject();
+        callbacks->setProperty("onInit", "Content.makeFrontInterface(600, 400);\n"
+                                         "Console.print(\"Test output\");");
+        bodyObj->setProperty("callbacks", var(callbacks.get()));
+        bodyObj->setProperty("compile", true);
+        
+        auto response = ctx->httpPost("/api/set_script", JSON::toString(var(bodyObj.get())));
+        var json = ctx->parseJson(response);
+        
+        expect((bool)json["success"], "Should succeed");
+        expect(json["moduleId"].toString() == "Interface", "Should return moduleId");
+        expect(json["result"].toString() == "Compiled OK", "Result should be 'Compiled OK'");
+        
+        // Verify updatedCallbacks array
+        expect(json.hasProperty("updatedCallbacks"), "Should have updatedCallbacks array");
+        auto updatedCallbacks = json["updatedCallbacks"];
+        expect(updatedCallbacks.isArray(), "updatedCallbacks should be array");
+        expect(updatedCallbacks.size() == 1, "Should have 1 updated callback");
+        expect(updatedCallbacks[0].toString() == "onInit", "Should have updated onInit");
         
         auto logs = json["logs"];
         expect(logs.isArray(), "logs should be array");
@@ -620,12 +644,23 @@ private:
         
         ctx->reset();
         
-        // Script with syntax error - don't expect success
-        var json = ctx->compile("Content.makeFrontInterface(600, 400);\n"
-                                "const var x = ;",  // Syntax error
-                                "Interface", "onInit", false);
+        // Script with syntax error - use callbacks object format
+        DynamicObject::Ptr bodyObj = new DynamicObject();
+        bodyObj->setProperty("moduleId", "Interface");
+        
+        DynamicObject::Ptr callbacks = new DynamicObject();
+        callbacks->setProperty("onInit", "Content.makeFrontInterface(600, 400);\n"
+                                         "const var x = ;");  // Syntax error
+        bodyObj->setProperty("callbacks", var(callbacks.get()));
+        bodyObj->setProperty("compile", true);
+        
+        auto response = ctx->httpPost("/api/set_script", JSON::toString(var(bodyObj.get())));
+        var json = ctx->parseJson(response);
         
         expect(!(bool)json["success"], "Compilation should fail");
+        
+        // Should still have updatedCallbacks even on failure
+        expect(json.hasProperty("updatedCallbacks"), "Should have updatedCallbacks");
         
         auto errors = json["errors"];
         expect(errors.isArray(), "errors should be array");
@@ -650,17 +685,59 @@ private:
         ctx->compile("Content.makeFrontInterface(600, 400);\n"
                      "const var MyKnob = Content.addKnob(\"MyKnob\", 10, 10);");
         
-        // Get the script back
-        auto response = ctx->httpGet("/api/get_script?moduleId=Interface&callback=onInit");
-        var json = ctx->parseJson(response);
+        // Test 1: Get specific callback - should return callbacks object with only that callback
+        {
+            auto response = ctx->httpGet("/api/get_script?moduleId=Interface&callback=onInit");
+            var json = ctx->parseJson(response);
+            
+            expect((bool)json["success"], "Should succeed");
+            expect(json["moduleId"].toString() == "Interface", "Should return correct moduleId");
+            expect(json.hasProperty("callbacks"), "Should have callbacks object");
+            expect(!json.hasProperty("script"), "Should NOT have script property");
+            
+            auto callbacks = json["callbacks"];
+            expect(callbacks.hasProperty("onInit"), "callbacks should have onInit");
+            
+            String returnedScript = callbacks["onInit"].toString();
+            expect(returnedScript.contains("makeFrontInterface"), "Should contain makeFrontInterface");
+            expect(returnedScript.contains("MyKnob"), "Should contain MyKnob");
+            
+            // onInit should NOT have function wrapper
+            expect(!returnedScript.contains("function onInit"), "onInit should NOT have function wrapper");
+            
+            // Verify externalFiles is present (may be empty)
+            expect(json.hasProperty("externalFiles"), "Should have externalFiles array");
+            expect(json["externalFiles"].isArray(), "externalFiles should be array");
+        }
         
-        expect((bool)json["success"], "Should succeed");
-        expect(json["moduleId"].toString() == "Interface", "Should return correct moduleId");
-        expect(json["callback"].toString() == "onInit", "Should return correct callback");
-        
-        String returnedScript = json["script"].toString();
-        expect(returnedScript.contains("makeFrontInterface"), "Should contain makeFrontInterface");
-        expect(returnedScript.contains("MyKnob"), "Should contain MyKnob");
+        // Test 2: Get all callbacks (no callback param) - should return all callbacks
+        {
+            auto response = ctx->httpGet("/api/get_script?moduleId=Interface");
+            var json = ctx->parseJson(response);
+            
+            expect((bool)json["success"], "Should succeed");
+            expect(json.hasProperty("callbacks"), "Should have callbacks object");
+            expect(!json.hasProperty("script"), "Should NOT have script property");
+            
+            auto callbacks = json["callbacks"];
+            expect(callbacks.hasProperty("onInit"), "Should have onInit callback");
+            expect(callbacks.hasProperty("onNoteOn"), "Should have onNoteOn callback");
+            expect(callbacks.hasProperty("onNoteOff"), "Should have onNoteOff callback");
+            expect(callbacks.hasProperty("onController"), "Should have onController callback");
+            expect(callbacks.hasProperty("onTimer"), "Should have onTimer callback");
+            expect(callbacks.hasProperty("onControl"), "Should have onControl callback");
+            
+            // onInit should be raw content (no function wrapper)
+            expect(!callbacks["onInit"].toString().contains("function onInit"), 
+                   "onInit should NOT have function wrapper");
+            
+            // onNoteOn should have function wrapper
+            expect(callbacks["onNoteOn"].toString().contains("function onNoteOn"), 
+                   "onNoteOn should have function wrapper");
+            
+            // Verify externalFiles is present
+            expect(json.hasProperty("externalFiles"), "Should have externalFiles array");
+        }
     }
     
     //==========================================================================
@@ -694,6 +771,115 @@ private:
                 foundOutput = true;
         }
         expect(foundOutput, "Recompile should execute onInit again");
+    }
+    
+    //==========================================================================
+    void testSetScriptUnknownCallback()
+    {
+        beginTest("POST /api/set_script (unknown callback)");
+        
+        ctx->reset();
+        
+        DynamicObject::Ptr bodyObj = new DynamicObject();
+        bodyObj->setProperty("moduleId", "Interface");
+        
+        DynamicObject::Ptr callbacks = new DynamicObject();
+        callbacks->setProperty("onFoo", "// This callback doesn't exist");
+        bodyObj->setProperty("callbacks", var(callbacks.get()));
+        
+        auto response = ctx->httpPost("/api/set_script", JSON::toString(var(bodyObj.get())));
+        var json = ctx->parseJson(response);
+        
+        expect(!(bool)json["success"], "Should fail for unknown callback");
+        expect(json["errors"].isArray(), "Should have errors array");
+        expect(json["errors"].size() >= 1, "Should have at least one error");
+        expect(json["errors"][0]["errorMessage"].toString().contains("unknown callback"), 
+               "Error should mention unknown callback");
+        expect(json["errors"][0]["errorMessage"].toString().contains("onFoo"), 
+               "Error should include the unknown callback name");
+    }
+    
+    //==========================================================================
+    void testSetScriptMultipleCallbacks()
+    {
+        beginTest("POST /api/set_script (multiple callbacks)");
+        
+        ctx->reset();
+        
+        DynamicObject::Ptr bodyObj = new DynamicObject();
+        bodyObj->setProperty("moduleId", "Interface");
+        
+        DynamicObject::Ptr callbacks = new DynamicObject();
+        callbacks->setProperty("onInit", "Content.makeFrontInterface(600, 400);\n"
+                                         "Console.print(\"Init ran\");");
+        callbacks->setProperty("onNoteOn", "function onNoteOn()\n{\n\tConsole.print(\"NoteOn\");\n}");
+        bodyObj->setProperty("callbacks", var(callbacks.get()));
+        bodyObj->setProperty("compile", true);
+        
+        auto response = ctx->httpPost("/api/set_script", JSON::toString(var(bodyObj.get())));
+        var json = ctx->parseJson(response);
+        
+        expect((bool)json["success"], "Should succeed");
+        
+        auto updatedCallbacks = json["updatedCallbacks"];
+        expect(updatedCallbacks.size() == 2, "Should have 2 updated callbacks");
+        
+        // Verify both callbacks are in the list (order may vary)
+        bool hasOnInit = false, hasOnNoteOn = false;
+        for (int i = 0; i < updatedCallbacks.size(); i++)
+        {
+            if (updatedCallbacks[i].toString() == "onInit") hasOnInit = true;
+            if (updatedCallbacks[i].toString() == "onNoteOn") hasOnNoteOn = true;
+        }
+        expect(hasOnInit, "Should have updated onInit");
+        expect(hasOnNoteOn, "Should have updated onNoteOn");
+    }
+    
+    //==========================================================================
+    void testSetScriptEmptyCallbacks()
+    {
+        beginTest("POST /api/set_script (empty callbacks)");
+        
+        ctx->reset();
+        
+        DynamicObject::Ptr bodyObj = new DynamicObject();
+        bodyObj->setProperty("moduleId", "Interface");
+        
+        DynamicObject::Ptr callbacks = new DynamicObject();
+        // Empty callbacks object
+        bodyObj->setProperty("callbacks", var(callbacks.get()));
+        
+        auto response = ctx->httpPost("/api/set_script", JSON::toString(var(bodyObj.get())));
+        var json = ctx->parseJson(response);
+        
+        expect(!(bool)json["success"], "Should fail for empty callbacks");
+        expect(json["errors"].isArray(), "Should have errors array");
+        expect(json["errors"].size() >= 1, "Should have at least one error");
+        expect(json["errors"][0]["errorMessage"].toString().contains("empty"), 
+               "Error should mention empty");
+    }
+    
+    //==========================================================================
+    void testGetScriptExternalFiles()
+    {
+        beginTest("GET /api/get_script (external files structure)");
+        
+        ctx->reset();
+        
+        // This test verifies the externalFiles structure is correct
+        // Without actual include() files, array should be empty
+        ctx->compile("Content.makeFrontInterface(600, 400);");
+        
+        auto response = ctx->httpGet("/api/get_script?moduleId=Interface");
+        var json = ctx->parseJson(response);
+        
+        expect((bool)json["success"], "Should succeed");
+        expect(json.hasProperty("externalFiles"), "Should have externalFiles");
+        
+        auto externalFiles = json["externalFiles"];
+        expect(externalFiles.isArray(), "externalFiles should be array");
+        // With no includes, array should be empty
+        expect(externalFiles.size() == 0, "Should have no external files when no includes used");
     }
     
     //==========================================================================

@@ -422,10 +422,16 @@ BackendProcessor::BackendProcessor(AudioDeviceManager *deviceManager_/*=nullptr*
 	//getExpansionHandler().createAvailableExpansions();
 
 
-	if (!inUnitTestMode())
+if (!inUnitTestMode())
 	{
 		getAutoSaver().initialise();
-		
+
+		// Auto-start REST API server if enabled in settings
+		if (getSettingsObject().getSetting(HiseSettings::Scripting::AutoStartRestServer).toString() == "Yes")
+		{
+			int port = (int)getSettingsObject().getSetting(HiseSettings::Scripting::RestApiPort);
+			restServer.start(port);
+		}
 	}
 	
 	clearPreset(dontSendNotification);

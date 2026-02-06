@@ -119,6 +119,9 @@ namespace RestApiIds
     DECLARE_ID(property);
     DECLARE_ID(recompileRequired);
     
+    // set_script response
+    DECLARE_ID(updatedCallbacks);
+    
     // screenshot
     DECLARE_ID(scale);
     DECLARE_ID(imageData);

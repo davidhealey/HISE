@@ -173,6 +173,7 @@ Array<juce::Identifier> HiseSettings::Scripting::getAllIds()
 	ids.add(EnableMousePositioning);
     ids.add(WarnIfUndefinedParameters);
 	ids.add(RestApiPort);
+	ids.add(AutoStartRestServer);
 
 	return ids;
 }
@@ -675,6 +676,11 @@ Array<juce::Identifier> HiseSettings::SnexWorkbench::getAllIds()
 		D("> Default port is 1900. Change this if you have a port conflict.");
 		P_();
 
+		P(HiseSettings::Scripting::AutoStartRestServer);
+		D("If enabled, the REST API server will automatically start when HISE is launched.");
+		D("> This is useful for AI agent integration workflows where you want the server always available.");
+		P_();
+
 		P(HiseSettings::Other::UseOpenGL);
 		D("Enable this in order to use OpenGL for the UI rendering of the HISE app. This might drastically accelerate the UI performance, so if you have a laggy UI in HISE, try this option");
 		D("> Be aware that this does not affect whether your compiled project uses OpenGL (as this can be defined separately).");
@@ -989,6 +995,7 @@ juce::StringArray HiseSettings::Data::getOptionsFor(const Identifier& id)
 		id == Scripting::RecompileOnFileChange ||
 		id == Scripting::SaveConnectedFilesOnCompile ||
         id == Scripting::WarnIfUndefinedParameters ||
+		id == Scripting::AutoStartRestServer ||
 		id == Scripting::EnableMousePositioning)
 
 	    return { "Yes", "No" };
@@ -1235,6 +1242,7 @@ var HiseSettings::Data::getDefaultSetting(const Identifier& id) const
 	else if (id == Scripting::CompileTimeout)		return 5.0;
 	else if (id == Scripting::SaveConnectedFilesOnCompile) return "No";
 	else if (id == Scripting::RestApiPort)			return 1900;
+	else if (id == Scripting::AutoStartRestServer)	return "No";
 #if HISE_USE_VS2022
 	else if (id == Compiler::VisualStudioVersion)	return "Visual Studio 2022";
 #else

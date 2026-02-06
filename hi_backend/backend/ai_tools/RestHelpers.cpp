@@ -289,20 +289,19 @@ const Array<RestHelpers::RouteMetadata>& RestHelpers::getRouteMetadata()
 		// ApiRoute::GetScript
 		m.add(RouteMetadata(ApiRoute::GetScript, "api/get_script")
 			.withCategory("scripting")
-			.withDescription("Read script content from a processor")
-			.withReturns("Script content for the specified callback (or all callbacks merged)")
+			.withDescription("Read script content from a processor's callbacks")
+			.withReturns("Callbacks object with script content for requested callback(s). Includes externalFiles array with name and full path.")
 			.withModuleIdParam()
-			.withQueryParam(RouteParameter(RestApiIds::callback, "Specific callback name (e.g., onInit). If omitted, returns all callbacks merged.").asOptional()));
+			.withQueryParam(RouteParameter(RestApiIds::callback, "Specific callback name (e.g., onInit). If omitted, returns all callbacks.").asOptional()));
 		
 		// ApiRoute::SetScript
 		m.add(RouteMetadata(ApiRoute::SetScript, "api/set_script")
 			.withMethod(RestServer::POST)
 			.withCategory("scripting")
-			.withDescription("Update script content and optionally compile")
-			.withReturns("Compilation result with success status, logs, and errors")
+			.withDescription("Update one or more callbacks and optionally compile. Only specified callbacks are updated; others remain unchanged.")
+			.withReturns("Compilation result with updatedCallbacks array, success status, logs, and errors")
 			.withBodyParam(RouteParameter(RestApiIds::moduleId, "The script processor's module ID"))
-			.withBodyParam(RouteParameter(RestApiIds::callback, "Specific callback to update. If omitted, script is treated as merged content.").asOptional())
-			.withBodyParam(RouteParameter(RestApiIds::script, "The script content"))
+			.withBodyParam(RouteParameter(RestApiIds::callbacks, "Object with callback names as keys and script content as values (e.g., {onInit: \"...\", onNoteOn: \"...\"})"))
 			.withBodyParam(RouteParameter(RestApiIds::compile, "Whether to compile after setting").withDefault("true"))
 			.withBodyParam(RouteParameter(RestApiIds::forceSynchronousExecution, "Debug tool: Bypass threading model for synchronous execution. WARNING: May cause crashes due to race conditions - use only as last resort after saving.").withDefault("false")));
 		
@@ -576,45 +575,65 @@ RestServer::Response RestHelpers::handleGetScript(MainController* mc, RestServer
 	if (auto jp = getScriptProcessor(mc, req))
 	{
 		auto callbackParam = req->getRequest()[RestApiIds::callback];
+		auto processor = dynamic_cast<Processor*>(jp);
+		
+		// Build externalFiles array (common to all response types)
+		Array<var> externalFilesArr;
+		for (int i = 0; i < jp->getNumWatchedFiles(); i++)
+		{
+			auto fp = jp->getWatchedFile(i);
+			DynamicObject::Ptr fileObj = new DynamicObject();
+			fileObj->setProperty(RestApiIds::name, fp.getFileName());
+			fileObj->setProperty(RestApiIds::path, fp.getFullPathName().replace("\\", "/"));
+			externalFilesArr.add(var(fileObj.get()));
+		}
+
+		DynamicObject::Ptr result = new DynamicObject();
+		result->setProperty(RestApiIds::success, true);
+		result->setProperty(RestApiIds::moduleId, processor->getId());
+
+		// Always use callbacks object for consistent response structure
+		DynamicObject::Ptr callbacksObj = new DynamicObject();
 
 		if (callbackParam.isNotEmpty())
 		{
+			// Single callback mode - return only the requested callback
 			if (auto cb = jp->getSnippet(Identifier(callbackParam)))
 			{
-				DynamicObject::Ptr result = new DynamicObject();
-				result->setProperty(RestApiIds::success, true);
-				result->setProperty(RestApiIds::moduleId, dynamic_cast<Processor*>(jp)->getId());
-				result->setProperty(RestApiIds::callback, callbackParam);
-
-				// onInit is special - it's raw content, not wrapped in function
+				// onInit is raw content, others include function wrapper
 				if (callbackParam == "onInit")
-					result->setProperty(RestApiIds::script, cb->getAllContent());
+					callbacksObj->setProperty(callbackParam, cb->getAllContent());
 				else
-					result->setProperty(RestApiIds::script, cb->getSnippetAsFunction());
-
-				result->setProperty(RestApiIds::logs, Array<var>());
-				result->setProperty(RestApiIds::errors, Array<var>());
-
-				req->complete(RestServer::Response::ok(var(result.get())));
-				return req->waitForResponse();
+					callbacksObj->setProperty(callbackParam, cb->getSnippetAsFunction());
 			}
 			else
 				return req->fail(404, "callback " + callbackParam + " not found");
 		}
 		else
 		{
-			String x;
-			jp->mergeCallbacksToScript(x);
-			DynamicObject::Ptr result = new DynamicObject();
-			result->setProperty(RestApiIds::success, true);
-			result->setProperty(RestApiIds::moduleId, dynamic_cast<Processor*>(jp)->getId());
-			result->setProperty(RestApiIds::script, x);
-			result->setProperty(RestApiIds::logs, Array<var>());
-			result->setProperty(RestApiIds::errors, Array<var>());
-			
-			req->complete(RestServer::Response::ok(var(result.get())));
-			return req->waitForResponse();
+			// All callbacks mode - return all callbacks
+			for (int i = 0; i < jp->getNumSnippets(); i++)
+			{
+				if (auto snippet = jp->getSnippet(i))
+				{
+					auto cbName = snippet->getCallbackName().toString();
+					
+					// onInit is raw content, others include function wrapper
+					if (cbName == "onInit")
+						callbacksObj->setProperty(cbName, snippet->getAllContent());
+					else
+						callbacksObj->setProperty(cbName, snippet->getSnippetAsFunction());
+				}
+			}
 		}
+
+		result->setProperty(RestApiIds::callbacks, var(callbacksObj.get()));
+		result->setProperty(RestApiIds::externalFiles, var(externalFilesArr));
+		result->setProperty(RestApiIds::logs, Array<var>());
+		result->setProperty(RestApiIds::errors, Array<var>());
+
+		req->complete(RestServer::Response::ok(var(result.get())));
+		return req->waitForResponse();
 	}
 	
 	return req->fail(404, "moduleId is not a valid script processor");
@@ -631,47 +650,105 @@ RestServer::Response RestHelpers::handleSetScript(MainController* mc, RestServer
 	if (forceSync)
 		syncMode = std::make_unique<MainController::ScopedBadBabysitter>(mc);
 	
-	// Read moduleId from JSON body (unified POST parameter handling)
+	// Read moduleId from JSON body
 	auto moduleId = obj[RestApiIds::moduleId].toString();
 	
+	// Helper for structured validation errors (consistent with compilation errors)
+	auto validationError = [&](int statusCode, const String& message) -> RestServer::Response
+	{
+		DynamicObject::Ptr result = new DynamicObject();
+		result->setProperty(RestApiIds::success, false);
+		result->setProperty(RestApiIds::moduleId, moduleId);
+		// Note: logs and errors are merged by AsyncRequest::mergeLogsIntoResponse()
+		
+		RestServer::Response response;
+		response.statusCode = statusCode;
+		response.contentType = "application/json";
+		response.body = JSON::toString(var(result.get()));
+		
+		// Add error via appendError so it gets properly merged
+		req->appendError(message);
+		req->complete(response);
+		return req->waitForResponse();
+	};
+	
 	if (moduleId.isEmpty())
-		return req->fail(400, "moduleId is required in request body");
+		return validationError(400, "moduleId is required in request body");
 	
 	auto jp = dynamic_cast<JavascriptProcessor*>(
 		ProcessorHelpers::getFirstProcessorWithName(mc->getMainSynthChain(), moduleId));
 	
 	if (jp == nullptr)
-		return req->fail(404, "module not found: " + moduleId);
+		return validationError(404, "module not found: " + moduleId);
 	
-	auto callbackParam = obj[RestApiIds::callback].toString();
-	auto scriptContent = obj[RestApiIds::script].toString();
-
-	if (callbackParam.isNotEmpty())
+	// Read callbacks object
+	auto callbacksVar = obj[RestApiIds::callbacks];
+	if (!callbacksVar.getDynamicObject())
+		return validationError(400, "callbacks must be an object");
+	
+	auto* callbacksObj = callbacksVar.getDynamicObject();
+	auto& props = callbacksObj->getProperties();
+	
+	if (props.isEmpty())
+		return validationError(400, "callbacks object cannot be empty");
+	
+	Array<var> updatedCallbackNames;
+	
+	// Validate all callback names first (reject unknown callbacks)
+	for (auto& nv: props)
 	{
-		if (auto cb = jp->getSnippet(Identifier(callbackParam)))
+		auto cbName = nv.name.toString();
+		auto content = nv.value.toString();
+
+		if (auto snippet = jp->getSnippet(Identifier(cbName)))
 		{
-			cb->replaceContentAsync(scriptContent);
+			snippet->replaceContentAsync(content);
+			updatedCallbackNames.add(cbName);
 		}
 		else
-			return req->fail(404, "callback not found: " + callbackParam);
+			return validationError(400, "unknown callback: " + cbName);
 	}
-	else
-	{
-		auto ok = jp->parseSnippetsFromString(scriptContent, false);
-
-		if (!ok)
-			return req->fail(400, "Error at parsing script");
-	}
-
+	
 	// Check if compile is requested (default true)
-	bool shouldCompile = true;
-	if (obj.hasProperty(RestApiIds::compile))
-		shouldCompile = (bool)obj[RestApiIds::compile];
+	if (obj.getProperty(RestApiIds::compile, true))
+	{
+		// Recompile and return result with updatedCallbacks in response
+		mc->getKillStateHandler().killVoicesAndCall(dynamic_cast<Processor*>(jp), 
+			[req, forceSync, updatedCallbackNames, moduleId](Processor* p)
+		{
+			JavascriptProcessor::ResultFunction rf = 
+				[req, forceSync, updatedCallbackNames, moduleId](const JavascriptProcessor::SnippetResult& result)
+			{
+				DynamicObject::Ptr r = new DynamicObject();
+				r->setProperty(RestApiIds::success, result.r.wasOk());
+				r->setProperty(RestApiIds::moduleId, moduleId);
+				r->setProperty(RestApiIds::updatedCallbacks, var(updatedCallbackNames));
+				r->setProperty(RestApiIds::result, result.r.wasOk() ? "Compiled OK" : "Compilation / Runtime Error");
+				r->setProperty(RestApiIds::forceSynchronousExecution, forceSync);
+				
+				if (forceSync)
+					r->setProperty(RestApiIds::warning, "Executed in unsafe synchronous mode - threading checks bypassed");
 
-	if (shouldCompile)
-		return handleRecompile(mc, req);
+				req->complete(RestServer::Response::ok(var(r.get())));
+			};
 
-	req->complete(RestServer::Response::ok("updated script"));
+			dynamic_cast<JavascriptProcessor*>(p)->compileScript(rf);
+			return SafeFunctionCall::OK;
+		}, MainController::KillStateHandler::TargetThread::ScriptingThread);
+		
+		return req->waitForResponse();
+	}
+
+	// No compile - return success immediately
+	DynamicObject::Ptr result = new DynamicObject();
+	result->setProperty(RestApiIds::success, true);
+	result->setProperty(RestApiIds::moduleId, moduleId);
+	result->setProperty(RestApiIds::updatedCallbacks, var(updatedCallbackNames));
+	result->setProperty(RestApiIds::result, "Updated without compilation");
+	result->setProperty(RestApiIds::logs, Array<var>());
+	result->setProperty(RestApiIds::errors, Array<var>());
+	
+	req->complete(RestServer::Response::ok(var(result.get())));
 	return req->waitForResponse();
 }
 
