@@ -1393,6 +1393,7 @@ JavascriptProcessor::SnippetResult JavascriptProcessor::compileInternal()
 	{
 		CompileDebugLock compileLock(*this);
 		scriptEngine->clearDebugInformation();
+		content->resetLafRegistry();
 	}
 
 	content->beginInitialization();

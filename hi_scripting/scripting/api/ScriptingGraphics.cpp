@@ -2484,6 +2484,8 @@ void ScriptingObjects::ScriptedLookAndFeel::setGlobalFont(const String& fontName
 
 void ScriptingObjects::ScriptedLookAndFeel::setInlineStyleSheet(const String& cssCode)
 {
+	useInlineStyleSheet = cssCode.isNotEmpty();
+
 	currentStyleSheetFile = "inline_";
     currentStyleSheetFile << String(cssCode.hash());
 	setStyleSheetInternal(cssCode);
@@ -2681,6 +2683,13 @@ bool ScriptingObjects::ScriptedLookAndFeel::callWithGraphics(Graphics& g_, const
 	TRACE_SCRIPTING(DYNAMIC_STRING_BUILDER(n));
 
 #endif
+
+	if (auto registry = getScriptProcessor()->getScriptingContent()->getLafRegistry())
+	{
+		auto id = Identifier(argsObject["id"].toString());
+		auto ok = registry->markAsRendered(id);
+		jassert(ok);
+	}
 
     // If this hits, you need to add that id to the array above.
 	jassert(getAllFunctionNames().contains(functionname));

@@ -1068,7 +1068,6 @@ void HiseJavascriptEngine::clearDebugInformation()
 void HiseJavascriptEngine::rebuildDebugInformation()
 {
 	root->hiseSpecialData.clearDebugInformation();
-
 	root->hiseSpecialData.createDebugInformation(root.get());
 
 	for(const auto& f: debugInfoListeners)
@@ -1079,10 +1078,27 @@ void HiseJavascriptEngine::rebuildDebugInformation()
 
 			if(auto obj = ptr->getObject())
 			{
-				if(f.first.get() == obj)
+				if (auto ns = dynamic_cast<RootObject::JavascriptNamespace*>(obj))
+				{
+					for (int j = 0; j < ns->getNumChildElements(); j++)
+					{
+						if (DebugInformation::Ptr nsptr = ns->getChildElement(j))
+						{
+							if (auto nsobj = nsptr->getObject())
+							{
+								if (f.first.get() == nsobj)
+								{
+									f.second(nsptr);
+									return;
+								}
+							}
+						}
+					}
+				}
+				else if(f.first.get() == obj)
 				{
 					f.second(ptr);
-					break;
+					return;
 				}
 			}
 		}
