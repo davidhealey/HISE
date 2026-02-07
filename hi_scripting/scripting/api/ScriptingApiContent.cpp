@@ -48,8 +48,6 @@
 #define ADD_AS_SLIDER_TYPE(min, max, interval)
 #endif
 
-
-
 #include <cmath>
 
 namespace hise { using namespace juce;
@@ -1868,6 +1866,11 @@ void ScriptingApi::Content::ScriptComponent::setLocalLookAndFeel(var lafObject)
 {
 	if (auto l = dynamic_cast<ScriptingObjects::ScriptedLookAndFeel*>(lafObject.getObject()))
 	{
+		if (auto registry = getScriptProcessor()->getScriptingContent()->lafRegistry.get())
+		{
+			registry->registerRecipient(l, getName());
+		}
+
 		if(l->currentStyleSheet.isNotEmpty())
 			setStyleSheetClass({});
 
@@ -8408,7 +8411,22 @@ var ScriptingApi::Content::createPath()
 
 juce::var ScriptingApi::Content::createLocalLookAndFeel()
 {
-	return var(new ScriptingObjects::ScriptedLookAndFeel(getScriptProcessor(), false));
+	auto laf = new ScriptingObjects::ScriptedLookAndFeel(getScriptProcessor(), false);
+
+	if (auto registry = getScriptProcessor()->getScriptingContent()->getLafRegistry())
+	{
+		if (auto jp = dynamic_cast<JavascriptProcessor*>(getScriptProcessor()))
+		{
+			jp->getScriptEngine()->debugInfoListeners.push_back({ laf , [registry](DebugInformationBase::Ptr debugInfo)
+			{
+				auto id = debugInfo->getTextForName();
+				auto loc = debugInfo->getLocation();
+				registry->registerLaf(debugInfo->getObject(), id, loc);
+			} });
+		}
+	}
+
+	return var(laf);
 }
 
 void ScriptingApi::Content::cleanJavascriptObjects()
@@ -9098,6 +9116,148 @@ void ScriptingApi::Content::setKeyPressCallback(const var& keyPress, var keyPres
 #undef ADD_TO_TYPE_SELECTOR
 #undef ADD_AS_SLIDER_TYPE
 #undef SEND_MESSAGE
+
+
+
+bool hise::ScriptingApi::Content::LafRegistry::hasRecipients() const
+{
+	return !list.isEmpty();
+}
+
+// Returns true if any recipients use Script or Mixed style (need render wait)
+bool hise::ScriptingApi::Content::LafRegistry::hasScriptBasedRecipients() const
+{
+	for (auto l : list)
+	{
+		if (l->isUsingScriptFunctions())
+			return true;
+	}
+
+	return false;
+}
+
+// Returns true when all script-based recipients have rendered at least once
+bool hise::ScriptingApi::Content::LafRegistry::allRecipientsRendered() const
+{
+	for (auto l : list)
+	{
+		if (l->isUsingScriptFunctions())
+		{
+			for (const auto& r : l->assignedComponents)
+			{
+				if (!r.rendered)
+					return false;
+			}
+		}
+	}
+
+	return true;
+}
+
+// Returns IDs of script-based components that haven't rendered yet
+StringArray hise::ScriptingApi::Content::LafRegistry::getUnrenderedComponentIds() const
+{
+	StringArray ids;
+
+	for (auto l : list)
+	{
+		if (l->isUsingScriptFunctions())
+		{
+			for (const auto& r : l->assignedComponents)
+			{
+				if (!r.rendered)
+					ids.add(r.name.toString());
+			}
+		}
+	}
+
+	return ids;
+}
+
+// Returns LAF info for a component (any style), or nullopt if no LAF
+hise::ScriptingApi::Content::LafRegistry::LafInfo::Ptr hise::ScriptingApi::Content::LafRegistry::getLafInfoForComponent(const Identifier& componentId) const
+{
+	for (auto l : list)
+	{
+		for (const auto& a : l->assignedComponents)
+		{
+			if (a.name == componentId)
+				return l;
+		}
+	}
+
+	return nullptr;
+}
+
+void hise::ScriptingApi::Content::LafRegistry::registerLaf(DebugableObjectBase* laf, const String& variableName, const DebugableObjectBase::Location& location)
+{
+	if (auto typed = dynamic_cast<ScriptingObjects::ScriptedLookAndFeel*>(laf))
+	{
+		auto newInfo = new LafInfo();
+
+		newInfo->variableName = variableName;
+		newInfo->location = location.toGotoString();
+
+		auto useCSS = typed->isUsingCSS();
+		auto useScript = typed->isUsingScriptFunctions();
+		auto useInline = typed->isUsingInlineStyleSheet();
+
+		
+
+		using RS = LafInfo::RenderStyle;
+
+		if (!useCSS)
+		{
+			newInfo->renderStyle = useScript ? RS::Script : RS::Unassigned;
+		}
+		else
+		{
+			if (useScript)
+				newInfo->renderStyle = RS::Mixed;
+			else
+				newInfo->renderStyle = useInline ? RS::CssInline : RS::Css;
+		}
+
+		// now add all pending components that match the laf.
+		for (auto pc : pendingRegisterComponents)
+		{
+			if (pc.second == laf)
+				newInfo->assignedComponents.add({ pc.first, false });
+		}
+
+		list.add(newInfo);
+	}
+	else
+	{
+		jassertfalse;
+	}
+}
+
+
+void ScriptingApi::Content::LafRegistry::registerRecipient(DebugableObjectBase* laf, const Identifier& componentId)
+{
+	// only store this in the pending component list, as this is called before the registry is created.
+	// note that calling this subsequently with the same component ID is expected behaviour and overwrites the assigned
+	// laf. This can occur if multiple setLocalLookAndFeel calls are made and behaves as expected.
+	pendingRegisterComponents[componentId] = laf;
+}
+
+bool ScriptingApi::Content::LafRegistry::markAsRendered(const Identifier& componentId)
+{
+	for (auto l : list)
+	{
+		for (auto& a : l->assignedComponents)
+		{
+			if (a.name == componentId)
+			{
+				a.rendered = true;
+				return true;
+			}
+		}
+	}
+
+	return false;
+}
 
 Identifier ScriptingApi::Content::Helpers::getUniqueIdentifier(Content* c, const String& id)
 {

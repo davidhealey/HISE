@@ -1445,6 +1445,7 @@ namespace ScriptingObjects
 
 		bool isUsingScriptFunctions() const { return hasScriptFunctions; }
 
+		bool isUsingInlineStyleSheet() const { return isUsingCSS() && useInlineStyleSheet; }
 
 		void setEnableProfiling(DebugSession::ProfileDataSource::Ptr ptr, ApiProviderBase::Holder* h);
 
@@ -1504,6 +1505,8 @@ namespace ScriptingObjects
 		ValueTree additionalProperties;
 
 		bool hasScriptFunctions = false;
+
+		bool useInlineStyleSheet = false;
 
 		JUCE_DECLARE_WEAK_REFERENCEABLE(ScriptedLookAndFeel);
 		JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(ScriptedLookAndFeel);

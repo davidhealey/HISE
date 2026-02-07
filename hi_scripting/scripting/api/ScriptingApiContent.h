@@ -3351,7 +3351,102 @@ public:
 
 	ProfileCollection contentProfile;
 
+	class LafRegistry: public ReferenceCountedObject
+	{
+	public:
+	
+		using Ptr = ReferenceCountedObjectPtr<LafRegistry>;
+
+		LafRegistry() = default;
+
+		struct LafInfo: public ReferenceCountedObject 
+		{
+			using List = ReferenceCountedArray<LafInfo>;
+			using Ptr = ReferenceCountedObjectPtr<LafInfo>;
+
+			enum class RenderStyle 
+			{
+				Unassigned,    // not found / registered
+				Script,        // registerFunction() only
+				Css,           // External CSS file only
+				CssInline,     // setInlineStyleSheet() only
+				Mixed          // Script functions + CSS (inline or file)
+			};
+
+			LafInfo() = default;
+
+			bool isUsingScriptFunctions() const
+			{
+				return renderStyle == RenderStyle::Script || renderStyle == RenderStyle::Mixed;
+			}
+
+			operator bool() const { return renderStyle != RenderStyle::Unassigned; }
+
+			struct RegisteredComponent
+			{
+				bool operator==(const RegisteredComponent& other) const { return name == other.name; }
+
+				Identifier name;
+				bool rendered = false;
+			};
+
+			Array<RegisteredComponent> assignedComponents;
+			String variableName;     // "LafNamespace.buttonLaf"
+			RenderStyle renderStyle = RenderStyle::Unassigned; // Script, Css, CssInline, Mixed
+			String location;         // createLocalLookAndFeel() location - always present
+			String cssLocation;      // CSS file path OR inline CSS location - empty for "script" style
+			WeakReference<DebugableObjectBase> laf; // opaque pointer, just for connecting components in setLocalLookAndFeel(),
+		};
+
+		// --- Called by REST API ---
+
+		// Returns true if any components have LAF assigned (any style)
+		bool hasRecipients() const;
+
+		// Returns true if any recipients use Script or Mixed style (need render wait)
+		bool hasScriptBasedRecipients() const;
+
+		// Returns true when all script-based recipients have rendered at least once
+		bool allRecipientsRendered() const;
+
+		// Returns IDs of script-based components that haven't rendered yet
+		StringArray getUnrenderedComponentIds() const;
+
+		// Returns LAF info for a component (any style), or nullopt if no LAF
+		LafInfo::Ptr getLafInfoForComponent(const Identifier& componentId) const;
+
+		// --- Called by HISE internals ---
+
+		// Called by debug info listener when LAF object is discovered
+		void registerLaf(DebugableObjectBase* laf, const String& variableName, const DebugableObjectBase::Location& location);
+
+		// Called by setLocalLookAndFeel()
+		void registerRecipient(DebugableObjectBase* laf, const Identifier& componentId);
+
+		// Called by callWithGraphics() on successful execution
+		bool markAsRendered(const Identifier& componentId);
+
+	private:
+
+		std::map<Identifier, WeakReference<DebugableObjectBase>> pendingRegisterComponents;
+
+		LafInfo::List list;
+
+		JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(LafRegistry);
+	};
+
+	LafRegistry::Ptr getLafRegistry() { return lafRegistry; }
+
+	void resetLafRegistry()
+	{
+#if USE_BACKEND
+		lafRegistry = new LafRegistry();
+#endif
+	}
+
 private:
+
+	LafRegistry::Ptr lafRegistry;
 
 	WeakCallbackHolder dragCallback;
 	WeakCallbackHolder suspendCallback;
