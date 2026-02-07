@@ -9125,7 +9125,7 @@ void ScriptingApi::Content::setKeyPressCallback(const var& keyPress, var keyPres
 
 bool hise::ScriptingApi::Content::LafRegistry::hasRecipients() const
 {
-	return !list.isEmpty();
+	return !list.isEmpty() || !pendingRegisterComponents.empty();
 }
 
 // Returns true if any recipients use Script or Mixed style (need render wait)
@@ -9149,7 +9149,7 @@ bool hise::ScriptingApi::Content::LafRegistry::allRecipientsRendered() const
 		{
 			for (const auto& r : l->assignedComponents)
 			{
-				if (!r.rendered)
+				if (r.rendered.get() == 0)
 					return false;
 			}
 		}
@@ -9169,7 +9169,7 @@ StringArray hise::ScriptingApi::Content::LafRegistry::getUnrenderedComponentIds(
 		{
 			for (const auto& r : l->assignedComponents)
 			{
-				if (!r.rendered)
+				if (r.rendered.get() == 0)
 					ids.add(r.name.toString());
 			}
 		}
@@ -9206,7 +9206,7 @@ void hise::ScriptingApi::Content::LafRegistry::registerLaf(DebugableObjectBase* 
 		auto useScript = typed->isUsingScriptFunctions();
 		auto useInline = typed->isUsingInlineStyleSheet();
 
-		
+		newInfo->cssLocation = typed->getExternalCssPath();
 
 		using RS = LafInfo::RenderStyle;
 
@@ -9254,7 +9254,7 @@ bool ScriptingApi::Content::LafRegistry::markAsRendered(const Identifier& compon
 		{
 			if (a.name == componentId)
 			{
-				a.rendered = true;
+				a.rendered.set(1);
 				return true;
 			}
 		}

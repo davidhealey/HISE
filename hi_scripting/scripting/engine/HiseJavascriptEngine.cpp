@@ -1070,38 +1070,41 @@ void HiseJavascriptEngine::rebuildDebugInformation()
 	root->hiseSpecialData.clearDebugInformation();
 	root->hiseSpecialData.createDebugInformation(root.get());
 
-	for(const auto& f: debugInfoListeners)
-	{
-		for(int i = 0; i < getNumDebugObjects(); i++)
-		{
-			auto ptr = getDebugInformation(i);
+	if (debugInfoListeners.empty())
+		return;
 
-			if(auto obj = ptr->getObject())
+	// Build lookup map once: O(D + N*C)
+	std::unordered_map<DebugableObjectBase*, DebugInformation::Ptr> objectMap;
+
+	for (int i = 0; i < getNumDebugObjects(); i++)
+	{
+		auto ptr = getDebugInformation(i);
+
+		if (auto obj = ptr->getObject())
+		{
+			objectMap[obj] = ptr;
+
+			// Traverse namespace children (not in root debug info array)
+			if (auto ns = dynamic_cast<RootObject::JavascriptNamespace*>(obj))
 			{
-				if (auto ns = dynamic_cast<RootObject::JavascriptNamespace*>(obj))
+				for (int j = 0; j < ns->getNumChildElements(); j++)
 				{
-					for (int j = 0; j < ns->getNumChildElements(); j++)
+					if (DebugInformation::Ptr nsptr = ns->getChildElement(j))
 					{
-						if (DebugInformation::Ptr nsptr = ns->getChildElement(j))
-						{
-							if (auto nsobj = nsptr->getObject())
-							{
-								if (f.first.get() == nsobj)
-								{
-									f.second(nsptr);
-									return;
-								}
-							}
-						}
+						if (auto nsobj = nsptr->getObject())
+							objectMap[nsobj] = nsptr;
 					}
-				}
-				else if(f.first.get() == obj)
-				{
-					f.second(ptr);
-					return;
 				}
 			}
 		}
+	}
+
+	// O(1) lookup for each listener
+	for (const auto& f : debugInfoListeners)
+	{
+		auto it = objectMap.find(f.first.get());
+		if (it != objectMap.end())
+			f.second(it->second);
 	}
 }
 
