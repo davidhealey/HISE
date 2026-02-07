@@ -1447,6 +1447,8 @@ namespace ScriptingObjects
 
 		bool isUsingInlineStyleSheet() const { return isUsingCSS() && useInlineStyleSheet; }
 
+		String getExternalCssPath() const;
+
 		void setEnableProfiling(DebugSession::ProfileDataSource::Ptr ptr, ApiProviderBase::Holder* h);
 
 		bool callWithGraphics(Graphics& g_, const Identifier& functionname, var argsObject, Component* c);

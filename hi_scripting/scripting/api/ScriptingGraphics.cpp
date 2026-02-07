@@ -2491,6 +2491,18 @@ void ScriptingObjects::ScriptedLookAndFeel::setInlineStyleSheet(const String& cs
 	setStyleSheetInternal(cssCode);
 }
 
+String ScriptingObjects::ScriptedLookAndFeel::getExternalCssPath() const
+{
+	if (!isUsingCSS() || isUsingInlineStyleSheet())
+		return {};
+
+	auto cssFile = getMainController()->getCurrentFileHandler()
+		.getSubDirectory(FileHandlerBase::Scripts)
+		.getChildFile(currentStyleSheetFile);
+
+	return cssFile.getFullPathName().replace("\\", "/");
+}
+
 String ScriptingObjects::ScriptedLookAndFeel::loadStyleSheetFile(const String& fileName)
 {
 	if(!fileName.endsWith(".css"))
@@ -2684,11 +2696,13 @@ bool ScriptingObjects::ScriptedLookAndFeel::callWithGraphics(Graphics& g_, const
 
 #endif
 
-	if (auto registry = getScriptProcessor()->getScriptingContent()->getLafRegistry())
+	if (hasScriptFunctions)
 	{
-		auto id = Identifier(argsObject["id"].toString());
-		auto ok = registry->markAsRendered(id);
-		jassert(ok);
+		if (auto registry = getScriptProcessor()->getScriptingContent()->getLafRegistry())
+		{
+			auto id = Identifier(argsObject["id"].toString());
+			registry->markAsRendered(id);
+		}
 	}
 
     // If this hits, you need to add that id to the array above.

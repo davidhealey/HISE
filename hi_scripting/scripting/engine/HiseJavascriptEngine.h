@@ -847,7 +847,6 @@ public:
 			int getNumDebugObjects() const
 			{
 				return 0;
-				
 			}
 
 			bool updateCyclicReferenceList(ThreadData& data, const Identifier& id) override;

@@ -3387,15 +3387,14 @@ public:
 				bool operator==(const RegisteredComponent& other) const { return name == other.name; }
 
 				Identifier name;
-				bool rendered = false;
+				Atomic<int> rendered = 0;
 			};
 
 			Array<RegisteredComponent> assignedComponents;
 			String variableName;     // "LafNamespace.buttonLaf"
 			RenderStyle renderStyle = RenderStyle::Unassigned; // Script, Css, CssInline, Mixed
 			String location;         // createLocalLookAndFeel() location - always present
-			String cssLocation;      // CSS file path OR inline CSS location - empty for "script" style
-			WeakReference<DebugableObjectBase> laf; // opaque pointer, just for connecting components in setLocalLookAndFeel(),
+			String cssLocation;      // CSS file full path - empty for inline/script style
 		};
 
 		// --- Called by REST API ---
