@@ -128,6 +128,16 @@ namespace RestApiIds
     DECLARE_ID(outputPath);
     DECLARE_ID(filePath);
     DECLARE_ID(selectionCount);
+    
+    // LAF (LookAndFeel) integration
+    DECLARE_ID(laf);                  // LAF info object for a component
+    DECLARE_ID(location);             // location of the LAF definition
+    DECLARE_ID(renderStyle);          // "script", "css", "css_inline", "mixed"
+    DECLARE_ID(cssLocation);          // Full path to external CSS file
+    DECLARE_ID(lafRenderWarning);     // Warning object when LAF render timeout
+    DECLARE_ID(unrenderedComponents); // Array of unrendered component objects
+    DECLARE_ID(timeoutMs);            // Timeout value in milliseconds
+    DECLARE_ID(reason);               // Reason for not rendering: "invisible" or "timeout"
 }
 
 #undef DECLARE_ID

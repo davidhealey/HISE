@@ -56,6 +56,9 @@ public:
         testStatusEndpoint();
         testListComponentsFlat();
         testListComponentsHierarchy();
+        testListComponentsWithLaf();
+        testListComponentsWithoutLaf();
+        testListComponentsWithLafHierarchy();
         testGetComponentProperties();
         testSetScriptSuccess();
         testSetScriptCompileError();
@@ -532,6 +535,128 @@ private:
         }
         
         expect(foundNestedChild, "ChildKnob should be nested under Panel1");
+    }
+    
+    //==========================================================================
+    void testListComponentsWithLaf()
+    {
+        beginTest("GET /api/list_components (with LAF info)");
+        
+        ctx->reset();
+        
+        // Create a button with a script-based LAF
+        ctx->compile("Content.makeFrontInterface(600, 400);\n"
+                     "const var TestButton = Content.addButton(\"TestButton\", 10, 10);\n"
+                     "const var laf = Content.createLocalLookAndFeel();\n"
+                     "laf.registerFunction(\"drawToggleButton\", function(g, obj) {\n"
+                     "    g.fillAll(0xFF000000);\n"
+                     "});\n"
+                     "TestButton.setLocalLookAndFeel(laf);");
+        
+        auto response = ctx->httpGet("/api/list_components?moduleId=Interface");
+        var json = ctx->parseJson(response);
+        
+        expect((bool)json["success"], "Should succeed");
+        
+        auto components = json["components"];
+        expect(components.isArray() && components.size() == 1, "Should have 1 component");
+        
+        auto button = components[0];
+        expect(button["id"].toString() == "TestButton", "Should be TestButton");
+        
+        // Verify LAF info is present
+        auto laf = button["laf"];
+        expect(laf.isObject(), "Should have laf object for component with LAF assigned");
+        expect(laf["id"].toString() == "laf", "LAF id should be 'laf'");
+        expect(laf["renderStyle"].toString() == "script", "Should be script style for registerFunction LAF");
+        expect(laf.hasProperty("location"), "Should have location property");
+        expect(laf.hasProperty("cssLocation"), "Should have cssLocation property");
+    }
+    
+    //==========================================================================
+    void testListComponentsWithoutLaf()
+    {
+        beginTest("GET /api/list_components (without LAF)");
+        
+        ctx->reset();
+        
+        // Create a component without LAF
+        ctx->compile("Content.makeFrontInterface(600, 400);\n"
+                     "const var TestKnob = Content.addKnob(\"TestKnob\", 10, 10);");
+        
+        auto response = ctx->httpGet("/api/list_components?moduleId=Interface");
+        var json = ctx->parseJson(response);
+        
+        expect((bool)json["success"], "Should succeed");
+        
+        auto components = json["components"];
+        expect(components.size() == 1, "Should have 1 component");
+        
+        auto knob = components[0];
+        expect(knob["id"].toString() == "TestKnob", "Should be TestKnob");
+        
+        // Verify LAF is false when no LAF assigned
+        expect(knob.hasProperty("laf"), "Should have laf property");
+        expect(!knob["laf"], "laf should be false when no LAF assigned");
+    }
+    
+    //==========================================================================
+    void testListComponentsWithLafHierarchy()
+    {
+        beginTest("GET /api/list_components?hierarchy=true (with LAF info)");
+        
+        ctx->reset();
+        
+        // Create a panel with a child that has LAF
+        ctx->compile("Content.makeFrontInterface(600, 400);\n"
+                     "const var Panel1 = Content.addPanel(\"Panel1\", 10, 10);\n"
+                     "Panel1.set(\"width\", 200);\n"
+                     "Panel1.set(\"height\", 200);\n"
+                     "const var ChildButton = Content.addButton(\"ChildButton\", 20, 20);\n"
+                     "ChildButton.set(\"parentComponent\", \"Panel1\");\n"
+                     "const var laf = Content.createLocalLookAndFeel();\n"
+                     "laf.registerFunction(\"drawToggleButton\", function(g, obj) {\n"
+                     "    g.fillAll(0xFF000000);\n"
+                     "});\n"
+                     "ChildButton.setLocalLookAndFeel(laf);");
+        
+        auto response = ctx->httpGet("/api/list_components?moduleId=Interface&hierarchy=true");
+        var json = ctx->parseJson(response);
+        
+        expect((bool)json["success"], "Should succeed");
+        
+        // Find Panel1 and check its LAF and its child's LAF
+        auto components = json["components"];
+        bool foundPanel = false;
+        bool foundChildWithLaf = false;
+        
+        for (int i = 0; i < components.size(); i++)
+        {
+            if (components[i]["id"].toString() == "Panel1")
+            {
+                foundPanel = true;
+                
+                // Panel should have laf: false
+                expect(!components[i]["laf"], "Panel without LAF should have laf: false");
+                
+                // Check child
+                auto children = components[i]["childComponents"];
+                for (int j = 0; j < children.size(); j++)
+                {
+                    if (children[j]["id"].toString() == "ChildButton")
+                    {
+                        foundChildWithLaf = true;
+                        auto childLaf = children[j]["laf"];
+                        expect(childLaf.isObject(), "Child with LAF should have laf object");
+                        expect(childLaf["renderStyle"].toString() == "script", 
+                               "Child LAF should have script renderStyle");
+                    }
+                }
+            }
+        }
+        
+        expect(foundPanel, "Should find Panel1");
+        expect(foundChildWithLaf, "Should find ChildButton with LAF in hierarchy");
     }
     
     //==========================================================================

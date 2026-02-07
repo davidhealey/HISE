@@ -190,6 +190,100 @@ void RestHelpers::waitForPendingCallbacks(ScriptComponent* sc, int timeoutMs)
 	}
 }
 
+//==============================================================================
+// LAF (LookAndFeel) integration helpers
+
+/** Converts LafRegistry::LafInfo::RenderStyle enum to JSON string. */
+static String renderStyleToString(ScriptingApi::Content::LafRegistry::LafInfo::RenderStyle style)
+{
+	using RenderStyle = ScriptingApi::Content::LafRegistry::LafInfo::RenderStyle;
+	
+	switch (style)
+	{
+		case RenderStyle::Script:    return "script";
+		case RenderStyle::Css:       return "css";
+		case RenderStyle::CssInline: return "css_inline";
+		case RenderStyle::Mixed:     return "mixed";
+		default:                     return "unknown";
+	}
+}
+
+/** Builds LAF info object for a component, or returns false if no LAF assigned. */
+static var getLafInfoForComponent(ScriptingApi::Content::LafRegistry* registry, const Identifier& componentId)
+{
+	if (registry == nullptr)
+		return var(false);
+	
+	if (auto lafInfo = registry->getLafInfoForComponent(componentId))
+	{
+		DynamicObject::Ptr laf = new DynamicObject();
+		laf->setProperty(RestApiIds::id, lafInfo->variableName);
+		laf->setProperty(RestApiIds::renderStyle, renderStyleToString(lafInfo->renderStyle));
+		laf->setProperty(RestApiIds::location, lafInfo->location);
+		laf->setProperty(RestApiIds::cssLocation, lafInfo->cssLocation);
+		return var(laf.get());
+	}
+	
+	return var(false);
+}
+
+/** Checks for script-based LAF recipients and waits for them to render.
+    If timeout occurs, adds lafRenderWarning to the result object.
+    Skipped on test port (1901) to avoid test delays. */
+static void addLafRenderWarningIfNeeded(MainController* mc, 
+                                         ScriptingApi::Content* content, 
+                                         DynamicObject* result)
+{
+	// Skip on test port to avoid test delays
+	if (auto bp = dynamic_cast<BackendProcessor*>(mc))
+	{
+		if (bp->getRestServer().isTestMode())
+			return;
+	}
+	
+	auto registry = content->getLafRegistry();
+	if (registry == nullptr || !registry->hasScriptBasedRecipients())
+		return;
+	
+	// Poll for render completion - pump message loop to allow UI thread to paint
+	constexpr int timeoutMs = 1000;
+	constexpr int pollIntervalMs = 50;
+	int elapsed = 0;
+	
+	while (elapsed < timeoutMs && !registry->allRecipientsRendered())
+	{
+		// Pump the message loop to allow UI thread to process paint events
+		if (auto* mm = MessageManager::getInstanceWithoutCreating())
+			mm->runDispatchLoopUntil(pollIntervalMs);
+		else
+			Thread::sleep(pollIntervalMs);
+		
+		elapsed += pollIntervalMs;
+	}
+	
+	auto unrendered = registry->getUnrenderedComponents();
+	
+	if (!unrendered.isEmpty())
+	{
+		DynamicObject::Ptr warning = new DynamicObject();
+		warning->setProperty(RestApiIds::errorMessage, 
+			"Some LAF components did not render");
+		
+		Array<var> componentList;
+		for (const auto& info : unrendered)
+		{
+			DynamicObject::Ptr comp = new DynamicObject();
+			comp->setProperty(RestApiIds::id, info.id.toString());
+			comp->setProperty(RestApiIds::reason, info.isInvisible ? "invisible" : "timeout");
+			componentList.add(var(comp.get()));
+		}
+		warning->setProperty(RestApiIds::unrenderedComponents, componentList);
+		warning->setProperty(RestApiIds::timeoutMs, timeoutMs);
+		
+		result->setProperty(RestApiIds::lafRenderWarning, var(warning.get()));
+	}
+}
+
 RestServer::Response RestHelpers::handleRecompile(MainController* mc, RestServer::AsyncRequest::Ptr req)
 {
 	auto obj = req->getRequest().getJsonBody();
@@ -203,9 +297,9 @@ RestServer::Response RestHelpers::handleRecompile(MainController* mc, RestServer
 
 	if (auto jp = getScriptProcessor(mc, req))
 	{
-		mc->getKillStateHandler().killVoicesAndCall(dynamic_cast<Processor*>(jp), [req, forceSync](Processor* p)
+		mc->getKillStateHandler().killVoicesAndCall(dynamic_cast<Processor*>(jp), [req, forceSync, mc](Processor* p)
 		{
-			JavascriptProcessor::ResultFunction rf = [req, forceSync](const JavascriptProcessor::SnippetResult& result)
+			JavascriptProcessor::ResultFunction rf = [req, forceSync, mc, p](const JavascriptProcessor::SnippetResult& result)
 			{
 				DynamicObject::Ptr r = new DynamicObject();
 				r->setProperty(RestApiIds::success, result.r.wasOk());
@@ -214,6 +308,16 @@ RestServer::Response RestHelpers::handleRecompile(MainController* mc, RestServer
 				
 				if (forceSync)
 					r->setProperty(RestApiIds::warning, "Executed in unsafe synchronous mode - threading checks bypassed");
+				
+				// Check for LAF render warnings on successful compilation
+				if (result.r.wasOk())
+				{
+					if (auto ps = dynamic_cast<ProcessorWithScriptingContent*>(p))
+					{
+						if (auto content = ps->getScriptingContent())
+							addLafRenderWarningIfNeeded(mc, content, r.get());
+					}
+				}
 
 				req->complete(RestServer::Response::ok(var(r.get())));
 			};
@@ -230,7 +334,9 @@ RestServer::Response RestHelpers::handleRecompile(MainController* mc, RestServer
 	return req->waitForResponse();
 }
 
-DynamicObject::Ptr RestHelpers::createRecursivePropertyTree(ScriptComponent* sc)
+/** Internal recursive helper that includes LAF info when registry is provided. */
+static DynamicObject::Ptr createRecursivePropertyTreeWithLaf(ScriptComponent* sc, 
+                                                              ScriptingApi::Content::LafRegistry* registry)
 {
 	DynamicObject::Ptr obj = new DynamicObject();
 
@@ -242,6 +348,9 @@ DynamicObject::Ptr RestHelpers::createRecursivePropertyTree(ScriptComponent* sc)
 	obj->setProperty(RestApiIds::y, sc->getScriptObjectProperty(ScriptComponent::y));
 	obj->setProperty(RestApiIds::width, sc->getScriptObjectProperty(ScriptComponent::width));
 	obj->setProperty(RestApiIds::height, sc->getScriptObjectProperty(ScriptComponent::height));
+	
+	// Add LAF info
+	obj->setProperty(RestApiIds::laf, getLafInfoForComponent(registry, sc->getName()));
 
 	Array<var> children;
 
@@ -253,7 +362,7 @@ DynamicObject::Ptr RestHelpers::createRecursivePropertyTree(ScriptComponent* sc)
 	{
 		if (auto child = sc->getScriptProcessor()->getScriptingContent()->getComponentWithName(c[RestApiIds::id].toString()))
 		{
-			auto cobj = createRecursivePropertyTree(child);
+			auto cobj = createRecursivePropertyTreeWithLaf(child, registry);
 			children.add(var(cobj.get()));
 		}
 	}
@@ -261,6 +370,12 @@ DynamicObject::Ptr RestHelpers::createRecursivePropertyTree(ScriptComponent* sc)
 	obj->setProperty(RestApiIds::childComponents, var(children));
 
 	return obj;
+}
+
+DynamicObject::Ptr RestHelpers::createRecursivePropertyTree(ScriptComponent* sc)
+{
+	// Public API without LAF info (for backward compatibility)
+	return createRecursivePropertyTreeWithLaf(sc, nullptr);
 }
 
 //==============================================================================
@@ -299,7 +414,7 @@ const Array<RestHelpers::RouteMetadata>& RestHelpers::getRouteMetadata()
 			.withMethod(RestServer::POST)
 			.withCategory("scripting")
 			.withDescription("Update one or more callbacks and optionally compile. Only specified callbacks are updated; others remain unchanged.")
-			.withReturns("Compilation result with updatedCallbacks array, success status, logs, and errors")
+			.withReturns("Compilation result with updatedCallbacks array, success status, logs, errors, and optional lafRenderWarning listing unrendered LAF components with reason (invisible or timeout)")
 			.withBodyParam(RouteParameter(RestApiIds::moduleId, "The script processor's module ID"))
 			.withBodyParam(RouteParameter(RestApiIds::callbacks, "Object with callback names as keys and script content as values (e.g., {onInit: \"...\", onNoteOn: \"...\"})"))
 			.withBodyParam(RouteParameter(RestApiIds::compile, "Whether to compile after setting").withDefault("true"))
@@ -310,7 +425,7 @@ const Array<RestHelpers::RouteMetadata>& RestHelpers::getRouteMetadata()
 			.withMethod(RestServer::POST)
 			.withCategory("scripting")
 			.withDescription("Recompile a processor (restores preset values, triggering callbacks for saveInPreset components)")
-			.withReturns("Compilation result with success status, logs, and errors")
+			.withReturns("Compilation result with success status, logs, errors, and optional lafRenderWarning listing unrendered LAF components with reason (invisible or timeout)")
 			.withBodyParam(RouteParameter(RestApiIds::moduleId, "The script processor's module ID"))
 			.withBodyParam(RouteParameter(RestApiIds::forceSynchronousExecution, "Debug tool: Bypass threading model for synchronous execution. WARNING: May cause crashes due to race conditions - use only as last resort after saving.").withDefault("false")));
 		
@@ -318,7 +433,7 @@ const Array<RestHelpers::RouteMetadata>& RestHelpers::getRouteMetadata()
 		m.add(RouteMetadata(ApiRoute::ListComponents, "api/list_components")
 			.withCategory("ui")
 			.withDescription("List all UI components in a script processor")
-			.withReturns("Array of components with id and type (flat list or hierarchical tree)")
+			.withReturns("Array of components with id, type, and laf info (flat list or hierarchical tree with layout properties)")
 			.withModuleIdParam()
 			.withQueryParam(RouteParameter(RestApiIds::hierarchy, "If true, returns nested tree with layout properties").withDefault("false")));
 		
@@ -714,10 +829,10 @@ RestServer::Response RestHelpers::handleSetScript(MainController* mc, RestServer
 	{
 		// Recompile and return result with updatedCallbacks in response
 		mc->getKillStateHandler().killVoicesAndCall(dynamic_cast<Processor*>(jp), 
-			[req, forceSync, updatedCallbackNames, moduleId](Processor* p)
+			[req, forceSync, updatedCallbackNames, moduleId, mc](Processor* p)
 		{
 			JavascriptProcessor::ResultFunction rf = 
-				[req, forceSync, updatedCallbackNames, moduleId](const JavascriptProcessor::SnippetResult& result)
+				[req, forceSync, updatedCallbackNames, moduleId, mc, p](const JavascriptProcessor::SnippetResult& result)
 			{
 				DynamicObject::Ptr r = new DynamicObject();
 				r->setProperty(RestApiIds::success, result.r.wasOk());
@@ -728,6 +843,16 @@ RestServer::Response RestHelpers::handleSetScript(MainController* mc, RestServer
 				
 				if (forceSync)
 					r->setProperty(RestApiIds::warning, "Executed in unsafe synchronous mode - threading checks bypassed");
+				
+				// Check for LAF render warnings on successful compilation
+				if (result.r.wasOk())
+				{
+					if (auto ps = dynamic_cast<ProcessorWithScriptingContent*>(p))
+					{
+						if (auto content = ps->getScriptingContent())
+							addLafRenderWarningIfNeeded(mc, content, r.get());
+					}
+				}
 
 				req->complete(RestServer::Response::ok(var(r.get())));
 			};
@@ -767,6 +892,7 @@ RestServer::Response RestHelpers::handleListComponents(MainController* mc, RestS
 		Array<var> components;
 
 		auto c = ps->getScriptingContent();
+		auto registry = c->getLafRegistry();
 
 		if (useHierarchy)
 		{
@@ -775,20 +901,21 @@ RestServer::Response RestHelpers::handleListComponents(MainController* mc, RestS
 				auto sc = c->getComponent(i);
 				if (sc->getParentScriptComponent() == nullptr)
 				{
-					auto obj = createRecursivePropertyTree(sc);
+					auto obj = createRecursivePropertyTreeWithLaf(sc, registry.get());
 					components.add(obj.get());
 				}
 			}
 		}
 		else
 		{
-			// Flat list: id and type only
+			// Flat list: id, type, and laf info
 			for(int i = 0; i < c->getNumComponents(); i++)
 			{
 				auto sc = c->getComponent(i);
 				DynamicObject::Ptr comp = new DynamicObject();
 				comp->setProperty(RestApiIds::id, sc->getName().toString());
 				comp->setProperty(RestApiIds::type, sc->getObjectName().toString());
+				comp->setProperty(RestApiIds::laf, getLafInfoForComponent(registry.get(), sc->getName()));
 				components.add(var(comp.get()));
 			}
 		}
