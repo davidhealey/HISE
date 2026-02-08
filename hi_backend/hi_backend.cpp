@@ -70,8 +70,12 @@
 #include "backend/ai_tools/RestHelpers.h"
 #include "backend/ai_tools/RestHelpers.cpp"
 
+#include "backend/ai_tools/InteractionParser.h"
+#include "backend/ai_tools/InteractionParser.cpp"
+
 #if HI_RUN_UNIT_TESTS
 #include "backend/ai_tools/ServerUnitTests.cpp"
+#include "backend/ai_tools/InteractionParserTests.cpp"
 #endif
 
 #include "backend/BackendProcessor.cpp"

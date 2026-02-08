@@ -1963,10 +1963,10 @@ public:
             
             // If you're working on a unit test, just add the "Current" category
             // and then uncomment this line.
-            if(UnitTest::getTestsInCategory("Current").isEmpty())
+            if(UnitTest::getTestsInCategory("AI Tools").isEmpty())
                 runner.runAllTests();
             else
-                runner.runTestsInCategory("Current");
+                runner.runTestsInCategory("AI Tools");
 
 			for (int i = 0; i < runner.getNumResults(); i++)
 			{
