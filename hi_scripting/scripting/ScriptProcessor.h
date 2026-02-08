@@ -573,6 +573,9 @@ public:
 	SnippetDocument *getSnippet(const Identifier& id);
 	const SnippetDocument *getSnippet(const Identifier& id) const;
 
+	/** Returns the code document for a debug location (handles callbacks and external files). */
+	CodeDocument* getSnippet(const DebugableObjectBase::Location& loc);
+
 	void saveScript(ValueTree &v) const;
 	void restoreScript(const ValueTree &v);
 

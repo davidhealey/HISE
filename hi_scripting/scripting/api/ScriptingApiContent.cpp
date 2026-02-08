@@ -8421,31 +8421,12 @@ juce::var ScriptingApi::Content::createLocalLookAndFeel()
 	{
 		if (auto jp = dynamic_cast<JavascriptProcessor*>(getScriptProcessor()))
 		{
-			jp->getScriptEngine()->debugInfoListeners.push_back({ laf , [registry, jp](DebugInformationBase::Ptr debugInfo)
+			jp->getScriptEngine()->debugInfoListeners.push_back({ laf, [registry](DebugInformationBase::Ptr debugInfo)
 			{
 				auto id = debugInfo->getTextForName();
 				auto loc = debugInfo->getLocation();
-
-				auto convertToSnippetId = [](const String& fn)
-				{
-					// match callbacks & external files to whatever HISE needs.
-					return Identifier(fn);
-				};
-
-				auto snippetId = convertToSnippetId(loc.fileName);
-				auto codeDoc = jp->getSnippet(Identifier(loc.fileName));
-				CodeDocument::Position pos(*codeDoc, loc.charNumber);
-				auto lineNumber = pos.getLineNumber();
-				auto indexInLine = pos.getIndexInLine();
-				auto fileName = loc.fileName;
-
-				auto p = dynamic_cast<Processor*>(jp);
-
-				auto b64 = Base64::toBase64(p + "|" + "lineNumber"); // whatever, match the exact output
-
-				// pass in the b64 location string instead, from there it's the same path as the error formatting...
-				registry->registerLaf(debugInfo->getObject(), id, b64);
-			} });
+				registry->registerLaf(debugInfo->getObject(), id, loc);
+			}});
 		}
 	}
 
@@ -9223,7 +9204,7 @@ void hise::ScriptingApi::Content::LafRegistry::registerLaf(DebugableObjectBase* 
 		auto newInfo = new LafInfo();
 
 		newInfo->variableName = variableName;
-		newInfo->location = location.toGotoString();
+		newInfo->location = location;
 
 		auto useCSS = typed->isUsingCSS();
 		auto useScript = typed->isUsingScriptFunctions();

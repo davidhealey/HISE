@@ -208,18 +208,107 @@ static String renderStyleToString(ScriptingApi::Content::LafRegistry::LafInfo::R
 	}
 }
 
-/** Builds LAF info object for a component, or returns false if no LAF assigned. */
-static var getLafInfoForComponent(ScriptingApi::Content::LafRegistry* registry, const Identifier& componentId)
+/** Decodes a Base64-encoded location string to file:line:col format.
+    Input: "{{Base64(processorId|path|charIndex|line|col)}}"
+    Output: "path:line:col" or "moduleId.js:line:col" for inline callbacks */
+static String decodeLocationString(const String& encodedLocation, 
+                                    const File& scriptRoot, 
+                                    const String& moduleId)
 {
-	if (registry == nullptr)
+	String encoded = encodedLocation.fromFirstOccurrenceOf("{{", false, false)
+	                                 .upToFirstOccurrenceOf("}}", false, false);
+	
+	if (encoded.isEmpty())
+		return encodedLocation;  // Return as-is if not encoded
+	
+	MemoryOutputStream mos;
+	if (!Base64::convertFromBase64(mos, encoded))
+		return encodedLocation;
+	
+	String decoded(static_cast<const char*>(mos.getData()), mos.getDataSize());
+	StringArray parts = StringArray::fromTokens(decoded, "|", "");
+	
+	if (parts.size() < 5)
+		return encodedLocation;
+	
+	// Format: "processorId|relativePath|charIndex|line|col"
+	String path = parts[1];
+	int line = parts[3].getIntValue();
+	int col = parts[4].getIntValue();
+	
+	String fullPath;
+	if (path.isEmpty() || path.contains("()"))
+	{
+		fullPath = moduleId + ".js";
+	}
+	else
+	{
+		File f = scriptRoot.getChildFile(path);
+		if (f.existsAsFile())
+			fullPath = f.getRelativePathFrom(scriptRoot.getParentDirectory()).replaceCharacter('\\', '/');
+		else
+			fullPath = path;
+	}
+	
+	return fullPath + ":" + String(line) + ":" + String(col);
+}
+
+/** Builds LAF info object for a component, or returns false if no LAF assigned.
+    Computes location lazily - by this point watched files are populated. */
+static var getLafInfoForComponent(ScriptingApi::Content::LafRegistry* registry, 
+                                   ScriptComponent* sc,
+                                   const File& scriptRoot,
+                                   const String& moduleId)
+{
+	if (registry == nullptr || sc == nullptr)
 		return var(false);
 	
-	if (auto lafInfo = registry->getLafInfoForComponent(componentId))
+	if (auto lafInfo = registry->getLafInfoForComponent(sc->getName()))
 	{
 		DynamicObject::Ptr laf = new DynamicObject();
 		laf->setProperty(RestApiIds::id, lafInfo->variableName);
 		laf->setProperty(RestApiIds::renderStyle, renderStyleToString(lafInfo->renderStyle));
-		laf->setProperty(RestApiIds::location, lafInfo->location);
+		
+		// Compute location lazily - watched files are now populated
+		String locationStr;
+		if (auto jp = dynamic_cast<JavascriptProcessor*>(sc->getScriptProcessor()))
+		{
+			if (auto codeDoc = jp->getSnippet(lafInfo->location))
+			{
+				CodeDocument::Position pos(*codeDoc, lafInfo->location.charNumber);
+				auto lineNumber = pos.getLineNumber() + 1;  // 1-based
+				auto columnNumber = pos.getIndexInLine();
+				
+				// Build location string directly (same format as error callstacks)
+				auto fileName = lafInfo->location.fileName;
+				String filePath;
+				
+				if (fileName.isEmpty() || fileName == "onInit" || fileName.contains("()"))
+				{
+					// Inline callback - use moduleId.js
+					filePath = moduleId + ".js";
+				}
+				else
+				{
+					// External file - use relative path from Scripts folder
+					filePath = "Scripts/" + fileName;
+				}
+				
+				locationStr = filePath + ":" + String(lineNumber) + ":" + String(columnNumber);
+			}
+			else
+			{
+				// Fallback if document not found
+				locationStr = lafInfo->location.fileName.isNotEmpty() ? lafInfo->location.fileName : "onInit";
+			}
+		}
+		else
+		{
+			// Fallback if no JavascriptProcessor
+			locationStr = lafInfo->location.fileName.isNotEmpty() ? lafInfo->location.fileName : "onInit";
+		}
+		
+		laf->setProperty(RestApiIds::location, locationStr);
 		laf->setProperty(RestApiIds::cssLocation, lafInfo->cssLocation);
 		return var(laf.get());
 	}
@@ -336,7 +425,9 @@ RestServer::Response RestHelpers::handleRecompile(MainController* mc, RestServer
 
 /** Internal recursive helper that includes LAF info when registry is provided. */
 static DynamicObject::Ptr createRecursivePropertyTreeWithLaf(ScriptComponent* sc, 
-                                                              ScriptingApi::Content::LafRegistry* registry)
+                                                              ScriptingApi::Content::LafRegistry* registry,
+                                                              const File& scriptRoot,
+                                                              const String& moduleId)
 {
 	DynamicObject::Ptr obj = new DynamicObject();
 
@@ -350,7 +441,7 @@ static DynamicObject::Ptr createRecursivePropertyTreeWithLaf(ScriptComponent* sc
 	obj->setProperty(RestApiIds::height, sc->getScriptObjectProperty(ScriptComponent::height));
 	
 	// Add LAF info
-	obj->setProperty(RestApiIds::laf, getLafInfoForComponent(registry, sc->getName()));
+	obj->setProperty(RestApiIds::laf, getLafInfoForComponent(registry, sc, scriptRoot, moduleId));
 
 	Array<var> children;
 
@@ -362,7 +453,7 @@ static DynamicObject::Ptr createRecursivePropertyTreeWithLaf(ScriptComponent* sc
 	{
 		if (auto child = sc->getScriptProcessor()->getScriptingContent()->getComponentWithName(c[RestApiIds::id].toString()))
 		{
-			auto cobj = createRecursivePropertyTreeWithLaf(child, registry);
+			auto cobj = createRecursivePropertyTreeWithLaf(child, registry, scriptRoot, moduleId);
 			children.add(var(cobj.get()));
 		}
 	}
@@ -375,7 +466,8 @@ static DynamicObject::Ptr createRecursivePropertyTreeWithLaf(ScriptComponent* sc
 DynamicObject::Ptr RestHelpers::createRecursivePropertyTree(ScriptComponent* sc)
 {
 	// Public API without LAF info (for backward compatibility)
-	return createRecursivePropertyTreeWithLaf(sc, nullptr);
+	// Pass empty File and String since LAF info won't be used with nullptr registry
+	return createRecursivePropertyTreeWithLaf(sc, nullptr, File(), String());
 }
 
 //==============================================================================
@@ -885,9 +977,13 @@ RestServer::Response RestHelpers::handleListComponents(MainController* mc, RestS
 		auto hierarchyParam = req->getRequest()[RestApiIds::hierarchy];
 		auto useHierarchy = (hierarchyParam == "true" || hierarchyParam == "1");
 
+		auto p = dynamic_cast<Processor*>(jp);
+		auto moduleId = p->getId();
+		auto scriptRoot = mc->getSampleManager().getProjectHandler().getSubDirectory(FileHandlerBase::Scripts);
+
 		DynamicObject::Ptr result = new DynamicObject();
 		result->setProperty(RestApiIds::success, true);
-		result->setProperty(RestApiIds::moduleId, dynamic_cast<Processor*>(jp)->getId());
+		result->setProperty(RestApiIds::moduleId, moduleId);
 
 		Array<var> components;
 
@@ -901,7 +997,7 @@ RestServer::Response RestHelpers::handleListComponents(MainController* mc, RestS
 				auto sc = c->getComponent(i);
 				if (sc->getParentScriptComponent() == nullptr)
 				{
-					auto obj = createRecursivePropertyTreeWithLaf(sc, registry.get());
+					auto obj = createRecursivePropertyTreeWithLaf(sc, registry.get(), scriptRoot, moduleId);
 					components.add(obj.get());
 				}
 			}
@@ -915,7 +1011,7 @@ RestServer::Response RestHelpers::handleListComponents(MainController* mc, RestS
 				DynamicObject::Ptr comp = new DynamicObject();
 				comp->setProperty(RestApiIds::id, sc->getName().toString());
 				comp->setProperty(RestApiIds::type, sc->getObjectName().toString());
-				comp->setProperty(RestApiIds::laf, getLafInfoForComponent(registry.get(), sc->getName()));
+				comp->setProperty(RestApiIds::laf, getLafInfoForComponent(registry.get(), sc, scriptRoot, moduleId));
 				components.add(var(comp.get()));
 			}
 		}

@@ -3399,10 +3399,10 @@ public:
 				bool isShowing = true;  // Captured at registerLaf() time
 			};
 
-			Array<RegisteredComponent> assignedComponents;
+		Array<RegisteredComponent> assignedComponents;
 			String variableName;     // "LafNamespace.buttonLaf"
 			RenderStyle renderStyle = RenderStyle::Unassigned; // Script, Css, CssInline, Mixed
-			String location;         // createLocalLookAndFeel() location - always present
+			DebugableObjectBase::Location location;  // Raw location, encoded lazily by REST API
 			String cssLocation;      // CSS file full path - empty for inline/script style
 		};
 

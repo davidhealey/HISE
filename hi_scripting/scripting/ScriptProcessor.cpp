@@ -1649,6 +1649,39 @@ const JavascriptProcessor::SnippetDocument * JavascriptProcessor::getSnippet(con
 	return nullptr;
 }
 
+CodeDocument* JavascriptProcessor::getSnippet(const DebugableObjectBase::Location& loc)
+{
+	auto fileName = loc.fileName;
+
+	if (fileName.isEmpty() || fileName == "onInit")
+	{
+		// onInit callback - empty fileName or "onInit" means onInit
+		return getSnippet(Identifier("onInit"));
+	}
+	else if (fileName.contains("()"))
+	{
+		// Other callback like "onNoteOn()" - strip the "()"
+		auto callbackName = fileName.upToFirstOccurrenceOf("()", false, false);
+		return getSnippet(Identifier(callbackName));
+	}
+	else
+	{
+		auto scriptFolder = GET_PROJECT_HANDLER(dynamic_cast<Processor*>(this)).getSubDirectory(FileHandlerBase::Scripts);
+
+		// External file - fileName is full path
+		auto f = File(scriptFolder).getChildFile(fileName);
+
+		for (int i = 0; i < getNumWatchedFiles(); i++)
+		{
+			
+
+			if (getWatchedFile(i) == f)
+				return &getWatchedFileDocument(i);
+		}
+		return nullptr;
+	}
+}
+
 #if 0
 void JavascriptProcessor::DelayedPositionUpdater::scriptComponentChanged(ReferenceCountedObject *componentThatWasChanged, Identifier idThatWasChanged)
 {
