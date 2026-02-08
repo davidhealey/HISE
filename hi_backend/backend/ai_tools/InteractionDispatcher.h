@@ -39,12 +39,34 @@ public:
     {
         virtual ~Executor() = default;
         
-        // Primitive mouse operations
-        virtual void executeMouseDown(Point<float> normPos, const String& target, 
+        //======================================================================
+        /** Result of resolving a component target to pixel coordinates. */
+        struct ResolveResult
+        {
+            Rectangle<int> componentBounds;  // Absolute bounds in content coords
+            Point<int> pixelPosition;        // Click position within content
+            bool visible = false;
+            String error;
+            
+            bool success() const { return error.isEmpty(); }
+        };
+        
+        //======================================================================
+        /** Resolve a component ID and normalized position to absolute pixel coords.
+         *  @param componentId   Script component ID (e.g., "Button1")
+         *  @param normalizedPos Position within component (0.5, 0.5 = center)
+         *  @returns             ResolveResult with pixel position or error
+         */
+        virtual ResolveResult resolveTarget(const String& componentId, 
+                                            Point<float> normalizedPos) = 0;
+        
+        //======================================================================
+        // Primitive mouse operations (pixel coordinates)
+        virtual void executeMouseDown(Point<int> pixelPos, const String& target, 
                                       ModifierKeys mods, bool rightClick, int timestampMs) = 0;
-        virtual void executeMouseUp(Point<float> normPos, const String& target,
+        virtual void executeMouseUp(Point<int> pixelPos, const String& target,
                                     ModifierKeys mods, bool rightClick, int timestampMs) = 0;
-        virtual void executeMouseMove(Point<float> normPos, const String& target,
+        virtual void executeMouseMove(Point<int> pixelPos, const String& target,
                                       ModifierKeys mods, int timestampMs) = 0;
         
         // Screenshot capture
@@ -104,6 +126,7 @@ public:
 private:
     int64 startTimeMs = 0;
     int timeoutMs = 20000;
+    String lastError;  // Set by execute methods if resolution fails
     
     int getElapsedMs() const;
     bool waitUntilTimestamp(int targetMs, Executor& executor);
@@ -134,11 +157,13 @@ private:
 class TestExecutor : public InteractionDispatcher::Executor
 {
 public:
+    //==========================================================================
+    /** Log entry for recorded mouse/screenshot events. */
     struct LogEntry
     {
         String type;           // "mouseDown", "mouseUp", "mouseMove", "screenshot"
         String target;
-        Point<float> position;
+        Point<int> pixelPos;   // Resolved pixel position
         ModifierKeys mods;
         bool rightClick = false;
         String screenshotId;
@@ -147,7 +172,17 @@ public:
         int actualTimestampMs;    // When it actually fired
     };
     
+    //==========================================================================
+    /** Mock component for testing resolution. */
+    struct MockComponent
+    {
+        Rectangle<int> absoluteBounds;
+        bool visible = true;
+    };
+    
+    //==========================================================================
     Array<LogEntry> log;
+    std::map<String, MockComponent> mockComponents;
     int64 startTimeMs = 0;
     
     // Human intervention simulation
@@ -155,6 +190,7 @@ public:
     bool interventionTriggered = false;
     int interventionTimestampMs = 0;
     
+    //==========================================================================
     /** Reset all state for a new test. */
     void reset();
     
@@ -164,16 +200,25 @@ public:
     /** Get current elapsed time since startTiming(). */
     int getElapsedMs() const;
     
-    //==============================================================================
+    /** Add a mock component for resolution testing. */
+    void addMockComponent(const String& id, Rectangle<int> bounds, bool visible = true);
+    
+    /** Clear all mock components. */
+    void clearMockComponents();
+    
+    //==========================================================================
     // Executor interface implementation
     
-    void executeMouseDown(Point<float> normPos, const String& target,
+    ResolveResult resolveTarget(const String& componentId, 
+                                Point<float> normalizedPos) override;
+    
+    void executeMouseDown(Point<int> pixelPos, const String& target,
                           ModifierKeys mods, bool rightClick, int timestampMs) override;
     
-    void executeMouseUp(Point<float> normPos, const String& target,
+    void executeMouseUp(Point<int> pixelPos, const String& target,
                         ModifierKeys mods, bool rightClick, int timestampMs) override;
     
-    void executeMouseMove(Point<float> normPos, const String& target,
+    void executeMouseMove(Point<int> pixelPos, const String& target,
                           ModifierKeys mods, int timestampMs) override;
     
     void executeScreenshot(const String& id, float scale, int timestampMs) override;

@@ -38,6 +38,7 @@ public:
         testExecuteHover();
         testExecuteMove();
         testExecuteMoveWithPath();
+        testExecuteMoveDirectionCorrect();
         testExecuteExit();
         testExecuteScreenshot();
         testExecuteScreenshotWithScale();
@@ -78,6 +79,18 @@ public:
         // Execution log verification
         testExecutionLogContainsAllEvents();
         testExecutionLogHasCorrectFormat();
+        
+        // Component resolution tests
+        testResolutionFindsComponentAtCenter();
+        testResolutionFindsComponentAtCorners();
+        testResolutionAllowsOutOfBoundsForDrag();
+        testResolutionFailsForUnknownComponent();
+        testResolutionFailsForHiddenComponent();
+        testResolutionFailsForZeroSizeComponent();
+        testDispatcherAbortsOnUnknownComponent();
+        testDispatcherAbortsOnHiddenComponent();
+        testDispatcherLogsCorrectPixelPosition();
+        testDispatcherClickNotAtWindowCenter();
     }
     
 private:
@@ -90,6 +103,17 @@ private:
     
     using Interaction = InteractionParser::Interaction;
     using MouseInteraction = InteractionParser::MouseInteraction;
+    
+    /** Set up common mock components for tests. */
+    void setupDefaultMockComponents(TestExecutor& exec)
+    {
+        // Standard test components with known positions
+        exec.addMockComponent("Button1", {100, 50, 200, 100}, true);
+        exec.addMockComponent("Button2", {100, 160, 200, 100}, true);
+        exec.addMockComponent("Button3", {100, 270, 200, 100}, true);
+        exec.addMockComponent("Slider1", {350, 50, 50, 300}, true);
+        exec.addMockComponent("Panel1", {450, 50, 200, 200}, true);
+    }
     
     /** Create a click interaction. */
     Interaction makeClick(const String& target, int timestampMs, 
@@ -250,6 +274,7 @@ private:
         beginTest("Execute single click");
         
         TestExecutor exec;
+        setupDefaultMockComponents(exec);
         InteractionDispatcher dispatcher;
         Array<var> log;
         
@@ -275,6 +300,7 @@ private:
         beginTest("Execute click with custom position");
         
         TestExecutor exec;
+        setupDefaultMockComponents(exec);
         InteractionDispatcher dispatcher;
         Array<var> log;
         
@@ -286,8 +312,10 @@ private:
         
         auto* down = findFirstEventOfType(exec, "mouseDown");
         expect(down != nullptr, "Should have mouseDown");
-        expect(std::abs(down->position.x - 0.25f) < 0.01f, "X position should be 0.25");
-        expect(std::abs(down->position.y - 0.75f) < 0.01f, "Y position should be 0.75");
+        // Button1 is at (100, 50) with size (200, 100)
+        // Position (0.25, 0.75) should map to pixel (100 + 200*0.25, 50 + 100*0.75) = (150, 125)
+        expect(down->pixelPos.x == 150, "X pixel should be 150, got " + String(down->pixelPos.x));
+        expect(down->pixelPos.y == 125, "Y pixel should be 125, got " + String(down->pixelPos.y));
     }
     
     void testExecuteSingleClickRightClick()
@@ -295,6 +323,7 @@ private:
         beginTest("Execute right click");
         
         TestExecutor exec;
+        setupDefaultMockComponents(exec);
         InteractionDispatcher dispatcher;
         Array<var> log;
         
@@ -313,6 +342,7 @@ private:
         beginTest("Execute click with modifiers");
         
         TestExecutor exec;
+        setupDefaultMockComponents(exec);
         InteractionDispatcher dispatcher;
         Array<var> log;
         
@@ -334,6 +364,7 @@ private:
         beginTest("Execute double click");
         
         TestExecutor exec;
+        setupDefaultMockComponents(exec);
         InteractionDispatcher dispatcher;
         Array<var> log;
         
@@ -353,6 +384,7 @@ private:
         beginTest("Execute hover");
         
         TestExecutor exec;
+        setupDefaultMockComponents(exec);
         InteractionDispatcher dispatcher;
         Array<var> log;
         
@@ -372,6 +404,7 @@ private:
         beginTest("Execute move");
         
         TestExecutor exec;
+        setupDefaultMockComponents(exec);
         InteractionDispatcher dispatcher;
         Array<var> log;
         
@@ -392,6 +425,7 @@ private:
         beginTest("Execute move with path");
         
         TestExecutor exec;
+        setupDefaultMockComponents(exec);
         InteractionDispatcher dispatcher;
         Array<var> log;
         
@@ -410,11 +444,64 @@ private:
         expect(countEventsOfType(exec, "mouseMove") == 3, "Should have 3 mouseMoves for 3 path points");
     }
     
+    void testExecuteMoveDirectionCorrect()
+    {
+        beginTest("Execute move direction: from -> to (not reversed)");
+        
+        TestExecutor exec;
+        setupDefaultMockComponents(exec);
+        InteractionDispatcher dispatcher;
+        Array<var> log;
+        
+        // Move from top-left (0.0, 0.0) to bottom-right (1.0, 1.0)
+        // Panel1 is 100x100 at position (100, 100)
+        // So from = (100, 100) and to = (200, 200) in pixels
+        Array<Interaction> interactions;
+        interactions.add(makeMove("Panel1", 0, {0.0f, 0.0f}, {1.0f, 1.0f}, 100));
+        
+        exec.startTiming();
+        dispatcher.execute(interactions, exec, log);
+        
+        // Get all mouseMove events
+        Array<LogEntry*> moves;
+        for (auto& entry : exec.log)
+        {
+            if (entry.type == "mouseMove")
+                moves.add(&entry);
+        }
+        
+        expect(moves.size() >= 2, "Should have at least 2 moves");
+        
+        if (moves.size() >= 2)
+        {
+            auto& firstMove = *moves.getFirst();
+            auto& lastMove = *moves.getLast();
+            
+            // First move should be near the 'from' position (100, 100)
+            // Last move should be near the 'to' position (200, 200)
+            expect(firstMove.pixelPos.x < lastMove.pixelPos.x,
+                   "Move should progress left-to-right: first.x=" + String(firstMove.pixelPos.x) +
+                   " should be < last.x=" + String(lastMove.pixelPos.x));
+            
+            expect(firstMove.pixelPos.y < lastMove.pixelPos.y,
+                   "Move should progress top-to-bottom: first.y=" + String(firstMove.pixelPos.y) +
+                   " should be < last.y=" + String(lastMove.pixelPos.y));
+            
+            // Verify approximate positions (Panel1 is at 100,100 with size 100x100)
+            // from (0,0) -> pixel (100, 100), to (1,1) -> pixel (200, 200)
+            expect(firstMove.pixelPos.x >= 100 && firstMove.pixelPos.x <= 120,
+                   "First move X should be near 100, got " + String(firstMove.pixelPos.x));
+            expect(lastMove.pixelPos.x >= 180 && lastMove.pixelPos.x <= 200,
+                   "Last move X should be near 200, got " + String(lastMove.pixelPos.x));
+        }
+    }
+    
     void testExecuteExit()
     {
         beginTest("Execute exit");
         
         TestExecutor exec;
+        setupDefaultMockComponents(exec);
         InteractionDispatcher dispatcher;
         Array<var> log;
         
@@ -428,7 +515,7 @@ private:
         expect(countEventsOfType(exec, "mouseMove") == 1, "Should have 1 mouseMove");
         
         auto* move = findFirstEventOfType(exec, "mouseMove");
-        expect(move != nullptr && move->position.x < 0, "Should move to offscreen position");
+        expect(move != nullptr && move->pixelPos.x < 0, "Should move to offscreen position");
     }
     
     void testExecuteScreenshot()
@@ -436,6 +523,7 @@ private:
         beginTest("Execute screenshot");
         
         TestExecutor exec;
+        setupDefaultMockComponents(exec);
         InteractionDispatcher dispatcher;
         Array<var> log;
         
@@ -457,6 +545,7 @@ private:
         beginTest("Execute screenshot with scale");
         
         TestExecutor exec;
+        setupDefaultMockComponents(exec);
         InteractionDispatcher dispatcher;
         Array<var> log;
         
@@ -479,6 +568,7 @@ private:
         beginTest("Drag generates down/move/up sequence");
         
         TestExecutor exec;
+        setupDefaultMockComponents(exec);
         InteractionDispatcher dispatcher;
         Array<var> log;
         
@@ -512,6 +602,7 @@ private:
         beginTest("Drag move count matches duration");
         
         TestExecutor exec;
+        setupDefaultMockComponents(exec);
         InteractionDispatcher dispatcher;
         Array<var> log;
         
@@ -535,8 +626,14 @@ private:
         beginTest("Drag interpolates positions");
         
         TestExecutor exec;
+        setupDefaultMockComponents(exec);
         InteractionDispatcher dispatcher;
         Array<var> log;
+        
+        // Slider1 is at (350, 50) with size (50, 300)
+        // Drag from (0.0, 0.0) to (1.0, 0.0) horizontally
+        // Start pixel: (350 + 50*0.0, 50 + 300*0.0) = (350, 50)
+        // End pixel: (350 + 50*1.0, 50 + 300*0.0) = (400, 50)
         
         Array<Interaction> interactions;
         interactions.add(makeDrag("Slider1", 0, {0.0f, 0.0f}, {1.0f, 0.0f}, 100));
@@ -544,22 +641,22 @@ private:
         exec.startTiming();
         dispatcher.execute(interactions, exec, log);
         
-        // Check that mouseDown is at start and mouseUp is at end
+        // Check that mouseDown is at start pixel position
         auto* down = findFirstEventOfType(exec, "mouseDown");
-        expect(down != nullptr && std::abs(down->position.x - 0.0f) < 0.01f, 
-               "mouseDown should be at start (0.0)");
+        expect(down != nullptr && down->pixelPos.x == 350, 
+               "mouseDown should be at start pixel X=350, got " + String(down->pixelPos.x));
         
         // Find mouseUp (last event)
         auto& up = exec.log[exec.log.size() - 1];
         expect(up.type == "mouseUp", "Last event should be mouseUp");
-        expect(std::abs(up.position.x - 1.0f) < 0.01f, 
-               "mouseUp should be at end (1.0), got " + String(up.position.x));
+        expect(up.pixelPos.x == 400, 
+               "mouseUp should be at end pixel X=400, got " + String(up.pixelPos.x));
         
-        // Check that intermediate moves are between 0 and 1
+        // Check that intermediate moves are between start and end pixels
         for (int i = 1; i < exec.log.size() - 1; i++)
         {
-            expect(exec.log[i].position.x >= 0.0f && exec.log[i].position.x <= 1.0f,
-                   "Intermediate move should be between 0 and 1");
+            expect(exec.log[i].pixelPos.x >= 350 && exec.log[i].pixelPos.x <= 400,
+                   "Intermediate move X should be between 350 and 400");
         }
     }
     
@@ -568,6 +665,7 @@ private:
         beginTest("Drag with modifiers");
         
         TestExecutor exec;
+        setupDefaultMockComponents(exec);
         InteractionDispatcher dispatcher;
         Array<var> log;
         
@@ -589,6 +687,7 @@ private:
         beginTest("Drag with right click");
         
         TestExecutor exec;
+        setupDefaultMockComponents(exec);
         InteractionDispatcher dispatcher;
         Array<var> log;
         
@@ -610,6 +709,7 @@ private:
         beginTest("Drag with very short duration");
         
         TestExecutor exec;
+        setupDefaultMockComponents(exec);
         InteractionDispatcher dispatcher;
         Array<var> log;
         
@@ -636,6 +736,7 @@ private:
         beginTest("Single event fires at correct time");
         
         TestExecutor exec;
+        setupDefaultMockComponents(exec);
         InteractionDispatcher dispatcher;
         Array<var> log;
         
@@ -655,6 +756,7 @@ private:
         beginTest("Multiple events fire at correct times");
         
         TestExecutor exec;
+        setupDefaultMockComponents(exec);
         InteractionDispatcher dispatcher;
         Array<var> log;
         
@@ -688,6 +790,7 @@ private:
         beginTest("Zero timestamp fires immediately");
         
         TestExecutor exec;
+        setupDefaultMockComponents(exec);
         InteractionDispatcher dispatcher;
         Array<var> log;
         
@@ -707,6 +810,7 @@ private:
         beginTest("Events with gaps fire at correct times");
         
         TestExecutor exec;
+        setupDefaultMockComponents(exec);
         InteractionDispatcher dispatcher;
         Array<var> log;
         
@@ -740,6 +844,7 @@ private:
         beginTest("Events execute in timestamp order");
         
         TestExecutor exec;
+        setupDefaultMockComponents(exec);
         InteractionDispatcher dispatcher;
         Array<var> log;
         
@@ -767,6 +872,7 @@ private:
         beginTest("Mixed mouse and screenshot maintain order");
         
         TestExecutor exec;
+        setupDefaultMockComponents(exec);
         InteractionDispatcher dispatcher;
         Array<var> log;
         
@@ -816,6 +922,7 @@ private:
         beginTest("Human intervention aborts execution");
         
         TestExecutor exec;
+        setupDefaultMockComponents(exec);
         InteractionDispatcher dispatcher;
         Array<var> log;
         
@@ -841,6 +948,7 @@ private:
         beginTest("Human intervention reports timestamp");
         
         TestExecutor exec;
+        setupDefaultMockComponents(exec);
         InteractionDispatcher dispatcher;
         Array<var> log;
         
@@ -865,6 +973,7 @@ private:
         beginTest("Human intervention mid-sequence");
         
         TestExecutor exec;
+        setupDefaultMockComponents(exec);
         InteractionDispatcher dispatcher;
         Array<var> log;
         
@@ -892,6 +1001,7 @@ private:
         beginTest("Human intervention during drag");
         
         TestExecutor exec;
+        setupDefaultMockComponents(exec);
         InteractionDispatcher dispatcher;
         Array<var> log;
         
@@ -913,6 +1023,7 @@ private:
         beginTest("No intervention completes successfully");
         
         TestExecutor exec;
+        setupDefaultMockComponents(exec);
         InteractionDispatcher dispatcher;
         Array<var> log;
         
@@ -939,6 +1050,7 @@ private:
         beginTest("Timeout aborts execution");
         
         TestExecutor exec;
+        setupDefaultMockComponents(exec);
         InteractionDispatcher dispatcher;
         Array<var> log;
         
@@ -960,6 +1072,7 @@ private:
         beginTest("Timeout reports correct error");
         
         TestExecutor exec;
+        setupDefaultMockComponents(exec);
         InteractionDispatcher dispatcher;
         Array<var> log;
         
@@ -983,6 +1096,7 @@ private:
         beginTest("Empty interaction list succeeds");
         
         TestExecutor exec;
+        setupDefaultMockComponents(exec);
         InteractionDispatcher dispatcher;
         Array<var> log;
         
@@ -1002,6 +1116,7 @@ private:
         beginTest("Single interaction succeeds");
         
         TestExecutor exec;
+        setupDefaultMockComponents(exec);
         InteractionDispatcher dispatcher;
         Array<var> log;
         
@@ -1024,6 +1139,7 @@ private:
         beginTest("Execution log contains all events");
         
         TestExecutor exec;
+        setupDefaultMockComponents(exec);
         InteractionDispatcher dispatcher;
         Array<var> log;
         
@@ -1044,11 +1160,14 @@ private:
         beginTest("Execution log has correct format");
         
         TestExecutor exec;
+        setupDefaultMockComponents(exec);
         InteractionDispatcher dispatcher;
         Array<var> log;
         
         Array<Interaction> interactions;
         interactions.add(makeClick("Button1", 50));
+        
+        exec.addMockComponent("Button1", {100, 50, 200, 100}, true);
         
         exec.startTiming();
         dispatcher.execute(interactions, exec, log);
@@ -1065,6 +1184,204 @@ private:
         
         expect(entry->getProperty("type").toString() == "mouseDown", "Type should be mouseDown");
         expect(entry->getProperty("target").toString() == "Button1", "Target should be Button1");
+    }
+    
+    //==========================================================================
+    // Component Resolution Tests
+    //==========================================================================
+    
+    void testResolutionFindsComponentAtCenter()
+    {
+        beginTest("Resolution: finds component at center");
+        
+        TestExecutor exec;
+        exec.addMockComponent("Button1", {100, 50, 200, 100}, true);
+        
+        auto result = exec.resolveTarget("Button1", {0.5f, 0.5f});
+        
+        expect(result.success(), "Should succeed");
+        expect(result.pixelPosition.x == 200, "X should be 100 + 200*0.5 = 200, got " + String(result.pixelPosition.x));
+        expect(result.pixelPosition.y == 100, "Y should be 50 + 100*0.5 = 100, got " + String(result.pixelPosition.y));
+        expect(result.componentBounds == Rectangle<int>(100, 50, 200, 100), "Bounds should match");
+    }
+    
+    void testResolutionFindsComponentAtCorners()
+    {
+        beginTest("Resolution: finds component at corners");
+        
+        TestExecutor exec;
+        exec.addMockComponent("Button1", {100, 50, 200, 100}, true);
+        
+        // Top-left
+        auto tl = exec.resolveTarget("Button1", {0.0f, 0.0f});
+        expect(tl.success() && tl.pixelPosition == Point<int>(100, 50), 
+               "Top-left should be (100, 50)");
+        
+        // Bottom-right
+        auto br = exec.resolveTarget("Button1", {1.0f, 1.0f});
+        expect(br.success() && br.pixelPosition == Point<int>(300, 150), 
+               "Bottom-right should be (300, 150)");
+    }
+    
+    void testResolutionAllowsOutOfBoundsForDrag()
+    {
+        beginTest("Resolution: allows out-of-bounds position for drag support");
+        
+        TestExecutor exec;
+        exec.addMockComponent("Slider1", {100, 50, 50, 200}, true);
+        
+        // Drag to 150% of height (below component)
+        auto result = exec.resolveTarget("Slider1", {0.5f, 1.5f});
+        
+        expect(result.success(), "Should succeed for out-of-bounds");
+        expect(result.pixelPosition.x == 125, "X should be 100 + 50*0.5 = 125");
+        expect(result.pixelPosition.y == 350, "Y should be 50 + 200*1.5 = 350");
+    }
+    
+    void testResolutionFailsForUnknownComponent()
+    {
+        beginTest("Resolution: fails for unknown component");
+        
+        TestExecutor exec;
+        // No components registered
+        
+        auto result = exec.resolveTarget("NonExistent", {0.5f, 0.5f});
+        
+        expect(!result.success(), "Should fail");
+        expect(result.error.containsIgnoreCase("not found"), 
+               "Error should mention 'not found': " + result.error);
+    }
+    
+    void testResolutionFailsForHiddenComponent()
+    {
+        beginTest("Resolution: fails for hidden component");
+        
+        TestExecutor exec;
+        exec.addMockComponent("Button1", {100, 50, 200, 100}, false);  // Not visible
+        
+        auto result = exec.resolveTarget("Button1", {0.5f, 0.5f});
+        
+        expect(!result.success(), "Should fail for hidden component");
+        expect(result.error.containsIgnoreCase("not visible"), 
+               "Error should mention 'not visible': " + result.error);
+    }
+    
+    void testResolutionFailsForZeroSizeComponent()
+    {
+        beginTest("Resolution: fails for zero-size component");
+        
+        TestExecutor exec;
+        exec.addMockComponent("Button1", {100, 50, 0, 0}, true);  // Zero size
+        
+        auto result = exec.resolveTarget("Button1", {0.5f, 0.5f});
+        
+        expect(!result.success(), "Should fail for zero-size");
+        expect(result.error.containsIgnoreCase("zero size"), 
+               "Error should mention 'zero size': " + result.error);
+    }
+    
+    void testDispatcherAbortsOnUnknownComponent()
+    {
+        beginTest("Dispatcher: aborts on unknown component");
+        
+        TestExecutor exec;
+        setupDefaultMockComponents(exec);
+        InteractionDispatcher dispatcher;
+        Array<var> log;
+        // No mock components - Button1 doesn't exist
+        
+        Array<Interaction> interactions;
+        interactions.add(makeClick("Unknown", 0));
+        
+        exec.startTiming();
+        auto result = dispatcher.execute(interactions, exec, log);
+        
+        expect(result.result.failed(), "Should fail");
+        expect(result.result.getErrorMessage().containsIgnoreCase("not found"), 
+               "Error should mention 'not found'");
+        expect(result.interactionsCompleted == 0, "Should complete 0 interactions");
+    }
+    
+    void testDispatcherAbortsOnHiddenComponent()
+    {
+        beginTest("Dispatcher: aborts on hidden component");
+        
+        TestExecutor exec;
+        setupDefaultMockComponents(exec);
+        InteractionDispatcher dispatcher;
+        Array<var> log;
+        exec.addMockComponent("Button1", {100, 50, 200, 100}, false);  // Hidden
+        
+        Array<Interaction> interactions;
+        interactions.add(makeClick("Button1", 0));
+        
+        exec.startTiming();
+        auto result = dispatcher.execute(interactions, exec, log);
+        
+        expect(result.result.failed(), "Should fail for hidden component");
+        expect(result.result.getErrorMessage().containsIgnoreCase("not visible"), 
+               "Error should mention 'not visible'");
+    }
+    
+    void testDispatcherLogsCorrectPixelPosition()
+    {
+        beginTest("Dispatcher: logs correct pixel position");
+        
+        TestExecutor exec;
+        setupDefaultMockComponents(exec);
+        InteractionDispatcher dispatcher;
+        Array<var> log;
+        
+        // Button at (100, 50) with size (200, 100)
+        // Click at center (0.5, 0.5) should go to pixel (200, 100)
+        exec.addMockComponent("Button1", {100, 50, 200, 100}, true);
+        
+        Array<Interaction> interactions;
+        interactions.add(makeClick("Button1", 0));
+        
+        exec.startTiming();
+        auto result = dispatcher.execute(interactions, exec, log);
+        
+        expect(result.result.wasOk(), "Should succeed");
+        expect(exec.log.size() >= 2, "Should have mouseDown and mouseUp");
+        
+        // Check that the logged pixel position is correct
+        expect(exec.log[0].pixelPos == Point<int>(200, 100), 
+               "mouseDown pixelPos should be (200, 100), got (" + 
+               String(exec.log[0].pixelPos.x) + ", " + String(exec.log[0].pixelPos.y) + ")");
+    }
+    
+    void testDispatcherClickNotAtWindowCenter()
+    {
+        beginTest("Dispatcher: click goes to component position, not window center");
+        
+        TestExecutor exec;
+        setupDefaultMockComponents(exec);
+        InteractionDispatcher dispatcher;
+        Array<var> log;
+        
+        // This test verifies the bug fix: clicks should go to the component's
+        // position, not to the center of the interface window.
+        
+        // Button is in top-left area, NOT at window center
+        exec.addMockComponent("Button1", {50, 30, 100, 40}, true);
+        
+        Array<Interaction> interactions;
+        interactions.add(makeClick("Button1", 0));  // Default position (0.5, 0.5) = center of Button1
+        
+        exec.startTiming();
+        auto result = dispatcher.execute(interactions, exec, log);
+        
+        expect(result.result.wasOk(), "Should succeed");
+        
+        // Click should be at center of Button1: (50 + 100*0.5, 30 + 40*0.5) = (100, 50)
+        // NOT at some arbitrary window center like (300, 200)
+        expect(exec.log[0].pixelPos.x == 100, 
+               "X should be 100 (center of button), not window center. Got " + 
+               String(exec.log[0].pixelPos.x));
+        expect(exec.log[0].pixelPos.y == 50, 
+               "Y should be 50 (center of button), not window center. Got " + 
+               String(exec.log[0].pixelPos.y));
     }
 };
 

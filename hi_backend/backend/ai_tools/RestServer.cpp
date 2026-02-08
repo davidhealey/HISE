@@ -131,6 +131,20 @@ void RestServer::normalizeFloatsInVar(var& v, int maxDecimalPlaces)
 }
 
 //==============================================================================
+// Platform-specific window repaint
+
+void RestServer::forceRepaintWindow(void* nativeHandle)
+{
+#ifdef _WIN32
+    if (nativeHandle != nullptr)
+        RedrawWindow((HWND)nativeHandle, nullptr, nullptr, 
+                     RDW_INVALIDATE | RDW_UPDATENOW | RDW_ALLCHILDREN);
+#else
+    ignoreUnused(nativeHandle);
+#endif
+}
+
+//==============================================================================
 // Request implementation
 String RestServer::Request::operator[](const Identifier& name) const
 {

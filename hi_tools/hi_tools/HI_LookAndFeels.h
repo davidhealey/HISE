@@ -111,6 +111,18 @@ class PopupLookAndFeel : public LookAndFeel_V3
 {
 public:
     
+	struct DocumentWindowWithEmbeddedPopupMenu : public juce::DocumentWindow
+	{
+		DocumentWindowWithEmbeddedPopupMenu(const String& name, Colour backgroundColour, int requiredButtons, bool addToDesktop = true) :
+			juce::DocumentWindow(name, backgroundColour, requiredButtons, addToDesktop)
+		{
+		};
+
+		virtual ~DocumentWindowWithEmbeddedPopupMenu() = default;
+
+		static Component* getParentOf(Component* c) { return c != nullptr ? dynamic_cast<DocumentWindowWithEmbeddedPopupMenu*>(c->getTopLevelComponent()) : nullptr; }
+	};
+
     static void drawFake3D(Graphics& g, Rectangle<int> area);
 
     PopupLookAndFeel();;

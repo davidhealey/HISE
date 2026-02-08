@@ -36,6 +36,7 @@ InteractionDispatcher::ExecutionResult InteractionDispatcher::execute(
     
     startTimeMs = Time::getMillisecondCounterHiRes();
     timeoutMs = timeout;
+    lastError = {};  // Reset error state
     
     int completedCount = 0;
     
@@ -76,6 +77,12 @@ InteractionDispatcher::ExecutionResult InteractionDispatcher::execute(
                 case Type::Exit:        executeExit(interaction.mouse, executor, executedLog); break;
                 case Type::Screenshot:  executeScreenshot(interaction.mouse, executor, executedLog); break;
             }
+        }
+        
+        // Check if resolution failed (critical error - hallucinated component ID)
+        if (lastError.isNotEmpty())
+        {
+            return ExecutionResult::fail(lastError, getElapsedMs(), completedCount);
         }
         
         completedCount++;
@@ -134,55 +141,83 @@ String InteractionDispatcher::checkAbortConditions(Executor& executor) const
 void InteractionDispatcher::executeClick(const InteractionParser::MouseInteraction& mouse, 
                                           Executor& exec, Array<var>& log)
 {
+    // Resolve target to pixel coordinates
+    auto resolved = exec.resolveTarget(mouse.targetComponentId, mouse.fromNormalized);
+    if (!resolved.success())
+    {
+        lastError = resolved.error;
+        return;
+    }
+    
     auto mods = buildModifiers(mouse);
-    auto pos = mouse.fromNormalized;
     int actualTime = getElapsedMs();
     
     // Click is: mouseDown, then mouseUp
-    exec.executeMouseDown(pos, mouse.targetComponentId, mods, mouse.rightClick, mouse.timestampMs);
-    log.add(createLogEntry("mouseDown", mouse.targetComponentId, pos, mouse.timestampMs, actualTime));
+    exec.executeMouseDown(resolved.pixelPosition, mouse.targetComponentId, mods, mouse.rightClick, mouse.timestampMs);
+    log.add(createLogEntry("mouseDown", mouse.targetComponentId, mouse.fromNormalized, mouse.timestampMs, actualTime));
     
-    // Small delay between down and up
-    MessageManager::getInstance()->runDispatchLoopUntil(5);
-    
+    waitUntilTimestamp(mouse.timestampMs + 20, exec);
+
     int upTime = getElapsedMs();
-    exec.executeMouseUp(pos, mouse.targetComponentId, mods, mouse.rightClick, mouse.timestampMs);
-    log.add(createLogEntry("mouseUp", mouse.targetComponentId, pos, mouse.timestampMs, upTime));
+    exec.executeMouseUp(resolved.pixelPosition, mouse.targetComponentId, mods, mouse.rightClick, mouse.timestampMs);
+    log.add(createLogEntry("mouseUp", mouse.targetComponentId, mouse.fromNormalized, mouse.timestampMs, upTime));
 }
 
 void InteractionDispatcher::executeDoubleClick(const InteractionParser::MouseInteraction& mouse, 
                                                 Executor& exec, Array<var>& log)
 {
+    // Resolve target to pixel coordinates
+    auto resolved = exec.resolveTarget(mouse.targetComponentId, mouse.fromNormalized);
+    if (!resolved.success())
+    {
+        lastError = resolved.error;
+        return;
+    }
+    
     auto mods = buildModifiers(mouse);
-    auto pos = mouse.fromNormalized;
     int actualTime = getElapsedMs();
     
     // Double click is: down, up, down, up (quickly)
-    exec.executeMouseDown(pos, mouse.targetComponentId, mods, mouse.rightClick, mouse.timestampMs);
-    log.add(createLogEntry("mouseDown", mouse.targetComponentId, pos, mouse.timestampMs, actualTime));
+    exec.executeMouseDown(resolved.pixelPosition, mouse.targetComponentId, mods, mouse.rightClick, mouse.timestampMs);
+    log.add(createLogEntry("mouseDown", mouse.targetComponentId, mouse.fromNormalized, mouse.timestampMs, actualTime));
     
     MessageManager::getInstance()->runDispatchLoopUntil(2);
     
-    exec.executeMouseUp(pos, mouse.targetComponentId, mods, mouse.rightClick, mouse.timestampMs);
-    log.add(createLogEntry("mouseUp", mouse.targetComponentId, pos, mouse.timestampMs, getElapsedMs()));
+    exec.executeMouseUp(resolved.pixelPosition, mouse.targetComponentId, mods, mouse.rightClick, mouse.timestampMs);
+    log.add(createLogEntry("mouseUp", mouse.targetComponentId, mouse.fromNormalized, mouse.timestampMs, getElapsedMs()));
     
     MessageManager::getInstance()->runDispatchLoopUntil(5);
     
-    exec.executeMouseDown(pos, mouse.targetComponentId, mods, mouse.rightClick, mouse.timestampMs);
-    log.add(createLogEntry("mouseDown", mouse.targetComponentId, pos, mouse.timestampMs, getElapsedMs()));
+    exec.executeMouseDown(resolved.pixelPosition, mouse.targetComponentId, mods, mouse.rightClick, mouse.timestampMs);
+    log.add(createLogEntry("mouseDown", mouse.targetComponentId, mouse.fromNormalized, mouse.timestampMs, getElapsedMs()));
     
     MessageManager::getInstance()->runDispatchLoopUntil(2);
     
-    exec.executeMouseUp(pos, mouse.targetComponentId, mods, mouse.rightClick, mouse.timestampMs);
-    log.add(createLogEntry("mouseUp", mouse.targetComponentId, pos, mouse.timestampMs, getElapsedMs()));
+    exec.executeMouseUp(resolved.pixelPosition, mouse.targetComponentId, mods, mouse.rightClick, mouse.timestampMs);
+    log.add(createLogEntry("mouseUp", mouse.targetComponentId, mouse.fromNormalized, mouse.timestampMs, getElapsedMs()));
 }
 
 void InteractionDispatcher::executeDrag(const InteractionParser::MouseInteraction& mouse, 
                                          Executor& exec, Array<var>& log)
 {
+    // Resolve both from and to positions
+    auto resolvedFrom = exec.resolveTarget(mouse.targetComponentId, mouse.fromNormalized);
+    if (!resolvedFrom.success())
+    {
+        lastError = resolvedFrom.error;
+        return;
+    }
+    
+    auto resolvedTo = exec.resolveTarget(mouse.targetComponentId, mouse.toNormalized);
+    if (!resolvedTo.success())
+    {
+        lastError = resolvedTo.error;
+        return;
+    }
+    
     auto mods = buildModifiers(mouse);
-    auto from = mouse.fromNormalized;
-    auto to = mouse.toNormalized;
+    auto fromPixel = resolvedFrom.pixelPosition;
+    auto toPixel = resolvedTo.pixelPosition;
     int duration = mouse.durationMs;
     int startTimestamp = mouse.timestampMs;
     
@@ -191,22 +226,23 @@ void InteractionDispatcher::executeDrag(const InteractionParser::MouseInteractio
     
     // Mouse down at start position
     int actualTime = getElapsedMs();
-    exec.executeMouseDown(from, mouse.targetComponentId, mods, mouse.rightClick, startTimestamp);
-    log.add(createLogEntry("mouseDown", mouse.targetComponentId, from, startTimestamp, actualTime));
+    exec.executeMouseDown(fromPixel, mouse.targetComponentId, mods, mouse.rightClick, startTimestamp);
+    log.add(createLogEntry("mouseDown", mouse.targetComponentId, mouse.fromNormalized, startTimestamp, actualTime));
     
-    // Interpolate mouse moves
+    // Interpolate mouse moves in pixel space
     for (int i = 1; i < numSteps; i++)
     {
         float t = (float)i / (float)numSteps;
-        Point<float> pos = from + (to - from) * t;
+        Point<int> pixelPos = fromPixel + ((toPixel - fromPixel).toFloat() * t).toInt();
+        Point<float> normPos = mouse.fromNormalized + (mouse.toNormalized - mouse.fromNormalized) * t;
         int stepTimestamp = startTimestamp + (duration * i / numSteps);
         
         // Wait until this step's timestamp
         waitUntilTimestamp(stepTimestamp, exec);
         
         actualTime = getElapsedMs();
-        exec.executeMouseMove(pos, mouse.targetComponentId, mods, stepTimestamp);
-        log.add(createLogEntry("mouseMove", mouse.targetComponentId, pos, stepTimestamp, actualTime));
+        exec.executeMouseMove(pixelPos, mouse.targetComponentId, mods, stepTimestamp);
+        log.add(createLogEntry("mouseMove", mouse.targetComponentId, normPos, stepTimestamp, actualTime));
     }
     
     // Wait until end timestamp
@@ -215,20 +251,27 @@ void InteractionDispatcher::executeDrag(const InteractionParser::MouseInteractio
     
     // Mouse up at end position
     actualTime = getElapsedMs();
-    exec.executeMouseUp(to, mouse.targetComponentId, mods, mouse.rightClick, endTimestamp);
-    log.add(createLogEntry("mouseUp", mouse.targetComponentId, to, endTimestamp, actualTime));
+    exec.executeMouseUp(toPixel, mouse.targetComponentId, mods, mouse.rightClick, endTimestamp);
+    log.add(createLogEntry("mouseUp", mouse.targetComponentId, mouse.toNormalized, endTimestamp, actualTime));
 }
 
 void InteractionDispatcher::executeHover(const InteractionParser::MouseInteraction& mouse, 
                                           Executor& exec, Array<var>& log)
 {
+    // Resolve target to pixel coordinates
+    auto resolved = exec.resolveTarget(mouse.targetComponentId, mouse.fromNormalized);
+    if (!resolved.success())
+    {
+        lastError = resolved.error;
+        return;
+    }
+    
     auto mods = buildModifiers(mouse);
-    auto pos = mouse.fromNormalized;
     int actualTime = getElapsedMs();
     
     // Hover is just a mouse move to position (no button down)
-    exec.executeMouseMove(pos, mouse.targetComponentId, mods, mouse.timestampMs);
-    log.add(createLogEntry("mouseMove", mouse.targetComponentId, pos, mouse.timestampMs, actualTime));
+    exec.executeMouseMove(resolved.pixelPosition, mouse.targetComponentId, mods, mouse.timestampMs);
+    log.add(createLogEntry("mouseMove", mouse.targetComponentId, mouse.fromNormalized, mouse.timestampMs, actualTime));
     
     // If duration specified, wait at that position
     if (mouse.durationMs > 0)
@@ -251,36 +294,60 @@ void InteractionDispatcher::executeMove(const InteractionParser::MouseInteractio
         
         for (int i = 0; i < numPoints; i++)
         {
+            // Resolve each path point
+            auto resolved = exec.resolveTarget(mouse.targetComponentId, mouse.pathNormalized[i]);
+            if (!resolved.success())
+            {
+                lastError = resolved.error;
+                return;
+            }
+            
             int stepTimestamp = startTimestamp + (duration * i / jmax(1, numPoints - 1));
             
             if (i > 0)
                 waitUntilTimestamp(stepTimestamp, exec);
             
             int actualTime = getElapsedMs();
-            exec.executeMouseMove(mouse.pathNormalized[i], mouse.targetComponentId, mods, stepTimestamp);
+            exec.executeMouseMove(resolved.pixelPosition, mouse.targetComponentId, mods, stepTimestamp);
             log.add(createLogEntry("mouseMove", mouse.targetComponentId, mouse.pathNormalized[i], 
                                    stepTimestamp, actualTime));
         }
     }
     else
     {
+        // Resolve from and to positions
+        auto resolvedFrom = exec.resolveTarget(mouse.targetComponentId, mouse.fromNormalized);
+        if (!resolvedFrom.success())
+        {
+            lastError = resolvedFrom.error;
+            return;
+        }
+        
+        auto resolvedTo = exec.resolveTarget(mouse.targetComponentId, mouse.toNormalized);
+        if (!resolvedTo.success())
+        {
+            lastError = resolvedTo.error;
+            return;
+        }
+        
         // Interpolate from->to similar to drag but without button down
-        auto from = mouse.fromNormalized;
-        auto to = mouse.toNormalized;
+        auto fromPixel = resolvedFrom.pixelPosition;
+        auto toPixel = resolvedTo.pixelPosition;
         int numSteps = jmax(1, duration / DRAG_STEP_INTERVAL_MS);
         
         for (int i = 0; i <= numSteps; i++)
         {
             float t = (float)i / (float)numSteps;
-            Point<float> pos = from + (to - from) * t;
+            Point<int> pixelPos = fromPixel + ((toPixel - fromPixel).toFloat() * t).toInt();
+            Point<float> normPos = mouse.fromNormalized + (mouse.toNormalized - mouse.fromNormalized) * t;
             int stepTimestamp = startTimestamp + (duration * i / numSteps);
             
             if (i > 0)
                 waitUntilTimestamp(stepTimestamp, exec);
             
             int actualTime = getElapsedMs();
-            exec.executeMouseMove(pos, mouse.targetComponentId, mods, stepTimestamp);
-            log.add(createLogEntry("mouseMove", mouse.targetComponentId, pos, stepTimestamp, actualTime));
+            exec.executeMouseMove(pixelPos, mouse.targetComponentId, mods, stepTimestamp);
+            log.add(createLogEntry("mouseMove", mouse.targetComponentId, normPos, stepTimestamp, actualTime));
         }
     }
 }
@@ -288,13 +355,23 @@ void InteractionDispatcher::executeMove(const InteractionParser::MouseInteractio
 void InteractionDispatcher::executeExit(const InteractionParser::MouseInteraction& mouse, 
                                          Executor& exec, Array<var>& log)
 {
+    // For exit, we need to resolve the target first to verify it exists,
+    // but then move to an off-screen position
+    auto resolved = exec.resolveTarget(mouse.targetComponentId, mouse.fromNormalized);
+    if (!resolved.success())
+    {
+        lastError = resolved.error;
+        return;
+    }
+    
     auto mods = buildModifiers(mouse);
     int actualTime = getElapsedMs();
     
     // Exit is a mouse move to off-screen position (-1, -1)
-    Point<float> offscreen(-1.0f, -1.0f);
+    Point<int> offscreen(-1, -1);
+    Point<float> offscreenNorm(-1.0f, -1.0f);
     exec.executeMouseMove(offscreen, mouse.targetComponentId, mods, mouse.timestampMs);
-    log.add(createLogEntry("mouseExit", mouse.targetComponentId, offscreen, mouse.timestampMs, actualTime));
+    log.add(createLogEntry("mouseExit", mouse.targetComponentId, offscreenNorm, mouse.timestampMs, actualTime));
 }
 
 void InteractionDispatcher::executeScreenshot(const InteractionParser::MouseInteraction& mouse, 
@@ -363,10 +440,57 @@ var InteractionDispatcher::createScreenshotLogEntry(const String& id, float scal
 void TestExecutor::reset()
 {
     log.clear();
+    mockComponents.clear();
     startTimeMs = 0;
     simulatedInterventionAtMs = -1;
     interventionTriggered = false;
     interventionTimestampMs = 0;
+}
+
+void TestExecutor::addMockComponent(const String& id, Rectangle<int> bounds, bool visible)
+{
+    mockComponents[id.toStdString()] = { bounds, visible };
+}
+
+void TestExecutor::clearMockComponents()
+{
+    mockComponents.clear();
+}
+
+InteractionDispatcher::Executor::ResolveResult TestExecutor::resolveTarget(
+    const String& componentId, Point<float> normalizedPos)
+{
+    ResolveResult result;
+    
+    auto it = mockComponents.find(componentId.toStdString());
+    if (it == mockComponents.end())
+    {
+        result.error = "Component '" + componentId + "' not found";
+        return result;
+    }
+    
+    auto& mock = it->second;
+    result.componentBounds = mock.absoluteBounds;
+    result.visible = mock.visible;
+    
+    if (!mock.visible)
+    {
+        result.error = "Component '" + componentId + "' is not visible";
+        return result;
+    }
+    
+    if (mock.absoluteBounds.isEmpty())
+    {
+        result.error = "Component '" + componentId + "' has zero size";
+        return result;
+    }
+    
+    result.pixelPosition = {
+        mock.absoluteBounds.getX() + roundToInt(normalizedPos.x * mock.absoluteBounds.getWidth()),
+        mock.absoluteBounds.getY() + roundToInt(normalizedPos.y * mock.absoluteBounds.getHeight())
+    };
+    
+    return result;
 }
 
 void TestExecutor::startTiming()
@@ -379,7 +503,7 @@ int TestExecutor::getElapsedMs() const
     return (int)(Time::getMillisecondCounterHiRes() - startTimeMs);
 }
 
-void TestExecutor::executeMouseDown(Point<float> normPos, const String& target,
+void TestExecutor::executeMouseDown(Point<int> pixelPos, const String& target,
                                      ModifierKeys mods, bool rightClick, int timestampMs)
 {
     checkIntervention(getElapsedMs());
@@ -387,7 +511,7 @@ void TestExecutor::executeMouseDown(Point<float> normPos, const String& target,
     LogEntry entry;
     entry.type = "mouseDown";
     entry.target = target;
-    entry.position = normPos;
+    entry.pixelPos = pixelPos;
     entry.mods = mods;
     entry.rightClick = rightClick;
     entry.expectedTimestampMs = timestampMs;
@@ -395,7 +519,7 @@ void TestExecutor::executeMouseDown(Point<float> normPos, const String& target,
     log.add(entry);
 }
 
-void TestExecutor::executeMouseUp(Point<float> normPos, const String& target,
+void TestExecutor::executeMouseUp(Point<int> pixelPos, const String& target,
                                    ModifierKeys mods, bool rightClick, int timestampMs)
 {
     checkIntervention(getElapsedMs());
@@ -403,7 +527,7 @@ void TestExecutor::executeMouseUp(Point<float> normPos, const String& target,
     LogEntry entry;
     entry.type = "mouseUp";
     entry.target = target;
-    entry.position = normPos;
+    entry.pixelPos = pixelPos;
     entry.mods = mods;
     entry.rightClick = rightClick;
     entry.expectedTimestampMs = timestampMs;
@@ -411,7 +535,7 @@ void TestExecutor::executeMouseUp(Point<float> normPos, const String& target,
     log.add(entry);
 }
 
-void TestExecutor::executeMouseMove(Point<float> normPos, const String& target,
+void TestExecutor::executeMouseMove(Point<int> pixelPos, const String& target,
                                      ModifierKeys mods, int timestampMs)
 {
     checkIntervention(getElapsedMs());
@@ -419,7 +543,7 @@ void TestExecutor::executeMouseMove(Point<float> normPos, const String& target,
     LogEntry entry;
     entry.type = "mouseMove";
     entry.target = target;
-    entry.position = normPos;
+    entry.pixelPos = pixelPos;
     entry.mods = mods;
     entry.expectedTimestampMs = timestampMs;
     entry.actualTimestampMs = getElapsedMs();

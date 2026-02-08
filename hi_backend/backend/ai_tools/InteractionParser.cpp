@@ -297,6 +297,31 @@ InteractionParser::ParseResult InteractionParser::parseMouseInteraction(
             return posResult;
     }
     
+    // Validate move interaction requires explicit from/to (not position)
+    if (mouse.type == MouseInteraction::Type::Move)
+    {
+        // Check if path is provided - path takes precedence over from/to
+        bool hasPath = obj.hasProperty("path");
+        
+        if (!hasPath)
+        {
+            // If using position instead of from, provide helpful error
+            if (obj.hasProperty("position") && !obj.hasProperty("from"))
+            {
+                return ParseResult::fail(formatError(
+                    "Field 'move' requires 'from' and 'to' positions (not 'position'). "
+                    "Use 'from' for start position and 'to' for end position.", index));
+            }
+            
+            // Require both from and to for move without path
+            if (!obj.hasProperty("from") || !obj.hasProperty("to"))
+            {
+                return ParseResult::fail(formatError(
+                    "Field 'move' requires both 'from' and 'to' positions, or a 'path' array", index));
+            }
+        }
+    }
+    
     // Parse path for move (optional)
     if (obj.hasProperty("path"))
     {
@@ -615,17 +640,9 @@ InteractionParser::ParseResult InteractionParser::parsePosition(
     float x = (float)obj["x"];
     float y = (float)obj["y"];
     
-    if (x < 0.0f || x > 1.0f)
-    {
-        return ParseResult::fail(formatError("Position 'x' value " + String(x, 2) + 
-            " out of range (0.0-1.0)", index, fieldName + ".x"));
-    }
-    
-    if (y < 0.0f || y > 1.0f)
-    {
-        return ParseResult::fail(formatError("Position 'y' value " + String(y, 2) + 
-            " out of range (0.0-1.0)", index, fieldName + ".y"));
-    }
+    // Note: We allow values outside [0,1] range to support drag operations
+    // that extend beyond component bounds (e.g., dragging a slider thumb
+    // past its visible range)
     
     position.x = x;
     position.y = y;

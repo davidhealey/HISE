@@ -23,6 +23,13 @@ namespace hise {
 using namespace juce;
 
 //==============================================================================
+// Debug flag for synthetic mouse event tracing
+// Set to true before injecting events, false after
+
+
+
+
+//==============================================================================
 // InteractionTestWindow::CursorOverlay implementation
 
 InteractionTestWindow::CursorOverlay::CursorOverlay()
@@ -39,20 +46,16 @@ void InteractionTestWindow::CursorOverlay::setState(State newState)
     }
 }
 
-void InteractionTestWindow::CursorOverlay::setPosition(Point<float> normalizedPos)
+void InteractionTestWindow::CursorOverlay::setPosition(Point<int> pixelPos)
 {
-    position = normalizedPos;
+    position = pixelPos;
     repaint();
 }
 
 void InteractionTestWindow::CursorOverlay::paint(Graphics& g)
 {
-    // Convert normalized position to pixel position within our bounds
-    auto bounds = getLocalBounds().toFloat();
-    auto pixelPos = Point<float>(
-        position.x * bounds.getWidth(),
-        position.y * bounds.getHeight()
-    );
+    // Position is already in pixels
+    auto pixelPos = position.toFloat();
     
     // Draw cursor circle
     auto cursorBounds = Rectangle<float>(cursorDiameter, cursorDiameter)
@@ -91,8 +94,8 @@ void InteractionTestWindow::ContentContainer::resized()
 {
     auto bounds = getLocalBounds();
     
-    if (content != nullptr)
-        content->setBounds(bounds);
+    if (rootTile != nullptr)
+        rootTile->setBounds(bounds);
     
     if (overlay != nullptr)
         overlay->setBounds(bounds);
@@ -101,21 +104,85 @@ void InteractionTestWindow::ContentContainer::resized()
 //==============================================================================
 // InteractionTestWindow::RealExecutor implementation
 
-InteractionTestWindow::RealExecutor::RealExecutor(InteractionTestWindow* w)
-    : window(w)
+InteractionTestWindow::RealExecutor::RealExecutor(InteractionTestWindow* w, ProcessorWithScriptingContent* p)
+    : window(w), processor(p)
 {
     jassert(window != nullptr);
+    jassert(processor != nullptr);
 }
 
-void InteractionTestWindow::RealExecutor::executeMouseDown(Point<float> normPos, const String& target,
+InteractionDispatcher::Executor::ResolveResult InteractionTestWindow::RealExecutor::resolveTarget(
+    const String& componentId, Point<float> normalizedPos)
+{
+    ResolveResult result;
+    
+    if (processor == nullptr)
+    {
+        result.error = "No processor available";
+        return result;
+    }
+    
+    auto* content = processor->getScriptingContent();
+    if (content == nullptr)
+    {
+        result.error = "No scripting content available";
+        return result;
+    }
+    
+    // Find component by ID
+    auto* sc = content->getComponentWithName(Identifier(componentId));
+    if (sc == nullptr)
+    {
+        result.error = "Component '" + componentId + "' not found";
+        return result;
+    }
+    
+    // Check visibility (includes parent visibility)
+    result.visible = sc->isShowing(true);
+    if (!result.visible)
+    {
+        result.error = "Component '" + componentId + "' is not visible";
+        return result;
+    }
+    
+    // Get absolute bounds using existing ScriptComponent methods
+    auto localBounds = sc->getPosition();
+    int globalX = sc->getGlobalPositionX();
+    int globalY = sc->getGlobalPositionY();
+    
+    result.componentBounds = Rectangle<int>(
+        globalX, globalY,
+        localBounds.getWidth(), localBounds.getHeight()
+    );
+    
+    // Check for zero-size
+    if (result.componentBounds.isEmpty())
+    {
+        result.error = "Component '" + componentId + "' has zero size";
+        return result;
+    }
+    
+    // Calculate pixel position from normalized coords
+    result.pixelPosition = {
+        globalX + roundToInt(normalizedPos.x * localBounds.getWidth()),
+        globalY + roundToInt(normalizedPos.y * localBounds.getHeight())
+    };
+    
+    return result;
+}
+
+void InteractionTestWindow::RealExecutor::executeMouseDown(Point<int> pixelPos, const String& target,
                                                            ModifierKeys mods, bool rightClick, int timestampMs)
 {
     ignoreUnused(target, timestampMs);
     
     mouseCurrentlyDown = true;
-    lastPosition = normPos;
     
-    auto pixelPos = window->normalizedToPixels(normPos).toFloat();
+    // Prime the component under mouse by sending mouse moves first
+    // This ensures JUCE properly tracks which component should receive the click
+    injectMouseEvent(pixelPos.toFloat().translated(1.0f, 0.0f), ModifierKeys());
+    injectMouseEvent(pixelPos.toFloat(), ModifierKeys());
+    MessageManager::getInstance()->runDispatchLoopUntil(1);
     
     // Add appropriate button modifier
     if (rightClick)
@@ -123,49 +190,47 @@ void InteractionTestWindow::RealExecutor::executeMouseDown(Point<float> normPos,
     else
         mods = mods.withFlags(ModifierKeys::leftButtonModifier);
     
-    injectMouseEvent(pixelPos, mods);
+    injectMouseEvent(pixelPos.toFloat(), mods);
     
     // Update overlay
-    window->getOverlay()->setPosition(normPos);
+    window->getOverlay()->setPosition(pixelPos);
     window->getOverlay()->setState(CursorOverlay::State::Clicking);
 }
 
-void InteractionTestWindow::RealExecutor::executeMouseUp(Point<float> normPos, const String& target,
+void InteractionTestWindow::RealExecutor::executeMouseUp(Point<int> pixelPos, const String& target,
                                                          ModifierKeys mods, bool rightClick, int timestampMs)
 {
     ignoreUnused(target, timestampMs, rightClick);
     
     mouseCurrentlyDown = false;
-    lastPosition = normPos;
     
-    auto pixelPos = window->normalizedToPixels(normPos).toFloat();
+    // No priming moves for mouseUp - the component is already tracking the mouse from mouseDown.
+    // Sending moves without button flags would be interpreted as a premature release,
+    // which breaks popups (e.g., ComboBox dropdown closes immediately).
     
     // No button flags for mouseUp - just modifiers
     // (The lack of button flags signals mouseUp)
-    injectMouseEvent(pixelPos, mods);
+    injectMouseEvent(pixelPos.toFloat(), mods);
     
     // Update overlay
-    window->getOverlay()->setPosition(normPos);
+    window->getOverlay()->setPosition(pixelPos);
     window->getOverlay()->setState(CursorOverlay::State::Idle);
 }
 
-void InteractionTestWindow::RealExecutor::executeMouseMove(Point<float> normPos, const String& target,
+void InteractionTestWindow::RealExecutor::executeMouseMove(Point<int> pixelPos, const String& target,
                                                            ModifierKeys mods, int timestampMs)
 {
     ignoreUnused(target, timestampMs);
     
-    lastPosition = normPos;
-    
-    auto pixelPos = window->normalizedToPixels(normPos).toFloat();
-    
-    // If mouse is down, this is a drag move - include button
-    if (mouseCurrentlyDown)
+    // If mouse is down and no button modifier is already set, add leftButtonModifier
+    // (The caller may have already set rightButtonModifier for right-click moves)
+    if (mouseCurrentlyDown && !mods.isAnyMouseButtonDown())
         mods = mods.withFlags(ModifierKeys::leftButtonModifier);
     
-    injectMouseEvent(pixelPos, mods);
+    injectMouseEvent(pixelPos.toFloat(), mods);
     
     // Update overlay
-    window->getOverlay()->setPosition(normPos);
+    window->getOverlay()->setPosition(pixelPos);
     
     if (mouseCurrentlyDown)
         window->getOverlay()->setState(CursorOverlay::State::Dragging);
@@ -226,16 +291,32 @@ void InteractionTestWindow::RealExecutor::injectMouseEvent(Point<float> pixelPos
         auto contentTopLeft = contentComponent->getScreenPosition() - window->getScreenPosition();
         auto windowPos = pixelPos + contentTopLeft.toFloat();
         
+        // Calculate screen position
+        auto screenPos = peer->localToGlobal(windowPos);
+        
+        // If real cursor mode is enabled, move the actual OS mouse cursor.
+        // This is required for modal components (PopupMenu, ComboBox) that poll
+        // the real cursor position via MouseInputSource::getScreenPosition().
+        if (realCursorMode)
+        {
+            //MouseInputSource::setRawMousePosition(screenPos);
+        }
+        
+        // Inject the synthetic mouse event
         peer->handleMouseEvent(
-            MouseInputSource::InputSourceType::touch,
+            MouseInputSource::InputSourceType::mouse,
             windowPos,
             mods,
             MouseInputSource::invalidPressure,
             MouseInputSource::invalidOrientation,
             Time::currentTimeMillis(),
             {},
-            syntheticTouchIndex
+            0  // Primary mouse input source
         );
+
+        // Force immediate repaint (Windows: calls UpdateWindow via native handle)
+        RestServer::forceRepaintWindow(peer->getNativeHandle());
+        peer->performAnyPendingRepaintsNow();
     }
 }
 
@@ -243,26 +324,42 @@ void InteractionTestWindow::RealExecutor::injectMouseEvent(Point<float> pixelPos
 // InteractionTestWindow implementation
 
 InteractionTestWindow::InteractionTestWindow(ProcessorWithScriptingContent* processor)
-    : DocumentWindow("Interaction Test", 
+    : PopupLookAndFeel::DocumentWindowWithEmbeddedPopupMenu("Interaction Test", 
                      Colours::darkgrey, 
                      DocumentWindow::closeButton,
                      true)
 {
-    // Create the script content component
-    content = std::make_unique<ScriptContentComponent>(processor);
+    context.attachTo(*this);
+
+    setUsingNativeTitleBar(true);
     
-    auto contentWidth = content->getContentWidth();
-    auto contentHeight = content->getContentHeight();
+    setRepaintsOnMouseActivity(true);
+    startTimer(30);
+
+    // Create FloatingTile with InterfacePanel content
+    // This mirrors FrontendProcessorEditor structure and ensures proper parent hierarchy
+    rootTile = std::make_unique<FloatingTile>(processor->getMainController_(), nullptr);
+    rootTile->setNewContent("InterfacePanel");
+    
+    // Get content dimensions from the ScriptContentComponent inside InterfaceContentPanel
+    int contentWidth = 600;  // Default fallback
+    int contentHeight = 400;
+    
+    if (auto* scc = getContent())
+    {
+        contentWidth = scc->getContentWidth();
+        contentHeight = scc->getContentHeight();
+    }
     
     // Create overlay
     overlay = std::make_unique<CursorOverlay>();
     
     // Create container to hold both
     container = std::make_unique<ContentContainer>();
-    container->content = content.get();
+    container->rootTile = rootTile.get();
     container->overlay = overlay.get();
     
-    container->addAndMakeVisible(content.get());
+    container->addAndMakeVisible(rootTile.get());
     container->addAndMakeVisible(overlay.get());
     overlay->setAlwaysOnTop(true);
     
@@ -287,9 +384,11 @@ InteractionTestWindow::InteractionTestWindow(ProcessorWithScriptingContent* proc
 
 InteractionTestWindow::~InteractionTestWindow()
 {
+    context.detach();
+
     // Clean up in correct order
     overlay = nullptr;
-    content = nullptr;
+    rootTile = nullptr;
     container = nullptr;
 }
 
@@ -297,6 +396,18 @@ void InteractionTestWindow::closeButtonPressed()
 {
     // Just hide - the owner (InteractionTester) will detect this
     setVisible(false);
+}
+
+ScriptContentComponent* InteractionTestWindow::getContent()
+{
+    if (rootTile == nullptr)
+        return nullptr;
+    
+    // Navigate: FloatingTile -> InterfaceContentPanel -> ScriptContentComponent
+    if (auto* panel = dynamic_cast<InterfaceContentPanel*>(rootTile->getCurrentFloatingPanel()))
+        return panel->getScriptContentComponent();
+    
+    return nullptr;
 }
 
 Point<int> InteractionTestWindow::normalizedToPixels(Point<float> norm) const
@@ -310,8 +421,10 @@ Point<int> InteractionTestWindow::normalizedToPixels(Point<float> norm) const
 
 Rectangle<int> InteractionTestWindow::getContentBounds() const
 {
-    if (content != nullptr)
-        return { 0, 0, content->getContentWidth(), content->getContentHeight() };
+    // Need non-const access to call getContent()
+    auto* self = const_cast<InteractionTestWindow*>(this);
+    if (auto* scc = self->getContent())
+        return { 0, 0, scc->getContentWidth(), scc->getContentHeight() };
     
     return {};
 }
@@ -374,7 +487,8 @@ InteractionTester::TestResult InteractionTester::executeInteractions(const var& 
     }
     
     // Execute with real executor
-    InteractionTestWindow::RealExecutor executor(window.get());
+    auto* pwsc = dynamic_cast<ProcessorWithScriptingContent*>(processor);
+    InteractionTestWindow::RealExecutor executor(window.get(), pwsc);
     InteractionDispatcher dispatcher;
     
     auto execResult = dispatcher.execute(interactions, executor, result.executionLog);

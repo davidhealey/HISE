@@ -151,6 +151,12 @@ public:
     */
     static void normalizeFloatsInVar(var& v, int maxDecimalPlaces = 4);
 
+    /** Forces an immediate repaint of a native window handle (Windows only).
+        Used by InteractionTester to ensure synthetic mouse events trigger visual updates.
+        On non-Windows platforms, this is a no-op.
+    */
+    static void forceRepaintWindow(void* nativeHandle);
+
     //==============================================================================
     /** A reference-counted async request object for coordinating work across threads.
         

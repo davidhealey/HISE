@@ -47,9 +47,7 @@ public:
         
         // Value Range Validation
         testParseNegativeTimestamp();
-        testParsePositionXOutOfRange();
-        testParsePositionYOutOfRange();
-        testParsePositionNegative();
+        testParsePositionOutOfRangeAllowed();
         testParseNegativeDuration();
         testParseZeroDuration();
         testParseDurationExceedsLimit();
@@ -65,6 +63,9 @@ public:
         testParseTooManyInteractions();
         testParseMovePathTooManyPoints();
         testParseMoveEmptyPath();
+        testParseMoveRequiresFromTo();
+        testParseMoveWithPositionRejected();
+        testParseMoveWithPathAccepted();
         
         // Physical Plausibility - Mouse Overlap Detection
         testOverlappingDrags();
@@ -400,40 +401,43 @@ private:
                "Error should mention 'timestamp': " + result.getErrorMessage());
     }
     
-    void testParsePositionXOutOfRange()
+    void testParsePositionOutOfRangeAllowed()
     {
-        beginTest("Range: Position X > 1.0 rejected");
+        beginTest("Range: Position outside [0,1] allowed for drag support");
         
-        auto result = parseExpectingFailure(R"([
-            {"type": "click", "target": "Button1", "timestamp": 0,
-             "position": {"x": 1.5, "y": 0.5}}
-        ])");
+        // Positions outside [0,1] are now allowed to support drag operations
+        // that extend beyond component bounds
         
-        expect(result.failed(), "Should reject x > 1.0");
-    }
-    
-    void testParsePositionYOutOfRange()
-    {
-        beginTest("Range: Position Y > 1.0 rejected");
+        // X > 1.0 allowed
+        {
+            auto interactions = parseOrFail(R"([
+                {"type": "click", "target": "Button1", "timestamp": 0,
+                 "position": {"x": 1.5, "y": 0.5}}
+            ])");
+            expect(interactions.size() == 1, "Should have 1 interaction");
+            expect(interactions[0].mouse.fromNormalized.x == 1.5f, "X should be 1.5");
+        }
         
-        auto result = parseExpectingFailure(R"([
-            {"type": "click", "target": "Button1", "timestamp": 0,
-             "position": {"x": 0.5, "y": 1.1}}
-        ])");
+        // Y > 1.0 allowed
+        {
+            auto interactions = parseOrFail(R"([
+                {"type": "click", "target": "Button1", "timestamp": 0,
+                 "position": {"x": 0.5, "y": 1.5}}
+            ])");
+            expect(interactions.size() == 1, "Should have 1 interaction");
+            expect(interactions[0].mouse.fromNormalized.y == 1.5f, "Y should be 1.5");
+        }
         
-        expect(result.failed(), "Should reject y > 1.0");
-    }
-    
-    void testParsePositionNegative()
-    {
-        beginTest("Range: Negative position rejected");
-        
-        auto result = parseExpectingFailure(R"([
-            {"type": "click", "target": "Button1", "timestamp": 0,
-             "position": {"x": -0.1, "y": 0.5}}
-        ])");
-        
-        expect(result.failed(), "Should reject negative position");
+        // Negative values allowed
+        {
+            auto interactions = parseOrFail(R"([
+                {"type": "click", "target": "Button1", "timestamp": 0,
+                 "position": {"x": -0.5, "y": -0.2}}
+            ])");
+            expect(interactions.size() == 1, "Should have 1 interaction");
+            expect(interactions[0].mouse.fromNormalized.x == -0.5f, "X should be -0.5");
+            expect(interactions[0].mouse.fromNormalized.y == -0.2f, "Y should be -0.2");
+        }
     }
     
     void testParseNegativeDuration()
@@ -610,6 +614,72 @@ private:
         ])");
         
         expect(result.failed(), "Should reject empty path");
+    }
+    
+    void testParseMoveRequiresFromTo()
+    {
+        beginTest("Syntax: Move without from/to rejected");
+        
+        // Move with no position info at all
+        {
+            auto result = parseExpectingFailure(R"([
+                {"type": "move", "target": "Panel1", "timestamp": 0, "duration": 100}
+            ])");
+            
+            expect(result.failed(), "Should reject move without from/to");
+            expect(result.getErrorMessage().containsIgnoreCase("from") &&
+                   result.getErrorMessage().containsIgnoreCase("to"),
+                   "Error should mention from/to: " + result.getErrorMessage());
+        }
+        
+        // Move with only 'from' (missing 'to')
+        {
+            auto result = parseExpectingFailure(R"([
+                {"type": "move", "target": "Panel1", "timestamp": 0, "duration": 100,
+                 "from": {"x": 0.2, "y": 0.2}}
+            ])");
+            
+            expect(result.failed(), "Should reject move with only 'from'");
+        }
+        
+        // Move with only 'to' (missing 'from')
+        {
+            auto result = parseExpectingFailure(R"([
+                {"type": "move", "target": "Panel1", "timestamp": 0, "duration": 100,
+                 "to": {"x": 0.8, "y": 0.8}}
+            ])");
+            
+            expect(result.failed(), "Should reject move with only 'to'");
+        }
+    }
+    
+    void testParseMoveWithPositionRejected()
+    {
+        beginTest("Syntax: Move with 'position' instead of from/to rejected");
+        
+        auto result = parseExpectingFailure(R"([
+            {"type": "move", "target": "Panel1", "timestamp": 0, "duration": 100,
+             "position": {"x": 0.5, "y": 0.5}}
+        ])");
+        
+        expect(result.failed(), "Should reject move with 'position'");
+        expect(result.getErrorMessage().containsIgnoreCase("from") &&
+               result.getErrorMessage().containsIgnoreCase("to"),
+               "Error should guide user to use from/to: " + result.getErrorMessage());
+    }
+    
+    void testParseMoveWithPathAccepted()
+    {
+        beginTest("Syntax: Move with path (no from/to) accepted");
+        
+        // Path alone is sufficient - no need for from/to
+        auto interactions = parseOrFail(R"([
+            {"type": "move", "target": "Panel1", "timestamp": 0, "duration": 100,
+             "path": [{"x": 0.2, "y": 0.2}, {"x": 0.5, "y": 0.5}, {"x": 0.8, "y": 0.8}]}
+        ])");
+        
+        expect(interactions.size() == 1, "Should have 1 interaction");
+        expectEquals(interactions[0].mouse.pathNormalized.size(), 3);
     }
     
     //==============================================================================

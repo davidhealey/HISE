@@ -69,6 +69,9 @@ public:
         
 	void updateChildEditorList(bool forceUpdate) override {};
 
+	/** Returns the ScriptContentComponent displaying the interface, or nullptr if not connected. */
+	ScriptContentComponent* getScriptContentComponent() { return content.get(); }
+
 private:
 
 	bool connectToScript();

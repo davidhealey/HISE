@@ -21,8 +21,12 @@
 
 #pragma once
 
+
+
 namespace hise {
 using namespace juce;
+
+
 
 // Forward declarations
 class BackendProcessor;
@@ -31,12 +35,16 @@ class BackendProcessor;
 /** Window hosting the test interface with cursor overlay.
  *
  *  Creates a DocumentWindow containing:
- *  - ScriptContentComponent displaying the HISE interface
+ *  - FloatingTile with InterfaceContentPanel (mirrors FrontendProcessorEditor structure)
  *  - CursorOverlay on top showing injected mouse events
+ *
+ *  The FloatingTile hierarchy ensures ScriptContentComponent can find its
+ *  expected parent components (required for proper slider/button callbacks).
  *
  *  Window is centered on the primary display and set to always-on-top.
  */
-class InteractionTestWindow : public DocumentWindow
+class InteractionTestWindow : public PopupLookAndFeel::DocumentWindowWithEmbeddedPopupMenu,
+                              public Timer
 {
 public:
     //==========================================================================
@@ -64,17 +72,17 @@ public:
         /** Set the current cursor state (affects color). */
         void setState(State newState);
         
-        /** Set cursor position in normalized coordinates (0-1). */
-        void setPosition(Point<float> normalizedPos);
+        /** Set cursor position in pixel coordinates. */
+        void setPosition(Point<int> pixelPos);
         
-        /** Get current position. */
-        Point<float> getPosition() const { return position; }
+        /** Get current position in pixels. */
+        Point<int> getPosition() const { return position; }
         
         void paint(Graphics& g) override;
         
     private:
         State state = State::Idle;
-        Point<float> position{0.5f, 0.5f};
+        Point<int> position{0, 0};
         
         Colour getColourForState() const;
         
@@ -93,24 +101,26 @@ public:
      *  - Capture screenshots with overlay temporarily hidden
      *  - Update cursor overlay state for visual feedback
      *
-     *  Uses touch input with index 99 as a synthetic marker to distinguish
-     *  from real user input (for future human intervention detection).
+     *  Uses InputSourceType::mouse with index 0 (primary mouse).
      */
     class RealExecutor : public InteractionDispatcher::Executor
     {
     public:
-        explicit RealExecutor(InteractionTestWindow* window);
+        RealExecutor(InteractionTestWindow* window, ProcessorWithScriptingContent* processor);
         
         //======================================================================
         // Executor interface implementation
         
-        void executeMouseDown(Point<float> normPos, const String& target,
+        ResolveResult resolveTarget(const String& componentId, 
+                                    Point<float> normalizedPos) override;
+        
+        void executeMouseDown(Point<int> pixelPos, const String& target,
                               ModifierKeys mods, bool rightClick, int timestampMs) override;
         
-        void executeMouseUp(Point<float> normPos, const String& target,
+        void executeMouseUp(Point<int> pixelPos, const String& target,
                             ModifierKeys mods, bool rightClick, int timestampMs) override;
         
-        void executeMouseMove(Point<float> normPos, const String& target,
+        void executeMouseMove(Point<int> pixelPos, const String& target,
                               ModifierKeys mods, int timestampMs) override;
         
         void executeScreenshot(const String& id, float scale, int timestampMs) override;
@@ -123,17 +133,24 @@ public:
         /** Get all captured screenshots (id -> base64 PNG with data URI prefix). */
         const StringPairArray& getScreenshots() const { return screenshots; }
         
+        /** Enable/disable real cursor mode.
+         *  When enabled, the actual OS mouse cursor is moved to match synthetic events.
+         *  This is required for modal components (PopupMenu, ComboBox) that poll the
+         *  real cursor position via MouseInputSource::getScreenPosition().
+         *  Default: true (enabled).
+         */
+        void setRealCursorMode(bool enabled) { realCursorMode = enabled; }
+        bool isRealCursorModeEnabled() const { return realCursorMode; }
+        
     private:
         InteractionTestWindow* window;
+        ProcessorWithScriptingContent* processor;
         StringPairArray screenshots;  // id -> "data:image/png;base64,..."
         bool mouseCurrentlyDown = false;
-        Point<float> lastPosition{0.5f, 0.5f};
+        bool realCursorMode = true;  // Move real cursor to match synthetic events
         
         /** Inject a mouse event into the window's ComponentPeer. */
         void injectMouseEvent(Point<float> pixelPos, ModifierKeys mods);
-        
-        /** Synthetic touch index used to mark injected events. */
-        static constexpr int syntheticTouchIndex = 99;
         
         JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(RealExecutor)
     };
@@ -143,10 +160,21 @@ public:
     InteractionTestWindow(ProcessorWithScriptingContent* processor);
     ~InteractionTestWindow() override;
     
+    void timerCallback() override
+    {
+        Component::callRecursive<Component>(this, [](Component* c)
+        {
+            c->repaint();
+            return false;
+        });
+    }
+
     void closeButtonPressed() override;
     
-    /** Get the ScriptContentComponent displaying the interface. */
-    ScriptContentComponent* getContent() { return content.get(); }
+    /** Get the ScriptContentComponent displaying the interface.
+     *  Navigates through FloatingTile -> InterfaceContentPanel -> ScriptContentComponent.
+     */
+    ScriptContentComponent* getContent();
     
     /** Get the cursor overlay component. */
     CursorOverlay* getOverlay() { return overlay.get(); }
@@ -158,23 +186,28 @@ public:
     Rectangle<int> getContentBounds() const;
     
 private:
-    /** Container component that holds content and overlay. */
+
+    /** Container component that holds FloatingTile and overlay. */
     class ContentContainer : public Component
     {
     public:
         ContentContainer() = default;
         void resized() override;
         
-        ScriptContentComponent* content = nullptr;
+        FloatingTile* rootTile = nullptr;
         CursorOverlay* overlay = nullptr;
     };
     
+    juce::OpenGLContext context;
+
     std::unique_ptr<ContentContainer> container;
-    std::unique_ptr<ScriptContentComponent> content;
+    std::unique_ptr<FloatingTile> rootTile;
     std::unique_ptr<CursorOverlay> overlay;
     
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(InteractionTestWindow)
 };
+
+
 
 //==============================================================================
 /** Main coordinator for interaction testing.
