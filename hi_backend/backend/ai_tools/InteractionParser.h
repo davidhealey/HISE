@@ -45,7 +45,8 @@ public:
             Click,
             DoubleClick,
             Drag,
-            Exit
+            Exit,
+            Screenshot
         };
         
         Type type = Type::Click;
@@ -60,6 +61,10 @@ public:
         bool ctrlDown = false;
         bool altDown = false;
         bool cmdDown = false;
+        
+        // Screenshot-specific fields
+        String screenshotId;
+        float screenshotScale = 1.0f;
     };
     
     /** MIDI interaction types */
