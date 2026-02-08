@@ -38,6 +38,7 @@ namespace hise { using namespace juce;
 
 
 class BackendProcessor;
+class InteractionTester;
 
 struct AnalyserInfo: public ReferenceCountedObject
 {
@@ -461,6 +462,9 @@ public:
 	}
 
 	AutoSaver& getAutoSaver() { return autosaver; }
+	
+	/** Returns the InteractionTester for UI interaction testing via REST API. */
+	InteractionTester* getInteractionTester();
 
 	/// @brief returns the PluginParameter value of the indexed PluginParameter.
     float getParameter (int index) override
@@ -630,7 +634,10 @@ private:
 	AutoSaver autosaver;
 
 	RestServer restServer;
+	
+	std::unique_ptr<InteractionTester> interactionTester;
 
+	JUCE_DECLARE_WEAK_REFERENCEABLE(BackendProcessor);
 	JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(BackendProcessor)
 };
 

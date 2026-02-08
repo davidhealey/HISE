@@ -584,6 +584,16 @@ const Array<RestHelpers::RouteMetadata>& RestHelpers::getRouteMetadata()
 			.withReturns("Selection count and array of selected components with all properties")
 			.withQueryParam(RouteParameter(RestApiIds::moduleId, "The script processor's module ID").withDefault("Interface")));
 		
+		// ApiRoute::SimulateInteractions
+		m.add(RouteMetadata(ApiRoute::SimulateInteractions, "api/simulate_interactions")
+			.withMethod(RestServer::POST)
+			.withCategory("testing")
+			.withDescription("Execute a sequence of UI interactions (clicks, drags, screenshots) in a test window")
+			.withReturns("Execution result with success status, completion count, timing, execution log, and captured screenshots")
+			.withBodyParam(RouteParameter(RestApiIds::interactions, 
+				"Array of interaction objects. Each object has 'type' (click, doubleClick, drag, hover, move, exit, screenshot), "
+				"'target' (component ID), 'timestamp' (ms), and type-specific fields like 'from'/'to' for drag, 'id' for screenshot")));
+		
 		// Verify count matches enum
 		jassert(m.size() == (int)ApiRoute::numRoutes);
 		
@@ -1591,6 +1601,80 @@ RestServer::Response RestHelpers::handleGetSelectedComponents(MainController* mc
 	}
 	
 	result->setProperty(RestApiIds::components, components);
+	result->setProperty(RestApiIds::logs, Array<var>());
+	result->setProperty(RestApiIds::errors, Array<var>());
+	
+	req->complete(RestServer::Response::ok(var(result.get())));
+	return req->waitForResponse();
+}
+
+RestServer::Response RestHelpers::handleSimulateInteractions(BackendProcessor* bp, RestServer::AsyncRequest::Ptr req)
+{
+	// Parse the request body to get interactions array
+	auto body = req->getRequest().getJsonBody();
+	
+	if (body.isUndefined() || body.isVoid())
+		return req->fail(400, "Request body is required");
+	
+	auto interactionsVar = body.getProperty(RestApiIds::interactions, var());
+	
+	if (!interactionsVar.isArray())
+		return req->fail(400, "'interactions' must be an array");
+	
+	// Get the interaction tester (only available when REST server is running)
+	auto* tester = bp->getInteractionTester();
+	
+	if (tester == nullptr)
+		return req->fail(503, "InteractionTester not available - REST server may have been stopped");
+	
+	// Execute on message thread
+	InteractionTester::TestResult testResult;
+	bool executed = false;
+	WaitableEvent completed;
+	
+	SafeAsyncCall::callAsyncIfNotOnMessageThread<BackendProcessor>(*bp, [&](BackendProcessor& processor)
+	{
+		auto* t = processor.getInteractionTester();
+		if (t != nullptr)
+		{
+			testResult = t->executeInteractions(interactionsVar);
+			executed = true;
+		}
+		completed.signal();
+	});
+	
+	// Wait for execution with timeout (30 seconds should be plenty for any interaction sequence)
+	if (!completed.wait(30000))
+		return req->fail(500, "Interaction execution timed out");
+	
+	if (!executed)
+		return req->fail(500, "Failed to execute interactions");
+	
+	// Build response
+	DynamicObject::Ptr result = new DynamicObject();
+	result->setProperty(RestApiIds::success, testResult.success);
+	
+	if (!testResult.success && testResult.errorMessage.isNotEmpty())
+		result->setProperty(RestApiIds::errorMessage, testResult.errorMessage);
+	
+	result->setProperty(RestApiIds::interactionsCompleted, testResult.interactionsCompleted);
+	result->setProperty(RestApiIds::totalElapsedMs, testResult.totalElapsedMs);
+	result->setProperty(RestApiIds::executionLog, testResult.executionLog);
+	
+	// Convert screenshots StringPairArray to JSON object
+	DynamicObject::Ptr screenshotsObj = new DynamicObject();
+	for (auto& key : testResult.screenshots.getAllKeys())
+	{
+		screenshotsObj->setProperty(Identifier(key), testResult.screenshots[key]);
+	}
+	result->setProperty(RestApiIds::screenshots, var(screenshotsObj.get()));
+	
+	// Add parse warnings if any
+	Array<var> warnings;
+	for (auto& w : testResult.parseWarnings)
+		warnings.add(w);
+	result->setProperty(RestApiIds::parseWarnings, var(warnings));
+	
 	result->setProperty(RestApiIds::logs, Array<var>());
 	result->setProperty(RestApiIds::errors, Array<var>());
 	

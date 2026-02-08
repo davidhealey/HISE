@@ -315,6 +315,9 @@ RestServer::Response BackendProcessor::onAsyncRequest(RestServer::AsyncRequest::
 		case RestHelpers::ApiRoute::GetSelectedComponents:
 			return RestHelpers::handleGetSelectedComponents(this, req);
 			
+		case RestHelpers::ApiRoute::SimulateInteractions:
+			return RestHelpers::handleSimulateInteractions(this, req);
+			
 		default:
 			return req->fail(404, "Unknown API endpoint: " + subURL);
 	}
@@ -323,11 +326,17 @@ RestServer::Response BackendProcessor::onAsyncRequest(RestServer::AsyncRequest::
 void BackendProcessor::serverStarted(int port)
 {
 	debugToConsole(getMainSynthChain(), "REST API Server started on port " + String(port));
+	
+	// Create interaction tester when server starts
+	interactionTester = std::make_unique<InteractionTester>(this);
 }
 
 void BackendProcessor::serverStopped()
 {
 	debugToConsole(getMainSynthChain(), "REST API Server stopped");
+	
+	// Destroy interaction tester when server stops
+	interactionTester = nullptr;
 }
 
 void BackendProcessor::requestReceived(const String& method, const String& path)
@@ -549,7 +558,10 @@ BackendProcessor::~BackendProcessor()
 	handleEditorData(true);
 }
 
-
+InteractionTester* BackendProcessor::getInteractionTester()
+{
+	return interactionTester.get();
+}
 
 void BackendProcessor::projectChanged(const File& /*newRootDirectory*/)
 {

@@ -68,13 +68,18 @@
 #include "backend/PostDebugComponents.cpp"
 
 #include "backend/ai_tools/RestHelpers.h"
-#include "backend/ai_tools/RestHelpers.cpp"
 
 #include "backend/ai_tools/InteractionParser.h"
 #include "backend/ai_tools/InteractionParser.cpp"
 
 #include "backend/ai_tools/InteractionDispatcher.h"
 #include "backend/ai_tools/InteractionDispatcher.cpp"
+
+#include "backend/ai_tools/InteractionTester.h"
+#include "backend/ai_tools/InteractionTester.cpp"
+
+// RestHelpers.cpp must come after InteractionTester.h since it uses InteractionTester::TestResult
+#include "backend/ai_tools/RestHelpers.cpp"
 
 #if HI_RUN_UNIT_TESTS
 #include "backend/ai_tools/ServerUnitTests.cpp"

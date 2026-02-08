@@ -138,6 +138,14 @@ namespace RestApiIds
     DECLARE_ID(unrenderedComponents); // Array of unrendered component objects
     DECLARE_ID(timeoutMs);            // Timeout value in milliseconds
     DECLARE_ID(reason);               // Reason for not rendering: "invisible" or "timeout"
+    
+    // Interaction testing
+    DECLARE_ID(interactions);         // Array of interaction objects
+    DECLARE_ID(interactionsCompleted); // Number of interactions successfully executed
+    DECLARE_ID(totalElapsedMs);       // Total execution time in milliseconds
+    DECLARE_ID(executionLog);         // Array of executed events with timing
+    DECLARE_ID(screenshots);          // Object with screenshot id -> base64 PNG data
+    DECLARE_ID(parseWarnings);        // Array of non-fatal parse warnings
 }
 
 #undef DECLARE_ID
@@ -169,6 +177,7 @@ struct RestHelpers
         SetComponentProperties, ///< POST /api/set_component_properties - Set component properties
         Screenshot,             ///< GET  /api/screenshot - Capture UI screenshot
         GetSelectedComponents,  ///< GET  /api/get_selected_components - Get selected UI components
+        SimulateInteractions,   ///< POST /api/simulate_interactions - Execute UI interaction sequence
         numRoutes
     };
     
@@ -414,6 +423,12 @@ struct RestHelpers
     /** Handler for GET /api/get_selected_components - Get selected UI components. */
     static RestServer::Response handleGetSelectedComponents(MainController* mc, 
                                                             RestServer::AsyncRequest::Ptr req);
+    
+    /** Handler for POST /api/simulate_interactions - Execute UI interaction sequence.
+     *  Note: Takes BackendProcessor* to access InteractionTester.
+     */
+    static RestServer::Response handleSimulateInteractions(BackendProcessor* bp, 
+                                                           RestServer::AsyncRequest::Ptr req);
 };
 
 } // namespace hise
