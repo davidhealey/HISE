@@ -40,11 +40,10 @@ public:
         virtual ~Executor() = default;
         
         //======================================================================
-        /** Result of resolving a component target to pixel coordinates. */
+        /** Result of resolving a component target to bounds. */
         struct ResolveResult
         {
-            Rectangle<int> componentBounds;  // Absolute bounds in content coords
-            Point<int> pixelPosition;        // Click position within content
+            Rectangle<int> componentBounds;  // Absolute bounds in Interface coords
             bool visible = false;
             String error;
             
@@ -52,55 +51,44 @@ public:
         };
         
         //======================================================================
-        /** Resolve a component ID and normalized position to absolute pixel coords.
+        /** Resolve a component ID to its bounds.
          *  @param componentId   Script component ID (e.g., "Button1")
-         *  @param normalizedPos Position within component (0.5, 0.5 = center)
-         *  @returns             ResolveResult with pixel position or error
+         *  @returns             ResolveResult with bounds or error
          */
-        virtual ResolveResult resolveTarget(const String& componentId, 
-                                            Point<float> normalizedPos) = 0;
+        virtual ResolveResult resolveTarget(const String& componentId) = 0;
         
         //======================================================================
         // Primitive mouse operations (pixel coordinates)
-        virtual void executeMouseDown(Point<int> pixelPos, const String& target, 
-                                      ModifierKeys mods, bool rightClick, int timestampMs) = 0;
-        virtual void executeMouseUp(Point<int> pixelPos, const String& target,
-                                    ModifierKeys mods, bool rightClick, int timestampMs) = 0;
-        virtual void executeMouseMove(Point<int> pixelPos, const String& target,
-                                      ModifierKeys mods, int timestampMs) = 0;
+        virtual void executeMouseDown(Point<int> pixelPos, ModifierKeys mods, 
+                                      bool rightClick, int elapsedMs) = 0;
+        virtual void executeMouseUp(Point<int> pixelPos, ModifierKeys mods,
+                                    bool rightClick, int elapsedMs) = 0;
+        virtual void executeMouseMove(Point<int> pixelPos, ModifierKeys mods,
+                                      int elapsedMs) = 0;
         
         // Screenshot capture
-        virtual void executeScreenshot(const String& id, float scale, int timestampMs) = 0;
+        virtual void executeScreenshot(const String& id, float scale, int elapsedMs) = 0;
         
         // Synthetic input mode control
-        virtual void executeSyntheticModeStart(int timestampMs) = 0;
-        virtual void executeSyntheticModeEnd(int timestampMs) = 0;
+        virtual void executeSyntheticModeStart(int elapsedMs) = 0;
+        virtual void executeSyntheticModeEnd(int elapsedMs) = 0;
         
         //======================================================================
-        // Menu item selection support
+        // Cursor and menu state
         
-        /** Get current cursor position in content coordinates. */
+        /** Get current cursor position in Interface coordinates. */
         virtual Point<int> getCurrentCursorPosition() const = 0;
         
-        /** Get all currently visible menu items from open popup menus.
-         *  Uses PopupMenu::VisibleMenuItem from JUCE.
-         *  @returns Array of visible menu items, empty if no menu is open
-         */
+        /** Set cursor position (for state tracking). */
+        virtual void setCursorPosition(Point<int> pos) = 0;
+        
+        /** Get all currently visible menu items from open popup menus. */
         virtual Array<PopupMenu::VisibleMenuItem> getVisibleMenuItems() const = 0;
         
         /** Wait until the executor is ready to process events.
-         *  TestExecutor returns 0 (immediately ready).
-         *  RealExecutor waits for UI paint + buffer.
          *  @returns The number of milliseconds waited, or -1 if timed out.
          */
         virtual int waitUntilReady() = 0;
-        
-        // Human intervention detection
-        virtual bool wasHumanInterventionDetected() const = 0;
-        virtual int getInterventionTimestamp() const = 0;
-        
-        // Test support - simulate human intervention at specific timestamp
-        virtual void simulateHumanIntervention(int atTimestampMs) {}
     };
     
     //==============================================================================
@@ -130,9 +118,20 @@ public:
     };
     
     //==============================================================================
-    /** Execute interactions synchronously. MUST be called on message thread.
+    /** Information about the selected menu item (from selectMenuItem interaction). */
+    struct SelectedMenuItemInfo
+    {
+        String text;
+        int itemId = 0;
+        bool wasSelected = false;
+    };
+    
+    //==============================================================================
+    /** Execute normalized interactions synchronously. MUST be called on message thread.
      *
-     *  @param interactions  Parsed interactions to execute
+     *  Assumes moveTo events have been auto-inserted by normalizeSequence().
+     *
+     *  @param interactions  Parsed and normalized interactions to execute
      *  @param executor      Implementation that performs the actual operations
      *  @param executedLog   Output: log of executed events for response
      *  @param timeoutMs     Maximum execution time (default 20 seconds)
@@ -143,52 +142,34 @@ public:
                             Array<var>& executedLog,
                             int timeoutMs = 20000);
     
-    //==============================================================================
-    static constexpr int DRAG_STEP_INTERVAL_MS = 10;  // Mouse move every 10ms during drag
-    
-    //==============================================================================
-    /** Information about the selected menu item (from selectMenuItem interaction). */
-    struct SelectedMenuItemInfo
-    {
-        String text;
-        int itemId = 0;
-        bool wasSelected = false;
-    };
-    
     /** Get info about the last selected menu item.
      *  Only valid after executing a selectMenuItem interaction.
      */
     SelectedMenuItemInfo getLastSelectedMenuItem() const { return lastSelectedMenuItem; }
     
+    //==============================================================================
+    static constexpr int MOVE_STEP_INTERVAL_MS = 10;
+    static constexpr int DRAG_STEP_INTERVAL_MS = 10;
+    
 private:
     int64 startTimeMs = 0;
     int timeoutMs = 20000;
-    String lastError;  // Set by execute methods if resolution fails
-    SelectedMenuItemInfo lastSelectedMenuItem;  // Set by executeSelectMenuItem on success
+    String lastError;
+    SelectedMenuItemInfo lastSelectedMenuItem;
     
     int getElapsedMs() const;
-    bool waitUntilTimestamp(int targetMs, Executor& executor);
-    
-    // Check for timeout or human intervention, returns error message or empty string
-    String checkAbortConditions(Executor& executor) const;
+    void waitForDuration(int ms, Executor& executor);
+    String checkAbortConditions() const;
     
     // Execute individual interaction types
+    void executeMoveTo(const InteractionParser::MouseInteraction& mouse, Executor& exec, Array<var>& log);
     void executeClick(const InteractionParser::MouseInteraction& mouse, Executor& exec, Array<var>& log);
-    void executeDoubleClick(const InteractionParser::MouseInteraction& mouse, Executor& exec, Array<var>& log);
     void executeDrag(const InteractionParser::MouseInteraction& mouse, Executor& exec, Array<var>& log);
-    void executeHover(const InteractionParser::MouseInteraction& mouse, Executor& exec, Array<var>& log);
-    void executeMove(const InteractionParser::MouseInteraction& mouse, Executor& exec, Array<var>& log);
-    void executeExit(const InteractionParser::MouseInteraction& mouse, Executor& exec, Array<var>& log);
     void executeScreenshot(const InteractionParser::MouseInteraction& mouse, Executor& exec, Array<var>& log);
     void executeSelectMenuItem(const InteractionParser::MouseInteraction& mouse, Executor& exec, Array<var>& log);
     
-    // Build modifier keys from MouseInteraction
-    ModifierKeys buildModifiers(const InteractionParser::MouseInteraction& mouse) const;
-    
     // Create log entry for response
-    var createLogEntry(const String& eventType, const String& target, Point<float> pos, 
-                       int timestampMs, int actualTimestampMs) const;
-    var createScreenshotLogEntry(const String& id, float scale, int timestampMs, int actualTimestampMs) const;
+    var createLogEntry(const String& type, Point<int> pixelPos, int elapsedMs) const;
 };
 
 //==============================================================================
@@ -201,14 +182,12 @@ public:
     struct LogEntry
     {
         String type;           // "mouseDown", "mouseUp", "mouseMove", "screenshot"
-        String target;
-        Point<int> pixelPos;   // Resolved pixel position
+        Point<int> pixelPos;
         ModifierKeys mods;
         bool rightClick = false;
         String screenshotId;
         float screenshotScale = 1.0f;
-        int expectedTimestampMs;  // When it should have fired
-        int actualTimestampMs;    // When it actually fired
+        int elapsedMs = 0;
     };
     
     //==========================================================================
@@ -222,26 +201,12 @@ public:
     //==========================================================================
     Array<LogEntry> log;
     std::map<String, MockComponent> mockComponents;
-    int64 startTimeMs = 0;
-    
-    // Menu item selection support
-    Array<PopupMenu::VisibleMenuItem> mockMenuItems;
     Point<int> cursorPosition{0, 0};
-    
-    // Human intervention simulation
-    int simulatedInterventionAtMs = -1;
-    bool interventionTriggered = false;
-    int interventionTimestampMs = 0;
+    Array<PopupMenu::VisibleMenuItem> mockMenuItems;
     
     //==========================================================================
     /** Reset all state for a new test. */
     void reset();
-    
-    /** Start timing - call this right before dispatcher.execute(). */
-    void startTiming();
-    
-    /** Get current elapsed time since startTiming(). */
-    int getElapsedMs() const;
     
     /** Add a mock component for resolution testing. */
     void addMockComponent(const String& id, Rectangle<int> bounds, bool visible = true);
@@ -258,34 +223,28 @@ public:
     //==========================================================================
     // Executor interface implementation
     
-    ResolveResult resolveTarget(const String& componentId, 
-                                Point<float> normalizedPos) override;
+    ResolveResult resolveTarget(const String& componentId) override;
     
-    void executeMouseDown(Point<int> pixelPos, const String& target,
-                          ModifierKeys mods, bool rightClick, int timestampMs) override;
+    void executeMouseDown(Point<int> pixelPos, ModifierKeys mods,
+                          bool rightClick, int elapsedMs) override;
     
-    void executeMouseUp(Point<int> pixelPos, const String& target,
-                        ModifierKeys mods, bool rightClick, int timestampMs) override;
+    void executeMouseUp(Point<int> pixelPos, ModifierKeys mods,
+                        bool rightClick, int elapsedMs) override;
     
-    void executeMouseMove(Point<int> pixelPos, const String& target,
-                          ModifierKeys mods, int timestampMs) override;
+    void executeMouseMove(Point<int> pixelPos, ModifierKeys mods,
+                          int elapsedMs) override;
     
-    void executeScreenshot(const String& id, float scale, int timestampMs) override;
+    void executeScreenshot(const String& id, float scale, int elapsedMs) override;
     
-    void executeSyntheticModeStart(int timestampMs) override { ignoreUnused(timestampMs); }
-    void executeSyntheticModeEnd(int timestampMs) override { ignoreUnused(timestampMs); }
+    void executeSyntheticModeStart(int elapsedMs) override { ignoreUnused(elapsedMs); }
+    void executeSyntheticModeEnd(int elapsedMs) override { ignoreUnused(elapsedMs); }
     
     Point<int> getCurrentCursorPosition() const override { return cursorPosition; }
+    void setCursorPosition(Point<int> pos) override { cursorPosition = pos; }
+    
     Array<PopupMenu::VisibleMenuItem> getVisibleMenuItems() const override { return mockMenuItems; }
     
     int waitUntilReady() override { return 0; }  // TestExecutor is always immediately ready
-    
-    bool wasHumanInterventionDetected() const override;
-    int getInterventionTimestamp() const override;
-    void simulateHumanIntervention(int atTimestampMs) override;
-    
-private:
-    void checkIntervention(int currentTimestampMs);
 };
 
 } // namespace hise

@@ -29,204 +29,114 @@ public:
     
     void runTest() override
     {
-        // Syntax Validation
+        // Basic Parsing
         testParseNotArray();
         testParseEmptyArray();
         testParseMissingType();
         testParseInvalidType();
         testParseMissingTarget();
-        testParseMissingTimestamp();
-        testParseInvalidPositionFormat();
-        testParsePositionNotObject();
-        testParseMidiMissingEventData();
-        testParseMidiMultipleEventTypes();
-        testParseMovePathNotArray();
         testParseInteractionNotObject();
         testParseTypeNotString();
         testParseTargetNotString();
-        
-        // Value Range Validation
-        testParseNegativeTimestamp();
-        testParsePositionOutOfRangeAllowed();
-        testParseNegativeDuration();
-        testParseZeroDuration();
-        testParseDurationExceedsLimit();
-        testParseMidiNoteOutOfRange();
-        testParseMidiNoteTooLow();
-        testParseMidiVelocityOutOfRange();
-        testParseMidiChannelTooLow();
-        testParseMidiChannelTooHigh();
-        testParseMidiCCControllerOutOfRange();
-        testParseMidiCCValueOutOfRange();
-        testParseMidiPitchBendOutOfRange();
         testParseEmptyTargetString();
-        testParseTooManyInteractions();
-        testParseMovePathTooManyPoints();
-        testParseMoveEmptyPath();
-        testParseMoveRequiresFromTo();
-        testParseMoveWithPositionRejected();
-        testParseMoveWithPathAccepted();
         
-        // Physical Plausibility - Mouse Overlap Detection
-        testOverlappingDrags();
-        testClickDuringDrag();
-        testDoubleClickDuringDrag();
-        testDragDuringDrag();
-        testHoverDuringDrag();
-        testMoveDuringDrag();
-        testExitDuringDrag();
-        testRightClickDuringDrag();
-        
-        // Physical Plausibility - Valid Sequential Events
-        testClickAfterDragEnds();
-        testClickAtExactDragEnd();
-        testDragAfterClick();
-        testHoverAfterDrag();
-        testMidiDuringDrag();
-        testMultipleMidiEvents();
-        
-        // Physical Plausibility - MIDI Warnings
-        testNoteOffWithoutNoteOn();
-        testNoteOnWithoutNoteOff();
-        testDuplicateNoteOn();
-        testNoteOffWrongNote();
-        testMidiWarningsInStrictMode();
-        
-        // Physical Plausibility - Sequence Duration
-        testSequenceDurationExceedsTimeout();
-        testSequenceDurationExceedsTimeoutStrict();
-        
-        // Valid Input - Click Variants
+        // Click Parsing
         testParseValidClick();
         testParseValidClickWithPosition();
-        testParseValidClickWithFromField();
+        testParseValidClickWithPixelPosition();
         testParseValidClickRightClick();
-        testParseValidClickAllModifiers();
-        testParseValidClickSingleModifier();
+        testParseValidClickWithModifiers();
+        testParseValidClickWithDelay();
         
-        // Valid Input - Double Click
-        testParseValidDoubleClick();
-        testParseValidDoubleClickWithModifiers();
+        // DoubleClick Expansion
+        testParseDoubleClickExpandsToTwoClicks();
+        testParseDoubleClickWithDelay();
+        testParseDoubleClickPreservesTarget();
         
-        // Valid Input - Drag
+        // MoveTo Parsing
+        testParseValidMoveTo();
+        testParseValidMoveToWithPosition();
+        testParseValidMoveToWithPixelPosition();
+        
+        // Drag Parsing
         testParseValidDrag();
         testParseValidDragWithModifiers();
-        testParseValidDragMinimalFields();
+        testParseDragMissingDelta();
+        testParseDragDeltaNotObject();
         
-        // Valid Input - Hover
-        testParseValidHover();
-        testParseValidHoverWithDuration();
+        // Screenshot Parsing
+        testParseValidScreenshot();
+        testParseScreenshotMissingId();
+        testParseScreenshotInvalidScale();
         
-        // Valid Input - Move
-        testParseValidMove();
-        testParseValidMoveWithPath();
-        testParseValidMoveSinglePathPoint();
-        testParseValidMovePathTakesPrecedence();
+        // SelectMenuItem Parsing
+        testParseValidSelectMenuItem();
+        testParseSelectMenuItemMissingText();
         
-        // Valid Input - Exit
-        testParseValidExit();
+        // Position Struct
+        testPositionNormalized();
+        testPositionAbsolute();
+        testPositionCenter();
+        testPositionGetPixelPosition();
         
-        // Valid Input - MIDI
-        testParseValidMidiNoteOn();
-        testParseValidMidiNoteOnAllFields();
-        testParseValidMidiNoteOff();
-        testParseValidMidiCC();
-        testParseValidMidiPitchBend();
+        // Delay and Duration
+        testParseNegativeDelay();
+        testParseNegativeDuration();
+        testParseDurationExceedsLimit();
         
         // Default Values
         testParseClickDefaults();
         testParseDragDefaults();
-        testParseHoverDefaults();
-        testParseMidiNoteOnDefaults();
-        testParseMidiCCDefaults();
+        testParseMoveToDefaults();
         
-        // Sequence Handling
+        // Multiple Interactions
         testParseMultipleInteractions();
-        testParseTimestampsAutoSort();
-        testParseTimestampsAlreadySorted();
-        testParseTimestampsAutoSortWarning();
-        
-        // Error Message Quality
-        testErrorMessageIncludesIndex();
-        testErrorMessageIncludesFieldName();
-        testErrorMessageIncludesActualValue();
-        testErrorMessageIncludesValidRange();
-        
-        // SelectMenuItem Tests
-        testParseSelectMenuItemValid();
-        testParseSelectMenuItemWithDuration();
-        testParseSelectMenuItemMissingText();
-        testParseSelectMenuItemEmptyText();
-        testParseSelectMenuItemTextNotString();
-        testParseSelectMenuItemNegativeDuration();
-        testParseSelectMenuItemNoTargetRequired();
-        testParseSelectMenuItemSequence();
+        testParseTooManyInteractions();
     }
     
 private:
     
     //==============================================================================
-    // Type aliases for convenience
+    // Type aliases
     using Interaction = InteractionParser::Interaction;
     using MouseInteraction = InteractionParser::MouseInteraction;
-    using MidiInteraction = InteractionParser::MidiInteraction;
     using ParseResult = InteractionParser::ParseResult;
+    using Position = InteractionParser::MouseInteraction::Position;
     
     //==============================================================================
     // Helper Methods
-    //==============================================================================
     
-    /** Parse JSON and expect success, return interactions */
-    Array<Interaction> parseOrFail(const String& json, bool strict = false)
+    Array<Interaction> parseOrFail(const String& json)
     {
         var input = JSON::parse(json);
         Array<Interaction> result;
-        auto parseResult = InteractionParser::parseInteractions(input, result, strict);
+        auto parseResult = InteractionParser::parseInteractions(input, result);
         
         expect(parseResult.wasOk(), 
                "Parse should succeed: " + parseResult.getErrorMessage());
         
-        // Log any warnings for visibility
-        for (auto& warning : parseResult.warnings)
-            logMessage("Warning: " + warning);
-        
         return result;
     }
     
-    /** Parse JSON and expect failure, return the result for inspection */
-    ParseResult parseExpectingFailure(const String& json, bool strict = false)
+    ParseResult parseExpectingFailure(const String& json)
     {
         var input = JSON::parse(json);
         Array<Interaction> result;
-        return InteractionParser::parseInteractions(input, result, strict);
-    }
-    
-    /** Parse JSON and expect success with warnings */
-    ParseResult parseExpectingWarnings(const String& json, bool strict = false)
-    {
-        var input = JSON::parse(json);
-        Array<Interaction> result;
-        auto parseResult = InteractionParser::parseInteractions(input, result, strict);
-        
-        expect(parseResult.wasOk(), 
-               "Parse should succeed (with warnings): " + parseResult.getErrorMessage());
-        
-        return parseResult;
+        return InteractionParser::parseInteractions(input, result);
     }
     
     //==============================================================================
-    // Syntax Validation Tests
+    // Basic Parsing Tests
     //==============================================================================
     
     void testParseNotArray()
     {
         beginTest("Syntax: Input must be array");
         
-        auto result = parseExpectingFailure(R"({"type": "click", "target": "Btn", "timestamp": 0})");
-        
+        auto result = parseExpectingFailure(R"({"type": "click", "target": "Btn"})");
         expect(result.failed(), "Should reject non-array input");
         expect(result.getErrorMessage().containsIgnoreCase("array"),
-               "Error should mention 'array': " + result.getErrorMessage());
+               "Error should mention 'array'");
     }
     
     void testParseEmptyArray()
@@ -234,152 +144,46 @@ private:
         beginTest("Syntax: Empty array rejected");
         
         auto result = parseExpectingFailure(R"([])");
-        
         expect(result.failed(), "Should reject empty array");
-        expect(result.getErrorMessage().containsIgnoreCase("empty"),
-               "Error should mention 'empty': " + result.getErrorMessage());
     }
     
     void testParseMissingType()
     {
         beginTest("Syntax: Missing 'type' field");
         
-        auto result = parseExpectingFailure(R"([
-            {"target": "Button1", "timestamp": 0}
-        ])");
-        
+        auto result = parseExpectingFailure(R"([{"target": "Button1"}])");
         expect(result.failed(), "Should reject missing type");
-        expect(result.getErrorMessage().containsIgnoreCase("type"),
-               "Error should mention 'type': " + result.getErrorMessage());
     }
     
     void testParseInvalidType()
     {
         beginTest("Syntax: Invalid type value");
         
-        auto result = parseExpectingFailure(R"([
-            {"type": "invalidType", "target": "Button1", "timestamp": 0}
-        ])");
-        
+        auto result = parseExpectingFailure(R"([{"type": "invalid", "target": "Button1"}])");
         expect(result.failed(), "Should reject invalid type");
-        expect(result.getErrorMessage().contains("invalidType") ||
-               result.getErrorMessage().containsIgnoreCase("type"),
-               "Error should mention the invalid type: " + result.getErrorMessage());
     }
     
     void testParseMissingTarget()
     {
-        beginTest("Syntax: Missing 'target' field for mouse event");
+        beginTest("Syntax: Missing 'target' for click");
         
-        auto result = parseExpectingFailure(R"([
-            {"type": "click", "timestamp": 0}
-        ])");
-        
+        auto result = parseExpectingFailure(R"([{"type": "click"}])");
         expect(result.failed(), "Should reject missing target");
-        expect(result.getErrorMessage().containsIgnoreCase("target"),
-               "Error should mention 'target': " + result.getErrorMessage());
-    }
-    
-    void testParseMissingTimestamp()
-    {
-        beginTest("Syntax: Missing 'timestamp' field");
-        
-        auto result = parseExpectingFailure(R"([
-            {"type": "click", "target": "Button1"}
-        ])");
-        
-        expect(result.failed(), "Should reject missing timestamp");
-        expect(result.getErrorMessage().containsIgnoreCase("timestamp"),
-               "Error should mention 'timestamp': " + result.getErrorMessage());
-    }
-    
-    void testParseInvalidPositionFormat()
-    {
-        beginTest("Syntax: Position must have x and y");
-        
-        auto result = parseExpectingFailure(R"([
-            {"type": "click", "target": "Button1", "timestamp": 0,
-             "position": {"x": 0.5}}
-        ])");
-        
-        expect(result.failed(), "Should reject position missing y");
-        expect(result.getErrorMessage().containsIgnoreCase("position") ||
-               result.getErrorMessage().containsIgnoreCase("y"),
-               "Error should mention position issue: " + result.getErrorMessage());
-    }
-    
-    void testParsePositionNotObject()
-    {
-        beginTest("Syntax: Position must be object");
-        
-        auto result = parseExpectingFailure(R"([
-            {"type": "click", "target": "Button1", "timestamp": 0,
-             "position": [0.5, 0.5]}
-        ])");
-        
-        expect(result.failed(), "Should reject position as array");
-        expect(result.getErrorMessage().containsIgnoreCase("position"),
-               "Error should mention 'position': " + result.getErrorMessage());
-    }
-    
-    void testParseMidiMissingEventData()
-    {
-        beginTest("Syntax: MIDI must have noteOn/noteOff/cc/pitchBend");
-        
-        auto result = parseExpectingFailure(R"([
-            {"type": "midi", "timestamp": 0}
-        ])");
-        
-        expect(result.failed(), "Should reject MIDI without event data");
-        expect(result.getErrorMessage().containsIgnoreCase("noteOn") ||
-               result.getErrorMessage().containsIgnoreCase("midi"),
-               "Error should mention missing MIDI data: " + result.getErrorMessage());
-    }
-    
-    void testParseMidiMultipleEventTypes()
-    {
-        beginTest("Syntax: MIDI cannot have multiple event types");
-        
-        auto result = parseExpectingFailure(R"([
-            {"type": "midi", "timestamp": 0,
-             "noteOn": {"note": 60},
-             "noteOff": {"note": 60}}
-        ])");
-        
-        expect(result.failed(), "Should reject multiple MIDI event types");
-    }
-    
-    void testParseMovePathNotArray()
-    {
-        beginTest("Syntax: Move path must be array");
-        
-        auto result = parseExpectingFailure(R"([
-            {"type": "move", "target": "Panel1", "timestamp": 0, "duration": 100,
-             "path": {"x": 0.5, "y": 0.5}}
-        ])");
-        
-        expect(result.failed(), "Should reject path as object");
     }
     
     void testParseInteractionNotObject()
     {
-        beginTest("Syntax: Each interaction must be object");
+        beginTest("Syntax: Interaction must be object");
         
-        auto result = parseExpectingFailure(R"([
-            "click"
-        ])");
-        
-        expect(result.failed(), "Should reject non-object interaction");
+        auto result = parseExpectingFailure(R"(["click"])");
+        expect(result.failed(), "Should reject non-object");
     }
     
     void testParseTypeNotString()
     {
         beginTest("Syntax: Type must be string");
         
-        auto result = parseExpectingFailure(R"([
-            {"type": 123, "target": "Button1", "timestamp": 0}
-        ])");
-        
+        auto result = parseExpectingFailure(R"([{"type": 123, "target": "Button1"}])");
         expect(result.failed(), "Should reject non-string type");
     }
     
@@ -387,67 +191,386 @@ private:
     {
         beginTest("Syntax: Target must be string");
         
-        auto result = parseExpectingFailure(R"([
-            {"type": "click", "target": 123, "timestamp": 0}
-        ])");
-        
+        auto result = parseExpectingFailure(R"([{"type": "click", "target": 123}])");
         expect(result.failed(), "Should reject non-string target");
     }
     
-    //==============================================================================
-    // Value Range Validation Tests
-    //==============================================================================
-    
-    void testParseNegativeTimestamp()
+    void testParseEmptyTargetString()
     {
-        beginTest("Range: Negative timestamp rejected");
+        beginTest("Syntax: Empty target rejected");
         
-        auto result = parseExpectingFailure(R"([
-            {"type": "click", "target": "Button1", "timestamp": -100}
-        ])");
-        
-        expect(result.failed(), "Should reject negative timestamp");
-        expect(result.getErrorMessage().containsIgnoreCase("timestamp"),
-               "Error should mention 'timestamp': " + result.getErrorMessage());
+        auto result = parseExpectingFailure(R"([{"type": "click", "target": ""}])");
+        expect(result.failed(), "Should reject empty target");
     }
     
-    void testParsePositionOutOfRangeAllowed()
+    //==============================================================================
+    // Click Parsing Tests
+    //==============================================================================
+    
+    void testParseValidClick()
     {
-        beginTest("Range: Position outside [0,1] allowed for drag support");
+        beginTest("Click: Valid minimal click");
         
-        // Positions outside [0,1] are now allowed to support drag operations
-        // that extend beyond component bounds
+        auto interactions = parseOrFail(R"([{"type": "click", "target": "Button1"}])");
         
-        // X > 1.0 allowed
+        expect(interactions.size() == 1, "Should have 1 interaction");
+        expect(interactions[0].mouse.type == MouseInteraction::Type::Click, "Should be Click");
+        expect(interactions[0].mouse.targetComponentId == "Button1", "Target should match");
+        expect(interactions[0].mouse.position.isCenter(), "Position should be center");
+    }
+    
+    void testParseValidClickWithPosition()
+    {
+        beginTest("Click: With normalized position");
+        
+        auto interactions = parseOrFail(R"([
+            {"type": "click", "target": "Panel1", "position": {"x": 0.2, "y": 0.8}}
+        ])");
+        
+        expect(interactions.size() == 1, "Should have 1 interaction");
+        expect(!interactions[0].mouse.position.isAbsolute(), "Should be normalized");
+        
+        auto pos = interactions[0].mouse.position.getValue();
+        expectWithinAbsoluteError(pos.x, 0.2f, 0.001f, "X should be 0.2");
+        expectWithinAbsoluteError(pos.y, 0.8f, 0.001f, "Y should be 0.8");
+    }
+    
+    void testParseValidClickWithPixelPosition()
+    {
+        beginTest("Click: With absolute pixel position");
+        
+        auto interactions = parseOrFail(R"([
+            {"type": "click", "target": "Panel1", "pixelPosition": {"x": 50, "y": 75}}
+        ])");
+        
+        expect(interactions.size() == 1, "Should have 1 interaction");
+        expect(interactions[0].mouse.position.isAbsolute(), "Should be absolute");
+        
+        // Test getPixelPosition with mock bounds
+        Rectangle<int> bounds{100, 100, 200, 200};
+        auto pixel = interactions[0].mouse.position.getPixelPosition(bounds);
+        expect(pixel.x == 150, "Pixel X should be 100 + 50 = 150");
+        expect(pixel.y == 175, "Pixel Y should be 100 + 75 = 175");
+    }
+    
+    void testParseValidClickRightClick()
+    {
+        beginTest("Click: Right click");
+        
+        auto interactions = parseOrFail(R"([
+            {"type": "click", "target": "Knob1", "rightClick": true}
+        ])");
+        
+        expect(interactions.size() == 1, "Should have 1 interaction");
+        expect(interactions[0].mouse.rightClick, "Should be right click");
+    }
+    
+    void testParseValidClickWithModifiers()
+    {
+        beginTest("Click: With modifiers");
+        
+        auto interactions = parseOrFail(R"([
+            {"type": "click", "target": "Button1", 
+             "shiftDown": true, "ctrlDown": true, "altDown": false}
+        ])");
+        
+        expect(interactions.size() == 1, "Should have 1 interaction");
+        expect(interactions[0].mouse.modifiers.isShiftDown(), "Shift should be down");
+        expect(interactions[0].mouse.modifiers.isCtrlDown(), "Ctrl should be down");
+        expect(!interactions[0].mouse.modifiers.isAltDown(), "Alt should not be down");
+    }
+    
+    void testParseValidClickWithDelay()
+    {
+        beginTest("Click: With delay");
+        
+        auto interactions = parseOrFail(R"([
+            {"type": "click", "target": "Button1", "delay": 500}
+        ])");
+        
+        expect(interactions.size() == 1, "Should have 1 interaction");
+        expect(interactions[0].mouse.delayMs == 500, "Delay should be 500ms");
+    }
+    
+    //==============================================================================
+    // DoubleClick Expansion Tests
+    //==============================================================================
+    
+    void testParseDoubleClickExpandsToTwoClicks()
+    {
+        beginTest("DoubleClick: Expands to two clicks");
+        
+        auto interactions = parseOrFail(R"([
+            {"type": "doubleClick", "target": "Button1"}
+        ])");
+        
+        expect(interactions.size() == 2, "Should expand to 2 clicks");
+        expect(interactions[0].mouse.type == MouseInteraction::Type::Click, "First should be Click");
+        expect(interactions[1].mouse.type == MouseInteraction::Type::Click, "Second should be Click");
+        expect(interactions[1].mouse.delayMs == InteractionDefaults::DOUBLE_CLICK_DELAY_MS, 
+               "Second click should have 20ms delay");
+    }
+    
+    void testParseDoubleClickWithDelay()
+    {
+        beginTest("DoubleClick: Delay goes to first click");
+        
+        auto interactions = parseOrFail(R"([
+            {"type": "doubleClick", "target": "Button1", "delay": 300}
+        ])");
+        
+        expect(interactions.size() == 2, "Should expand to 2 clicks");
+        expect(interactions[0].mouse.delayMs == 300, "First click should have 300ms delay");
+        expect(interactions[1].mouse.delayMs == InteractionDefaults::DOUBLE_CLICK_DELAY_MS, 
+               "Second click should have 20ms delay");
+    }
+    
+    void testParseDoubleClickPreservesTarget()
+    {
+        beginTest("DoubleClick: Both clicks have same target");
+        
+        auto interactions = parseOrFail(R"([
+            {"type": "doubleClick", "target": "Panel1", "position": {"x": 0.3, "y": 0.7}}
+        ])");
+        
+        expect(interactions.size() == 2, "Should expand to 2 clicks");
+        expect(interactions[0].mouse.targetComponentId == "Panel1", "First target should match");
+        expect(interactions[1].mouse.targetComponentId == "Panel1", "Second target should match");
+        expect(interactions[0].mouse.position == interactions[1].mouse.position, 
+               "Both should have same position");
+    }
+    
+    //==============================================================================
+    // MoveTo Parsing Tests
+    //==============================================================================
+    
+    void testParseValidMoveTo()
+    {
+        beginTest("MoveTo: Valid minimal");
+        
+        auto interactions = parseOrFail(R"([{"type": "moveTo", "target": "Button1"}])");
+        
+        expect(interactions.size() == 1, "Should have 1 interaction");
+        expect(interactions[0].mouse.type == MouseInteraction::Type::MoveTo, "Should be MoveTo");
+        expect(interactions[0].mouse.durationMs == InteractionDefaults::MOVE_DURATION_MS, 
+               "Duration should be default 700ms");
+    }
+    
+    void testParseValidMoveToWithPosition()
+    {
+        beginTest("MoveTo: With position");
+        
+        auto interactions = parseOrFail(R"([
+            {"type": "moveTo", "target": "Panel1", "position": {"x": 0.1, "y": 0.9}}
+        ])");
+        
+        expect(interactions.size() == 1, "Should have 1 interaction");
+        auto pos = interactions[0].mouse.position.getValue();
+        expectWithinAbsoluteError(pos.x, 0.1f, 0.001f, "X should be 0.1");
+        expectWithinAbsoluteError(pos.y, 0.9f, 0.001f, "Y should be 0.9");
+    }
+    
+    void testParseValidMoveToWithPixelPosition()
+    {
+        beginTest("MoveTo: With pixel position");
+        
+        auto interactions = parseOrFail(R"([
+            {"type": "moveTo", "target": "Panel1", "pixelPosition": {"x": 100, "y": 50}}
+        ])");
+        
+        expect(interactions.size() == 1, "Should have 1 interaction");
+        expect(interactions[0].mouse.position.isAbsolute(), "Should be absolute");
+    }
+    
+    //==============================================================================
+    // Drag Parsing Tests
+    //==============================================================================
+    
+    void testParseValidDrag()
+    {
+        beginTest("Drag: Valid with delta");
+        
+        auto interactions = parseOrFail(R"([
+            {"type": "drag", "target": "Knob1", "delta": {"x": 0, "y": -50}}
+        ])");
+        
+        expect(interactions.size() == 1, "Should have 1 interaction");
+        expect(interactions[0].mouse.type == MouseInteraction::Type::Drag, "Should be Drag");
+        expect(interactions[0].mouse.deltaPixels.x == 0, "Delta X should be 0");
+        expect(interactions[0].mouse.deltaPixels.y == -50, "Delta Y should be -50");
+    }
+    
+    void testParseValidDragWithModifiers()
+    {
+        beginTest("Drag: With shift modifier");
+        
+        auto interactions = parseOrFail(R"([
+            {"type": "drag", "target": "Knob1", "delta": {"x": 0, "y": -50}, "shiftDown": true}
+        ])");
+        
+        expect(interactions.size() == 1, "Should have 1 interaction");
+        expect(interactions[0].mouse.modifiers.isShiftDown(), "Shift should be down");
+    }
+    
+    void testParseDragMissingDelta()
+    {
+        beginTest("Drag: Missing delta rejected");
+        
+        auto result = parseExpectingFailure(R"([
+            {"type": "drag", "target": "Knob1"}
+        ])");
+        
+        expect(result.failed(), "Should reject drag without delta");
+        expect(result.getErrorMessage().containsIgnoreCase("delta"), 
+               "Error should mention 'delta'");
+    }
+    
+    void testParseDragDeltaNotObject()
+    {
+        beginTest("Drag: Delta must be object");
+        
+        auto result = parseExpectingFailure(R"([
+            {"type": "drag", "target": "Knob1", "delta": [0, -50]}
+        ])");
+        
+        expect(result.failed(), "Should reject delta as array");
+    }
+    
+    //==============================================================================
+    // Screenshot Parsing Tests
+    //==============================================================================
+    
+    void testParseValidScreenshot()
+    {
+        beginTest("Screenshot: Valid");
+        
+        auto interactions = parseOrFail(R"([{"type": "screenshot", "id": "capture1"}])");
+        
+        expect(interactions.size() == 1, "Should have 1 interaction");
+        expect(interactions[0].mouse.type == MouseInteraction::Type::Screenshot, "Should be Screenshot");
+        expect(interactions[0].mouse.screenshotId == "capture1", "ID should match");
+        expect(interactions[0].mouse.screenshotScale == 1.0f, "Default scale should be 1.0");
+    }
+    
+    void testParseScreenshotMissingId()
+    {
+        beginTest("Screenshot: Missing id rejected");
+        
+        auto result = parseExpectingFailure(R"([{"type": "screenshot"}])");
+        expect(result.failed(), "Should reject screenshot without id");
+    }
+    
+    void testParseScreenshotInvalidScale()
+    {
+        beginTest("Screenshot: Invalid scale rejected");
+        
+        auto result = parseExpectingFailure(R"([
+            {"type": "screenshot", "id": "test", "scale": 0.75}
+        ])");
+        
+        expect(result.failed(), "Should reject scale other than 0.5 or 1.0");
+    }
+    
+    //==============================================================================
+    // SelectMenuItem Parsing Tests
+    //==============================================================================
+    
+    void testParseValidSelectMenuItem()
+    {
+        beginTest("SelectMenuItem: Valid");
+        
+        auto interactions = parseOrFail(R"([
+            {"type": "selectMenuItem", "text": "Learn MIDI CC"}
+        ])");
+        
+        expect(interactions.size() == 1, "Should have 1 interaction");
+        expect(interactions[0].mouse.type == MouseInteraction::Type::SelectMenuItem, "Should be SelectMenuItem");
+        expect(interactions[0].mouse.menuItemText == "Learn MIDI CC", "Text should match");
+    }
+    
+    void testParseSelectMenuItemMissingText()
+    {
+        beginTest("SelectMenuItem: Missing text rejected");
+        
+        auto result = parseExpectingFailure(R"([{"type": "selectMenuItem"}])");
+        expect(result.failed(), "Should reject selectMenuItem without text");
+    }
+    
+    //==============================================================================
+    // Position Struct Tests
+    //==============================================================================
+    
+    void testPositionNormalized()
+    {
+        beginTest("Position: Normalized creation");
+        
+        auto pos = Position::normalized(0.3f, 0.7f);
+        expect(!pos.isAbsolute(), "Should be normalized");
+        expect(!pos.isCenter(), "Should not be center");
+        
+        auto val = pos.getValue();
+        expectWithinAbsoluteError(val.x, 0.3f, 0.001f, "X should be 0.3");
+        expectWithinAbsoluteError(val.y, 0.7f, 0.001f, "Y should be 0.7");
+    }
+    
+    void testPositionAbsolute()
+    {
+        beginTest("Position: Absolute creation");
+        
+        auto pos = Position::absolute(50, 75);
+        expect(pos.isAbsolute(), "Should be absolute");
+        expect(!pos.isCenter(), "Should not be center");
+    }
+    
+    void testPositionCenter()
+    {
+        beginTest("Position: Center creation");
+        
+        auto pos = Position::center();
+        expect(!pos.isAbsolute(), "Should be normalized");
+        expect(pos.isCenter(), "Should be center");
+        
+        auto val = pos.getValue();
+        expectWithinAbsoluteError(val.x, 0.5f, 0.001f, "X should be 0.5");
+        expectWithinAbsoluteError(val.y, 0.5f, 0.001f, "Y should be 0.5");
+    }
+    
+    void testPositionGetPixelPosition()
+    {
+        beginTest("Position: getPixelPosition calculation");
+        
+        Rectangle<int> bounds{100, 200, 80, 60};  // x=100, y=200, w=80, h=60
+        
+        // Normalized position
         {
-            auto interactions = parseOrFail(R"([
-                {"type": "click", "target": "Button1", "timestamp": 0,
-                 "position": {"x": 1.5, "y": 0.5}}
-            ])");
-            expect(interactions.size() == 1, "Should have 1 interaction");
-            expect(interactions[0].mouse.fromNormalized.x == 1.5f, "X should be 1.5");
+            auto pos = Position::normalized(0.5f, 0.5f);  // Center
+            auto pixel = pos.getPixelPosition(bounds);
+            expect(pixel.x == 140, "Normalized center X: 100 + 40 = 140");
+            expect(pixel.y == 230, "Normalized center Y: 200 + 30 = 230");
         }
         
-        // Y > 1.0 allowed
+        // Absolute position
         {
-            auto interactions = parseOrFail(R"([
-                {"type": "click", "target": "Button1", "timestamp": 0,
-                 "position": {"x": 0.5, "y": 1.5}}
-            ])");
-            expect(interactions.size() == 1, "Should have 1 interaction");
-            expect(interactions[0].mouse.fromNormalized.y == 1.5f, "Y should be 1.5");
+            auto pos = Position::absolute(10, 20);
+            auto pixel = pos.getPixelPosition(bounds);
+            expect(pixel.x == 110, "Absolute X: 100 + 10 = 110");
+            expect(pixel.y == 220, "Absolute Y: 200 + 20 = 220");
         }
+    }
+    
+    //==============================================================================
+    // Delay and Duration Tests
+    //==============================================================================
+    
+    void testParseNegativeDelay()
+    {
+        beginTest("Range: Negative delay rejected");
         
-        // Negative values allowed
-        {
-            auto interactions = parseOrFail(R"([
-                {"type": "click", "target": "Button1", "timestamp": 0,
-                 "position": {"x": -0.5, "y": -0.2}}
-            ])");
-            expect(interactions.size() == 1, "Should have 1 interaction");
-            expect(interactions[0].mouse.fromNormalized.x == -0.5f, "X should be -0.5");
-            expect(interactions[0].mouse.fromNormalized.y == -0.2f, "Y should be -0.2");
-        }
+        auto result = parseExpectingFailure(R"([
+            {"type": "click", "target": "Button1", "delay": -100}
+        ])");
+        
+        expect(result.failed(), "Should reject negative delay");
     }
     
     void testParseNegativeDuration()
@@ -455,21 +578,10 @@ private:
         beginTest("Range: Negative duration rejected");
         
         auto result = parseExpectingFailure(R"([
-            {"type": "drag", "target": "Slider1", "timestamp": 0, "duration": -50}
+            {"type": "drag", "target": "Knob1", "delta": {"x": 0, "y": -50}, "duration": -50}
         ])");
         
         expect(result.failed(), "Should reject negative duration");
-    }
-    
-    void testParseZeroDuration()
-    {
-        beginTest("Range: Zero duration rejected");
-        
-        auto result = parseExpectingFailure(R"([
-            {"type": "drag", "target": "Slider1", "timestamp": 0, "duration": 0}
-        ])");
-        
-        expect(result.failed(), "Should reject zero duration");
     }
     
     void testParseDurationExceedsLimit()
@@ -477,1134 +589,89 @@ private:
         beginTest("Range: Duration > 10s rejected");
         
         auto result = parseExpectingFailure(R"([
-            {"type": "drag", "target": "Slider1", "timestamp": 0, "duration": 15000}
+            {"type": "drag", "target": "Knob1", "delta": {"x": 0, "y": -50}, "duration": 15000}
         ])");
         
         expect(result.failed(), "Should reject duration > 10 seconds");
     }
     
-    void testParseMidiNoteOutOfRange()
-    {
-        beginTest("Range: MIDI note > 127 rejected");
-        
-        auto result = parseExpectingFailure(R"([
-            {"type": "midi", "noteOn": {"note": 128}, "timestamp": 0}
-        ])");
-        
-        expect(result.failed(), "Should reject note > 127");
-    }
-    
-    void testParseMidiNoteTooLow()
-    {
-        beginTest("Range: MIDI note < 0 rejected");
-        
-        auto result = parseExpectingFailure(R"([
-            {"type": "midi", "noteOn": {"note": -1}, "timestamp": 0}
-        ])");
-        
-        expect(result.failed(), "Should reject note < 0");
-    }
-    
-    void testParseMidiVelocityOutOfRange()
-    {
-        beginTest("Range: MIDI velocity > 127 rejected");
-        
-        auto result = parseExpectingFailure(R"([
-            {"type": "midi", "noteOn": {"note": 60, "velocity": 200}, "timestamp": 0}
-        ])");
-        
-        expect(result.failed(), "Should reject velocity > 127");
-    }
-    
-    void testParseMidiChannelTooLow()
-    {
-        beginTest("Range: MIDI channel < 1 rejected");
-        
-        auto result = parseExpectingFailure(R"([
-            {"type": "midi", "noteOn": {"channel": 0, "note": 60}, "timestamp": 0}
-        ])");
-        
-        expect(result.failed(), "Should reject channel < 1");
-    }
-    
-    void testParseMidiChannelTooHigh()
-    {
-        beginTest("Range: MIDI channel > 16 rejected");
-        
-        auto result = parseExpectingFailure(R"([
-            {"type": "midi", "noteOn": {"channel": 17, "note": 60}, "timestamp": 0}
-        ])");
-        
-        expect(result.failed(), "Should reject channel > 16");
-    }
-    
-    void testParseMidiCCControllerOutOfRange()
-    {
-        beginTest("Range: MIDI CC controller > 127 rejected");
-        
-        auto result = parseExpectingFailure(R"([
-            {"type": "midi", "cc": {"controller": 128, "value": 64}, "timestamp": 0}
-        ])");
-        
-        expect(result.failed(), "Should reject controller > 127");
-    }
-    
-    void testParseMidiCCValueOutOfRange()
-    {
-        beginTest("Range: MIDI CC value > 127 rejected");
-        
-        auto result = parseExpectingFailure(R"([
-            {"type": "midi", "cc": {"controller": 1, "value": 128}, "timestamp": 0}
-        ])");
-        
-        expect(result.failed(), "Should reject CC value > 127");
-    }
-    
-    void testParseMidiPitchBendOutOfRange()
-    {
-        beginTest("Range: MIDI pitch bend out of range rejected");
-        
-        auto result = parseExpectingFailure(R"([
-            {"type": "midi", "pitchBend": {"value": 20000}, "timestamp": 0}
-        ])");
-        
-        expect(result.failed(), "Should reject pitch bend > 16383");
-    }
-    
-    void testParseEmptyTargetString()
-    {
-        beginTest("Range: Empty target string rejected");
-        
-        auto result = parseExpectingFailure(R"([
-            {"type": "click", "target": "", "timestamp": 0}
-        ])");
-        
-        expect(result.failed(), "Should reject empty target");
-    }
-    
-    void testParseTooManyInteractions()
-    {
-        beginTest("Range: More than 100 interactions rejected");
-        
-        String json = "[";
-        for (int i = 0; i < 101; i++) {
-            if (i > 0) json += ",";
-            json += R"({"type": "click", "target": "Btn", "timestamp": )" + String(i * 100) + "}";
-        }
-        json += "]";
-        
-        auto result = parseExpectingFailure(json);
-        
-        expect(result.failed(), "Should reject > 100 interactions");
-    }
-    
-    void testParseMovePathTooManyPoints()
-    {
-        beginTest("Range: Move path > 50 points rejected");
-        
-        String path = "[";
-        for (int i = 0; i < 51; i++) {
-            if (i > 0) path += ",";
-            path += R"({"x": 0.5, "y": 0.5})";
-        }
-        path += "]";
-        
-        auto result = parseExpectingFailure(
-            R"([{"type": "move", "target": "Panel1", "timestamp": 0, "duration": 100, "path": )" + path + "}]");
-        
-        expect(result.failed(), "Should reject path > 50 points");
-    }
-    
-    void testParseMoveEmptyPath()
-    {
-        beginTest("Range: Move with empty path rejected");
-        
-        auto result = parseExpectingFailure(R"([
-            {"type": "move", "target": "Panel1", "timestamp": 0, "duration": 100, "path": []}
-        ])");
-        
-        expect(result.failed(), "Should reject empty path");
-    }
-    
-    void testParseMoveRequiresFromTo()
-    {
-        beginTest("Syntax: Move without from/to rejected");
-        
-        // Move with no position info at all
-        {
-            auto result = parseExpectingFailure(R"([
-                {"type": "move", "target": "Panel1", "timestamp": 0, "duration": 100}
-            ])");
-            
-            expect(result.failed(), "Should reject move without from/to");
-            expect(result.getErrorMessage().containsIgnoreCase("from") &&
-                   result.getErrorMessage().containsIgnoreCase("to"),
-                   "Error should mention from/to: " + result.getErrorMessage());
-        }
-        
-        // Move with only 'from' (missing 'to')
-        {
-            auto result = parseExpectingFailure(R"([
-                {"type": "move", "target": "Panel1", "timestamp": 0, "duration": 100,
-                 "from": {"x": 0.2, "y": 0.2}}
-            ])");
-            
-            expect(result.failed(), "Should reject move with only 'from'");
-        }
-        
-        // Move with only 'to' (missing 'from')
-        {
-            auto result = parseExpectingFailure(R"([
-                {"type": "move", "target": "Panel1", "timestamp": 0, "duration": 100,
-                 "to": {"x": 0.8, "y": 0.8}}
-            ])");
-            
-            expect(result.failed(), "Should reject move with only 'to'");
-        }
-    }
-    
-    void testParseMoveWithPositionRejected()
-    {
-        beginTest("Syntax: Move with 'position' instead of from/to rejected");
-        
-        auto result = parseExpectingFailure(R"([
-            {"type": "move", "target": "Panel1", "timestamp": 0, "duration": 100,
-             "position": {"x": 0.5, "y": 0.5}}
-        ])");
-        
-        expect(result.failed(), "Should reject move with 'position'");
-        expect(result.getErrorMessage().containsIgnoreCase("from") &&
-               result.getErrorMessage().containsIgnoreCase("to"),
-               "Error should guide user to use from/to: " + result.getErrorMessage());
-    }
-    
-    void testParseMoveWithPathAccepted()
-    {
-        beginTest("Syntax: Move with path (no from/to) accepted");
-        
-        // Path alone is sufficient - no need for from/to
-        auto interactions = parseOrFail(R"([
-            {"type": "move", "target": "Panel1", "timestamp": 0, "duration": 100,
-             "path": [{"x": 0.2, "y": 0.2}, {"x": 0.5, "y": 0.5}, {"x": 0.8, "y": 0.8}]}
-        ])");
-        
-        expect(interactions.size() == 1, "Should have 1 interaction");
-        expectEquals(interactions[0].mouse.pathNormalized.size(), 3);
-    }
-    
     //==============================================================================
-    // Physical Plausibility - Mouse Overlap Detection
-    //==============================================================================
-    
-    void testOverlappingDrags()
-    {
-        beginTest("Plausibility: Overlapping drags rejected");
-        
-        auto result = parseExpectingFailure(R"([
-            {"type": "drag", "target": "Slider1", "timestamp": 0, "duration": 300},
-            {"type": "drag", "target": "Slider2", "timestamp": 100, "duration": 200}
-        ])");
-        
-        expect(result.failed(), "Should reject overlapping drags");
-        expect(result.getErrorMessage().containsIgnoreCase("overlap") ||
-               result.getErrorMessage().containsIgnoreCase("simultaneous") ||
-               result.getErrorMessage().containsIgnoreCase("during"),
-               "Error should mention overlap: " + result.getErrorMessage());
-    }
-    
-    void testClickDuringDrag()
-    {
-        beginTest("Plausibility: Click during drag rejected");
-        
-        auto result = parseExpectingFailure(R"([
-            {"type": "drag", "target": "Slider1", "timestamp": 0, "duration": 300},
-            {"type": "click", "target": "Button1", "timestamp": 150}
-        ])");
-        
-        expect(result.failed(), "Should reject click during drag");
-    }
-    
-    void testDoubleClickDuringDrag()
-    {
-        beginTest("Plausibility: Double-click during drag rejected");
-        
-        auto result = parseExpectingFailure(R"([
-            {"type": "drag", "target": "Slider1", "timestamp": 0, "duration": 300},
-            {"type": "doubleClick", "target": "Button1", "timestamp": 150}
-        ])");
-        
-        expect(result.failed(), "Should reject double-click during drag");
-    }
-    
-    void testDragDuringDrag()
-    {
-        beginTest("Plausibility: Drag during drag rejected");
-        
-        auto result = parseExpectingFailure(R"([
-            {"type": "drag", "target": "Slider1", "timestamp": 0, "duration": 300},
-            {"type": "drag", "target": "Slider2", "timestamp": 50, "duration": 100}
-        ])");
-        
-        expect(result.failed(), "Should reject drag during drag");
-    }
-    
-    void testHoverDuringDrag()
-    {
-        beginTest("Plausibility: Hover during drag rejected");
-        
-        auto result = parseExpectingFailure(R"([
-            {"type": "drag", "target": "Slider1", "timestamp": 0, "duration": 300},
-            {"type": "hover", "target": "Panel1", "timestamp": 150, "duration": 50}
-        ])");
-        
-        expect(result.failed(), "Should reject hover during drag");
-    }
-    
-    void testMoveDuringDrag()
-    {
-        beginTest("Plausibility: Move during drag rejected");
-        
-        auto result = parseExpectingFailure(R"([
-            {"type": "drag", "target": "Slider1", "timestamp": 0, "duration": 300},
-            {"type": "move", "target": "Panel1", "timestamp": 150, "duration": 50,
-             "path": [{"x": 0.2, "y": 0.2}, {"x": 0.8, "y": 0.8}]}
-        ])");
-        
-        expect(result.failed(), "Should reject move during drag");
-    }
-    
-    void testExitDuringDrag()
-    {
-        beginTest("Plausibility: Exit during drag rejected");
-        
-        auto result = parseExpectingFailure(R"([
-            {"type": "drag", "target": "Slider1", "timestamp": 0, "duration": 300},
-            {"type": "exit", "target": "Panel1", "timestamp": 150}
-        ])");
-        
-        expect(result.failed(), "Should reject exit during drag");
-    }
-    
-    void testRightClickDuringDrag()
-    {
-        beginTest("Plausibility: Right-click during drag rejected");
-        
-        auto result = parseExpectingFailure(R"([
-            {"type": "drag", "target": "Slider1", "timestamp": 0, "duration": 300},
-            {"type": "click", "target": "Button1", "timestamp": 150, "rightClick": true}
-        ])");
-        
-        expect(result.failed(), "Should reject right-click during drag");
-    }
-    
-    //==============================================================================
-    // Physical Plausibility - Valid Sequential Events
-    //==============================================================================
-    
-    void testClickAfterDragEnds()
-    {
-        beginTest("Plausibility: Click after drag ends is valid");
-        
-        auto interactions = parseOrFail(R"([
-            {"type": "drag", "target": "Slider1", "timestamp": 0, "duration": 300},
-            {"type": "click", "target": "Button1", "timestamp": 350}
-        ])");
-        
-        expectEquals(interactions.size(), 2, "Should have 2 interactions");
-    }
-    
-    void testClickAtExactDragEnd()
-    {
-        beginTest("Plausibility: Click at exact drag end is valid");
-        
-        auto interactions = parseOrFail(R"([
-            {"type": "drag", "target": "Slider1", "timestamp": 0, "duration": 300},
-            {"type": "click", "target": "Button1", "timestamp": 300}
-        ])");
-        
-        expectEquals(interactions.size(), 2, "Should have 2 interactions");
-    }
-    
-    void testDragAfterClick()
-    {
-        beginTest("Plausibility: Drag after click is valid");
-        
-        auto interactions = parseOrFail(R"([
-            {"type": "click", "target": "Button1", "timestamp": 0},
-            {"type": "drag", "target": "Slider1", "timestamp": 100, "duration": 200}
-        ])");
-        
-        expectEquals(interactions.size(), 2, "Should have 2 interactions");
-    }
-    
-    void testHoverAfterDrag()
-    {
-        beginTest("Plausibility: Hover after drag is valid");
-        
-        auto interactions = parseOrFail(R"([
-            {"type": "drag", "target": "Slider1", "timestamp": 0, "duration": 300},
-            {"type": "hover", "target": "Panel1", "timestamp": 350, "duration": 100}
-        ])");
-        
-        expectEquals(interactions.size(), 2, "Should have 2 interactions");
-    }
-    
-    void testMidiDuringDrag()
-    {
-        beginTest("Plausibility: MIDI during drag is valid");
-        
-        auto interactions = parseOrFail(R"([
-            {"type": "drag", "target": "Slider1", "timestamp": 0, "duration": 300},
-            {"type": "midi", "noteOn": {"note": 60}, "timestamp": 50},
-            {"type": "midi", "noteOff": {"note": 60}, "timestamp": 250}
-        ])");
-        
-        expectEquals(interactions.size(), 3, "Should have 3 interactions");
-    }
-    
-    void testMultipleMidiEvents()
-    {
-        beginTest("Plausibility: Multiple simultaneous MIDI events valid");
-        
-        auto interactions = parseOrFail(R"([
-            {"type": "midi", "noteOn": {"note": 60}, "timestamp": 0},
-            {"type": "midi", "noteOn": {"note": 64}, "timestamp": 0},
-            {"type": "midi", "noteOn": {"note": 67}, "timestamp": 0}
-        ])");
-        
-        expectEquals(interactions.size(), 3, "Should have 3 MIDI events");
-    }
-    
-    //==============================================================================
-    // Physical Plausibility - MIDI Warnings
-    //==============================================================================
-    
-    void testNoteOffWithoutNoteOn()
-    {
-        beginTest("Plausibility: NoteOff without NoteOn (warning, not error)");
-        
-        auto result = parseExpectingWarnings(R"([
-            {"type": "midi", "noteOff": {"note": 60}, "timestamp": 0}
-        ])");
-        
-        expect(result.wasOk(), "Should parse successfully");
-        expect(result.warnings.size() > 0, "Should have warning about missing NoteOn");
-    }
-    
-    void testNoteOnWithoutNoteOff()
-    {
-        beginTest("Plausibility: NoteOn without NoteOff (warning, not error)");
-        
-        auto result = parseExpectingWarnings(R"([
-            {"type": "midi", "noteOn": {"note": 60}, "timestamp": 0}
-        ])");
-        
-        expect(result.wasOk(), "Should parse successfully");
-        expect(result.warnings.size() > 0, "Should have warning about hanging note");
-    }
-    
-    void testDuplicateNoteOn()
-    {
-        beginTest("Plausibility: Duplicate NoteOn is valid (retrigger)");
-        
-        auto interactions = parseOrFail(R"([
-            {"type": "midi", "noteOn": {"note": 60}, "timestamp": 0},
-            {"type": "midi", "noteOn": {"note": 60}, "timestamp": 100}
-        ])");
-        
-        expectEquals(interactions.size(), 2, "Should allow retriggering");
-    }
-    
-    void testNoteOffWrongNote()
-    {
-        beginTest("Plausibility: NoteOff for different note than NoteOn (warning)");
-        
-        auto result = parseExpectingWarnings(R"([
-            {"type": "midi", "noteOn": {"note": 60}, "timestamp": 0},
-            {"type": "midi", "noteOff": {"note": 62}, "timestamp": 100}
-        ])");
-        
-        expect(result.wasOk(), "Should parse but warn");
-        // Two warnings: note 60 has no NoteOff, note 62 has no NoteOn
-    }
-    
-    void testMidiWarningsInStrictMode()
-    {
-        beginTest("Plausibility: MIDI warnings become errors in strict mode");
-        
-        auto result = parseExpectingFailure(R"([
-            {"type": "midi", "noteOn": {"note": 60}, "timestamp": 0}
-        ])", true);  // strict = true
-        
-        expect(result.failed(), "Should fail in strict mode due to hanging note");
-    }
-    
-    //==============================================================================
-    // Physical Plausibility - Sequence Duration
-    //==============================================================================
-    
-    void testSequenceDurationExceedsTimeout()
-    {
-        beginTest("Plausibility: Sequence > 20s warns but parses");
-        
-        // Total duration: 25 seconds
-        auto result = parseExpectingWarnings(R"([
-            {"type": "drag", "target": "S1", "timestamp": 0, "duration": 5000},
-            {"type": "drag", "target": "S2", "timestamp": 6000, "duration": 5000},
-            {"type": "drag", "target": "S3", "timestamp": 12000, "duration": 5000},
-            {"type": "drag", "target": "S4", "timestamp": 18000, "duration": 7000}
-        ])");
-        
-        expect(result.wasOk(), "Should parse with warning");
-        expect(result.warnings.size() > 0, "Should warn about exceeding session timeout");
-    }
-    
-    void testSequenceDurationExceedsTimeoutStrict()
-    {
-        beginTest("Plausibility: Sequence > 20s fails in strict mode");
-        
-        auto result = parseExpectingFailure(R"([
-            {"type": "drag", "target": "S1", "timestamp": 0, "duration": 5000},
-            {"type": "drag", "target": "S2", "timestamp": 6000, "duration": 5000},
-            {"type": "drag", "target": "S3", "timestamp": 12000, "duration": 5000},
-            {"type": "drag", "target": "S4", "timestamp": 18000, "duration": 7000}
-        ])", true);  // strict = true
-        
-        expect(result.failed(), "Should fail in strict mode");
-    }
-    
-    //==============================================================================
-    // Valid Input - Click Variants
-    //==============================================================================
-    
-    void testParseValidClick()
-    {
-        beginTest("Valid: Basic click");
-        
-        auto interactions = parseOrFail(R"([
-            {"type": "click", "target": "Button1", "timestamp": 0}
-        ])");
-        
-        expectEquals(interactions.size(), 1);
-        expect(!interactions[0].isMidi);
-        expectEquals((int)interactions[0].mouse.type, (int)MouseInteraction::Type::Click);
-        expectEquals(interactions[0].mouse.targetComponentId, String("Button1"));
-        expectEquals(interactions[0].mouse.timestampMs, 0);
-    }
-    
-    void testParseValidClickWithPosition()
-    {
-        beginTest("Valid: Click with position field");
-        
-        auto interactions = parseOrFail(R"([
-            {"type": "click", "target": "Button1", "timestamp": 0,
-             "position": {"x": 0.25, "y": 0.75}}
-        ])");
-        
-        expectEquals(interactions[0].mouse.fromNormalized.x, 0.25f, "X should be 0.25");
-        expectEquals(interactions[0].mouse.fromNormalized.y, 0.75f, "Y should be 0.75");
-    }
-    
-    void testParseValidClickWithFromField()
-    {
-        beginTest("Valid: Click with 'from' field (alternative to position)");
-        
-        auto interactions = parseOrFail(R"([
-            {"type": "click", "target": "Button1", "timestamp": 0,
-             "from": {"x": 0.3, "y": 0.7}}
-        ])");
-        
-        expectEquals(interactions[0].mouse.fromNormalized.x, 0.3f);
-        expectEquals(interactions[0].mouse.fromNormalized.y, 0.7f);
-    }
-    
-    void testParseValidClickRightClick()
-    {
-        beginTest("Valid: Right-click");
-        
-        auto interactions = parseOrFail(R"([
-            {"type": "click", "target": "Button1", "timestamp": 0, "rightClick": true}
-        ])");
-        
-        expect(interactions[0].mouse.rightClick, "Should be right-click");
-    }
-    
-    void testParseValidClickAllModifiers()
-    {
-        beginTest("Valid: Click with all modifiers");
-        
-        auto interactions = parseOrFail(R"([
-            {"type": "click", "target": "Button1", "timestamp": 0,
-             "shiftDown": true, "ctrlDown": true, "altDown": true, "cmdDown": true}
-        ])");
-        
-        expect(interactions[0].mouse.shiftDown, "Shift should be down");
-        expect(interactions[0].mouse.ctrlDown, "Ctrl should be down");
-        expect(interactions[0].mouse.altDown, "Alt should be down");
-        expect(interactions[0].mouse.cmdDown, "Cmd should be down");
-    }
-    
-    void testParseValidClickSingleModifier()
-    {
-        beginTest("Valid: Click with single modifier");
-        
-        auto interactions = parseOrFail(R"([
-            {"type": "click", "target": "Button1", "timestamp": 0, "shiftDown": true}
-        ])");
-        
-        expect(interactions[0].mouse.shiftDown, "Shift should be down");
-        expect(!interactions[0].mouse.ctrlDown, "Ctrl should be up");
-        expect(!interactions[0].mouse.altDown, "Alt should be up");
-        expect(!interactions[0].mouse.cmdDown, "Cmd should be up");
-    }
-    
-    //==============================================================================
-    // Valid Input - Double Click
-    //==============================================================================
-    
-    void testParseValidDoubleClick()
-    {
-        beginTest("Valid: Double-click");
-        
-        auto interactions = parseOrFail(R"([
-            {"type": "doubleClick", "target": "Label1", "timestamp": 0}
-        ])");
-        
-        expectEquals((int)interactions[0].mouse.type, (int)MouseInteraction::Type::DoubleClick);
-    }
-    
-    void testParseValidDoubleClickWithModifiers()
-    {
-        beginTest("Valid: Double-click with modifiers");
-        
-        auto interactions = parseOrFail(R"([
-            {"type": "doubleClick", "target": "Label1", "timestamp": 0, "ctrlDown": true}
-        ])");
-        
-        expect(interactions[0].mouse.ctrlDown);
-    }
-    
-    //==============================================================================
-    // Valid Input - Drag
-    //==============================================================================
-    
-    void testParseValidDrag()
-    {
-        beginTest("Valid: Drag with all fields");
-        
-        auto interactions = parseOrFail(R"([
-            {"type": "drag", "target": "Slider1", "timestamp": 100,
-             "from": {"x": 0.5, "y": 0.8},
-             "to": {"x": 0.5, "y": 0.2},
-             "duration": 300}
-        ])");
-        
-        expectEquals((int)interactions[0].mouse.type, (int)MouseInteraction::Type::Drag);
-        expectEquals(interactions[0].mouse.fromNormalized.x, 0.5f);
-        expectEquals(interactions[0].mouse.fromNormalized.y, 0.8f);
-        expectEquals(interactions[0].mouse.toNormalized.x, 0.5f);
-        expectEquals(interactions[0].mouse.toNormalized.y, 0.2f);
-        expectEquals(interactions[0].mouse.durationMs, 300);
-        expectEquals(interactions[0].mouse.timestampMs, 100);
-    }
-    
-    void testParseValidDragWithModifiers()
-    {
-        beginTest("Valid: Drag with shift modifier");
-        
-        auto interactions = parseOrFail(R"([
-            {"type": "drag", "target": "Slider1", "timestamp": 0,
-             "from": {"x": 0.5, "y": 0.8}, "to": {"x": 0.5, "y": 0.2},
-             "duration": 300, "shiftDown": true}
-        ])");
-        
-        expect(interactions[0].mouse.shiftDown, "Shift should be down for fine control");
-    }
-    
-    void testParseValidDragMinimalFields()
-    {
-        beginTest("Valid: Drag with minimal fields uses defaults");
-        
-        auto interactions = parseOrFail(R"([
-            {"type": "drag", "target": "Slider1", "timestamp": 0}
-        ])");
-        
-        // Should use default from/to/duration
-        expectEquals(interactions[0].mouse.durationMs, 100, "Default duration should be 100ms");
-    }
-    
-    //==============================================================================
-    // Valid Input - Hover
-    //==============================================================================
-    
-    void testParseValidHover()
-    {
-        beginTest("Valid: Hover");
-        
-        auto interactions = parseOrFail(R"([
-            {"type": "hover", "target": "InfoPanel", "timestamp": 0}
-        ])");
-        
-        expectEquals((int)interactions[0].mouse.type, (int)MouseInteraction::Type::Hover);
-    }
-    
-    void testParseValidHoverWithDuration()
-    {
-        beginTest("Valid: Hover with duration");
-        
-        auto interactions = parseOrFail(R"([
-            {"type": "hover", "target": "InfoPanel", "timestamp": 0, "duration": 500}
-        ])");
-        
-        expectEquals(interactions[0].mouse.durationMs, 500);
-    }
-    
-    //==============================================================================
-    // Valid Input - Move
-    //==============================================================================
-    
-    void testParseValidMove()
-    {
-        beginTest("Valid: Move with from/to");
-        
-        auto interactions = parseOrFail(R"([
-            {"type": "move", "target": "XYPad", "timestamp": 0,
-             "from": {"x": 0.2, "y": 0.2}, "to": {"x": 0.8, "y": 0.8}, "duration": 200}
-        ])");
-        
-        expectEquals((int)interactions[0].mouse.type, (int)MouseInteraction::Type::Move);
-    }
-    
-    void testParseValidMoveWithPath()
-    {
-        beginTest("Valid: Move with path");
-        
-        auto interactions = parseOrFail(R"([
-            {"type": "move", "target": "XYPad", "timestamp": 0, "duration": 300,
-             "path": [{"x": 0.2, "y": 0.2}, {"x": 0.8, "y": 0.5}, {"x": 0.5, "y": 0.8}]}
-        ])");
-        
-        expectEquals(interactions[0].mouse.pathNormalized.size(), 3);
-    }
-    
-    void testParseValidMoveSinglePathPoint()
-    {
-        beginTest("Valid: Move with single path point");
-        
-        auto interactions = parseOrFail(R"([
-            {"type": "move", "target": "XYPad", "timestamp": 0, "duration": 100,
-             "path": [{"x": 0.5, "y": 0.5}]}
-        ])");
-        
-        expectEquals(interactions[0].mouse.pathNormalized.size(), 1);
-    }
-    
-    void testParseValidMovePathTakesPrecedence()
-    {
-        beginTest("Valid: Move path takes precedence over from/to");
-        
-        auto interactions = parseOrFail(R"([
-            {"type": "move", "target": "XYPad", "timestamp": 0, "duration": 200,
-             "from": {"x": 0.1, "y": 0.1}, "to": {"x": 0.9, "y": 0.9},
-             "path": [{"x": 0.3, "y": 0.3}, {"x": 0.7, "y": 0.7}]}
-        ])");
-        
-        // Path should be used, from/to ignored
-        expectEquals(interactions[0].mouse.pathNormalized.size(), 2);
-        expectEquals(interactions[0].mouse.pathNormalized[0].x, 0.3f);
-    }
-    
-    //==============================================================================
-    // Valid Input - Exit
-    //==============================================================================
-    
-    void testParseValidExit()
-    {
-        beginTest("Valid: Exit");
-        
-        auto interactions = parseOrFail(R"([
-            {"type": "exit", "target": "HoverPanel", "timestamp": 0}
-        ])");
-        
-        expectEquals((int)interactions[0].mouse.type, (int)MouseInteraction::Type::Exit);
-    }
-    
-    //==============================================================================
-    // Valid Input - MIDI
-    //==============================================================================
-    
-    void testParseValidMidiNoteOn()
-    {
-        beginTest("Valid: MIDI NoteOn");
-        
-        auto interactions = parseOrFail(R"([
-            {"type": "midi", "noteOn": {"note": 60}, "timestamp": 0}
-        ])");
-        
-        expect(interactions[0].isMidi);
-        expectEquals((int)interactions[0].midi.type, (int)MidiInteraction::Type::NoteOn);
-        expectEquals(interactions[0].midi.noteOrController, 60);
-    }
-    
-    void testParseValidMidiNoteOnAllFields()
-    {
-        beginTest("Valid: MIDI NoteOn with all fields");
-        
-        auto interactions = parseOrFail(R"([
-            {"type": "midi", "noteOn": {"channel": 2, "note": 64, "velocity": 100}, "timestamp": 50}
-        ])");
-        
-        expectEquals(interactions[0].midi.channel, 2);
-        expectEquals(interactions[0].midi.noteOrController, 64);
-        expectEquals(interactions[0].midi.valueOrVelocity, 100);
-        expectEquals(interactions[0].midi.timestampMs, 50);
-    }
-    
-    void testParseValidMidiNoteOff()
-    {
-        beginTest("Valid: MIDI NoteOff");
-        
-        auto interactions = parseOrFail(R"([
-            {"type": "midi", "noteOff": {"note": 60}, "timestamp": 0}
-        ])");
-        
-        expect(interactions[0].isMidi);
-        expectEquals((int)interactions[0].midi.type, (int)MidiInteraction::Type::NoteOff);
-    }
-    
-    void testParseValidMidiCC()
-    {
-        beginTest("Valid: MIDI CC");
-        
-        auto interactions = parseOrFail(R"([
-            {"type": "midi", "cc": {"controller": 1, "value": 64}, "timestamp": 0}
-        ])");
-        
-        expectEquals((int)interactions[0].midi.type, (int)MidiInteraction::Type::Controller);
-        expectEquals(interactions[0].midi.noteOrController, 1);
-        expectEquals(interactions[0].midi.valueOrVelocity, 64);
-    }
-    
-    void testParseValidMidiPitchBend()
-    {
-        beginTest("Valid: MIDI PitchBend");
-        
-        auto interactions = parseOrFail(R"([
-            {"type": "midi", "pitchBend": {"value": 8192}, "timestamp": 0}
-        ])");
-        
-        expectEquals((int)interactions[0].midi.type, (int)MidiInteraction::Type::PitchBend);
-        expectEquals(interactions[0].midi.valueOrVelocity, 8192);
-    }
-    
-    //==============================================================================
-    // Default Values
+    // Default Values Tests
     //==============================================================================
     
     void testParseClickDefaults()
     {
-        beginTest("Defaults: Click uses center position");
+        beginTest("Defaults: Click uses correct defaults");
         
-        auto interactions = parseOrFail(R"([
-            {"type": "click", "target": "Button1", "timestamp": 0}
-        ])");
+        auto interactions = parseOrFail(R"([{"type": "click", "target": "Button1"}])");
         
-        expectEquals(interactions[0].mouse.fromNormalized.x, 0.5f, "Default X should be 0.5");
-        expectEquals(interactions[0].mouse.fromNormalized.y, 0.5f, "Default Y should be 0.5");
-        expect(!interactions[0].mouse.rightClick, "Default should be left-click");
-        expect(!interactions[0].mouse.shiftDown, "Default shift should be false");
-        expect(!interactions[0].mouse.ctrlDown, "Default ctrl should be false");
-        expect(!interactions[0].mouse.altDown, "Default alt should be false");
-        expect(!interactions[0].mouse.cmdDown, "Default cmd should be false");
+        expect(interactions.size() == 1, "Should have 1 interaction");
+        expect(interactions[0].mouse.durationMs == InteractionDefaults::CLICK_DURATION_MS, 
+               "Duration should be 30ms");
+        expect(interactions[0].mouse.delayMs == 0, "Delay should be 0");
+        expect(!interactions[0].mouse.rightClick, "Should not be right click");
+        expect(interactions[0].mouse.position.isCenter(), "Position should be center");
     }
     
     void testParseDragDefaults()
     {
-        beginTest("Defaults: Drag uses sensible defaults");
+        beginTest("Defaults: Drag uses correct defaults");
         
         auto interactions = parseOrFail(R"([
-            {"type": "drag", "target": "Slider1", "timestamp": 0}
+            {"type": "drag", "target": "Knob1", "delta": {"x": 0, "y": -50}}
         ])");
         
-        expectEquals(interactions[0].mouse.durationMs, 100, "Default duration should be 100ms");
-        expectEquals(interactions[0].mouse.fromNormalized.x, 0.5f);
-        expectEquals(interactions[0].mouse.fromNormalized.y, 0.5f);
-        expectEquals(interactions[0].mouse.toNormalized.x, 0.5f);
-        expectEquals(interactions[0].mouse.toNormalized.y, 0.5f);
+        expect(interactions.size() == 1, "Should have 1 interaction");
+        expect(interactions[0].mouse.durationMs == InteractionDefaults::DRAG_DURATION_MS, 
+               "Duration should be 500ms");
     }
     
-    void testParseHoverDefaults()
+    void testParseMoveToDefaults()
     {
-        beginTest("Defaults: Hover uses sensible defaults");
+        beginTest("Defaults: MoveTo uses correct defaults");
         
-        auto interactions = parseOrFail(R"([
-            {"type": "hover", "target": "Panel1", "timestamp": 0}
-        ])");
+        auto interactions = parseOrFail(R"([{"type": "moveTo", "target": "Button1"}])");
         
-        expectEquals(interactions[0].mouse.durationMs, 100, "Default hover duration");
-    }
-    
-    void testParseMidiNoteOnDefaults()
-    {
-        beginTest("Defaults: MIDI NoteOn defaults");
-        
-        auto interactions = parseOrFail(R"([
-            {"type": "midi", "noteOn": {"note": 60}, "timestamp": 0}
-        ])");
-        
-        expectEquals(interactions[0].midi.channel, 1, "Default channel should be 1");
-        expectEquals(interactions[0].midi.valueOrVelocity, 100, "Default velocity should be 100");
-    }
-    
-    void testParseMidiCCDefaults()
-    {
-        beginTest("Defaults: MIDI CC defaults");
-        
-        auto interactions = parseOrFail(R"([
-            {"type": "midi", "cc": {"controller": 1, "value": 64}, "timestamp": 0}
-        ])");
-        
-        expectEquals(interactions[0].midi.channel, 1, "Default channel should be 1");
+        expect(interactions.size() == 1, "Should have 1 interaction");
+        expect(interactions[0].mouse.durationMs == InteractionDefaults::MOVE_DURATION_MS, 
+               "Duration should be 700ms");
     }
     
     //==============================================================================
-    // Sequence Handling
+    // Multiple Interactions Tests
     //==============================================================================
     
     void testParseMultipleInteractions()
     {
-        beginTest("Sequence: Multiple interactions parsed correctly");
+        beginTest("Sequence: Multiple interactions");
         
         auto interactions = parseOrFail(R"([
-            {"type": "hover", "target": "Knob1", "timestamp": 0, "duration": 50},
-            {"type": "drag", "target": "Knob1", "from": {"x": 0.5, "y": 0.5}, 
-             "to": {"x": 0.5, "y": 0.1}, "timestamp": 100, "duration": 200},
-            {"type": "click", "target": "Button1", "timestamp": 350},
-            {"type": "midi", "noteOn": {"note": 60}, "timestamp": 400},
-            {"type": "midi", "noteOff": {"note": 60}, "timestamp": 900}
+            {"type": "click", "target": "Button1"},
+            {"type": "click", "target": "Button2", "delay": 200},
+            {"type": "drag", "target": "Knob1", "delta": {"x": 0, "y": -50}}
         ])");
         
-        expectEquals(interactions.size(), 5, "Should have 5 interactions");
+        expect(interactions.size() == 3, "Should have 3 interactions");
+        expect(interactions[0].mouse.type == MouseInteraction::Type::Click, "First should be Click");
+        expect(interactions[1].mouse.type == MouseInteraction::Type::Click, "Second should be Click");
+        expect(interactions[2].mouse.type == MouseInteraction::Type::Drag, "Third should be Drag");
     }
     
-    void testParseTimestampsAutoSort()
+    void testParseTooManyInteractions()
     {
-        beginTest("Sequence: Out-of-order timestamps are auto-sorted");
+        beginTest("Limit: Too many interactions rejected");
         
-        auto interactions = parseOrFail(R"([
-            {"type": "click", "target": "A", "timestamp": 200},
-            {"type": "click", "target": "B", "timestamp": 100},
-            {"type": "click", "target": "C", "timestamp": 300}
-        ])");
-        
-        // After sorting, order should be B, A, C
-        expectEquals(interactions[0].mouse.targetComponentId, String("B"));
-        expectEquals(interactions[1].mouse.targetComponentId, String("A"));
-        expectEquals(interactions[2].mouse.targetComponentId, String("C"));
-    }
-    
-    void testParseTimestampsAlreadySorted()
-    {
-        beginTest("Sequence: Already sorted timestamps work correctly");
-        
-        auto interactions = parseOrFail(R"([
-            {"type": "click", "target": "A", "timestamp": 0},
-            {"type": "click", "target": "B", "timestamp": 100},
-            {"type": "click", "target": "C", "timestamp": 200}
-        ])");
-        
-        expectEquals(interactions[0].mouse.targetComponentId, String("A"));
-        expectEquals(interactions[1].mouse.targetComponentId, String("B"));
-        expectEquals(interactions[2].mouse.targetComponentId, String("C"));
-    }
-    
-    void testParseTimestampsAutoSortWarning()
-    {
-        beginTest("Sequence: Auto-sort generates warning");
-        
-        auto result = parseExpectingWarnings(R"([
-            {"type": "click", "target": "A", "timestamp": 200},
-            {"type": "click", "target": "B", "timestamp": 100}
-        ])");
-        
-        expect(result.wasOk(), "Should parse successfully");
-        expect(result.warnings.size() > 0, "Should warn about auto-sorting");
-        
-        bool hasOrderWarning = false;
-        for (auto& w : result.warnings)
+        // Build JSON array with 101 interactions (limit is 100)
+        String json = "[";
+        for (int i = 0; i < 101; i++)
         {
-            if (w.containsIgnoreCase("order") || w.containsIgnoreCase("sort"))
-                hasOrderWarning = true;
+            if (i > 0) json += ",";
+            json += R"({"type": "click", "target": "Button1"})";
         }
-        expect(hasOrderWarning, "Should have warning about timestamp order");
-    }
-    
-    //==============================================================================
-    // Error Message Quality
-    //==============================================================================
-    
-    void testErrorMessageIncludesIndex()
-    {
-        beginTest("Error Quality: Message includes interaction index");
+        json += "]";
         
-        auto result = parseExpectingFailure(R"([
-            {"type": "click", "target": "A", "timestamp": 0},
-            {"type": "click", "target": "B", "timestamp": 100},
-            {"type": "invalidType", "target": "C", "timestamp": 200}
-        ])");
-        
-        expect(result.failed());
-        expect(result.getErrorMessage().contains("2") ||
-               result.getErrorMessage().contains("[2]") ||
-               result.getErrorMessage().containsIgnoreCase("third"),
-               "Error should indicate which interaction failed: " + result.getErrorMessage());
-    }
-    
-    void testErrorMessageIncludesFieldName()
-    {
-        beginTest("Error Quality: Message includes field name");
-        
-        auto result = parseExpectingFailure(R"([
-            {"type": "click", "target": "Button1", "timestamp": -5}
-        ])");
-        
-        expect(result.failed());
-        expect(result.getErrorMessage().containsIgnoreCase("timestamp"),
-               "Error should mention the problematic field: " + result.getErrorMessage());
-    }
-    
-    void testErrorMessageIncludesActualValue()
-    {
-        beginTest("Error Quality: Message includes actual value");
-        
-        auto result = parseExpectingFailure(R"([
-            {"type": "midi", "noteOn": {"note": 999}, "timestamp": 0}
-        ])");
-        
-        expect(result.failed());
-        expect(result.getErrorMessage().contains("999") ||
-               result.getErrorMessage().containsIgnoreCase("note"),
-               "Error should mention the invalid value: " + result.getErrorMessage());
-    }
-    
-    void testErrorMessageIncludesValidRange()
-    {
-        beginTest("Error Quality: Message includes valid range");
-        
-        auto result = parseExpectingFailure(R"([
-            {"type": "midi", "noteOn": {"note": 200}, "timestamp": 0}
-        ])");
-        
-        expect(result.failed());
-        expect(result.getErrorMessage().contains("127") ||
-               result.getErrorMessage().contains("0-127") ||
-               result.getErrorMessage().containsIgnoreCase("range"),
-               "Error should mention valid range: " + result.getErrorMessage());
-    }
-    
-    //==============================================================================
-    // SelectMenuItem Tests
-    //==============================================================================
-    
-    void testParseSelectMenuItemValid()
-    {
-        beginTest("SelectMenuItem: Valid basic parsing");
-        
-        auto interactions = parseOrFail(R"([
-            {"type": "selectMenuItem", "text": "Option B", "timestamp": 100}
-        ])");
-        
-        expectEquals(interactions.size(), 1);
-        expect(!interactions[0].isMidi);
-        expectEquals((int)interactions[0].mouse.type, (int)MouseInteraction::Type::SelectMenuItem);
-        expectEquals(interactions[0].mouse.menuItemText, String("Option B"));
-        expectEquals(interactions[0].mouse.timestampMs, 100);
-        expectEquals(interactions[0].mouse.durationMs, 500);  // Default duration
-    }
-    
-    void testParseSelectMenuItemWithDuration()
-    {
-        beginTest("SelectMenuItem: Custom duration");
-        
-        auto interactions = parseOrFail(R"([
-            {"type": "selectMenuItem", "text": "Some Item", "timestamp": 0, "duration": 1000}
-        ])");
-        
-        expectEquals(interactions[0].mouse.durationMs, 1000);
-    }
-    
-    void testParseSelectMenuItemMissingText()
-    {
-        beginTest("SelectMenuItem: Missing 'text' field rejected");
-        
-        auto result = parseExpectingFailure(R"([
-            {"type": "selectMenuItem", "timestamp": 0}
-        ])");
-        
-        expect(result.failed(), "Should reject missing text");
-        expect(result.getErrorMessage().containsIgnoreCase("text"),
-               "Error should mention 'text': " + result.getErrorMessage());
-    }
-    
-    void testParseSelectMenuItemEmptyText()
-    {
-        beginTest("SelectMenuItem: Empty 'text' field rejected");
-        
-        auto result = parseExpectingFailure(R"([
-            {"type": "selectMenuItem", "text": "", "timestamp": 0}
-        ])");
-        
-        expect(result.failed(), "Should reject empty text");
-    }
-    
-    void testParseSelectMenuItemTextNotString()
-    {
-        beginTest("SelectMenuItem: Non-string 'text' field rejected");
-        
-        auto result = parseExpectingFailure(R"([
-            {"type": "selectMenuItem", "text": 123, "timestamp": 0}
-        ])");
-        
-        expect(result.failed(), "Should reject non-string text");
-    }
-    
-    void testParseSelectMenuItemNegativeDuration()
-    {
-        beginTest("SelectMenuItem: Negative duration rejected");
-        
-        auto result = parseExpectingFailure(R"([
-            {"type": "selectMenuItem", "text": "Item", "timestamp": 0, "duration": -100}
-        ])");
-        
-        expect(result.failed(), "Should reject negative duration");
-    }
-    
-    void testParseSelectMenuItemNoTargetRequired()
-    {
-        beginTest("SelectMenuItem: No target required");
-        
-        // SelectMenuItem should NOT require a target field (unlike most mouse events)
-        auto interactions = parseOrFail(R"([
-            {"type": "selectMenuItem", "text": "Menu Option", "timestamp": 0}
-        ])");
-        
-        expectEquals(interactions.size(), 1);
-        expect(interactions[0].mouse.targetComponentId.isEmpty(), "Target should be empty for selectMenuItem");
-    }
-    
-    void testParseSelectMenuItemSequence()
-    {
-        beginTest("SelectMenuItem: Valid in sequence with click");
-        
-        // Typical usage: click to open menu, then selectMenuItem
-        auto interactions = parseOrFail(R"([
-            {"type": "click", "target": "ComboBox1", "timestamp": 0},
-            {"type": "selectMenuItem", "text": "Option B", "timestamp": 100, "duration": 500}
-        ])");
-        
-        expectEquals(interactions.size(), 2);
-        expectEquals((int)interactions[0].mouse.type, (int)MouseInteraction::Type::Click);
-        expectEquals((int)interactions[1].mouse.type, (int)MouseInteraction::Type::SelectMenuItem);
+        auto result = parseExpectingFailure(json);
+        expect(result.failed(), "Should reject > 100 interactions");
     }
 };
 

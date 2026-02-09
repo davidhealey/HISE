@@ -146,6 +146,10 @@ namespace RestApiIds
     DECLARE_ID(executionLog);         // Array of executed events with timing
     DECLARE_ID(screenshots);          // Object with screenshot id -> base64 PNG data
     DECLARE_ID(parseWarnings);        // Array of non-fatal parse warnings
+    DECLARE_ID(verbose);              // If true, include extra debug info in response
+    DECLARE_ID(mouseState);           // Final mouse state object (when verbose=true)
+    DECLARE_ID(currentTarget);        // Component ID mouse is currently over
+    DECLARE_ID(pixelPosition);        // Absolute pixel position {x, y}
     
     // SelectMenuItem response fields
     DECLARE_ID(selectedMenuItem);     // Object with selected menu item info

@@ -114,32 +114,27 @@ public:
         //======================================================================
         // Executor interface implementation
         
-        ResolveResult resolveTarget(const String& componentId, 
-                                    Point<float> normalizedPos) override;
+        ResolveResult resolveTarget(const String& componentId) override;
         
-        void executeMouseDown(Point<int> pixelPos, const String& target,
-                              ModifierKeys mods, bool rightClick, int timestampMs) override;
+        void executeMouseDown(Point<int> pixelPos, ModifierKeys mods,
+                              bool rightClick, int elapsedMs) override;
         
-        void executeMouseUp(Point<int> pixelPos, const String& target,
-                            ModifierKeys mods, bool rightClick, int timestampMs) override;
+        void executeMouseUp(Point<int> pixelPos, ModifierKeys mods,
+                            bool rightClick, int elapsedMs) override;
         
-        void executeMouseMove(Point<int> pixelPos, const String& target,
-                              ModifierKeys mods, int timestampMs) override;
+        void executeMouseMove(Point<int> pixelPos, ModifierKeys mods,
+                              int elapsedMs) override;
         
-        void executeScreenshot(const String& id, float scale, int timestampMs) override;
+        void executeScreenshot(const String& id, float scale, int elapsedMs) override;
         
-        void executeSyntheticModeStart(int timestampMs) override;
-        void executeSyntheticModeEnd(int timestampMs) override;
+        void executeSyntheticModeStart(int elapsedMs) override;
+        void executeSyntheticModeEnd(int elapsedMs) override;
         
-        // Human intervention detection (disabled for MVP)
-        bool wasHumanInterventionDetected() const override { return false; }
-        int getInterventionTimestamp() const override { return -1; }
-        
-        // Menu item selection support
         Point<int> getCurrentCursorPosition() const override;
+        void setCursorPosition(Point<int> pos) override;
+        
         Array<PopupMenu::VisibleMenuItem> getVisibleMenuItems() const override;
         
-        // Ready detection
         int waitUntilReady() override;
         
         //======================================================================
@@ -156,10 +151,11 @@ public:
         ProcessorWithScriptingContent* processor;
         StringPairArray screenshots;  // id -> "data:image/png;base64,..."
         bool mouseCurrentlyDown = false;
+        Point<int> cursorPosition{0, 0};
         
         // Synthetic input mode state
-        bool syntheticModeActive = false;  // Track if synthetic mode is enabled for destructor cleanup
-        ModifierKeys syntheticModifiers;  // Full modifier state for getCurrentModifiersRealtime()
+        bool syntheticModeActive = false;
+        ModifierKeys syntheticModifiers;
         
         void beginSyntheticInputMode();
         void endSyntheticInputMode();
@@ -216,6 +212,20 @@ private:
 };
 
 
+//==============================================================================
+/** Tracks virtual mouse position across API calls. */
+struct MouseState
+{
+    String currentTarget;           // Component ID mouse is over (empty = root/none)
+    Point<int> pixelPosition{0, 0}; // Absolute pixel position in Interface coords
+    
+    void reset() 
+    { 
+        currentTarget = ""; 
+        pixelPosition = {0, 0}; 
+    }
+};
+
 
 //==============================================================================
 /** Main coordinator for interaction testing.
@@ -223,7 +233,8 @@ private:
  *  Manages a single implicit test session:
  *  - Creates test window on first interaction request
  *  - Re-creates window if it was closed externally
- *  - Orchestrates parsing, dispatching, and result collection
+ *  - Orchestrates parsing, normalization, dispatching, and result collection
+ *  - Maintains mouse state across API calls
  *
  *  Lifetime is tied to the REST server - created when server starts,
  *  destroyed when server stops.
@@ -246,20 +257,24 @@ public:
         StringPairArray screenshots;  // id -> base64 PNG
         StringArray parseWarnings;
         
-        // Menu item selection result (only valid if selectMenuItem was executed)
+        // Menu item selection result
         InteractionDispatcher::SelectedMenuItemInfo selectedMenuItem;
+        
+        // Final mouse state (when verbose=true)
+        MouseState finalMouseState;
     };
     
     //==========================================================================
     /** Execute a sequence of interactions.
      *
-     *  Creates the test window if needed. Must be called on the message thread
-     *  (use SafeAsyncCall from REST handler).
+     *  Creates the test window if needed. Must be called on the message thread.
+     *  Auto-inserts moveTo events as needed for proper mouse positioning.
      *
      *  @param interactionsJson  JSON array of interaction objects
+     *  @param verbose           If true, include auto-insertion details in response
      *  @return                  TestResult with success/failure and captured data
      */
-    TestResult executeInteractions(const var& interactionsJson);
+    TestResult executeInteractions(const var& interactionsJson, bool verbose = false);
     
     /** Check if the test window is currently open. */
     bool isWindowOpen() const;
@@ -267,15 +282,41 @@ public:
     /** Close the test window if open. */
     void closeWindow();
     
+    /** Get current mouse state (for debugging/verbose output). */
+    const MouseState& getMouseState() const { return mouseState; }
+    
+    /** Reset mouse state to origin. */
+    void resetMouseState();
+    
 private:
     BackendProcessor* backendProcessor;
     std::unique_ptr<InteractionTestWindow> window;
+    MouseState mouseState;  // Persists across API calls!
     
     /** Ensure test window is open, creating if needed. */
     void ensureWindowOpen();
     
     /** Get the main interface script processor. */
     JavascriptMidiProcessor* getInterfaceProcessor() const;
+    
+    /** Normalize sequence by auto-inserting moveTo events.
+     *  Modifies interactions array in place.
+     *  Uses and updates mouseState.
+     */
+    void normalizeSequence(Array<InteractionParser::Interaction>& interactions);
+    
+    /** Result of createMoveToIfNeeded - either contains a moveTo or indicates none needed. */
+    struct MoveToResult
+    {
+        bool needed = false;
+        InteractionParser::MouseInteraction moveTo;
+    };
+    
+    /** Check if moveTo needed before interaction, create if so. */
+    MoveToResult createMoveToIfNeeded(const InteractionParser::MouseInteraction& next);
+    
+    /** Update mouse state after interaction. Called during normalization. */
+    void updateMouseStateForNormalization(const InteractionParser::MouseInteraction& interaction);
     
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(InteractionTester)
 };

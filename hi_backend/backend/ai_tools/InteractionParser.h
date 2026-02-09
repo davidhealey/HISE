@@ -24,84 +24,163 @@
 namespace hise {
 using namespace juce;
 
+//==============================================================================
+/** Default timing values for interactions */
+struct InteractionDefaults
+{
+    static constexpr int MOVE_DURATION_MS = 700;
+    static constexpr int CLICK_DURATION_MS = 30;
+    static constexpr int DOUBLE_CLICK_DELAY_MS = 20;
+    static constexpr int DRAG_DURATION_MS = 500;
+    static constexpr int MENU_SELECT_DURATION_MS = 700;
+};
+
+//==============================================================================
 /** Parser and validator for interaction test sequences.
  *
- *  This class handles parsing JSON interaction arrays and validating them for:
- *  - Syntactical correctness (required fields, correct types)
- *  - Value ranges (normalized positions 0-1, MIDI values 0-127, etc.)
- *  - Physical plausibility (no overlapping mouse interactions, etc.)
+ *  Parses JSON interaction arrays and validates them.
+ *  Expands doubleClick to two clicks.
+ *  Does NOT perform moveTo auto-insertion (that's done by InteractionTester).
  */
 class InteractionParser
 {
 public:
     //==============================================================================
-    /** Mouse interaction types */
+    /** Mouse interaction data */
     struct MouseInteraction
     {
+        //==========================================================================
+        /** Position within a component - normalized (0-1) or absolute pixels.
+         *  Both modes are relative to the target component's bounds.
+         */
+        struct Position
+        {
+            enum class Mode { Normalized, Absolute };
+            
+            /** Get pixel position in Interface coordinates.
+             *  @param componentBounds  Absolute bounds of target component
+             */
+            Point<int> getPixelPosition(Rectangle<int> componentBounds) const
+            {
+                if (mode == Mode::Absolute)
+                {
+                    return {
+                        componentBounds.getX() + roundToInt(value.x),
+                        componentBounds.getY() + roundToInt(value.y)
+                    };
+                }
+                
+                return {
+                    componentBounds.getX() + roundToInt(value.x * componentBounds.getWidth()),
+                    componentBounds.getY() + roundToInt(value.y * componentBounds.getHeight())
+                };
+            }
+            
+            /** Create normalized position (0-1 range relative to component). */
+            static Position normalized(float x, float y) 
+            { 
+                Position p;
+                p.mode = Mode::Normalized;
+                p.value = {x, y};
+                return p;
+            }
+            
+            /** Create absolute pixel position (relative to component origin). */
+            static Position absolute(int x, int y) 
+            { 
+                Position p;
+                p.mode = Mode::Absolute;
+                p.value = {static_cast<float>(x), static_cast<float>(y)};
+                return p;
+            }
+            
+            /** Create normalized position at center (0.5, 0.5). */
+            static Position center() { return normalized(0.5f, 0.5f); }
+            
+            bool isAbsolute() const { return mode == Mode::Absolute; }
+            
+            bool isCenter() const 
+            { 
+                return mode == Mode::Normalized && 
+                       value.x == 0.5f && value.y == 0.5f; 
+            }
+            
+            bool operator==(const Position& other) const
+            {
+                return mode == other.mode && value == other.value;
+            }
+            
+            bool operator!=(const Position& other) const { return !(*this == other); }
+            
+            Mode getMode() const { return mode; }
+            Point<float> getValue() const { return value; }
+            
+        private:
+            Mode mode = Mode::Normalized;
+            Point<float> value{0.5f, 0.5f};
+        };
+        
+        //==========================================================================
+        /** Internal primitive types (dispatcher executes these).
+         *  Note: doubleClick is expanded to two Click events at parse time.
+         */
         enum class Type
         {
-            Hover,
-            Move,
+            MoveTo,
             Click,
-            DoubleClick,
             Drag,
-            Exit,
             Screenshot,
             SelectMenuItem
         };
         
         Type type = Type::Click;
-        String targetComponentId;
-        Point<float> fromNormalized{0.5f, 0.5f};
-        Point<float> toNormalized{0.5f, 0.5f};
-        Array<Point<float>> pathNormalized;  // For Move type with path
-        int durationMs = 100;
-        int timestampMs = 0;
-        bool rightClick = false;
-        bool shiftDown = false;
-        bool ctrlDown = false;
-        bool altDown = false;
-        bool cmdDown = false;
         
-        // Screenshot-specific fields
+        /** Target component ID (for moveTo, click, drag). */
+        String targetComponentId;
+        
+        /** Position within target (for moveTo, click, drag start). */
+        Position position = Position::center();
+        
+        /** Drag-specific: pixel delta from current position. */
+        Point<int> deltaPixels{0, 0};
+        
+        /** Delay before this interaction starts (ms). */
+        int delayMs = 0;
+        
+        /** Duration of animated movement (ms). */
+        int durationMs = 0;
+        
+        /** Modifier keys (shift, ctrl, alt, cmd). */
+        ModifierKeys modifiers;
+        
+        /** Right-click flag (for click only). */
+        bool rightClick = false;
+        
+        /** Screenshot ID (for screenshot only). */
         String screenshotId;
+        
+        /** Screenshot scale factor (for screenshot only). */
         float screenshotScale = 1.0f;
         
-        // SelectMenuItem-specific fields
-        String menuItemText;  // Text to fuzzy-match for menu item selection
-    };
-    
-    /** MIDI interaction types */
-    struct MidiInteraction
-    {
-        enum class Type
-        {
-            NoteOn,
-            NoteOff,
-            Controller,
-            PitchBend
-        };
+        /** Menu item text to match (for selectMenuItem only). */
+        String menuItemText;
         
-        Type type = Type::NoteOn;
-        int channel = 1;
-        int noteOrController = 60;
-        int valueOrVelocity = 100;
-        int timestampMs = 0;
-    };
-    
-    /** Union of mouse and MIDI interactions */
-    struct Interaction
-    {
-        bool isMidi = false;
-        MouseInteraction mouse;
-        MidiInteraction midi;
-        
-        int getTimestamp() const { return isMidi ? midi.timestampMs : mouse.timestampMs; }
-        int getEndTime() const;
+        /** True if this event was auto-inserted by normalization. */
+        bool autoInserted = false;
     };
     
     //==============================================================================
-    /** Result of parsing, includes warnings */
+    /** Parsed interaction (mouse only - MIDI support deferred). */
+    struct Interaction
+    {
+        MouseInteraction mouse;
+        
+        int getDelay() const { return mouse.delayMs; }
+        int getDuration() const { return mouse.durationMs; }
+    };
+    
+    //==============================================================================
+    /** Result of parsing, includes warnings. */
     struct ParseResult
     {
         Result result = Result::ok();
@@ -112,77 +191,63 @@ public:
         String getErrorMessage() const { return result.getErrorMessage(); }
         
         static ParseResult ok() { return {}; }
-        static ParseResult fail(const String& message) { ParseResult r; r.result = Result::fail(message); return r; }
+        static ParseResult fail(const String& message) 
+        { 
+            ParseResult r; 
+            r.result = Result::fail(message); 
+            return r; 
+        }
         void addWarning(const String& warning) { warnings.add(warning); }
     };
     
     //==============================================================================
     /** Parse JSON array of interactions.
      *
+     *  Expands doubleClick to two clicks.
+     *  Does NOT perform moveTo auto-insertion (that's done by InteractionTester).
+     *
      *  @param jsonArray    The var containing the JSON array of interactions
      *  @param result       Output array to receive parsed interactions
-     *  @param strict       If true, warnings are treated as errors
      *  @return             ParseResult containing success/failure and any warnings
      */
     static ParseResult parseInteractions(const var& jsonArray, 
-                                         Array<Interaction>& result,
-                                         bool strict = false);
+                                         Array<Interaction>& result);
     
     //==============================================================================
     // Validation limits
     static constexpr int MaxInteractions = 100;
-    static constexpr int MaxPathPoints = 50;
     static constexpr int MaxDurationMs = 10000;      // 10 seconds
     static constexpr int SessionTimeoutMs = 20000;   // 20 seconds
     
 private:
     //==============================================================================
-    /** Parse a single interaction object */
+    /** Parse a single interaction object (may add multiple to result for doubleClick). */
     static ParseResult parseSingleInteraction(const var& obj, 
-                                              Interaction& interaction,
+                                              Array<Interaction>& result,
                                               int index);
     
-    /** Parse mouse interaction fields */
+    /** Expand doubleClick to two click interactions. */
+    static ParseResult parseDoubleClick(const var& obj,
+                                        Array<Interaction>& result,
+                                        int index);
+    
+    /** Parse mouse interaction fields. */
     static ParseResult parseMouseInteraction(const var& obj,
                                              MouseInteraction& mouse,
                                              const String& type,
                                              int index);
     
-    /** Parse MIDI interaction fields */
-    static ParseResult parseMidiInteraction(const var& obj,
-                                            MidiInteraction& midi,
-                                            int index);
+    /** Parse position (normalized or absolute pixel). */
+    static MouseInteraction::Position parsePosition(const var& obj);
     
-    /** Parse a position object {x, y} */
-    static ParseResult parsePosition(const var& obj,
-                                     Point<float>& position,
-                                     const String& fieldName,
-                                     int index);
+    /** Parse modifier keys from JSON object. */
+    static ModifierKeys parseModifiers(const var& obj);
     
-    /** Validate physical plausibility of the sequence */
-    static ParseResult validateSequence(Array<Interaction>& interactions, bool strict);
-    
-    /** Check for mouse interaction overlaps */
-    static ParseResult checkMouseOverlaps(const Array<Interaction>& interactions);
-    
-    /** Check for MIDI note pairing issues (returns warnings, not errors) */
-    static void checkMidiPairing(const Array<Interaction>& interactions, 
-                                 ParseResult& result);
-    
-    /** Sort interactions by timestamp */
-    static bool sortByTimestamp(Array<Interaction>& interactions, ParseResult& result);
-    
-    /** Helper to format error messages with context */
+    /** Helper to format error messages with context. */
     static String formatError(const String& message, int index, const String& field = {});
     
-    /** Get string name for mouse interaction type */
+    /** Get string name for mouse interaction type. */
     static String getTypeName(MouseInteraction::Type type);
-    
-    /** Check if mouse interaction requires button down */
-    static bool requiresMouseButton(MouseInteraction::Type type);
-    
-    /** Get end time of an interaction */
-    static int getInteractionEndTime(const Interaction& interaction);
 };
 
 } // namespace hise
