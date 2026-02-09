@@ -23,6 +23,49 @@ namespace hise {
 using namespace juce;
 
 //==============================================================================
+// Helper functions
+//==============================================================================
+
+namespace {
+
+/** Generate human-readable description for an interaction. */
+String getInteractionDescription(const InteractionParser::MouseInteraction& mouse)
+{
+    using Type = InteractionParser::MouseInteraction::Type;
+    
+    switch (mouse.type)
+    {
+        case Type::MoveTo:
+            return "Moving to " + mouse.targetComponentId;
+        case Type::Click:
+            return mouse.rightClick ? "Right-clicking" : "Clicking";
+        case Type::Drag:
+            return "Dragging";
+        case Type::Screenshot:
+            return "Capturing screenshot";
+        case Type::SelectMenuItem:
+            return "Selecting menu item";
+        default:
+            return "Processing...";
+    }
+}
+
+/** Estimate total duration for a sequence of interactions. */
+int estimateTotalDuration(const Array<InteractionParser::Interaction>& interactions)
+{
+    int total = 0;
+    for (const auto& i : interactions)
+    {
+        total += 150;  // Base overhead per interaction
+        total += i.mouse.delayMs;
+        total += i.mouse.durationMs;
+    }
+    return total;
+}
+
+} // anonymous namespace
+
+//==============================================================================
 // InteractionDispatcher implementation
 //==============================================================================
 
@@ -48,15 +91,32 @@ InteractionDispatcher::ExecutionResult InteractionDispatcher::execute(
     if (readyDelayMs < 0)
     {
         executor.executeSyntheticModeEnd(0);
+        if (progressListener != nullptr)
+            progressListener->onSequenceCompleted(false, "UI failed to become ready within timeout");
         return ExecutionResult::fail("UI failed to become ready within timeout", 0, 0);
+    }
+    
+    // Notify listener that sequence is starting
+    if (progressListener != nullptr)
+    {
+        int estimatedMs = estimateTotalDuration(interactions);
+        progressListener->onSequenceStarted(interactions.size(), estimatedMs);
     }
     
     // Start timing AFTER ready
     startTimeMs = Time::getMillisecondCounterHiRes();
     
+    int interactionIndex = 0;
     for (const auto& interaction : interactions)
     {
         const auto& mouse = interaction.mouse;
+        
+        // Notify listener that interaction is starting
+        if (progressListener != nullptr)
+        {
+            String description = getInteractionDescription(mouse);
+            progressListener->onInteractionStarted(interactionIndex, description);
+        }
         
         // Apply delay before this interaction
         if (mouse.delayMs > 0)
@@ -69,6 +129,8 @@ InteractionDispatcher::ExecutionResult InteractionDispatcher::execute(
         if (error.isNotEmpty())
         {
             executor.executeSyntheticModeEnd(getElapsedMs());
+            if (progressListener != nullptr)
+                progressListener->onSequenceCompleted(false, error);
             return ExecutionResult::fail(error, getElapsedMs(), completedCount);
         }
         
@@ -88,6 +150,8 @@ InteractionDispatcher::ExecutionResult InteractionDispatcher::execute(
                 break;
             case Type::Screenshot:
                 executeScreenshot(mouse, executor, executedLog);
+                if (progressListener != nullptr)
+                    progressListener->onScreenshotCaptured();
                 break;
             case Type::SelectMenuItem:
                 executeSelectMenuItem(mouse, executor, executedLog);
@@ -98,22 +162,36 @@ InteractionDispatcher::ExecutionResult InteractionDispatcher::execute(
         if (lastError.isNotEmpty())
         {
             executor.executeSyntheticModeEnd(getElapsedMs());
+            if (progressListener != nullptr)
+                progressListener->onSequenceCompleted(false, lastError);
             return ExecutionResult::fail(lastError, getElapsedMs(), completedCount);
         }
         
         completedCount++;
+        
+        // Notify listener that interaction completed
+        if (progressListener != nullptr)
+            progressListener->onInteractionCompleted(interactionIndex);
+        
+        interactionIndex++;
         
         // Check again after execution
         error = checkAbortConditions();
         if (error.isNotEmpty())
         {
             executor.executeSyntheticModeEnd(getElapsedMs());
+            if (progressListener != nullptr)
+                progressListener->onSequenceCompleted(false, error);
             return ExecutionResult::fail(error, getElapsedMs(), completedCount);
         }
     }
     
     // End synthetic mode
     executor.executeSyntheticModeEnd(getElapsedMs());
+    
+    // Notify listener of successful completion
+    if (progressListener != nullptr)
+        progressListener->onSequenceCompleted(true, {});
     
     return ExecutionResult::ok(getElapsedMs(), completedCount);
 }
@@ -219,6 +297,10 @@ void InteractionDispatcher::executeClick(
     else
         mods = mods.withFlags(ModifierKeys::leftButtonModifier);
     
+    // Wiggle: small move to force JUCE to update componentUnderMouse
+    exec.executeMouseMove(pixelPos + Point<int>(2, 0), {}, getElapsedMs());
+    exec.executeMouseMove(pixelPos, {}, getElapsedMs());
+    
     // MouseDown
     exec.executeMouseDown(pixelPos, mods, mouse.rightClick, getElapsedMs());
     
@@ -237,6 +319,9 @@ void InteractionDispatcher::executeClick(
     if (mouse.rightClick)
         upEntry.getDynamicObject()->setProperty("rightClick", true);
     log.add(upEntry);
+    
+    // Let UI settle after click (e.g., popup menus appearing, button state changes)
+    waitForDuration(UI_SETTLE_DELAY_MS, exec);
 }
 
 //==============================================================================
@@ -254,6 +339,10 @@ void InteractionDispatcher::executeDrag(
     // Build modifiers with left button
     auto mods = mouse.modifiers;
     mods = mods.withFlags(ModifierKeys::leftButtonModifier);
+    
+    // Wiggle: small move to force JUCE to update componentUnderMouse
+    exec.executeMouseMove(startPos + Point<int>(2, 0), {}, getElapsedMs());
+    exec.executeMouseMove(startPos, {}, getElapsedMs());
     
     // MouseDown at start
     exec.executeMouseDown(startPos, mods, false, getElapsedMs());
@@ -287,6 +376,9 @@ void InteractionDispatcher::executeDrag(
     upEntry.getDynamicObject()->getProperty("dragDelta").getDynamicObject()->setProperty("x", mouse.deltaPixels.x);
     upEntry.getDynamicObject()->getProperty("dragDelta").getDynamicObject()->setProperty("y", mouse.deltaPixels.y);
     log.add(upEntry);
+    
+    // Let UI settle after drag
+    waitForDuration(UI_SETTLE_DELAY_MS, exec);
 }
 
 //==============================================================================
@@ -383,6 +475,10 @@ void InteractionDispatcher::executeSelectMenuItem(
             waitForDuration(stepDuration, exec);
     }
     
+    // Wiggle: small move to force JUCE to update componentUnderMouse
+    exec.executeMouseMove(targetPos + Point<int>(2, 0), {}, getElapsedMs());
+    exec.executeMouseMove(targetPos, {}, getElapsedMs());
+    
     // Click on menu item
     auto mods = ModifierKeys(ModifierKeys::leftButtonModifier);
     exec.executeMouseDown(targetPos, mods, false, getElapsedMs());
@@ -394,6 +490,9 @@ void InteractionDispatcher::executeSelectMenuItem(
     entry.getDynamicObject()->setProperty("menuItem", matchedItem.text);
     entry.getDynamicObject()->setProperty("menuItemId", matchedItem.itemId);
     log.add(entry);
+    
+    // Let UI settle after menu selection (menu closes, value updates)
+    waitForDuration(UI_SETTLE_DELAY_MS, exec);
 }
 
 //==============================================================================

@@ -96,6 +96,101 @@ public:
     };
     
     //==========================================================================
+    /** Status bar showing execution progress at bottom of test window.
+     *
+     *  Displays:
+     *  - State indicator (colored dot + text: IDLE/RUNNING/SUCCESS/FAILED)
+     *  - Current action description
+     *  - Time-based progress bar
+     *  - Step counter (completed/total)
+     *  - Screenshot counter with flash effect
+     *  - Dump button to save screenshots to folder
+     */
+    class StatusBar : public Component,
+                      public ProgressListener,
+                      public Timer,
+                      public Button::Listener
+    {
+    public:
+        enum class State { Idle, Running, Success, Failed };
+        
+        StatusBar();
+        ~StatusBar() override;
+        
+        // Component
+        void paint(Graphics& g) override;
+        void resized() override;
+        
+        // ProgressListener
+        void onSequenceStarted(int totalInteractions, int estimatedDurationMs) override;
+        void onInteractionStarted(int index, const String& description) override;
+        void onInteractionCompleted(int index) override;
+        void onScreenshotCaptured() override;
+        void onSequenceCompleted(bool success, const String& error) override;
+        
+        // Timer (for animations)
+        void timerCallback() override;
+        
+        // Button::Listener
+        void buttonClicked(Button* b) override;
+        
+        /** Store a screenshot for later dumping.
+         *  @param id    Screenshot identifier (used as filename)
+         *  @param image The captured image
+         */
+        void storeScreenshot(const String& id, const Image& image);
+        
+        /** Clear all stored screenshots. */
+        void clearScreenshots();
+        
+        static constexpr int HEIGHT = 28;
+        
+    private:
+
+        float flashAlpha = 0.0f;
+
+        State state = State::Idle;
+        String currentAction = "Ready";
+        int totalInteractions = 0;
+        int completedInteractions = 0;
+        int screenshotCount = 0;
+        int estimatedDurationMs = 0;
+        int64 sequenceStartTime = 0;
+        
+        // Animation state
+        float pulseAlpha = 1.0f;
+        bool pulseIncreasing = false;
+        
+        // Progress (0.0 - 1.0)
+        double progress = 0.0;
+        
+        // Components
+        ScopedPointer<HiseShapeButton> dumpButton;
+        ScopedPointer<HiseShapeButton> logButton;
+        
+        // Dump state
+        File dumpFolder;
+        std::vector<std::pair<String, Image>> capturedScreenshots;
+        
+        // LAF
+        GlobalHiseLookAndFeel laf;
+        
+        // Path factory for button icons
+        struct ButtonPathFactory : public PathFactory
+        {
+            Path createPath(const String& id) const override;
+        };
+        
+        ButtonPathFactory pathFactory;
+        
+        // Helpers
+        Colour getStateColour() const;
+        String getStateText() const;
+        
+        JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(StatusBar)
+    };
+    
+    //==========================================================================
     /** Executor that injects real mouse events via ComponentPeer.
      *
      *  Implements the InteractionDispatcher::Executor interface to:
@@ -174,6 +269,8 @@ public:
     ~InteractionTestWindow() override;
     
     void closeButtonPressed() override;
+    void childrenChanged() override;
+    void resized() override;
     
     /** Get the ScriptContentComponent displaying the interface.
      *  Navigates through FloatingTile -> InterfaceContentPanel -> ScriptContentComponent.
@@ -183,6 +280,9 @@ public:
     /** Get the cursor overlay component. */
     CursorOverlay* getOverlay() { return overlay.get(); }
     
+    /** Get the status bar component. */
+    StatusBar* getStatusBar() { return statusBar.get(); }
+    
     /** Convert normalized position (0-1) to pixel coordinates within content. */
     Point<int> normalizedToPixels(Point<float> norm) const;
     
@@ -191,7 +291,7 @@ public:
     
 private:
 
-    /** Container component that holds FloatingTile and overlay. */
+    /** Container component that holds FloatingTile and status bar. */
     class ContentContainer : public Component
     {
     public:
@@ -199,7 +299,7 @@ private:
         void resized() override;
         
         FloatingTile* rootTile = nullptr;
-        CursorOverlay* overlay = nullptr;
+        StatusBar* statusBar = nullptr;
     };
     
     juce::OpenGLContext context;
@@ -207,6 +307,7 @@ private:
     std::unique_ptr<ContentContainer> container;
     std::unique_ptr<FloatingTile> rootTile;
     std::unique_ptr<CursorOverlay> overlay;
+    std::unique_ptr<StatusBar> statusBar;
     
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(InteractionTestWindow)
 };

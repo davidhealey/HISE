@@ -24,6 +24,42 @@
 namespace hise {
 using namespace juce;
 
+//==============================================================================
+/** Listener for interaction execution progress updates.
+ *  Implement this interface to receive callbacks during sequence execution.
+ */
+struct ProgressListener
+{
+    virtual ~ProgressListener() = default;
+    
+    /** Called when a sequence begins execution.
+     *  @param totalInteractions   Number of interactions in the sequence
+     *  @param estimatedDurationMs Estimated total duration in milliseconds
+     */
+    virtual void onSequenceStarted(int totalInteractions, int estimatedDurationMs) = 0;
+    
+    /** Called when an individual interaction starts.
+     *  @param index       Zero-based index of the interaction
+     *  @param description Human-readable description (e.g., "Moving to Button1")
+     */
+    virtual void onInteractionStarted(int index, const String& description) = 0;
+    
+    /** Called when an individual interaction completes.
+     *  @param index  Zero-based index of the completed interaction
+     */
+    virtual void onInteractionCompleted(int index) = 0;
+    
+    /** Called when a screenshot is captured. */
+    virtual void onScreenshotCaptured() = 0;
+    
+    /** Called when the sequence completes (success or failure).
+     *  @param success True if all interactions completed without error
+     *  @param error   Error message if success is false
+     */
+    virtual void onSequenceCompleted(bool success, const String& error) = 0;
+};
+
+//==============================================================================
 /** Executes parsed interactions with timing control.
  *  Must be called on the message thread. Pumps message loop between events.
  */
@@ -147,15 +183,20 @@ public:
      */
     SelectedMenuItemInfo getLastSelectedMenuItem() const { return lastSelectedMenuItem; }
     
+    /** Set a listener to receive progress callbacks during execution. */
+    void setProgressListener(ProgressListener* listener) { progressListener = listener; }
+    
     //==============================================================================
     static constexpr int MOVE_STEP_INTERVAL_MS = 10;
     static constexpr int DRAG_STEP_INTERVAL_MS = 10;
+    static constexpr int UI_SETTLE_DELAY_MS = 50;  // Time to let UI react after interactions
     
 private:
     int64 startTimeMs = 0;
     int timeoutMs = 20000;
     String lastError;
     SelectedMenuItemInfo lastSelectedMenuItem;
+    ProgressListener* progressListener = nullptr;
     
     int getElapsedMs() const;
     void waitForDuration(int ms, Executor& executor);

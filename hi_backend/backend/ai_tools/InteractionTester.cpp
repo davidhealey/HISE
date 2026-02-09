@@ -78,17 +78,296 @@ Colour InteractionTestWindow::CursorOverlay::getColourForState() const
 }
 
 //==============================================================================
+// InteractionTestWindow::StatusBar implementation
+
+Path InteractionTestWindow::StatusBar::ButtonPathFactory::createPath(const String& url) const
+{
+    Path p;
+    LOAD_EPATH_IF_URL("save", SampleMapIcons::saveSampleMap);
+    LOAD_EPATH_IF_URL("log", ColumnIcons::scriptWorkspaceIcon);
+    return p;
+}
+
+InteractionTestWindow::StatusBar::StatusBar()
+{
+    dumpButton = new HiseShapeButton("dump", this, pathFactory, "save");
+    dumpButton->setTooltip("Save screenshots to folder");
+    addAndMakeVisible(dumpButton);
+    
+    logButton = new HiseShapeButton("log", this, pathFactory, "log");
+    logButton->setTooltip("Show verbose response log");
+    logButton->setToggleModeWithColourChange(true);
+    addAndMakeVisible(logButton);
+}
+
+InteractionTestWindow::StatusBar::~StatusBar()
+{
+    stopTimer();
+}
+
+void InteractionTestWindow::StatusBar::paint(Graphics& g)
+{
+    auto b = getLocalBounds();
+    
+    // Background
+    g.setColour(Colour(0xFF333333));
+    g.fillRect(b);
+    
+    if (flashAlpha > 0.0f)
+    {
+        g.setColour(Colours::white.withAlpha(flashAlpha));
+        g.fillRect(b);
+    }
+
+    // Top border line
+    g.setColour(Colours::black.withAlpha(0.5f));
+    g.drawHorizontalLine(0, 0.0f, (float)getWidth());
+    
+    // Layout areas (right to left for fixed-width elements)
+    auto dumpArea = b.removeFromRight(28);        // dump button handled by child
+    auto screenshotArea = b.removeFromRight(90);  // screenshot counter
+    auto stateArea = b.removeFromLeft(90);        // state indicator
+    auto logArea = b.removeFromLeft(28);          // log button handled by child
+    auto progressArea = b.reduced(4, 4);          // remaining = progress bar with text inside
+    
+    // State indicator (colored dot)
+    auto dotArea = stateArea.removeFromLeft(20);
+    auto dotBounds = dotArea.withSizeKeepingCentre(10, 10).toFloat();
+    
+    Colour stateColour = getStateColour();
+    if (state == State::Running)
+        stateColour = stateColour.withAlpha(pulseAlpha);
+    
+    g.setColour(stateColour);
+    g.fillEllipse(dotBounds);
+    
+    // State text
+    g.setFont(GLOBAL_BOLD_FONT());
+    g.setColour(Colours::white.withAlpha(0.8f));
+    g.drawText(getStateText(), stateArea, Justification::centredLeft);
+    
+    // Progress bar background
+    g.setColour(Colours::black.withAlpha(0.3f));
+    g.fillRoundedRectangle(progressArea.toFloat(), 2.0f);
+    
+    
+
+    // Progress bar fill (white with 20% opacity)
+    if (progress > 0.0)
+    {
+        auto fillWidth = (int)(progressArea.getWidth() * jlimit(0.0, 1.0, progress));
+        if (fillWidth > 0)
+        {
+            auto fillBounds = progressArea.withWidth(fillWidth);
+            g.setColour(Colours::white.withAlpha(0.2f));
+            g.fillRoundedRectangle(fillBounds.toFloat(), 2.0f);
+        }
+    }
+    
+    // Centered text inside progress bar: "Action (completed/total)"
+    g.setFont(GLOBAL_FONT());
+    g.setColour(Colours::white.withAlpha(0.8f));
+    
+    String progressText = currentAction;
+    if (totalInteractions > 0)
+        progressText += " (" + String(completedInteractions) + "/" + String(totalInteractions) + ")";
+    
+    g.drawText(progressText, progressArea, Justification::centred, true);
+    
+    // Screenshot counter
+    g.setColour(Colours::white.withAlpha(0.7f));
+    String ssText = String(screenshotCount) + (screenshotCount == 1 ? " screenshot" : " screenshots");
+    g.drawText(ssText, screenshotArea.reduced(4, 0), Justification::centredRight);
+}
+
+void InteractionTestWindow::StatusBar::resized()
+{
+    auto b = getLocalBounds();
+    dumpButton->setBounds(b.removeFromRight(28).reduced(4));
+    b.removeFromRight(90);  // screenshot area
+    b.removeFromLeft(90);   // state area
+    logButton->setBounds(b.removeFromLeft(28).reduced(4));
+}
+
+//==============================================================================
+// StatusBar ProgressListener implementation
+
+void InteractionTestWindow::StatusBar::onSequenceStarted(int total, int estimatedMs)
+{
+    state = State::Running;
+    totalInteractions = total;
+    completedInteractions = 0;
+    screenshotCount = 0;
+    estimatedDurationMs = estimatedMs;
+    sequenceStartTime = Time::currentTimeMillis();
+    progress = 0.0;
+    currentAction = "Starting...";
+    clearScreenshots();
+    startTimerHz(30);
+    repaint();
+}
+
+void InteractionTestWindow::StatusBar::onInteractionStarted(int index, const String& description)
+{
+    ignoreUnused(index);
+    currentAction = description;
+    repaint();
+}
+
+void InteractionTestWindow::StatusBar::onInteractionCompleted(int index)
+{
+    completedInteractions = index + 1;
+    repaint();
+}
+
+void InteractionTestWindow::StatusBar::onScreenshotCaptured()
+{
+    flashAlpha = 1.0f;
+    screenshotCount++;
+    repaint();
+}
+
+void InteractionTestWindow::StatusBar::onSequenceCompleted(bool success, const String& error)
+{
+    state = success ? State::Success : State::Failed;
+    currentAction = success ? "Complete" : error;
+    progress = 1.0;
+    stopTimer();
+    repaint();
+}
+
+//==============================================================================
+// StatusBar Timer implementation
+
+void InteractionTestWindow::StatusBar::timerCallback()
+{
+    // Update progress based on elapsed time
+    if (estimatedDurationMs > 0)
+    {
+        auto elapsed = Time::currentTimeMillis() - sequenceStartTime;
+        progress = jlimit(0.0, 0.95, (double)elapsed / (double)estimatedDurationMs);
+    }
+    
+    flashAlpha *= 0.9f;
+
+    if (flashAlpha < 0.01f)
+        flashAlpha = 0.0f;
+
+    // Pulse animation for running state
+    if (pulseIncreasing)
+    {
+        pulseAlpha += 0.05f;
+        if (pulseAlpha >= 1.0f)
+        {
+            pulseAlpha = 1.0f;
+            pulseIncreasing = false;
+        }
+    }
+    else
+    {
+        pulseAlpha -= 0.05f;
+        if (pulseAlpha <= 0.6f)
+        {
+            pulseAlpha = 0.6f;
+            pulseIncreasing = true;
+        }
+    }
+    
+    repaint();
+}
+
+//==============================================================================
+// StatusBar Button::Listener implementation
+
+void InteractionTestWindow::StatusBar::buttonClicked(Button* b)
+{
+    if (b == dumpButton.get())
+    {
+        // If no folder selected yet, prompt for one
+        if (!dumpFolder.exists())
+        {
+            FileChooser chooser("Select folder for screenshots",
+                               File::getSpecialLocation(File::userDesktopDirectory));
+            
+            if (chooser.browseForDirectory())
+                dumpFolder = chooser.getResult();
+        }
+        
+        // If we have a folder, save the screenshots
+        if (dumpFolder.exists() && !capturedScreenshots.empty())
+        {
+            PNGImageFormat pngFormat;
+            
+            for (const auto& screenshot : capturedScreenshots)
+            {
+                auto file = dumpFolder.getChildFile(screenshot.first + ".png");
+                FileOutputStream fos(file);
+                
+                if (fos.openedOk())
+                    pngFormat.writeImageToStream(screenshot.second, fos);
+            }
+        }
+    }
+    else if (b == logButton.get())
+    {
+        // TODO: Implement console log display
+    }
+}
+
+//==============================================================================
+// StatusBar screenshot storage
+
+void InteractionTestWindow::StatusBar::storeScreenshot(const String& id, const Image& image)
+{
+    capturedScreenshots.push_back({id, image.createCopy()});
+}
+
+void InteractionTestWindow::StatusBar::clearScreenshots()
+{
+    capturedScreenshots.clear();
+}
+
+//==============================================================================
+// StatusBar helpers
+
+Colour InteractionTestWindow::StatusBar::getStateColour() const
+{
+    switch (state)
+    {
+        case State::Idle:    return Colours::white.withAlpha(0.5f);
+        case State::Running: return Colour(SIGNAL_COLOUR);
+        case State::Success: return Colour(HISE_OK_COLOUR);
+        case State::Failed:  return Colour(HISE_ERROR_COLOUR);
+        default:             return Colours::white;
+    }
+}
+
+String InteractionTestWindow::StatusBar::getStateText() const
+{
+    switch (state)
+    {
+        case State::Idle:    return "IDLE";
+        case State::Running: return "RUNNING";
+        case State::Success: return "SUCCESS";
+        case State::Failed:  return "FAILED";
+        default:             return "";
+    }
+}
+
+//==============================================================================
 // InteractionTestWindow::ContentContainer implementation
 
 void InteractionTestWindow::ContentContainer::resized()
 {
     auto bounds = getLocalBounds();
     
+    // Status bar at bottom
+    if (statusBar != nullptr)
+        statusBar->setBounds(bounds.removeFromBottom(StatusBar::HEIGHT));
+    
+    // Root tile gets remaining space
     if (rootTile != nullptr)
         rootTile->setBounds(bounds);
-    
-    if (overlay != nullptr)
-        overlay->setBounds(bounds);
 }
 
 //==============================================================================
@@ -121,6 +400,13 @@ void InteractionTestWindow::RealExecutor::executeSyntheticModeStart(int elapsedM
 void InteractionTestWindow::RealExecutor::executeSyntheticModeEnd(int elapsedMs)
 {
     ignoreUnused(elapsedMs);
+    
+    // Force a final repaint to ensure last UI change is visible
+    if (auto* peer = window->getPeer())
+    {
+        RestServer::forceRepaintWindow(peer->getNativeHandle());
+        peer->performAnyPendingRepaintsNow();
+    }
     
     MessageManager::getInstance()->runDispatchLoopUntil(200);
     
@@ -293,18 +579,41 @@ void InteractionTestWindow::RealExecutor::executeScreenshot(const String& id, fl
     if (contentComponent == nullptr)
         return;
     
+    // Hide overlay for screenshot
     bool wasVisible = overlayComponent != nullptr && overlayComponent->isVisible();
     if (overlayComponent != nullptr)
         overlayComponent->setVisible(false);
     
-    auto bounds = contentComponent->getLocalBounds();
-    auto image = contentComponent->createComponentSnapshot(bounds, true, scale);
+    // Capture the full window (includes embedded popup menus)
+    auto windowImage = window->createComponentSnapshot(window->getLocalBounds(), true, scale);
     
     if (overlayComponent != nullptr)
         overlayComponent->setVisible(wasVisible);
     
+    if (!windowImage.isValid())
+        return;
+    
+    // Calculate crop region to exclude status bar (content area only)
+    // Note: Native title bar is already excluded from window->getLocalBounds()
+    auto contentBoundsInWindow = window->getLocalArea(contentComponent, contentComponent->getLocalBounds());
+    
+    // Scale the crop region
+    auto scaledCropBounds = Rectangle<int>(
+        roundToInt(contentBoundsInWindow.getX() * scale),
+        roundToInt(contentBoundsInWindow.getY() * scale),
+        roundToInt(contentBoundsInWindow.getWidth() * scale),
+        roundToInt(contentBoundsInWindow.getHeight() * scale)
+    );
+    
+    // Crop to just the content area (excludes status bar)
+    auto image = windowImage.getClippedImage(scaledCropBounds);
+    
     if (!image.isValid())
         return;
+    
+    // Store image in StatusBar for dump feature
+    if (auto* sb = window->getStatusBar())
+        sb->storeScreenshot(id, image);
     
     MemoryBlock mb;
     {
@@ -339,8 +648,8 @@ void InteractionTestWindow::RealExecutor::injectMouseEvent(Point<float> pixelPos
             0
         );
 
-        RestServer::forceRepaintWindow(peer->getNativeHandle());
-        peer->performAnyPendingRepaintsNow();
+        //RestServer::forceRepaintWindow(peer->getNativeHandle());
+        //peer->performAnyPendingRepaintsNow();
     }
 }
 
@@ -431,19 +740,26 @@ InteractionTestWindow::InteractionTestWindow(ProcessorWithScriptingContent* proc
         contentHeight = scc->getContentHeight();
     }
     
+    // Add status bar height to content height
+    contentHeight += StatusBar::HEIGHT;
+    
     overlay = std::make_unique<CursorOverlay>();
+    statusBar = std::make_unique<StatusBar>();
     
     container = std::make_unique<ContentContainer>();
     container->rootTile = rootTile.get();
-    container->overlay = overlay.get();
+    container->statusBar = statusBar.get();
     
     container->addAndMakeVisible(rootTile.get());
-    container->addAndMakeVisible(overlay.get());
-    overlay->setAlwaysOnTop(true);
+    container->addAndMakeVisible(statusBar.get());
     
     container->setSize(contentWidth, contentHeight);
     
     setContentNonOwned(container.get(), true);
+    
+    // Add overlay as direct child of window (same level as popup menus)
+    Component::addAndMakeVisible(overlay.get());
+    overlay->setAlwaysOnTop(true);
     
     if (auto* display = Desktop::getInstance().getDisplays().getPrimaryDisplay())
     {
@@ -459,6 +775,7 @@ InteractionTestWindow::InteractionTestWindow(ProcessorWithScriptingContent* proc
 InteractionTestWindow::~InteractionTestWindow()
 {
     overlay = nullptr;
+    statusBar = nullptr;
     rootTile = nullptr;
     container = nullptr;
 }
@@ -466,6 +783,24 @@ InteractionTestWindow::~InteractionTestWindow()
 void InteractionTestWindow::closeButtonPressed()
 {
     setVisible(false);
+}
+
+void InteractionTestWindow::childrenChanged()
+{
+    // Ensure overlay stays on top when children change (e.g., popup menu added)
+    // Only reorder if overlay exists and isn't already the frontmost child
+    if (overlay != nullptr && getChildren().getLast() != overlay.get())
+        overlay->toFront(false);
+}
+
+void InteractionTestWindow::resized()
+{
+    // Call base class to handle content component
+    DocumentWindowWithEmbeddedPopupMenu::resized();
+    
+    // Position overlay to cover the content area
+    if (overlay != nullptr && container != nullptr)
+        overlay->setBounds(container->getBounds());
 }
 
 ScriptContentComponent* InteractionTestWindow::getContent()
@@ -568,6 +903,10 @@ InteractionTester::TestResult InteractionTester::executeInteractions(const var& 
     executor.setCursorPosition(mouseState.pixelPosition);
     
     InteractionDispatcher dispatcher;
+    
+    // Wire up status bar as progress listener
+    if (auto* statusBar = window->getStatusBar())
+        dispatcher.setProgressListener(statusBar);
     
     auto execResult = dispatcher.execute(interactions, executor, result.executionLog);
     
