@@ -125,6 +125,9 @@ public:
         
         void executeScreenshot(const String& id, float scale, int timestampMs) override;
         
+        void executeSyntheticModeStart(int timestampMs) override;
+        void executeSyntheticModeEnd(int timestampMs) override;
+        
         // Human intervention detection (disabled for MVP)
         bool wasHumanInterventionDetected() const override { return false; }
         int getInterventionTimestamp() const override { return -1; }
@@ -133,21 +136,25 @@ public:
         /** Get all captured screenshots (id -> base64 PNG with data URI prefix). */
         const StringPairArray& getScreenshots() const { return screenshots; }
         
-        /** Enable/disable real cursor mode.
-         *  When enabled, the actual OS mouse cursor is moved to match synthetic events.
-         *  This is required for modal components (PopupMenu, ComboBox) that poll the
-         *  real cursor position via MouseInputSource::getScreenPosition().
-         *  Default: true (enabled).
-         */
-        void setRealCursorMode(bool enabled) { realCursorMode = enabled; }
-        bool isRealCursorModeEnabled() const { return realCursorMode; }
+        //======================================================================
+        /** Destructor ensures synthetic mode is cleaned up if still active. */
+        ~RealExecutor();
         
     private:
+        
         InteractionTestWindow* window;
         ProcessorWithScriptingContent* processor;
         StringPairArray screenshots;  // id -> "data:image/png;base64,..."
         bool mouseCurrentlyDown = false;
-        bool realCursorMode = true;  // Move real cursor to match synthetic events
+        
+        // Synthetic input mode state
+        bool syntheticModeActive = false;  // Track if synthetic mode is enabled for destructor cleanup
+        ModifierKeys syntheticModifiers;  // Full modifier state for getCurrentModifiersRealtime()
+        
+        void beginSyntheticInputMode();
+        void endSyntheticInputMode();
+        static ModifierKeys getSyntheticModifiersCallback();
+        static RealExecutor* activeExecutor;
         
         /** Inject a mouse event into the window's ComponentPeer. */
         void injectMouseEvent(Point<float> pixelPos, ModifierKeys mods);

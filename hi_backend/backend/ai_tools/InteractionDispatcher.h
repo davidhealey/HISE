@@ -72,6 +72,10 @@ public:
         // Screenshot capture
         virtual void executeScreenshot(const String& id, float scale, int timestampMs) = 0;
         
+        // Synthetic input mode control
+        virtual void executeSyntheticModeStart(int timestampMs) = 0;
+        virtual void executeSyntheticModeEnd(int timestampMs) = 0;
+        
         // Human intervention detection
         virtual bool wasHumanInterventionDetected() const = 0;
         virtual int getInterventionTimestamp() const = 0;
@@ -122,6 +126,8 @@ public:
     
     //==============================================================================
     static constexpr int DRAG_STEP_INTERVAL_MS = 10;  // Mouse move every 10ms during drag
+    static constexpr int WINDOW_INIT_DELAY_MS = 500;  // Delay before first user event to allow window init
+    static constexpr int SYNTHETIC_MODE_END_DELAY_MS = 200;  // Delay after last event before ending synthetic mode
     
 private:
     int64 startTimeMs = 0;
@@ -222,6 +228,9 @@ public:
                           ModifierKeys mods, int timestampMs) override;
     
     void executeScreenshot(const String& id, float scale, int timestampMs) override;
+    
+    void executeSyntheticModeStart(int timestampMs) override { ignoreUnused(timestampMs); }
+    void executeSyntheticModeEnd(int timestampMs) override { ignoreUnused(timestampMs); }
     
     bool wasHumanInterventionDetected() const override;
     int getInterventionTimestamp() const override;

@@ -104,11 +104,105 @@ void InteractionTestWindow::ContentContainer::resized()
 //==============================================================================
 // InteractionTestWindow::RealExecutor implementation
 
+// Static member for callback access
+InteractionTestWindow::RealExecutor* InteractionTestWindow::RealExecutor::activeExecutor = nullptr;
+
 InteractionTestWindow::RealExecutor::RealExecutor(InteractionTestWindow* w, ProcessorWithScriptingContent* p)
     : window(w), processor(p)
 {
     jassert(window != nullptr);
     jassert(processor != nullptr);
+}
+
+InteractionTestWindow::RealExecutor::~RealExecutor()
+{
+    // Ensure synthetic mode is cleaned up if still active (safety net)
+    if (syntheticModeActive)
+        endSyntheticInputMode();
+}
+
+//==============================================================================
+
+void InteractionTestWindow::RealExecutor::executeSyntheticModeStart(int timestampMs)
+{
+    ignoreUnused(timestampMs);
+    beginSyntheticInputMode();
+    syntheticModeActive = true;
+}
+
+void InteractionTestWindow::RealExecutor::executeSyntheticModeEnd(int timestampMs)
+{
+    ignoreUnused(timestampMs);
+    if (syntheticModeActive)
+    {
+        endSyntheticInputMode();
+        syntheticModeActive = false;
+    }
+}
+
+//==============================================================================
+
+void InteractionTestWindow::RealExecutor::beginSyntheticInputMode()
+{
+    activeExecutor = this;
+    syntheticModifiers = ModifierKeys();
+    
+    // Grab keyboard focus on the test window to prevent PopupMenu from dismissing
+    // due to "no JUCE comp has focus" check in doesAnyJuceCompHaveFocus()
+    if (window != nullptr)
+        window->grabKeyboardFocus();
+    
+    // Enable synthetic input mode in PopupMenu to skip focus and inputAttemptWhenModal checks
+    PopupMenu::setSyntheticInputMode(true);
+    
+    // Enable synthetic position mode on ALL mouse sources, not just the main one
+    // PopupMenu and other components may use different mouse sources
+    auto& desktop = Desktop::getInstance();
+    for (int i = 0; i < desktop.getNumMouseSources(); ++i)
+    {
+        if (auto* source = desktop.getMouseSource(i))
+            source->setSyntheticPositionMode(true);
+    }
+    
+    // Hook the realtime modifiers callback
+    ComponentPeer::getNativeRealtimeModifiers = &RealExecutor::getSyntheticModifiersCallback;
+}
+
+void InteractionTestWindow::RealExecutor::endSyntheticInputMode()
+{
+    // Disable synthetic input mode in PopupMenu
+    PopupMenu::setSyntheticInputMode(false);
+    
+    // Restore normal position mode on ALL mouse sources
+    auto& desktop = Desktop::getInstance();
+    for (int i = 0; i < desktop.getNumMouseSources(); ++i)
+    {
+        if (auto* source = desktop.getMouseSource(i))
+            source->setSyntheticPositionMode(false);
+    }
+    
+    // Restore default realtime modifiers callback
+    ComponentPeer::getNativeRealtimeModifiers = nullptr;
+    
+    // Note: We don't reset ModifierKeys::currentModifiers here
+    // JUCE's internal state is managed by handleMouseEvent() and native windowing code
+    
+    activeExecutor = nullptr;
+}
+
+ModifierKeys InteractionTestWindow::RealExecutor::getSyntheticModifiersCallback()
+{
+    if (activeExecutor != nullptr)
+    {
+        auto mods = activeExecutor->syntheticModifiers;
+        DBG("getSyntheticModifiersCallback: returning synthetic mods, leftButton=" 
+            << (mods.isLeftButtonDown() ? "true" : "false")
+            << ", rightButton=" << (mods.isRightButtonDown() ? "true" : "false"));
+        return mods;
+    }
+    
+    DBG("getSyntheticModifiersCallback: no active executor, returning currentModifiers");
+    return ModifierKeys::currentModifiers;
 }
 
 InteractionDispatcher::Executor::ResolveResult InteractionTestWindow::RealExecutor::resolveTarget(
@@ -179,17 +273,25 @@ void InteractionTestWindow::RealExecutor::executeMouseDown(Point<int> pixelPos, 
     mouseCurrentlyDown = true;
     
     // Prime the component under mouse by sending mouse moves first
-    // This ensures JUCE properly tracks which component should receive the click
+    // This ensures JUCE's MouseInputSourceInternal properly tracks:
+    // 1. The peer (via setPeer)
+    // 2. The component under mouse (via setComponentUnderMouse)
+    // Without this, JUCE doesn't know which component should receive the click.
+    // We use empty modifiers for the priming moves (no buttons down).
+    // Note: We don't update syntheticModifiers or currentModifiers during priming
+    // to avoid interfering with JUCE's internal state tracking.
     injectMouseEvent(pixelPos.toFloat().translated(1.0f, 0.0f), ModifierKeys());
     injectMouseEvent(pixelPos.toFloat(), ModifierKeys());
     MessageManager::getInstance()->runDispatchLoopUntil(1);
     
-    // Add appropriate button modifier
-    if (rightClick)
-        mods = mods.withFlags(ModifierKeys::rightButtonModifier);
-    else
-        mods = mods.withFlags(ModifierKeys::leftButtonModifier);
+    // Now update synthetic modifier state to reflect this mouseDown
+    // mods already contains the button flag from buildModifiers()
+    // Note: We only update syntheticModifiers, NOT ModifierKeys::currentModifiers
+    // Our getNativeRealtimeModifiers hook handles PopupMenu's realtime checks
+    // JUCE's internal buttonState is updated automatically by handleMouseEvent()
+    syntheticModifiers = mods;
     
+    // Inject the mouseDown event
     injectMouseEvent(pixelPos.toFloat(), mods);
     
     // Update overlay
@@ -200,17 +302,21 @@ void InteractionTestWindow::RealExecutor::executeMouseDown(Point<int> pixelPos, 
 void InteractionTestWindow::RealExecutor::executeMouseUp(Point<int> pixelPos, const String& target,
                                                          ModifierKeys mods, bool rightClick, int timestampMs)
 {
-    ignoreUnused(target, timestampMs, rightClick);
+    ignoreUnused(target, timestampMs);
     
     mouseCurrentlyDown = false;
     
-    // No priming moves for mouseUp - the component is already tracking the mouse from mouseDown.
-    // Sending moves without button flags would be interpreted as a premature release,
-    // which breaks popups (e.g., ComboBox dropdown closes immediately).
-    
-    // No button flags for mouseUp - just modifiers
-    // (The lack of button flags signals mouseUp)
+    // Inject the mouseUp event
+    // JUCE expects mods to still contain the button being released
     injectMouseEvent(pixelPos.toFloat(), mods);
+    
+    // After the event, clear the button from syntheticModifiers
+    // Keep keyboard modifiers (shift/ctrl/alt/cmd) intact
+    // Note: We only update syntheticModifiers, NOT ModifierKeys::currentModifiers
+    if (rightClick)
+        syntheticModifiers = syntheticModifiers.withoutFlags(ModifierKeys::rightButtonModifier);
+    else
+        syntheticModifiers = syntheticModifiers.withoutFlags(ModifierKeys::leftButtonModifier);
     
     // Update overlay
     window->getOverlay()->setPosition(pixelPos);
@@ -226,6 +332,9 @@ void InteractionTestWindow::RealExecutor::executeMouseMove(Point<int> pixelPos, 
     // (The caller may have already set rightButtonModifier for right-click moves)
     if (mouseCurrentlyDown && !mods.isAnyMouseButtonDown())
         mods = mods.withFlags(ModifierKeys::leftButtonModifier);
+    
+    // Update synthetic modifier state (NOT ModifierKeys::currentModifiers)
+    syntheticModifiers = mods;
     
     injectMouseEvent(pixelPos.toFloat(), mods);
     
@@ -290,17 +399,6 @@ void InteractionTestWindow::RealExecutor::injectMouseEvent(Point<float> pixelPos
         // The content component is inside the window, so we need to offset
         auto contentTopLeft = contentComponent->getScreenPosition() - window->getScreenPosition();
         auto windowPos = pixelPos + contentTopLeft.toFloat();
-        
-        // Calculate screen position
-        auto screenPos = peer->localToGlobal(windowPos);
-        
-        // If real cursor mode is enabled, move the actual OS mouse cursor.
-        // This is required for modal components (PopupMenu, ComboBox) that poll
-        // the real cursor position via MouseInputSource::getScreenPosition().
-        if (realCursorMode)
-        {
-            //MouseInputSource::setRawMousePosition(screenPos);
-        }
         
         // Inject the synthetic mouse event
         peer->handleMouseEvent(
@@ -487,6 +585,8 @@ InteractionTester::TestResult InteractionTester::executeInteractions(const var& 
     }
     
     // Execute with real executor
+    // The dispatcher handles synthetic input mode internally via executeSyntheticModeStart/End events
+    // with proper timing (500ms delay before first event, 200ms after last event)
     auto* pwsc = dynamic_cast<ProcessorWithScriptingContent*>(processor);
     InteractionTestWindow::RealExecutor executor(window.get(), pwsc);
     InteractionDispatcher dispatcher;

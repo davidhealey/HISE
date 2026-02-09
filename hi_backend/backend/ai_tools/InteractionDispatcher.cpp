@@ -40,13 +40,35 @@ InteractionDispatcher::ExecutionResult InteractionDispatcher::execute(
     
     int completedCount = 0;
     
+    // Start synthetic input mode immediately (no delay)
+    executor.executeSyntheticModeStart(0);
+    
+    // Calculate the last event timestamp (after adding window init delay)
+    int lastEventTimestamp = 0;
     for (const auto& interaction : interactions)
     {
-        // Wait until this interaction's timestamp
-        if (!waitUntilTimestamp(interaction.getTimestamp(), executor))
+        int adjustedTimestamp = interaction.getTimestamp() + WINDOW_INIT_DELAY_MS;
+        
+        // For drag/hover/move, also consider duration
+        if (!interaction.isMidi)
+        {
+            adjustedTimestamp += interaction.mouse.durationMs;
+        }
+        
+        lastEventTimestamp = jmax(lastEventTimestamp, adjustedTimestamp);
+    }
+    
+    for (const auto& interaction : interactions)
+    {
+        // Add window init delay to all user event timestamps
+        int adjustedTimestamp = interaction.getTimestamp() + WINDOW_INIT_DELAY_MS;
+        
+        // Wait until this interaction's adjusted timestamp
+        if (!waitUntilTimestamp(adjustedTimestamp, executor))
         {
             // Aborted due to timeout or human intervention
             String error = checkAbortConditions(executor);
+            executor.executeSyntheticModeEnd(getElapsedMs());  // Cleanup on abort
             return ExecutionResult::fail(error, getElapsedMs(), completedCount);
         }
         
@@ -54,6 +76,7 @@ InteractionDispatcher::ExecutionResult InteractionDispatcher::execute(
         String error = checkAbortConditions(executor);
         if (error.isNotEmpty())
         {
+            executor.executeSyntheticModeEnd(getElapsedMs());  // Cleanup on abort
             return ExecutionResult::fail(error, getElapsedMs(), completedCount);
         }
         
@@ -67,21 +90,26 @@ InteractionDispatcher::ExecutionResult InteractionDispatcher::execute(
         {
             using Type = InteractionParser::MouseInteraction::Type;
             
+            // Create a copy with adjusted timestamp for execution
+            auto adjustedMouse = interaction.mouse;
+            adjustedMouse.timestampMs += WINDOW_INIT_DELAY_MS;
+            
             switch (interaction.mouse.type)
             {
-                case Type::Click:       executeClick(interaction.mouse, executor, executedLog); break;
-                case Type::DoubleClick: executeDoubleClick(interaction.mouse, executor, executedLog); break;
-                case Type::Drag:        executeDrag(interaction.mouse, executor, executedLog); break;
-                case Type::Hover:       executeHover(interaction.mouse, executor, executedLog); break;
-                case Type::Move:        executeMove(interaction.mouse, executor, executedLog); break;
-                case Type::Exit:        executeExit(interaction.mouse, executor, executedLog); break;
-                case Type::Screenshot:  executeScreenshot(interaction.mouse, executor, executedLog); break;
+                case Type::Click:       executeClick(adjustedMouse, executor, executedLog); break;
+                case Type::DoubleClick: executeDoubleClick(adjustedMouse, executor, executedLog); break;
+                case Type::Drag:        executeDrag(adjustedMouse, executor, executedLog); break;
+                case Type::Hover:       executeHover(adjustedMouse, executor, executedLog); break;
+                case Type::Move:        executeMove(adjustedMouse, executor, executedLog); break;
+                case Type::Exit:        executeExit(adjustedMouse, executor, executedLog); break;
+                case Type::Screenshot:  executeScreenshot(adjustedMouse, executor, executedLog); break;
             }
         }
         
         // Check if resolution failed (critical error - hallucinated component ID)
         if (lastError.isNotEmpty())
         {
+            executor.executeSyntheticModeEnd(getElapsedMs());  // Cleanup on error
             return ExecutionResult::fail(lastError, getElapsedMs(), completedCount);
         }
         
@@ -91,9 +119,20 @@ InteractionDispatcher::ExecutionResult InteractionDispatcher::execute(
         error = checkAbortConditions(executor);
         if (error.isNotEmpty())
         {
+            executor.executeSyntheticModeEnd(getElapsedMs());  // Cleanup on abort
             return ExecutionResult::fail(error, getElapsedMs(), completedCount);
         }
     }
+    
+    // Wait for synthetic mode end delay, then end synthetic mode
+    // BUT: If a modal component is open (e.g., user right-clicked and opened a context menu),
+    // don't wait - the modal event loop would trap us. Just end synthetic mode immediately.
+    int syntheticModeEndTimestamp = lastEventTimestamp + SYNTHETIC_MODE_END_DELAY_MS;
+    if (Component::getNumCurrentlyModalComponents() == 0)
+    {
+        waitUntilTimestamp(syntheticModeEndTimestamp, executor);
+    }
+    executor.executeSyntheticModeEnd(getElapsedMs());
     
     return ExecutionResult::ok(getElapsedMs(), completedCount);
 }
