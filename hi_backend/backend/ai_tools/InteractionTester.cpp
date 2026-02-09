@@ -105,6 +105,220 @@ Colour InteractionTestWindow::CursorOverlay::getColourForState() const
 }
 
 //==============================================================================
+// InteractionTestWindow::TopBar implementation
+
+Path InteractionTestWindow::TopBar::ButtonPathFactory::createPath(const String& url) const
+{
+    Path p;
+    
+    if (url == "record")
+    {
+        // Simple filled circle for record button
+        p.addEllipse(0.0f, 0.0f, 1.0f, 1.0f);
+        return p;
+    }
+    
+    LOAD_EPATH_IF_URL("replay", EditorIcons::swapIcon);
+    LOAD_EPATH_IF_URL("new", SampleMapIcons::newSampleMap);
+    LOAD_EPATH_IF_URL("save", SampleMapIcons::saveSampleMap);
+    LOAD_EPATH_IF_URL("load", SampleMapIcons::loadSampleMap);
+    
+    return p;
+}
+
+InteractionTestWindow::TopBar::TopBar()
+{
+    // Group 1: Record, Replay
+    recordButton = new HiseShapeButton("record", this, pathFactory, "record");
+    recordButton->setTooltip("Record mouse interactions");
+    addAndMakeVisible(recordButton);
+    
+    replayButton = new HiseShapeButton("replay", this, pathFactory, "replay");
+    replayButton->setTooltip("Replay recorded interactions");
+    replayButton->setEnabled(false);
+    addAndMakeVisible(replayButton);
+    
+    // Group 2: New, Open, Save
+    clearButton = new HiseShapeButton("new", this, pathFactory, "new");
+    clearButton->setTooltip("New session");
+    addAndMakeVisible(clearButton);
+    
+    loadButton = new HiseShapeButton("load", this, pathFactory, "load");
+    loadButton->setTooltip("Load session from Tests folder");
+    addAndMakeVisible(loadButton);
+    
+    saveButton = new HiseShapeButton("save", this, pathFactory, "save");
+    saveButton->setTooltip("Save session to Tests folder");
+    saveButton->setEnabled(false);
+    addAndMakeVisible(saveButton);
+    
+    // Session name editor
+    sessionNameEditor = new TextEditor("sessionName");
+    sessionNameEditor->setText(sessionName, dontSendNotification);
+    sessionNameEditor->setFont(GLOBAL_BOLD_FONT());
+    GlobalHiseLookAndFeel::setTextEditorColours(*sessionNameEditor);
+    addAndMakeVisible(sessionNameEditor);
+}
+
+void InteractionTestWindow::TopBar::paint(Graphics& g)
+{
+    auto b = getLocalBounds();
+    
+    // Background (same as StatusBar)
+    g.setColour(Colour(0xFF333333));
+    g.fillRect(b);
+    
+    // Bottom border line
+    g.setColour(Colours::black.withAlpha(0.5f));
+    g.drawHorizontalLine(getHeight() - 1, 0.0f, (float)getWidth());
+}
+
+void InteractionTestWindow::TopBar::resized()
+{
+    auto b = getLocalBounds();
+    
+    int buttonSize = 32;
+    int padding = 4;
+    int groupMargin = 12;  // Larger margin between button groups
+    
+    b.removeFromLeft(padding);
+    
+    // Group 1: Record, Replay
+    recordButton->setBounds(b.removeFromLeft(buttonSize).withSizeKeepingCentre(buttonSize, buttonSize).reduced(4));
+    b.removeFromLeft(padding);
+    replayButton->setBounds(b.removeFromLeft(buttonSize).withSizeKeepingCentre(buttonSize, buttonSize).reduced(4));
+    
+    b.removeFromLeft(groupMargin);
+    
+    // Group 2: New, Open, Save
+    clearButton->setBounds(b.removeFromLeft(buttonSize).withSizeKeepingCentre(buttonSize, buttonSize).reduced(4));
+    b.removeFromLeft(padding);
+    loadButton->setBounds(b.removeFromLeft(buttonSize).withSizeKeepingCentre(buttonSize, buttonSize).reduced(4));
+    b.removeFromLeft(padding);
+    saveButton->setBounds(b.removeFromLeft(buttonSize).withSizeKeepingCentre(buttonSize, buttonSize).reduced(4));
+    b.removeFromLeft(padding);
+    
+    // Session name editor fills remaining space
+    sessionNameEditor->setBounds(b.reduced(4, 6));
+}
+
+void InteractionTestWindow::TopBar::buttonClicked(Button* b)
+{
+    if (b == recordButton.get())
+    {
+        // Toggle recording state (actual recording logic in Phase 2)
+        setRecording(!recording);
+    }
+    else if (b == replayButton.get())
+    {
+        // Replay the recorded/loaded interactions
+        if (auto* window = findParentComponentOfClass<InteractionTestWindow>())
+        {
+            if (auto* t = window->getInteractionTester())
+            {
+                t->executeInteractions(recordedInteractions, false);
+            }
+        }
+    }
+    else if (b == clearButton.get())
+    {
+        // Clear current session
+        recordedInteractions = var();
+        setHasRecording(false);
+        
+        // Bump session name if folder exists
+        if (auto* window = findParentComponentOfClass<InteractionTestWindow>())
+        {
+            if (auto* t = window->getInteractionTester())
+            {
+                setSessionName(generateSessionName(t->getTestsFolder()));
+            }
+        }
+    }
+    else if (b == saveButton.get())
+    {
+        // Save logic (Phase 3)
+    }
+    else if (b == loadButton.get())
+    {
+        // Load logic (Phase 3)
+    }
+}
+
+void InteractionTestWindow::TopBar::setRecording(bool isRecording)
+{
+    recording = isRecording;
+    
+    // Update button appearance
+    if (recordButton != nullptr)
+    {
+        if (recording)
+        {
+            // Red color when recording
+            recordButton->setColours(Colour(0xFFFF4444), Colour(0xFFFF6666), Colour(0xFFFF2222));
+        }
+        else
+        {
+            // Default colors
+            recordButton->setColours(Colours::white.withAlpha(0.7f), 
+                                     Colours::white, 
+                                     Colours::white.withAlpha(0.5f));
+        }
+        recordButton->repaint();
+    }
+    
+    // Disable other buttons during recording
+    replayButton->setEnabled(!recording && hasRecordingData);
+    saveButton->setEnabled(!recording && hasRecordingData);
+    loadButton->setEnabled(!recording);
+    
+    // Update status bar state
+    if (auto* window = findParentComponentOfClass<InteractionTestWindow>())
+    {
+        if (auto* statusBar = window->getStatusBar())
+        {
+            // StatusBar will handle the state change via its own mechanism
+            // For now, we just update the visual appearance
+        }
+    }
+    
+    repaint();
+}
+
+void InteractionTestWindow::TopBar::setHasRecording(bool hasData)
+{
+    hasRecordingData = hasData;
+    replayButton->setEnabled(hasData && !recording);
+    saveButton->setEnabled(hasData && !recording);
+}
+
+void InteractionTestWindow::TopBar::setSessionName(const String& name)
+{
+    sessionName = name;
+    if (sessionNameEditor != nullptr)
+        sessionNameEditor->setText(name, dontSendNotification);
+    repaint();
+}
+
+String InteractionTestWindow::TopBar::getSessionName() const
+{
+    if (sessionNameEditor != nullptr)
+        return sessionNameEditor->getText();
+    return sessionName;
+}
+
+String InteractionTestWindow::TopBar::generateSessionName(const File& testsFolder)
+{
+    int counter = 1;
+    String baseName = "new_session_";
+    
+    while (testsFolder.getChildFile(baseName + String(counter)).exists())
+        counter++;
+    
+    return baseName + String(counter);
+}
+
+//==============================================================================
 // InteractionTestWindow::StatusBar implementation
 
 Path InteractionTestWindow::StatusBar::ButtonPathFactory::createPath(const String& url) const
@@ -444,11 +658,12 @@ Colour InteractionTestWindow::StatusBar::getStateColour() const
 {
     switch (state)
     {
-        case State::Idle:    return Colours::white.withAlpha(0.5f);
-        case State::Running: return Colour(SIGNAL_COLOUR);
-        case State::Success: return Colour(HISE_OK_COLOUR);
-        case State::Failed:  return Colour(HISE_ERROR_COLOUR);
-        default:             return Colours::white;
+        case State::Idle:      return Colours::white.withAlpha(0.5f);
+        case State::Running:   return Colour(SIGNAL_COLOUR);
+        case State::Recording: return Colour(0xFFFF4444);  // Red for recording
+        case State::Success:   return Colour(HISE_OK_COLOUR);
+        case State::Failed:    return Colour(HISE_ERROR_COLOUR);
+        default:               return Colours::white;
     }
 }
 
@@ -456,11 +671,12 @@ String InteractionTestWindow::StatusBar::getStateText() const
 {
     switch (state)
     {
-        case State::Idle:    return "IDLE";
-        case State::Running: return "RUNNING";
-        case State::Success: return "SUCCESS";
-        case State::Failed:  return "FAILED";
-        default:             return "";
+        case State::Idle:      return "IDLE";
+        case State::Running:   return "RUNNING";
+        case State::Recording: return "RECORDING";
+        case State::Success:   return "SUCCESS";
+        case State::Failed:    return "FAILED";
+        default:               return "";
     }
 }
 
@@ -471,7 +687,11 @@ void InteractionTestWindow::ContentContainer::resized()
 {
     auto bounds = getLocalBounds();
     
-    // Status bar at bottom
+    // TopBar at top
+    if (topBar != nullptr)
+        topBar->setBounds(bounds.removeFromTop(TopBar::HEIGHT));
+    
+    // StatusBar at bottom
     if (statusBar != nullptr)
         statusBar->setBounds(bounds.removeFromBottom(StatusBar::HEIGHT));
     
@@ -791,6 +1011,7 @@ Array<PopupMenu::VisibleMenuItem> InteractionTestWindow::RealExecutor::getVisibl
         for (auto& item : screenItems)
         {
             auto localBounds = window->getLocalArea(nullptr, item.screenBounds);
+            localBounds.translate(0, -TopBar::HEIGHT);  // Offset for TopBar
             
             PopupMenu::VisibleMenuItem localItem;
             localItem.text = item.text;
@@ -846,11 +1067,12 @@ MainController* InteractionTestWindow::RealExecutor::getMainController() const
 //==============================================================================
 // InteractionTestWindow implementation
 
-InteractionTestWindow::InteractionTestWindow(ProcessorWithScriptingContent* processor)
+InteractionTestWindow::InteractionTestWindow(ProcessorWithScriptingContent* processor, InteractionTester* t)
     : PopupLookAndFeel::DocumentWindowWithEmbeddedPopupMenu("Interaction Test", 
                      Colours::darkgrey, 
                      DocumentWindow::closeButton,
-                     true)
+                     true),
+      tester(t)
 {
     setUsingNativeTitleBar(true);
     
@@ -866,16 +1088,20 @@ InteractionTestWindow::InteractionTestWindow(ProcessorWithScriptingContent* proc
         contentHeight = scc->getContentHeight();
     }
     
-    // Add status bar height to content height
+    // Add TopBar and StatusBar height to content height
+    contentHeight += TopBar::HEIGHT;
     contentHeight += StatusBar::HEIGHT;
     
     overlay = std::make_unique<CursorOverlay>();
+    topBar = std::make_unique<TopBar>();
     statusBar = std::make_unique<StatusBar>();
     
     container = std::make_unique<ContentContainer>();
     container->rootTile = rootTile.get();
+    container->topBar = topBar.get();
     container->statusBar = statusBar.get();
     
+    container->addAndMakeVisible(topBar.get());
     container->addAndMakeVisible(rootTile.get());
     container->addAndMakeVisible(statusBar.get());
     
@@ -902,6 +1128,7 @@ InteractionTestWindow::~InteractionTestWindow()
 {
     logEditor = nullptr;  // Destroy before StatusBar (which owns CodeDocument)
     overlay = nullptr;
+    topBar = nullptr;
     statusBar = nullptr;
     rootTile = nullptr;
     container = nullptr;
@@ -925,14 +1152,19 @@ void InteractionTestWindow::resized()
     // Call base class to handle content component
     DocumentWindowWithEmbeddedPopupMenu::resized();
     
-    // Position overlay to cover the content area
+    // Position overlay to cover the content area (excluding TopBar)
     if (overlay != nullptr && container != nullptr)
-        overlay->setBounds(container->getBounds());
+    {
+        auto overlayBounds = container->getBounds();
+        overlayBounds.removeFromTop(TopBar::HEIGHT);
+        overlay->setBounds(overlayBounds);
+    }
     
-    // Position log editor over content area (excluding status bar)
+    // Position log editor over content area (excluding TopBar and StatusBar)
     if (logEditor != nullptr && container != nullptr)
     {
         auto logBounds = container->getBounds();
+        logBounds.removeFromTop(TopBar::HEIGHT);
         logBounds.removeFromBottom(StatusBar::HEIGHT);
         logEditor->setBounds(logBounds);
         logEditor->toFront(false);
@@ -1078,6 +1310,10 @@ InteractionTester::TestResult InteractionTester::executeInteractions(const var& 
         return result;
     }
     
+    // Make a local copy of interactions to avoid dangling references during replay
+    // (when replaying, interactionsJson may reference TopBar::recordedInteractions which gets overwritten)
+    var interactionsCopy = interactionsJson;
+    
     // Ensure window is open
     ensureWindowOpen();
     
@@ -1086,6 +1322,10 @@ InteractionTester::TestResult InteractionTester::executeInteractions(const var& 
         result.errorMessage = "Failed to create test window";
         return result;
     }
+    
+    // Capture console if not already being captured by REST handler
+    RestHelpers::ReplayConsoleHandler consoleHandler(backendProcessor, window.get(),
+        !backendProcessor->getConsoleHandler().hasCustomLogger());
     
     // NORMALIZE: Auto-insert moveTo events
     normalizeSequence(interactions);
@@ -1120,6 +1360,20 @@ InteractionTester::TestResult InteractionTester::executeInteractions(const var& 
         result.finalMouseState = mouseState;
     }
     
+    // Store for replay & enable replay button
+    if (window != nullptr && window->getTopBar() != nullptr)
+    {
+        window->getTopBar()->setRecordedInteractions(interactionsCopy);
+        window->getTopBar()->setHasRecording(true);
+    }
+    
+    // Finalize console capture and log to StatusBar
+    if (consoleHandler.isCapturing())
+    {
+        consoleHandler.finalize(interactionsCopy, result.success, 
+                                result.interactionsCompleted, result.totalElapsedMs);
+    }
+    
     return result;
 }
 
@@ -1151,7 +1405,7 @@ void InteractionTester::ensureWindowOpen()
             auto* pwsc = dynamic_cast<ProcessorWithScriptingContent*>(processor);
             if (pwsc != nullptr)
             {
-                window = std::make_unique<InteractionTestWindow>(pwsc);
+                window = std::make_unique<InteractionTestWindow>(pwsc, this);
             }
         }
     }
@@ -1163,6 +1417,14 @@ JavascriptMidiProcessor* InteractionTester::getInterfaceProcessor() const
         return nullptr;
     
     return JavascriptMidiProcessor::getFirstInterfaceScriptProcessor(backendProcessor);
+}
+
+File InteractionTester::getTestsFolder() const
+{
+    if (backendProcessor == nullptr)
+        return File();
+    
+    return GET_PROJECT_HANDLER(backendProcessor->getMainSynthChain()).getWorkDirectory().getChildFile("Tests");
 }
 
 //==============================================================================

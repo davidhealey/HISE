@@ -34,6 +34,9 @@
 
 namespace hise { using namespace juce;
 
+// Forward declaration for ReplayConsoleHandler
+class InteractionTestWindow;
+
 //==============================================================================
 /** Identifiers for REST API parameter names and JSON response keys.
     Using Identifiers instead of string literals provides compile-time safety
@@ -290,24 +293,26 @@ struct RestHelpers
     
     //==========================================================================
     
-    /** Scoped handler that captures console output during request processing.
-        
-        While this object exists, any Console.print() calls or error messages
-        will be captured and added to the AsyncRequest's logs/errors arrays,
-        which are then merged into the JSON response.
-        
-        Inherits from IConsoleCapture so it can be attached to AsyncRequest
-        with proper lifetime management (destroyed when request completes).
-    */
-    struct ScopedConsoleHandler : public ControlledObject,
-                                  public RestServer::AsyncRequest::IConsoleCapture
+    /** Base class for scoped console capture.
+     *  
+     *  Captures console output during its lifetime by setting a custom logger
+     *  on the MainController's CodeHandler. Only captures if enabled AND no
+     *  existing custom logger is set.
+     *
+     *  Subclasses implement handleMessage() and handleError() to process captured output.
+     */
+    struct BaseScopedConsoleHandler : public ControlledObject
     {
-        ScopedConsoleHandler(MainController* mc, RestServer::AsyncRequest::Ptr request_);
-        ~ScopedConsoleHandler();
+        BaseScopedConsoleHandler(MainController* mc, bool enabled);
+        virtual ~BaseScopedConsoleHandler();
         
-        void onMessage(const String& message, int warning, const Processor* p);
+        bool isCapturing() const { return capturing; }
         
-    private:
+    protected:
+        virtual void handleMessage(const String& message) = 0;
+        virtual void handleError(const String& message, const StringArray& callstack) = 0;
+        
+        // Error parsing utilities
         struct ParsedError
         {
             String message;      // "API call with undefined parameter 0"
@@ -331,13 +336,64 @@ struct RestHelpers
             
             @returns ParsedError with message, location, and optional functionName
         */
-        static ParsedError parseError(const String& errorString,
-                                      const File& scriptRoot,
-                                      const String& moduleId);
+        ParsedError parseError(const String& errorString,
+                               const File& scriptRoot,
+                               const String& moduleId);
         
+    private:
+        void onMessage(const String& message, int warning, const Processor* p);
+        bool capturing = false;
+    };
+    
+    //==========================================================================
+    
+    /** Scoped handler that captures console output during request processing.
+        
+        While this object exists, any Console.print() calls or error messages
+        will be captured and added to the AsyncRequest's logs/errors arrays,
+        which are then merged into the JSON response.
+        
+        Inherits from IConsoleCapture so it can be attached to AsyncRequest
+        with proper lifetime management (destroyed when request completes).
+    */
+    struct ScopedConsoleHandler : public BaseScopedConsoleHandler,
+                                  public RestServer::AsyncRequest::IConsoleCapture
+    {
+        ScopedConsoleHandler(MainController* mc, RestServer::AsyncRequest::Ptr request_);
+        
+    protected:
+        void handleMessage(const String& message) override;
+        void handleError(const String& message, const StringArray& callstack) override;
+        
+    private:
         // Reference - safe because AsyncRequest owns this ScopedConsoleHandler,
         // so AsyncRequest always outlives this object
         RestServer::AsyncRequest& request;
+    };
+    
+    //==========================================================================
+    
+    /** Console handler for replay that captures to StatusBar log.
+     *  
+     *  Used when executeInteractions() is called directly (not through REST API)
+     *  to capture console output and display it in the test window's log panel.
+     */
+    struct ReplayConsoleHandler : public BaseScopedConsoleHandler
+    {
+        ReplayConsoleHandler(MainController* mc, InteractionTestWindow* window, bool enabled);
+        
+        /** Build result JSON and log to StatusBar. Call after execution completes. */
+        void finalize(const var& inputInteractions, bool success, 
+                      int interactionsCompleted, int totalElapsedMs);
+        
+    protected:
+        void handleMessage(const String& message) override;
+        void handleError(const String& message, const StringArray& callstack) override;
+        
+    private:
+        InteractionTestWindow* window;
+        StringArray logs;
+        Array<var> errors;
     };
     
     /** Gets a JavascriptProcessor from the request's moduleId parameter.

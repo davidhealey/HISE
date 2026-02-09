@@ -107,15 +107,83 @@ public:
     };
     
     //==========================================================================
+    /** Top bar with action buttons for recording, replay, save, and load.
+     *
+     *  Displays:
+     *  - Record button (toggle, red when recording)
+     *  - Replay button (disabled until recording exists)
+     *  - Save button (disabled until recording exists)
+     *  - Load button (always enabled)
+     *  - Session name label
+     */
+    class TopBar : public Component,
+                   public Button::Listener
+    {
+    public:
+        TopBar();
+        
+        // Component
+        void paint(Graphics& g) override;
+        void resized() override;
+        
+        // Button::Listener
+        void buttonClicked(Button* b) override;
+        
+        // Recording state
+        void setRecording(bool isRecording);
+        bool isRecording() const { return recording; }
+        
+        // Enable/disable based on session state
+        void setHasRecording(bool hasRecording);
+        
+        // Recorded interactions for replay
+        void setRecordedInteractions(const var& interactions) { recordedInteractions = interactions; }
+        const var& getRecordedInteractions() const { return recordedInteractions; }
+        
+        // Session name
+        void setSessionName(const String& name);
+        String getSessionName() const;
+        
+        /** Generate a unique session name (new_session_1, new_session_2, etc.) */
+        String generateSessionName(const File& testsFolder);
+        
+        static constexpr int HEIGHT = 40;
+        
+    private:
+        struct ButtonPathFactory : public PathFactory
+        {
+            Path createPath(const String& id) const override;
+        };
+        
+        ButtonPathFactory pathFactory;
+        GlobalHiseLookAndFeel laf;
+        
+        ScopedPointer<HiseShapeButton> recordButton;
+        ScopedPointer<HiseShapeButton> replayButton;
+        ScopedPointer<HiseShapeButton> clearButton;
+        ScopedPointer<HiseShapeButton> loadButton;
+        ScopedPointer<HiseShapeButton> saveButton;
+        ScopedPointer<TextEditor> sessionNameEditor;
+        
+        String sessionName = "new_session_1";
+        bool recording = false;
+        bool hasRecordingData = false;
+        
+        var recordedInteractions;  // Stores the recorded/loaded session data
+        
+        JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(TopBar)
+    };
+    
+    //==========================================================================
     /** Status bar showing execution progress at bottom of test window.
      *
      *  Displays:
-     *  - State indicator (colored dot + text: IDLE/RUNNING/SUCCESS/FAILED)
+     *  - State indicator (colored dot + text: IDLE/RUNNING/RECORDING/SUCCESS/FAILED)
      *  - Current action description
      *  - Time-based progress bar
      *  - Step counter (completed/total)
      *  - Screenshot counter with flash effect
-     *  - Dump button to save screenshots to folder
+     *  - Log toggle button
      */
     class StatusBar : public Component,
                       public ProgressListener,
@@ -123,7 +191,7 @@ public:
                       public Button::Listener
     {
     public:
-        enum class State { Idle, Running, Success, Failed };
+        enum class State { Idle, Running, Recording, Success, Failed };
         
         StatusBar();
         ~StatusBar() override;
@@ -300,7 +368,7 @@ public:
     
     //==========================================================================
     /** Create window for the given script processor's interface. */
-    InteractionTestWindow(ProcessorWithScriptingContent* processor);
+    InteractionTestWindow(ProcessorWithScriptingContent* processor, InteractionTester* tester);
     ~InteractionTestWindow() override;
     
     void closeButtonPressed() override;
@@ -330,22 +398,31 @@ public:
     /** Get the content size in pixels. */
     Rectangle<int> getContentBounds() const;
     
+    /** Get the top bar component. */
+    TopBar* getTopBar() { return topBar.get(); }
+    
+    /** Get the interaction tester that owns this window. */
+    InteractionTester* getInteractionTester() { return tester; }
+    
 private:
 
-    /** Container component that holds FloatingTile and status bar. */
+    /** Container component that holds TopBar, FloatingTile, and StatusBar. */
     class ContentContainer : public Component
     {
     public:
         ContentContainer() = default;
         void resized() override;
         
+        TopBar* topBar = nullptr;
         FloatingTile* rootTile = nullptr;
         StatusBar* statusBar = nullptr;
     };
     
     juce::OpenGLContext context;
 
+    InteractionTester* tester;
     std::unique_ptr<ContentContainer> container;
+    std::unique_ptr<TopBar> topBar;
     std::unique_ptr<FloatingTile> rootTile;
     std::unique_ptr<CursorOverlay> overlay;
     std::unique_ptr<StatusBar> statusBar;
@@ -441,13 +518,18 @@ public:
     /** Get the test window (for internal use). */
     InteractionTestWindow* getTestWindow() { return window.get(); }
     
+    /** Ensure test window is open, creating if needed.
+     *  Called from menu command and REST API.
+     */
+    void ensureWindowOpen();
+    
+    /** Get the Tests folder path for saving/loading sessions. */
+    File getTestsFolder() const;
+    
 private:
     BackendProcessor* backendProcessor;
     std::unique_ptr<InteractionTestWindow> window;
     MouseState mouseState;  // Persists across API calls!
-    
-    /** Ensure test window is open, creating if needed. */
-    void ensureWindowOpen();
     
     /** Get the main interface script processor. */
     JavascriptMidiProcessor* getInterfaceProcessor() const;

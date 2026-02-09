@@ -465,6 +465,9 @@ public:
 	
 	/** Returns the InteractionTester for UI interaction testing via REST API. */
 	InteractionTester* getInteractionTester();
+	
+	/** Shows the Interaction Test Window, creating the tester if needed. */
+	void showInteractionTestWindow();
 
 	/// @brief returns the PluginParameter value of the indexed PluginParameter.
     float getParameter (int index) override

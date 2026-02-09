@@ -33,37 +33,43 @@
 namespace hise { using namespace juce;
 
 //==============================================================================
-// ScopedConsoleHandler implementation
+// BaseScopedConsoleHandler implementation
 
-RestHelpers::ScopedConsoleHandler::ScopedConsoleHandler(MainController* mc, RestServer::AsyncRequest::Ptr request_) :
+RestHelpers::BaseScopedConsoleHandler::BaseScopedConsoleHandler(MainController* mc, bool enabled) :
 	ControlledObject(mc),
-	request(*request_)
+	capturing(false)
 {
-	debugToConsole(getMainController()->getMainSynthChain(), "> create console pipe");
-	getMainController()->getConsoleHandler().setCustomCodeHandler(BIND_MEMBER_FUNCTION_3(ScopedConsoleHandler::onMessage));
+	if (enabled && !mc->getConsoleHandler().hasCustomLogger())
+	{
+		capturing = true;
+		mc->getConsoleHandler().setCustomCodeHandler(
+			BIND_MEMBER_FUNCTION_3(BaseScopedConsoleHandler::onMessage));
+	}
 }
 
-RestHelpers::ScopedConsoleHandler::~ScopedConsoleHandler()
+RestHelpers::BaseScopedConsoleHandler::~BaseScopedConsoleHandler()
 {
-	getMainController()->getConsoleHandler().setCustomCodeHandler({});
-	debugToConsole(getMainController()->getMainSynthChain(), "> close console pipe");
+	if (capturing)
+		getMainController()->getConsoleHandler().setCustomCodeHandler({});
 }
 
-void RestHelpers::ScopedConsoleHandler::onMessage(const String& message, int warning, const Processor* p)
+void RestHelpers::BaseScopedConsoleHandler::onMessage(const String& message, int warning, const Processor* p)
 {
 	if (warning == 0)
-		request.appendLog(message);
+	{
+		handleMessage(message);
+	}
 	else
 	{
 		auto lines = StringArray::fromLines(message);
-
-		auto scriptRoot = getMainController()->getSampleManager().getProjectHandler().getSubDirectory(FileHandlerBase::Scripts);
+		
+		auto scriptRoot = getMainController()->getSampleManager().getProjectHandler()
+			.getSubDirectory(FileHandlerBase::Scripts);
 		auto moduleId = p->getId();
-
+		
 		auto error = parseError(lines[0], scriptRoot, moduleId);
-
 		lines.remove(0);
-
+		
 		StringArray callstack;
 		for (auto& entry : lines)
 		{
@@ -71,19 +77,19 @@ void RestHelpers::ScopedConsoleHandler::onMessage(const String& message, int war
 			if (parsed.location.isNotEmpty())
 				callstack.add(parsed.toCallstackString());
 		}
-
-		request.appendError(error.message, callstack);
+		
+		handleError(error.message, callstack);
 	}
 }
 
-String RestHelpers::ScopedConsoleHandler::ParsedError::toCallstackString() const
+String RestHelpers::BaseScopedConsoleHandler::ParsedError::toCallstackString() const
 {
 	if (functionName.isEmpty())
 		return location;
 	return functionName + "() at " + location;
 }
 
-RestHelpers::ScopedConsoleHandler::ParsedError RestHelpers::ScopedConsoleHandler::parseError(
+RestHelpers::BaseScopedConsoleHandler::ParsedError RestHelpers::BaseScopedConsoleHandler::parseError(
 	const String& errorString,
 	const File& scriptRoot,
 	const String& moduleId)
@@ -151,6 +157,78 @@ RestHelpers::ScopedConsoleHandler::ParsedError RestHelpers::ScopedConsoleHandler
 	}
 
 	return result;
+}
+
+//==============================================================================
+// ScopedConsoleHandler implementation
+
+RestHelpers::ScopedConsoleHandler::ScopedConsoleHandler(MainController* mc, RestServer::AsyncRequest::Ptr request_) :
+	BaseScopedConsoleHandler(mc, true),  // Always enabled for REST
+	request(*request_)
+{
+}
+
+void RestHelpers::ScopedConsoleHandler::handleMessage(const String& message)
+{
+	request.appendLog(message);
+}
+
+void RestHelpers::ScopedConsoleHandler::handleError(const String& message, const StringArray& callstack)
+{
+	request.appendError(message, callstack);
+}
+
+//==============================================================================
+// ReplayConsoleHandler implementation
+
+RestHelpers::ReplayConsoleHandler::ReplayConsoleHandler(MainController* mc, InteractionTestWindow* window_, bool enabled) :
+	BaseScopedConsoleHandler(mc, enabled),
+	window(window_)
+{
+}
+
+void RestHelpers::ReplayConsoleHandler::handleMessage(const String& message)
+{
+	logs.add(message);
+}
+
+void RestHelpers::ReplayConsoleHandler::handleError(const String& message, const StringArray& callstack)
+{
+	DynamicObject::Ptr errorObj = new DynamicObject();
+	errorObj->setProperty("message", message);
+	
+	Array<var> callstackArray;
+	for (auto& entry : callstack)
+		callstackArray.add(entry);
+	errorObj->setProperty("callstack", var(callstackArray));
+	
+	errors.add(var(errorObj.get()));
+}
+
+void RestHelpers::ReplayConsoleHandler::finalize(const var& inputInteractions, bool success,
+                                                  int interactionsCompleted, int totalElapsedMs)
+{
+	if (window == nullptr) return;
+	
+	// Build JSON response similar to REST API format
+	DynamicObject::Ptr result = new DynamicObject();
+	result->setProperty(RestApiIds::success, success && errors.isEmpty());
+	result->setProperty(RestApiIds::interactionsCompleted, interactionsCompleted);
+	result->setProperty(RestApiIds::totalElapsedMs, totalElapsedMs);
+	
+	Array<var> logsArray;
+	for (auto& log : logs)
+		logsArray.add(log);
+	result->setProperty(RestApiIds::logs, var(logsArray));
+	
+	if (!errors.isEmpty())
+		result->setProperty(RestApiIds::errors, var(errors));
+	
+	String jsonResponse = JSON::toString(var(result.get()), false);
+	
+	// Log to StatusBar
+	if (auto* tester = window->getInteractionTester())
+		tester->logResponse(inputInteractions, jsonResponse, success && errors.isEmpty());
 }
 
 //==============================================================================

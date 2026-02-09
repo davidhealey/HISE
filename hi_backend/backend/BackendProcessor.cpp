@@ -563,6 +563,15 @@ InteractionTester* BackendProcessor::getInteractionTester()
 	return interactionTester.get();
 }
 
+void BackendProcessor::showInteractionTestWindow()
+{
+	// Create tester if it doesn't exist (independent of REST server)
+	if (interactionTester == nullptr)
+		interactionTester = std::make_unique<InteractionTester>(this);
+	
+	interactionTester->ensureWindowOpen();
+}
+
 void BackendProcessor::projectChanged(const File& /*newRootDirectory*/)
 {
 	getExpansionHandler().setCurrentExpansion("");

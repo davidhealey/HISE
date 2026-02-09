@@ -179,6 +179,7 @@ public:
 		MenuToolsConvertSVGToPathData,
 		MenuToolsBroadcasterWizard,
 		MenuToolsToggleRestServer,
+		MenuToolsShowInteractionTestWindow,
 		MenuToolsCreateExternalScriptFile,
 		
 		// ---------------------------------
