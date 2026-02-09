@@ -63,6 +63,15 @@ int estimateTotalDuration(const Array<InteractionParser::Interaction>& interacti
     return total;
 }
 
+/** Write interaction event to console if MainController available. */
+void logInteractionToConsole(InteractionDispatcher::Executor& exec, const String& description)
+{
+    if (auto* mc = exec.getMainController())
+    {
+        debugToConsole(mc->getMainSynthChain(), "> " + description);
+    }
+}
+
 } // anonymous namespace
 
 //==============================================================================
@@ -112,11 +121,14 @@ InteractionDispatcher::ExecutionResult InteractionDispatcher::execute(
         const auto& mouse = interaction.mouse;
         
         // Notify listener that interaction is starting
+        String description = getInteractionDescription(mouse);
         if (progressListener != nullptr)
         {
-            String description = getInteractionDescription(mouse);
             progressListener->onInteractionStarted(interactionIndex, description);
         }
+        
+        // Log to console for interleaved output with script Console.print() calls
+        logInteractionToConsole(executor, description);
         
         // Apply delay before this interaction
         if (mouse.delayMs > 0)

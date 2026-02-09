@@ -287,6 +287,9 @@ public:
             consoleCapture = std::move(capture); 
         }
 
+        /** Returns true if any errors have been captured. */
+        bool hasErrors() const { return !errors.isEmpty(); }
+
     private:
         ConsoleCapturePtr consoleCapture;
         /** Merges collected logs and errors into the response body as JSON. */

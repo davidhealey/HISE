@@ -19,6 +19,25 @@
 *   ===========================================================================
 */
 
+
+/** TODO:
+
+- filter console log. error ? only show error list, otherwise: just show log list
+- set the green indicator to match the error state (so if a script error occurs, make it red)
+- append the initial input list. so log window only shows: input list -> console log or error per run.
+- test popupment properly - panels, right click, etc!
+- add MIDI event logic!
+- add a simple replay button
+- make a comprehensive guide for the MCP server 
+- add get screenshot with downscaling & cropping. remove entire old screenshot endpoint
+- add autoscroll
+- add autodump for screenshots, use projectfolder/Images/screenshots as default...
+- record audio output too! make spectrogram with downsampling endpoint
+- design a system that organizes this into unit tests that the user can execute!
+- add subcomponent resolving to allow more complex components to work (eg. Preset browser or slider packs).
+
+*/
+
 namespace hise {
 using namespace juce;
 
@@ -296,35 +315,49 @@ void InteractionTestWindow::StatusBar::buttonClicked(Button* b)
         // If we have a folder, save the screenshots
         if (dumpFolder.exists() && !capturedScreenshots.empty())
         {
-            PNGImageFormat pngFormat;
-            
             for (const auto& screenshot : capturedScreenshots)
             {
                 auto file = dumpFolder.getChildFile(screenshot.first + ".png");
-                FileOutputStream fos(file);
-                
-                if (fos.openedOk())
-                    pngFormat.writeImageToStream(screenshot.second, fos);
+                file.replaceWithData(screenshot.second.getData(), screenshot.second.getSize());
             }
         }
     }
     else if (b == logButton.get())
     {
-        // TODO: Implement console log display
+        if (auto* window = findParentComponentOfClass<InteractionTestWindow>())
+        {
+            window->setLogVisible(logButton->getToggleState());
+            window->overlay->setVisible(!logButton->getToggleState());
+        }
+            
     }
 }
 
 //==============================================================================
 // StatusBar screenshot storage
 
-void InteractionTestWindow::StatusBar::storeScreenshot(const String& id, const Image& image)
+void InteractionTestWindow::StatusBar::storeScreenshot(const String& id, const MemoryBlock& pngData)
 {
-    capturedScreenshots.push_back({id, image.createCopy()});
+    capturedScreenshots.push_back({id, pngData});
 }
 
 void InteractionTestWindow::StatusBar::clearScreenshots()
 {
     capturedScreenshots.clear();
+}
+
+void InteractionTestWindow::StatusBar::appendToLog(const String& json, bool success)
+{
+    String separator = "\n// === " + Time::getCurrentTime().toString(true, true) + 
+                       (success ? " [SUCCESS]" : " [FAILED]") + " ===\n\n";
+    
+    logDocument.insertText(logDocument.getNumCharacters(), separator + json + "\n");
+}
+
+void InteractionTestWindow::StatusBar::setLogToggleState(bool state)
+{
+    if (logButton != nullptr)
+        logButton->setToggleStateAndUpdateIcon(state, true);
 }
 
 //==============================================================================
@@ -611,10 +644,6 @@ void InteractionTestWindow::RealExecutor::executeScreenshot(const String& id, fl
     if (!image.isValid())
         return;
     
-    // Store image in StatusBar for dump feature
-    if (auto* sb = window->getStatusBar())
-        sb->storeScreenshot(id, image);
-    
     MemoryBlock mb;
     {
         MemoryOutputStream mos(mb, false);
@@ -623,7 +652,18 @@ void InteractionTestWindow::RealExecutor::executeScreenshot(const String& id, fl
             return;
     }
     
-    screenshots.set(id, "data:image/png;base64," + Base64::toBase64(mb.getData(), mb.getSize()));
+    // Store PNG data in StatusBar for dump feature
+    if (auto* sb = window->getStatusBar())
+        sb->storeScreenshot(id, mb);
+    
+    // Store screenshot info (metadata + raw PNG data)
+    ScreenshotInfo info;
+    info.id = id;
+    info.sizeKB = static_cast<float>(mb.getSize()) / 1024.0f;
+    info.width = image.getWidth();
+    info.height = image.getHeight();
+    info.pngData = std::move(mb);
+    screenshots[id] = std::move(info);
 }
 
 void InteractionTestWindow::RealExecutor::injectMouseEvent(Point<float> pixelPos, ModifierKeys mods)
@@ -692,6 +732,10 @@ int InteractionTestWindow::RealExecutor::waitUntilReady()
     constexpr int POLL_INTERVAL_MS = 10;
     constexpr int BUFFER_MS = 100;
     
+    // Hide log editor before sequence starts to prevent accidental clicks
+    if (window->isLogVisible())
+        window->setLogVisible(false);
+    
     auto* overlay = window->getOverlay();
     if (overlay == nullptr)
         return -1;
@@ -715,6 +759,11 @@ int InteractionTestWindow::RealExecutor::waitUntilReady()
     MessageManager::getInstance()->runDispatchLoopUntil(BUFFER_MS);
     
     return static_cast<int>(Time::getMillisecondCounterHiRes() - startTime);
+}
+
+MainController* InteractionTestWindow::RealExecutor::getMainController() const
+{
+    return processor != nullptr ? processor->getMainController_() : nullptr;
 }
 
 //==============================================================================
@@ -774,6 +823,7 @@ InteractionTestWindow::InteractionTestWindow(ProcessorWithScriptingContent* proc
 
 InteractionTestWindow::~InteractionTestWindow()
 {
+    logEditor = nullptr;  // Destroy before StatusBar (which owns CodeDocument)
     overlay = nullptr;
     statusBar = nullptr;
     rootTile = nullptr;
@@ -801,6 +851,54 @@ void InteractionTestWindow::resized()
     // Position overlay to cover the content area
     if (overlay != nullptr && container != nullptr)
         overlay->setBounds(container->getBounds());
+    
+    // Position log editor over content area (excluding status bar)
+    if (logEditor != nullptr && container != nullptr)
+    {
+        auto logBounds = container->getBounds();
+        logBounds.removeFromBottom(StatusBar::HEIGHT);
+        logEditor->setBounds(logBounds);
+        logEditor->toFront(false);
+    }
+}
+
+void InteractionTestWindow::setLogVisible(bool visible)
+{
+    // Sync button toggle state
+    if (auto* sb = getStatusBar())
+    {
+        sb->setLogToggleState(visible);
+        overlay->setVisible(!visible);
+    }
+        
+    
+    if (visible && logEditor == nullptr)
+    {
+        auto* sb = getStatusBar();
+        if (sb == nullptr) return;
+        
+        logEditor = std::make_unique<CodeEditorComponent>(sb->getLogDocument(), sb->getLogTokeniser());
+        
+        // Style to match JSONEditor / HISE dark theme
+        logEditor->setColour(CodeEditorComponent::backgroundColourId, Colour(0xff262626));
+        logEditor->setColour(CodeEditorComponent::defaultTextColourId, Colour(0xFFCCCCCC));
+        logEditor->setColour(CodeEditorComponent::lineNumberTextId, Colour(0xFFCCCCCC));
+        logEditor->setColour(CodeEditorComponent::lineNumberBackgroundId, Colour(0xff363636));
+        logEditor->setColour(CodeEditorComponent::highlightColourId, Colour(0xff666666));
+        logEditor->setColour(CaretComponent::caretColourId, Colour(0xFFDDDDDD));
+        logEditor->setColour(ScrollBar::thumbColourId, Colour(0x3dffffff));
+        logEditor->setReadOnly(true);
+        logEditor->setFont(GLOBAL_MONOSPACE_FONT().withHeight(14.0f));
+        
+        Component::addAndMakeVisible(logEditor.get());
+        resized();
+        logEditor->moveCaretToEnd(false);
+    }
+    else if (!visible && logEditor != nullptr)
+    {
+        logEditor = nullptr;
+        resized();
+    }
 }
 
 ScriptContentComponent* InteractionTestWindow::getContent()
@@ -849,6 +947,17 @@ InteractionTester::~InteractionTester()
 void InteractionTester::resetMouseState()
 {
     mouseState.reset();
+}
+
+void InteractionTester::logResponse(const String& jsonResponse, bool success)
+{
+    if (window != nullptr)
+    {
+        if (auto* sb = window->getStatusBar())
+        {
+            sb->appendToLog(jsonResponse, success);
+        }
+    }
 }
 
 InteractionTester::TestResult InteractionTester::executeInteractions(const var& interactionsJson, bool verbose)

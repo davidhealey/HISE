@@ -32,6 +32,17 @@ using namespace juce;
 class BackendProcessor;
 
 //==============================================================================
+/** Screenshot metadata (replaces base64 data in API response). */
+struct ScreenshotInfo
+{
+    String id;
+    float sizeKB = 0.0f;
+    int width = 0;
+    int height = 0;
+    MemoryBlock pngData;  // Raw PNG data for dump feature (not serialized to JSON)
+};
+
+//==============================================================================
 /** Window hosting the test interface with cursor overlay.
  *
  *  Creates a DocumentWindow containing:
@@ -135,13 +146,25 @@ public:
         void buttonClicked(Button* b) override;
         
         /** Store a screenshot for later dumping.
-         *  @param id    Screenshot identifier (used as filename)
-         *  @param image The captured image
+         *  @param id      Screenshot identifier (used as filename)
+         *  @param pngData Raw PNG data
          */
-        void storeScreenshot(const String& id, const Image& image);
+        void storeScreenshot(const String& id, const MemoryBlock& pngData);
         
         /** Clear all stored screenshots. */
         void clearScreenshots();
+        
+        /** Append JSON response to the log document. */
+        void appendToLog(const String& json, bool success);
+        
+        /** Get the log document for the editor. */
+        CodeDocument& getLogDocument() { return logDocument; }
+        
+        /** Get the tokeniser for syntax highlighting. */
+        CodeTokeniser* getLogTokeniser() { return &logTokeniser; }
+        
+        /** Set the log button toggle state (used when hiding log programmatically). */
+        void setLogToggleState(bool state);
         
         static constexpr int HEIGHT = 28;
         
@@ -170,7 +193,11 @@ public:
         
         // Dump state
         File dumpFolder;
-        std::vector<std::pair<String, Image>> capturedScreenshots;
+        std::vector<std::pair<String, MemoryBlock>> capturedScreenshots;  // id -> PNG data
+        
+        // Log console
+        CodeDocument logDocument;
+        JavascriptTokeniser logTokeniser;
         
         // LAF
         GlobalHiseLookAndFeel laf;
@@ -233,8 +260,11 @@ public:
         int waitUntilReady() override;
         
         //======================================================================
-        /** Get all captured screenshots (id -> base64 PNG with data URI prefix). */
-        const StringPairArray& getScreenshots() const { return screenshots; }
+        /** Get all captured screenshots. */
+        const std::map<String, ScreenshotInfo>& getScreenshots() const { return screenshots; }
+        
+        /** Get MainController for console logging. */
+        MainController* getMainController() const override;
         
         //======================================================================
         /** Destructor ensures synthetic mode is cleaned up if still active. */
@@ -244,7 +274,7 @@ public:
         
         InteractionTestWindow* window;
         ProcessorWithScriptingContent* processor;
-        StringPairArray screenshots;  // id -> "data:image/png;base64,..."
+        std::map<String, ScreenshotInfo> screenshots;
         bool mouseCurrentlyDown = false;
         Point<int> cursorPosition{0, 0};
         
@@ -283,6 +313,12 @@ public:
     /** Get the status bar component. */
     StatusBar* getStatusBar() { return statusBar.get(); }
     
+    /** Show/hide the log editor overlay. */
+    void setLogVisible(bool visible);
+    
+    /** Check if log is currently visible. */
+    bool isLogVisible() const { return logEditor != nullptr; }
+    
     /** Convert normalized position (0-1) to pixel coordinates within content. */
     Point<int> normalizedToPixels(Point<float> norm) const;
     
@@ -308,6 +344,7 @@ private:
     std::unique_ptr<FloatingTile> rootTile;
     std::unique_ptr<CursorOverlay> overlay;
     std::unique_ptr<StatusBar> statusBar;
+    std::unique_ptr<CodeEditorComponent> logEditor;
     
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(InteractionTestWindow)
 };
@@ -355,7 +392,7 @@ public:
         int interactionsCompleted = 0;
         int totalElapsedMs = 0;
         Array<var> executionLog;
-        StringPairArray screenshots;  // id -> base64 PNG
+        std::map<String, ScreenshotInfo> screenshots;  // id -> metadata + PNG data
         StringArray parseWarnings;
         
         // Menu item selection result
@@ -388,6 +425,12 @@ public:
     
     /** Reset mouse state to origin. */
     void resetMouseState();
+    
+    /** Log the JSON response for display in the status bar console. */
+    void logResponse(const String& jsonResponse, bool success);
+    
+    /** Get the test window (for internal use). */
+    InteractionTestWindow* getTestWindow() { return window.get(); }
     
 private:
     BackendProcessor* backendProcessor;

@@ -125,6 +125,11 @@ public:
          *  @returns The number of milliseconds waited, or -1 if timed out.
          */
         virtual int waitUntilReady() = 0;
+        
+        /** Get MainController for console logging (optional).
+         *  @returns MainController pointer, or nullptr for test executors.
+         */
+        virtual MainController* getMainController() const { return nullptr; }
     };
     
     //==============================================================================

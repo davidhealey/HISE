@@ -1613,6 +1613,9 @@ RestServer::Response RestHelpers::handleGetSelectedComponents(MainController* mc
 
 RestServer::Response RestHelpers::handleSimulateInteractions(BackendProcessor* bp, RestServer::AsyncRequest::Ptr req)
 {
+	// Capture console output during interaction execution
+	ScopedConsoleHandler consoleHandler(bp, req);
+	
 	// Parse the request body to get interactions array
 	auto body = req->getRequest().getJsonBody();
 	
@@ -1658,20 +1661,33 @@ RestServer::Response RestHelpers::handleSimulateInteractions(BackendProcessor* b
 	
 	// Build response
 	DynamicObject::Ptr result = new DynamicObject();
-	result->setProperty(RestApiIds::success, testResult.success);
 	
-	if (!testResult.success && testResult.errorMessage.isNotEmpty())
-		result->setProperty(RestApiIds::errorMessage, testResult.errorMessage);
+	// If any script errors were captured during execution, mark as failed
+	bool success = testResult.success && !req->hasErrors();
+	result->setProperty(RestApiIds::success, success);
+	
+	if (!success)
+	{
+		if (testResult.errorMessage.isNotEmpty())
+			result->setProperty(RestApiIds::errorMessage, testResult.errorMessage);
+		else if (req->hasErrors())
+			result->setProperty(RestApiIds::errorMessage, "Script error(s) occurred during execution");
+	}
 	
 	result->setProperty(RestApiIds::interactionsCompleted, testResult.interactionsCompleted);
 	result->setProperty(RestApiIds::totalElapsedMs, testResult.totalElapsedMs);
 	result->setProperty(RestApiIds::executionLog, testResult.executionLog);
 	
-	// Convert screenshots StringPairArray to JSON object
+	// Convert screenshots to JSON object with metadata (no base64 data)
 	DynamicObject::Ptr screenshotsObj = new DynamicObject();
-	for (auto& key : testResult.screenshots.getAllKeys())
+	for (const auto& [id, info] : testResult.screenshots)
 	{
-		screenshotsObj->setProperty(Identifier(key), testResult.screenshots[key]);
+		DynamicObject::Ptr ssInfo = new DynamicObject();
+		ssInfo->setProperty(RestApiIds::id, info.id);
+		ssInfo->setProperty("sizeKB", info.sizeKB);
+		ssInfo->setProperty("width", info.width);
+		ssInfo->setProperty("height", info.height);
+		screenshotsObj->setProperty(Identifier(id), var(ssInfo.get()));
 	}
 	result->setProperty(RestApiIds::screenshots, var(screenshotsObj.get()));
 	
@@ -1704,11 +1720,15 @@ RestServer::Response RestHelpers::handleSimulateInteractions(BackendProcessor* b
 		result->setProperty(RestApiIds::mouseState, var(mouseStateObj.get()));
 	}
 	
-	result->setProperty(RestApiIds::logs, Array<var>());
-	result->setProperty(RestApiIds::errors, Array<var>());
-	
+	// Complete the request - this merges logs/errors via mergeLogsIntoResponse()
 	req->complete(RestServer::Response::ok(var(result.get())));
-	return req->waitForResponse();
+	auto finalResponse = req->waitForResponse();
+	
+	// Log the final response (which now includes logs/errors) to the interaction tester's console
+	if (auto* t = bp->getInteractionTester())
+		t->logResponse(finalResponse.body, success);
+	
+	return finalResponse;
 }
 
 } // namespace hise
