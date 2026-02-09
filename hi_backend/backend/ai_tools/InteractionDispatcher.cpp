@@ -36,15 +36,15 @@ String getInteractionDescription(const InteractionParser::MouseInteraction& mous
     switch (mouse.type)
     {
         case Type::MoveTo:
-            return "Moving to " + mouse.targetComponentId;
+            return "Moving to \"" + mouse.targetComponentId + "\"";
         case Type::Click:
             return mouse.rightClick ? "Right-clicking" : "Clicking";
         case Type::Drag:
-            return "Dragging";
+            return "Dragging (" + String(mouse.deltaPixels.x) + ", " + String(mouse.deltaPixels.y) + ")";
         case Type::Screenshot:
-            return "Capturing screenshot";
+            return "Capturing screenshot \"" + mouse.screenshotId + "\"";
         case Type::SelectMenuItem:
-            return "Selecting menu item";
+            return "Selecting menu item \"" + mouse.menuItemText + "\"";
         default:
             return "Processing...";
     }

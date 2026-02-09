@@ -154,8 +154,13 @@ public:
         /** Clear all stored screenshots. */
         void clearScreenshots();
         
-        /** Append JSON response to the log document. */
-        void appendToLog(const String& json, bool success);
+        /** Append formatted log entry showing input, console output, and errors. */
+        void appendToLog(const var& inputInteractions, const String& jsonResponse, bool success);
+        
+        /** Update the final state after script errors are known.
+         *  Call this after sequence completes if script errors were detected.
+         */
+        void updateFinalState(bool hasScriptErrors);
         
         /** Get the log document for the editor. */
         CodeDocument& getLogDocument() { return logDocument; }
@@ -426,8 +431,12 @@ public:
     /** Reset mouse state to origin. */
     void resetMouseState();
     
-    /** Log the JSON response for display in the status bar console. */
-    void logResponse(const String& jsonResponse, bool success);
+    /** Log the JSON response for display in the status bar console.
+     *  @param inputInteractions  The original input interactions array (for display only)
+     *  @param jsonResponse       The full JSON response string
+     *  @param success            Whether the overall operation succeeded
+     */
+    void logResponse(const var& inputInteractions, const String& jsonResponse, bool success);
     
     /** Get the test window (for internal use). */
     InteractionTestWindow* getTestWindow() { return window.get(); }

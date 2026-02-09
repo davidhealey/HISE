@@ -26,15 +26,23 @@
 - set the green indicator to match the error state (so if a script error occurs, make it red)
 - append the initial input list. so log window only shows: input list -> console log or error per run.
 - test popupment properly - panels, right click, etc!
-- add MIDI event logic!
 - add a simple replay button
 - make a comprehensive guide for the MCP server 
 - add get screenshot with downscaling & cropping. remove entire old screenshot endpoint
 - add autoscroll
-- add autodump for screenshots, use projectfolder/Images/screenshots as default...
-- record audio output too! make spectrogram with downsampling endpoint
-- design a system that organizes this into unit tests that the user can execute!
 - add subcomponent resolving to allow more complex components to work (eg. Preset browser or slider packs).
+
+## big feature: project-based testing system! 
+
+- record (!) user interaction with event filtering & thinning
+- record audio output too! make spectrogram with downsampling endpoint
+- use profiling toolkit
+- add MIDI event logic!
+- record audio
+- store in projectfolder/Tests
+- check with scriptnode test system
+- add autodump for screenshots, use projectfolder/Images/screenshots as default...
+- add embedded tool in HISE that replicates my current debug script.
 
 */
 
@@ -223,6 +231,11 @@ void InteractionTestWindow::StatusBar::onSequenceStarted(int total, int estimate
     currentAction = "Starting...";
     clearScreenshots();
     startTimerHz(30);
+    
+    // Disable log button during sequence to prevent accidental clicks
+    if (logButton != nullptr)
+        logButton->setEnabled(false);
+    
     repaint();
 }
 
@@ -252,6 +265,11 @@ void InteractionTestWindow::StatusBar::onSequenceCompleted(bool success, const S
     currentAction = success ? "Complete" : error;
     progress = 1.0;
     stopTimer();
+    
+    // Re-enable log button after sequence completes
+    if (logButton != nullptr)
+        logButton->setEnabled(true);
+    
     repaint();
 }
 
@@ -346,18 +364,77 @@ void InteractionTestWindow::StatusBar::clearScreenshots()
     capturedScreenshots.clear();
 }
 
-void InteractionTestWindow::StatusBar::appendToLog(const String& json, bool success)
+void InteractionTestWindow::StatusBar::appendToLog(const var& inputInteractions, const String& jsonResponse, bool success)
 {
-    String separator = "\n// === " + Time::getCurrentTime().toString(true, true) + 
-                       (success ? " [SUCCESS]" : " [FAILED]") + " ===\n\n";
+    String text;
     
-    logDocument.insertText(logDocument.getNumCharacters(), separator + json + "\n");
+    // Header with timestamp and status
+    text << "\n// === " << Time::getCurrentTime().toString(true, true)
+         << (success ? " [SUCCESS]" : " [FAILED]") << " ===\n\n";
+    
+    // Input section - compact JSON format
+    text << "// Input:\n";
+    text << JSON::toString(inputInteractions, false) << "\n\n";
+    
+    // Parse response to extract logs and errors
+    var parsed = JSON::parse(jsonResponse);
+    auto* obj = parsed.getDynamicObject();
+    
+    if (obj != nullptr)
+    {
+        // Console section (always show if not empty)
+        auto logsVar = obj->getProperty(RestApiIds::logs);
+        if (logsVar.isArray() && logsVar.size() > 0)
+        {
+            text << "// Console:\n";
+            for (int i = 0; i < logsVar.size(); i++)
+                text << logsVar[i].toString() << "\n";
+            text << "\n";
+        }
+        
+        // Errors section (only show if errors exist)
+        auto errorsVar = obj->getProperty(RestApiIds::errors);
+        if (errorsVar.isArray() && errorsVar.size() > 0)
+        {
+            text << "// Errors:\n";
+            for (int i = 0; i < errorsVar.size(); i++)
+            {
+                auto* errObj = errorsVar[i].getDynamicObject();
+                if (errObj == nullptr) continue;
+                
+                text << "[" << (i + 1) << "] " << errObj->getProperty(RestApiIds::errorMessage).toString() << "\n";
+                
+                // Show location if available
+                auto callstack = errObj->getProperty(RestApiIds::callstack);
+                if (callstack.isArray() && callstack.size() > 0)
+                {
+                    text << "    Callstack:\n";
+                    for (int j = 0; j < callstack.size(); j++)
+                        text << "      " << callstack[j].toString() << "\n";
+                }
+            }
+            text << "\n";
+        }
+    }
+    
+    logDocument.insertText(logDocument.getNumCharacters(), text);
 }
 
-void InteractionTestWindow::StatusBar::setLogToggleState(bool state)
+void InteractionTestWindow::StatusBar::setLogToggleState(bool shouldBeOn)
 {
     if (logButton != nullptr)
-        logButton->setToggleStateAndUpdateIcon(state, true);
+        logButton->setToggleStateAndUpdateIcon(shouldBeOn, true);
+}
+
+void InteractionTestWindow::StatusBar::updateFinalState(bool hasScriptErrors)
+{
+    if (hasScriptErrors && state == State::Success)
+    {
+        state = State::Failed;
+        currentAction = "Script error(s)";
+
+        SafeAsyncCall::repaint(this);
+    }
 }
 
 //==============================================================================
@@ -949,14 +1026,23 @@ void InteractionTester::resetMouseState()
     mouseState.reset();
 }
 
-void InteractionTester::logResponse(const String& jsonResponse, bool success)
+void InteractionTester::logResponse(const var& inputInteractions, const String& jsonResponse, bool success)
 {
-    if (window != nullptr)
+    if (window == nullptr) return;
+    
+    auto* sb = window->getStatusBar();
+    if (sb == nullptr) return;
+    
+    // Append formatted log entry
+    sb->appendToLog(inputInteractions, jsonResponse, success);
+    
+    // Update indicator if script errors occurred
+    var parsed = JSON::parse(jsonResponse);
+    if (auto* obj = parsed.getDynamicObject())
     {
-        if (auto* sb = window->getStatusBar())
-        {
-            sb->appendToLog(jsonResponse, success);
-        }
+        auto errorsVar = obj->getProperty(RestApiIds::errors);
+        bool hasScriptErrors = errorsVar.isArray() && errorsVar.size() > 0;
+        sb->updateFinalState(hasScriptErrors);
     }
 }
 

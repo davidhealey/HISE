@@ -1726,7 +1726,7 @@ RestServer::Response RestHelpers::handleSimulateInteractions(BackendProcessor* b
 	
 	// Log the final response (which now includes logs/errors) to the interaction tester's console
 	if (auto* t = bp->getInteractionTester())
-		t->logResponse(finalResponse.body, success);
+		t->logResponse(interactionsVar, finalResponse.body, success);
 	
 	return finalResponse;
 }
