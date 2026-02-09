@@ -91,6 +91,14 @@ public:
         testDispatcherAbortsOnHiddenComponent();
         testDispatcherLogsCorrectPixelPosition();
         testDispatcherClickNotAtWindowCenter();
+        
+        // SelectMenuItem tests
+        testSelectMenuItemFindsMatch();
+        testSelectMenuItemFuzzyMatch();
+        testSelectMenuItemNoMenuOpen();
+        testSelectMenuItemNoMatch();
+        testSelectMenuItemUpdatesLastSelected();
+        testSelectMenuItemAnimatesMove();
     }
     
 private:
@@ -454,8 +462,8 @@ private:
         Array<var> log;
         
         // Move from top-left (0.0, 0.0) to bottom-right (1.0, 1.0)
-        // Panel1 is 100x100 at position (100, 100)
-        // So from = (100, 100) and to = (200, 200) in pixels
+        // Panel1 is 200x200 at position (450, 50) per setupDefaultMockComponents
+        // So from = (450, 50) and to = (650, 250) in pixels
         Array<Interaction> interactions;
         interactions.add(makeMove("Panel1", 0, {0.0f, 0.0f}, {1.0f, 1.0f}, 100));
         
@@ -463,7 +471,7 @@ private:
         dispatcher.execute(interactions, exec, log);
         
         // Get all mouseMove events
-        Array<LogEntry*> moves;
+        Array<TestExecutor::LogEntry*> moves;
         for (auto& entry : exec.log)
         {
             if (entry.type == "mouseMove")
@@ -474,25 +482,25 @@ private:
         
         if (moves.size() >= 2)
         {
-            auto& firstMove = *moves.getFirst();
-            auto& lastMove = *moves.getLast();
+            auto* firstMove = moves.getFirst();
+            auto* lastMove = moves.getLast();
             
-            // First move should be near the 'from' position (100, 100)
-            // Last move should be near the 'to' position (200, 200)
-            expect(firstMove.pixelPos.x < lastMove.pixelPos.x,
-                   "Move should progress left-to-right: first.x=" + String(firstMove.pixelPos.x) +
-                   " should be < last.x=" + String(lastMove.pixelPos.x));
+            // First move should be near the 'from' position (450, 50)
+            // Last move should be near the 'to' position (650, 250)
+            expect(firstMove->pixelPos.x < lastMove->pixelPos.x,
+                   "Move should progress left-to-right: first.x=" + String(firstMove->pixelPos.x) +
+                   " should be < last.x=" + String(lastMove->pixelPos.x));
             
-            expect(firstMove.pixelPos.y < lastMove.pixelPos.y,
-                   "Move should progress top-to-bottom: first.y=" + String(firstMove.pixelPos.y) +
-                   " should be < last.y=" + String(lastMove.pixelPos.y));
+            expect(firstMove->pixelPos.y < lastMove->pixelPos.y,
+                   "Move should progress top-to-bottom: first.y=" + String(firstMove->pixelPos.y) +
+                   " should be < last.y=" + String(lastMove->pixelPos.y));
             
-            // Verify approximate positions (Panel1 is at 100,100 with size 100x100)
-            // from (0,0) -> pixel (100, 100), to (1,1) -> pixel (200, 200)
-            expect(firstMove.pixelPos.x >= 100 && firstMove.pixelPos.x <= 120,
-                   "First move X should be near 100, got " + String(firstMove.pixelPos.x));
-            expect(lastMove.pixelPos.x >= 180 && lastMove.pixelPos.x <= 200,
-                   "Last move X should be near 200, got " + String(lastMove.pixelPos.x));
+            // Verify approximate positions (Panel1 is at 450,50 with size 200x200)
+            // from (0,0) -> pixel (450, 50), to (1,1) -> pixel (650, 250)
+            expect(firstMove->pixelPos.x >= 450 && firstMove->pixelPos.x <= 470,
+                   "First move X should be near 450, got " + String(firstMove->pixelPos.x));
+            expect(lastMove->pixelPos.x >= 630 && lastMove->pixelPos.x <= 650,
+                   "Last move X should be near 650, got " + String(lastMove->pixelPos.x));
         }
     }
     
@@ -647,7 +655,7 @@ private:
                "mouseDown should be at start pixel X=350, got " + String(down->pixelPos.x));
         
         // Find mouseUp (last event)
-        auto& up = exec.log[exec.log.size() - 1];
+        const auto& up = exec.log[exec.log.size() - 1];
         expect(up.type == "mouseUp", "Last event should be mouseUp");
         expect(up.pixelPos.x == 400, 
                "mouseUp should be at end pixel X=400, got " + String(up.pixelPos.x));
@@ -1382,6 +1390,194 @@ private:
         expect(exec.log[0].pixelPos.y == 50, 
                "Y should be 50 (center of button), not window center. Got " + 
                String(exec.log[0].pixelPos.y));
+    }
+    
+    //==========================================================================
+    // SelectMenuItem tests
+    //==========================================================================
+    
+    void testSelectMenuItemFindsMatch()
+    {
+        beginTest("SelectMenuItem: finds exact match");
+        
+        TestExecutor exec;
+        setupDefaultMockComponents(exec);
+        InteractionDispatcher dispatcher;
+        Array<var> log;
+        
+        // Set up mock menu items
+        exec.addMockMenuItem("Option A", 1, {100, 100, 150, 25});
+        exec.addMockMenuItem("Option B", 2, {100, 125, 150, 25});
+        exec.addMockMenuItem("Option C", 3, {100, 150, 150, 25});
+        
+        // Set cursor position (simulates where we are after clicking a combo box)
+        exec.cursorPosition = {50, 50};
+        
+        Array<Interaction> interactions;
+        interactions.add(makeSelectMenuItem("Option B", 0, 100));
+        
+        exec.startTiming();
+        auto result = dispatcher.execute(interactions, exec, log);
+        
+        expect(result.result.wasOk(), "Should succeed");
+        
+        auto selected = dispatcher.getLastSelectedMenuItem();
+        expect(selected.wasSelected, "Should have selected an item");
+        expect(selected.text == "Option B", "Should match 'Option B', got: " + selected.text);
+        expect(selected.itemId == 2, "Item ID should be 2");
+    }
+    
+    void testSelectMenuItemFuzzyMatch()
+    {
+        beginTest("SelectMenuItem: fuzzy matching works");
+        
+        TestExecutor exec;
+        setupDefaultMockComponents(exec);
+        InteractionDispatcher dispatcher;
+        Array<var> log;
+        
+        exec.addMockMenuItem("Save File", 1, {100, 100, 150, 25});
+        exec.addMockMenuItem("Save As...", 2, {100, 125, 150, 25});
+        exec.addMockMenuItem("Export", 3, {100, 150, 150, 25});
+        
+        exec.cursorPosition = {50, 50};
+        
+        Array<Interaction> interactions;
+        // Typo in "Save As" - should still match via fuzzy search
+        interactions.add(makeSelectMenuItem("Save As", 0, 100));
+        
+        exec.startTiming();
+        auto result = dispatcher.execute(interactions, exec, log);
+        
+        expect(result.result.wasOk(), "Should succeed with fuzzy match");
+        
+        auto selected = dispatcher.getLastSelectedMenuItem();
+        expect(selected.wasSelected, "Should have selected an item");
+        expect(selected.text == "Save As...", "Should fuzzy match 'Save As...'");
+    }
+    
+    void testSelectMenuItemNoMenuOpen()
+    {
+        beginTest("SelectMenuItem: fails when no menu open");
+        
+        TestExecutor exec;
+        setupDefaultMockComponents(exec);
+        InteractionDispatcher dispatcher;
+        Array<var> log;
+        
+        // No mock menu items added - simulates no popup menu open
+        
+        Array<Interaction> interactions;
+        interactions.add(makeSelectMenuItem("Option B", 0, 100));
+        
+        exec.startTiming();
+        auto result = dispatcher.execute(interactions, exec, log);
+        
+        expect(result.result.failed(), "Should fail when no menu is open");
+        expect(result.result.getErrorMessage().containsIgnoreCase("no popup menu"),
+               "Error should mention no popup menu: " + result.result.getErrorMessage());
+    }
+    
+    void testSelectMenuItemNoMatch()
+    {
+        beginTest("SelectMenuItem: fails with helpful error when no match");
+        
+        TestExecutor exec;
+        setupDefaultMockComponents(exec);
+        InteractionDispatcher dispatcher;
+        Array<var> log;
+        
+        exec.addMockMenuItem("Cut", 1, {100, 100, 150, 25});
+        exec.addMockMenuItem("Copy", 2, {100, 125, 150, 25});
+        exec.addMockMenuItem("Paste", 3, {100, 150, 150, 25});
+        
+        Array<Interaction> interactions;
+        interactions.add(makeSelectMenuItem("Delete", 0, 100));
+        
+        exec.startTiming();
+        auto result = dispatcher.execute(interactions, exec, log);
+        
+        expect(result.result.failed(), "Should fail when no match found");
+        expect(result.result.getErrorMessage().containsIgnoreCase("Delete"),
+               "Error should mention the search term");
+        expect(result.result.getErrorMessage().containsIgnoreCase("not found"),
+               "Error should mention 'not found'");
+    }
+    
+    void testSelectMenuItemUpdatesLastSelected()
+    {
+        beginTest("SelectMenuItem: updates lastSelectedMenuItem info");
+        
+        TestExecutor exec;
+        setupDefaultMockComponents(exec);
+        InteractionDispatcher dispatcher;
+        Array<var> log;
+        
+        exec.addMockMenuItem("First Item", 10, {100, 100, 150, 25});
+        exec.addMockMenuItem("Second Item", 20, {100, 125, 150, 25});
+        
+        exec.cursorPosition = {50, 50};
+        
+        Array<Interaction> interactions;
+        interactions.add(makeSelectMenuItem("Second Item", 0, 100));
+        
+        exec.startTiming();
+        dispatcher.execute(interactions, exec, log);
+        
+        auto selected = dispatcher.getLastSelectedMenuItem();
+        expectEquals(selected.text, String("Second Item"));
+        expectEquals(selected.itemId, 20);
+        expect(selected.wasSelected, "wasSelected should be true");
+    }
+    
+    void testSelectMenuItemAnimatesMove()
+    {
+        beginTest("SelectMenuItem: generates mouse move events");
+        
+        TestExecutor exec;
+        setupDefaultMockComponents(exec);
+        InteractionDispatcher dispatcher;
+        Array<var> log;
+        
+        exec.addMockMenuItem("Target Item", 1, {100, 100, 150, 25});
+        exec.cursorPosition = {50, 50};
+        
+        Array<Interaction> interactions;
+        interactions.add(makeSelectMenuItem("Target Item", 0, 200));  // 200ms duration
+        
+        exec.startTiming();
+        dispatcher.execute(interactions, exec, log);
+        
+        // Should have multiple mouse moves followed by down/up
+        int moveCount = 0;
+        bool hasDown = false;
+        bool hasUp = false;
+        
+        for (const auto& entry : exec.log)
+        {
+            if (entry.type == "mouseMove") moveCount++;
+            if (entry.type == "mouseDown") hasDown = true;
+            if (entry.type == "mouseUp") hasUp = true;
+        }
+        
+        expect(moveCount > 1, "Should have multiple mouse move events, got " + String(moveCount));
+        expect(hasDown, "Should have mouseDown");
+        expect(hasUp, "Should have mouseUp");
+    }
+    
+    //==========================================================================
+    // Helper to create SelectMenuItem interaction
+    //==========================================================================
+    
+    Interaction makeSelectMenuItem(const String& text, int timestamp, int duration = 500)
+    {
+        Interaction i;
+        i.isMidi = false;
+        i.mouse.type = MouseInteraction::Type::SelectMenuItem;
+        i.mouse.menuItemText = text;
+        i.mouse.timestampMs = timestamp;
+        i.mouse.durationMs = duration;
+        return i;
     }
 };
 

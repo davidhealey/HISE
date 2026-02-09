@@ -180,10 +180,12 @@ InteractionParser::ParseResult InteractionParser::parseMouseInteraction(
         mouse.type = MouseInteraction::Type::Exit;
     else if (type == "screenshot")
         mouse.type = MouseInteraction::Type::Screenshot;
+    else if (type == "selectmenuitem")
+        mouse.type = MouseInteraction::Type::SelectMenuItem;
     else
     {
         return ParseResult::fail(formatError("Unknown interaction type '" + type + 
-            "'. Valid types: click, doubleClick, drag, hover, move, exit, screenshot, midi", index, "type"));
+            "'. Valid types: click, doubleClick, drag, hover, move, exit, screenshot, selectMenuItem, midi", index, "type"));
     }
     
     // Screenshot type has different required fields
@@ -239,7 +241,65 @@ InteractionParser::ParseResult InteractionParser::parseMouseInteraction(
         return ParseResult::ok();
     }
     
-    // Parse target (required for all mouse events except screenshot)
+    // SelectMenuItem type has different required fields
+    if (mouse.type == MouseInteraction::Type::SelectMenuItem)
+    {
+        // Parse text (required for selectMenuItem)
+        if (!obj.hasProperty("text"))
+        {
+            return ParseResult::fail(formatError("Missing required field 'text' for selectMenuItem", index));
+        }
+        
+        auto textVar = obj["text"];
+        if (!textVar.isString())
+        {
+            return ParseResult::fail(formatError("Field 'text' must be a string", index, "text"));
+        }
+        
+        mouse.menuItemText = textVar.toString();
+        
+        if (mouse.menuItemText.isEmpty())
+        {
+            return ParseResult::fail(formatError("Field 'text' cannot be empty", index, "text"));
+        }
+        
+        // Parse timestamp (required)
+        if (!obj.hasProperty("timestamp"))
+        {
+            return ParseResult::fail(formatError("Missing required field 'timestamp'", index));
+        }
+        
+        int timestamp = (int)obj["timestamp"];
+        if (timestamp < 0)
+        {
+            return ParseResult::fail(formatError("Field 'timestamp' cannot be negative (got " + 
+                String(timestamp) + ")", index, "timestamp"));
+        }
+        mouse.timestampMs = timestamp;
+        
+        // Parse duration (optional, defaults to 500ms for menu item selection animation)
+        mouse.durationMs = 500;
+        if (obj.hasProperty("duration"))
+        {
+            int duration = (int)obj["duration"];
+            if (duration < 0)
+            {
+                return ParseResult::fail(formatError("Field 'duration' cannot be negative (got " + 
+                    String(duration) + ")", index, "duration"));
+            }
+            if (duration > MaxDurationMs)
+            {
+                return ParseResult::fail(formatError("Field 'duration' exceeds maximum of " + 
+                    String(MaxDurationMs) + "ms (got " + String(duration) + "ms)", index, "duration"));
+            }
+            mouse.durationMs = duration;
+        }
+        
+        // SelectMenuItem doesn't need target or position fields
+        return ParseResult::ok();
+    }
+    
+    // Parse target (required for all mouse events except screenshot and selectMenuItem)
     if (!obj.hasProperty("target"))
     {
         return ParseResult::fail(formatError("Missing required field 'target' for mouse interaction", index));
@@ -704,7 +764,6 @@ InteractionParser::ParseResult InteractionParser::checkMouseOverlaps(
         if (interactions[i].isMidi)
             continue;  // MIDI events don't conflict with mouse
         
-        int startTimeI = interactions[i].getTimestamp();
         int endTimeI = interactions[i].getEndTime();
         
         for (int j = i + 1; j < interactions.size(); j++)
@@ -828,13 +887,14 @@ String InteractionParser::getTypeName(MouseInteraction::Type type)
 {
     switch (type)
     {
-        case MouseInteraction::Type::Hover:       return "hover";
-        case MouseInteraction::Type::Move:        return "move";
-        case MouseInteraction::Type::Click:       return "click";
-        case MouseInteraction::Type::DoubleClick: return "doubleClick";
-        case MouseInteraction::Type::Drag:        return "drag";
-        case MouseInteraction::Type::Exit:        return "exit";
-        case MouseInteraction::Type::Screenshot:  return "screenshot";
+        case MouseInteraction::Type::Hover:          return "hover";
+        case MouseInteraction::Type::Move:           return "move";
+        case MouseInteraction::Type::Click:          return "click";
+        case MouseInteraction::Type::DoubleClick:    return "doubleClick";
+        case MouseInteraction::Type::Drag:           return "drag";
+        case MouseInteraction::Type::Exit:           return "exit";
+        case MouseInteraction::Type::Screenshot:     return "screenshot";
+        case MouseInteraction::Type::SelectMenuItem: return "selectMenuItem";
     }
     return "unknown";
 }

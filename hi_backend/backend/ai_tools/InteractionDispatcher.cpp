@@ -34,41 +34,33 @@ InteractionDispatcher::ExecutionResult InteractionDispatcher::execute(
 {
     jassert(MessageManager::getInstance()->isThisTheMessageThread());
     
-    startTimeMs = Time::getMillisecondCounterHiRes();
     timeoutMs = timeout;
-    lastError = {};  // Reset error state
+    lastError = {};
+    lastSelectedMenuItem = {};
     
     int completedCount = 0;
     
-    // Start synthetic input mode immediately (no delay)
+    // Start synthetic input mode
     executor.executeSyntheticModeStart(0);
     
-    // Calculate the last event timestamp (after adding window init delay)
-    int lastEventTimestamp = 0;
-    for (const auto& interaction : interactions)
+    // Wait until executor is ready to receive events
+    int readyDelayMs = executor.waitUntilReady();
+    if (readyDelayMs < 0)
     {
-        int adjustedTimestamp = interaction.getTimestamp() + WINDOW_INIT_DELAY_MS;
-        
-        // For drag/hover/move, also consider duration
-        if (!interaction.isMidi)
-        {
-            adjustedTimestamp += interaction.mouse.durationMs;
-        }
-        
-        lastEventTimestamp = jmax(lastEventTimestamp, adjustedTimestamp);
+        executor.executeSyntheticModeEnd(0);
+        return ExecutionResult::fail("UI failed to become ready within timeout", 0, 0);
     }
+    
+    // Start timing AFTER ready - user timestamps are relative to ready state
+    startTimeMs = Time::getMillisecondCounterHiRes();
     
     for (const auto& interaction : interactions)
     {
-        // Add window init delay to all user event timestamps
-        int adjustedTimestamp = interaction.getTimestamp() + WINDOW_INIT_DELAY_MS;
-        
-        // Wait until this interaction's adjusted timestamp
-        if (!waitUntilTimestamp(adjustedTimestamp, executor))
+        // Wait until this interaction's timestamp (no adjustment needed)
+        if (!waitUntilTimestamp(interaction.getTimestamp(), executor))
         {
-            // Aborted due to timeout or human intervention
             String error = checkAbortConditions(executor);
-            executor.executeSyntheticModeEnd(getElapsedMs());  // Cleanup on abort
+            executor.executeSyntheticModeEnd(getElapsedMs());
             return ExecutionResult::fail(error, getElapsedMs(), completedCount);
         }
         
@@ -76,7 +68,7 @@ InteractionDispatcher::ExecutionResult InteractionDispatcher::execute(
         String error = checkAbortConditions(executor);
         if (error.isNotEmpty())
         {
-            executor.executeSyntheticModeEnd(getElapsedMs());  // Cleanup on abort
+            executor.executeSyntheticModeEnd(getElapsedMs());
             return ExecutionResult::fail(error, getElapsedMs(), completedCount);
         }
         
@@ -90,26 +82,23 @@ InteractionDispatcher::ExecutionResult InteractionDispatcher::execute(
         {
             using Type = InteractionParser::MouseInteraction::Type;
             
-            // Create a copy with adjusted timestamp for execution
-            auto adjustedMouse = interaction.mouse;
-            adjustedMouse.timestampMs += WINDOW_INIT_DELAY_MS;
-            
             switch (interaction.mouse.type)
             {
-                case Type::Click:       executeClick(adjustedMouse, executor, executedLog); break;
-                case Type::DoubleClick: executeDoubleClick(adjustedMouse, executor, executedLog); break;
-                case Type::Drag:        executeDrag(adjustedMouse, executor, executedLog); break;
-                case Type::Hover:       executeHover(adjustedMouse, executor, executedLog); break;
-                case Type::Move:        executeMove(adjustedMouse, executor, executedLog); break;
-                case Type::Exit:        executeExit(adjustedMouse, executor, executedLog); break;
-                case Type::Screenshot:  executeScreenshot(adjustedMouse, executor, executedLog); break;
+                case Type::Click:       executeClick(interaction.mouse, executor, executedLog); break;
+                case Type::DoubleClick: executeDoubleClick(interaction.mouse, executor, executedLog); break;
+                case Type::Drag:        executeDrag(interaction.mouse, executor, executedLog); break;
+                case Type::Hover:       executeHover(interaction.mouse, executor, executedLog); break;
+                case Type::Move:        executeMove(interaction.mouse, executor, executedLog); break;
+                case Type::Exit:        executeExit(interaction.mouse, executor, executedLog); break;
+                case Type::Screenshot:  executeScreenshot(interaction.mouse, executor, executedLog); break;
+                case Type::SelectMenuItem: executeSelectMenuItem(interaction.mouse, executor, executedLog); break;
             }
         }
         
         // Check if resolution failed (critical error - hallucinated component ID)
         if (lastError.isNotEmpty())
         {
-            executor.executeSyntheticModeEnd(getElapsedMs());  // Cleanup on error
+            executor.executeSyntheticModeEnd(getElapsedMs());
             return ExecutionResult::fail(lastError, getElapsedMs(), completedCount);
         }
         
@@ -119,19 +108,12 @@ InteractionDispatcher::ExecutionResult InteractionDispatcher::execute(
         error = checkAbortConditions(executor);
         if (error.isNotEmpty())
         {
-            executor.executeSyntheticModeEnd(getElapsedMs());  // Cleanup on abort
+            executor.executeSyntheticModeEnd(getElapsedMs());
             return ExecutionResult::fail(error, getElapsedMs(), completedCount);
         }
     }
     
-    // Wait for synthetic mode end delay, then end synthetic mode
-    // BUT: If a modal component is open (e.g., user right-clicked and opened a context menu),
-    // don't wait - the modal event loop would trap us. Just end synthetic mode immediately.
-    int syntheticModeEndTimestamp = lastEventTimestamp + SYNTHETIC_MODE_END_DELAY_MS;
-    if (Component::getNumCurrentlyModalComponents() == 0)
-    {
-        waitUntilTimestamp(syntheticModeEndTimestamp, executor);
-    }
+    // End synthetic mode (RealExecutor handles its own cleanup delay internally)
     executor.executeSyntheticModeEnd(getElapsedMs());
     
     return ExecutionResult::ok(getElapsedMs(), completedCount);
@@ -422,6 +404,129 @@ void InteractionDispatcher::executeScreenshot(const InteractionParser::MouseInte
                                      mouse.timestampMs, actualTime));
 }
 
+void InteractionDispatcher::executeSelectMenuItem(const InteractionParser::MouseInteraction& mouse, 
+                                                   Executor& exec, Array<var>& log)
+{
+    // Reset last selected menu item
+    lastSelectedMenuItem = {};
+    
+    // Get current cursor position (should be at the component that opened the menu)
+    auto startPosition = exec.getCurrentCursorPosition();
+    
+    // Get all visible menu items from open popup menus
+    auto menuItems = exec.getVisibleMenuItems();
+    
+    if (menuItems.isEmpty())
+    {
+        lastError = "No popup menu is currently open";
+        return;
+    }
+    
+    // Build StringArray of item texts for matching
+    StringArray itemTexts;
+    for (const auto& item : menuItems)
+        itemTexts.add(item.text);
+    
+    // Find best match (sorted by Levenshtein distance, first element is best)
+    auto matches = FuzzySearcher::searchForIndexes(mouse.menuItemText, itemTexts, 0.4, true);
+    int matchedIndex = matches.isEmpty() ? -1 : matches.getFirst();
+    
+    if (matchedIndex < 0)
+    {
+        // No match found - provide helpful error with suggestion
+        String availableItems;
+        for (int i = 0; i < jmin(5, itemTexts.size()); i++)
+        {
+            if (i > 0) availableItems += ", ";
+            availableItems += "'" + itemTexts[i] + "'";
+        }
+        if (itemTexts.size() > 5)
+            availableItems += ", ... (" + String(itemTexts.size() - 5) + " more)";
+        
+        String suggestion = FuzzySearcher::suggestCorrection(mouse.menuItemText, itemTexts, 0.3);
+        
+        lastError = "Menu item '" + mouse.menuItemText + "' not found.";
+        if (suggestion.isNotEmpty())
+            lastError += " Did you mean '" + suggestion + "'?";
+        lastError += " Available: " + availableItems;
+        return;
+    }
+    auto& matchedItem = menuItems.getReference(matchedIndex);
+    
+    // Store the matched item info for response
+    lastSelectedMenuItem.text = matchedItem.text;
+    lastSelectedMenuItem.itemId = matchedItem.itemId;
+    lastSelectedMenuItem.wasSelected = true;
+    
+    // Calculate target position (center of menu item)
+    auto targetPosition = matchedItem.screenBounds.getCentre();
+    
+    // Animate mouse move from current position to menu item
+    int duration = mouse.durationMs;
+    int numSteps = jmax(1, duration / DRAG_STEP_INTERVAL_MS);
+    int startTimestamp = mouse.timestampMs;
+    
+    auto mods = buildModifiers(mouse);
+    
+    for (int i = 0; i <= numSteps; i++)
+    {
+        float t = (float)i / (float)numSteps;
+        Point<int> pixelPos = startPosition + ((targetPosition - startPosition).toFloat() * t).toInt();
+        int stepTimestamp = startTimestamp + (duration * i / numSteps);
+        
+        if (i > 0)
+            waitUntilTimestamp(stepTimestamp, exec);
+        
+        int actualTime = getElapsedMs();
+        exec.executeMouseMove(pixelPos, "MenuItem:" + matchedItem.text, mods, stepTimestamp);
+        
+        // Log the move
+        DynamicObject::Ptr moveObj = new DynamicObject();
+        moveObj->setProperty("type", "mouseMove");
+        moveObj->setProperty("menuItem", matchedItem.text);
+        moveObj->setProperty("x", pixelPos.x);
+        moveObj->setProperty("y", pixelPos.y);
+        moveObj->setProperty("timestamp", stepTimestamp);
+        moveObj->setProperty("actualTimestamp", actualTime);
+        log.add(var(moveObj.get()));
+    }
+    
+    // Click on the menu item
+    int clickTimestamp = startTimestamp + duration;
+    waitUntilTimestamp(clickTimestamp, exec);
+    
+    int actualTime = getElapsedMs();
+    exec.executeMouseDown(targetPosition, "MenuItem:" + matchedItem.text, mods, false, clickTimestamp);
+    
+    // Log mouseDown
+    DynamicObject::Ptr downObj = new DynamicObject();
+    downObj->setProperty("type", "mouseDown");
+    downObj->setProperty("menuItem", matchedItem.text);
+    downObj->setProperty("menuItemId", matchedItem.itemId);
+    downObj->setProperty("x", targetPosition.x);
+    downObj->setProperty("y", targetPosition.y);
+    downObj->setProperty("timestamp", clickTimestamp);
+    downObj->setProperty("actualTimestamp", actualTime);
+    log.add(var(downObj.get()));
+    
+    // Small delay before mouseUp
+    waitUntilTimestamp(clickTimestamp + 20, exec);
+    
+    int upTime = getElapsedMs();
+    exec.executeMouseUp(targetPosition, "MenuItem:" + matchedItem.text, mods, false, clickTimestamp);
+    
+    // Log mouseUp
+    DynamicObject::Ptr upObj = new DynamicObject();
+    upObj->setProperty("type", "mouseUp");
+    upObj->setProperty("menuItem", matchedItem.text);
+    upObj->setProperty("menuItemId", matchedItem.itemId);
+    upObj->setProperty("x", targetPosition.x);
+    upObj->setProperty("y", targetPosition.y);
+    upObj->setProperty("timestamp", clickTimestamp);
+    upObj->setProperty("actualTimestamp", upTime);
+    log.add(var(upObj.get()));
+}
+
 //==============================================================================
 // Helper methods
 //==============================================================================
@@ -480,6 +585,8 @@ void TestExecutor::reset()
 {
     log.clear();
     mockComponents.clear();
+    mockMenuItems.clear();
+    cursorPosition = {0, 0};
     startTimeMs = 0;
     simulatedInterventionAtMs = -1;
     interventionTriggered = false;
@@ -494,6 +601,20 @@ void TestExecutor::addMockComponent(const String& id, Rectangle<int> bounds, boo
 void TestExecutor::clearMockComponents()
 {
     mockComponents.clear();
+}
+
+void TestExecutor::addMockMenuItem(const String& text, int itemId, Rectangle<int> bounds)
+{
+    PopupMenu::VisibleMenuItem item;
+    item.text = text;
+    item.itemId = itemId;
+    item.screenBounds = bounds;
+    mockMenuItems.add(item);
+}
+
+void TestExecutor::clearMockMenuItems()
+{
+    mockMenuItems.clear();
 }
 
 InteractionDispatcher::Executor::ResolveResult TestExecutor::resolveTarget(
@@ -546,6 +667,7 @@ void TestExecutor::executeMouseDown(Point<int> pixelPos, const String& target,
                                      ModifierKeys mods, bool rightClick, int timestampMs)
 {
     checkIntervention(getElapsedMs());
+    cursorPosition = pixelPos;  // Track cursor position
     
     LogEntry entry;
     entry.type = "mouseDown";
@@ -562,6 +684,7 @@ void TestExecutor::executeMouseUp(Point<int> pixelPos, const String& target,
                                    ModifierKeys mods, bool rightClick, int timestampMs)
 {
     checkIntervention(getElapsedMs());
+    cursorPosition = pixelPos;  // Track cursor position
     
     LogEntry entry;
     entry.type = "mouseUp";
@@ -578,6 +701,7 @@ void TestExecutor::executeMouseMove(Point<int> pixelPos, const String& target,
                                      ModifierKeys mods, int timestampMs)
 {
     checkIntervention(getElapsedMs());
+    cursorPosition = pixelPos;  // Track cursor position
     
     LogEntry entry;
     entry.type = "mouseMove";

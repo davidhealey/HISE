@@ -76,6 +76,25 @@ public:
         virtual void executeSyntheticModeStart(int timestampMs) = 0;
         virtual void executeSyntheticModeEnd(int timestampMs) = 0;
         
+        //======================================================================
+        // Menu item selection support
+        
+        /** Get current cursor position in content coordinates. */
+        virtual Point<int> getCurrentCursorPosition() const = 0;
+        
+        /** Get all currently visible menu items from open popup menus.
+         *  Uses PopupMenu::VisibleMenuItem from JUCE.
+         *  @returns Array of visible menu items, empty if no menu is open
+         */
+        virtual Array<PopupMenu::VisibleMenuItem> getVisibleMenuItems() const = 0;
+        
+        /** Wait until the executor is ready to process events.
+         *  TestExecutor returns 0 (immediately ready).
+         *  RealExecutor waits for UI paint + buffer.
+         *  @returns The number of milliseconds waited, or -1 if timed out.
+         */
+        virtual int waitUntilReady() = 0;
+        
         // Human intervention detection
         virtual bool wasHumanInterventionDetected() const = 0;
         virtual int getInterventionTimestamp() const = 0;
@@ -126,13 +145,26 @@ public:
     
     //==============================================================================
     static constexpr int DRAG_STEP_INTERVAL_MS = 10;  // Mouse move every 10ms during drag
-    static constexpr int WINDOW_INIT_DELAY_MS = 500;  // Delay before first user event to allow window init
-    static constexpr int SYNTHETIC_MODE_END_DELAY_MS = 200;  // Delay after last event before ending synthetic mode
+    
+    //==============================================================================
+    /** Information about the selected menu item (from selectMenuItem interaction). */
+    struct SelectedMenuItemInfo
+    {
+        String text;
+        int itemId = 0;
+        bool wasSelected = false;
+    };
+    
+    /** Get info about the last selected menu item.
+     *  Only valid after executing a selectMenuItem interaction.
+     */
+    SelectedMenuItemInfo getLastSelectedMenuItem() const { return lastSelectedMenuItem; }
     
 private:
     int64 startTimeMs = 0;
     int timeoutMs = 20000;
     String lastError;  // Set by execute methods if resolution fails
+    SelectedMenuItemInfo lastSelectedMenuItem;  // Set by executeSelectMenuItem on success
     
     int getElapsedMs() const;
     bool waitUntilTimestamp(int targetMs, Executor& executor);
@@ -148,6 +180,7 @@ private:
     void executeMove(const InteractionParser::MouseInteraction& mouse, Executor& exec, Array<var>& log);
     void executeExit(const InteractionParser::MouseInteraction& mouse, Executor& exec, Array<var>& log);
     void executeScreenshot(const InteractionParser::MouseInteraction& mouse, Executor& exec, Array<var>& log);
+    void executeSelectMenuItem(const InteractionParser::MouseInteraction& mouse, Executor& exec, Array<var>& log);
     
     // Build modifier keys from MouseInteraction
     ModifierKeys buildModifiers(const InteractionParser::MouseInteraction& mouse) const;
@@ -191,6 +224,10 @@ public:
     std::map<String, MockComponent> mockComponents;
     int64 startTimeMs = 0;
     
+    // Menu item selection support
+    Array<PopupMenu::VisibleMenuItem> mockMenuItems;
+    Point<int> cursorPosition{0, 0};
+    
     // Human intervention simulation
     int simulatedInterventionAtMs = -1;
     bool interventionTriggered = false;
@@ -212,6 +249,12 @@ public:
     /** Clear all mock components. */
     void clearMockComponents();
     
+    /** Add a mock menu item for testing selectMenuItem. */
+    void addMockMenuItem(const String& text, int itemId, Rectangle<int> bounds);
+    
+    /** Clear all mock menu items. */
+    void clearMockMenuItems();
+    
     //==========================================================================
     // Executor interface implementation
     
@@ -231,6 +274,11 @@ public:
     
     void executeSyntheticModeStart(int timestampMs) override { ignoreUnused(timestampMs); }
     void executeSyntheticModeEnd(int timestampMs) override { ignoreUnused(timestampMs); }
+    
+    Point<int> getCurrentCursorPosition() const override { return cursorPosition; }
+    Array<PopupMenu::VisibleMenuItem> getVisibleMenuItems() const override { return mockMenuItems; }
+    
+    int waitUntilReady() override { return 0; }  // TestExecutor is always immediately ready
     
     bool wasHumanInterventionDetected() const override;
     int getInterventionTimestamp() const override;

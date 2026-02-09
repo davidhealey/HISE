@@ -46,7 +46,8 @@ public:
             DoubleClick,
             Drag,
             Exit,
-            Screenshot
+            Screenshot,
+            SelectMenuItem
         };
         
         Type type = Type::Click;
@@ -65,6 +66,9 @@ public:
         // Screenshot-specific fields
         String screenshotId;
         float screenshotScale = 1.0f;
+        
+        // SelectMenuItem-specific fields
+        String menuItemText;  // Text to fuzzy-match for menu item selection
     };
     
     /** MIDI interaction types */

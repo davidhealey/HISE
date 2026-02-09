@@ -54,6 +54,8 @@ void InteractionTestWindow::CursorOverlay::setPosition(Point<int> pixelPos)
 
 void InteractionTestWindow::CursorOverlay::paint(Graphics& g)
 {
+    painted = true;
+    
     // Position is already in pixels
     auto pixelPos = position.toFloat();
     
@@ -133,6 +135,10 @@ void InteractionTestWindow::RealExecutor::executeSyntheticModeStart(int timestam
 void InteractionTestWindow::RealExecutor::executeSyntheticModeEnd(int timestampMs)
 {
     ignoreUnused(timestampMs);
+    
+    // Small delay to let UI settle after interactions
+    MessageManager::getInstance()->runDispatchLoopUntil(200);
+    
     if (syntheticModeActive)
     {
         endSyntheticInputMode();
@@ -418,6 +424,76 @@ void InteractionTestWindow::RealExecutor::injectMouseEvent(Point<float> pixelPos
     }
 }
 
+Point<int> InteractionTestWindow::RealExecutor::getCurrentCursorPosition() const
+{
+    // Return the current overlay position (in content coordinates)
+    if (window != nullptr && window->getOverlay() != nullptr)
+        return window->getOverlay()->getPosition();
+    return {};
+}
+
+Array<PopupMenu::VisibleMenuItem> InteractionTestWindow::RealExecutor::getVisibleMenuItems() const
+{
+    // Get visible menu items from JUCE PopupMenu system
+    auto screenItems = PopupMenu::getVisibleMenuItems();
+    
+    // Convert screen coordinates to content-local coordinates
+    Array<PopupMenu::VisibleMenuItem> localItems;
+    
+    if (window != nullptr)
+    {
+        for (auto& item : screenItems)
+        {
+            // Convert from screen coordinates to window-local
+            auto localBounds = window->getLocalArea(nullptr, item.screenBounds);
+            
+            PopupMenu::VisibleMenuItem localItem;
+            localItem.text = item.text;
+            localItem.itemId = item.itemId;
+            localItem.screenBounds = localBounds;  // Reusing field name but contains local coords
+            localItems.add(localItem);
+        }
+    }
+    
+    return localItems;
+}
+
+int InteractionTestWindow::RealExecutor::waitUntilReady()
+{
+    constexpr int MAX_WAIT_MS = 5000;
+    constexpr int POLL_INTERVAL_MS = 10;
+    constexpr int BUFFER_MS = 100;
+    
+    auto* overlay = window->getOverlay();
+    if (overlay == nullptr)
+        return -1;
+    
+    // If already painted (window reused from previous session), we're ready immediately
+    if (overlay->hasBeenPainted())
+        return 0;
+    
+    // First time - wait for initial paint
+    overlay->repaint();
+    
+    auto startTime = Time::getMillisecondCounterHiRes();
+    
+    while (!overlay->hasBeenPainted())
+    {
+        auto elapsed = Time::getMillisecondCounterHiRes() - startTime;
+        if (elapsed > MAX_WAIT_MS)
+            return -1;  // Timeout
+        
+        MessageManager::getInstance()->runDispatchLoopUntil(POLL_INTERVAL_MS);
+    }
+    
+    // Add buffer for safety
+    MessageManager::getInstance()->runDispatchLoopUntil(BUFFER_MS);
+    
+    auto isFocused = window->hasKeyboardFocus(true);
+
+    return (int)(Time::getMillisecondCounterHiRes() - startTime);
+}
+
 //==============================================================================
 // InteractionTestWindow implementation
 
@@ -427,13 +503,10 @@ InteractionTestWindow::InteractionTestWindow(ProcessorWithScriptingContent* proc
                      DocumentWindow::closeButton,
                      true)
 {
-    context.attachTo(*this);
+    //context.attachTo(*this);
 
     setUsingNativeTitleBar(true);
     
-    setRepaintsOnMouseActivity(true);
-    startTimer(30);
-
     // Create FloatingTile with InterfacePanel content
     // This mirrors FrontendProcessorEditor structure and ensures proper parent hierarchy
     rootTile = std::make_unique<FloatingTile>(processor->getMainController_(), nullptr);
@@ -470,7 +543,7 @@ InteractionTestWindow::InteractionTestWindow(ProcessorWithScriptingContent* proc
     if (auto* display = Desktop::getInstance().getDisplays().getPrimaryDisplay())
     {
         auto displayArea = display->userArea;
-        setCentrePosition(displayArea.getCentre());
+        setCentrePosition(displayArea.getCentre().translated(1000, 0));
     }
     
     setVisible(true);
@@ -482,7 +555,7 @@ InteractionTestWindow::InteractionTestWindow(ProcessorWithScriptingContent* proc
 
 InteractionTestWindow::~InteractionTestWindow()
 {
-    context.detach();
+    //context.detach();
 
     // Clean up in correct order
     overlay = nullptr;
@@ -598,6 +671,7 @@ InteractionTester::TestResult InteractionTester::executeInteractions(const var& 
     result.interactionsCompleted = execResult.interactionsCompleted;
     result.totalElapsedMs = execResult.totalElapsedMs;
     result.screenshots = executor.getScreenshots();
+    result.selectedMenuItem = dispatcher.getLastSelectedMenuItem();
     
     return result;
 }

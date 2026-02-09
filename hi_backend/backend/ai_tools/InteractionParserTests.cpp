@@ -151,6 +151,16 @@ public:
         testErrorMessageIncludesFieldName();
         testErrorMessageIncludesActualValue();
         testErrorMessageIncludesValidRange();
+        
+        // SelectMenuItem Tests
+        testParseSelectMenuItemValid();
+        testParseSelectMenuItemWithDuration();
+        testParseSelectMenuItemMissingText();
+        testParseSelectMenuItemEmptyText();
+        testParseSelectMenuItemTextNotString();
+        testParseSelectMenuItemNegativeDuration();
+        testParseSelectMenuItemNoTargetRequired();
+        testParseSelectMenuItemSequence();
     }
     
 private:
@@ -1490,6 +1500,111 @@ private:
                result.getErrorMessage().contains("0-127") ||
                result.getErrorMessage().containsIgnoreCase("range"),
                "Error should mention valid range: " + result.getErrorMessage());
+    }
+    
+    //==============================================================================
+    // SelectMenuItem Tests
+    //==============================================================================
+    
+    void testParseSelectMenuItemValid()
+    {
+        beginTest("SelectMenuItem: Valid basic parsing");
+        
+        auto interactions = parseOrFail(R"([
+            {"type": "selectMenuItem", "text": "Option B", "timestamp": 100}
+        ])");
+        
+        expectEquals(interactions.size(), 1);
+        expect(!interactions[0].isMidi);
+        expectEquals((int)interactions[0].mouse.type, (int)MouseInteraction::Type::SelectMenuItem);
+        expectEquals(interactions[0].mouse.menuItemText, String("Option B"));
+        expectEquals(interactions[0].mouse.timestampMs, 100);
+        expectEquals(interactions[0].mouse.durationMs, 500);  // Default duration
+    }
+    
+    void testParseSelectMenuItemWithDuration()
+    {
+        beginTest("SelectMenuItem: Custom duration");
+        
+        auto interactions = parseOrFail(R"([
+            {"type": "selectMenuItem", "text": "Some Item", "timestamp": 0, "duration": 1000}
+        ])");
+        
+        expectEquals(interactions[0].mouse.durationMs, 1000);
+    }
+    
+    void testParseSelectMenuItemMissingText()
+    {
+        beginTest("SelectMenuItem: Missing 'text' field rejected");
+        
+        auto result = parseExpectingFailure(R"([
+            {"type": "selectMenuItem", "timestamp": 0}
+        ])");
+        
+        expect(result.failed(), "Should reject missing text");
+        expect(result.getErrorMessage().containsIgnoreCase("text"),
+               "Error should mention 'text': " + result.getErrorMessage());
+    }
+    
+    void testParseSelectMenuItemEmptyText()
+    {
+        beginTest("SelectMenuItem: Empty 'text' field rejected");
+        
+        auto result = parseExpectingFailure(R"([
+            {"type": "selectMenuItem", "text": "", "timestamp": 0}
+        ])");
+        
+        expect(result.failed(), "Should reject empty text");
+    }
+    
+    void testParseSelectMenuItemTextNotString()
+    {
+        beginTest("SelectMenuItem: Non-string 'text' field rejected");
+        
+        auto result = parseExpectingFailure(R"([
+            {"type": "selectMenuItem", "text": 123, "timestamp": 0}
+        ])");
+        
+        expect(result.failed(), "Should reject non-string text");
+    }
+    
+    void testParseSelectMenuItemNegativeDuration()
+    {
+        beginTest("SelectMenuItem: Negative duration rejected");
+        
+        auto result = parseExpectingFailure(R"([
+            {"type": "selectMenuItem", "text": "Item", "timestamp": 0, "duration": -100}
+        ])");
+        
+        expect(result.failed(), "Should reject negative duration");
+    }
+    
+    void testParseSelectMenuItemNoTargetRequired()
+    {
+        beginTest("SelectMenuItem: No target required");
+        
+        // SelectMenuItem should NOT require a target field (unlike most mouse events)
+        auto interactions = parseOrFail(R"([
+            {"type": "selectMenuItem", "text": "Menu Option", "timestamp": 0}
+        ])");
+        
+        expectEquals(interactions.size(), 1);
+        expect(interactions[0].mouse.targetComponentId.isEmpty(), "Target should be empty for selectMenuItem");
+    }
+    
+    void testParseSelectMenuItemSequence()
+    {
+        beginTest("SelectMenuItem: Valid in sequence with click");
+        
+        // Typical usage: click to open menu, then selectMenuItem
+        auto interactions = parseOrFail(R"([
+            {"type": "click", "target": "ComboBox1", "timestamp": 0},
+            {"type": "selectMenuItem", "text": "Option B", "timestamp": 100, "duration": 500}
+        ])");
+        
+        expectEquals(interactions.size(), 2);
+        expectEquals((int)interactions[0].mouse.type, (int)MouseInteraction::Type::Click);
+        expectEquals((int)interactions[1].mouse.type, (int)MouseInteraction::Type::SelectMenuItem);
     }
 };
 

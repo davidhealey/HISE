@@ -43,8 +43,7 @@ class BackendProcessor;
  *
  *  Window is centered on the primary display and set to always-on-top.
  */
-class InteractionTestWindow : public PopupLookAndFeel::DocumentWindowWithEmbeddedPopupMenu,
-                              public Timer
+class InteractionTestWindow : public PopupLookAndFeel::DocumentWindowWithEmbeddedPopupMenu
 {
 public:
     //==========================================================================
@@ -78,11 +77,15 @@ public:
         /** Get current position in pixels. */
         Point<int> getPosition() const { return position; }
         
+        /** Returns true if paint() has been called at least once. */
+        bool hasBeenPainted() const { return painted; }
+        
         void paint(Graphics& g) override;
         
     private:
         State state = State::Idle;
         Point<int> position{0, 0};
+        bool painted = false;
         
         Colour getColourForState() const;
         
@@ -132,6 +135,13 @@ public:
         bool wasHumanInterventionDetected() const override { return false; }
         int getInterventionTimestamp() const override { return -1; }
         
+        // Menu item selection support
+        Point<int> getCurrentCursorPosition() const override;
+        Array<PopupMenu::VisibleMenuItem> getVisibleMenuItems() const override;
+        
+        // Ready detection
+        int waitUntilReady() override;
+        
         //======================================================================
         /** Get all captured screenshots (id -> base64 PNG with data URI prefix). */
         const StringPairArray& getScreenshots() const { return screenshots; }
@@ -167,15 +177,6 @@ public:
     InteractionTestWindow(ProcessorWithScriptingContent* processor);
     ~InteractionTestWindow() override;
     
-    void timerCallback() override
-    {
-        Component::callRecursive<Component>(this, [](Component* c)
-        {
-            c->repaint();
-            return false;
-        });
-    }
-
     void closeButtonPressed() override;
     
     /** Get the ScriptContentComponent displaying the interface.
@@ -244,6 +245,9 @@ public:
         Array<var> executionLog;
         StringPairArray screenshots;  // id -> base64 PNG
         StringArray parseWarnings;
+        
+        // Menu item selection result (only valid if selectMenuItem was executed)
+        InteractionDispatcher::SelectedMenuItemInfo selectedMenuItem;
     };
     
     //==========================================================================

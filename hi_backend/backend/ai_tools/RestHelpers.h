@@ -146,6 +146,11 @@ namespace RestApiIds
     DECLARE_ID(executionLog);         // Array of executed events with timing
     DECLARE_ID(screenshots);          // Object with screenshot id -> base64 PNG data
     DECLARE_ID(parseWarnings);        // Array of non-fatal parse warnings
+    
+    // SelectMenuItem response fields
+    DECLARE_ID(selectedMenuItem);     // Object with selected menu item info
+    DECLARE_ID(text);                 // Menu item display text
+    DECLARE_ID(itemId);               // Menu item ID
 }
 
 #undef DECLARE_ID

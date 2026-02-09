@@ -1675,6 +1675,15 @@ RestServer::Response RestHelpers::handleSimulateInteractions(BackendProcessor* b
 		warnings.add(w);
 	result->setProperty(RestApiIds::parseWarnings, var(warnings));
 	
+	// Add selected menu item info if a menu item was selected
+	if (testResult.selectedMenuItem.wasSelected)
+	{
+		DynamicObject::Ptr menuItemObj = new DynamicObject();
+		menuItemObj->setProperty(RestApiIds::text, testResult.selectedMenuItem.text);
+		menuItemObj->setProperty(RestApiIds::itemId, testResult.selectedMenuItem.itemId);
+		result->setProperty(RestApiIds::selectedMenuItem, var(menuItemObj.get()));
+	}
+	
 	result->setProperty(RestApiIds::logs, Array<var>());
 	result->setProperty(RestApiIds::errors, Array<var>());
 	

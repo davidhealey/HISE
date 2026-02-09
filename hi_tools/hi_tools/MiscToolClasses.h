@@ -1808,8 +1808,9 @@ public:
 	/** Returns a string array with the results. */
 	static StringArray searchForResults(const String &word, const StringArray &wordList, double fuzzyness);
 
-	/** Returns a index array with the results for the given wordlist. */
-	static Array<int> searchForIndexes(const String &word, const StringArray &wordList, double fuzzyness);
+	/** Returns a index array with the results for the given wordlist. 
+	    If sortByScore is true, results are sorted by Levenshtein distance (best match first). */
+	static Array<int> searchForIndexes(const String &word, const StringArray &wordList, double fuzzyness, bool sortByScore = false);
 
 	static String suggestCorrection(const juce::String& wrongToken, const juce::StringArray& availableTokens, double fuzzyness = 0.3);
 
