@@ -231,6 +231,27 @@ void InteractionDispatcher::waitForDuration(int ms, InteractionExecutorBase& exe
     }
 }
 
+void InteractionDispatcher::waitWithWiggle(int ms, InteractionExecutorBase& exec)
+{
+    if (ms <= 0) return;
+    
+    auto endTime = Time::getMillisecondCounterHiRes() + ms;
+    
+    while (Time::getMillisecondCounterHiRes() < endTime)
+    {
+        if (checkAbortConditions().isNotEmpty())
+            return;
+        
+        // Wiggle mouse to keep message loop active
+        auto pos = exec.getCurrentCursorPosition();
+        exec.executeMouseMove(pos + Point<int>(1, 0), {}, getElapsedMs());
+        exec.executeMouseMove(pos, {}, getElapsedMs());
+        
+        // Pump message loop
+        MessageManager::getInstance()->runDispatchLoopUntil(5);
+    }
+}
+
 String InteractionDispatcher::checkAbortConditions() const
 {
     if (getElapsedMs() > timeoutMs)
@@ -251,7 +272,68 @@ void InteractionDispatcher::executeMoveTo(
     Array<var>& log)
 {
     // Resolve target bounds (including subtarget if specified)
+    // Retry loop: target may not be visible yet (e.g., after page transition)
     auto resolved = exec.resolveTarget(mouse.target);
+    
+    for (int attempt = 0; !resolved.success() && attempt < RESOLVE_MAX_RETRIES; ++attempt)
+    {
+        if (checkAbortConditions().isNotEmpty())
+            break;
+        
+        waitWithWiggle(RESOLVE_RETRY_DELAY_MS, exec);
+        resolved = exec.resolveTarget(mouse.target);
+    }
+    
+    // Fallback for subtargets that don't exist yet (e.g., TableEditor point created by mouseDown)
+    // Use normalized position within parent component instead
+    if (!resolved.success() && mouse.target.hasSubtarget() && mouse.position.hasFallback())
+    {
+        ComponentTargetPath parentOnly(mouse.target.componentId);
+        auto parentResolved = exec.resolveTarget(parentOnly);
+        
+        if (parentResolved.success())
+        {
+            // Calculate pixel position from normalized coordinates within parent bounds
+            Point<int> fallbackPos(
+                parentResolved.componentBounds.getX() + 
+                    roundToInt(mouse.position.normalizedInParent.x * parentResolved.componentBounds.getWidth()),
+                parentResolved.componentBounds.getY() + 
+                    roundToInt(mouse.position.normalizedInParent.y * parentResolved.componentBounds.getHeight())
+            );
+            
+            // Move to fallback position - subsequent click/drag will create the subtarget
+            Point<int> startPos = exec.getCurrentCursorPosition();
+            int duration = mouse.durationMs;
+            int numSteps = jmax(1, duration / MOVE_STEP_INTERVAL_MS);
+            int stepDuration = duration / numSteps;
+            
+            for (int i = 1; i <= numSteps; ++i)
+            {
+                float t = static_cast<float>(i) / numSteps;
+                auto delta = (fallbackPos - startPos).toFloat() * t;
+                Point<int> pos = startPos + Point<int>(roundToInt(delta.x), roundToInt(delta.y));
+                
+                exec.executeMouseMove(pos, mouse.modifiers, getElapsedMs());
+                exec.setCursorPosition(pos);
+                
+                if (i < numSteps)
+                    waitForDuration(stepDuration, exec);
+            }
+            
+            exec.setCursorPosition(fallbackPos);
+            
+            // Log with fallback indicator
+            auto entry = createLogEntry("moveTo", fallbackPos, getElapsedMs());
+            mouse.target.toVar(entry.getDynamicObject());
+            entry.getDynamicObject()->setProperty("fallback", true);
+            if (mouse.autoInserted)
+                entry.getDynamicObject()->setProperty("autoInserted", true);
+            log.add(entry);
+            
+            return;  // Success via fallback
+        }
+    }
+    
     if (!resolved.success())
     {
         lastError = resolved.error;
@@ -333,7 +415,7 @@ void InteractionDispatcher::executeClick(
     log.add(upEntry);
     
     // Let UI settle after click (e.g., popup menus appearing, button state changes)
-    waitForDuration(UI_SETTLE_DELAY_MS, exec);
+    waitWithWiggle(UI_SETTLE_DELAY_MS, exec);
 }
 
 //==============================================================================
@@ -390,7 +472,7 @@ void InteractionDispatcher::executeDrag(
     log.add(upEntry);
     
     // Let UI settle after drag
-    waitForDuration(UI_SETTLE_DELAY_MS, exec);
+    waitWithWiggle(UI_SETTLE_DELAY_MS, exec);
 }
 
 //==============================================================================
@@ -504,7 +586,7 @@ void InteractionDispatcher::executeSelectMenuItem(
     log.add(entry);
     
     // Let UI settle after menu selection (menu closes, value updates)
-    waitForDuration(UI_SETTLE_DELAY_MS, exec);
+    waitWithWiggle(UI_SETTLE_DELAY_MS, exec);
 }
 
 //==============================================================================

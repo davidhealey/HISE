@@ -244,6 +244,31 @@ void InteractionTestWindow::RecordingListener::addEvent(const String& type, cons
     if (!targetBoundsArray.isEmpty())
         event->setProperty("targetBounds", targetBoundsArray);
     
+    // For subtarget interactions, also store normalized position within parent component
+    // This enables fallback when subtarget doesn't exist at replay time (e.g., TableEditor point creation)
+    if (resolvedTarget.hasSubtarget())
+    {
+        if (auto* pwsc = window->getProcessor())
+        {
+            RealExecutor tempExecutor(window, pwsc);
+            ComponentTargetPath parentOnly(resolvedTarget.componentId);
+            auto parentResult = tempExecutor.resolveTarget(parentOnly);
+            
+            if (parentResult.success() && !parentResult.componentBounds.isEmpty())
+            {
+                float normX = (posInScc.x - parentResult.componentBounds.getX()) 
+                            / (float)parentResult.componentBounds.getWidth();
+                float normY = (posInScc.y - parentResult.componentBounds.getY()) 
+                            / (float)parentResult.componentBounds.getHeight();
+                
+                DynamicObject::Ptr normPos = new DynamicObject();
+                normPos->setProperty("x", normX);
+                normPos->setProperty("y", normY);
+                event->setProperty("normalizedPositionInTarget", var(normPos.get()));
+            }
+        }
+    }
+    
     if (type == "mouseDown" || type == "mouseUp")
     {
         event->setProperty("rightClick", e.mods.isRightButtonDown());

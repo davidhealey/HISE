@@ -268,6 +268,19 @@ InteractionParser::ParseResult InteractionParser::parseMouseInteraction(
     // Parse position (optional, defaults to center)
     mouse.position = parsePosition(obj);
     
+    // Parse normalizedPositionInTarget (optional, for subtarget fallback)
+    if (obj.hasProperty("normalizedPositionInTarget"))
+    {
+        auto normPos = obj["normalizedPositionInTarget"];
+        if (normPos.isObject() && normPos.hasProperty("x") && normPos.hasProperty("y"))
+        {
+            mouse.position.normalizedInParent = Point<float>(
+                static_cast<float>(normPos["x"]),
+                static_cast<float>(normPos["y"])
+            );
+        }
+    }
+    
     // Parse delay (optional)
     mouse.delayMs = static_cast<int>(obj.getProperty("delay", 0));
     if (mouse.delayMs < 0)
@@ -418,15 +431,95 @@ String InteractionParser::getTypeName(MouseInteraction::Type type)
 // InteractionAnalyzer implementation
 //==============================================================================
 
+InteractionAnalyzer::RecordedPosition InteractionAnalyzer::RecordedPosition::fromVar(const var& obj)
+{
+    RecordedPosition pos;
+    
+    pos.absolute = Point<int>(
+        static_cast<int>(obj.getProperty("x", 0)),
+        static_cast<int>(obj.getProperty("y", 0))
+    );
+    
+    if (obj.hasProperty("targetBounds"))
+    {
+        auto bounds = obj["targetBounds"];
+        if (bounds.isArray() && bounds.size() >= 4)
+        {
+            pos.targetBounds = Rectangle<int>(
+                static_cast<int>(bounds[0]),
+                static_cast<int>(bounds[1]),
+                static_cast<int>(bounds[2]),
+                static_cast<int>(bounds[3])
+            );
+        }
+    }
+    
+    if (obj.hasProperty("normalizedPositionInTarget"))
+    {
+        auto normPos = obj["normalizedPositionInTarget"];
+        if (normPos.isObject())
+        {
+            pos.normalizedInParent = Point<float>(
+                static_cast<float>(normPos.getProperty("x", -1.f)),
+                static_cast<float>(normPos.getProperty("y", -1.f))
+            );
+        }
+    }
+    
+    return pos;
+}
+
+void InteractionAnalyzer::RecordedPosition::toInteractionVar(DynamicObject* obj, PositionMode mode) const
+{
+    if (targetBounds.isEmpty())
+    {
+        // No component - use absolute coordinates
+        DynamicObject::Ptr pos = new DynamicObject();
+        pos->setProperty("x", absolute.x);
+        pos->setProperty("y", absolute.y);
+        obj->setProperty("pixelPosition", var(pos.get()));
+    }
+    else
+    {
+        // Component available - use relative coordinates
+        Point<int> relPos = getRelativePosition();
+        
+        if (mode == PositionMode::Absolute)
+        {
+            DynamicObject::Ptr pos = new DynamicObject();
+            pos->setProperty("x", relPos.x);
+            pos->setProperty("y", relPos.y);
+            obj->setProperty("pixelPosition", var(pos.get()));
+        }
+        else
+        {
+            // Normalized mode
+            float normX = static_cast<float>(relPos.x) / targetBounds.getWidth();
+            float normY = static_cast<float>(relPos.y) / targetBounds.getHeight();
+            
+            DynamicObject::Ptr pos = new DynamicObject();
+            pos->setProperty("x", normX);
+            pos->setProperty("y", normY);
+            obj->setProperty("position", var(pos.get()));
+        }
+    }
+    
+    // Write fallback position if available
+    if (hasFallback())
+    {
+        DynamicObject::Ptr normPos = new DynamicObject();
+        normPos->setProperty("x", normalizedInParent.x);
+        normPos->setProperty("y", normalizedInParent.y);
+        obj->setProperty("normalizedPositionInTarget", var(normPos.get()));
+    }
+}
+
 InteractionAnalyzer::RawEvent InteractionAnalyzer::RawEvent::fromVar(const var& obj)
 {
     RawEvent event;
     
     event.type = obj.getProperty("type", "").toString();
-    event.position = Point<int>(
-        static_cast<int>(obj.getProperty("x", 0)),
-        static_cast<int>(obj.getProperty("y", 0))
-    );
+    event.position = RecordedPosition::fromVar(obj);
     event.timestamp = static_cast<int64>(obj.getProperty("timestamp", 0));
     event.rightClick = static_cast<bool>(obj.getProperty("rightClick", false));
     
@@ -450,20 +543,6 @@ InteractionAnalyzer::RawEvent InteractionAnalyzer::RawEvent::fromVar(const var& 
     
     // Parse pre-resolved target info if present
     event.target = ComponentTargetPath::fromVar(obj);
-    
-    if (obj.hasProperty("targetBounds"))
-    {
-        auto bounds = obj["targetBounds"];
-        if (bounds.isArray() && bounds.size() >= 4)
-        {
-            event.targetBounds = Rectangle<int>(
-                static_cast<int>(bounds[0]),
-                static_cast<int>(bounds[1]),
-                static_cast<int>(bounds[2]),
-                static_cast<int>(bounds[3])
-            );
-        }
-    }
     
     // Parse menu selection info if present (for "selectMenuItem" type)
     event.menuItemId = static_cast<int>(obj.getProperty("itemId", -1));
@@ -489,18 +568,36 @@ void InteractionAnalyzer::attachTargetInfo(Array<RawEvent>& events, InteractionE
 {
     for (auto& event : events)
     {
-        auto resolveResult = executor.resolvePosition(event.position);
+        auto resolveResult = executor.resolvePosition(event.position.absolute);
         
         if (resolveResult.target.isEmpty())
         {
             // No component at position - click on background
             event.target = ComponentTargetPath("content");
-            event.targetBounds = {};
+            event.position.targetBounds = {};
         }
         else
         {
             event.target = resolveResult.target;
-            event.targetBounds = resolveResult.componentBounds;
+            event.position.targetBounds = resolveResult.componentBounds;
+            
+            // Compute normalized fallback position if this is a subtarget
+            if (resolveResult.target.hasSubtarget())
+            {
+                // Resolve parent-only to get parent bounds
+                ComponentTargetPath parentOnly(resolveResult.target.componentId);
+                auto parentResult = executor.resolveTarget(parentOnly);
+                
+                if (parentResult.success() && !parentResult.componentBounds.isEmpty())
+                {
+                    float normX = (event.position.absolute.x - parentResult.componentBounds.getX()) 
+                                / static_cast<float>(parentResult.componentBounds.getWidth());
+                    float normY = (event.position.absolute.y - parentResult.componentBounds.getY()) 
+                                / static_cast<float>(parentResult.componentBounds.getHeight());
+                    
+                    event.position.normalizedInParent = {normX, normY};
+                }
+            }
         }
     }
 }
@@ -535,8 +632,8 @@ InteractionAnalyzer::AnalyzeResult InteractionAnalyzer::analyze(
             // Validate that target info was attached (via recording or attachTargetInfo())
             if (event.target.isEmpty())
             {
-                result.warnings.add("mouseDown at (" + String(event.position.x) + ", " + 
-                                   String(event.position.y) + ") has no target info - call attachTargetInfo() first");
+                result.warnings.add("mouseDown at (" + String(event.position.absolute.x) + ", " + 
+                                   String(event.position.absolute.y) + ") has no target info - call attachTargetInfo() first");
             }
             
             state.mouseDown = true;
@@ -545,7 +642,6 @@ InteractionAnalyzer::AnalyzeResult InteractionAnalyzer::analyze(
             state.downRightClick = event.rightClick;
             state.downModifiers = event.modifiers;
             state.downTarget = event.target;
-            state.downComponentBounds = event.targetBounds;
         }
         else if (event.type == "mouseUp")
         {
@@ -558,8 +654,8 @@ InteractionAnalyzer::AnalyzeResult InteractionAnalyzer::analyze(
             }
             
             // Calculate movement distance
-            int dx = event.position.x - state.downPosition.x;
-            int dy = event.position.y - state.downPosition.y;
+            int dx = event.position.absolute.x - state.downPosition.absolute.x;
+            int dy = event.position.absolute.y - state.downPosition.absolute.y;
             int distance = static_cast<int>(std::sqrt(dx * dx + dy * dy));
             
             if (distance < options.clickMaxMovementPx)
@@ -570,8 +666,8 @@ InteractionAnalyzer::AnalyzeResult InteractionAnalyzer::analyze(
                 if (state.lastClickTimestamp >= 0)
                 {
                     int64 timeSinceLastClick = state.downTimestamp - state.lastClickTimestamp;
-                    int lastClickDx = state.downPosition.x - state.lastClickPosition.x;
-                    int lastClickDy = state.downPosition.y - state.lastClickPosition.y;
+                    int lastClickDx = state.downPosition.absolute.x - state.lastClickPosition.x;
+                    int lastClickDy = state.downPosition.absolute.y - state.lastClickPosition.y;
                     int lastClickDist = static_cast<int>(std::sqrt(lastClickDx * lastClickDx + lastClickDy * lastClickDy));
                     
                     if (timeSinceLastClick <= options.doubleClickThresholdMs &&
@@ -603,14 +699,14 @@ InteractionAnalyzer::AnalyzeResult InteractionAnalyzer::analyze(
                     
                     // Track for potential double-click
                     state.lastClickTimestamp = state.downTimestamp;
-                    state.lastClickPosition = state.downPosition;
+                    state.lastClickPosition = state.downPosition.absolute;
                     state.lastClickTarget = state.downTarget;
                 }
             }
             else
             {
                 // It's a drag
-                interactions.add(createDragInteraction(state, event.position, options));
+                interactions.add(createDragInteraction(state, event.position.absolute, options));
                 
                 // Reset last click tracking (drag breaks double-click)
                 state.lastClickTimestamp = -1000;
@@ -640,23 +736,7 @@ var InteractionAnalyzer::createClickInteraction(const GestureState& state,
     
     obj->setProperty("type", "click");
     state.downTarget.toVar(obj.get());
-    
-    if (state.downComponentBounds.isEmpty())
-    {
-        // "content" click or no component - use absolute coordinates
-        obj->setProperty("pixelPosition", [&]() {
-            DynamicObject::Ptr pos = new DynamicObject();
-            pos->setProperty("x", state.downPosition.x);
-            pos->setProperty("y", state.downPosition.y);
-            return var(pos.get());
-        }());
-    }
-    else
-    {
-        // Component click - use relative coordinates
-        addPositionToInteraction(obj.get(), state.downPosition, 
-                                 state.downComponentBounds, options.positionMode);
-    }
+    state.downPosition.toInteractionVar(obj.get(), options.positionMode);
     
     if (state.downRightClick)
     {
@@ -675,23 +755,7 @@ var InteractionAnalyzer::createDoubleClickInteraction(const GestureState& state,
     
     obj->setProperty("type", "doubleClick");
     state.downTarget.toVar(obj.get());
-    
-    if (state.downComponentBounds.isEmpty())
-    {
-        // "content" click or no component - use absolute coordinates
-        obj->setProperty("pixelPosition", [&]() {
-            DynamicObject::Ptr pos = new DynamicObject();
-            pos->setProperty("x", state.downPosition.x);
-            pos->setProperty("y", state.downPosition.y);
-            return var(pos.get());
-        }());
-    }
-    else
-    {
-        // Component click - use relative coordinates
-        addPositionToInteraction(obj.get(), state.downPosition, 
-                                 state.downComponentBounds, options.positionMode);
-    }
+    state.downPosition.toInteractionVar(obj.get(), options.positionMode);
     
     addModifiersToInteraction(obj.get(), state.downModifiers);
     
@@ -706,28 +770,12 @@ var InteractionAnalyzer::createDragInteraction(const GestureState& state,
     
     obj->setProperty("type", "drag");
     state.downTarget.toVar(obj.get());
-    
-    if (state.downComponentBounds.isEmpty())
-    {
-        // "content" drag or no component - use absolute coordinates
-        obj->setProperty("pixelPosition", [&]() {
-            DynamicObject::Ptr pos = new DynamicObject();
-            pos->setProperty("x", state.downPosition.x);
-            pos->setProperty("y", state.downPosition.y);
-            return var(pos.get());
-        }());
-    }
-    else
-    {
-        // Component drag - use relative coordinates
-        addPositionToInteraction(obj.get(), state.downPosition, 
-                                 state.downComponentBounds, options.positionMode);
-    }
+    state.downPosition.toInteractionVar(obj.get(), options.positionMode);
     
     // Delta
     DynamicObject::Ptr delta = new DynamicObject();
-    delta->setProperty("x", endPosition.x - state.downPosition.x);
-    delta->setProperty("y", endPosition.y - state.downPosition.y);
+    delta->setProperty("x", endPosition.x - state.downPosition.absolute.x);
+    delta->setProperty("y", endPosition.y - state.downPosition.absolute.y);
     obj->setProperty("delta", var(delta.get()));
     
     addModifiersToInteraction(obj.get(), state.downModifiers);

@@ -268,6 +268,12 @@ public:
             Mode getMode() const { return mode; }
             Point<float> getValue() const { return value; }
             
+            /** Fallback: normalized position within parent component.
+             *  Used when subtarget doesn't exist at replay time. */
+            Point<float> normalizedInParent = {-1.f, -1.f};
+            
+            bool hasFallback() const { return normalizedInParent.x >= 0.f; }
+            
         private:
             Mode mode = Mode::Normalized;
             Point<float> value{0.5f, 0.5f};
@@ -434,18 +440,46 @@ public:
     };
     
     //==========================================================================
+    /** Position data captured during recording, including fallback for subtarget creation.
+     *  Groups absolute position, target bounds, and parent-relative fallback together.
+     */
+    struct RecordedPosition
+    {
+        Point<int> absolute;                              // Position in ScriptContentComponent coords
+        Rectangle<int> targetBounds;                      // Bounds of resolved target (subtarget if present)
+        Point<float> normalizedInParent = {-1.f, -1.f};   // Normalized position in parent (for fallback)
+        
+        bool hasFallback() const { return normalizedInParent.x >= 0.f; }
+        bool hasTargetBounds() const { return !targetBounds.isEmpty(); }
+        
+        /** Compute pixel position relative to target bounds. */
+        Point<int> getRelativePosition() const
+        {
+            return {
+                absolute.x - targetBounds.getX(),
+                absolute.y - targetBounds.getY()
+            };
+        }
+        
+        /** Parse from raw event JSON. */
+        static RecordedPosition fromVar(const var& obj);
+        
+        /** Write position fields to interaction JSON (pixelPosition + normalizedPositionInTarget). */
+        void toInteractionVar(DynamicObject* obj, PositionMode mode) const;
+    };
+    
+    //==========================================================================
     /** A single raw mouse event from recording. */
     struct RawEvent
     {
         String type;           // "mouseDown", "mouseUp", "mouseMove", "selectMenuItem"
-        Point<int> position;   // Absolute position in ScriptContentComponent coords
-        int64 timestamp;       // Milliseconds since recording start
+        RecordedPosition position;  // Position data with fallback info
+        int64 timestamp = 0;   // Milliseconds since recording start
         bool rightClick = false;
         ModifierKeys modifiers;
         
         // Pre-resolved target info (attached during recording or via attachTargetInfo())
         ComponentTargetPath target;       // Component + subtarget, or empty (unresolved)
-        Rectangle<int> targetBounds;      // Component bounds at time of event (empty if no component)
         
         // Menu selection info (for "selectMenuItem" type events)
         int menuItemId = -1;
@@ -504,12 +538,11 @@ private:
     struct GestureState
     {
         bool mouseDown = false;
-        Point<int> downPosition;
+        RecordedPosition downPosition;       // Position data with fallback info
         int64 downTimestamp = 0;
         bool downRightClick = false;
         ModifierKeys downModifiers;
         ComponentTargetPath downTarget;      // Component where mouse went down
-        Rectangle<int> downComponentBounds;
         
         // For double-click detection
         int64 lastClickTimestamp = -1000;    // Far in the past
@@ -524,7 +557,6 @@ private:
             downRightClick = false;
             downModifiers = {};
             downTarget.clear();
-            downComponentBounds = {};
         }
     };
     

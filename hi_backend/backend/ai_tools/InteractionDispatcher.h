@@ -129,6 +129,8 @@ public:
     static constexpr int MOVE_STEP_INTERVAL_MS = 10;
     static constexpr int DRAG_STEP_INTERVAL_MS = 10;
     static constexpr int UI_SETTLE_DELAY_MS = 50;  // Time to let UI react after interactions
+    static constexpr int RESOLVE_RETRY_DELAY_MS = 30;   // Delay between resolve attempts
+    static constexpr int RESOLVE_MAX_RETRIES = 10;      // Max attempts (10 * 30ms = 300ms max)
     
 private:
     int64 startTimeMs = 0;
@@ -139,6 +141,7 @@ private:
     
     int getElapsedMs() const;
     void waitForDuration(int ms, InteractionExecutorBase& executor);
+    void waitWithWiggle(int ms, InteractionExecutorBase& exec);
     String checkAbortConditions() const;
     
     // Execute individual interaction types
