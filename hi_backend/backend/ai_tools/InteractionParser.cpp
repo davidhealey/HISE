@@ -221,16 +221,16 @@ InteractionParser::ParseResult InteractionParser::parseMouseInteraction(
     //==========================================================================
     if (mouse.type == MouseInteraction::Type::SelectMenuItem)
     {
-        if (!obj.hasProperty("text"))
-            return ParseResult::fail(formatError("Missing required field 'text' for selectMenuItem", index));
+        if (!obj.hasProperty("menuItemText"))
+            return ParseResult::fail(formatError("Missing required field 'menuItemText' for selectMenuItem", index));
         
-        auto textVar = obj["text"];
+        auto textVar = obj["menuItemText"];
         if (!textVar.isString())
-            return ParseResult::fail(formatError("Field 'text' must be a string", index, "text"));
+            return ParseResult::fail(formatError("Field 'menuItemText' must be a string", index, "menuItemText"));
         
         mouse.menuItemText = textVar.toString();
         if (mouse.menuItemText.isEmpty())
-            return ParseResult::fail(formatError("Field 'text' cannot be empty", index, "text"));
+            return ParseResult::fail(formatError("Field 'menuItemText' cannot be empty", index, "menuItemText"));
         
         // Parse delay (optional)
         mouse.delayMs = static_cast<int>(obj.getProperty("delay", 0));
@@ -362,9 +362,9 @@ InteractionParser::MouseInteraction::Position InteractionParser::parsePosition(c
     }
     
     // Normalized position
-    if (obj.hasProperty("position"))
+    if (obj.hasProperty("normalizedPosition"))
     {
-        auto pos = obj["position"];
+        auto pos = obj["normalizedPosition"];
         if (pos.isObject() && pos.hasProperty("x") && pos.hasProperty("y"))
         {
             return MouseInteraction::Position::normalized(
@@ -500,7 +500,7 @@ void InteractionAnalyzer::RecordedPosition::toInteractionVar(DynamicObject* obj,
             DynamicObject::Ptr pos = new DynamicObject();
             pos->setProperty("x", normX);
             pos->setProperty("y", normY);
-            obj->setProperty("position", var(pos.get()));
+            obj->setProperty("normalizedPosition", var(pos.get()));
         }
     }
     
@@ -529,13 +529,13 @@ InteractionAnalyzer::RawEvent InteractionAnalyzer::RawEvent::fromVar(const var& 
         auto mods = obj["modifiers"];
         int flags = 0;
         
-        if (static_cast<bool>(mods.getProperty("shift", false)))
+        if (static_cast<bool>(mods.getProperty("shiftDown", false)))
             flags |= ModifierKeys::shiftModifier;
-        if (static_cast<bool>(mods.getProperty("ctrl", false)))
+        if (static_cast<bool>(mods.getProperty("ctrlDown", false)))
             flags |= ModifierKeys::ctrlModifier;
-        if (static_cast<bool>(mods.getProperty("alt", false)))
+        if (static_cast<bool>(mods.getProperty("altDown", false)))
             flags |= ModifierKeys::altModifier;
-        if (static_cast<bool>(mods.getProperty("cmd", false)))
+        if (static_cast<bool>(mods.getProperty("cmdDown", false)))
             flags |= ModifierKeys::commandModifier;
         
         event.modifiers = ModifierKeys(flags);
@@ -546,7 +546,7 @@ InteractionAnalyzer::RawEvent InteractionAnalyzer::RawEvent::fromVar(const var& 
     
     // Parse menu selection info if present (for "selectMenuItem" type)
     event.menuItemId = static_cast<int>(obj.getProperty("itemId", -1));
-    event.menuItemText = obj.getProperty("itemText", "").toString();
+    event.menuItemText = obj.getProperty("menuItemText", "").toString();
     
     return event;
 }
@@ -622,7 +622,7 @@ InteractionAnalyzer::AnalyzeResult InteractionAnalyzer::analyze(
             obj->setProperty("type", "selectMenuItem");
             obj->setProperty("itemId", event.menuItemId);
             if (event.menuItemText.isNotEmpty())
-                obj->setProperty("itemText", event.menuItemText);
+                obj->setProperty("menuItemText", event.menuItemText);
             interactions.add(var(obj.get()));
             continue;
         }
@@ -811,7 +811,7 @@ void InteractionAnalyzer::addPositionToInteraction(DynamicObject* obj,
         DynamicObject::Ptr pos = new DynamicObject();
         pos->setProperty("x", normX);
         pos->setProperty("y", normY);
-        obj->setProperty("position", var(pos.get()));
+        obj->setProperty("normalizedPosition", var(pos.get()));
     }
 }
 

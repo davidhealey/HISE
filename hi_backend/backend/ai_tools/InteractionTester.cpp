@@ -168,6 +168,11 @@ void InteractionTestWindow::RecordingListener::addEvent(const String& type, cons
     auto* window = sourceComponent->findParentComponentOfClass<InteractionTestWindow>();
     if (window == nullptr) return;
     
+    // Filter out clicks on TopBar and StatusBar (not part of test interface)
+    if (sourceComponent->findParentComponentOfClass<TopBar>() != nullptr ||
+        sourceComponent->findParentComponentOfClass<StatusBar>() != nullptr)
+        return;
+    
     auto* topBar = window->getTopBar();
     if (topBar == nullptr) return;
     
@@ -193,7 +198,7 @@ void InteractionTestWindow::RecordingListener::addEvent(const String& type, cons
         event->setProperty("type", "selectMenuItem");
         event->setProperty("itemId", pendingMenuSelection.itemId);
         if (pendingMenuSelection.itemText.isNotEmpty())
-            event->setProperty("itemText", pendingMenuSelection.itemText);
+            event->setProperty("menuItemText", pendingMenuSelection.itemText);
         event->setProperty("timestamp", (int)timestamp);
         
         topBar->addRawEvent(var(event.get()));
@@ -278,10 +283,10 @@ void InteractionTestWindow::RecordingListener::addEvent(const String& type, cons
     if (e.mods.isShiftDown() || e.mods.isCtrlDown() || e.mods.isAltDown() || e.mods.isCommandDown())
     {
         DynamicObject::Ptr mods = new DynamicObject();
-        mods->setProperty("shift", e.mods.isShiftDown());
-        mods->setProperty("ctrl", e.mods.isCtrlDown());
-        mods->setProperty("alt", e.mods.isAltDown());
-        mods->setProperty("cmd", e.mods.isCommandDown());
+        mods->setProperty("shiftDown", e.mods.isShiftDown());
+        mods->setProperty("ctrlDown", e.mods.isCtrlDown());
+        mods->setProperty("altDown", e.mods.isAltDown());
+        mods->setProperty("cmdDown", e.mods.isCommandDown());
         event->setProperty("modifiers", var(mods.get()));
     }
     
@@ -327,6 +332,8 @@ void InteractionTestWindow::RecordingListener::mouseDown(const MouseEvent& e)
 
 void InteractionTestWindow::RecordingListener::mouseUp(const MouseEvent& e)
 {
+    auto menuItems = PopupMenu::getVisibleMenuItems(e.eventComponent);
+
     addEvent("mouseUp", e);
 }
 
@@ -346,13 +353,28 @@ InteractionTestWindow::RecordingListener::detectPopupMenuSelection(const MouseEv
 {
     PopupMenuSelectionInfo result;
     
-    // TODO: You implement this
-    // - Check if e.eventComponent is inside a popup menu
-    // - If so, get the item ID and text
-    // - Set result.isMenuClick = true, result.itemId, result.itemText
-    ignoreUnused(e);
+    // Get all visible menu items from open popup menus
+    auto menuItems = PopupMenu::getVisibleMenuItems(e.eventComponent);
     
-    return result;
+    if (menuItems.isEmpty())
+        return result;  // No popup menu open
+    
+    // Get the click position in screen coordinates
+    Point<int> screenPos = e.getScreenPosition();
+    
+    // Check if click is inside any menu item's bounds
+    for (const auto& item : menuItems)
+    {
+        if (item.screenBounds.contains(screenPos))
+        {
+            result.isMenuClick = true;
+            result.itemId = item.itemId;
+            result.itemText = item.text;
+            return result;
+        }
+    }
+    
+    return result;  // Click was not on a menu item (e.g., menu background or outside)
 }
 
 //==============================================================================
@@ -783,7 +805,7 @@ void InteractionTestWindow::TopBar::processRecordedEvents()
         Array<var> eventsArray;
         for (auto& e : processedEvents)
             eventsArray.add(e);
-        wrapper->setProperty("events", eventsArray);
+        wrapper->setProperty("interactions", eventsArray);
         
         recordedInteractions = var(wrapper.get());
         setHasRecording(true);
@@ -1665,7 +1687,7 @@ void InteractionTestWindow::RealExecutor::setCursorPosition(Point<int> pos)
 
 Array<PopupMenu::VisibleMenuItem> InteractionTestWindow::RealExecutor::getVisibleMenuItems() const
 {
-    auto screenItems = PopupMenu::getVisibleMenuItems();
+    auto screenItems = PopupMenu::getVisibleMenuItems(window);
     
     Array<PopupMenu::VisibleMenuItem> localItems;
     
@@ -1936,19 +1958,15 @@ void InteractionTestWindow::setRecordingMouseCapture(bool enabled)
     if (recordingListener == nullptr)
         return;
     
-    auto* scc = getContent();
-    if (scc == nullptr)
-        return;
-    
     if (enabled)
     {
         int64 startTime = Time::getMillisecondCounter();
         recordingListener->setRecording(true, startTime);
-        scc->addMouseListener(recordingListener.get(), true);  // true = wantsEventsForAllNestedChildComponents
+        addMouseListener(recordingListener.get(), true);  // true = wantsEventsForAllNestedChildComponents
     }
     else
     {
-        scc->removeMouseListener(recordingListener.get());
+        removeMouseListener(recordingListener.get());
         recordingListener->setRecording(false, 0);
     }
 }
@@ -2010,7 +2028,7 @@ InteractionTester::TestResult InteractionTester::executeInteractions(const var& 
         if (mode == "raw")
         {
             isRawMode = true;
-            actualInteractions = obj->getProperty("events");
+            actualInteractions = obj->getProperty("interactions");
         }
         else if (mode == "semantic")
         {

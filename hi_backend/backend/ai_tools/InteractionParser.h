@@ -25,6 +25,67 @@ namespace hise {
 using namespace juce;
 
 //==============================================================================
+/** Identifiers for interaction JSON field names.
+    Using Identifiers instead of string literals provides compile-time safety
+    and better performance for property lookups.
+*/
+#define DECLARE_ID(x) const Identifier x(#x);
+
+namespace InteractionIds
+{
+    // Event types (semantic)
+    DECLARE_ID(click);
+    DECLARE_ID(doubleClick);
+    DECLARE_ID(drag);
+    DECLARE_ID(moveTo);
+    DECLARE_ID(screenshot);
+    DECLARE_ID(selectMenuItem);
+    
+    // Event types (raw) 
+    DECLARE_ID(mouseDown);
+    DECLARE_ID(mouseUp);
+    DECLARE_ID(mouseMove);
+    
+    // Position
+    DECLARE_ID(normalizedPosition);
+    DECLARE_ID(pixelPosition);
+    DECLARE_ID(normalizedPositionInTarget);
+    DECLARE_ID(delta);
+    DECLARE_ID(targetBounds);
+    
+    // Component targeting
+    DECLARE_ID(target);
+    DECLARE_ID(subtarget);
+    
+    // Timing
+    DECLARE_ID(timestamp);
+    DECLARE_ID(delay);
+    DECLARE_ID(duration);
+    
+    // Modifiers
+    DECLARE_ID(rightClick);
+    DECLARE_ID(shiftDown);
+    DECLARE_ID(ctrlDown);
+    DECLARE_ID(altDown);
+    DECLARE_ID(cmdDown);
+    DECLARE_ID(modifiers);
+    
+    // Menu selection
+    DECLARE_ID(menuItemText);
+    
+    // Recording mode
+    DECLARE_ID(mode);
+    DECLARE_ID(raw);
+    DECLARE_ID(semantic);
+    
+    // Execution log flags
+    DECLARE_ID(fallback);
+    DECLARE_ID(autoInserted);
+}
+
+#undef DECLARE_ID
+
+//==============================================================================
 /** Represents a UI component target, optionally with a subtarget.
  *  Examples:
  *    - {"Button1", ""}        -> main component

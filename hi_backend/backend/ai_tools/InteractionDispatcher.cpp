@@ -465,10 +465,10 @@ void InteractionDispatcher::executeDrag(
     exec.setCursorPosition(endPos);
     
     auto upEntry = createLogEntry("mouseUp", endPos, getElapsedMs());
-    upEntry.getDynamicObject()->setProperty("dragDelta", 
+    upEntry.getDynamicObject()->setProperty("delta", 
         var(new DynamicObject()));
-    upEntry.getDynamicObject()->getProperty("dragDelta").getDynamicObject()->setProperty("x", mouse.deltaPixels.x);
-    upEntry.getDynamicObject()->getProperty("dragDelta").getDynamicObject()->setProperty("y", mouse.deltaPixels.y);
+    upEntry.getDynamicObject()->getProperty("delta").getDynamicObject()->setProperty("x", mouse.deltaPixels.x);
+    upEntry.getDynamicObject()->getProperty("delta").getDynamicObject()->setProperty("y", mouse.deltaPixels.y);
     log.add(upEntry);
     
     // Let UI settle after drag
@@ -581,8 +581,8 @@ void InteractionDispatcher::executeSelectMenuItem(
     
     // Log
     auto entry = createLogEntry("selectMenuItem", targetPos, getElapsedMs());
-    entry.getDynamicObject()->setProperty("menuItem", matchedItem.text);
-    entry.getDynamicObject()->setProperty("menuItemId", matchedItem.itemId);
+    entry.getDynamicObject()->setProperty("menuItemText", matchedItem.text);
+    entry.getDynamicObject()->setProperty("itemId", matchedItem.itemId);
     log.add(entry);
     
     // Let UI settle after menu selection (menu closes, value updates)
@@ -599,7 +599,7 @@ var InteractionDispatcher::createLogEntry(const String& type, Point<int> pixelPo
     obj->setProperty("type", type);
     obj->setProperty("x", pixelPos.x);
     obj->setProperty("y", pixelPos.y);
-    obj->setProperty("elapsedMs", elapsedMs);
+    obj->setProperty("timestamp", elapsedMs);
     return var(obj.get());
 }
 
