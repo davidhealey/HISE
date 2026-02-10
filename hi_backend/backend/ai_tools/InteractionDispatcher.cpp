@@ -36,7 +36,7 @@ String getInteractionDescription(const InteractionParser::MouseInteraction& mous
     switch (mouse.type)
     {
         case Type::MoveTo:
-            return "Moving to \"" + mouse.targetComponentId + "\"";
+            return "Moving to \"" + mouse.target.toString() + "\"";
         case Type::Click:
             return mouse.rightClick ? "Right-clicking" : "Clicking";
         case Type::Drag:
@@ -64,7 +64,7 @@ int estimateTotalDuration(const Array<InteractionParser::Interaction>& interacti
 }
 
 /** Write interaction event to console if MainController available. */
-void logInteractionToConsole(InteractionDispatcher::Executor& exec, const String& description)
+void logInteractionToConsole(InteractionExecutorBase& exec, const String& description)
 {
     if (auto* mc = exec.getMainController())
     {
@@ -80,7 +80,7 @@ void logInteractionToConsole(InteractionDispatcher::Executor& exec, const String
 
 InteractionDispatcher::ExecutionResult InteractionDispatcher::execute(
     const Array<InteractionParser::Interaction>& interactions,
-    Executor& executor,
+    InteractionExecutorBase& executor,
     Array<var>& executedLog,
     int timeout)
 {
@@ -213,7 +213,7 @@ int InteractionDispatcher::getElapsedMs() const
     return static_cast<int>(Time::getMillisecondCounterHiRes() - startTimeMs);
 }
 
-void InteractionDispatcher::waitForDuration(int ms, Executor& executor)
+void InteractionDispatcher::waitForDuration(int ms, InteractionExecutorBase& executor)
 {
     if (ms <= 0) return;
     
@@ -247,11 +247,11 @@ String InteractionDispatcher::checkAbortConditions() const
 
 void InteractionDispatcher::executeMoveTo(
     const InteractionParser::MouseInteraction& mouse,
-    Executor& exec,
+    InteractionExecutorBase& exec,
     Array<var>& log)
 {
-    // Resolve target bounds
-    auto resolved = exec.resolveTarget(mouse.targetComponentId);
+    // Resolve target bounds (including subtarget if specified)
+    auto resolved = exec.resolveTarget(mouse.target);
     if (!resolved.success())
     {
         lastError = resolved.error;
@@ -284,7 +284,7 @@ void InteractionDispatcher::executeMoveTo(
     
     // Log
     auto entry = createLogEntry("moveTo", endPos, getElapsedMs());
-    entry.getDynamicObject()->setProperty("target", mouse.targetComponentId);
+    mouse.target.toVar(entry.getDynamicObject());
     if (mouse.autoInserted)
         entry.getDynamicObject()->setProperty("autoInserted", true);
     log.add(entry);
@@ -296,7 +296,7 @@ void InteractionDispatcher::executeMoveTo(
 
 void InteractionDispatcher::executeClick(
     const InteractionParser::MouseInteraction& mouse,
-    Executor& exec,
+    InteractionExecutorBase& exec,
     Array<var>& log)
 {
     // Get current position (moveTo should have positioned us)
@@ -342,7 +342,7 @@ void InteractionDispatcher::executeClick(
 
 void InteractionDispatcher::executeDrag(
     const InteractionParser::MouseInteraction& mouse,
-    Executor& exec,
+    InteractionExecutorBase& exec,
     Array<var>& log)
 {
     Point<int> startPos = exec.getCurrentCursorPosition();
@@ -399,7 +399,7 @@ void InteractionDispatcher::executeDrag(
 
 void InteractionDispatcher::executeScreenshot(
     const InteractionParser::MouseInteraction& mouse,
-    Executor& exec,
+    InteractionExecutorBase& exec,
     Array<var>& log)
 {
     exec.executeScreenshot(mouse.screenshotId, mouse.screenshotScale, getElapsedMs());
@@ -416,7 +416,7 @@ void InteractionDispatcher::executeScreenshot(
 
 void InteractionDispatcher::executeSelectMenuItem(
     const InteractionParser::MouseInteraction& mouse,
-    Executor& exec,
+    InteractionExecutorBase& exec,
     Array<var>& log)
 {
     lastSelectedMenuItem = {};
@@ -557,33 +557,93 @@ void TestExecutor::clearMockMenuItems()
     mockMenuItems.clear();
 }
 
-InteractionDispatcher::Executor::ResolveResult TestExecutor::resolveTarget(const String& componentId)
+void TestExecutor::addMockSubtarget(const String& parentId, const String& subtargetId, Rectangle<int> bounds)
 {
-    ResolveResult result;
+    auto it = mockComponents.find(parentId.toStdString());
+    if (it != mockComponents.end())
+    {
+        it->second.subtargets[subtargetId.toStdString()] = bounds;
+    }
+}
+
+InteractionExecutorBase::ResolveResult TestExecutor::resolveTarget(
+    const ComponentTargetPath& target)
+{
+    InteractionExecutorBase::ResolveResult result;
     
-    auto it = mockComponents.find(componentId.toStdString());
+    auto it = mockComponents.find(target.componentId.toStdString());
     if (it == mockComponents.end())
     {
-        result.error = "Component '" + componentId + "' not found";
+        result.error = "Component '" + target.componentId + "' not found";
         return result;
     }
     
     auto& mock = it->second;
     result.componentBounds = mock.absoluteBounds;
+    result.target = target;
     result.visible = mock.visible;
+    
+    // If subtarget specified, try to find its bounds
+    if (target.hasSubtarget())
+    {
+        auto subIt = mock.subtargets.find(target.subtargetId.toStdString());
+        if (subIt != mock.subtargets.end())
+        {
+            result.componentBounds = subIt->second;
+        }
+    }
     
     if (!mock.visible)
     {
-        result.error = "Component '" + componentId + "' is not visible";
+        result.error = "Component '" + target.componentId + "' is not visible";
         return result;
     }
     
     if (mock.absoluteBounds.isEmpty())
     {
-        result.error = "Component '" + componentId + "' has zero size";
+        result.error = "Component '" + target.componentId + "' has zero size";
         return result;
     }
     
+    return result;
+}
+
+InteractionExecutorBase::ResolveResult TestExecutor::resolvePosition(Point<int> absolutePos) const
+{
+    InteractionExecutorBase::ResolveResult result;
+    
+    // Check subtargets first (they're on top)
+    for (const auto& [id, comp] : mockComponents)
+    {
+        if (!comp.visible) continue;
+        
+        for (const auto& [subtargetId, bounds] : comp.subtargets)
+        {
+            if (bounds.contains(absolutePos))
+            {
+                result.target = ComponentTargetPath(id, subtargetId);
+                result.componentBounds = comp.absoluteBounds;
+                result.visible = true;
+                return result;
+            }
+        }
+    }
+    
+    // Then check main components
+    for (const auto& [id, comp] : mockComponents)
+    {
+        if (!comp.visible) continue;
+        
+        if (comp.absoluteBounds.contains(absolutePos))
+        {
+            result.target = ComponentTargetPath(id);
+            result.componentBounds = comp.absoluteBounds;
+            result.visible = true;
+            return result;
+        }
+    }
+    
+    result.error = "No component at position (" + String(absolutePos.x) + ", " + String(absolutePos.y) + ")";
     return result;
 }
 

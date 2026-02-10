@@ -22,6 +22,15 @@
 
 /** TODO:
 
+Fixes for semantic mode:
+
+- fails with inserting table points
+- add content restore
+- show subtarget in log when click
+
+
+
+
 - filter console log. error ? only show error list, otherwise: just show log list
 - set the green indicator to match the error state (so if a script error occurs, make it red)
 - append the initial input list. so log window only shows: input list -> console log or error per run.
@@ -48,6 +57,40 @@
 
 namespace hise {
 using namespace juce;
+
+//==============================================================================
+// Debug helper for generating unit test data from recorded sessions
+//==============================================================================
+
+#if JUCE_DEBUG
+static void dumpMockComponents(Component* component, ScriptContentComponent* scc)
+{
+    for (int i = 0; i < component->getNumChildComponents(); i++)
+    {
+        auto* child = component->getChildComponent(i);
+        String name;
+        
+        if (dynamic_cast<HiToggleButton*>(child) != nullptr)
+            name = child->getName();
+        else if (dynamic_cast<HiSlider*>(child) != nullptr)
+            name = child->getName();
+        else if (dynamic_cast<HiComboBox*>(child) != nullptr)
+            name = child->getName();
+        
+        if (name.isNotEmpty())
+        {
+            auto topLeft = scc->getLocalPoint(child, Point<int>(0, 0));
+            auto size = child->getLocalBounds();
+            
+            DBG("exec.addMockComponent(\"" + name + "\", {" + 
+                String(topLeft.x) + ", " + String(topLeft.y) + ", " +
+                String(size.getWidth()) + ", " + String(size.getHeight()) + "}, true);");
+        }
+        
+        dumpMockComponents(child, scc);
+    }
+}
+#endif
 
 //==============================================================================
 // InteractionTestWindow::CursorOverlay implementation
@@ -128,19 +171,78 @@ void InteractionTestWindow::RecordingListener::addEvent(const String& type, cons
     auto* topBar = window->getTopBar();
     if (topBar == nullptr) return;
     
+    int64 timestamp = Time::getMillisecondCounter() - recordingStartTime;
+    
+    // Check for popup menu selection on mouseDown
+    if (type == "mouseDown")
+    {
+        auto menuInfo = detectPopupMenuSelection(e);
+        
+        if (menuInfo.isValid())
+        {
+            // Store for mouseUp to emit the selectMenuItem event
+            pendingMenuSelection = menuInfo;
+            return;  // Don't record as normal mouseDown
+        }
+    }
+    
+    // Emit selectMenuItem event on mouseUp if we have a pending menu selection
+    if (type == "mouseUp" && pendingMenuSelection.isValid())
+    {
+        DynamicObject::Ptr event = new DynamicObject();
+        event->setProperty("type", "selectMenuItem");
+        event->setProperty("itemId", pendingMenuSelection.itemId);
+        if (pendingMenuSelection.itemText.isNotEmpty())
+            event->setProperty("itemText", pendingMenuSelection.itemText);
+        event->setProperty("timestamp", (int)timestamp);
+        
+        topBar->addRawEvent(var(event.get()));
+        
+#if JUCE_DEBUG
+        DBG("{\"type\": \"selectMenuItem\", \"itemId\": " + String(pendingMenuSelection.itemId) + 
+            ", \"itemText\": \"" + pendingMenuSelection.itemText + "\", \"timestamp\": " + 
+            String((int)timestamp) + "},");
+#endif
+        
+        pendingMenuSelection.reset();
+        return;
+    }
+    
     // Convert coordinates to ScriptContentComponent space
     auto* scc = window->getContent();
     if (scc == nullptr) return;
     
     Point<int> posInScc = scc->getLocalPoint(sourceComponent, e.getPosition());
     
-    int64 timestamp = Time::getMillisecondCounter() - recordingStartTime;
+    // Resolve target component at this moment (captures current UI state)
+    ComponentTargetPath resolvedTarget("content");
+    Array<var> targetBoundsArray;
+    
+    if (auto* pwsc = window->getProcessor())
+    {
+        RealExecutor tempExecutor(window, pwsc);
+        auto resolveResult = tempExecutor.resolvePosition(posInScc);
+        
+        if (!resolveResult.target.isEmpty())
+        {
+            resolvedTarget = resolveResult.target;
+            targetBoundsArray.add(resolveResult.componentBounds.getX());
+            targetBoundsArray.add(resolveResult.componentBounds.getY());
+            targetBoundsArray.add(resolveResult.componentBounds.getWidth());
+            targetBoundsArray.add(resolveResult.componentBounds.getHeight());
+        }
+    }
     
     DynamicObject::Ptr event = new DynamicObject();
     event->setProperty("type", type);
     event->setProperty("x", posInScc.x);
     event->setProperty("y", posInScc.y);
     event->setProperty("timestamp", (int)timestamp);
+    
+    // Attach resolved target info
+    resolvedTarget.toVar(event.get());
+    if (!targetBoundsArray.isEmpty())
+        event->setProperty("targetBounds", targetBoundsArray);
     
     if (type == "mouseDown" || type == "mouseUp")
     {
@@ -159,6 +261,38 @@ void InteractionTestWindow::RecordingListener::addEvent(const String& type, cons
     }
     
     topBar->addRawEvent(var(event.get()));
+    
+#if JUCE_DEBUG
+    // Output JSON for unit test data generation
+    String json = "{\"type\": \"" + type + "\", \"x\": " + String(posInScc.x) + 
+                  ", \"y\": " + String(posInScc.y) + 
+                  ", \"timestamp\": " + String((int)timestamp);
+    
+    json += ", \"target\": \"" + resolvedTarget.componentId + "\"";
+    if (resolvedTarget.hasSubtarget())
+        json += ", \"subtarget\": \"" + resolvedTarget.subtargetId + "\"";
+    if (!targetBoundsArray.isEmpty())
+    {
+        json += ", \"targetBounds\": [" + String((int)targetBoundsArray[0]) + ", " +
+                String((int)targetBoundsArray[1]) + ", " +
+                String((int)targetBoundsArray[2]) + ", " +
+                String((int)targetBoundsArray[3]) + "]";
+    }
+    
+    if (type == "mouseDown" || type == "mouseUp")
+        json += ", \"rightClick\": " + String(e.mods.isRightButtonDown() ? "true" : "false");
+    
+    if (e.mods.isShiftDown() || e.mods.isCtrlDown() || e.mods.isAltDown() || e.mods.isCommandDown())
+    {
+        json += ", \"modifiers\": {\"shift\": " + String(e.mods.isShiftDown() ? "true" : "false");
+        json += ", \"ctrl\": " + String(e.mods.isCtrlDown() ? "true" : "false");
+        json += ", \"alt\": " + String(e.mods.isAltDown() ? "true" : "false");
+        json += ", \"cmd\": " + String(e.mods.isCommandDown() ? "true" : "false") + "}";
+    }
+    
+    json += "},";
+    DBG(json);
+#endif
 }
 
 void InteractionTestWindow::RecordingListener::mouseDown(const MouseEvent& e)
@@ -180,6 +314,20 @@ void InteractionTestWindow::RecordingListener::mouseDrag(const MouseEvent& e)
 {
     // Treat drag as mouseMove (the down state is already tracked)
     addEvent("mouseMove", e);
+}
+
+InteractionTestWindow::RecordingListener::PopupMenuSelectionInfo
+InteractionTestWindow::RecordingListener::detectPopupMenuSelection(const MouseEvent& e)
+{
+    PopupMenuSelectionInfo result;
+    
+    // TODO: You implement this
+    // - Check if e.eventComponent is inside a popup menu
+    // - If so, get the item ID and text
+    // - Set result.isMenuClick = true, result.itemId, result.itemText
+    ignoreUnused(e);
+    
+    return result;
 }
 
 //==============================================================================
@@ -494,6 +642,16 @@ void InteractionTestWindow::TopBar::startRecording()
         
         // Enable mouse capture on recording overlay
         window->setRecordingMouseCapture(true);
+        
+#if JUCE_DEBUG
+        // Dump component tree for unit test data generation
+        if (auto* scc = window->getContent())
+        {
+            DBG("// Mock component setup:");
+            dumpMockComponents(scc, scc);
+            DBG("");
+        }
+#endif
     }
     
     // Timer continues at 1 second intervals
@@ -607,13 +765,48 @@ void InteractionTestWindow::TopBar::processRecordedEvents()
     }
     else
     {
-        // Semantic mode - for now just store raw, semantic parsing in Phase 2 Step 6
-        // TODO: Implement semantic analysis
-        DynamicObject::Ptr wrapper = new DynamicObject();
-        wrapper->setProperty("mode", "semantic");
-        wrapper->setProperty("interactions", Array<var>());  // Empty for now
+        // Semantic mode - analyze raw events to produce compact interactions
+        // Targets are already attached during recording (in addEvent)
+        auto events = InteractionAnalyzer::parseRawEvents(rawRecordedEvents);
         
-        recordedInteractions = var(wrapper.get());
+        // Create a dummy executor for the analyze call (targets already pre-resolved)
+        // The executor parameter is kept for interface consistency but not used when targets are attached
+        auto* window = findParentComponentOfClass<InteractionTestWindow>();
+        if (window != nullptr)
+        {
+            if (auto* pwsc = window->getProcessor())
+            {
+                RealExecutor tempExecutor(window, pwsc);
+                auto analysisResult = InteractionAnalyzer::analyze(events, tempExecutor);
+                
+                // Log any warnings
+                if (analysisResult.hasWarnings())
+                {
+                    if (auto* statusBar = window->getStatusBar())
+                    {
+                        for (const auto& warning : analysisResult.warnings)
+                        {
+                            DBG("Analysis warning: " + warning);
+                        }
+                    }
+                }
+                
+                // Store result
+                DynamicObject::Ptr wrapper = new DynamicObject();
+                wrapper->setProperty("mode", "semantic");
+                wrapper->setProperty("interactions", analysisResult.interactions);
+                
+                recordedInteractions = var(wrapper.get());
+                setHasRecording(true);
+                
+                // Use the analyzed interactions for logging
+                if (auto* interactionsArray = analysisResult.interactions.getArray())
+                {
+                    for (const auto& interaction : *interactionsArray)
+                        processedEvents.add(interaction);
+                }
+            }
+        }
     }
     
     // Log recording result to StatusBar
@@ -1207,10 +1400,10 @@ ModifierKeys InteractionTestWindow::RealExecutor::getSyntheticModifiersCallback(
     return ModifierKeys::currentModifiers;
 }
 
-InteractionDispatcher::Executor::ResolveResult 
-InteractionTestWindow::RealExecutor::resolveTarget(const String& componentId)
+InteractionExecutorBase::ResolveResult 
+InteractionTestWindow::RealExecutor::resolveTarget(const ComponentTargetPath& target)
 {
-    ResolveResult result;
+    InteractionExecutorBase::ResolveResult result;
     
     if (processor == nullptr)
     {
@@ -1225,17 +1418,18 @@ InteractionTestWindow::RealExecutor::resolveTarget(const String& componentId)
         return result;
     }
     
-    auto* sc = content->getComponentWithName(Identifier(componentId));
+    auto* sc = content->getComponentWithName(Identifier(target.componentId));
     if (sc == nullptr)
     {
-        result.error = "Component '" + componentId + "' not found";
+        result.error = "Component '" + target.componentId + "' not found";
         return result;
     }
     
+    result.target = target;
     result.visible = sc->isShowing(true);
     if (!result.visible)
     {
-        result.error = "Component '" + componentId + "' is not visible";
+        result.error = "Component '" + target.componentId + "' is not visible";
         return result;
     }
     
@@ -1243,17 +1437,46 @@ InteractionTestWindow::RealExecutor::resolveTarget(const String& componentId)
     int globalX = sc->getGlobalPositionX();
     int globalY = sc->getGlobalPositionY();
     
-    result.componentBounds = Rectangle<int>(
-        globalX, globalY,
-        localBounds.getWidth(), localBounds.getHeight()
-    );
-    
+    if (target.hasSubtarget())
+    {
+        Component* c = window->getContent()->getComponentForScriptComponentWithId(target.componentId);
+        result.componentBounds = DocumentWindowWithEmbeddedPopupMenu::resolveToGlobalBounds(window->getContent(), c, target.subtargetId);
+    }
+    else
+    {
+		result.componentBounds = Rectangle<int>(
+			globalX, globalY,
+			localBounds.getWidth(), localBounds.getHeight()
+		);
+    }
+
     if (result.componentBounds.isEmpty())
     {
-        result.error = "Component '" + componentId + "' has zero size";
+        result.error = "Component '" + target.toString() + "' has zero size";
         return result;
     }
     
+    return result;
+}
+
+InteractionExecutorBase::ResolveResult 
+InteractionTestWindow::RealExecutor::resolvePosition(Point<int> absolutePos) const
+{
+    InteractionExecutorBase::ResolveResult result;
+    
+	auto scc = window->getContent();
+
+	if (auto c = scc->getScriptComponentComponent(absolutePos))
+	{
+        auto localPos = c->getLocalPoint(scc, absolutePos);
+        auto subTarget = DocumentWindowWithEmbeddedPopupMenu::findSubTargetId(scc, c, localPos);
+
+        auto componentBounds = scc->getLocalArea(c, c->getLocalBounds());
+        result.componentBounds = subTarget.first.isNotEmpty() ? subTarget.second : componentBounds;
+        result.target = ComponentTargetPath(c->getName(), subTarget.first);
+        result.visible = true;
+	}
+
     return result;
 }
 
@@ -1483,15 +1706,16 @@ MainController* InteractionTestWindow::RealExecutor::getMainController() const
 // InteractionTestWindow implementation
 
 InteractionTestWindow::InteractionTestWindow(ProcessorWithScriptingContent* processor, InteractionTester* t)
-    : PopupLookAndFeel::DocumentWindowWithEmbeddedPopupMenu("Interaction Test", 
+    : DocumentWindowWithEmbeddedPopupMenu("Interaction Test", 
                      Colours::darkgrey, 
                      DocumentWindow::closeButton,
                      true),
+      ControlledObject(processor->getMainController_()),
       tester(t)
 {
     setUsingNativeTitleBar(true);
     
-    rootTile = std::make_unique<FloatingTile>(processor->getMainController_(), nullptr);
+	rootTile = std::make_unique<FloatingTile>(processor->getMainController_(), nullptr);
     rootTile->setNewContent("InterfacePanel");
     
     int contentWidth = 600;
@@ -1536,12 +1760,18 @@ InteractionTestWindow::InteractionTestWindow(ProcessorWithScriptingContent* proc
     }
     
     setVisible(true);
-    setAlwaysOnTop(true);
     toFront(true);
+
+	auto useOpenGL = GET_HISE_SETTING(getMainController()->getMainSynthChain(), HiseSettings::Other::UseOpenGL).toString() == "1";
+
+	if (useOpenGL)
+		setEnableOpenGL(this);
 }
 
 InteractionTestWindow::~InteractionTestWindow()
 {
+    detachOpenGl();
+
     // Remove the listener before destroying
     if (recordingListener != nullptr)
     {
@@ -1661,6 +1891,19 @@ Rectangle<int> InteractionTestWindow::getContentBounds() const
         return { 0, 0, scc->getContentWidth(), scc->getContentHeight() };
     
     return {};
+}
+
+ProcessorWithScriptingContent* InteractionTestWindow::getProcessor() const
+{
+    // Get processor through ScriptContentComponent -> ScriptingApi::Content -> Processor
+    auto* self = const_cast<InteractionTestWindow*>(this);
+    if (auto* scc = self->getContent())
+    {
+        auto pwsc = dynamic_cast<const ProcessorWithScriptingContent*>(scc->getScriptProcessor());
+        return const_cast<ProcessorWithScriptingContent*>(pwsc);
+    }
+    
+    return nullptr;
 }
 
 void InteractionTestWindow::setRecordingMouseCapture(bool enabled)
@@ -1959,7 +2202,7 @@ InteractionTester::createMoveToIfNeeded(const InteractionParser::MouseInteractio
             // 1. Different target, OR
             // 2. Same target but explicit non-center position
             
-            bool differentTarget = (mouseState.currentTarget != next.targetComponentId);
+            bool differentTarget = (mouseState.currentTarget != next.target);
             bool explicitPosition = !next.position.isCenter();
             
             if (differentTarget || explicitPosition)
@@ -1967,7 +2210,7 @@ InteractionTester::createMoveToIfNeeded(const InteractionParser::MouseInteractio
                 MoveToResult result;
                 result.needed = true;
                 result.moveTo.type = Type::MoveTo;
-                result.moveTo.targetComponentId = next.targetComponentId;
+                result.moveTo.target = next.target;
                 result.moveTo.position = next.position;
                 result.moveTo.durationMs = InteractionDefaults::MOVE_DURATION_MS;
                 result.moveTo.delayMs = 0;  // Will be set by caller
@@ -1994,7 +2237,7 @@ void InteractionTester::updateMouseStateForNormalization(const InteractionParser
     switch (interaction.type)
     {
         case Type::MoveTo:
-            mouseState.currentTarget = interaction.targetComponentId;
+            mouseState.currentTarget = interaction.target;
             // Note: pixelPosition will be updated during actual execution
             // when we have access to resolved component bounds
             break;
@@ -2010,7 +2253,7 @@ void InteractionTester::updateMouseStateForNormalization(const InteractionParser
             
         case Type::SelectMenuItem:
             // Menu closes, reset to unknown state
-            mouseState.currentTarget = "";
+            mouseState.currentTarget.clear();
             break;
             
         case Type::Screenshot:
@@ -2024,7 +2267,7 @@ void InteractionTester::updateMouseStateForNormalization(const InteractionParser
 
 InteractionDispatcher::ExecutionResult InteractionTester::executeRawEvents(
     const var& eventsArray,
-    InteractionDispatcher::Executor& executor,
+    InteractionExecutorBase& executor,
     Array<var>& executionLog)
 {
     if (!eventsArray.isArray())

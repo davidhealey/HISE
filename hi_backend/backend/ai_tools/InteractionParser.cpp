@@ -145,7 +145,7 @@ InteractionParser::ParseResult InteractionParser::parseDoubleClick(
     // First click
     Interaction click1;
     click1.mouse.type = MouseInteraction::Type::Click;
-    click1.mouse.targetComponentId = target;
+    click1.mouse.target = ComponentTargetPath::fromVar(obj);
     click1.mouse.position = position;
     click1.mouse.modifiers = mods;
     click1.mouse.delayMs = delay;
@@ -155,7 +155,7 @@ InteractionParser::ParseResult InteractionParser::parseDoubleClick(
     // Second click with short delay
     Interaction click2;
     click2.mouse.type = MouseInteraction::Type::Click;
-    click2.mouse.targetComponentId = target;
+    click2.mouse.target = ComponentTargetPath::fromVar(obj);
     click2.mouse.position = position;
     click2.mouse.modifiers = mods;
     click2.mouse.delayMs = InteractionDefaults::DOUBLE_CLICK_DELAY_MS;
@@ -253,7 +253,7 @@ InteractionParser::ParseResult InteractionParser::parseMouseInteraction(
     // Target-based interactions (moveTo, click, drag)
     //==========================================================================
     
-    // Parse target (required)
+    // Parse target (required) and optional subtarget
     if (!obj.hasProperty("target"))
         return ParseResult::fail(formatError("Missing required field 'target'", index));
     
@@ -261,8 +261,8 @@ InteractionParser::ParseResult InteractionParser::parseMouseInteraction(
     if (!targetVar.isString())
         return ParseResult::fail(formatError("Field 'target' must be a string", index, "target"));
     
-    mouse.targetComponentId = targetVar.toString();
-    if (mouse.targetComponentId.isEmpty())
+    mouse.target = ComponentTargetPath::fromVar(obj);
+    if (mouse.target.componentId.isEmpty())
         return ParseResult::fail(formatError("Field 'target' cannot be empty", index, "target"));
     
     // Parse position (optional, defaults to center)
@@ -412,6 +412,373 @@ String InteractionParser::getTypeName(MouseInteraction::Type type)
         case MouseInteraction::Type::SelectMenuItem: return "selectMenuItem";
     }
     return "unknown";
+}
+
+//==============================================================================
+// InteractionAnalyzer implementation
+//==============================================================================
+
+InteractionAnalyzer::RawEvent InteractionAnalyzer::RawEvent::fromVar(const var& obj)
+{
+    RawEvent event;
+    
+    event.type = obj.getProperty("type", "").toString();
+    event.position = Point<int>(
+        static_cast<int>(obj.getProperty("x", 0)),
+        static_cast<int>(obj.getProperty("y", 0))
+    );
+    event.timestamp = static_cast<int64>(obj.getProperty("timestamp", 0));
+    event.rightClick = static_cast<bool>(obj.getProperty("rightClick", false));
+    
+    // Parse modifiers if present
+    if (obj.hasProperty("modifiers"))
+    {
+        auto mods = obj["modifiers"];
+        int flags = 0;
+        
+        if (static_cast<bool>(mods.getProperty("shift", false)))
+            flags |= ModifierKeys::shiftModifier;
+        if (static_cast<bool>(mods.getProperty("ctrl", false)))
+            flags |= ModifierKeys::ctrlModifier;
+        if (static_cast<bool>(mods.getProperty("alt", false)))
+            flags |= ModifierKeys::altModifier;
+        if (static_cast<bool>(mods.getProperty("cmd", false)))
+            flags |= ModifierKeys::commandModifier;
+        
+        event.modifiers = ModifierKeys(flags);
+    }
+    
+    // Parse pre-resolved target info if present
+    event.target = ComponentTargetPath::fromVar(obj);
+    
+    if (obj.hasProperty("targetBounds"))
+    {
+        auto bounds = obj["targetBounds"];
+        if (bounds.isArray() && bounds.size() >= 4)
+        {
+            event.targetBounds = Rectangle<int>(
+                static_cast<int>(bounds[0]),
+                static_cast<int>(bounds[1]),
+                static_cast<int>(bounds[2]),
+                static_cast<int>(bounds[3])
+            );
+        }
+    }
+    
+    // Parse menu selection info if present (for "selectMenuItem" type)
+    event.menuItemId = static_cast<int>(obj.getProperty("itemId", -1));
+    event.menuItemText = obj.getProperty("itemText", "").toString();
+    
+    return event;
+}
+
+Array<InteractionAnalyzer::RawEvent> InteractionAnalyzer::parseRawEvents(const Array<var>& rawEventVars)
+{
+    Array<RawEvent> events;
+    events.ensureStorageAllocated(rawEventVars.size());
+    
+    for (const auto& eventVar : rawEventVars)
+    {
+        events.add(RawEvent::fromVar(eventVar));
+    }
+    
+    return events;
+}
+
+void InteractionAnalyzer::attachTargetInfo(Array<RawEvent>& events, InteractionExecutorBase& executor)
+{
+    for (auto& event : events)
+    {
+        auto resolveResult = executor.resolvePosition(event.position);
+        
+        if (resolveResult.target.isEmpty())
+        {
+            // No component at position - click on background
+            event.target = ComponentTargetPath("content");
+            event.targetBounds = {};
+        }
+        else
+        {
+            event.target = resolveResult.target;
+            event.targetBounds = resolveResult.componentBounds;
+        }
+    }
+}
+
+InteractionAnalyzer::AnalyzeResult InteractionAnalyzer::analyze(
+    const Array<RawEvent>& rawEvents,
+    const InteractionExecutorBase& executor,
+    const Options& options)
+{
+    ignoreUnused(executor);  // Targets are now pre-attached via attachTargetInfo()
+    
+    AnalyzeResult result;
+    Array<var> interactions;
+    GestureState state;
+    
+    for (const auto& event : rawEvents)
+    {
+        // Handle selectMenuItem events - pass through directly (already semantic)
+        if (event.type == "selectMenuItem")
+        {
+            DynamicObject::Ptr obj = new DynamicObject();
+            obj->setProperty("type", "selectMenuItem");
+            obj->setProperty("itemId", event.menuItemId);
+            if (event.menuItemText.isNotEmpty())
+                obj->setProperty("itemText", event.menuItemText);
+            interactions.add(var(obj.get()));
+            continue;
+        }
+        
+        if (event.type == "mouseDown")
+        {
+            // Validate that target info was attached (via recording or attachTargetInfo())
+            if (event.target.isEmpty())
+            {
+                result.warnings.add("mouseDown at (" + String(event.position.x) + ", " + 
+                                   String(event.position.y) + ") has no target info - call attachTargetInfo() first");
+            }
+            
+            state.mouseDown = true;
+            state.downPosition = event.position;
+            state.downTimestamp = event.timestamp;
+            state.downRightClick = event.rightClick;
+            state.downModifiers = event.modifiers;
+            state.downTarget = event.target;
+            state.downComponentBounds = event.targetBounds;
+        }
+        else if (event.type == "mouseUp")
+        {
+            if (!state.mouseDown)
+            {
+                // mouseUp without mouseDown - skip
+                result.warnings.add("mouseUp without matching mouseDown at timestamp " + 
+                                   String(event.timestamp));
+                continue;
+            }
+            
+            // Calculate movement distance
+            int dx = event.position.x - state.downPosition.x;
+            int dy = event.position.y - state.downPosition.y;
+            int distance = static_cast<int>(std::sqrt(dx * dx + dy * dy));
+            
+            if (distance < options.clickMaxMovementPx)
+            {
+                // It's a click - check for double-click
+                bool isDoubleClick = false;
+                
+                if (state.lastClickTimestamp >= 0)
+                {
+                    int64 timeSinceLastClick = state.downTimestamp - state.lastClickTimestamp;
+                    int lastClickDx = state.downPosition.x - state.lastClickPosition.x;
+                    int lastClickDy = state.downPosition.y - state.lastClickPosition.y;
+                    int lastClickDist = static_cast<int>(std::sqrt(lastClickDx * lastClickDx + lastClickDy * lastClickDy));
+                    
+                    if (timeSinceLastClick <= options.doubleClickThresholdMs &&
+                        lastClickDist < options.clickMaxMovementPx &&
+                        state.lastClickTarget == state.downTarget)
+                    {
+                        isDoubleClick = true;
+                    }
+                }
+                
+                if (isDoubleClick)
+                {
+                    // Remove the previous click and replace with doubleClick
+                    if (interactions.size() > 0)
+                    {
+                        interactions.removeLast();
+                    }
+                    interactions.add(createDoubleClickInteraction(state, options));
+                    
+                    // Reset last click tracking (can't triple-click)
+                    state.lastClickTimestamp = -1000;
+                    state.lastClickPosition = {};
+                    state.lastClickTarget.clear();
+                }
+                else
+                {
+                    // Single click
+                    interactions.add(createClickInteraction(state, options));
+                    
+                    // Track for potential double-click
+                    state.lastClickTimestamp = state.downTimestamp;
+                    state.lastClickPosition = state.downPosition;
+                    state.lastClickTarget = state.downTarget;
+                }
+            }
+            else
+            {
+                // It's a drag
+                interactions.add(createDragInteraction(state, event.position, options));
+                
+                // Reset last click tracking (drag breaks double-click)
+                state.lastClickTimestamp = -1000;
+                state.lastClickPosition = {};
+                state.lastClickTarget.clear();
+            }
+            
+            state.reset();
+        }
+        // mouseMove events are ignored for semantic analysis
+    }
+    
+    // Handle case where recording ended with mouse still down
+    if (state.mouseDown)
+    {
+        result.warnings.add("Recording ended with mouse still down");
+    }
+    
+    result.interactions = interactions;
+    return result;
+}
+
+var InteractionAnalyzer::createClickInteraction(const GestureState& state,
+                                                 const Options& options)
+{
+    DynamicObject::Ptr obj = new DynamicObject();
+    
+    obj->setProperty("type", "click");
+    state.downTarget.toVar(obj.get());
+    
+    if (state.downComponentBounds.isEmpty())
+    {
+        // "content" click or no component - use absolute coordinates
+        obj->setProperty("pixelPosition", [&]() {
+            DynamicObject::Ptr pos = new DynamicObject();
+            pos->setProperty("x", state.downPosition.x);
+            pos->setProperty("y", state.downPosition.y);
+            return var(pos.get());
+        }());
+    }
+    else
+    {
+        // Component click - use relative coordinates
+        addPositionToInteraction(obj.get(), state.downPosition, 
+                                 state.downComponentBounds, options.positionMode);
+    }
+    
+    if (state.downRightClick)
+    {
+        obj->setProperty("rightClick", true);
+    }
+    
+    addModifiersToInteraction(obj.get(), state.downModifiers);
+    
+    return var(obj.get());
+}
+
+var InteractionAnalyzer::createDoubleClickInteraction(const GestureState& state,
+                                                       const Options& options)
+{
+    DynamicObject::Ptr obj = new DynamicObject();
+    
+    obj->setProperty("type", "doubleClick");
+    state.downTarget.toVar(obj.get());
+    
+    if (state.downComponentBounds.isEmpty())
+    {
+        // "content" click or no component - use absolute coordinates
+        obj->setProperty("pixelPosition", [&]() {
+            DynamicObject::Ptr pos = new DynamicObject();
+            pos->setProperty("x", state.downPosition.x);
+            pos->setProperty("y", state.downPosition.y);
+            return var(pos.get());
+        }());
+    }
+    else
+    {
+        // Component click - use relative coordinates
+        addPositionToInteraction(obj.get(), state.downPosition, 
+                                 state.downComponentBounds, options.positionMode);
+    }
+    
+    addModifiersToInteraction(obj.get(), state.downModifiers);
+    
+    return var(obj.get());
+}
+
+var InteractionAnalyzer::createDragInteraction(const GestureState& state,
+                                                Point<int> endPosition,
+                                                const Options& options)
+{
+    DynamicObject::Ptr obj = new DynamicObject();
+    
+    obj->setProperty("type", "drag");
+    state.downTarget.toVar(obj.get());
+    
+    if (state.downComponentBounds.isEmpty())
+    {
+        // "content" drag or no component - use absolute coordinates
+        obj->setProperty("pixelPosition", [&]() {
+            DynamicObject::Ptr pos = new DynamicObject();
+            pos->setProperty("x", state.downPosition.x);
+            pos->setProperty("y", state.downPosition.y);
+            return var(pos.get());
+        }());
+    }
+    else
+    {
+        // Component drag - use relative coordinates
+        addPositionToInteraction(obj.get(), state.downPosition, 
+                                 state.downComponentBounds, options.positionMode);
+    }
+    
+    // Delta
+    DynamicObject::Ptr delta = new DynamicObject();
+    delta->setProperty("x", endPosition.x - state.downPosition.x);
+    delta->setProperty("y", endPosition.y - state.downPosition.y);
+    obj->setProperty("delta", var(delta.get()));
+    
+    addModifiersToInteraction(obj.get(), state.downModifiers);
+    
+    return var(obj.get());
+}
+
+void InteractionAnalyzer::addPositionToInteraction(DynamicObject* obj,
+                                                    Point<int> position,
+                                                    Rectangle<int> componentBounds,
+                                                    PositionMode mode)
+{
+    if (componentBounds.isEmpty())
+        return;
+    
+    // Calculate position relative to component
+    int relX = position.x - componentBounds.getX();
+    int relY = position.y - componentBounds.getY();
+    
+    if (mode == PositionMode::Absolute)
+    {
+        DynamicObject::Ptr pos = new DynamicObject();
+        pos->setProperty("x", relX);
+        pos->setProperty("y", relY);
+        obj->setProperty("pixelPosition", var(pos.get()));
+    }
+    else
+    {
+        // Normalized
+        float normX = static_cast<float>(relX) / componentBounds.getWidth();
+        float normY = static_cast<float>(relY) / componentBounds.getHeight();
+        
+        DynamicObject::Ptr pos = new DynamicObject();
+        pos->setProperty("x", normX);
+        pos->setProperty("y", normY);
+        obj->setProperty("position", var(pos.get()));
+    }
+}
+
+void InteractionAnalyzer::addModifiersToInteraction(DynamicObject* obj,
+                                                     ModifierKeys mods)
+{
+    // Only add modifiers that are active (non-default = non-noisy)
+    if (mods.isShiftDown())
+        obj->setProperty("shiftDown", true);
+    if (mods.isCtrlDown())
+        obj->setProperty("ctrlDown", true);
+    if (mods.isAltDown())
+        obj->setProperty("altDown", true);
+    if (mods.isCommandDown())
+        obj->setProperty("cmdDown", true);
 }
 
 } // namespace hise

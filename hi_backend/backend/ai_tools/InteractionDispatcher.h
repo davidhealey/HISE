@@ -67,72 +67,6 @@ class InteractionDispatcher
 {
 public:
     //==============================================================================
-    /** Interface for executing individual mouse/screenshot actions.
-     *  Real implementation injects into JUCE.
-     *  Test implementation logs for verification.
-     */
-    struct Executor
-    {
-        virtual ~Executor() = default;
-        
-        //======================================================================
-        /** Result of resolving a component target to bounds. */
-        struct ResolveResult
-        {
-            Rectangle<int> componentBounds;  // Absolute bounds in Interface coords
-            bool visible = false;
-            String error;
-            
-            bool success() const { return error.isEmpty(); }
-        };
-        
-        //======================================================================
-        /** Resolve a component ID to its bounds.
-         *  @param componentId   Script component ID (e.g., "Button1")
-         *  @returns             ResolveResult with bounds or error
-         */
-        virtual ResolveResult resolveTarget(const String& componentId) = 0;
-        
-        //======================================================================
-        // Primitive mouse operations (pixel coordinates)
-        virtual void executeMouseDown(Point<int> pixelPos, ModifierKeys mods, 
-                                      bool rightClick, int elapsedMs) = 0;
-        virtual void executeMouseUp(Point<int> pixelPos, ModifierKeys mods,
-                                    bool rightClick, int elapsedMs) = 0;
-        virtual void executeMouseMove(Point<int> pixelPos, ModifierKeys mods,
-                                      int elapsedMs) = 0;
-        
-        // Screenshot capture
-        virtual void executeScreenshot(const String& id, float scale, int elapsedMs) = 0;
-        
-        // Synthetic input mode control
-        virtual void executeSyntheticModeStart(int elapsedMs) = 0;
-        virtual void executeSyntheticModeEnd(int elapsedMs) = 0;
-        
-        //======================================================================
-        // Cursor and menu state
-        
-        /** Get current cursor position in Interface coordinates. */
-        virtual Point<int> getCurrentCursorPosition() const = 0;
-        
-        /** Set cursor position (for state tracking). */
-        virtual void setCursorPosition(Point<int> pos) = 0;
-        
-        /** Get all currently visible menu items from open popup menus. */
-        virtual Array<PopupMenu::VisibleMenuItem> getVisibleMenuItems() const = 0;
-        
-        /** Wait until the executor is ready to process events.
-         *  @returns The number of milliseconds waited, or -1 if timed out.
-         */
-        virtual int waitUntilReady() = 0;
-        
-        /** Get MainController for console logging (optional).
-         *  @returns MainController pointer, or nullptr for test executors.
-         */
-        virtual MainController* getMainController() const { return nullptr; }
-    };
-    
-    //==============================================================================
     /** Result of execution with timing info. */
     struct ExecutionResult
     {
@@ -179,7 +113,7 @@ public:
      *  @returns             ExecutionResult with success/failure and timing
      */
     ExecutionResult execute(const Array<InteractionParser::Interaction>& interactions,
-                            Executor& executor,
+                            InteractionExecutorBase& executor,
                             Array<var>& executedLog,
                             int timeoutMs = 20000);
     
@@ -204,15 +138,15 @@ private:
     ProgressListener* progressListener = nullptr;
     
     int getElapsedMs() const;
-    void waitForDuration(int ms, Executor& executor);
+    void waitForDuration(int ms, InteractionExecutorBase& executor);
     String checkAbortConditions() const;
     
     // Execute individual interaction types
-    void executeMoveTo(const InteractionParser::MouseInteraction& mouse, Executor& exec, Array<var>& log);
-    void executeClick(const InteractionParser::MouseInteraction& mouse, Executor& exec, Array<var>& log);
-    void executeDrag(const InteractionParser::MouseInteraction& mouse, Executor& exec, Array<var>& log);
-    void executeScreenshot(const InteractionParser::MouseInteraction& mouse, Executor& exec, Array<var>& log);
-    void executeSelectMenuItem(const InteractionParser::MouseInteraction& mouse, Executor& exec, Array<var>& log);
+    void executeMoveTo(const InteractionParser::MouseInteraction& mouse, InteractionExecutorBase& exec, Array<var>& log);
+    void executeClick(const InteractionParser::MouseInteraction& mouse, InteractionExecutorBase& exec, Array<var>& log);
+    void executeDrag(const InteractionParser::MouseInteraction& mouse, InteractionExecutorBase& exec, Array<var>& log);
+    void executeScreenshot(const InteractionParser::MouseInteraction& mouse, InteractionExecutorBase& exec, Array<var>& log);
+    void executeSelectMenuItem(const InteractionParser::MouseInteraction& mouse, InteractionExecutorBase& exec, Array<var>& log);
     
     // Create log entry for response
     var createLogEntry(const String& type, Point<int> pixelPos, int elapsedMs) const;
@@ -220,7 +154,7 @@ private:
 
 //==============================================================================
 /** Test executor that logs events for verification without actual UI injection. */
-class TestExecutor : public InteractionDispatcher::Executor
+class TestExecutor : public InteractionExecutorBase
 {
 public:
     //==========================================================================
@@ -242,6 +176,7 @@ public:
     {
         Rectangle<int> absoluteBounds;
         bool visible = true;
+        std::map<String, Rectangle<int>> subtargets;  // subtargetId → bounds
     };
     
     //==========================================================================
@@ -260,6 +195,9 @@ public:
     /** Clear all mock components. */
     void clearMockComponents();
     
+    /** Add a subtarget (child component) to a mock component. */
+    void addMockSubtarget(const String& parentId, const String& subtargetId, Rectangle<int> bounds);
+    
     /** Add a mock menu item for testing selectMenuItem. */
     void addMockMenuItem(const String& text, int itemId, Rectangle<int> bounds);
     
@@ -267,9 +205,11 @@ public:
     void clearMockMenuItems();
     
     //==========================================================================
-    // Executor interface implementation
+    // InteractionExecutorBase interface implementation
     
-    ResolveResult resolveTarget(const String& componentId) override;
+    InteractionExecutorBase::ResolveResult resolveTarget(const ComponentTargetPath& target) override;
+    
+    InteractionExecutorBase::ResolveResult resolvePosition(Point<int> absolutePos) const override;
     
     void executeMouseDown(Point<int> pixelPos, ModifierKeys mods,
                           bool rightClick, int elapsedMs) override;

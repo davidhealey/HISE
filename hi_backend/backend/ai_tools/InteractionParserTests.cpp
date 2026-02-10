@@ -215,7 +215,7 @@ private:
         
         expect(interactions.size() == 1, "Should have 1 interaction");
         expect(interactions[0].mouse.type == MouseInteraction::Type::Click, "Should be Click");
-        expect(interactions[0].mouse.targetComponentId == "Button1", "Target should match");
+        expect(interactions[0].mouse.target.componentId == "Button1", "Target should match");
         expect(interactions[0].mouse.position.isCenter(), "Position should be center");
     }
     
@@ -334,8 +334,8 @@ private:
         ])");
         
         expect(interactions.size() == 2, "Should expand to 2 clicks");
-        expect(interactions[0].mouse.targetComponentId == "Panel1", "First target should match");
-        expect(interactions[1].mouse.targetComponentId == "Panel1", "Second target should match");
+        expect(interactions[0].mouse.target.componentId == "Panel1", "First target should match");
+        expect(interactions[1].mouse.target.componentId == "Panel1", "Second target should match");
         expect(interactions[0].mouse.position == interactions[1].mouse.position, 
                "Both should have same position");
     }

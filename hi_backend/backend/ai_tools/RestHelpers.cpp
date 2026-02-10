@@ -1788,7 +1788,7 @@ RestServer::Response RestHelpers::handleSimulateInteractions(BackendProcessor* b
 	if (verbose)
 	{
 		DynamicObject::Ptr mouseStateObj = new DynamicObject();
-		mouseStateObj->setProperty(RestApiIds::currentTarget, testResult.finalMouseState.currentTarget);
+		mouseStateObj->setProperty(RestApiIds::currentTarget, testResult.finalMouseState.currentTarget.toString());
 		
 		DynamicObject::Ptr pixelPosObj = new DynamicObject();
 		pixelPosObj->setProperty(RestApiIds::x, testResult.finalMouseState.pixelPosition.x);

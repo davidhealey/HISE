@@ -85,7 +85,7 @@ private:
     {
         Interaction i;
         i.mouse.type = MouseInteraction::Type::MoveTo;
-        i.mouse.targetComponentId = target;
+        i.mouse.target = ComponentTargetPath(target);
         i.mouse.position = Position::center();
         i.mouse.delayMs = delayMs;
         i.mouse.durationMs = durationMs;
@@ -96,7 +96,7 @@ private:
     {
         Interaction i;
         i.mouse.type = MouseInteraction::Type::MoveTo;
-        i.mouse.targetComponentId = target;
+        i.mouse.target = ComponentTargetPath(target);
         i.mouse.position = Position::absolute(x, y);
         i.mouse.durationMs = durationMs;
         return i;
@@ -115,7 +115,7 @@ private:
     {
         Interaction i;
         i.mouse.type = MouseInteraction::Type::Click;
-        i.mouse.targetComponentId = target;
+        i.mouse.target = ComponentTargetPath(target);
         i.mouse.position = Position::center();
         i.mouse.durationMs = InteractionDefaults::CLICK_DURATION_MS;
         return i;
@@ -125,7 +125,7 @@ private:
     {
         Interaction i;
         i.mouse.type = MouseInteraction::Type::Drag;
-        i.mouse.targetComponentId = target;
+        i.mouse.target = ComponentTargetPath(target);
         i.mouse.position = Position::center();
         i.mouse.deltaPixels = {dx, dy};
         i.mouse.durationMs = durationMs;

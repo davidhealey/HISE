@@ -85,6 +85,7 @@
 #include "backend/ai_tools/ServerUnitTests.cpp"
 #include "backend/ai_tools/InteractionParserTests.cpp"
 #include "backend/ai_tools/InteractionDispatcherTests.cpp"
+#include "backend/ai_tools/InteractionAnalyzerTests.cpp"
 #endif
 
 #include "backend/BackendProcessor.cpp"

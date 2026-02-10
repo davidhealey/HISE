@@ -54,7 +54,8 @@ struct ScreenshotInfo
  *
  *  Window is centered on the primary display and set to always-on-top.
  */
-class InteractionTestWindow : public PopupLookAndFeel::DocumentWindowWithEmbeddedPopupMenu
+class InteractionTestWindow : public DocumentWindowWithEmbeddedPopupMenu,
+                              public ControlledObject
 {
 public:
     //==========================================================================
@@ -121,11 +122,28 @@ public:
         void setRecording(bool enabled, int64 startTime);
         bool isRecordingActive() const { return recording; }
         
+        /** Info about a popup menu item selection. */
+        struct PopupMenuSelectionInfo
+        {
+            bool isMenuClick = false;
+            int itemId = -1;
+            String itemText;
+            
+            bool isValid() const { return isMenuClick && itemId >= 0; }
+            void reset() { isMenuClick = false; itemId = -1; itemText = ""; }
+        };
+        
     private:
         bool recording = false;
         int64 recordingStartTime = 0;
+        PopupMenuSelectionInfo pendingMenuSelection;
         
         void addEvent(const String& type, const MouseEvent& e);
+        
+        /** Detect if this mouseDown is on a popup menu item.
+         *  Returns info about the menu item if found.
+         */
+        PopupMenuSelectionInfo detectPopupMenuSelection(const MouseEvent& e);
         
         JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(RecordingListener)
     };
@@ -402,15 +420,17 @@ public:
      *
      *  Uses InputSourceType::mouse with index 0 (primary mouse).
      */
-    class RealExecutor : public InteractionDispatcher::Executor
+    class RealExecutor : public InteractionExecutorBase
     {
     public:
         RealExecutor(InteractionTestWindow* window, ProcessorWithScriptingContent* processor);
         
         //======================================================================
-        // Executor interface implementation
+        // InteractionExecutorBase interface implementation
         
-        ResolveResult resolveTarget(const String& componentId) override;
+        InteractionExecutorBase::ResolveResult resolveTarget(const ComponentTargetPath& target) override;
+        
+        InteractionExecutorBase::ResolveResult resolvePosition(Point<int> absolutePos) const override;
         
         void executeMouseDown(Point<int> pixelPos, ModifierKeys mods,
                               bool rightClick, int elapsedMs) override;
@@ -508,6 +528,11 @@ public:
     /** Get the interaction tester that owns this window. */
     InteractionTester* getInteractionTester() { return tester; }
     
+    /** Get the processor for creating temporary RealExecutor during recording.
+     *  Returns nullptr if processor is not available.
+     */
+    ProcessorWithScriptingContent* getProcessor() const;
+    
 private:
 
     /** Container component that holds TopBar, FloatingTile, and StatusBar. */
@@ -522,8 +547,6 @@ private:
         StatusBar* statusBar = nullptr;
     };
     
-    juce::OpenGLContext context;
-
     InteractionTester* tester;
     std::unique_ptr<ContentContainer> container;
     std::unique_ptr<TopBar> topBar;
@@ -541,12 +564,12 @@ private:
 /** Tracks virtual mouse position across API calls. */
 struct MouseState
 {
-    String currentTarget;           // Component ID mouse is over (empty = root/none)
-    Point<int> pixelPosition{0, 0}; // Absolute pixel position in Interface coords
+    ComponentTargetPath currentTarget;  // Component + subtarget mouse is over
+    Point<int> pixelPosition{0, 0};     // Absolute pixel position in Interface coords
     
     void reset() 
     { 
-        currentTarget = ""; 
+        currentTarget.clear(); 
         pixelPosition = {0, 0}; 
     }
 };
@@ -663,7 +686,7 @@ private:
      */
     InteractionDispatcher::ExecutionResult executeRawEvents(
         const var& eventsArray,
-        InteractionDispatcher::Executor& executor,
+        InteractionExecutorBase& executor,
         Array<var>& executionLog);
     
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(InteractionTester)

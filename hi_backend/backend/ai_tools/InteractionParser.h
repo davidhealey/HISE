@@ -25,6 +25,159 @@ namespace hise {
 using namespace juce;
 
 //==============================================================================
+/** Represents a UI component target, optionally with a subtarget.
+ *  Examples:
+ *    - {"Button1", ""}        -> main component
+ *    - {"SliderPack1", "11"}  -> slider 11 within SliderPack
+ *    - {"FilterGraph", "2"}   -> EQ band 2
+ */
+struct ComponentTargetPath
+{
+    String componentId;     // Main component ID (e.g., "SliderPack1")
+    String subtargetId;     // Child element ID (e.g., "11"), or empty
+    
+    //==========================================================================
+    // Constructors
+    ComponentTargetPath() = default;
+    ComponentTargetPath(const String& component) : componentId(component) {}
+    ComponentTargetPath(const String& component, const String& subtarget)
+        : componentId(component), subtargetId(subtarget) {}
+    
+    //==========================================================================
+    // Queries
+    bool isEmpty() const { return componentId.isEmpty(); }
+    bool isValid() const { return componentId.isNotEmpty(); }
+    bool hasSubtarget() const { return subtargetId.isNotEmpty(); }
+    
+    //==========================================================================
+    // Comparison
+    bool operator==(const ComponentTargetPath& other) const
+    {
+        return componentId == other.componentId && subtargetId == other.subtargetId;
+    }
+    bool operator!=(const ComponentTargetPath& other) const { return !(*this == other); }
+    
+    /** Compare component only (ignores subtarget). */
+    bool sameComponent(const ComponentTargetPath& other) const
+    {
+        return componentId == other.componentId;
+    }
+    
+    //==========================================================================
+    // JSON Serialization (backward-compatible separate fields)
+    
+    /** Read from JSON object with "target" and optional "subtarget" fields. */
+    static ComponentTargetPath fromVar(const var& obj)
+    {
+        ComponentTargetPath path;
+        path.componentId = obj.getProperty("target", "").toString();
+        path.subtargetId = obj.getProperty("subtarget", "").toString();
+        return path;
+    }
+    
+    /** Write to existing JSON object as "target" and "subtarget" fields. */
+    void toVar(DynamicObject* obj) const
+    {
+        if (componentId.isNotEmpty())
+            obj->setProperty("target", componentId);
+        if (subtargetId.isNotEmpty())
+            obj->setProperty("subtarget", subtargetId);
+    }
+    
+    //==========================================================================
+    // Debug/Display
+    String toString() const
+    {
+        if (subtargetId.isEmpty())
+            return componentId;
+        return componentId + "." + subtargetId;
+    }
+    
+    void clear()
+    {
+        componentId = {};
+        subtargetId = {};
+    }
+};
+
+//==============================================================================
+/** Base interface for executing mouse/screenshot actions.
+ *  Real implementation injects into JUCE.
+ *  Test implementation logs for verification.
+ */
+struct InteractionExecutorBase
+{
+    virtual ~InteractionExecutorBase() = default;
+    
+    //==========================================================================
+    /** Result of resolving component ID ↔ position (bidirectional). */
+    struct ResolveResult
+    {
+        Rectangle<int> componentBounds;  // Absolute bounds (of subtarget if specified)
+        ComponentTargetPath target;      // Resolved component + subtarget
+        bool visible = false;
+        String error;
+        
+        bool success() const { return error.isEmpty(); }
+        
+        /** True if clicked on a child element within the component. */
+        bool hasSubtarget() const { return target.hasSubtarget(); }
+    };
+    
+    //==========================================================================
+    /** Resolve component ID → bounds (for dispatch).
+     *  @param target   Component + optional subtarget to resolve
+     *  @returns        ResolveResult with componentBounds, visible, error
+     */
+    virtual ResolveResult resolveTarget(const ComponentTargetPath& target) = 0;
+    
+    /** Resolve position → component ID (for analysis).
+     *  @param absolutePos   Position in Interface/ScriptContentComponent coords
+     *  @returns             ResolveResult with componentId, subtargetId,
+     *                       componentBounds, visible, error
+     */
+    virtual ResolveResult resolvePosition(Point<int> absolutePos) const = 0;
+    
+    //==========================================================================
+    // Primitive mouse operations (pixel coordinates)
+    virtual void executeMouseDown(Point<int> pixelPos, ModifierKeys mods, 
+                                  bool rightClick, int elapsedMs) = 0;
+    virtual void executeMouseUp(Point<int> pixelPos, ModifierKeys mods,
+                                bool rightClick, int elapsedMs) = 0;
+    virtual void executeMouseMove(Point<int> pixelPos, ModifierKeys mods,
+                                  int elapsedMs) = 0;
+    
+    // Screenshot capture
+    virtual void executeScreenshot(const String& id, float scale, int elapsedMs) = 0;
+    
+    // Synthetic input mode control
+    virtual void executeSyntheticModeStart(int elapsedMs) = 0;
+    virtual void executeSyntheticModeEnd(int elapsedMs) = 0;
+    
+    //==========================================================================
+    // Cursor and menu state
+    
+    /** Get current cursor position in Interface coordinates. */
+    virtual Point<int> getCurrentCursorPosition() const = 0;
+    
+    /** Set cursor position (for state tracking). */
+    virtual void setCursorPosition(Point<int> pos) = 0;
+    
+    /** Get all currently visible menu items from open popup menus. */
+    virtual Array<PopupMenu::VisibleMenuItem> getVisibleMenuItems() const = 0;
+    
+    /** Wait until the executor is ready to process events.
+     *  @returns The number of milliseconds waited, or -1 if timed out.
+     */
+    virtual int waitUntilReady() = 0;
+    
+    /** Get MainController for console logging (optional).
+     *  @returns MainController pointer, or nullptr for test executors.
+     */
+    virtual MainController* getMainController() const { return nullptr; }
+};
+
+//==============================================================================
 /** Default timing values for interactions */
 struct InteractionDefaults
 {
@@ -135,9 +288,9 @@ public:
         
         Type type = Type::Click;
         
-        /** Target component ID (for moveTo, click, drag). */
-        String targetComponentId;
-        
+        /** Target component + optional subtarget (for moveTo, click, drag). */
+        ComponentTargetPath target;
+
         /** Position within target (for moveTo, click, drag start). */
         Position position = Position::center();
         
@@ -248,6 +401,155 @@ private:
     
     /** Get string name for mouse interaction type. */
     static String getTypeName(MouseInteraction::Type type);
+};
+
+//==============================================================================
+/** Analyzes raw mouse events and produces semantic interactions.
+ *
+ *  This is the INVERSE of InteractionParser:
+ *  - Parser:   JSON (semantic) → Interaction structs
+ *  - Analyzer: Raw events → JSON (semantic)
+ *
+ *  Used by the recording feature to convert captured mouse events
+ *  into the same format that the parser accepts.
+ */
+class InteractionAnalyzer
+{
+public:
+    //==========================================================================
+    /** Position output mode for generated JSON. */
+    enum class PositionMode
+    {
+        Absolute,      // {"pixelPosition": {"x": 50, "y": 75}}
+        Normalized     // {"position": {"x": 0.3, "y": 0.7}}
+    };
+    
+    //==========================================================================
+    /** Configuration options for analysis. */
+    struct Options
+    {
+        PositionMode positionMode = PositionMode::Absolute;
+        int doubleClickThresholdMs = 400;   // Max time between clicks for double-click
+        int clickMaxMovementPx = 5;          // Max movement to still count as click
+    };
+    
+    //==========================================================================
+    /** A single raw mouse event from recording. */
+    struct RawEvent
+    {
+        String type;           // "mouseDown", "mouseUp", "mouseMove", "selectMenuItem"
+        Point<int> position;   // Absolute position in ScriptContentComponent coords
+        int64 timestamp;       // Milliseconds since recording start
+        bool rightClick = false;
+        ModifierKeys modifiers;
+        
+        // Pre-resolved target info (attached during recording or via attachTargetInfo())
+        ComponentTargetPath target;       // Component + subtarget, or empty (unresolved)
+        Rectangle<int> targetBounds;      // Component bounds at time of event (empty if no component)
+        
+        // Menu selection info (for "selectMenuItem" type events)
+        int menuItemId = -1;
+        String menuItemText;
+        
+        /** Create RawEvent from a JSON object (from RecordingListener). */
+        static RawEvent fromVar(const var& obj);
+    };
+    
+    //==========================================================================
+    /** Result of analysis. */
+    struct AnalyzeResult
+    {
+        var interactions;      // JSON array matching parser input format
+        StringArray warnings;
+        
+        bool hasWarnings() const { return !warnings.isEmpty(); }
+    };
+    
+    //==========================================================================
+    /** Analyze raw events and produce semantic interactions JSON.
+     *
+     *  Detects:
+     *  - click: mouseDown + mouseUp with < 5px movement
+     *  - doubleClick: two clicks within 400ms at same position
+     *  - drag: mouseDown + movement >= 5px + mouseUp
+     *
+     *  @param rawEvents   Array of raw events (from RecordingListener)
+     *  @param executor    Executor for component lookup (resolvePosition)
+     *  @param options     Analysis configuration
+     *  @return            JSON array of interactions + warnings
+     */
+    static AnalyzeResult analyze(const Array<RawEvent>& rawEvents,
+                                 const InteractionExecutorBase& executor,
+                                 const Options& options = {});
+    
+    /** Convert var array (from recording) to RawEvent array. */
+    static Array<RawEvent> parseRawEvents(const Array<var>& rawEventVars);
+    
+    /** Attach target info to raw events using executor for position resolution.
+     *
+     *  Iterates through events and calls executor.resolvePosition() to populate
+     *  the target, subtarget, and targetBounds fields.
+     *
+     *  For real recording: Not needed - targets are resolved during capture.
+     *  For unit tests: Call this before analyze() to simulate resolved targets.
+     *
+     *  @param events   Array of events to modify in place
+     *  @param executor Executor providing resolvePosition()
+     */
+    static void attachTargetInfo(Array<RawEvent>& events, InteractionExecutorBase& executor);
+    
+private:
+    //==========================================================================
+    /** Internal state for tracking mouse gestures during analysis. */
+    struct GestureState
+    {
+        bool mouseDown = false;
+        Point<int> downPosition;
+        int64 downTimestamp = 0;
+        bool downRightClick = false;
+        ModifierKeys downModifiers;
+        ComponentTargetPath downTarget;      // Component where mouse went down
+        Rectangle<int> downComponentBounds;
+        
+        // For double-click detection
+        int64 lastClickTimestamp = -1000;    // Far in the past
+        Point<int> lastClickPosition;
+        ComponentTargetPath lastClickTarget; // For double-click same-target detection
+        
+        void reset()
+        {
+            mouseDown = false;
+            downPosition = {};
+            downTimestamp = 0;
+            downRightClick = false;
+            downModifiers = {};
+            downTarget.clear();
+            downComponentBounds = {};
+        }
+    };
+    
+    /** Create a JSON interaction object for a click. */
+    static var createClickInteraction(const GestureState& state,
+                                      const Options& options);
+    
+    /** Create a JSON interaction object for a double-click. */
+    static var createDoubleClickInteraction(const GestureState& state,
+                                            const Options& options);
+    
+    /** Create a JSON interaction object for a drag. */
+    static var createDragInteraction(const GestureState& state,
+                                     Point<int> endPosition,
+                                     const Options& options);
+    
+    /** Add position to interaction JSON based on mode. */
+    static void addPositionToInteraction(DynamicObject* obj,
+                                         Point<int> position,
+                                         Rectangle<int> componentBounds,
+                                         PositionMode mode);
+    
+    /** Add modifiers to interaction JSON (only if non-default). */
+    static void addModifiersToInteraction(DynamicObject* obj,
+                                          ModifierKeys mods);
 };
 
 } // namespace hise
