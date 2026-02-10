@@ -63,7 +63,7 @@ StringArray ParameterProperties::getModulationModeNames()
 		"Gain",
 		"Offset",	
 		"Pan", 
-		"Disabled"
+		"Pitch"
 	};
 }
 
@@ -144,12 +144,13 @@ void ParameterProperties::setModulationMode(int16 parameterIndex, ParameterMode 
 void ParameterProperties::fromValueTree(const ValueTree& v)
 {
 	jassert(v.getType() == PropertyIds::Network);
+
+	reset();
+
 	modulationBlocksize = (int)v.getProperty(PropertyIds::ModulationBlockSize, 0);
 
 	if(modulationBlocksize != 0)
 		setModulationBlockSize(modulationBlocksize);
-		
-	reset();
 
 	auto pTree = v.getChildWithName(PropertyIds::Node).getChildWithName(PropertyIds::Parameters);
 
@@ -181,7 +182,7 @@ void ParameterProperties::fromValueTree(const ValueTree& v)
 
 bool ParameterProperties::isUsed(int8 modulationIndex) const
 {
-	if(modulationIndex == -1)
+	if(!isPositiveAndBelow(modulationIndex, NumMaxModulationSources))
 		return false;
 
 	return modInfo[modulationIndex].parameterIndex != -1;
@@ -236,7 +237,7 @@ void ParameterProperties::readFromStream(InputStream& input)
 
 int16 ParameterProperties::getParameterIndex(int8 modulationIndex) const
 {
-	if(modulationIndex == -1 || numUsedModulationSlots == 0)
+	if(!isPositiveAndBelow(modulationIndex, NumMaxModulationSources) || numUsedModulationSlots == 0)
 		return -1;
 
 	auto pIndex = (int)modInfo[modulationIndex].parameterIndex;
@@ -244,7 +245,6 @@ int16 ParameterProperties::getParameterIndex(int8 modulationIndex) const
 	if(pIndex == -1)
 		return -1;
 
-	jassert(pIndex != -1);
 	jassert(modulationIndex == parameterInfo[pIndex].modulationSlotIndex);
 	return pIndex;
 }
@@ -272,7 +272,7 @@ bool ParameterProperties::isAnyConnected() const noexcept
 
 scriptnode::modulation::ParameterMode ParameterProperties::getParameterMode(int16 parameterIndex) const noexcept
 {
-	if (isPositiveAndBelow(parameterIndex, NumMaxModulationSources))
+	if (isPositiveAndBelow(parameterIndex, NumMaxModulationParameterIndex))
 		return parameterInfo[parameterIndex].mode;
 
 	return ParameterMode::Disabled;
