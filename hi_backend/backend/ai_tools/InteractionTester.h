@@ -107,9 +107,42 @@ public:
     };
     
     //==========================================================================
+    /** Mouse listener that captures events during recording without blocking UI. */
+    class RecordingListener : public MouseListener
+    {
+    public:
+        RecordingListener() = default;
+        
+        void mouseDown(const MouseEvent& e) override;
+        void mouseUp(const MouseEvent& e) override;
+        void mouseMove(const MouseEvent& e) override;
+        void mouseDrag(const MouseEvent& e) override;
+        
+        void setRecording(bool enabled, int64 startTime);
+        bool isRecordingActive() const { return recording; }
+        
+    private:
+        bool recording = false;
+        int64 recordingStartTime = 0;
+        
+        void addEvent(const String& type, const MouseEvent& e);
+        
+        JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(RecordingListener)
+    };
+    
+    //==========================================================================
+    /** Recording mode for captured mouse interactions. */
+    enum class RecordingMode
+    {
+        Semantic,   // Analyze raw events to detect clicks/drags, store as compact format
+        Raw         // Store thinned raw events for exact replay
+    };
+    
+    //==========================================================================
     /** Top bar with action buttons for recording, replay, save, and load.
      *
      *  Displays:
+     *  - Mode toggle button (Semantic/Raw)
      *  - Record button (toggle, red when recording)
      *  - Replay button (disabled until recording exists)
      *  - Save button (disabled until recording exists)
@@ -117,7 +150,8 @@ public:
      *  - Session name label
      */
     class TopBar : public Component,
-                   public Button::Listener
+                   public Button::Listener,
+                   public Timer
     {
     public:
         TopBar();
@@ -129,9 +163,30 @@ public:
         // Button::Listener
         void buttonClicked(Button* b) override;
         
+        // Timer (for countdown and recording duration)
+        void timerCallback() override;
+        
+        // Recording mode
+        RecordingMode getRecordingMode() const { return recordingMode; }
+        
         // Recording state
         void setRecording(bool isRecording);
         bool isRecording() const { return recording; }
+        
+        // Start the countdown sequence (3-2-1 then record)
+        void startRecordingCountdown();
+        
+        // Called when recording actually starts (after countdown)
+        void startRecording();
+        
+        // Called when recording duration expires
+        void stopRecording();
+        
+        // Add a raw mouse event during recording
+        void addRawEvent(const var& event);
+        
+        // Get the raw recorded events
+        const Array<var>& getRawRecordedEvents() const { return rawRecordedEvents; }
         
         // Enable/disable based on session state
         void setHasRecording(bool hasRecording);
@@ -149,6 +204,9 @@ public:
         
         static constexpr int HEIGHT = 40;
         
+        static constexpr int COUNTDOWN_SECONDS = 3;
+        static constexpr int RECORDING_DURATION_SECONDS = 5;
+        
     private:
         struct ButtonPathFactory : public PathFactory
         {
@@ -158,6 +216,7 @@ public:
         ButtonPathFactory pathFactory;
         GlobalHiseLookAndFeel laf;
         
+        ScopedPointer<TextButton> modeToggle;
         ScopedPointer<HiseShapeButton> recordButton;
         ScopedPointer<HiseShapeButton> replayButton;
         ScopedPointer<HiseShapeButton> clearButton;
@@ -168,8 +227,25 @@ public:
         String sessionName = "new_session_1";
         bool recording = false;
         bool hasRecordingData = false;
+        RecordingMode recordingMode = RecordingMode::Semantic;
+        
+        // Countdown state
+        bool inCountdown = false;
+        int countdownValue = 0;
+        
+        // Recording timing
+        int64 recordingStartTime = 0;
+        
+        // Raw events captured during recording
+        Array<var> rawRecordedEvents;
         
         var recordedInteractions;  // Stores the recorded/loaded session data
+        
+        // Helper to update button enabled states
+        void updateButtonStates();
+        
+        // Process raw events after recording stops
+        void processRecordedEvents();
         
         JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(TopBar)
     };
@@ -239,6 +315,25 @@ public:
         /** Set the log button toggle state (used when hiding log programmatically). */
         void setLogToggleState(bool state);
         
+        /** Log the result of a recording session.
+         *  @param mode          Recording mode (Semantic or Raw)
+         *  @param events        The processed events (thinned for raw mode)
+         *  @param originalCount Number of events before processing
+         */
+        void logRecordingResult(RecordingMode mode, const Array<var>& events, int originalCount);
+        
+        /** Show countdown overlay (for recording countdown). */
+        void showCountdown(int seconds);
+        
+        /** Hide countdown overlay and show recording indicator. */
+        void showRecordingActive(int remainingSeconds);
+        
+        /** Hide countdown/recording overlay. */
+        void hideCountdown();
+        
+        /** Check if countdown is currently showing. */
+        bool isShowingCountdown() const { return countdownActive; }
+        
         static constexpr int HEIGHT = 28;
         
     private:
@@ -271,6 +366,12 @@ public:
         // Log console
         CodeDocument logDocument;
         JavascriptTokeniser logTokeniser;
+        
+        // Countdown/Recording overlay state
+        bool countdownActive = false;
+        int countdownValue = 0;
+        bool recordingIndicator = false;
+        int recordingRemaining = 0;
         
         // LAF
         GlobalHiseLookAndFeel laf;
@@ -386,6 +487,9 @@ public:
     /** Get the status bar component. */
     StatusBar* getStatusBar() { return statusBar.get(); }
     
+    /** Enable/disable recording mode for mouse capture. */
+    void setRecordingMouseCapture(bool enabled);
+    
     /** Show/hide the log editor overlay. */
     void setLogVisible(bool visible);
     
@@ -425,6 +529,7 @@ private:
     std::unique_ptr<TopBar> topBar;
     std::unique_ptr<FloatingTile> rootTile;
     std::unique_ptr<CursorOverlay> overlay;
+    std::unique_ptr<RecordingListener> recordingListener;
     std::unique_ptr<StatusBar> statusBar;
     std::unique_ptr<CodeEditorComponent> logEditor;
     
@@ -552,6 +657,14 @@ private:
     
     /** Update mouse state after interaction. Called during normalization. */
     void updateMouseStateForNormalization(const InteractionParser::MouseInteraction& interaction);
+    
+    /** Execute raw recorded events directly (no parsing/normalization).
+     *  Used for raw recording mode where events are replayed exactly as captured.
+     */
+    InteractionDispatcher::ExecutionResult executeRawEvents(
+        const var& eventsArray,
+        InteractionDispatcher::Executor& executor,
+        Array<var>& executionLog);
     
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(InteractionTester)
 };

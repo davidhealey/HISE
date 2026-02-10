@@ -105,6 +105,84 @@ Colour InteractionTestWindow::CursorOverlay::getColourForState() const
 }
 
 //==============================================================================
+// InteractionTestWindow::RecordingListener implementation
+
+void InteractionTestWindow::RecordingListener::setRecording(bool enabled, int64 startTime)
+{
+    recording = enabled;
+    recordingStartTime = startTime;
+}
+
+void InteractionTestWindow::RecordingListener::addEvent(const String& type, const MouseEvent& e)
+{
+    if (!recording) return;
+    
+    // Get the source component from the event
+    auto* sourceComponent = e.eventComponent;
+    if (sourceComponent == nullptr) return;
+    
+    // Navigate up to find InteractionTestWindow
+    auto* window = sourceComponent->findParentComponentOfClass<InteractionTestWindow>();
+    if (window == nullptr) return;
+    
+    auto* topBar = window->getTopBar();
+    if (topBar == nullptr) return;
+    
+    // Convert coordinates to ScriptContentComponent space
+    auto* scc = window->getContent();
+    if (scc == nullptr) return;
+    
+    Point<int> posInScc = scc->getLocalPoint(sourceComponent, e.getPosition());
+    
+    int64 timestamp = Time::getMillisecondCounter() - recordingStartTime;
+    
+    DynamicObject::Ptr event = new DynamicObject();
+    event->setProperty("type", type);
+    event->setProperty("x", posInScc.x);
+    event->setProperty("y", posInScc.y);
+    event->setProperty("timestamp", (int)timestamp);
+    
+    if (type == "mouseDown" || type == "mouseUp")
+    {
+        event->setProperty("rightClick", e.mods.isRightButtonDown());
+    }
+    
+    // Store modifier state
+    if (e.mods.isShiftDown() || e.mods.isCtrlDown() || e.mods.isAltDown() || e.mods.isCommandDown())
+    {
+        DynamicObject::Ptr mods = new DynamicObject();
+        mods->setProperty("shift", e.mods.isShiftDown());
+        mods->setProperty("ctrl", e.mods.isCtrlDown());
+        mods->setProperty("alt", e.mods.isAltDown());
+        mods->setProperty("cmd", e.mods.isCommandDown());
+        event->setProperty("modifiers", var(mods.get()));
+    }
+    
+    topBar->addRawEvent(var(event.get()));
+}
+
+void InteractionTestWindow::RecordingListener::mouseDown(const MouseEvent& e)
+{
+    addEvent("mouseDown", e);
+}
+
+void InteractionTestWindow::RecordingListener::mouseUp(const MouseEvent& e)
+{
+    addEvent("mouseUp", e);
+}
+
+void InteractionTestWindow::RecordingListener::mouseMove(const MouseEvent& e)
+{
+    addEvent("mouseMove", e);
+}
+
+void InteractionTestWindow::RecordingListener::mouseDrag(const MouseEvent& e)
+{
+    // Treat drag as mouseMove (the down state is already tracked)
+    addEvent("mouseMove", e);
+}
+
+//==============================================================================
 // InteractionTestWindow::TopBar implementation
 
 Path InteractionTestWindow::TopBar::ButtonPathFactory::createPath(const String& url) const
@@ -128,6 +206,15 @@ Path InteractionTestWindow::TopBar::ButtonPathFactory::createPath(const String& 
 
 InteractionTestWindow::TopBar::TopBar()
 {
+    // Mode toggle button
+    modeToggle = new TextButton("Semantic");
+    modeToggle->setButtonText("Semantic");
+    modeToggle->setTooltip("Toggle recording mode: Semantic (detect clicks/drags) or Raw (exact mouse replay)");
+    modeToggle->addListener(this);
+    modeToggle->setColour(TextButton::buttonColourId, Colour(0xFF555555));
+    modeToggle->setColour(TextButton::textColourOffId, Colours::white);
+    addAndMakeVisible(modeToggle);
+    
     // Group 1: Record, Replay
     recordButton = new HiseShapeButton("record", this, pathFactory, "record");
     recordButton->setTooltip("Record mouse interactions");
@@ -178,9 +265,14 @@ void InteractionTestWindow::TopBar::resized()
     auto b = getLocalBounds();
     
     int buttonSize = 32;
+    int toggleWidth = 70;
     int padding = 4;
     int groupMargin = 12;  // Larger margin between button groups
     
+    b.removeFromLeft(padding);
+    
+    // Mode toggle (before record button)
+    modeToggle->setBounds(b.removeFromLeft(toggleWidth).reduced(0, 8));
     b.removeFromLeft(padding);
     
     // Group 1: Record, Replay
@@ -204,10 +296,33 @@ void InteractionTestWindow::TopBar::resized()
 
 void InteractionTestWindow::TopBar::buttonClicked(Button* b)
 {
-    if (b == recordButton.get())
+    if (b == modeToggle.get())
     {
-        // Toggle recording state (actual recording logic in Phase 2)
-        setRecording(!recording);
+        // Toggle between Semantic and Raw modes
+        if (recordingMode == RecordingMode::Semantic)
+        {
+            recordingMode = RecordingMode::Raw;
+            modeToggle->setButtonText("Raw");
+        }
+        else
+        {
+            recordingMode = RecordingMode::Semantic;
+            modeToggle->setButtonText("Semantic");
+        }
+    }
+    else if (b == recordButton.get())
+    {
+        if (!recording && !inCountdown)
+        {
+            // Start countdown sequence
+            startRecordingCountdown();
+        }
+        else if (recording)
+        {
+            // Stop recording early (user clicked during recording)
+            stopRecording();
+        }
+        // If in countdown, ignore clicks
     }
     else if (b == replayButton.get())
     {
@@ -267,22 +382,248 @@ void InteractionTestWindow::TopBar::setRecording(bool isRecording)
         recordButton->repaint();
     }
     
-    // Disable other buttons during recording
-    replayButton->setEnabled(!recording && hasRecordingData);
-    saveButton->setEnabled(!recording && hasRecordingData);
-    loadButton->setEnabled(!recording);
+    updateButtonStates();
+    repaint();
+}
+
+void InteractionTestWindow::TopBar::updateButtonStates()
+{
+    bool busy = recording || inCountdown;
     
-    // Update status bar state
+    // Disable all buttons during recording or countdown
+    modeToggle->setEnabled(!busy);
+    replayButton->setEnabled(!busy && hasRecordingData);
+    saveButton->setEnabled(!busy && hasRecordingData);
+    loadButton->setEnabled(!busy);
+    clearButton->setEnabled(!busy);
+}
+
+void InteractionTestWindow::TopBar::timerCallback()
+{
+    if (inCountdown)
+    {
+        countdownValue--;
+        
+        if (auto* window = findParentComponentOfClass<InteractionTestWindow>())
+        {
+            if (auto* statusBar = window->getStatusBar())
+            {
+                if (countdownValue > 0)
+                {
+                    statusBar->showCountdown(countdownValue);
+                }
+                else
+                {
+                    // Countdown finished, start actual recording
+                    inCountdown = false;
+                    startRecording();
+                }
+            }
+        }
+    }
+    else if (recording)
+    {
+        // Check if recording duration has expired
+        auto elapsed = Time::getMillisecondCounter() - recordingStartTime;
+        auto remaining = RECORDING_DURATION_SECONDS - (int)(elapsed / 1000);
+        
+        if (remaining <= 0)
+        {
+            stopRecording();
+        }
+        else
+        {
+            // Update status bar with remaining time
+            if (auto* window = findParentComponentOfClass<InteractionTestWindow>())
+            {
+                if (auto* statusBar = window->getStatusBar())
+                {
+                    statusBar->showRecordingActive(remaining);
+                }
+            }
+        }
+    }
+}
+
+void InteractionTestWindow::TopBar::startRecordingCountdown()
+{
+    inCountdown = true;
+    countdownValue = COUNTDOWN_SECONDS;
+    rawRecordedEvents.clear();
+    
+    updateButtonStates();
+    
+    // Show initial countdown
     if (auto* window = findParentComponentOfClass<InteractionTestWindow>())
     {
         if (auto* statusBar = window->getStatusBar())
         {
-            // StatusBar will handle the state change via its own mechanism
-            // For now, we just update the visual appearance
+            statusBar->showCountdown(countdownValue);
+        }
+        
+        // Hide cursor overlay during countdown and recording
+        if (auto* overlay = window->getOverlay())
+        {
+            overlay->setVisible(false);
         }
     }
     
+    // Start timer for countdown (1 second intervals)
+    startTimer(1000);
+}
+
+void InteractionTestWindow::TopBar::startRecording()
+{
+    recording = true;
+    recordingStartTime = Time::getMillisecondCounter();
+    
+    // Update button appearance
+    if (recordButton != nullptr)
+    {
+        recordButton->setColours(Colour(0xFFFF4444), Colour(0xFFFF6666), Colour(0xFFFF2222));
+        recordButton->repaint();
+    }
+    
+    // Show recording indicator and enable mouse capture
+    if (auto* window = findParentComponentOfClass<InteractionTestWindow>())
+    {
+        if (auto* statusBar = window->getStatusBar())
+        {
+            statusBar->showRecordingActive(RECORDING_DURATION_SECONDS);
+        }
+        
+        // Enable mouse capture on recording overlay
+        window->setRecordingMouseCapture(true);
+    }
+    
+    // Timer continues at 1 second intervals
+}
+
+void InteractionTestWindow::TopBar::stopRecording()
+{
+    stopTimer();
+    recording = false;
+    inCountdown = false;
+    
+    // Reset button appearance
+    if (recordButton != nullptr)
+    {
+        recordButton->setColours(Colours::white.withAlpha(0.7f), 
+                                 Colours::white, 
+                                 Colours::white.withAlpha(0.5f));
+        recordButton->repaint();
+    }
+    
+    // Hide countdown/recording indicator, disable mouse capture, show cursor overlay again
+    if (auto* window = findParentComponentOfClass<InteractionTestWindow>())
+    {
+        // Disable mouse capture first
+        window->setRecordingMouseCapture(false);
+        
+        if (auto* statusBar = window->getStatusBar())
+        {
+            statusBar->hideCountdown();
+        }
+        
+        if (auto* overlay = window->getOverlay())
+        {
+            overlay->setVisible(true);
+        }
+    }
+    
+    // Process the recorded events
+    processRecordedEvents();
+    
+    updateButtonStates();
     repaint();
+}
+
+void InteractionTestWindow::TopBar::addRawEvent(const var& event)
+{
+    if (recording)
+    {
+        rawRecordedEvents.add(event);
+    }
+}
+
+void InteractionTestWindow::TopBar::processRecordedEvents()
+{
+    int eventCount = rawRecordedEvents.size();
+    
+    if (eventCount == 0)
+    {
+        // No events recorded
+        if (auto* window = findParentComponentOfClass<InteractionTestWindow>())
+        {
+            if (auto* statusBar = window->getStatusBar())
+            {
+                statusBar->hideCountdown();
+                // Could show a message in log
+            }
+        }
+        return;
+    }
+    
+    Array<var> processedEvents;
+    
+    if (recordingMode == RecordingMode::Raw)
+    {
+        // Thin mouse move events to ~100ms intervals
+        int64 lastMoveTime = -100;  // Ensure first move is included
+        
+        for (int i = 0; i < rawRecordedEvents.size(); i++)
+        {
+            auto& event = rawRecordedEvents.getReference(i);
+            String type = event.getProperty("type", "").toString();
+            int64 timestamp = (int64)event.getProperty("timestamp", 0);
+            
+            if (type == "mouseMove")
+            {
+                // Only include if 100ms has passed since last move
+                if (timestamp - lastMoveTime >= 100)
+                {
+                    processedEvents.add(event);
+                    lastMoveTime = timestamp;
+                }
+            }
+            else
+            {
+                // Always include mouseDown/mouseUp
+                processedEvents.add(event);
+            }
+        }
+        
+        // Create wrapper with mode
+        DynamicObject::Ptr wrapper = new DynamicObject();
+        wrapper->setProperty("mode", "raw");
+        
+        Array<var> eventsArray;
+        for (auto& e : processedEvents)
+            eventsArray.add(e);
+        wrapper->setProperty("events", eventsArray);
+        
+        recordedInteractions = var(wrapper.get());
+        setHasRecording(true);
+    }
+    else
+    {
+        // Semantic mode - for now just store raw, semantic parsing in Phase 2 Step 6
+        // TODO: Implement semantic analysis
+        DynamicObject::Ptr wrapper = new DynamicObject();
+        wrapper->setProperty("mode", "semantic");
+        wrapper->setProperty("interactions", Array<var>());  // Empty for now
+        
+        recordedInteractions = var(wrapper.get());
+    }
+    
+    // Log recording result to StatusBar
+    if (auto* window = findParentComponentOfClass<InteractionTestWindow>())
+    {
+        if (auto* statusBar = window->getStatusBar())
+        {
+            statusBar->logRecordingResult(recordingMode, processedEvents, eventCount);
+        }
+    }
 }
 
 void InteractionTestWindow::TopBar::setHasRecording(bool hasData)
@@ -378,13 +719,21 @@ void InteractionTestWindow::StatusBar::paint(Graphics& g)
     Colour stateColour = getStateColour();
     if (state == State::Running)
         stateColour = stateColour.withAlpha(pulseAlpha);
+    if (state == State::Recording)
+        stateColour = stateColour.withAlpha(0.7f + 0.3f * pulseAlpha);  // Pulsing red
     
     g.setColour(stateColour);
     g.fillEllipse(dotBounds);
     
     // State text
     g.setFont(GLOBAL_BOLD_FONT());
-    g.setColour(Colours::white.withAlpha(0.8f));
+    
+    // Use red text for countdown/recording, white otherwise
+    if (countdownActive)
+        g.setColour(Colour(0xFFFF4444));
+    else
+        g.setColour(Colours::white.withAlpha(0.8f));
+    
     g.drawText(getStateText(), stateArea, Justification::centredLeft);
     
     // Progress bar background
@@ -493,7 +842,7 @@ void InteractionTestWindow::StatusBar::onSequenceCompleted(bool success, const S
 void InteractionTestWindow::StatusBar::timerCallback()
 {
     // Update progress based on elapsed time
-    if (estimatedDurationMs > 0)
+    if (estimatedDurationMs > 0 && state == State::Running)
     {
         auto elapsed = Time::currentTimeMillis() - sequenceStartTime;
         progress = jlimit(0.0, 0.95, (double)elapsed / (double)estimatedDurationMs);
@@ -504,23 +853,26 @@ void InteractionTestWindow::StatusBar::timerCallback()
     if (flashAlpha < 0.01f)
         flashAlpha = 0.0f;
 
-    // Pulse animation for running state
-    if (pulseIncreasing)
+    // Pulse animation for running/recording state
+    if (state == State::Running || state == State::Recording)
     {
-        pulseAlpha += 0.05f;
-        if (pulseAlpha >= 1.0f)
+        if (pulseIncreasing)
         {
-            pulseAlpha = 1.0f;
-            pulseIncreasing = false;
+            pulseAlpha += 0.05f;
+            if (pulseAlpha >= 1.0f)
+            {
+                pulseAlpha = 1.0f;
+                pulseIncreasing = false;
+            }
         }
-    }
-    else
-    {
-        pulseAlpha -= 0.05f;
-        if (pulseAlpha <= 0.6f)
+        else
         {
-            pulseAlpha = 0.6f;
-            pulseIncreasing = true;
+            pulseAlpha -= 0.05f;
+            if (pulseAlpha <= 0.6f)
+            {
+                pulseAlpha = 0.6f;
+                pulseIncreasing = true;
+            }
         }
     }
     
@@ -640,6 +992,36 @@ void InteractionTestWindow::StatusBar::setLogToggleState(bool shouldBeOn)
         logButton->setToggleStateAndUpdateIcon(shouldBeOn, true);
 }
 
+void InteractionTestWindow::StatusBar::logRecordingResult(RecordingMode mode, 
+                                                          const Array<var>& events, 
+                                                          int originalCount)
+{
+    String text;
+    
+    // Header with timestamp
+    text << "\n// === " << Time::getCurrentTime().toString(true, true)
+         << " [RECORDING] ===\n\n";
+    
+    if (mode == RecordingMode::Raw)
+    {
+        text << "// Raw mode: " << originalCount << " events captured, "
+             << events.size() << " after thinning\n\n";
+    }
+    else
+    {
+        text << "// Semantic mode: " << originalCount << " events captured\n\n";
+    }
+    
+    // Output all events as JSON array
+    Array<var> eventsArray;
+    for (const auto& e : events)
+        eventsArray.add(e);
+    
+    text << JSON::toString(var(eventsArray), true) << "\n";
+    
+    logDocument.insertText(logDocument.getNumCharacters(), text);
+}
+
 void InteractionTestWindow::StatusBar::updateFinalState(bool hasScriptErrors)
 {
     if (hasScriptErrors && state == State::Success)
@@ -649,6 +1031,39 @@ void InteractionTestWindow::StatusBar::updateFinalState(bool hasScriptErrors)
 
         SafeAsyncCall::repaint(this);
     }
+}
+
+void InteractionTestWindow::StatusBar::showCountdown(int seconds)
+{
+    countdownActive = true;
+    countdownValue = seconds;
+    recordingIndicator = false;
+    state = State::Recording;
+    currentAction = String(seconds);
+    startTimerHz(30);  // Start pulse animation
+    repaint();
+}
+
+void InteractionTestWindow::StatusBar::showRecordingActive(int remainingSeconds)
+{
+    countdownActive = true;
+    recordingIndicator = true;
+    recordingRemaining = remainingSeconds;
+    state = State::Recording;
+    currentAction = "REC " + String(remainingSeconds) + "s";
+    repaint();
+}
+
+void InteractionTestWindow::StatusBar::hideCountdown()
+{
+    countdownActive = false;
+    recordingIndicator = false;
+    countdownValue = 0;
+    recordingRemaining = 0;
+    state = State::Idle;
+    currentAction = "Ready";
+    stopTimer();
+    repaint();
 }
 
 //==============================================================================
@@ -1093,6 +1508,7 @@ InteractionTestWindow::InteractionTestWindow(ProcessorWithScriptingContent* proc
     contentHeight += StatusBar::HEIGHT;
     
     overlay = std::make_unique<CursorOverlay>();
+    recordingListener = std::make_unique<RecordingListener>();
     topBar = std::make_unique<TopBar>();
     statusBar = std::make_unique<StatusBar>();
     
@@ -1126,7 +1542,15 @@ InteractionTestWindow::InteractionTestWindow(ProcessorWithScriptingContent* proc
 
 InteractionTestWindow::~InteractionTestWindow()
 {
+    // Remove the listener before destroying
+    if (recordingListener != nullptr)
+    {
+        if (auto* scc = getContent())
+            scc->removeMouseListener(recordingListener.get());
+    }
+    
     logEditor = nullptr;  // Destroy before StatusBar (which owns CodeDocument)
+    recordingListener = nullptr;
     overlay = nullptr;
     topBar = nullptr;
     statusBar = nullptr;
@@ -1239,6 +1663,28 @@ Rectangle<int> InteractionTestWindow::getContentBounds() const
     return {};
 }
 
+void InteractionTestWindow::setRecordingMouseCapture(bool enabled)
+{
+    if (recordingListener == nullptr)
+        return;
+    
+    auto* scc = getContent();
+    if (scc == nullptr)
+        return;
+    
+    if (enabled)
+    {
+        int64 startTime = Time::getMillisecondCounter();
+        recordingListener->setRecording(true, startTime);
+        scc->addMouseListener(recordingListener.get(), true);  // true = wantsEventsForAllNestedChildComponents
+    }
+    else
+    {
+        scc->removeMouseListener(recordingListener.get());
+        recordingListener->setRecording(false, 0);
+    }
+}
+
 //==============================================================================
 // InteractionTester implementation
 
@@ -1284,23 +1730,29 @@ InteractionTester::TestResult InteractionTester::executeInteractions(const var& 
     
     jassert(MessageManager::getInstance()->isThisTheMessageThread());
     
-    // Parse interactions
-    Array<InteractionParser::Interaction> interactions;
-    auto parseResult = InteractionParser::parseInteractions(interactionsJson, interactions);
+    DBG(JSON::toString(interactionsJson, false));
+
+    // Check for wrapper format with mode indicator
+    var actualInteractions = interactionsJson;
+    bool isRawMode = false;
     
-    if (parseResult.failed())
+    if (auto* obj = interactionsJson.getDynamicObject())
     {
-        result.errorMessage = parseResult.getErrorMessage();
-        return result;
+        String mode = obj->getProperty("mode").toString();
+        if (mode == "raw")
+        {
+            isRawMode = true;
+            actualInteractions = obj->getProperty("events");
+        }
+        else if (mode == "semantic")
+        {
+            actualInteractions = obj->getProperty("interactions");
+        }
+        // If no mode property, treat as legacy format (semantic)
     }
     
-    result.parseWarnings = parseResult.warnings;
-    
-    if (interactions.isEmpty())
-    {
-        result.success = true;
-        return result;
-    }
+    // Make a local copy to avoid dangling references during replay
+    var interactionsCopy = interactionsJson;
     
     // Get interface processor
     auto* processor = getInterfaceProcessor();
@@ -1309,10 +1761,6 @@ InteractionTester::TestResult InteractionTester::executeInteractions(const var& 
         result.errorMessage = "moduleId 'Interface' not found";
         return result;
     }
-    
-    // Make a local copy of interactions to avoid dangling references during replay
-    // (when replaying, interactionsJson may reference TopBar::recordedInteractions which gets overwritten)
-    var interactionsCopy = interactionsJson;
     
     // Ensure window is open
     ensureWindowOpen();
@@ -1327,9 +1775,6 @@ InteractionTester::TestResult InteractionTester::executeInteractions(const var& 
     RestHelpers::ReplayConsoleHandler consoleHandler(backendProcessor, window.get(),
         !backendProcessor->getConsoleHandler().hasCustomLogger());
     
-    // NORMALIZE: Auto-insert moveTo events
-    normalizeSequence(interactions);
-    
     // Execute with real executor
     auto* pwsc = dynamic_cast<ProcessorWithScriptingContent*>(processor);
     InteractionTestWindow::RealExecutor executor(window.get(), pwsc);
@@ -1343,7 +1788,38 @@ InteractionTester::TestResult InteractionTester::executeInteractions(const var& 
     if (auto* statusBar = window->getStatusBar())
         dispatcher.setProgressListener(statusBar);
     
-    auto execResult = dispatcher.execute(interactions, executor, result.executionLog);
+    InteractionDispatcher::ExecutionResult execResult;
+    
+    if (isRawMode)
+    {
+        // Raw mode: execute events directly without parsing/normalization
+        execResult = executeRawEvents(actualInteractions, executor, result.executionLog);
+    }
+    else
+    {
+        // Semantic mode: parse, normalize, and execute
+        Array<InteractionParser::Interaction> interactions;
+        auto parseResult = InteractionParser::parseInteractions(actualInteractions, interactions);
+        
+        if (parseResult.failed())
+        {
+            result.errorMessage = parseResult.getErrorMessage();
+            return result;
+        }
+        
+        result.parseWarnings = parseResult.warnings;
+        
+        if (interactions.isEmpty())
+        {
+            result.success = true;
+            return result;
+        }
+        
+        // NORMALIZE: Auto-insert moveTo events
+        normalizeSequence(interactions);
+        
+        execResult = dispatcher.execute(interactions, executor, result.executionLog);
+    }
     
     // Update our mouse state from executor
     mouseState.pixelPosition = executor.getCurrentCursorPosition();
@@ -1541,6 +2017,140 @@ void InteractionTester::updateMouseStateForNormalization(const InteractionParser
             // No state change
             break;
     }
+}
+
+//==============================================================================
+// Raw event execution (for recorded raw mode)
+
+InteractionDispatcher::ExecutionResult InteractionTester::executeRawEvents(
+    const var& eventsArray,
+    InteractionDispatcher::Executor& executor,
+    Array<var>& executionLog)
+{
+    if (!eventsArray.isArray())
+    {
+        return InteractionDispatcher::ExecutionResult::fail("Raw events must be an array", 0, 0);
+    }
+    
+    int64 startTime = Time::getMillisecondCounter();
+    int eventsCompleted = 0;
+    
+    // Notify progress listener if available
+    if (auto* statusBar = window->getStatusBar())
+    {
+        int totalEvents = eventsArray.size();
+        int estimatedMs = 0;
+        if (totalEvents > 0)
+        {
+            // Estimate duration from last event's timestamp
+            auto lastEvent = eventsArray[totalEvents - 1];
+            estimatedMs = (int)lastEvent.getProperty("timestamp", 0);
+        }
+        statusBar->onSequenceStarted(totalEvents, estimatedMs);
+    }
+    
+    for (int i = 0; i < eventsArray.size(); i++)
+    {
+        auto& event = eventsArray[i];
+        String type = event.getProperty("type", "").toString();
+        int x = (int)event.getProperty("x", 0);
+        int y = (int)event.getProperty("y", 0);
+        int timestamp = (int)event.getProperty("timestamp", 0);
+        bool rightClick = (bool)event.getProperty("rightClick", false);
+        
+        // Parse modifiers
+        ModifierKeys mods;
+        var modsVar = event.getProperty("modifiers", var());
+        if (auto* modsObj = modsVar.getDynamicObject())
+        {
+            int modFlags = 0;
+            if ((bool)modsObj->getProperty("shift"))
+                modFlags |= ModifierKeys::shiftModifier;
+            if ((bool)modsObj->getProperty("ctrl"))
+                modFlags |= ModifierKeys::ctrlModifier;
+            if ((bool)modsObj->getProperty("alt"))
+                modFlags |= ModifierKeys::altModifier;
+            if ((bool)modsObj->getProperty("cmd"))
+                modFlags |= ModifierKeys::commandModifier;
+            mods = ModifierKeys(modFlags);
+        }
+        
+        Point<int> pos(x, y);
+        
+        // Wait until the correct timestamp
+        int64 targetTime = startTime + timestamp;
+        int64 now = Time::getMillisecondCounter();
+        if (targetTime > now)
+        {
+            int waitMs = (int)(targetTime - now);
+            // Pump message loop while waiting
+            while (Time::getMillisecondCounter() < targetTime)
+            {
+                MessageManager::getInstance()->runDispatchLoopUntil(jmin(10, waitMs));
+            }
+        }
+        
+        int elapsedMs = (int)(Time::getMillisecondCounter() - startTime);
+        
+        // Execute the event
+        if (type == "mouseDown")
+        {
+            // Add button modifier flag
+            if (rightClick)
+                mods = mods.withFlags(ModifierKeys::rightButtonModifier);
+            else
+                mods = mods.withFlags(ModifierKeys::leftButtonModifier);
+
+            // Wiggle to update componentUnderMouse
+            executor.executeMouseMove(pos + Point<int>(2, 0), {}, elapsedMs);
+            executor.executeMouseMove(pos, {}, elapsedMs);
+
+            executor.executeMouseDown(pos, mods, rightClick, elapsedMs);
+        }
+        else if (type == "mouseUp")
+        {
+            // Add button modifier flag (still needed for mouseUp)
+            if (rightClick)
+                mods = mods.withFlags(ModifierKeys::rightButtonModifier);
+            else
+                mods = mods.withFlags(ModifierKeys::leftButtonModifier);
+
+            executor.executeMouseUp(pos, mods, rightClick, elapsedMs);
+
+            // UI settle time
+            MessageManager::getInstance()->runDispatchLoopUntil(50);
+        }
+        else if (type == "mouseMove")
+        {
+            executor.executeMouseMove(pos, mods, elapsedMs);
+        }
+        
+        // Add to execution log
+        DynamicObject::Ptr logEntry = new DynamicObject();
+        logEntry->setProperty("type", type);
+        logEntry->setProperty("x", x);
+        logEntry->setProperty("y", y);
+        logEntry->setProperty("elapsedMs", elapsedMs);
+        executionLog.add(var(logEntry.get()));
+        
+        eventsCompleted++;
+        
+        // Update progress
+        if (auto* statusBar = window->getStatusBar())
+        {
+            statusBar->onInteractionCompleted(i);
+        }
+    }
+    
+    int totalElapsedMs = (int)(Time::getMillisecondCounter() - startTime);
+    
+    // Notify completion
+    if (auto* statusBar = window->getStatusBar())
+    {
+        statusBar->onSequenceCompleted(true, "");
+    }
+    
+    return InteractionDispatcher::ExecutionResult::ok(totalElapsedMs, eventsCompleted);
 }
 
 } // namespace hise
