@@ -32,32 +32,48 @@
 
 #pragma once
 
+/** Timer and async updater classes for scriptnode nodes.
 
-/** When a node is loaded from the DLL into HISE we'll need to simulate the message thread
-    because the process where the DLL runs cannot access the standard UI thread. 
-
-	All you need to do is to subclass your node from either
-
-	- hise::DllAsyncUpdater for a juce::AsycUpdater replacement or
-	- hise::DllTimer for a juce::Timer replacement.
-
-	Both classes are designed to be drop in replacements for the original classes.
-	
-	Note that when you compile the plugin, this all goes away and the node uses the actual JUCE classes.
+    Use VoiceProtectedTimer or VoiceProtectedAsyncUpdater for any timer/async 
+    functionality in your nodes. These classes:
+    
+    1. Provide message thread simulation in DLL builds (where juce::Timer won't work)
+    2. Automatically wrap callbacks with ScopedAllVoiceSetter for safe PolyData access
+    
+    IMPORTANT: Do not use juce::Timer or juce::AsyncUpdater directly in node code.
+    In DLL builds, they will silently fail (no message thread).
+    
+    Usage:
+    - Inherit from VoiceProtectedTimer or VoiceProtectedAsyncUpdater
+    - Call setPolyHandler(specs.voiceIndex) in your prepare() method
+    - Override onTimerWithVoiceProtection() or onAsyncUpdateWithVoiceProtection()
 */
-#if 1 || HI_EXPORT_AS_PROJECT_DLL
+
 namespace hise {
-	using namespace juce;
+using namespace juce;
 
-
-struct DllUpdaterBase
+struct VoiceProtectionBase
 {
-	virtual ~DllUpdaterBase() = default;
+	void setPolyHandler(PolyHandler* ph) { polyHandler = ph; }
 
 protected:
+	PolyHandler* polyHandler = nullptr;
 
-	virtual void execute() = 0;
+	template<typename F>
+	void callWithVoiceProtection(F&& f)
+	{
+		if (polyHandler != nullptr)
+		{
+			PolyHandler::ScopedAllVoiceSetter avs(*polyHandler);
+			f();
+		}
+		else
+		{
+			f();
+		}
+	}
 
+#if HI_EXPORT_AS_PROJECT_DLL
 	class TimerThread : public Thread,
 		public DeletedAtShutdown
 	{
@@ -77,19 +93,19 @@ protected:
 			stopThread(1000);
 		}
 
-		void addUpdater(DllUpdaterBase* t)
+		void addUpdater(VoiceProtectionBase* t)
 		{
 			asyncUpdaters.add(t);
 			notify();
 		}
 
-		void addTimer(DllUpdaterBase* t)
+		void addTimer(VoiceProtectionBase* t)
 		{
 			hise::SimpleReadWriteLock::ScopedWriteLock sl(lock);
 			timers.addIfNotAlreadyThere(t);
 		}
 
-		void removeTimer(DllUpdaterBase* t)
+		void removeTimer(VoiceProtectionBase* t)
 		{
 			hise::SimpleReadWriteLock::ScopedWriteLock sl(lock);
 			timers.removeAllInstancesOf(t);
@@ -112,12 +128,15 @@ protected:
 
 					if (!asyncUpdaters.isEmpty())
 					{
-						Array<WeakReference<DllUpdaterBase>> pending;
+						Array<WeakReference<VoiceProtectionBase>> pending;
 						pending.ensureStorageAllocated(128);
 						pending.swapWith(asyncUpdaters);
 
 						for (auto& p : pending)
-							p->execute();
+						{
+							if (p != nullptr)
+								p->execute();
+						}
 					}
 				}
 
@@ -126,47 +145,26 @@ protected:
 		}
 
 		hise::SimpleReadWriteLock lock;
-		Array<WeakReference<DllUpdaterBase>> timers;
-		Array<WeakReference<DllUpdaterBase>> asyncUpdaters;
+		Array<WeakReference<VoiceProtectionBase>> timers;
+		Array<WeakReference<VoiceProtectionBase>> asyncUpdaters;
 	};
 
-	SharedResourcePointer<TimerThread> thread;
-
-	JUCE_DECLARE_WEAK_REFERENCEABLE(DllUpdaterBase);
-};
-
-
-
-struct DllAsyncUpdater : public DllUpdaterBase
-{
-	void triggerAsyncUpdate()
-	{
-		if (!dirty)
-		{
-			dirty = true;
-			thread->addUpdater(this);
-		}
-	}
-
-	virtual void handleAsyncUpdate() = 0;
-
-	void execute() override
-	{
-		if (dirty)
-		{
-			handleAsyncUpdate();
-			dirty = false;
-		}
-	}
+	virtual void execute() = 0;
 
 	SharedResourcePointer<TimerThread> thread;
 
-	bool dirty = false;
+	JUCE_DECLARE_WEAK_REFERENCEABLE(VoiceProtectionBase);
+#endif
 };
 
-struct DllTimer : public DllUpdaterBase
+#if HI_EXPORT_AS_PROJECT_DLL
+
+struct VoiceProtectedTimer : public VoiceProtectionBase
 {
-	virtual ~DllTimer() {};
+	virtual ~VoiceProtectedTimer()
+	{
+		stopTimer();
+	}
 
 	void startTimerHz(int frequencyHz)
 	{
@@ -178,15 +176,14 @@ struct DllTimer : public DllUpdaterBase
 		numSteps = milliSeconds / 15;
 		counter = numSteps;
 
-		if(running)
+		if (running)
 			return;
-		
+
 		running = true;
 		thread->addTimer(this);
 	}
 
 	bool isTimerRunning() const { return running; }
-	
 
 	void stopTimer()
 	{
@@ -194,16 +191,15 @@ struct DllTimer : public DllUpdaterBase
 		thread->removeTimer(this);
 	}
 
-	virtual void timerCallback() = 0;
+	virtual void onTimerWithVoiceProtection() = 0;
 
 private:
-
-	void execute()
+	void execute() override
 	{
 		if (--counter == 0)
 		{
 			counter = numSteps;
-			timerCallback();
+			callWithVoiceProtection([this]() { onTimerWithVoiceProtection(); });
 		}
 	}
 
@@ -212,16 +208,106 @@ private:
 	bool running = false;
 };
 
-}
-#else
+struct VoiceProtectedAsyncUpdater : public VoiceProtectionBase
+{
+	virtual ~VoiceProtectedAsyncUpdater() = default;
 
+	void triggerAsyncUpdate()
+	{
+		if (!dirty)
+		{
+			dirty = true;
+			thread->addUpdater(this);
+		}
+	}
 
-namespace hise { using namespace juce;
+	virtual void onAsyncUpdateWithVoiceProtection() = 0;
 
-// In a non-DLL build we'll use the proper JUCE classes that operate on the real message thread
-using DllTimer = juce::Timer;
-using DllAsyncUpdater = juce::AsyncUpdater;
+private:
+	void execute() override
+	{
+		if (dirty)
+		{
+			callWithVoiceProtection([this]() { onAsyncUpdateWithVoiceProtection(); });
+			dirty = false;
+		}
+	}
 
-}
+	bool dirty = false;
+};
+
+#else // Non-DLL build
+
+struct VoiceProtectedTimer : private juce::Timer, public VoiceProtectionBase
+{
+	virtual ~VoiceProtectedTimer() = default;
+
+	using juce::Timer::startTimer;
+	using juce::Timer::startTimerHz;
+	using juce::Timer::stopTimer;
+	using juce::Timer::isTimerRunning;
+
+	virtual void onTimerWithVoiceProtection() = 0;
+
+private:
+	void timerCallback() override
+	{
+		callWithVoiceProtection([this]() { onTimerWithVoiceProtection(); });
+	}
+};
+
+struct VoiceProtectedAsyncUpdater : private juce::AsyncUpdater, public VoiceProtectionBase
+{
+	virtual ~VoiceProtectedAsyncUpdater() = default;
+
+	using juce::AsyncUpdater::triggerAsyncUpdate;
+	using juce::AsyncUpdater::cancelPendingUpdate;
+	using juce::AsyncUpdater::handleUpdateNowIfNeeded;
+	using juce::AsyncUpdater::isUpdatePending;
+
+	virtual void onAsyncUpdateWithVoiceProtection() = 0;
+
+private:
+	void handleAsyncUpdate() override
+	{
+		callWithVoiceProtection([this]() { onAsyncUpdateWithVoiceProtection(); });
+	}
+};
 
 #endif
+
+// Legacy stubs - force compile error with migration message
+struct DllTimer
+{
+	// DllTimer has been removed. Migration steps:
+	// 1. Change base class to VoiceProtectedTimer
+	// 2. Rename timerCallback() to onTimerWithVoiceProtection()
+	// 3. Add setPolyHandler(specs.voiceIndex) in prepare()
+	DllTimer() = delete;
+	virtual ~DllTimer() = default;
+	virtual void timerCallback() = 0;
+
+	void startTimer(int) {}
+	void startTimerHz(int) {}
+	void stopTimer() {}
+	bool isTimerRunning() const { return false; }
+	int getTimerInterval() const { return 0; }
+};
+
+struct DllAsyncUpdater
+{
+	// DllAsyncUpdater has been removed. Migration steps:
+	// 1. Change base class to VoiceProtectedAsyncUpdater
+	// 2. Rename handleAsyncUpdate() to onAsyncUpdateWithVoiceProtection()
+	// 3. Add setPolyHandler(specs.voiceIndex) in prepare()
+	DllAsyncUpdater() = delete;
+	virtual ~DllAsyncUpdater() = default;
+	virtual void handleAsyncUpdate() = 0;
+
+	void triggerAsyncUpdate() {}
+	void cancelPendingUpdate() {}
+	void handleUpdateNowIfNeeded() {}
+	bool isUpdatePending() const { return false; }
+};
+
+} // namespace hise
