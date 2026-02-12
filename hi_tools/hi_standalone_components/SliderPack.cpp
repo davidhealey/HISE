@@ -1147,7 +1147,7 @@ void SliderPack::rebuildSliders()
 			sliders.add(s);
 			s->setComponentID(String(i));
 #if USE_BACKEND
-			DocumentWindowWithEmbeddedPopupMenu::setSubComponentTargetId(s, String(i)));
+			DocumentWindowWithEmbeddedPopupMenu::setSubComponentTargetId(s, String(i));
 #endif
 			
 
