@@ -1890,6 +1890,9 @@ template <int NV, typename IndexClass, runtime_target::RuntimeTarget TargetType>
 		check();
 	}
 
+	// note: never use this directly outside of the usual HISE callback system
+	// use the isPlaying() function instead, this gets you the state for the currently
+	// rendered voice
 	bool handleModulation(double& v)
 	{
 		return mv.getChangedValue(v);
@@ -1900,10 +1903,14 @@ template <int NV, typename IndexClass, runtime_target::RuntimeTarget TargetType>
 		check();
 	}
 
-	void check()
+	bool check()
 	{
-		if(!state.get().isPlaying())
+		auto isPlaying = state.get().isPlaying();
+
+		if(!isPlaying)
 			mv.setModValue(0.0);
+
+		return isPlaying;
 	}
 
 	virtual void prepare(PrepareSpecs ps)
