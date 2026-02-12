@@ -458,7 +458,6 @@ public:
 
 	ScopedPointer<GlContextHolder> contextHolder;
 };
-#endif
 
 
 struct DocumentWindowWithEmbeddedPopupMenu : public juce::DocumentWindow,
@@ -574,6 +573,9 @@ struct DocumentWindowWithEmbeddedPopupMenu : public juce::DocumentWindow,
 	}
 
 };
+
+#endif
+
 
 class SuspendableTimer
 {
