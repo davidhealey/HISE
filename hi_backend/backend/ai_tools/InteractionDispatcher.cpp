@@ -252,6 +252,34 @@ void InteractionDispatcher::waitWithWiggle(int ms, InteractionExecutorBase& exec
     }
 }
 
+void InteractionDispatcher::wiggleToUpdateComponent(Point<int> pos, InteractionExecutorBase& exec)
+{
+    // Small move to force JUCE to update componentUnderMouse before mouse events
+    exec.executeMouseMove(pos + Point<int>(2, 0), {}, getElapsedMs());
+    exec.executeMouseMove(pos, {}, getElapsedMs());
+}
+
+void InteractionDispatcher::interpolateMovement(Point<int> startPos, Point<int> endPos, 
+                                                 int durationMs, ModifierKeys mods, 
+                                                 InteractionExecutorBase& exec)
+{
+    int numSteps = jmax(1, durationMs / MOVE_STEP_INTERVAL_MS);
+    int stepDuration = durationMs / numSteps;
+    
+    for (int i = 1; i <= numSteps; ++i)
+    {
+        float t = static_cast<float>(i) / numSteps;
+        auto delta = (endPos - startPos).toFloat() * t;
+        Point<int> pos = startPos + Point<int>(roundToInt(delta.x), roundToInt(delta.y));
+        
+        exec.executeMouseMove(pos, mods, getElapsedMs());
+        exec.setCursorPosition(pos);
+        
+        if (i < numSteps)
+            waitForDuration(stepDuration, exec);
+    }
+}
+
 String InteractionDispatcher::checkAbortConditions() const
 {
     if (getElapsedMs() > timeoutMs)
@@ -288,7 +316,7 @@ void InteractionDispatcher::executeMoveTo(
     // Use normalized position within parent component instead
     if (!resolved.success() && mouse.target.hasSubtarget() && mouse.position.hasFallback())
     {
-        ComponentTargetPath parentOnly(mouse.target.componentId);
+        InteractionParser::ComponentTargetPath parentOnly(mouse.target.componentId);
         auto parentResolved = exec.resolveTarget(parentOnly);
         
         if (parentResolved.success())
@@ -323,11 +351,11 @@ void InteractionDispatcher::executeMoveTo(
             exec.setCursorPosition(fallbackPos);
             
             // Log with fallback indicator
-            auto entry = createLogEntry("moveTo", fallbackPos, getElapsedMs());
+            auto entry = createLogEntry(InteractionIds::moveTo.toString(), fallbackPos, getElapsedMs());
             mouse.target.toVar(entry.getDynamicObject());
-            entry.getDynamicObject()->setProperty("fallback", true);
+            entry.getDynamicObject()->setProperty(InteractionIds::fallback, true);
             if (mouse.autoInserted)
-                entry.getDynamicObject()->setProperty("autoInserted", true);
+                entry.getDynamicObject()->setProperty(InteractionIds::autoInserted, true);
             log.add(entry);
             
             return;  // Success via fallback
@@ -343,32 +371,14 @@ void InteractionDispatcher::executeMoveTo(
     Point<int> startPos = exec.getCurrentCursorPosition();
     Point<int> endPos = mouse.position.getPixelPosition(resolved.componentBounds);
     
-    // Interpolate movement
-    int duration = mouse.durationMs;
-    int numSteps = jmax(1, duration / MOVE_STEP_INTERVAL_MS);
-    int stepDuration = duration / numSteps;
-    
-    for (int i = 1; i <= numSteps; ++i)
-    {
-        float t = static_cast<float>(i) / numSteps;
-        auto delta = (endPos - startPos).toFloat() * t;
-        Point<int> pos = startPos + Point<int>(roundToInt(delta.x), roundToInt(delta.y));
-        
-        exec.executeMouseMove(pos, mouse.modifiers, getElapsedMs());
-        exec.setCursorPosition(pos);
-        
-        if (i < numSteps)
-            waitForDuration(stepDuration, exec);
-    }
-    
-    // Ensure we're exactly at end position
+    interpolateMovement(startPos, endPos, mouse.durationMs, mouse.modifiers, exec);
     exec.setCursorPosition(endPos);
     
     // Log
-    auto entry = createLogEntry("moveTo", endPos, getElapsedMs());
+    auto entry = createLogEntry(InteractionIds::moveTo.toString(), endPos, getElapsedMs());
     mouse.target.toVar(entry.getDynamicObject());
     if (mouse.autoInserted)
-        entry.getDynamicObject()->setProperty("autoInserted", true);
+        entry.getDynamicObject()->setProperty(InteractionIds::autoInserted, true);
     log.add(entry);
 }
 
@@ -391,16 +401,14 @@ void InteractionDispatcher::executeClick(
     else
         mods = mods.withFlags(ModifierKeys::leftButtonModifier);
     
-    // Wiggle: small move to force JUCE to update componentUnderMouse
-    exec.executeMouseMove(pixelPos + Point<int>(2, 0), {}, getElapsedMs());
-    exec.executeMouseMove(pixelPos, {}, getElapsedMs());
+    wiggleToUpdateComponent(pixelPos, exec);
     
     // MouseDown
     exec.executeMouseDown(pixelPos, mods, mouse.rightClick, getElapsedMs());
     
-    auto downEntry = createLogEntry("mouseDown", pixelPos, getElapsedMs());
+    auto downEntry = createLogEntry(InteractionIds::mouseDown.toString(), pixelPos, getElapsedMs());
     if (mouse.rightClick)
-        downEntry.getDynamicObject()->setProperty("rightClick", true);
+        downEntry.getDynamicObject()->setProperty(InteractionIds::rightClick, true);
     log.add(downEntry);
     
     // Brief pause (click duration)
@@ -409,9 +417,9 @@ void InteractionDispatcher::executeClick(
     // MouseUp
     exec.executeMouseUp(pixelPos, mods, mouse.rightClick, getElapsedMs());
     
-    auto upEntry = createLogEntry("mouseUp", pixelPos, getElapsedMs());
+    auto upEntry = createLogEntry(InteractionIds::mouseUp.toString(), pixelPos, getElapsedMs());
     if (mouse.rightClick)
-        upEntry.getDynamicObject()->setProperty("rightClick", true);
+        upEntry.getDynamicObject()->setProperty(InteractionIds::rightClick, true);
     log.add(upEntry);
     
     // Let UI settle after click (e.g., popup menus appearing, button state changes)
@@ -434,41 +442,23 @@ void InteractionDispatcher::executeDrag(
     auto mods = mouse.modifiers;
     mods = mods.withFlags(ModifierKeys::leftButtonModifier);
     
-    // Wiggle: small move to force JUCE to update componentUnderMouse
-    exec.executeMouseMove(startPos + Point<int>(2, 0), {}, getElapsedMs());
-    exec.executeMouseMove(startPos, {}, getElapsedMs());
+    wiggleToUpdateComponent(startPos, exec);
     
     // MouseDown at start
     exec.executeMouseDown(startPos, mods, false, getElapsedMs());
-    log.add(createLogEntry("mouseDown", startPos, getElapsedMs()));
+    log.add(createLogEntry(InteractionIds::mouseDown.toString(), startPos, getElapsedMs()));
     
-    // Interpolate drag
-    int duration = mouse.durationMs;
-    int numSteps = jmax(1, duration / DRAG_STEP_INTERVAL_MS);
-    int stepDuration = duration / numSteps;
-    
-    for (int i = 1; i <= numSteps; ++i)
-    {
-        float t = static_cast<float>(i) / numSteps;
-        auto delta = (endPos - startPos).toFloat() * t;
-        Point<int> pos = startPos + Point<int>(roundToInt(delta.x), roundToInt(delta.y));
-        
-        exec.executeMouseMove(pos, mods, getElapsedMs());
-        exec.setCursorPosition(pos);
-        
-        if (i < numSteps)
-            waitForDuration(stepDuration, exec);
-    }
+    interpolateMovement(startPos, endPos, mouse.durationMs, mods, exec);
     
     // MouseUp at end
     exec.executeMouseUp(endPos, mods, false, getElapsedMs());
     exec.setCursorPosition(endPos);
     
-    auto upEntry = createLogEntry("mouseUp", endPos, getElapsedMs());
-    upEntry.getDynamicObject()->setProperty("delta", 
+    auto upEntry = createLogEntry(InteractionIds::mouseUp.toString(), endPos, getElapsedMs());
+    upEntry.getDynamicObject()->setProperty(InteractionIds::delta, 
         var(new DynamicObject()));
-    upEntry.getDynamicObject()->getProperty("delta").getDynamicObject()->setProperty("x", mouse.deltaPixels.x);
-    upEntry.getDynamicObject()->getProperty("delta").getDynamicObject()->setProperty("y", mouse.deltaPixels.y);
+    upEntry.getDynamicObject()->getProperty(InteractionIds::delta).getDynamicObject()->setProperty(RestApiIds::x, mouse.deltaPixels.x);
+    upEntry.getDynamicObject()->getProperty(InteractionIds::delta).getDynamicObject()->setProperty(RestApiIds::y, mouse.deltaPixels.y);
     log.add(upEntry);
     
     // Let UI settle after drag
@@ -486,9 +476,9 @@ void InteractionDispatcher::executeScreenshot(
 {
     exec.executeScreenshot(mouse.screenshotId, mouse.screenshotScale, getElapsedMs());
     
-    auto entry = createLogEntry("screenshot", {}, getElapsedMs());
-    entry.getDynamicObject()->setProperty("id", mouse.screenshotId);
-    entry.getDynamicObject()->setProperty("scale", mouse.screenshotScale);
+    auto entry = createLogEntry(InteractionIds::screenshot.toString(), {}, getElapsedMs());
+    entry.getDynamicObject()->setProperty(RestApiIds::id, mouse.screenshotId);
+    entry.getDynamicObject()->setProperty(RestApiIds::scale, mouse.screenshotScale);
     log.add(entry);
 }
 
@@ -552,26 +542,8 @@ void InteractionDispatcher::executeSelectMenuItem(
     Point<int> startPos = exec.getCurrentCursorPosition();
     Point<int> targetPos = matchedItem.screenBounds.getCentre();
     
-    int duration = mouse.durationMs;
-    int numSteps = jmax(1, duration / MOVE_STEP_INTERVAL_MS);
-    int stepDuration = duration / numSteps;
-    
-    for (int i = 1; i <= numSteps; ++i)
-    {
-        float t = static_cast<float>(i) / numSteps;
-        auto delta = (targetPos - startPos).toFloat() * t;
-        Point<int> pos = startPos + Point<int>(roundToInt(delta.x), roundToInt(delta.y));
-        
-        exec.executeMouseMove(pos, {}, getElapsedMs());
-        exec.setCursorPosition(pos);
-        
-        if (i < numSteps)
-            waitForDuration(stepDuration, exec);
-    }
-    
-    // Wiggle: small move to force JUCE to update componentUnderMouse
-    exec.executeMouseMove(targetPos + Point<int>(2, 0), {}, getElapsedMs());
-    exec.executeMouseMove(targetPos, {}, getElapsedMs());
+    interpolateMovement(startPos, targetPos, mouse.durationMs, {}, exec);
+    wiggleToUpdateComponent(targetPos, exec);
     
     // Click on menu item
     auto mods = ModifierKeys(ModifierKeys::leftButtonModifier);
@@ -580,9 +552,9 @@ void InteractionDispatcher::executeSelectMenuItem(
     exec.executeMouseUp(targetPos, mods, false, getElapsedMs());
     
     // Log
-    auto entry = createLogEntry("selectMenuItem", targetPos, getElapsedMs());
-    entry.getDynamicObject()->setProperty("menuItemText", matchedItem.text);
-    entry.getDynamicObject()->setProperty("itemId", matchedItem.itemId);
+    auto entry = createLogEntry(InteractionIds::selectMenuItem.toString(), targetPos, getElapsedMs());
+    entry.getDynamicObject()->setProperty(InteractionIds::menuItemText, matchedItem.text);
+    entry.getDynamicObject()->setProperty(RestApiIds::itemId, matchedItem.itemId);
     log.add(entry);
     
     // Let UI settle after menu selection (menu closes, value updates)
@@ -596,10 +568,10 @@ void InteractionDispatcher::executeSelectMenuItem(
 var InteractionDispatcher::createLogEntry(const String& type, Point<int> pixelPos, int elapsedMs) const
 {
     DynamicObject::Ptr obj = new DynamicObject();
-    obj->setProperty("type", type);
-    obj->setProperty("x", pixelPos.x);
-    obj->setProperty("y", pixelPos.y);
-    obj->setProperty("timestamp", elapsedMs);
+    obj->setProperty(RestApiIds::type, type);
+    obj->setProperty(RestApiIds::x, pixelPos.x);
+    obj->setProperty(RestApiIds::y, pixelPos.y);
+    obj->setProperty(InteractionIds::timestamp, elapsedMs);
     return var(obj.get());
 }
 
@@ -649,7 +621,7 @@ void TestExecutor::addMockSubtarget(const String& parentId, const String& subtar
 }
 
 InteractionExecutorBase::ResolveResult TestExecutor::resolveTarget(
-    const ComponentTargetPath& target)
+    const InteractionParser::ComponentTargetPath& target)
 {
     InteractionExecutorBase::ResolveResult result;
     
@@ -703,7 +675,7 @@ InteractionExecutorBase::ResolveResult TestExecutor::resolvePosition(Point<int> 
         {
             if (bounds.contains(absolutePos))
             {
-                result.target = ComponentTargetPath(id, subtargetId);
+                result.target = InteractionParser::ComponentTargetPath(id, subtargetId);
                 result.componentBounds = comp.absoluteBounds;
                 result.visible = true;
                 return result;
@@ -718,7 +690,7 @@ InteractionExecutorBase::ResolveResult TestExecutor::resolvePosition(Point<int> 
         
         if (comp.absoluteBounds.contains(absolutePos))
         {
-            result.target = ComponentTargetPath(id);
+            result.target = InteractionParser::ComponentTargetPath(id);
             result.componentBounds = comp.absoluteBounds;
             result.visible = true;
             return result;
@@ -735,7 +707,7 @@ void TestExecutor::executeMouseDown(Point<int> pixelPos, ModifierKeys mods,
     cursorPosition = pixelPos;
     
     LogEntry entry;
-    entry.type = "mouseDown";
+    entry.type = InteractionIds::mouseDown;
     entry.pixelPos = pixelPos;
     entry.mods = mods;
     entry.rightClick = rightClick;
@@ -749,7 +721,7 @@ void TestExecutor::executeMouseUp(Point<int> pixelPos, ModifierKeys mods,
     cursorPosition = pixelPos;
     
     LogEntry entry;
-    entry.type = "mouseUp";
+    entry.type = InteractionIds::mouseUp;
     entry.pixelPos = pixelPos;
     entry.mods = mods;
     entry.rightClick = rightClick;
@@ -762,7 +734,7 @@ void TestExecutor::executeMouseMove(Point<int> pixelPos, ModifierKeys mods, int 
     cursorPosition = pixelPos;
     
     LogEntry entry;
-    entry.type = "mouseMove";
+    entry.type = InteractionIds::mouseMove;
     entry.pixelPos = pixelPos;
     entry.mods = mods;
     entry.elapsedMs = elapsedMs;
@@ -772,7 +744,7 @@ void TestExecutor::executeMouseMove(Point<int> pixelPos, ModifierKeys mods, int 
 void TestExecutor::executeScreenshot(const String& id, float scale, int elapsedMs)
 {
     LogEntry entry;
-    entry.type = "screenshot";
+    entry.type = InteractionIds::screenshot;
     entry.screenshotId = id;
     entry.screenshotScale = scale;
     entry.elapsedMs = elapsedMs;

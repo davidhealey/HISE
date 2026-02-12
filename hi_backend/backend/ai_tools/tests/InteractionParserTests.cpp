@@ -224,7 +224,7 @@ private:
         beginTest("Click: With normalized position");
         
         auto interactions = parseOrFail(R"([
-            {"type": "click", "target": "Panel1", "position": {"x": 0.2, "y": 0.8}}
+            {"type": "click", "target": "Panel1", "normalizedPosition": {"x": 0.2, "y": 0.8}}
         ])");
         
         expect(interactions.size() == 1, "Should have 1 interaction");
@@ -307,7 +307,7 @@ private:
         expect(interactions.size() == 2, "Should expand to 2 clicks");
         expect(interactions[0].mouse.type == MouseInteraction::Type::Click, "First should be Click");
         expect(interactions[1].mouse.type == MouseInteraction::Type::Click, "Second should be Click");
-        expect(interactions[1].mouse.delayMs == InteractionDefaults::DOUBLE_CLICK_DELAY_MS, 
+        expect(interactions[1].mouse.delayMs == InteractionConstants::DefaultDoubleClickDurationMs, 
                "Second click should have 20ms delay");
     }
     
@@ -321,7 +321,7 @@ private:
         
         expect(interactions.size() == 2, "Should expand to 2 clicks");
         expect(interactions[0].mouse.delayMs == 300, "First click should have 300ms delay");
-        expect(interactions[1].mouse.delayMs == InteractionDefaults::DOUBLE_CLICK_DELAY_MS, 
+        expect(interactions[1].mouse.delayMs == InteractionConstants::DefaultDoubleClickDurationMs, 
                "Second click should have 20ms delay");
     }
     
@@ -330,7 +330,7 @@ private:
         beginTest("DoubleClick: Both clicks have same target");
         
         auto interactions = parseOrFail(R"([
-            {"type": "doubleClick", "target": "Panel1", "position": {"x": 0.3, "y": 0.7}}
+            {"type": "doubleClick", "target": "Panel1", "normalizedPosition": {"x": 0.3, "y": 0.7}}
         ])");
         
         expect(interactions.size() == 2, "Should expand to 2 clicks");
@@ -352,7 +352,7 @@ private:
         
         expect(interactions.size() == 1, "Should have 1 interaction");
         expect(interactions[0].mouse.type == MouseInteraction::Type::MoveTo, "Should be MoveTo");
-        expect(interactions[0].mouse.durationMs == InteractionDefaults::MOVE_DURATION_MS, 
+        expect(interactions[0].mouse.durationMs == InteractionConstants::DefaultMoveDurationMs, 
                "Duration should be default 700ms");
     }
     
@@ -361,7 +361,7 @@ private:
         beginTest("MoveTo: With position");
         
         auto interactions = parseOrFail(R"([
-            {"type": "moveTo", "target": "Panel1", "position": {"x": 0.1, "y": 0.9}}
+            {"type": "moveTo", "target": "Panel1", "normalizedPosition": {"x": 0.1, "y": 0.9}}
         ])");
         
         expect(interactions.size() == 1, "Should have 1 interaction");
@@ -480,7 +480,7 @@ private:
         beginTest("SelectMenuItem: Valid");
         
         auto interactions = parseOrFail(R"([
-            {"type": "selectMenuItem", "text": "Learn MIDI CC"}
+            {"type": "selectMenuItem", "menuItemText": "Learn MIDI CC"}
         ])");
         
         expect(interactions.size() == 1, "Should have 1 interaction");
@@ -606,7 +606,7 @@ private:
         auto interactions = parseOrFail(R"([{"type": "click", "target": "Button1"}])");
         
         expect(interactions.size() == 1, "Should have 1 interaction");
-        expect(interactions[0].mouse.durationMs == InteractionDefaults::CLICK_DURATION_MS, 
+        expect(interactions[0].mouse.durationMs == InteractionConstants::DefaultClickDurationMs,
                "Duration should be 30ms");
         expect(interactions[0].mouse.delayMs == 0, "Delay should be 0");
         expect(!interactions[0].mouse.rightClick, "Should not be right click");
@@ -622,7 +622,7 @@ private:
         ])");
         
         expect(interactions.size() == 1, "Should have 1 interaction");
-        expect(interactions[0].mouse.durationMs == InteractionDefaults::DRAG_DURATION_MS, 
+        expect(interactions[0].mouse.durationMs == InteractionConstants::DefaultDragDurationMs, 
                "Duration should be 500ms");
     }
     
@@ -633,7 +633,7 @@ private:
         auto interactions = parseOrFail(R"([{"type": "moveTo", "target": "Button1"}])");
         
         expect(interactions.size() == 1, "Should have 1 interaction");
-        expect(interactions[0].mouse.durationMs == InteractionDefaults::MOVE_DURATION_MS, 
+        expect(interactions[0].mouse.durationMs == InteractionConstants::DefaultMoveDurationMs, 
                "Duration should be 700ms");
     }
     

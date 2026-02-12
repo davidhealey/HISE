@@ -68,6 +68,7 @@ private:
     using Interaction = InteractionParser::Interaction;
     using MouseInteraction = InteractionParser::MouseInteraction;
     using Position = InteractionParser::MouseInteraction::Position;
+    using ComponentTargetPath = InteractionParser::ComponentTargetPath;
     
     //==========================================================================
     // Helper methods
@@ -107,7 +108,7 @@ private:
         Interaction i;
         i.mouse.type = MouseInteraction::Type::Click;
         i.mouse.delayMs = delayMs;
-        i.mouse.durationMs = InteractionDefaults::CLICK_DURATION_MS;
+        i.mouse.durationMs = InteractionConstants::DefaultClickDurationMs;
         return i;
     }
     
@@ -117,7 +118,7 @@ private:
         i.mouse.type = MouseInteraction::Type::Click;
         i.mouse.target = ComponentTargetPath(target);
         i.mouse.position = Position::center();
-        i.mouse.durationMs = InteractionDefaults::CLICK_DURATION_MS;
+        i.mouse.durationMs = InteractionConstants::DefaultClickDurationMs;
         return i;
     }
     
@@ -195,7 +196,7 @@ private:
         int moveCount = 0;
         for (const auto& entry : exec.log)
         {
-            if (entry.type == "mouseMove")
+            if (entry.type == InteractionIds::mouseMove)
                 moveCount++;
         }
         
@@ -247,13 +248,13 @@ private:
         bool hasDown = false, hasUp = false;
         for (const auto& entry : exec.log)
         {
-            if (entry.type == "mouseDown")
+            if (entry.type == InteractionIds::mouseDown)
             {
                 hasDown = true;
                 expect(entry.pixelPos.x == 140, "MouseDown X should be 140");
                 expect(entry.pixelPos.y == 115, "MouseDown Y should be 115");
             }
-            if (entry.type == "mouseUp")
+            if (entry.type == InteractionIds::mouseUp)
             {
                 hasUp = true;
                 expect(entry.pixelPos.x == 140, "MouseUp X should be 140");
@@ -284,7 +285,7 @@ private:
         bool hasRightDown = false;
         for (const auto& entry : exec.log)
         {
-            if (entry.type == "mouseDown" && entry.rightClick)
+            if (entry.type == InteractionIds::mouseDown && entry.rightClick)
                 hasRightDown = true;
         }
         
@@ -310,7 +311,7 @@ private:
         bool hasModifiers = false;
         for (const auto& entry : exec.log)
         {
-            if (entry.type == "mouseDown")
+            if (entry.type == InteractionIds::mouseDown)
             {
                 hasModifiers = entry.mods.isShiftDown() && entry.mods.isCtrlDown();
             }
@@ -364,7 +365,7 @@ private:
         bool hasShift = false;
         for (const auto& entry : exec.log)
         {
-            if (entry.type == "mouseDown" && entry.mods.isShiftDown())
+            if (entry.type == InteractionIds::mouseDown && entry.mods.isShiftDown())
                 hasShift = true;
         }
         
@@ -412,7 +413,7 @@ private:
         bool hasScreenshot = false;
         for (const auto& entry : exec.log)
         {
-            if (entry.type == "screenshot" && entry.screenshotId == "test_capture")
+            if (entry.type == InteractionIds::screenshot && entry.screenshotId == "test_capture")
                 hasScreenshot = true;
         }
         
@@ -503,7 +504,7 @@ private:
         TestExecutor exec;
         exec.addMockComponent("TestBtn", {50, 50, 100, 50}, true);
         
-        auto result = exec.resolveTarget("TestBtn");
+        auto result = exec.resolveTarget(ComponentTargetPath("TestBtn"));
         
         expect(result.success(), "Resolution should succeed");
         expect(result.componentBounds == Rectangle<int>(50, 50, 100, 50), "Bounds should match");
@@ -515,7 +516,7 @@ private:
         
         TestExecutor exec;
         
-        auto result = exec.resolveTarget("NonExistent");
+        auto result = exec.resolveTarget(ComponentTargetPath("NonExistent"));
         
         expect(!result.success(), "Resolution should fail");
         expect(result.error.containsIgnoreCase("not found"), "Error should mention not found");
@@ -528,7 +529,7 @@ private:
         TestExecutor exec;
         exec.addMockComponent("HiddenBtn", {50, 50, 100, 50}, false);  // visible = false
         
-        auto result = exec.resolveTarget("HiddenBtn");
+        auto result = exec.resolveTarget(ComponentTargetPath("HiddenBtn"));
         
         expect(!result.success(), "Resolution should fail");
         expect(result.error.containsIgnoreCase("not visible"), "Error should mention not visible");
@@ -562,10 +563,10 @@ private:
         {
             if (entry.isObject())
             {
-                String type = entry.getProperty("type", "").toString();
-                if (type == "mouseDown") hasDown = true;
-                if (type == "mouseUp") hasUp = true;
-                if (type == "screenshot") hasScreenshot = true;
+                String type = entry.getProperty(RestApiIds::type, "").toString();
+                if (type == InteractionIds::mouseDown.toString()) hasDown = true;
+                if (type == InteractionIds::mouseUp.toString()) hasUp = true;
+                if (type == InteractionIds::screenshot.toString()) hasScreenshot = true;
             }
         }
         

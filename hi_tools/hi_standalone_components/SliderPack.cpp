@@ -1146,8 +1146,10 @@ void SliderPack::rebuildSliders()
 			addAndMakeVisible(s);
 			sliders.add(s);
 			s->setComponentID(String(i));
-			DocumentWindowWithEmbeddedPopupMenu::setSubComponentTargetId(s, String(i));
-			//s->setLookAndFeel(getSpecialLookAndFeel<LookAndFeel>());
+#if USE_BACKEND
+			DocumentWindowWithEmbeddedPopupMenu::setSubComponentTargetId(s, String(i)));
+#endif
+			
 
 #if !HISE_NO_GUI_TOOLS
 			if(addClassSelector)

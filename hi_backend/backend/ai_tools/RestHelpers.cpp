@@ -671,8 +671,10 @@ const Array<RestHelpers::RouteMetadata>& RestHelpers::getRouteMetadata()
 			.withBodyParam(RouteParameter(RestApiIds::interactions, 
 				"Array of interaction objects. Types: 'moveTo' (explicit mouse positioning), 'click' (uses current position), "
 				"'doubleClick' (expands to two clicks), 'drag' (uses pixel 'delta'), 'selectMenuItem' (click menu item by text), "
-				"'screenshot' (capture interface). Fields: 'target' (component ID), 'delay' (ms before action, replaces timestamp), "
-				"'position' (normalized 0-1, default center), 'pixelPosition' (absolute, takes precedence), 'delta' (for drag)"))
+				"'screenshot' (capture interface). Fields: 'target' (component ID), 'delay' (ms before action), "
+				"'normalizedPosition' (0-1, default center), 'pixelPosition' (absolute, takes precedence), 'delta' (for drag), "
+				"'subtarget' (optional sub-component ID), 'rightClick' (boolean), 'shiftDown'/'ctrlDown'/'altDown'/'cmdDown' (modifiers), "
+				"'menuItemText' (for selectMenuItem), 'id'/'scale' (for screenshot)"))
 			.withBodyParam(RouteParameter(RestApiIds::verbose, "If true, include auto-insertion details and final mouseState in response").withDefault("false")));
 		
 		// Verify count matches enum

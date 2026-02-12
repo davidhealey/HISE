@@ -257,12 +257,14 @@ void TableEditor::addDragPoint(int x, int y, float curve, bool isStart/*=false*/
 		dp->setPosPixel(Point<int>(x, y));
 		addAndMakeVisible(dp);
 
+#if USE_BACKEND
 		if (isStart)
 			DocumentWindowWithEmbeddedPopupMenu::setSubComponentTargetId(dp, "start");
 		else if (isEnd)
 			DocumentWindowWithEmbeddedPopupMenu::setSubComponentTargetId(dp, "end");
 		else
 			DocumentWindowWithEmbeddedPopupMenu::setSubComponentTargetId(dp, "point_" + String(drag_points.size()));
+#endif
 
 		DragPointComparator comparator;
 

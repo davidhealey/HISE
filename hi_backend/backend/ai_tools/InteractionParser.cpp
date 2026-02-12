@@ -84,17 +84,17 @@ InteractionParser::ParseResult InteractionParser::parseSingleInteraction(
     if (!obj.isObject())
         return ParseResult::fail(formatError("Must be a JSON object", index));
     
-    if (!obj.hasProperty("type"))
+    if (!obj.hasProperty(RestApiIds::type))
         return ParseResult::fail(formatError("Missing required field 'type'", index));
     
-    auto typeVar = obj["type"];
+    auto typeVar = obj[RestApiIds::type];
     if (!typeVar.isString())
-        return ParseResult::fail(formatError("Field 'type' must be a string", index, "type"));
+        return ParseResult::fail(formatError("must be a string", index, RestApiIds::type));
     
     String type = typeVar.toString().toLowerCase();
     
     // Handle doubleClick expansion (expands to 2 clicks)
-    if (type == "doubleclick")
+    if (type == InteractionIds::doubleClick.toString().toLowerCase())
         return parseDoubleClick(obj, result, index);
     
     // Parse single interaction
@@ -120,16 +120,16 @@ InteractionParser::ParseResult InteractionParser::parseDoubleClick(
     // The moveTo will be auto-inserted by the normalizer
     
     // Parse target (required)
-    if (!obj.hasProperty("target"))
+    if (!obj.hasProperty(InteractionIds::target))
         return ParseResult::fail(formatError("Missing required field 'target'", index));
     
-    auto targetVar = obj["target"];
+    auto targetVar = obj[InteractionIds::target];
     if (!targetVar.isString())
-        return ParseResult::fail(formatError("Field 'target' must be a string", index, "target"));
+        return ParseResult::fail(formatError("must be a string", index, InteractionIds::target));
     
     String target = targetVar.toString();
     if (target.isEmpty())
-        return ParseResult::fail(formatError("Field 'target' cannot be empty", index, "target"));
+        return ParseResult::fail(formatError("cannot be empty", index, InteractionIds::target));
     
     // Parse position
     auto position = parsePosition(obj);
@@ -138,29 +138,24 @@ InteractionParser::ParseResult InteractionParser::parseDoubleClick(
     ModifierKeys mods = parseModifiers(obj);
     
     // Parse delay (applies to first click)
-    int delay = static_cast<int>(obj.getProperty("delay", 0));
+    int delay = static_cast<int>(obj.getProperty(InteractionIds::delay, 0));
     if (delay < 0)
-        return ParseResult::fail(formatError("Field 'delay' cannot be negative", index, "delay"));
+        return ParseResult::fail(formatError("cannot be negative", index, InteractionIds::delay));
     
-    // First click
-    Interaction click1;
-    click1.mouse.type = MouseInteraction::Type::Click;
-    click1.mouse.target = ComponentTargetPath::fromVar(obj);
-    click1.mouse.position = position;
-    click1.mouse.modifiers = mods;
-    click1.mouse.delayMs = delay;
-    click1.mouse.durationMs = InteractionDefaults::CLICK_DURATION_MS;
-    result.add(click1);
+    // Helper to create a click interaction
+    auto createClick = [&](int clickDelay) {
+        Interaction click;
+        click.mouse.type = MouseInteraction::Type::Click;
+        click.mouse.target = ComponentTargetPath::fromVar(obj);
+        click.mouse.position = position;
+        click.mouse.modifiers = mods;
+        click.mouse.delayMs = clickDelay;
+        click.mouse.durationMs = InteractionConstants::DefaultClickDurationMs;
+        return click;
+    };
     
-    // Second click with short delay
-    Interaction click2;
-    click2.mouse.type = MouseInteraction::Type::Click;
-    click2.mouse.target = ComponentTargetPath::fromVar(obj);
-    click2.mouse.position = position;
-    click2.mouse.modifiers = mods;
-    click2.mouse.delayMs = InteractionDefaults::DOUBLE_CLICK_DELAY_MS;
-    click2.mouse.durationMs = InteractionDefaults::CLICK_DURATION_MS;
-    result.add(click2);
+    result.add(createClick(delay));  // First click with user-specified delay
+    result.add(createClick(InteractionConstants::DefaultDoubleClickDurationMs));  // Second click
     
     return ParseResult::ok();
 }
@@ -176,41 +171,41 @@ InteractionParser::ParseResult InteractionParser::parseMouseInteraction(
     int index)
 {
     // Parse type
-    if (type == "moveto")
+    if (type == InteractionIds::moveTo.toString().toLowerCase())
         mouse.type = MouseInteraction::Type::MoveTo;
-    else if (type == "click")
+    else if (type == InteractionIds::click.toString().toLowerCase())
         mouse.type = MouseInteraction::Type::Click;
-    else if (type == "drag")
+    else if (type == InteractionIds::drag.toString().toLowerCase())
         mouse.type = MouseInteraction::Type::Drag;
-    else if (type == "screenshot")
+    else if (type == InteractionIds::screenshot.toString().toLowerCase())
         mouse.type = MouseInteraction::Type::Screenshot;
-    else if (type == "selectmenuitem")
+    else if (type == InteractionIds::selectMenuItem.toString().toLowerCase())
         mouse.type = MouseInteraction::Type::SelectMenuItem;
     else
         return ParseResult::fail(formatError(
-            "Unknown type '" + type + "'. Valid types: moveTo, click, doubleClick, drag, screenshot, selectMenuItem", 
-            index, "type"));
+            "unknown value '" + type + "'. Valid types: moveTo, click, doubleClick, drag, screenshot, selectMenuItem", 
+            index, RestApiIds::type));
     
     //==========================================================================
     // Screenshot handling
     //==========================================================================
     if (mouse.type == MouseInteraction::Type::Screenshot)
     {
-        if (!obj.hasProperty("id"))
-            return ParseResult::fail(formatError("Missing required field 'id' for screenshot", index));
+        if (!obj.hasProperty(RestApiIds::id))
+            return ParseResult::fail(formatError("required field", index, RestApiIds::id));
         
-        auto idVar = obj["id"];
+        auto idVar = obj[RestApiIds::id];
         if (!idVar.isString())
-            return ParseResult::fail(formatError("Field 'id' must be a string", index, "id"));
+            return ParseResult::fail(formatError("must be a string", index, RestApiIds::id));
         
         mouse.screenshotId = idVar.toString();
         if (mouse.screenshotId.isEmpty())
-            return ParseResult::fail(formatError("Field 'id' cannot be empty", index, "id"));
+            return ParseResult::fail(formatError("cannot be empty", index, RestApiIds::id));
         
         // Parse scale (optional, defaults to 1.0)
-        mouse.screenshotScale = static_cast<float>(obj.getProperty("scale", 1.0f));
+        mouse.screenshotScale = static_cast<float>(obj.getProperty(RestApiIds::scale, 1.0f));
         if (mouse.screenshotScale != 0.5f && mouse.screenshotScale != 1.0f)
-            return ParseResult::fail(formatError("Field 'scale' must be 0.5 or 1.0", index, "scale"));
+            return ParseResult::fail(formatError("must be 0.5 or 1.0", index, RestApiIds::scale));
         
         // Screenshot has no other fields
         return ParseResult::ok();
@@ -221,29 +216,29 @@ InteractionParser::ParseResult InteractionParser::parseMouseInteraction(
     //==========================================================================
     if (mouse.type == MouseInteraction::Type::SelectMenuItem)
     {
-        if (!obj.hasProperty("menuItemText"))
+        if (!obj.hasProperty(InteractionIds::menuItemText))
             return ParseResult::fail(formatError("Missing required field 'menuItemText' for selectMenuItem", index));
         
-        auto textVar = obj["menuItemText"];
+        auto textVar = obj[InteractionIds::menuItemText];
         if (!textVar.isString())
-            return ParseResult::fail(formatError("Field 'menuItemText' must be a string", index, "menuItemText"));
+            return ParseResult::fail(formatError("must be a string", index, InteractionIds::menuItemText));
         
         mouse.menuItemText = textVar.toString();
         if (mouse.menuItemText.isEmpty())
-            return ParseResult::fail(formatError("Field 'menuItemText' cannot be empty", index, "menuItemText"));
+            return ParseResult::fail(formatError("cannot be empty", index, InteractionIds::menuItemText));
         
         // Parse delay (optional)
-        mouse.delayMs = static_cast<int>(obj.getProperty("delay", 0));
+        mouse.delayMs = static_cast<int>(obj.getProperty(InteractionIds::delay, 0));
         if (mouse.delayMs < 0)
-            return ParseResult::fail(formatError("Field 'delay' cannot be negative", index, "delay"));
+            return ParseResult::fail(formatError("cannot be negative", index, InteractionIds::delay));
         
         // Parse duration (optional)
-        mouse.durationMs = static_cast<int>(obj.getProperty("duration", InteractionDefaults::MENU_SELECT_DURATION_MS));
+        mouse.durationMs = static_cast<int>(obj.getProperty(InteractionIds::duration, InteractionConstants::DefaultMenuSelectDurationMs));
         if (mouse.durationMs < 0)
-            return ParseResult::fail(formatError("Field 'duration' cannot be negative", index, "duration"));
+            return ParseResult::fail(formatError("cannot be negative", index, InteractionIds::duration));
         if (mouse.durationMs > MaxDurationMs)
-            return ParseResult::fail(formatError("Field 'duration' exceeds maximum of " + 
-                String(MaxDurationMs) + "ms", index, "duration"));
+            return ParseResult::fail(formatError("exceeds maximum of " + 
+                String(MaxDurationMs) + "ms", index, InteractionIds::duration));
         
         // SelectMenuItem has no target or position
         return ParseResult::ok();
@@ -254,37 +249,37 @@ InteractionParser::ParseResult InteractionParser::parseMouseInteraction(
     //==========================================================================
     
     // Parse target (required) and optional subtarget
-    if (!obj.hasProperty("target"))
+    if (!obj.hasProperty(InteractionIds::target))
         return ParseResult::fail(formatError("Missing required field 'target'", index));
     
-    auto targetVar = obj["target"];
+    auto targetVar = obj[InteractionIds::target];
     if (!targetVar.isString())
-        return ParseResult::fail(formatError("Field 'target' must be a string", index, "target"));
+        return ParseResult::fail(formatError("must be a string", index, InteractionIds::target));
     
     mouse.target = ComponentTargetPath::fromVar(obj);
     if (mouse.target.componentId.isEmpty())
-        return ParseResult::fail(formatError("Field 'target' cannot be empty", index, "target"));
+        return ParseResult::fail(formatError("cannot be empty", index, InteractionIds::target));
     
     // Parse position (optional, defaults to center)
     mouse.position = parsePosition(obj);
     
     // Parse normalizedPositionInTarget (optional, for subtarget fallback)
-    if (obj.hasProperty("normalizedPositionInTarget"))
+    if (obj.hasProperty(InteractionIds::normalizedPositionInTarget))
     {
-        auto normPos = obj["normalizedPositionInTarget"];
-        if (normPos.isObject() && normPos.hasProperty("x") && normPos.hasProperty("y"))
+        auto normPos = obj[InteractionIds::normalizedPositionInTarget];
+        if (normPos.isObject() && normPos.hasProperty(RestApiIds::x) && normPos.hasProperty(RestApiIds::y))
         {
             mouse.position.normalizedInParent = Point<float>(
-                static_cast<float>(normPos["x"]),
-                static_cast<float>(normPos["y"])
+                static_cast<float>(normPos[RestApiIds::x]),
+                static_cast<float>(normPos[RestApiIds::y])
             );
         }
     }
     
     // Parse delay (optional)
-    mouse.delayMs = static_cast<int>(obj.getProperty("delay", 0));
+    mouse.delayMs = static_cast<int>(obj.getProperty(InteractionIds::delay, 0));
     if (mouse.delayMs < 0)
-        return ParseResult::fail(formatError("Field 'delay' cannot be negative", index, "delay"));
+        return ParseResult::fail(formatError("cannot be negative", index, InteractionIds::delay));
     
     //==========================================================================
     // Type-specific parsing
@@ -293,37 +288,37 @@ InteractionParser::ParseResult InteractionParser::parseMouseInteraction(
     {
         case MouseInteraction::Type::MoveTo:
         {
-            mouse.durationMs = static_cast<int>(obj.getProperty("duration", InteractionDefaults::MOVE_DURATION_MS));
+            mouse.durationMs = static_cast<int>(obj.getProperty(InteractionIds::duration, InteractionConstants::DefaultMoveDurationMs));
             break;
         }
         
         case MouseInteraction::Type::Click:
         {
-            mouse.durationMs = static_cast<int>(obj.getProperty("duration", InteractionDefaults::CLICK_DURATION_MS));
-            mouse.rightClick = static_cast<bool>(obj.getProperty("rightClick", false));
+            mouse.durationMs = static_cast<int>(obj.getProperty(InteractionIds::duration, InteractionConstants::DefaultClickDurationMs));
+            mouse.rightClick = static_cast<bool>(obj.getProperty(InteractionIds::rightClick, false));
             mouse.modifiers = parseModifiers(obj);
             break;
         }
         
         case MouseInteraction::Type::Drag:
         {
-            mouse.durationMs = static_cast<int>(obj.getProperty("duration", InteractionDefaults::DRAG_DURATION_MS));
+            mouse.durationMs = static_cast<int>(obj.getProperty(InteractionIds::duration, InteractionConstants::DefaultDragDurationMs));
             mouse.modifiers = parseModifiers(obj);
             
             // Delta required for drag
-            if (!obj.hasProperty("delta"))
-                return ParseResult::fail(formatError("Missing required field 'delta' for drag", index));
+            if (!obj.hasProperty(InteractionIds::delta))
+                return ParseResult::fail(formatError("missing required field for drag", index, InteractionIds::delta));
             
-            auto deltaVar = obj["delta"];
+            auto deltaVar = obj[InteractionIds::delta];
             if (!deltaVar.isObject())
-                return ParseResult::fail(formatError("Field 'delta' must be an object with 'x' and 'y'", index, "delta"));
+                return ParseResult::fail(formatError("must be an object with 'x' and 'y'", index, InteractionIds::delta));
             
-            if (!deltaVar.hasProperty("x") || !deltaVar.hasProperty("y"))
-                return ParseResult::fail(formatError("Field 'delta' must have both 'x' and 'y' properties", index, "delta"));
+            if (!deltaVar.hasProperty(RestApiIds::x) || !deltaVar.hasProperty(RestApiIds::y))
+                return ParseResult::fail(formatError("must have both 'x' and 'y' properties", index, InteractionIds::delta));
             
             mouse.deltaPixels = {
-                static_cast<int>(deltaVar["x"]),
-                static_cast<int>(deltaVar["y"])
+                static_cast<int>(deltaVar[RestApiIds::x]),
+                static_cast<int>(deltaVar[RestApiIds::y])
             };
             break;
         }
@@ -334,10 +329,10 @@ InteractionParser::ParseResult InteractionParser::parseMouseInteraction(
     
     // Validate duration
     if (mouse.durationMs < 0)
-        return ParseResult::fail(formatError("Field 'duration' cannot be negative", index, "duration"));
+        return ParseResult::fail(formatError("cannot be negative", index, InteractionIds::duration));
     if (mouse.durationMs > MaxDurationMs)
-        return ParseResult::fail(formatError("Field 'duration' exceeds maximum of " + 
-            String(MaxDurationMs) + "ms", index, "duration"));
+        return ParseResult::fail(formatError("exceeds maximum of " + 
+            String(MaxDurationMs) + "ms", index, InteractionIds::duration));
     
     return ParseResult::ok();
 }
@@ -349,27 +344,27 @@ InteractionParser::ParseResult InteractionParser::parseMouseInteraction(
 InteractionParser::MouseInteraction::Position InteractionParser::parsePosition(const var& obj)
 {
     // pixelPosition takes precedence over position
-    if (obj.hasProperty("pixelPosition"))
+    if (obj.hasProperty(RestApiIds::pixelPosition))
     {
-        auto px = obj["pixelPosition"];
-        if (px.isObject() && px.hasProperty("x") && px.hasProperty("y"))
+        auto px = obj[RestApiIds::pixelPosition];
+        if (px.isObject() && px.hasProperty(RestApiIds::x) && px.hasProperty(RestApiIds::y))
         {
             return MouseInteraction::Position::absolute(
-                static_cast<int>(px["x"]),
-                static_cast<int>(px["y"])
+                static_cast<int>(px[RestApiIds::x]),
+                static_cast<int>(px[RestApiIds::y])
             );
         }
     }
     
     // Normalized position
-    if (obj.hasProperty("normalizedPosition"))
+    if (obj.hasProperty(InteractionIds::normalizedPosition))
     {
-        auto pos = obj["normalizedPosition"];
-        if (pos.isObject() && pos.hasProperty("x") && pos.hasProperty("y"))
+        auto pos = obj[InteractionIds::normalizedPosition];
+        if (pos.isObject() && pos.hasProperty(RestApiIds::x) && pos.hasProperty(RestApiIds::y))
         {
             return MouseInteraction::Position::normalized(
-                static_cast<float>(pos["x"]),
-                static_cast<float>(pos["y"])
+                static_cast<float>(pos[RestApiIds::x]),
+                static_cast<float>(pos[RestApiIds::y])
             );
         }
     }
@@ -386,13 +381,13 @@ ModifierKeys InteractionParser::parseModifiers(const var& obj)
 {
     int flags = 0;
     
-    if (static_cast<bool>(obj.getProperty("shiftDown", false)))
+    if (static_cast<bool>(obj.getProperty(InteractionIds::shiftDown, false)))
         flags |= ModifierKeys::shiftModifier;
-    if (static_cast<bool>(obj.getProperty("ctrlDown", false)))
+    if (static_cast<bool>(obj.getProperty(InteractionIds::ctrlDown, false)))
         flags |= ModifierKeys::ctrlModifier;
-    if (static_cast<bool>(obj.getProperty("altDown", false)))
+    if (static_cast<bool>(obj.getProperty(InteractionIds::altDown, false)))
         flags |= ModifierKeys::altModifier;
-    if (static_cast<bool>(obj.getProperty("cmdDown", false)))
+    if (static_cast<bool>(obj.getProperty(InteractionIds::cmdDown, false)))
         flags |= ModifierKeys::commandModifier;
     
     return ModifierKeys(flags);
@@ -402,29 +397,16 @@ ModifierKeys InteractionParser::parseModifiers(const var& obj)
 // Helper methods
 //==============================================================================
 
-String InteractionParser::formatError(const String& message, int index, const String& field)
+String InteractionParser::formatError(const String& message, int index, const Identifier& field)
 {
     String error = "Interaction [" + String(index) + "]";
     
-    if (field.isNotEmpty())
-        error += " field '" + field + "'";
+    if (field.isValid())
+        error += " field '" + field.toString() + "'";
     
     error += ": " + message;
     
     return error;
-}
-
-String InteractionParser::getTypeName(MouseInteraction::Type type)
-{
-    switch (type)
-    {
-        case MouseInteraction::Type::MoveTo:        return "moveTo";
-        case MouseInteraction::Type::Click:         return "click";
-        case MouseInteraction::Type::Drag:          return "drag";
-        case MouseInteraction::Type::Screenshot:    return "screenshot";
-        case MouseInteraction::Type::SelectMenuItem: return "selectMenuItem";
-    }
-    return "unknown";
 }
 
 //==============================================================================
@@ -436,13 +418,13 @@ InteractionAnalyzer::RecordedPosition InteractionAnalyzer::RecordedPosition::fro
     RecordedPosition pos;
     
     pos.absolute = Point<int>(
-        static_cast<int>(obj.getProperty("x", 0)),
-        static_cast<int>(obj.getProperty("y", 0))
+        static_cast<int>(obj.getProperty(RestApiIds::x, 0)),
+        static_cast<int>(obj.getProperty(RestApiIds::y, 0))
     );
     
-    if (obj.hasProperty("targetBounds"))
+    if (obj.hasProperty(InteractionIds::targetBounds))
     {
-        auto bounds = obj["targetBounds"];
+        auto bounds = obj[InteractionIds::targetBounds];
         if (bounds.isArray() && bounds.size() >= 4)
         {
             pos.targetBounds = Rectangle<int>(
@@ -454,14 +436,14 @@ InteractionAnalyzer::RecordedPosition InteractionAnalyzer::RecordedPosition::fro
         }
     }
     
-    if (obj.hasProperty("normalizedPositionInTarget"))
+    if (obj.hasProperty(InteractionIds::normalizedPositionInTarget))
     {
-        auto normPos = obj["normalizedPositionInTarget"];
+        auto normPos = obj[InteractionIds::normalizedPositionInTarget];
         if (normPos.isObject())
         {
             pos.normalizedInParent = Point<float>(
-                static_cast<float>(normPos.getProperty("x", -1.f)),
-                static_cast<float>(normPos.getProperty("y", -1.f))
+                static_cast<float>(normPos.getProperty(RestApiIds::x, -1.f)),
+                static_cast<float>(normPos.getProperty(RestApiIds::y, -1.f))
             );
         }
     }
@@ -475,9 +457,9 @@ void InteractionAnalyzer::RecordedPosition::toInteractionVar(DynamicObject* obj,
     {
         // No component - use absolute coordinates
         DynamicObject::Ptr pos = new DynamicObject();
-        pos->setProperty("x", absolute.x);
-        pos->setProperty("y", absolute.y);
-        obj->setProperty("pixelPosition", var(pos.get()));
+        pos->setProperty(RestApiIds::x, absolute.x);
+        pos->setProperty(RestApiIds::y, absolute.y);
+        obj->setProperty(RestApiIds::pixelPosition, var(pos.get()));
     }
     else
     {
@@ -487,9 +469,9 @@ void InteractionAnalyzer::RecordedPosition::toInteractionVar(DynamicObject* obj,
         if (mode == PositionMode::Absolute)
         {
             DynamicObject::Ptr pos = new DynamicObject();
-            pos->setProperty("x", relPos.x);
-            pos->setProperty("y", relPos.y);
-            obj->setProperty("pixelPosition", var(pos.get()));
+            pos->setProperty(RestApiIds::x, relPos.x);
+            pos->setProperty(RestApiIds::y, relPos.y);
+            obj->setProperty(RestApiIds::pixelPosition, var(pos.get()));
         }
         else
         {
@@ -498,9 +480,9 @@ void InteractionAnalyzer::RecordedPosition::toInteractionVar(DynamicObject* obj,
             float normY = static_cast<float>(relPos.y) / targetBounds.getHeight();
             
             DynamicObject::Ptr pos = new DynamicObject();
-            pos->setProperty("x", normX);
-            pos->setProperty("y", normY);
-            obj->setProperty("normalizedPosition", var(pos.get()));
+            pos->setProperty(RestApiIds::x, normX);
+            pos->setProperty(RestApiIds::y, normY);
+            obj->setProperty(InteractionIds::normalizedPosition, var(pos.get()));
         }
     }
     
@@ -508,9 +490,9 @@ void InteractionAnalyzer::RecordedPosition::toInteractionVar(DynamicObject* obj,
     if (hasFallback())
     {
         DynamicObject::Ptr normPos = new DynamicObject();
-        normPos->setProperty("x", normalizedInParent.x);
-        normPos->setProperty("y", normalizedInParent.y);
-        obj->setProperty("normalizedPositionInTarget", var(normPos.get()));
+        normPos->setProperty(RestApiIds::x, normalizedInParent.x);
+        normPos->setProperty(RestApiIds::y, normalizedInParent.y);
+        obj->setProperty(InteractionIds::normalizedPositionInTarget, var(normPos.get()));
     }
 }
 
@@ -518,35 +500,35 @@ InteractionAnalyzer::RawEvent InteractionAnalyzer::RawEvent::fromVar(const var& 
 {
     RawEvent event;
     
-    event.type = obj.getProperty("type", "").toString();
+    event.type = Identifier(obj.getProperty(RestApiIds::type, "").toString());
     event.position = RecordedPosition::fromVar(obj);
-    event.timestamp = static_cast<int64>(obj.getProperty("timestamp", 0));
-    event.rightClick = static_cast<bool>(obj.getProperty("rightClick", false));
+    event.timestamp = static_cast<int64>(obj.getProperty(InteractionIds::timestamp, 0));
+    event.rightClick = static_cast<bool>(obj.getProperty(InteractionIds::rightClick, false));
     
     // Parse modifiers if present
-    if (obj.hasProperty("modifiers"))
+    if (obj.hasProperty(InteractionIds::modifiers))
     {
-        auto mods = obj["modifiers"];
+        auto mods = obj[InteractionIds::modifiers];
         int flags = 0;
         
-        if (static_cast<bool>(mods.getProperty("shiftDown", false)))
+        if (static_cast<bool>(mods.getProperty(InteractionIds::shiftDown, false)))
             flags |= ModifierKeys::shiftModifier;
-        if (static_cast<bool>(mods.getProperty("ctrlDown", false)))
+        if (static_cast<bool>(mods.getProperty(InteractionIds::ctrlDown, false)))
             flags |= ModifierKeys::ctrlModifier;
-        if (static_cast<bool>(mods.getProperty("altDown", false)))
+        if (static_cast<bool>(mods.getProperty(InteractionIds::altDown, false)))
             flags |= ModifierKeys::altModifier;
-        if (static_cast<bool>(mods.getProperty("cmdDown", false)))
+        if (static_cast<bool>(mods.getProperty(InteractionIds::cmdDown, false)))
             flags |= ModifierKeys::commandModifier;
         
         event.modifiers = ModifierKeys(flags);
     }
     
     // Parse pre-resolved target info if present
-    event.target = ComponentTargetPath::fromVar(obj);
+    event.target = InteractionParser::ComponentTargetPath::fromVar(obj);
     
     // Parse menu selection info if present (for "selectMenuItem" type)
-    event.menuItemId = static_cast<int>(obj.getProperty("itemId", -1));
-    event.menuItemText = obj.getProperty("menuItemText", "").toString();
+    event.menuItemId = static_cast<int>(obj.getProperty(RestApiIds::itemId, -1));
+    event.menuItemText = obj.getProperty(InteractionIds::menuItemText, "").toString();
     
     return event;
 }
@@ -573,7 +555,7 @@ void InteractionAnalyzer::attachTargetInfo(Array<RawEvent>& events, InteractionE
         if (resolveResult.target.isEmpty())
         {
             // No component at position - click on background
-            event.target = ComponentTargetPath("content");
+            event.target = InteractionParser::ComponentTargetPath(InteractionIds::content.toString());
             event.position.targetBounds = {};
         }
         else
@@ -585,7 +567,7 @@ void InteractionAnalyzer::attachTargetInfo(Array<RawEvent>& events, InteractionE
             if (resolveResult.target.hasSubtarget())
             {
                 // Resolve parent-only to get parent bounds
-                ComponentTargetPath parentOnly(resolveResult.target.componentId);
+                InteractionParser::ComponentTargetPath parentOnly(resolveResult.target.componentId);
                 auto parentResult = executor.resolveTarget(parentOnly);
                 
                 if (parentResult.success() && !parentResult.componentBounds.isEmpty())
@@ -616,18 +598,18 @@ InteractionAnalyzer::AnalyzeResult InteractionAnalyzer::analyze(
     for (const auto& event : rawEvents)
     {
         // Handle selectMenuItem events - pass through directly (already semantic)
-        if (event.type == "selectMenuItem")
+        if (event.type == InteractionIds::selectMenuItem)
         {
             DynamicObject::Ptr obj = new DynamicObject();
-            obj->setProperty("type", "selectMenuItem");
-            obj->setProperty("itemId", event.menuItemId);
+            obj->setProperty(RestApiIds::type, InteractionIds::selectMenuItem.toString());
+            obj->setProperty(RestApiIds::itemId, event.menuItemId);
             if (event.menuItemText.isNotEmpty())
-                obj->setProperty("menuItemText", event.menuItemText);
+                obj->setProperty(InteractionIds::menuItemText, event.menuItemText);
             interactions.add(var(obj.get()));
             continue;
         }
         
-        if (event.type == "mouseDown")
+        if (event.type == InteractionIds::mouseDown)
         {
             // Validate that target info was attached (via recording or attachTargetInfo())
             if (event.target.isEmpty())
@@ -643,7 +625,7 @@ InteractionAnalyzer::AnalyzeResult InteractionAnalyzer::analyze(
             state.downModifiers = event.modifiers;
             state.downTarget = event.target;
         }
-        else if (event.type == "mouseUp")
+        else if (event.type == InteractionIds::mouseUp)
         {
             if (!state.mouseDown)
             {
@@ -734,13 +716,13 @@ var InteractionAnalyzer::createClickInteraction(const GestureState& state,
 {
     DynamicObject::Ptr obj = new DynamicObject();
     
-    obj->setProperty("type", "click");
+    obj->setProperty(RestApiIds::type, InteractionIds::click.toString());
     state.downTarget.toVar(obj.get());
     state.downPosition.toInteractionVar(obj.get(), options.positionMode);
     
     if (state.downRightClick)
     {
-        obj->setProperty("rightClick", true);
+        obj->setProperty(InteractionIds::rightClick, true);
     }
     
     addModifiersToInteraction(obj.get(), state.downModifiers);
@@ -753,7 +735,7 @@ var InteractionAnalyzer::createDoubleClickInteraction(const GestureState& state,
 {
     DynamicObject::Ptr obj = new DynamicObject();
     
-    obj->setProperty("type", "doubleClick");
+    obj->setProperty(RestApiIds::type, InteractionIds::doubleClick.toString());
     state.downTarget.toVar(obj.get());
     state.downPosition.toInteractionVar(obj.get(), options.positionMode);
     
@@ -768,51 +750,19 @@ var InteractionAnalyzer::createDragInteraction(const GestureState& state,
 {
     DynamicObject::Ptr obj = new DynamicObject();
     
-    obj->setProperty("type", "drag");
+    obj->setProperty(RestApiIds::type, InteractionIds::drag.toString());
     state.downTarget.toVar(obj.get());
     state.downPosition.toInteractionVar(obj.get(), options.positionMode);
     
     // Delta
     DynamicObject::Ptr delta = new DynamicObject();
-    delta->setProperty("x", endPosition.x - state.downPosition.absolute.x);
-    delta->setProperty("y", endPosition.y - state.downPosition.absolute.y);
-    obj->setProperty("delta", var(delta.get()));
+    delta->setProperty(RestApiIds::x, endPosition.x - state.downPosition.absolute.x);
+    delta->setProperty(RestApiIds::y, endPosition.y - state.downPosition.absolute.y);
+    obj->setProperty(InteractionIds::delta, var(delta.get()));
     
     addModifiersToInteraction(obj.get(), state.downModifiers);
     
     return var(obj.get());
-}
-
-void InteractionAnalyzer::addPositionToInteraction(DynamicObject* obj,
-                                                    Point<int> position,
-                                                    Rectangle<int> componentBounds,
-                                                    PositionMode mode)
-{
-    if (componentBounds.isEmpty())
-        return;
-    
-    // Calculate position relative to component
-    int relX = position.x - componentBounds.getX();
-    int relY = position.y - componentBounds.getY();
-    
-    if (mode == PositionMode::Absolute)
-    {
-        DynamicObject::Ptr pos = new DynamicObject();
-        pos->setProperty("x", relX);
-        pos->setProperty("y", relY);
-        obj->setProperty("pixelPosition", var(pos.get()));
-    }
-    else
-    {
-        // Normalized
-        float normX = static_cast<float>(relX) / componentBounds.getWidth();
-        float normY = static_cast<float>(relY) / componentBounds.getHeight();
-        
-        DynamicObject::Ptr pos = new DynamicObject();
-        pos->setProperty("x", normX);
-        pos->setProperty("y", normY);
-        obj->setProperty("normalizedPosition", var(pos.get()));
-    }
 }
 
 void InteractionAnalyzer::addModifiersToInteraction(DynamicObject* obj,
@@ -820,13 +770,13 @@ void InteractionAnalyzer::addModifiersToInteraction(DynamicObject* obj,
 {
     // Only add modifiers that are active (non-default = non-noisy)
     if (mods.isShiftDown())
-        obj->setProperty("shiftDown", true);
+        obj->setProperty(InteractionIds::shiftDown, true);
     if (mods.isCtrlDown())
-        obj->setProperty("ctrlDown", true);
+        obj->setProperty(InteractionIds::ctrlDown, true);
     if (mods.isAltDown())
-        obj->setProperty("altDown", true);
+        obj->setProperty(InteractionIds::altDown, true);
     if (mods.isCommandDown())
-        obj->setProperty("cmdDown", true);
+        obj->setProperty(InteractionIds::cmdDown, true);
 }
 
 } // namespace hise

@@ -31,6 +31,17 @@ using namespace juce;
 */
 #define DECLARE_ID(x) const Identifier x(#x);
 
+//==============================================================================
+/** Default timing values for interactions */
+namespace InteractionConstants
+{
+	static constexpr int DefaultMoveDurationMs = 700;
+	static constexpr int DefaultClickDurationMs = 30;
+	static constexpr int DefaultDoubleClickDurationMs = 20;
+	static constexpr int DefaultDragDurationMs = 500;
+	static constexpr int DefaultMenuSelectDurationMs = 700;
+}
+
 namespace InteractionIds
 {
     // Event types (semantic)
@@ -56,6 +67,7 @@ namespace InteractionIds
     // Component targeting
     DECLARE_ID(target);
     DECLARE_ID(subtarget);
+    DECLARE_ID(content);
     
     // Timing
     DECLARE_ID(timestamp);
@@ -85,169 +97,8 @@ namespace InteractionIds
 
 #undef DECLARE_ID
 
-//==============================================================================
-/** Represents a UI component target, optionally with a subtarget.
- *  Examples:
- *    - {"Button1", ""}        -> main component
- *    - {"SliderPack1", "11"}  -> slider 11 within SliderPack
- *    - {"FilterGraph", "2"}   -> EQ band 2
- */
-struct ComponentTargetPath
-{
-    String componentId;     // Main component ID (e.g., "SliderPack1")
-    String subtargetId;     // Child element ID (e.g., "11"), or empty
-    
-    //==========================================================================
-    // Constructors
-    ComponentTargetPath() = default;
-    ComponentTargetPath(const String& component) : componentId(component) {}
-    ComponentTargetPath(const String& component, const String& subtarget)
-        : componentId(component), subtargetId(subtarget) {}
-    
-    //==========================================================================
-    // Queries
-    bool isEmpty() const { return componentId.isEmpty(); }
-    bool isValid() const { return componentId.isNotEmpty(); }
-    bool hasSubtarget() const { return subtargetId.isNotEmpty(); }
-    
-    //==========================================================================
-    // Comparison
-    bool operator==(const ComponentTargetPath& other) const
-    {
-        return componentId == other.componentId && subtargetId == other.subtargetId;
-    }
-    bool operator!=(const ComponentTargetPath& other) const { return !(*this == other); }
-    
-    /** Compare component only (ignores subtarget). */
-    bool sameComponent(const ComponentTargetPath& other) const
-    {
-        return componentId == other.componentId;
-    }
-    
-    //==========================================================================
-    // JSON Serialization (backward-compatible separate fields)
-    
-    /** Read from JSON object with "target" and optional "subtarget" fields. */
-    static ComponentTargetPath fromVar(const var& obj)
-    {
-        ComponentTargetPath path;
-        path.componentId = obj.getProperty("target", "").toString();
-        path.subtargetId = obj.getProperty("subtarget", "").toString();
-        return path;
-    }
-    
-    /** Write to existing JSON object as "target" and "subtarget" fields. */
-    void toVar(DynamicObject* obj) const
-    {
-        if (componentId.isNotEmpty())
-            obj->setProperty("target", componentId);
-        if (subtargetId.isNotEmpty())
-            obj->setProperty("subtarget", subtargetId);
-    }
-    
-    //==========================================================================
-    // Debug/Display
-    String toString() const
-    {
-        if (subtargetId.isEmpty())
-            return componentId;
-        return componentId + "." + subtargetId;
-    }
-    
-    void clear()
-    {
-        componentId = {};
-        subtargetId = {};
-    }
-};
 
-//==============================================================================
-/** Base interface for executing mouse/screenshot actions.
- *  Real implementation injects into JUCE.
- *  Test implementation logs for verification.
- */
-struct InteractionExecutorBase
-{
-    virtual ~InteractionExecutorBase() = default;
-    
-    //==========================================================================
-    /** Result of resolving component ID ↔ position (bidirectional). */
-    struct ResolveResult
-    {
-        Rectangle<int> componentBounds;  // Absolute bounds (of subtarget if specified)
-        ComponentTargetPath target;      // Resolved component + subtarget
-        bool visible = false;
-        String error;
-        
-        bool success() const { return error.isEmpty(); }
-        
-        /** True if clicked on a child element within the component. */
-        bool hasSubtarget() const { return target.hasSubtarget(); }
-    };
-    
-    //==========================================================================
-    /** Resolve component ID → bounds (for dispatch).
-     *  @param target   Component + optional subtarget to resolve
-     *  @returns        ResolveResult with componentBounds, visible, error
-     */
-    virtual ResolveResult resolveTarget(const ComponentTargetPath& target) = 0;
-    
-    /** Resolve position → component ID (for analysis).
-     *  @param absolutePos   Position in Interface/ScriptContentComponent coords
-     *  @returns             ResolveResult with componentId, subtargetId,
-     *                       componentBounds, visible, error
-     */
-    virtual ResolveResult resolvePosition(Point<int> absolutePos) const = 0;
-    
-    //==========================================================================
-    // Primitive mouse operations (pixel coordinates)
-    virtual void executeMouseDown(Point<int> pixelPos, ModifierKeys mods, 
-                                  bool rightClick, int elapsedMs) = 0;
-    virtual void executeMouseUp(Point<int> pixelPos, ModifierKeys mods,
-                                bool rightClick, int elapsedMs) = 0;
-    virtual void executeMouseMove(Point<int> pixelPos, ModifierKeys mods,
-                                  int elapsedMs) = 0;
-    
-    // Screenshot capture
-    virtual void executeScreenshot(const String& id, float scale, int elapsedMs) = 0;
-    
-    // Synthetic input mode control
-    virtual void executeSyntheticModeStart(int elapsedMs) = 0;
-    virtual void executeSyntheticModeEnd(int elapsedMs) = 0;
-    
-    //==========================================================================
-    // Cursor and menu state
-    
-    /** Get current cursor position in Interface coordinates. */
-    virtual Point<int> getCurrentCursorPosition() const = 0;
-    
-    /** Set cursor position (for state tracking). */
-    virtual void setCursorPosition(Point<int> pos) = 0;
-    
-    /** Get all currently visible menu items from open popup menus. */
-    virtual Array<PopupMenu::VisibleMenuItem> getVisibleMenuItems() const = 0;
-    
-    /** Wait until the executor is ready to process events.
-     *  @returns The number of milliseconds waited, or -1 if timed out.
-     */
-    virtual int waitUntilReady() = 0;
-    
-    /** Get MainController for console logging (optional).
-     *  @returns MainController pointer, or nullptr for test executors.
-     */
-    virtual MainController* getMainController() const { return nullptr; }
-};
 
-//==============================================================================
-/** Default timing values for interactions */
-struct InteractionDefaults
-{
-    static constexpr int MOVE_DURATION_MS = 700;
-    static constexpr int CLICK_DURATION_MS = 30;
-    static constexpr int DOUBLE_CLICK_DELAY_MS = 20;
-    static constexpr int DRAG_DURATION_MS = 500;
-    static constexpr int MENU_SELECT_DURATION_MS = 700;
-};
 
 //==============================================================================
 /** Parser and validator for interaction test sequences.
@@ -259,6 +110,76 @@ struct InteractionDefaults
 class InteractionParser
 {
 public:
+    //==============================================================================
+    /** Represents a UI component target, optionally with a subtarget.
+     *  Examples:
+     *    - {"Button1", ""}        -> main component
+     *    - {"SliderPack1", "11"}  -> slider 11 within SliderPack
+     *    - {"FilterGraph", "2"}   -> EQ band 2
+     */
+    struct ComponentTargetPath
+    {
+        String componentId;     // Main component ID (e.g., "SliderPack1")
+        String subtargetId;     // Child element ID (e.g., "11"), or empty
+        
+        //==========================================================================
+        // Constructors
+        ComponentTargetPath() = default;
+        ComponentTargetPath(const String& component) : componentId(component) {}
+        ComponentTargetPath(const String& component, const String& subtarget)
+            : componentId(component), subtargetId(subtarget) {}
+        
+        //==========================================================================
+        // Queries
+        bool isEmpty() const { return componentId.isEmpty(); }
+        bool isValid() const { return componentId.isNotEmpty(); }
+        bool hasSubtarget() const { return subtargetId.isNotEmpty(); }
+        
+        //==========================================================================
+        // Comparison
+        bool operator==(const ComponentTargetPath& other) const
+        {
+            return componentId == other.componentId && subtargetId == other.subtargetId;
+        }
+        bool operator!=(const ComponentTargetPath& other) const { return !(*this == other); }
+        
+        //==========================================================================
+        // JSON Serialization (backward-compatible separate fields)
+        
+        /** Read from JSON object with "target" and optional "subtarget" fields. */
+        static ComponentTargetPath fromVar(const var& obj)
+        {
+            ComponentTargetPath path;
+            path.componentId = obj.getProperty(InteractionIds::target, "").toString();
+            path.subtargetId = obj.getProperty(InteractionIds::subtarget, "").toString();
+            return path;
+        }
+        
+        /** Write to existing JSON object as "target" and "subtarget" fields. */
+        void toVar(DynamicObject* obj) const
+        {
+            if (componentId.isNotEmpty())
+                obj->setProperty(InteractionIds::target, componentId);
+            if (subtargetId.isNotEmpty())
+                obj->setProperty(InteractionIds::subtarget, subtargetId);
+        }
+        
+        //==========================================================================
+        // Debug/Display
+        String toString() const
+        {
+            if (subtargetId.isEmpty())
+                return componentId;
+            return componentId + "." + subtargetId;
+        }
+        
+        void clear()
+        {
+            componentId = {};
+            subtargetId = {};
+        }
+    };
+
     //==============================================================================
     /** Mouse interaction data */
     struct MouseInteraction
@@ -464,10 +385,84 @@ private:
     static ModifierKeys parseModifiers(const var& obj);
     
     /** Helper to format error messages with context. */
-    static String formatError(const String& message, int index, const String& field = {});
+    static String formatError(const String& message, int index, const Identifier& field = {});
+};
+
+//==============================================================================
+/** Base interface for executing mouse/screenshot actions.
+ *  Real implementation injects into JUCE.
+ *  Test implementation logs for verification.
+ */
+struct InteractionExecutorBase
+{
+    virtual ~InteractionExecutorBase() = default;
     
-    /** Get string name for mouse interaction type. */
-    static String getTypeName(MouseInteraction::Type type);
+    //==========================================================================
+    /** Result of resolving component ID ↔ position (bidirectional). */
+    struct ResolveResult
+    {
+        Rectangle<int> componentBounds;  // Absolute bounds (of subtarget if specified)
+        InteractionParser::ComponentTargetPath target;      // Resolved component + subtarget
+        bool visible = false;
+        String error;
+        
+        bool success() const { return error.isEmpty(); }
+        
+        /** True if clicked on a child element within the component. */
+        bool hasSubtarget() const { return target.hasSubtarget(); }
+    };
+    
+    //==========================================================================
+    /** Resolve component ID → bounds (for dispatch).
+     *  @param target   Component + optional subtarget to resolve
+     *  @returns        ResolveResult with componentBounds, visible, error
+     */
+    virtual ResolveResult resolveTarget(const InteractionParser::ComponentTargetPath& target) = 0;
+    
+    /** Resolve position → component ID (for analysis).
+     *  @param absolutePos   Position in Interface/ScriptContentComponent coords
+     *  @returns             ResolveResult with componentId, subtargetId,
+     *                       componentBounds, visible, error
+     */
+    virtual ResolveResult resolvePosition(Point<int> absolutePos) const = 0;
+    
+    //==========================================================================
+    // Primitive mouse operations (pixel coordinates)
+    virtual void executeMouseDown(Point<int> pixelPos, ModifierKeys mods, 
+                                  bool rightClick, int elapsedMs) = 0;
+    virtual void executeMouseUp(Point<int> pixelPos, ModifierKeys mods,
+                                bool rightClick, int elapsedMs) = 0;
+    virtual void executeMouseMove(Point<int> pixelPos, ModifierKeys mods,
+                                  int elapsedMs) = 0;
+    
+    // Screenshot capture
+    virtual void executeScreenshot(const String& id, float scale, int elapsedMs) = 0;
+    
+    // Synthetic input mode control
+    virtual void executeSyntheticModeStart(int elapsedMs) = 0;
+    virtual void executeSyntheticModeEnd(int elapsedMs) = 0;
+    
+    //==========================================================================
+    // Cursor and menu state
+    
+    /** Get current cursor position in Interface coordinates. */
+    virtual Point<int> getCurrentCursorPosition() const = 0;
+    
+    /** Set cursor position (for state tracking). */
+    virtual void setCursorPosition(Point<int> pos) = 0;
+    
+    /** Get all currently visible menu items from open popup menus. */
+    virtual Array<PopupMenu::VisibleMenuItem> getVisibleMenuItems() const = 0;
+    
+    /** Wait until the executor is ready to process events.
+     *  @returns The number of milliseconds waited, or -1 if timed out.
+     */
+    virtual int waitUntilReady() = 0;
+    
+    /** Get MainController for console logging (optional).
+     *  @returns MainController pointer, or nullptr for test executors.
+     */
+    virtual MainController* getMainController() const { return nullptr; }
 };
 
 //==============================================================================
@@ -495,9 +490,15 @@ public:
     /** Configuration options for analysis. */
     struct Options
     {
-        PositionMode positionMode = PositionMode::Absolute;
-        int doubleClickThresholdMs = 400;   // Max time between clicks for double-click
-        int clickMaxMovementPx = 5;          // Max movement to still count as click
+        PositionMode positionMode;
+        int doubleClickThresholdMs;
+        int clickMaxMovementPx;
+        
+        Options() 
+            : positionMode(PositionMode::Absolute)
+            , doubleClickThresholdMs(400)
+            , clickMaxMovementPx(5)
+        {}
     };
     
     //==========================================================================
@@ -533,14 +534,14 @@ public:
     /** A single raw mouse event from recording. */
     struct RawEvent
     {
-        String type;           // "mouseDown", "mouseUp", "mouseMove", "selectMenuItem"
+        Identifier type;       // InteractionIds::mouseDown, mouseUp, mouseMove, selectMenuItem
         RecordedPosition position;  // Position data with fallback info
         int64 timestamp = 0;   // Milliseconds since recording start
         bool rightClick = false;
         ModifierKeys modifiers;
         
         // Pre-resolved target info (attached during recording or via attachTargetInfo())
-        ComponentTargetPath target;       // Component + subtarget, or empty (unresolved)
+        InteractionParser::ComponentTargetPath target;       // Component + subtarget, or empty (unresolved)
         
         // Menu selection info (for "selectMenuItem" type events)
         int menuItemId = -1;
@@ -603,12 +604,12 @@ private:
         int64 downTimestamp = 0;
         bool downRightClick = false;
         ModifierKeys downModifiers;
-        ComponentTargetPath downTarget;      // Component where mouse went down
+        InteractionParser::ComponentTargetPath downTarget;      // Component where mouse went down
         
         // For double-click detection
         int64 lastClickTimestamp = -1000;    // Far in the past
         Point<int> lastClickPosition;
-        ComponentTargetPath lastClickTarget; // For double-click same-target detection
+        InteractionParser::ComponentTargetPath lastClickTarget; // For double-click same-target detection
         
         void reset()
         {
@@ -633,12 +634,6 @@ private:
     static var createDragInteraction(const GestureState& state,
                                      Point<int> endPosition,
                                      const Options& options);
-    
-    /** Add position to interaction JSON based on mode. */
-    static void addPositionToInteraction(DynamicObject* obj,
-                                         Point<int> position,
-                                         Rectangle<int> componentBounds,
-                                         PositionMode mode);
     
     /** Add modifiers to interaction JSON (only if non-default). */
     static void addModifiersToInteraction(DynamicObject* obj,

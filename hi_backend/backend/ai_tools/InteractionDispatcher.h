@@ -25,47 +25,47 @@ namespace hise {
 using namespace juce;
 
 //==============================================================================
-/** Listener for interaction execution progress updates.
- *  Implement this interface to receive callbacks during sequence execution.
- */
-struct ProgressListener
-{
-    virtual ~ProgressListener() = default;
-    
-    /** Called when a sequence begins execution.
-     *  @param totalInteractions   Number of interactions in the sequence
-     *  @param estimatedDurationMs Estimated total duration in milliseconds
-     */
-    virtual void onSequenceStarted(int totalInteractions, int estimatedDurationMs) = 0;
-    
-    /** Called when an individual interaction starts.
-     *  @param index       Zero-based index of the interaction
-     *  @param description Human-readable description (e.g., "Moving to Button1")
-     */
-    virtual void onInteractionStarted(int index, const String& description) = 0;
-    
-    /** Called when an individual interaction completes.
-     *  @param index  Zero-based index of the completed interaction
-     */
-    virtual void onInteractionCompleted(int index) = 0;
-    
-    /** Called when a screenshot is captured. */
-    virtual void onScreenshotCaptured() = 0;
-    
-    /** Called when the sequence completes (success or failure).
-     *  @param success True if all interactions completed without error
-     *  @param error   Error message if success is false
-     */
-    virtual void onSequenceCompleted(bool success, const String& error) = 0;
-};
-
-//==============================================================================
 /** Executes parsed interactions with timing control.
  *  Must be called on the message thread. Pumps message loop between events.
  */
 class InteractionDispatcher
 {
 public:
+    //==============================================================================
+    /** Listener for interaction execution progress updates.
+     *  Implement this interface to receive callbacks during sequence execution.
+     */
+    struct ProgressListener
+    {
+        virtual ~ProgressListener() = default;
+        
+        /** Called when a sequence begins execution.
+         *  @param totalInteractions   Number of interactions in the sequence
+         *  @param estimatedDurationMs Estimated total duration in milliseconds
+         */
+        virtual void onSequenceStarted(int totalInteractions, int estimatedDurationMs) = 0;
+        
+        /** Called when an individual interaction starts.
+         *  @param index       Zero-based index of the interaction
+         *  @param description Human-readable description (e.g., "Moving to Button1")
+         */
+        virtual void onInteractionStarted(int index, const String& description) = 0;
+        
+        /** Called when an individual interaction completes.
+         *  @param index  Zero-based index of the completed interaction
+         */
+        virtual void onInteractionCompleted(int index) = 0;
+        
+        /** Called when a screenshot is captured. */
+        virtual void onScreenshotCaptured() = 0;
+        
+        /** Called when the sequence completes (success or failure).
+         *  @param success True if all interactions completed without error
+         *  @param error   Error message if success is false
+         */
+        virtual void onSequenceCompleted(bool success, const String& error) = 0;
+    };
+
     //==============================================================================
     /** Result of execution with timing info. */
     struct ExecutionResult
@@ -142,6 +142,9 @@ private:
     int getElapsedMs() const;
     void waitForDuration(int ms, InteractionExecutorBase& executor);
     void waitWithWiggle(int ms, InteractionExecutorBase& exec);
+    void wiggleToUpdateComponent(Point<int> pos, InteractionExecutorBase& exec);
+    void interpolateMovement(Point<int> startPos, Point<int> endPos, int durationMs,
+                             ModifierKeys mods, InteractionExecutorBase& exec);
     String checkAbortConditions() const;
     
     // Execute individual interaction types
@@ -164,7 +167,7 @@ public:
     /** Log entry for recorded mouse/screenshot events. */
     struct LogEntry
     {
-        String type;           // "mouseDown", "mouseUp", "mouseMove", "screenshot"
+        Identifier type;       // InteractionIds::mouseDown, mouseUp, mouseMove, screenshot
         Point<int> pixelPos;
         ModifierKeys mods;
         bool rightClick = false;
@@ -210,7 +213,7 @@ public:
     //==========================================================================
     // InteractionExecutorBase interface implementation
     
-    InteractionExecutorBase::ResolveResult resolveTarget(const ComponentTargetPath& target) override;
+    InteractionExecutorBase::ResolveResult resolveTarget(const InteractionParser::ComponentTargetPath& target) override;
     
     InteractionExecutorBase::ResolveResult resolvePosition(Point<int> absolutePos) const override;
     

@@ -516,6 +516,8 @@ BackendProcessor::~BackendProcessor()
 	restServer.removeListener(this);
 	restServer.stop();
 
+	interactionTester = nullptr;
+
 #if IS_STANDALONE_APP
 	for(auto p: getParameters())
     {
