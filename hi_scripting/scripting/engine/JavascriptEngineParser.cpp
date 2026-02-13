@@ -2626,11 +2626,17 @@ void HiseJavascriptEngine::RootObject::ExpressionTreeBuilder::preprocessCode(con
 			it.match(TokenTypes::include_);
 			it.match(TokenTypes::openParen);
 			String fileName = it.currentValue.toString();
+
+			auto previousExternalFilePath = currentExternalFilePath;
+			currentExternalFilePath = externalFileName;
+
 			String externalCode = getFileContent(it.currentValue.toString(), fileName);
-			
-            
-            
+
+
+
 			preprocessCode(externalCode, fileName);
+
+			currentExternalFilePath = previousExternalFilePath;
 
 			continue;
 		}
