@@ -723,7 +723,7 @@ private:
 
 		
 
-		static String resolveIncludeStatements(String& x, Array<File>& includedFiles, const JavascriptProcessor* p);
+		static String resolveIncludeStatements(String& x, Array<File>& includedFiles, const JavascriptProcessor* p, const File& parentFile = File());
 		static Array<ExternalScript> desolveIncludeStatements(String& x, const File& scriptRoot, MainController* mc);
 
 		static String stripUnusedNamespaces(const String &code, int& counter);
