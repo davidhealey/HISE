@@ -857,6 +857,8 @@ private:
 	double sr = 44100.0;
 	double periodTime = 500.0;
 	PolyData<State, NumVoices> state;
+
+	SN_VOICE_SETTER(ramp, state);
 };
 
 template <int NV, bool UseRingBuffer> class clock_ramp : public polyphonic_base,
@@ -1716,15 +1718,20 @@ template <int NV> struct file_player : public data::base,
         {
             if (mode != PlaybackModes::MidiFreq)
             {
-                auto& cd = *currentXYZSample.begin();
+                // Manual lock required here because reset() is called directly (not through
+                // the wrapper's VoiceSetter) from prepare(), startVoice(), and setPlaybackMode().
+                // This lock is reentrant for read access, so it's safe even if the VoiceSetter
+                // already holds a read lock in some call paths.
+                if (auto dt = DataTryReadLock(this))
+                {
+                    auto& cd = currentXYZSample.get(PolyHandler::AccessType::AllowUncached);
+                    HiseEvent e(HiseEvent::Type::NoteOn, 64, 1, 1);
 
-                HiseEvent e(HiseEvent::Type::NoteOn, 64, 1, 1);
+                    if (this->externalData.getStereoSample(cd, e))
+                        s.uptimeDelta = cd.getPitchFactor();
+                }
 
-                if (this->externalData.getStereoSample(cd, e))
-                    s.uptimeDelta = cd.getPitchFactor();
-
-                
-
+                // Always reset playback position, regardless of lock status
                 s.uptime = 0.0;
             }
         }
@@ -1755,47 +1762,43 @@ template <int NV> struct file_player : public data::base,
 
     template <int C> void processFix(ProcessData<C>& data)
     {
-        if (auto dt = DataTryReadLock(this))
+        // Data lock is acquired by VoiceSetter in wrapper (SN_VOICE_SETTER_2_WITH_DATA_LOCK)
+        auto& s = getCurrentAudioSample();
+
+        if (!externalData.isEmpty() && !s.data[0].isEmpty())
         {
-            auto& s = getCurrentAudioSample();
+            auto fd = data.toFrameData();
 
-            if (!externalData.isEmpty() && !s.data[0].isEmpty())
+            auto maxIndex = (double)s.data[0].size();
+
+            if (mode == PlaybackModes::SignalInput)
             {
-                auto fd = data.toFrameData();
+                auto pos = jlimit(0.0, 1.0, (double)data[0][0]);
+                externalData.setDisplayedValue(pos * maxIndex);
 
-                
-                auto maxIndex = (double)s.data[0].size();
-
-                if (mode == PlaybackModes::SignalInput)
-                {
-                    auto pos = jlimit(0.0, 1.0, (double)data[0][0]);
-                    externalData.setDisplayedValue(pos * maxIndex);
-
-                    while (fd.next())
-                        processWithSignalInput(fd.toSpan());
-                }
-                else
-                {
-
-                    using IndexType = index::unscaled<double, index::looped<0>>;
-
-                    IndexType i(state.get().uptime);
-                    i.setLoopRange(s.loopRange[0], s.loopRange[1]);
-                    auto uptime = i.getIndex(maxIndex, 0);
-                    externalData.setDisplayedValue(uptime);
-
-                    while (fd.next())
-                        processWithPitchRatio(fd.toSpan());
-                }
+                while (fd.next())
+                    processWithSignalInput(fd.toSpan());
             }
-            else if (mode == PlaybackModes::SignalInput)
+            else
             {
-                for (auto& ch : data)
-                {
-                    auto b = data.toChannelData(ch);
-                        FloatVectorOperations::clear(b.begin(), b.size());
-                }
-            };
+                using IndexType = index::unscaled<double, index::looped<0>>;
+
+                IndexType i(state.get().uptime);
+                i.setLoopRange(s.loopRange[0], s.loopRange[1]);
+                auto uptime = i.getIndex(maxIndex, 0);
+                externalData.setDisplayedValue(uptime);
+
+                while (fd.next())
+                    processWithPitchRatio(fd.toSpan());
+            }
+        }
+        else if (mode == PlaybackModes::SignalInput)
+        {
+            for (auto& ch : data)
+            {
+                auto b = data.toChannelData(ch);
+                FloatVectorOperations::clear(b.begin(), b.size());
+            }
         }
     }
 
@@ -1853,44 +1856,42 @@ template <int NV> struct file_player : public data::base,
 
     template <typename FrameDataType> void processFrame(FrameDataType& data) noexcept
     {
-        if (auto dt = DataTryReadLock(this))
+        // Data lock is acquired by VoiceSetter in wrapper (SN_VOICE_SETTER_2_WITH_DATA_LOCK)
+        auto& cd = getCurrentAudioSample().data;
+        int numSamples = cd[0].size();
+
+        switch (mode)
         {
-            auto& cd = getCurrentAudioSample().data;
-            int numSamples = cd[0].size();
-
-            switch (mode)
-            {
-            case PlaybackModes::SignalInput:
-            {
-                if (numSamples == 0)
-                    data = 0.0f;
-                else
-                {
-                    if (frameUpdateCounter++ >= 1024)
-                    {
-                        frameUpdateCounter = 0;
-                        auto pos = jlimit(0.0, 1.0, (double)data[0]);
-                        externalData.setDisplayedValue(pos * (double)(numSamples));
-                    }
-
-                    processWithSignalInput(data);
-                }
-
-                break;
-            }
-            case PlaybackModes::Static:
-            case PlaybackModes::MidiFreq:
+        case PlaybackModes::SignalInput:
+        {
+            if (numSamples == 0)
+                data = 0.0f;
+            else
             {
                 if (frameUpdateCounter++ >= 1024)
                 {
                     frameUpdateCounter = 0;
-                    externalData.setDisplayedValue(hmath::fmod(state.get().uptime * globalRatio, (double)numSamples));
+                    auto pos = jlimit(0.0, 1.0, (double)data[0]);
+                    externalData.setDisplayedValue(pos * (double)(numSamples));
                 }
 
-                processWithPitchRatio(data);
-                break;
+                processWithSignalInput(data);
             }
+
+            break;
+        }
+        case PlaybackModes::Static:
+        case PlaybackModes::MidiFreq:
+        {
+            if (frameUpdateCounter++ >= 1024)
+            {
+                frameUpdateCounter = 0;
+                externalData.setDisplayedValue(hmath::fmod(state.get().uptime * globalRatio, (double)numSamples));
             }
+
+            processWithPitchRatio(data);
+            break;
+        }
         }
     }
 
@@ -1990,6 +1991,8 @@ private:
 
     PolyData<OscData, NumVoices> state;
     PrepareSpecs lastSpecs;
+
+    SN_VOICE_SETTER_2_WITH_DATA_LOCK(file_player, state, currentXYZSample);
 };
 
 class fm : public HiseDspBase
@@ -2062,6 +2065,8 @@ private:
 	PolyData<double, NUM_POLYPHONIC_VOICES> modGain;
 
 	SharedResourcePointer<SineLookupTable<2048>> sinTable;
+
+	SN_VOICE_SETTER_2(fm, oscData, modGain);
 };
 
 template <int V> class gain : public HiseDspBase,
@@ -2203,6 +2208,8 @@ public:
 	double resetValue = 0.0;
 
 	PolyData<sfloat, NumVoices> gainer;
+
+	SN_VOICE_SETTER(gain, gainer);
 };
 
 template <int NV> class smoother: public mothernode,

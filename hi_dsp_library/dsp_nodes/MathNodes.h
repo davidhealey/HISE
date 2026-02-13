@@ -755,6 +755,8 @@ public:
 	}
 
 	PolyData<float, NumVoices> value;
+
+	SN_VOICE_SETTER(OpNode, value);
 };
 
 #define DEFINE_MONO_OP_NODE(monoName) template <int NV> using monoName = OpNode<Operations::monoName, 1>;
@@ -1050,7 +1052,7 @@ private:
 
     void clearFilterState()
     {
-        typename decltype(filterState)::ScopedVoiceSetter scope(filterState, true);
+        typename decltype(filterState)::ScopedVoiceIndexCacher scope(filterState, true);
 
         for(auto& voiceState : filterState)
             voiceState.fill(0.0f);

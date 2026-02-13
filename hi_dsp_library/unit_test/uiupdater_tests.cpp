@@ -326,6 +326,13 @@ struct NodeUIUpdaterTests : public juce::UnitTest
 		testPolyDataCacherUnderLoad();
 		testPolyDataUIIterationUnderLoad();
 
+#if JUCE_DEBUG
+		// PolyData debug counter tests (only run in debug builds)
+		testPolyDataAllowUncachedNoAssertion();
+		testPolyDataCounterResetOnCachedAccess();
+		testPolyDataCachedAccessNoAssertion();
+#endif
+
 		// Cleanup: destroy nodes while JUCE infrastructure is still alive
 		// (static destruction order would otherwise cause crash in CriticalSection)
 		timerNode = nullptr;
@@ -2372,6 +2379,124 @@ struct NodeUIUpdaterTests : public juce::UnitTest
 		expect(voicesWritten.load() >= 16, "Should have written to at least 16 voices");
 		expect(maxVoicesSeenByUI.load() > 0, "UI should have seen some written voices");
 	}
+
+	// =========================================
+	// PolyData Debug Counter Tests
+	// =========================================
+
+#if JUCE_DEBUG
+	/** Setup: PolyData with PolyHandler, no ScopedVoiceIndexCacher.
+	 *
+	 *  Scenario: Call get(AccessType::AllowUncached) many times.
+	 *
+	 *  Expected: No assertion fires because AllowUncached bypasses the counter.
+	 */
+	void testPolyDataAllowUncachedNoAssertion()
+	{
+		beginTest("PolyData get(AllowUncached) does not trigger assertion");
+
+		PolyHandler localPolyHandler(true);
+		PolyData<int, NUM_POLYPHONIC_VOICES> polyData;
+
+		PrepareSpecs specs;
+		specs.sampleRate = 44100.0;
+		specs.blockSize = 512;
+		specs.numChannels = 2;
+		specs.voiceIndex = &localPolyHandler;
+		polyData.prepare(specs);
+
+		{
+			PolyHandler::ScopedVoiceSetter svs(localPolyHandler, 3);
+
+			// Call get(AllowUncached) more than threshold times - should NOT assert
+			for (int i = 0; i < 100; i++)
+			{
+				polyData.get(PolyHandler::AccessType::AllowUncached) = i;
+			}
+		}
+
+		// If we reach here, no assertion fired
+		expect(true, "get(AllowUncached) should not trigger assertion after 100 calls");
+	}
+
+	/** Setup: PolyData with PolyHandler, no ScopedVoiceIndexCacher, then activate cacher.
+	 *
+	 *  Scenario: Call get() 50 times (below threshold), then activate cacher and get(),
+	 *  then deactivate cacher and call get() 50 more times.
+	 *
+	 *  Expected: Counter resets when cacher is active, so total uncached calls stay below threshold.
+	 */
+	void testPolyDataCounterResetOnCachedAccess()
+	{
+		beginTest("PolyData debug counter resets when ScopedVoiceIndexCacher is used");
+
+		PolyHandler localPolyHandler(true);
+		PolyData<int, NUM_POLYPHONIC_VOICES> polyData;
+
+		PrepareSpecs specs;
+		specs.sampleRate = 44100.0;
+		specs.blockSize = 512;
+		specs.numChannels = 2;
+		specs.voiceIndex = &localPolyHandler;
+		polyData.prepare(specs);
+
+		{
+			PolyHandler::ScopedVoiceSetter svs(localPolyHandler, 3);
+
+			// Call get() 50 times (below threshold of 64)
+			for (int i = 0; i < 50; i++)
+				polyData.get(PolyHandler::AccessType::AllowUncached);
+
+			// Now activate cacher
+			{
+				PolyData<int, NUM_POLYPHONIC_VOICES>::ScopedVoiceIndexCacher cacher(polyData, false);
+				polyData.get(); // This should reset the counter
+			}
+
+			// Call get() 50 more times (below threshold again because counter was reset)
+			for (int i = 0; i < 50; i++)
+				polyData.get(PolyHandler::AccessType::AllowUncached);
+		}
+
+		// If we reach here, the counter was properly reset
+		expect(true, "Counter should reset when ScopedVoiceIndexCacher is active");
+	}
+
+	/** Setup: PolyData with cached access via ScopedVoiceIndexCacher.
+	 *
+	 *  Scenario: Call get() many times while cacher is active.
+	 *
+	 *  Expected: No assertion because cached path is used, counter stays at 0.
+	 */
+	void testPolyDataCachedAccessNoAssertion()
+	{
+		beginTest("PolyData cached access does not trigger assertion");
+
+		PolyHandler localPolyHandler(true);
+		PolyData<int, NUM_POLYPHONIC_VOICES> polyData;
+
+		PrepareSpecs specs;
+		specs.sampleRate = 44100.0;
+		specs.blockSize = 512;
+		specs.numChannels = 2;
+		specs.voiceIndex = &localPolyHandler;
+		polyData.prepare(specs);
+
+		{
+			PolyHandler::ScopedVoiceSetter svs(localPolyHandler, 3);
+			PolyData<int, NUM_POLYPHONIC_VOICES>::ScopedVoiceIndexCacher cacher(polyData, false);
+
+			// Call get() many times with cacher active - should NOT increment counter
+			for (int i = 0; i < 1000; i++)
+			{
+				polyData.get() = i;
+			}
+		}
+
+		// If we reach here, no assertion fired
+		expect(true, "Cached get() should not trigger assertion even after 1000 calls");
+	}
+#endif // JUCE_DEBUG
 };
 
 static NodeUIUpdaterTests nodeUIUpdaterTests;

@@ -590,6 +590,26 @@ struct DllBoundaryTempoSyncer: public hise::TempoListener
 */
 struct PolyHandler
 {
+	/** Specifies how PolyData::get() should behave regarding caching requirements.
+	 *
+	 *  Used to control debug-mode assertions that detect performance issues from
+	 *  repeated uncached voice lookups in hot paths.
+	 */
+	enum class AccessType
+	{
+		/** Default. Requires ScopedVoiceIndexCacher for optimal performance.
+		 *  Triggers jassertfalse in debug builds if called repeatedly (>64 times)
+		 *  without caching active. Use SN_VOICE_SETTER macro to enable caching. */
+		RequireCached,
+
+		/** Explicitly allows uncached access without debug assertions.
+		 *  Use for:
+		 *  - Control-rate code (parameter setters, reset, prepare)
+		 *  - Event handlers (handleHiseEvent, handleModulation)
+		 *  - Heavy processing where lookup overhead is negligible (neural networks, FFT) */
+		AllowUncached
+	};
+
 	/** Creates a poly handler. If you want to deactivate polyphonic behaviour altogether, pass in
 	    false and it will bypass the entire threading and always return 0.
 	*/
@@ -1142,6 +1162,9 @@ template <typename T, int NumVoices> struct PolyData
 			{
 				p.currentRenderVoice = nullptr;
 				p.forceAll = prevForceAll;
+#if JUCE_DEBUG
+				p.uncachedGetCallCount = 0;
+#endif
 			}
 		}
 
@@ -1152,31 +1175,55 @@ template <typename T, int NumVoices> struct PolyData
 	/** @deprecated Use ScopedVoiceIndexCacher instead. Kept for backwards compatibility. */
 	using ScopedVoiceSetter = ScopedVoiceIndexCacher;
 
-	/** If you know that you're inside a rendering context, you can
-	    use this function instead of the for-loop syntax. Be aware that
-		the performance will be the same, it's just a bit less to type. 
-	*/
-	T& get(bool allowSlowFetch=false) const
+	/** Returns a reference to the current voice's data.
+	 *
+	 *  @param accessType Controls caching enforcement (default: RequireCached).
+	 *         - RequireCached: Expects ScopedVoiceIndexCacher to be active.
+	 *           Triggers jassertfalse if called repeatedly (>64 times) without caching.
+	 *           This catches performance issues where ~40% CPU overhead occurs.
+	 *         - AllowUncached: Explicitly permits the slow path without assertions.
+	 *           Use for control-rate code, event handlers, or when processing payload
+	 *           is heavy enough that the lookup overhead is negligible.
+	 *
+	 *  If you hit the assertion, add SN_VOICE_SETTER(YourClass, polyDataMember) to your
+	 *  node class, or use SN_VOICE_SETTER_2 for nodes with two PolyData members.
+	 */
+	T& get(PolyHandler::AccessType accessType = PolyHandler::AccessType::RequireCached) const
 	{
 		if constexpr (isPolyphonic())
 		{
-			if(currentRenderVoice == nullptr)
+			if (currentRenderVoice == nullptr)
 			{
-				//jassert(allowSlowFetch);
+#if JUCE_DEBUG
+				// Uncached path: calls begin() which does atomic loads + thread ID checks.
+				// ~40% slower than cached path in tight per-sample loops.
+				//
+				// FIX OPTIONS:
+				// 1. Add SN_VOICE_SETTER(YourClass, polyDataMember) to your node
+				// 2. For two members: SN_VOICE_SETTER_2(YourClass, member1, member2)
+				// 3. If intentional (control-rate, heavy processing), use:
+				//    get(PolyHandler::AccessType::AllowUncached)
+				if (accessType == PolyHandler::AccessType::RequireCached)
+				{
+					if (++uncachedGetCallCount > UNCACHED_GET_THRESHOLD)
+					{
+						jassertfalse;
+						uncachedGetCallCount = 0;
+					}
+				}
+#endif
 				return *begin();
 			}
 
+#if JUCE_DEBUG
+			uncachedGetCallCount = 0;
+#endif
 			return *currentRenderVoice;
 		}
 		else
 		{
 			return *const_cast<T*>(data);
 		}
-		
-#if 0
-		jassert(isMonophonicOrInsideVoiceRendering());
-		return *begin();
-#endif
 	}
 
 	template <typename F> void forEachCurrentVoice(F&& f)
@@ -1317,6 +1364,15 @@ private:
 
 	T* currentRenderVoice = nullptr;
 	bool forceAll = false;
+
+#if JUCE_DEBUG
+	/** Counter for detecting repeated uncached get() calls in hot paths. */
+	mutable int uncachedGetCallCount = 0;
+	
+	/** Threshold after which jassertfalse fires for uncached access. 
+	 *  Set to 64 to catch issues within one typical audio buffer. */
+	static constexpr int UNCACHED_GET_THRESHOLD = 64;
+#endif
 
 	T data[NumVoices];
 

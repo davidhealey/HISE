@@ -458,7 +458,7 @@ template <int NV, typename CheckClass=NoCheck> struct event_data_reader:
 		if(isStatic)
 			return staticValue.getChangedValue(value);
 		else
-			return eventStorage != nullptr ? eventStorage->changed(currentEventId.get(), dataSlot, value) : false;
+			return eventStorage != nullptr ? eventStorage->changed(currentEventId.get(PolyHandler::AccessType::AllowUncached), dataSlot, value) : false;
 	}
 	
 	static constexpr bool isNormalisedModulation() { return true; }
@@ -482,11 +482,11 @@ template <int NV, typename CheckClass=NoCheck> struct event_data_reader:
 	{
 		if(e.isNoteOn())
 		{
-			currentEventId.get() = e.getEventId();
+			currentEventId.get(PolyHandler::AccessType::AllowUncached) = e.getEventId();
 
 			if(isStatic && eventStorage != nullptr)
 			{
-				auto v = eventStorage->getValue(currentEventId.get(), dataSlot);
+				auto v = eventStorage->getValue(currentEventId.get(PolyHandler::AccessType::AllowUncached), dataSlot);
 
 				if(v.first)
 					staticValue.setModValue(v.second);
@@ -584,7 +584,7 @@ template <int NV, typename CheckClass=NoCheck> struct event_data_writer:
 	{
 		if(e.isNoteOn() && eventStorage != nullptr)
 		{
-			auto& s = currentEventId.get();
+			auto& s = currentEventId.get(PolyHandler::AccessType::AllowUncached);
 			s.first = e.getEventId();
 			eventStorage->setValue(s.first, dataSlot, s.second, dontSendNotification);
 		}
