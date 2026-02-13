@@ -327,6 +327,12 @@ struct NodeUIAsyncUpdater : public NodeUIUpdaterBase
 	template<typename T>
 	using WithData = NodeUIAsyncUpdaterWithData<T>;
 
+protected:
+#if HI_RUN_UNIT_TESTS
+	int getUpdateThreshold() const { return updateThreshold; }
+	int getRateLimitCounter() const { return rateLimitCounter; }
+#endif
+
 private:
 	void execute() override
 	{
@@ -453,6 +459,12 @@ struct NodeUIAsyncUpdater : private juce::AsyncUpdater, public NodeUIUpdaterBase
 
 	template<typename T>
 	using WithData = NodeUIAsyncUpdaterWithData<T>;
+
+protected:
+#if HI_RUN_UNIT_TESTS
+	int getUpdateThreshold() const { return updateThreshold; }
+	int getRateLimitCounter() const { return rateLimitCounter; }
+#endif
 
 private:
 	void handleAsyncUpdate() override

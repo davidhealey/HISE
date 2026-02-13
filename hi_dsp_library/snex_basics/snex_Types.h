@@ -1038,7 +1038,7 @@ template <typename T, int NumVoices> struct PolyData
 {
 	PolyData(T initValue)
 	{
-		setAll(std::move(initValue));
+		setAll(initValue);
 	}
 
 	PolyData& operator=(const PolyData& other)
@@ -1082,22 +1082,50 @@ template <typename T, int NumVoices> struct PolyData
 		voicePtr = sp.voiceIndex;
 	}
 
-	void setAll(T&& value)
+	void setAll(const T& value)
 	{
-		if (!isPolyphonic() || voicePtr == nullptr)
+		if (!isPolyphonic())
 		{
-			*data = std::move(value);
+			data[0] = value;
+		}
+		else if (voicePtr == nullptr)
+		{
+			// Before prepare() - initialize all slots
+			for (int i = 0; i < NumVoices; i++)
+				data[i] = value;
 		}
 		else
 		{
+			// After prepare() - set based on current voice context
 			for (auto& d : *this)
-				d = std::move(value);
+				d = value;
 		}
 	}
 
-	struct ScopedVoiceSetter
+	/** Caches the current voice pointer for zero-overhead get() access.
+	 *
+	 *  This is a PERFORMANCE OPTIMIZATION - not to be confused with PolyHandler::ScopedVoiceSetter!
+	 *
+	 *  | Class                              | Purpose                                     |
+	 *  |------------------------------------|---------------------------------------------|
+	 *  | PolyHandler::ScopedVoiceSetter     | Sets which voice is active (audio thread)  |
+	 *  | PolyData::ScopedVoiceIndexCacher   | Caches voice pointer for fast get() access |
+	 *
+	 *  Used by the SN_VOICE_SETTER macro in node wrappers. Calls begin() once at 
+	 *  construction to compute the voice pointer, then get() returns the cached
+	 *  pointer directly without calling begin() again (which involves getVoiceIndex()
+	 *  lookups with atomic loads and thread ID checks).
+	 *
+	 *  Without this optimization, repeated get() calls in tight per-sample loops
+	 *  can add ~40% CPU overhead.
+	 *
+	 *  @param forceAll If true, forEachCurrentVoice() iterates all voices even in
+	 *                  single-voice context. Used for parameter updates that must
+	 *                  affect all voices.
+	 */
+	struct ScopedVoiceIndexCacher
 	{
-		ScopedVoiceSetter(PolyData& p_, bool forceAll):
+		ScopedVoiceIndexCacher(PolyData& p_, bool forceAll):
 		  p(p_)
 		{
 			if constexpr (PolyData::isPolyphonic())
@@ -1108,7 +1136,7 @@ template <typename T, int NumVoices> struct PolyData
 			}
 		};
 
-		~ScopedVoiceSetter()
+		~ScopedVoiceIndexCacher()
 		{
 			if constexpr (PolyData::isPolyphonic())
 			{
@@ -1120,6 +1148,9 @@ template <typename T, int NumVoices> struct PolyData
 		PolyData& p;
 		bool prevForceAll;
 	};
+
+	/** @deprecated Use ScopedVoiceIndexCacher instead. Kept for backwards compatibility. */
+	using ScopedVoiceSetter = ScopedVoiceIndexCacher;
 
 	/** If you know that you're inside a rendering context, you can
 	    use this function instead of the for-loop syntax. Be aware that
