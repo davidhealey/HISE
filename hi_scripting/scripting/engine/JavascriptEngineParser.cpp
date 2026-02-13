@@ -271,7 +271,8 @@ struct HiseJavascriptEngine::RootObject::ExpressionTreeBuilder : private TokenIt
 	ExpressionTreeBuilder(const String code, const String externalFile, HiseJavascriptPreprocessor::Ptr preprocessor_) :
 		TokenIterator(code, externalFile),
 		preprocessor(preprocessor_),
-	    currentErrorLocation(nullptr)
+	    currentErrorLocation(nullptr),
+	    currentExternalFilePath(externalFile)
 	{
 #if ENABLE_SCRIPTING_BREAKPOINTS
 		if (externalFile.isNotEmpty())
@@ -282,6 +283,9 @@ struct HiseJavascriptEngine::RootObject::ExpressionTreeBuilder : private TokenIt
 	}
 
     HiseJavascriptPreprocessor::Ptr preprocessor;
+
+	/** The full path of the file currently being parsed (used for resolving relative includes). */
+	String currentExternalFilePath;
 
 	void setupApiData(HiseSpecialData &data, const String& codeToPreprocess)
 	{
@@ -853,9 +857,9 @@ private:
 		else if (cleanedFileName.startsWith("./") || cleanedFileName.startsWith("../"))
 		{
 			// Resolve relative to the directory of the currently parsed file
-			if (location.externalFile.isNotEmpty())
+			if (currentExternalFilePath.isNotEmpty())
 			{
-				File currentFile(location.externalFile);
+				File currentFile(currentExternalFilePath);
 				refFileName = currentFile.getParentDirectory().getChildFile(cleanedFileName).getFullPathName();
 			}
 			else
