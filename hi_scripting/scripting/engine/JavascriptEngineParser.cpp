@@ -848,8 +848,23 @@ private:
 
 #if USE_BACKEND
 
-		if (File::isAbsolutePath(cleanedFileName)) 
+		if (File::isAbsolutePath(cleanedFileName))
 			refFileName = cleanedFileName;
+		else if (cleanedFileName.startsWith("./") || cleanedFileName.startsWith("../"))
+		{
+			// Resolve relative to the directory of the currently parsed file
+			if (location.externalFile.isNotEmpty())
+			{
+				File currentFile(location.externalFile);
+				refFileName = currentFile.getParentDirectory().getChildFile(cleanedFileName).getFullPathName();
+			}
+			else
+			{
+				// No parent file context, fall back to project Scripts directory
+				const String fileName = "{PROJECT_FOLDER}" + cleanedFileName;
+				refFileName = GET_PROJECT_HANDLER(dynamic_cast<Processor*>(hiseSpecialData->processor)).getFilePath(fileName, ProjectHandler::SubDirectories::Scripts);
+			}
+		}
 		else if (cleanedFileName.contains("{GLOBAL_SCRIPT_FOLDER}"))
 		{
 			File globalScriptFolder = PresetHandler::getGlobalScriptFolder(dynamic_cast<Processor*>(hiseSpecialData->processor));
