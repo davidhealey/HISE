@@ -1052,10 +1052,10 @@ private:
 
     void clearFilterState()
     {
-        typename decltype(filterState)::ScopedVoiceIndexCacher scope(filterState, true);
-
-        for(auto& voiceState : filterState)
+        filterState.forEachCurrentVoice([](FilterStateArray& voiceState)
+        {
             voiceState.fill(0.0f);
+        }, PolyHandler::AccessType::ForceAllVoices);
     }
 
     float processHpfSample(float input, int channel, FilterStateArray& state)

@@ -607,7 +607,13 @@ struct PolyHandler
 		 *  - Control-rate code (parameter setters, reset, prepare)
 		 *  - Event handlers (handleHiseEvent, handleModulation)
 		 *  - Heavy processing where lookup overhead is negligible (neural networks, FFT) */
-		AllowUncached
+		AllowUncached,
+
+		/** Forces forEachCurrentVoice() to iterate all voices, regardless of
+		 *  the current voice context.
+		 *  Use for operations that must affect all voices unconditionally
+		 *  (e.g., clearing filter state, resetting all voice data). */
+		ForceAllVoices
 	};
 
 	/** Creates a poly handler. If you want to deactivate polyphonic behaviour altogether, pass in
@@ -1139,20 +1145,15 @@ template <typename T, int NumVoices> struct PolyData
 	 *  Without this optimization, repeated get() calls in tight per-sample loops
 	 *  can add ~40% CPU overhead.
 	 *
-	 *  @param forceAll If true, forEachCurrentVoice() iterates all voices even in
-	 *                  single-voice context. Used for parameter updates that must
-	 *                  affect all voices.
 	 */
 	struct ScopedVoiceIndexCacher
 	{
-		ScopedVoiceIndexCacher(PolyData& p_, bool forceAll):
+		ScopedVoiceIndexCacher(PolyData& p_):
 		  p(p_)
 		{
 			if constexpr (PolyData::isPolyphonic())
 			{
 				p.currentRenderVoice = p.begin();
-				prevForceAll = p.forceAll;
-				p.forceAll = forceAll;
 			}
 		};
 
@@ -1161,7 +1162,6 @@ template <typename T, int NumVoices> struct PolyData
 			if constexpr (PolyData::isPolyphonic())
 			{
 				p.currentRenderVoice = nullptr;
-				p.forceAll = prevForceAll;
 #if JUCE_DEBUG
 				p.uncachedGetCallCount = 0;
 #endif
@@ -1169,7 +1169,6 @@ template <typename T, int NumVoices> struct PolyData
 		}
 
 		PolyData& p;
-		bool prevForceAll;
 	};
 
 	/** @deprecated Use ScopedVoiceIndexCacher instead. Kept for backwards compatibility. */
@@ -1226,7 +1225,16 @@ template <typename T, int NumVoices> struct PolyData
 		}
 	}
 
-	template <typename F> void forEachCurrentVoice(F&& f)
+	/** Calls f() for each voice that should be processed in the current context.
+	 *
+	 *  @param f         Lambda to call for each voice's data.
+	 *  @param accessType Controls iteration and caching behavior:
+	 *         - RequireCached (default): Single-voice branch uses cached get().
+	 *         - AllowUncached: Single-voice branch uses uncached get() without assertions.
+	 *         - ForceAllVoices: Iterates all voices regardless of current voice context.
+	 */
+	template <typename F> void forEachCurrentVoice(F&& f,
+		PolyHandler::AccessType accessType = PolyHandler::AccessType::RequireCached)
 	{
 		if(!isPolyphonic() || voicePtr == nullptr)
 		{
@@ -1234,14 +1242,14 @@ template <typename T, int NumVoices> struct PolyData
 		}
 		else
 		{
-			if(forceAll || voicePtr->isAllThread())
+			if(accessType == PolyHandler::AccessType::ForceAllVoices || voicePtr->getVoiceIndex() < 0)
 			{
 				for(int i = 0; i < NumVoices; i++)
 					f(data[i]);
 			}
 			else
 			{
-				f(get());
+				f(get(accessType));
 			}
 		}
 	}
@@ -1363,7 +1371,6 @@ private:
 	int unused = 0;
 
 	T* currentRenderVoice = nullptr;
-	bool forceAll = false;
 
 #if JUCE_DEBUG
 	/** Counter for detecting repeated uncached get() calls in hot paths. */

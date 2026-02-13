@@ -425,6 +425,8 @@ void FlexAhdsrEnvelope::setInternalAttribute(int parameterIndex, float newValue)
 	parameterIndex -= getParameterOffset();
 	parameters[parameterIndex] = newValue;
 
+	PolyHandler::ScopedAllVoiceSetter avs(polyHandler);
+
 	switch(parameterIndex)
 	{
 		case 0: obj.template setParameter<0>(newValue); break;
