@@ -82,6 +82,7 @@
 #include "unit_test/wrapper_tests.cpp"
 #include "unit_test/node_tests.cpp"
 #include "unit_test/container_tests.cpp"
+#include "unit_test/uiupdater_tests.cpp"
 #endif
 
 #include "dsp_nodes/CoreNodes.cpp"

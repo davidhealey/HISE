@@ -59,7 +59,7 @@ using namespace hise;
 		template <typename WT> VoiceSetter(WT& obj, bool forceAll) : svs(obj.getWrappedObject().polyDataMember, forceAll), updater(obj.getWrappedObject()) {}; \
 		data::updater<className> updater; \
 		operator bool() const { return true; } \
-		typename FT::ScopedVoiceSetter svs; }
+		typename FT::ScopedVoiceIndexCacher svs; }
 
 #define SN_VOICE_SETTER_WITH_DATA_LOCK(className, polyDataMember) struct VoiceSetter { \
 		using FT = decltype(polyDataMember); \
@@ -67,7 +67,7 @@ using namespace hise;
 		DataTryReadLock sl; \
 		data::updater<className> updater; \
 		operator bool() const { return (bool)sl; } \
-		typename FT::ScopedVoiceSetter svs; }
+		typename FT::ScopedVoiceIndexCacher svs; }
 
 /** Object Accessors
 
