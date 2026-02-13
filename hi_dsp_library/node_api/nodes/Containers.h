@@ -94,8 +94,8 @@ struct base_wrapper<T, I, true>
 	using WT = typename T::ObjectType;
     using VS = typename WT::VoiceSetter;
 
-	base_wrapper(T& obj, bool forceAll) :
-        vs(obj.getObject(), forceAll)
+	base_wrapper(T& obj) :
+        vs(obj.getObject())
 	{}
     
     explicit operator bool() const
@@ -108,7 +108,7 @@ struct base_wrapper<T, I, true>
 
 template <typename T, std::size_t I>
 struct base_wrapper<T, I, false> {
-	base_wrapper(T&, bool) {} // ignore it
+	base_wrapper(T&) {} // ignore it
 
 	operator bool() const { return true; }
 };
@@ -119,8 +119,8 @@ template <typename... Ts, std::size_t... Is>
 struct sub_tuple_helper_impl<std::tuple<Ts...>, std::index_sequence<Is...>>
 	: base_wrapper<Ts, Is>...
 {
-	sub_tuple_helper_impl(std::tuple<Ts...>& t, bool forceAll)
-		: base_wrapper<Ts, Is>(std::get<Is>(t), forceAll)... {}
+	sub_tuple_helper_impl(std::tuple<Ts...>& t)
+		: base_wrapper<Ts, Is>(std::get<Is>(t))... {}
 
 	operator bool() const
 	{
@@ -133,7 +133,7 @@ using sub_tuple = sub_tuple_helper_impl<std::tuple<Ts...>, std::make_index_seque
 
 struct DummyVoiceSetter
 {
-	template <typename T> DummyVoiceSetter(T& obj, bool) {};
+	template <typename T> DummyVoiceSetter(T& obj) {};
 	operator bool() const { return true; }
 };
 
@@ -200,8 +200,8 @@ template <class ParameterClass, typename... Processors> struct container_base
 
 	struct VoiceSetter : Helpers::sub_tuple<Processors...>
 	{
-		VoiceSetter(container_base& t, bool forceAll) :
-			Helpers::sub_tuple<Processors...>(t.elements, forceAll)
+		VoiceSetter(container_base& t) :
+			Helpers::sub_tuple<Processors...>(t.elements)
 		{}
 	};
 

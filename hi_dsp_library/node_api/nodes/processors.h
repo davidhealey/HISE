@@ -1747,7 +1747,7 @@ template <class T> struct node : public scriptnode::data::base
 
 	void process(FixBlockType& d)
 	{
-		if (auto sv = typename T::ObjectType::VoiceSetter(obj.getObject(), false))
+		if (auto sv = typename T::ObjectType::VoiceSetter(obj.getObject()))
 			obj.process(d);
 	}
 
@@ -1756,7 +1756,7 @@ template <class T> struct node : public scriptnode::data::base
 		jassert(data.getNumChannels() == NumChannels);
 		auto& fd = data.as<FixBlockType>();
 
-		if (auto sv = typename T::ObjectType::VoiceSetter(obj.getObject(), false))
+		if (auto sv = typename T::ObjectType::VoiceSetter(obj.getObject()))
 			obj.process(fd);
 	}
 
@@ -1764,7 +1764,7 @@ template <class T> struct node : public scriptnode::data::base
 	{
 		auto& fd = FrameType::as(data.begin());
 
-		if (auto sv = typename T::ObjectType::VoiceSetter(obj.getObject(), false))
+		if (auto sv = typename T::ObjectType::VoiceSetter(obj.getObject()))
 			obj.processFrame(fd);
 	}
 
@@ -1780,7 +1780,7 @@ template <class T> struct node : public scriptnode::data::base
 
 	void handleHiseEvent(HiseEvent& e)
 	{
-		if (auto sv = typename T::ObjectType::VoiceSetter(obj.getObject(), false))
+		if (auto sv = typename T::ObjectType::VoiceSetter(obj.getObject()))
 			obj.handleHiseEvent(e);
 	}
 

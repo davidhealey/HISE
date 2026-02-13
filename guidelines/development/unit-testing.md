@@ -11,6 +11,51 @@ This document describes patterns and best practices for unit testing HISE compon
 
 ---
 
+## Scenario-Based Bug Analysis
+
+A methodology for investigating complex bugs (threading, race conditions, state machines) through systematic scenario enumeration before diving into code.
+
+### The Process
+
+| Phase | Activity | Output |
+|-------|----------|--------|
+| 1. Define Failure Modes | List abstract ways things could go wrong | 2-4 categories |
+| 2. Enumerate Scenarios | Hypothetical code patterns triggering each failure | 5-10 numbered scenarios |
+| 3. Classify Scenarios | Bug? Correct behavior? Performance concern? | Severity table |
+| 4. Write Scenario Tests | Test abstract patterns, not specific code paths | Test coverage |
+| 5. Search Codebase | Find real occurrences of problematic patterns | Fix list |
+
+### Example: Threading Bug Analysis
+
+**Phase 1 - Failure Modes:**
+- Wrong single element accessed when all intended
+- All elements accessed when single intended
+- Expensive lookup in hot path
+
+**Phase 3 - Classification Table:**
+
+| Scenario | Description | Verdict |
+|----------|-------------|---------|
+| #1 | Nested scope overrides outer | CRITICAL if occurs |
+| #6 | Cross-thread race on shared index | CONFIRMED BUG |
+| #7 | Same-thread access before loop | Correct behavior |
+
+**Phase 4 - Test Naming:**
+```cpp
+void testScenario6RaceWithoutProtection()     // Demonstrates the bug
+void testScenario6FixWithProtection()         // Proves the fix
+void testScenario7NoProtectionNeeded()        // Documents correct behavior
+```
+
+### Key Insight
+
+Test the **category of bug**, not specific code paths. A test for "UI thread accessing shared data without protection" catches:
+- The current bug
+- Future bugs matching the same pattern
+- Serves as documentation of the failure mode
+
+---
+
 ## When to Use Multi-Threaded Testing
 
 Use the multi-threaded test pattern when testing code that:

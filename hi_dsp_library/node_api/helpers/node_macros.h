@@ -56,14 +56,14 @@ using namespace hise;
 
 #define SN_VOICE_SETTER(className, polyDataMember) struct VoiceSetter { \
 		using FT = decltype(polyDataMember); \
-		template <typename WT> VoiceSetter(WT& obj, bool forceAll) : svs(obj.getWrappedObject().polyDataMember, forceAll), updater(obj.getWrappedObject()) {}; \
+		template <typename WT> VoiceSetter(WT& obj) : svs(obj.getWrappedObject().polyDataMember), updater(obj.getWrappedObject()) {}; \
 		data::updater<className> updater; \
 		operator bool() const { return true; } \
 		typename FT::ScopedVoiceIndexCacher svs; }
 
 #define SN_VOICE_SETTER_WITH_DATA_LOCK(className, polyDataMember) struct VoiceSetter { \
 		using FT = decltype(polyDataMember); \
-		template <typename WT> VoiceSetter(WT& obj, bool forceAll) : svs(obj.getWrappedObject().polyDataMember, forceAll), sl(&obj.getWrappedObject(), !forceAll), updater(obj.getWrappedObject()) {}; \
+		template <typename WT> VoiceSetter(WT& obj) : svs(obj.getWrappedObject().polyDataMember), sl(&obj.getWrappedObject()), updater(obj.getWrappedObject()) {}; \
 		DataTryReadLock sl; \
 		data::updater<className> updater; \
 		operator bool() const { return (bool)sl; } \
@@ -82,9 +82,9 @@ using namespace hise;
 #define SN_VOICE_SETTER_2(className, poly1, poly2) struct VoiceSetter { \
 		using FT1 = decltype(poly1); \
 		using FT2 = decltype(poly2); \
-		template <typename WT> VoiceSetter(WT& obj, bool forceAll) : \
-			svs1(obj.getWrappedObject().poly1, forceAll), \
-			svs2(obj.getWrappedObject().poly2, forceAll), \
+		template <typename WT> VoiceSetter(WT& obj) : \
+			svs1(obj.getWrappedObject().poly1), \
+			svs2(obj.getWrappedObject().poly2), \
 			updater(obj.getWrappedObject()) {}; \
 		data::updater<className> updater; \
 		operator bool() const { return true; } \
@@ -116,10 +116,10 @@ using namespace hise;
 #define SN_VOICE_SETTER_2_WITH_DATA_LOCK(className, poly1, poly2) struct VoiceSetter { \
 		using FT1 = decltype(poly1); \
 		using FT2 = decltype(poly2); \
-		template <typename WT> VoiceSetter(WT& obj, bool forceAll) : \
-			svs1(obj.getWrappedObject().poly1, forceAll), \
-			svs2(obj.getWrappedObject().poly2, forceAll), \
-			sl(&obj.getWrappedObject(), !forceAll), \
+		template <typename WT> VoiceSetter(WT& obj) : \
+			svs1(obj.getWrappedObject().poly1), \
+			svs2(obj.getWrappedObject().poly2), \
+			sl(&obj.getWrappedObject()), \
 			updater(obj.getWrappedObject()) {}; \
 		DataTryReadLock sl; \
 		data::updater<className> updater; \

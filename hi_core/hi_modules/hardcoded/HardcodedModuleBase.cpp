@@ -864,6 +864,7 @@ void HardcodedSwappableEffect::setHardcodedAttribute(int parameterIndex, float n
 		}
 		else
 		{
+			PolyHandler::ScopedAllVoiceSetter avs(polyHandler);
 			p->callback.call((double)newValue);
 		}
 	}

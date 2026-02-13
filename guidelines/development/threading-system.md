@@ -237,6 +237,7 @@ mc->getLockFreeDispatcher().callOnMessageThreadAfterSuspension(
 - Use `ScopedTryReadLock` for audio-thread reads (never blocking reads)
 - Return `SafeFunctionCall::OK` or `SafeFunctionCall::cancelled` from lambdas
 - Document which thread calls each method
+- Use `PolyHandler::ScopedAllVoiceSetter` when accessing `PolyData` from non-audio threads (see below)
 
 ### DON'T
 
@@ -245,6 +246,37 @@ mc->getLockFreeDispatcher().callOnMessageThreadAfterSuspension(
 - Never acquire `AudioLock` while holding a lower-priority lock
 - Never assume thread context without checking
 - Never use raw `new`/`delete` in audio-thread code
+- Never use `ScopedAllVoiceSetter` inside voice rendering context (would override `ScopedVoiceSetter`)
+
+### PolyData and ScopedAllVoiceSetter
+
+When `setInternalAttribute()` or any parameter setter touches `PolyData` (via scriptnode
+parameter callbacks or `forEachCurrentVoice()`), it **must** be wrapped with 
+`PolyHandler::ScopedAllVoiceSetter` if it can be called from a non-audio thread.
+
+Without this protection, the UI thread may read a stale `voiceIndex` set by the audio
+thread's `ScopedVoiceSetter`, causing only one voice to be updated instead of all.
+
+```cpp
+// WRONG: UI thread reads racy voiceIndex
+void setInternalAttribute(int index, float newValue) override
+{
+    obj.template setParameter<0>(newValue);  // May only update one voice!
+}
+
+// CORRECT: ScopedAllVoiceSetter ensures all voices updated
+void setInternalAttribute(int index, float newValue) override
+{
+    PolyHandler::ScopedAllVoiceSetter avs(polyHandler);
+    obj.template setParameter<0>(newValue);  // Always updates all voices
+}
+```
+
+**Key rule:** `ScopedAllVoiceSetter` is NOT needed on the audio thread (even outside
+voice rendering) because there's no race condition on the same thread. It's only needed
+for cross-thread access to `PolyData`.
+
+See `voice-setter-system.md` for the full scenario analysis and fix details.
 
 ### Thread Context Comments
 

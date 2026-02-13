@@ -12,7 +12,7 @@ This is the **definitive guideline document** for HISE's UI synchronization syst
 - Global cable automatic protection
 - Best practices and key insights
 
-**Last Updated:** Session adding external data locking, SN_VOICE_SETTER_2_WITH_DATA_LOCK, and thread safety documentation
+**Last Updated:** Session fixing Scenario #6 thread safety bug in setAttribute() paths (HardcodedSwappableEffect, FlexAhdsrEnvelope)
 
 ---
 
@@ -24,10 +24,14 @@ This is the **definitive guideline document** for HISE's UI synchronization syst
 |------|---------|
 | `hi_dsp_library/node_api/helpers/UIUpdater.h` | Complete rewrite with new class hierarchy |
 | `hi_dsp_library/dsp_nodes/RoutingNodes.h` | Added PolyHandler storage and automatic callback wrapping |
-| `hi_dsp_library/node_api/helpers/node_macros.h` | Added `SN_VOICE_SETTER_2_WITH_DATA_LOCK` macro |
+| `hi_dsp_library/node_api/helpers/node_macros.h` | Added `SN_VOICE_SETTER_2_WITH_DATA_LOCK` macro; removed `forceAll` from all macros |
 | `hi_dsp_library/dsp_nodes/CoreNodes.h` | Updated `file_player` with data lock macro and proper `reset()` locking |
 | `hi_dsp_library/snex_basics/snex_ExternalData.h` | Fixed `data::updater<T>` incomplete type issue |
-| `hi_dsp_library/snex_basics/snex_Types.h` | Added `PolyHandler::AccessType` enum, debug counter for uncached access |
+| `hi_dsp_library/snex_basics/snex_Types.h` | Added `PolyHandler::AccessType` enum with `ForceAllVoices`, `forEachCurrentVoice()` with `AccessType`, removed `forceAll` from `PolyData`/`ScopedVoiceIndexCacher` |
+| `hi_dsp_library/node_api/nodes/Containers.h` | Removed `forceAll` from `base_wrapper`, `sub_tuple_helper_impl`, `DummyVoiceSetter`, container `VoiceSetter` |
+| `hi_dsp_library/node_api/nodes/processors.h` | Removed `false` argument from `VoiceSetter` calls |
+| `hi_dsp_library/dsp_nodes/MathNodes.h` | Updated `neural::clearFilterState()` to use `forEachCurrentVoice(..., ForceAllVoices)` |
+| `hi_dsp_library/unit_test/uiupdater_tests.cpp` | Updated `forceAll` test, added `testForEachCurrentVoiceWithAccessType` |
 
 ---
 
@@ -619,8 +623,8 @@ The `SN_VOICE_SETTER` macro generates a `VoiceSetter` struct that creates a `Sco
 ```cpp
 #define SN_VOICE_SETTER(className, polyDataMember) struct VoiceSetter { \
     using FT = decltype(polyDataMember); \
-    template <typename WT> VoiceSetter(WT& obj, bool forceAll) : \
-        svs(obj.getWrappedObject().polyDataMember, forceAll), \
+    template <typename WT> VoiceSetter(WT& obj) : \
+        svs(obj.getWrappedObject().polyDataMember), \
         updater(obj.getWrappedObject()) {}; \
     data::updater<className> updater; \
     operator bool() const { return true; } \
@@ -633,30 +637,30 @@ Container wrappers automatically create `VoiceSetter` around all processing call
 // In processors.h - wraps every process() call
 void process(ProcessDataDyn& data) noexcept
 {
-    if (auto sv = typename T::ObjectType::VoiceSetter(obj.getObject(), false))
+    if (auto sv = typename T::ObjectType::VoiceSetter(obj.getObject()))
         obj.process(fd);
 }
 ```
 
-### The forceAll Parameter
+### AccessType::ForceAllVoices
 
-`ScopedVoiceIndexCacher` takes a `forceAll` parameter:
+`forEachCurrentVoice()` accepts an `AccessType` parameter that controls iteration:
 
-| forceAll | Effect on forEachCurrentVoice() |
-|----------|--------------------------------|
-| `false` | Normal behavior - iterates single voice or all based on context |
-| `true` | Forces iteration over ALL voices regardless of context |
+| AccessType | Effect on forEachCurrentVoice() |
+|------------|--------------------------------|
+| `RequireCached` (default) | Single-voice branch uses cached `get()` |
+| `AllowUncached` | Single-voice branch uses uncached `get()` without assertions |
+| `ForceAllVoices` | Iterates ALL voices regardless of current context |
 
-Use `forceAll=true` for parameter updates that must affect all voices:
+Use `ForceAllVoices` for operations that must affect all voices unconditionally:
 
 ```cpp
-void setFrequency(double newFrequency)
+void clearFilterState()
 {
-    // forceAll=true ensures all voices get updated
-    voiceData.forEachCurrentVoice([newFrequency](OscData& d)
+    filterState.forEachCurrentVoice([](FilterStateArray& voiceState)
     {
-        d.frequency = newFrequency;
-    });
+        voiceState.fill(0.0f);
+    }, PolyHandler::AccessType::ForceAllVoices);
 }
 ```
 
@@ -691,10 +695,11 @@ PolyData tests are included in `uiupdater_tests.cpp`:
 | Construction & Setup | `testPolyDataDefaultConstruction`, `testPolyDataValueConstruction`, `testPolyDataPrepare`, `testPolyDataSetAll` |
 | Iteration | `testPolyDataBeginEndSingleVoice`, `testPolyDataBeginEndAllVoices`, `testPolyDataRangeForSingleVoice`, `testPolyDataRangeForAllVoices` |
 | get() | `testPolyDataGetReturnsCurrentVoice`, `testPolyDataGetWithCacher`, `testPolyDataGetWithoutCacher` |
-| forEachCurrentVoice | `testPolyDataForEachSingleVoice`, `testPolyDataForEachAllVoices`, `testPolyDataForEachForceAll` |
+| forEachCurrentVoice | `testPolyDataForEachSingleVoice`, `testPolyDataForEachAllVoices`, `testPolyDataForEachForceAll`, `testForEachCurrentVoiceWithAccessType` |
 | Utility Methods | `testPolyDataIsFirst`, `testPolyDataGetFirst`, `testPolyDataGetVoiceIndexForData`, `testPolyDataGetWithIndex`, `testPolyDataIsMonophonicOrInsideVoiceRendering`, `testPolyDataIsVoiceRenderingActive`, `testPolyDataIsPolyHandlerEnabled` |
 | WithData Integration | `testWithDataPostsFromPolyDataGet`, `testWithDataAggregatesPolyDataVoices` |
 | Multi-Threaded | `testPolyDataCacherUnderLoad`, `testPolyDataUIIterationUnderLoad` |
+| Thread Safety Scenarios | `testScenario6RaceWithoutProtection`, `testScenario6FixWithScopedAllVoiceSetter`, `testScopedAllVoiceSetterNestingSafe`, `testScenario7AudioThreadNoProtectionNeeded` |
 | Debug Counter (debug builds only) | `testPolyDataAllowUncachedNoAssertion`, `testPolyDataCounterResetOnCachedAccess`, `testPolyDataCachedAccessNoAssertion` |
 
 ---
@@ -835,10 +840,15 @@ Understanding which thread calls each method is critical for writing safe, lock-
 | `handleHiseEvent()` | Audio | **YES** | Per-event |
 | `handleModulation()` | Audio | **YES** | Per-block |
 | `reset()` | Audio | **YES** | Called during `startVoice()` |
-| `prepare()` | Various | No | May allocate; called during setup/reconfiguration |
+| `prepare()` | Various | No | **Never concurrent with audio**; called with audio suspended during setup/reconfiguration |
 | `setExternalData()` | Message | No | Called under write lock by caller |
 | `createParameters()` | Message | No | Setup only |
 | `setXxx()` (parameters) | Both | **YES** | Called from UI or via modulation |
+
+**Key guarantee:** `prepare()` is always called with audio processing suspended. The HISE framework ensures this via `killVoicesAndCall()` or equivalent suspension mechanisms before invoking `prepare()`. This means:
+- No race conditions with `process()`, `handleHiseEvent()`, or other audio-thread methods
+- No need for `ScopedAllVoiceSetter` protection in `prepare()`
+- Safe to iterate all voices directly (e.g., to initialize state)
 
 **Critical:** `reset()` is called from the audio thread during voice start via `startVoice()` in `snex_Types.h`. Any external data access in `reset()` requires manual locking.
 
@@ -921,7 +931,7 @@ The wrapper skips processing if the lock fails:
 
 ```cpp
 // In wrap::node::process()
-if (auto sv = typename T::ObjectType::VoiceSetter(obj.getObject(), false))
+if (auto sv = typename T::ObjectType::VoiceSetter(obj.getObject()))
     obj.process(d);  // Only runs if lock acquired (and other conditions met)
 ```
 
@@ -994,70 +1004,197 @@ See **CRITICAL TODO** below for the full scope of this issue.
 
 ---
 
-## CRITICAL TODO: forEachCurrentVoice() Performance and API Consistency
+## COMPLETED: forEachCurrentVoice() API Consistency and forceAll Removal
 
-### Problem Statement
+### What Was Done
 
-Parameter setters using `for(auto& s : polyState)` bypass the voice caching optimization
-provided by `ScopedVoiceIndexCacher`. When modulation calls parameter setters per-frame
-via `wrap::mod`, this negates the ~40% performance gain from voice caching.
-
-### Current State
-
-1. `forEachCurrentVoice()` correctly uses `get()` in the single-voice branch, which 
-   respects the cached `currentRenderVoice` pointer when `ScopedVoiceIndexCacher` is active.
-
-2. However, many parameter setters use `for(auto& s : polyState)` which calls `begin()`
-   directly, bypassing the cache.
-
-3. The `forceAll` flag (stored in PolyData, set by ScopedVoiceIndexCacher) is **never 
-   set to true in production code** - only in tests. It only affects `forEachCurrentVoice()`.
-
-### Proposed Solution
-
-1. **Add `AccessType` parameter to `forEachCurrentVoice()`** for API consistency with `get()`:
+1. **Added `AccessType` parameter to `forEachCurrentVoice()`** for API consistency with `get()`:
 
    ```cpp
    template <typename F> 
    void forEachCurrentVoice(F&& f, 
        PolyHandler::AccessType accessType = PolyHandler::AccessType::RequireCached);
    ```
-   
-   This passes through to `get(accessType)` in the single-voice branch, making the
-   method completely opaque regarding caching behavior.
 
-2. **Update all parameter setters** to use `forEachCurrentVoice()` instead of 
-   `for(auto& s : polyState)`. Found 36 instances across:
-   - CoreNodes.h (12 instances)
-   - EnvelopeNodes.h (6 instances)
-   - CableNodes.h (2 instances)
-   - ModulationNodes.h (4 instances)
-   - DynamicsNode.cpp (2 instances)
-   - StretchNode.h (10 instances)
+2. **Added `ForceAllVoices` to `PolyHandler::AccessType` enum** - replaces the old 
+   `forceAll` flag mechanism. Callers now express intent directly at the call site:
 
-3. **Evaluate the `forceAll` flag**:
-   - Currently named poorly - better name: `bypassVoiceContext`
-   - Never used in production (always `false`)
-   - Options:
-     a) Remove entirely (simplifies API but removes future flexibility)
-     b) Keep but rename for clarity
-     c) Integrate into AccessType enum somehow
-   
-   **Decision needed:** This affects ScopedVoiceIndexCacher constructor signature and
-   all VoiceSetter macro definitions.
+   ```cpp
+   filterState.forEachCurrentVoice([](FilterStateArray& voiceState)
+   {
+       voiceState.fill(0.0f);
+   }, PolyHandler::AccessType::ForceAllVoices);
+   ```
 
-4. **Consider deprecating `for(auto& s : polyState)` syntax** entirely for PolyData,
-   as it provides no control over AccessType. This is a larger API change requiring
-   careful consideration.
+3. **Removed `forceAll` flag entirely:**
+   - Removed `bool forceAll` member from `PolyData`
+   - Removed `forceAll` parameter from `ScopedVoiceIndexCacher` constructor
+   - Simplified all `SN_VOICE_SETTER*` macros (removed `forceAll` parameter)
+   - Simplified `VoiceSetter` constructors in Containers.h and processors.h
 
-### Files to Modify
+4. **Updated `neural::clearFilterState()`** to use `forEachCurrentVoice(..., ForceAllVoices)`.
+   This also fixed a latent bug: the old code used `ScopedVoiceIndexCacher(filterState, true)` 
+   with `for(auto& : filterState)`, but `forceAll` never affected `begin()/end()` - it only 
+   affected `forEachCurrentVoice()`. The old code worked by accident (always called from 
+   all-voices context). The new code works correctly in all contexts.
 
-- `snex_Types.h`: Add AccessType to forEachCurrentVoice(), evaluate forceAll removal/rename
-- `node_macros.h`: Update macros if forceAll is removed/renamed  
-- All node files with `for(auto& s : polyState)` in parameter setters
-- Unit tests for forEachCurrentVoice() with AccessType
+### Files Modified
 
-### Dependencies
+| File | Changes |
+|------|---------|
+| `snex_Types.h` | Added `ForceAllVoices` to enum, added `AccessType` param to `forEachCurrentVoice()`, removed `forceAll` from `ScopedVoiceIndexCacher` and `PolyData` |
+| `node_macros.h` | Removed `forceAll` parameter from all `SN_VOICE_SETTER*` macros |
+| `Containers.h` | Removed `forceAll` from `base_wrapper`, `sub_tuple_helper_impl`, `DummyVoiceSetter`, container `VoiceSetter` |
+| `processors.h` | Removed `false` argument from 4 `VoiceSetter` calls |
+| `MathNodes.h` | Updated `neural::clearFilterState()` to use `forEachCurrentVoice(..., ForceAllVoices)` |
+| `uiupdater_tests.cpp` | Updated `testPolyDataForEachForceAll`, added `testForEachCurrentVoiceWithAccessType` |
+
+### Remaining TODO: Parameter Setter Migration
+
+**Update all parameter setters** to use `forEachCurrentVoice()` instead of 
+`for(auto& s : polyState)`. Found 36 instances across:
+- CoreNodes.h (12 instances)
+- EnvelopeNodes.h (6 instances)
+- CableNodes.h (2 instances)
+- ModulationNodes.h (4 instances)
+- DynamicsNode.cpp (2 instances)
+- StretchNode.h (10 instances)
 
 This should be done BEFORE widespread adoption of the debug counter system, as the
 counter will fire on all the parameter setters using the slow path.
+
+**Consider deprecating `for(auto& s : polyState)` syntax** entirely for PolyData,
+as it provides no control over AccessType. This is a larger API change requiring
+careful consideration.
+
+---
+
+## COMPLETED: Thread Safety Fix for setAttribute() Paths
+
+### The Problem: Scenario #6 Race Condition
+
+When `setAttribute()` / `setInternalAttribute()` is called from the UI/message thread,
+the code eventually reaches scriptnode parameter setters that iterate `PolyData` via
+`forEachCurrentVoice()` or `for(auto& s : polyState)`. Without `ScopedAllVoiceSetter`,
+the UI thread reads the raw `voiceIndex` atomic, which may contain a stale value set
+by the audio thread's `ScopedVoiceSetter`.
+
+**The race condition:**
+
+```
+Audio thread:                          UI thread:
+ScopedVoiceSetter(polyHandler, 5)      
+  voiceIndex = 5                       
+                                       // No ScopedAllVoiceSetter!
+                                       forEachCurrentVoice(...)
+                                       // getVoiceIndex() returns 5
+                                       // Only voice 5 updated!
+```
+
+This is non-deterministic: if the audio thread happens to be between voices
+(`voiceIndex = -1`), all voices are updated correctly. If mid-voice rendering,
+only that voice is updated.
+
+### Why ScopedAllVoiceSetter Exists
+
+`ScopedAllVoiceSetter` is fundamentally a **thread safety mechanism**, not an
+"all voices" semantic. It forces `getVoiceIndex()` to return -1 for the calling
+thread by checking thread ID, bypassing the potentially racy `voiceIndex` atomic.
+
+| Context | ScopedAllVoiceSetter needed? | Why |
+|---------|------------------------------|-----|
+| Audio thread (inside voice rendering) | NO | Same thread as `voiceIndex` writer, no race |
+| Audio thread (before voice rendering, e.g., MIDI CC) | NO | `voiceIndex = -1` (correct), same thread, no race |
+| UI/message thread | **YES** | Different thread, `voiceIndex` may be stale |
+| Any other non-audio thread | **YES** | Same reasoning as UI thread |
+
+### Key Architectural Insight
+
+`setAttribute()` / `setInternalAttribute()` is **never** called from within voice
+rendering context (while `ScopedVoiceSetter` is active). All calls originate from:
+
+- **UI/message thread:** Parameter changes, preset loads, drag handlers
+- **Audio thread before voice rendering:** MIDI automation, macro controls, voice start events
+
+Modulation during voice rendering uses a different path (`copyModulationValues()`) 
+that operates on float buffers, not `setAttribute()`.
+
+This means `ScopedAllVoiceSetter` can be added unconditionally to `setInternalAttribute()`
+implementations without risk of Scenario #1 (nested `ScopedAllVoiceSetter` inside
+`ScopedVoiceSetter`).
+
+### Scenario Analysis
+
+During investigation, we analyzed 7 failure scenarios:
+
+| Scenario | Description | Verdict |
+|----------|-------------|---------|
+| #1 | Nested `ScopedAllVoiceSetter` inside `ScopedVoiceSetter` (audio thread) | CRITICAL BUG if it occurs |
+| #2 | Missing `ScopedAllVoiceSetter` on UI thread (voiceIndex happens to be -1) | Lucky, not safe |
+| #3 | Stale voiceIndex between voices (audio thread) | Design consideration |
+| #4 | `ScopedVoiceSetter` on UI thread | CRITICAL BUG if it occurs |
+| #5 | Concurrent access during `ScopedAllVoiceSetter` | Correct behavior (by design) |
+| #6 | UI thread without `ScopedAllVoiceSetter`, audio thread mid-voice | **CONFIRMED BUG** |
+| #7 | Audio thread before voice rendering (MIDI CC) | Correct behavior, no protection needed |
+
+### The Fix
+
+Added `ScopedAllVoiceSetter` unconditionally in two locations:
+
+**1. `HardcodedSwappableEffect::setHardcodedAttribute()`**
+File: `hi_core/hi_modules/hardcoded/HardcodedModuleBase.cpp`
+
+```cpp
+else
+{
+    PolyHandler::ScopedAllVoiceSetter avs(polyHandler);
+    p->callback.call((double)newValue);
+}
+```
+
+**2. `FlexAhdsrEnvelope::setInternalAttribute()`**
+File: `hi_core/hi_modules/modulators/mods/FlexAhdsrEnvelope.cpp`
+
+```cpp
+parameterIndex -= getParameterOffset();
+parameters[parameterIndex] = newValue;
+
+PolyHandler::ScopedAllVoiceSetter avs(polyHandler);
+
+switch(parameterIndex)
+{
+    case 0: obj.template setParameter<0>(newValue); break;
+    // ... cases 1-9
+}
+```
+
+### Why No Branch / No `isAllThread()` Check
+
+`ScopedAllVoiceSetter` safely nests (saves/restores `prevThread`), so:
+- If already wrapped: harmless, overwrites with same thread ID, restores correctly
+- If on audio thread before voice rendering: `voiceIndex = -1` anyway, wrapper is harmless
+- If on UI thread without wrapper: **fixes the bug**
+
+No conditional logic needed. No code duplication.
+
+### Checklist: Other Classes That May Need This Fix
+
+Any class with a `PolyHandler` member whose `setInternalAttribute()` calls scriptnode
+parameter setters needs the same fix. Known classes:
+
+| Class | Has `polyHandler`? | `setInternalAttribute()` touches PolyData? | Fixed? |
+|-------|-------------------|-------------------------------------------|--------|
+| `HardcodedSwappableEffect` | Yes | Yes (via `p->callback.call()`) | **YES** |
+| `FlexAhdsrEnvelope` | Yes | Yes (via `obj.template setParameter<N>()`) | **YES** |
+| `MatrixModulator` | Yes | No (uses `setValueInternal()` / `baseValue.prepare()`) | N/A |
+
+### Test Coverage
+
+Tests added to `uiupdater_tests.cpp`:
+
+| Test | Scenario Covered |
+|------|-----------------|
+| `testScenario6RaceWithoutProtection` | Demonstrates the bug: UI thread reads stale voiceIndex |
+| `testScenario6FixWithScopedAllVoiceSetter` | Confirms fix: ScopedAllVoiceSetter prevents race |
+| `testScopedAllVoiceSetterNestingSafe` | Confirms nesting is safe (no branch needed) |
+| `testScenario7AudioThreadNoProtectionNeeded` | Confirms audio thread before voice rendering is correct |
