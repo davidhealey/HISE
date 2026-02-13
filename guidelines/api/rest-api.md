@@ -29,7 +29,7 @@ This document describes the REST API available in HISE for enabling AI agents to
 
 ### Related Documentation
 
-When writing HISEScript code to pass to the scripting endpoints, refer to **[HISE_SCRIPT_CODING_STYLE.md](HISE_SCRIPT_CODING_STYLE.md)** for language quirks and best practices (e.g., using `local` instead of `var` in inline functions, triggering callbacks with `changed()`).
+When writing HISEScript code to pass to the scripting endpoints, refer to **[hisescript.md](../style/hisescript.md)** for language quirks and best practices (e.g., using `local` instead of `var` in inline functions, triggering callbacks with `changed()`).
 
 ---
 
