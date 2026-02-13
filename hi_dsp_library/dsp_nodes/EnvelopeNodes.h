@@ -666,9 +666,9 @@ template <int NV, typename ParameterType> struct simple_ar: public pimpl::envelo
 		}
 	}
 
-	
-	
 	PolyData<State, NumVoices> states;
+
+	SN_VOICE_SETTER(simple_ar, states);
 };
 
 template <int NV, typename ParameterType> struct ahdsr : public pimpl::envelope_base<ParameterType>,
@@ -973,6 +973,8 @@ template <int NV, typename ParameterType> struct ahdsr : public pimpl::envelope_
 	int lastTimeSamples = 0;
 
 	PolyData<state_base, NumVoices> states;
+
+	SN_VOICE_SETTER(ahdsr, states);
 };
 
 

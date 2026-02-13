@@ -280,7 +280,7 @@ public:
 
 	bool handleModulation(double& value)
 	{
-		return t.begin()->getChangedValue(value);
+		return t.get(PolyHandler::AccessType::AllowUncached).getChangedValue(value);
 	}
 
 	void createParameters(ParameterDataList& data)

@@ -69,6 +69,64 @@ using namespace hise;
 		operator bool() const { return (bool)sl; } \
 		typename FT::ScopedVoiceIndexCacher svs; }
 
+/** Creates a VoiceSetter that caches two PolyData members for optimal get() performance.
+ *  Use when your node has two PolyData members accessed in hot paths.
+ *
+ *  Example:
+ *  @code
+ *  PolyData<OscData, NumVoices> oscData;
+ *  PolyData<double, NumVoices> modGain;
+ *  SN_VOICE_SETTER_2(fm, oscData, modGain);
+ *  @endcode
+ */
+#define SN_VOICE_SETTER_2(className, poly1, poly2) struct VoiceSetter { \
+		using FT1 = decltype(poly1); \
+		using FT2 = decltype(poly2); \
+		template <typename WT> VoiceSetter(WT& obj, bool forceAll) : \
+			svs1(obj.getWrappedObject().poly1, forceAll), \
+			svs2(obj.getWrappedObject().poly2, forceAll), \
+			updater(obj.getWrappedObject()) {}; \
+		data::updater<className> updater; \
+		operator bool() const { return true; } \
+		typename FT1::ScopedVoiceIndexCacher svs1; \
+		typename FT2::ScopedVoiceIndexCacher svs2; }
+
+/** Creates a VoiceSetter that caches two PolyData members AND acquires a data lock.
+ *  Use when your node has two PolyData members AND inherits from data::base with
+ *  external data that is accessed during audio processing.
+ *
+ *  The operator bool() returns false if the data lock cannot be acquired
+ *  (e.g., UI thread is loading new data), causing the wrapper to skip processing.
+ *  This is safe and preferred over blocking on the audio thread.
+ *
+ *  Note: Methods called directly (not through the wrapper) like reset() may still
+ *  need manual DataTryReadLock. The lock is reentrant for read access, so nested
+ *  locks are safe.
+ *
+ *  Example:
+ *  @code
+ *  struct my_node : public data::base, public polyphonic_base
+ *  {
+ *      PolyData<OscData, NumVoices> state;
+ *      PolyData<StereoSample, NumVoices> sampleData;
+ *      SN_VOICE_SETTER_2_WITH_DATA_LOCK(my_node, state, sampleData);
+ *  };
+ *  @endcode
+ */
+#define SN_VOICE_SETTER_2_WITH_DATA_LOCK(className, poly1, poly2) struct VoiceSetter { \
+		using FT1 = decltype(poly1); \
+		using FT2 = decltype(poly2); \
+		template <typename WT> VoiceSetter(WT& obj, bool forceAll) : \
+			svs1(obj.getWrappedObject().poly1, forceAll), \
+			svs2(obj.getWrappedObject().poly2, forceAll), \
+			sl(&obj.getWrappedObject(), !forceAll), \
+			updater(obj.getWrappedObject()) {}; \
+		DataTryReadLock sl; \
+		data::updater<className> updater; \
+		operator bool() const { return (bool)sl; } \
+		typename FT1::ScopedVoiceIndexCacher svs1; \
+		typename FT2::ScopedVoiceIndexCacher svs2; }
+
 /** Object Accessors
 
  Use this macro to define the type that should be returned by calls to getObject(). Normally you pass in the wrapped object (for non-wrapped classes you should use SN_GET_SELF_AS_OBJECT().
