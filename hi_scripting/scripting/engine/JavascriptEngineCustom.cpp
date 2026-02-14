@@ -203,6 +203,9 @@ struct HiseJavascriptEngine::RootObject::ApiCall : public Expression
 
 		CHECK_CONDITION_WITH_LOCATION(apiClass != nullptr, "API class does not exist");
 
+		if(apiClass->wantsCurrentLocation())
+			apiClass->setCurrentLocation(location.externalFile, location.getCharIndex());
+
 		try
 		{
 #if ENABLE_SCRIPTING_BREAKPOINTS
