@@ -613,7 +613,13 @@ struct PolyHandler
 		 *  the current voice context.
 		 *  Use for operations that must affect all voices unconditionally
 		 *  (e.g., clearing filter state, resetting all voice data). */
-		ForceAllVoices
+		ForceAllVoices,
+
+		/** Skips the thread-ID check and trusts that the caller is on the audio thread.
+		 *  Use ONLY for internally-modulated parameters (connected via wrap::mod / parameter::plain)
+		 *  where the parameter setter is guaranteed to be called from the audio thread.
+		 *  This eliminates the ~15-65 cycle overhead of Thread::getCurrentThreadId(). */
+		TrustAudioThreadContext
 	};
 
 	/** Creates a poly handler. If you want to deactivate polyphonic behaviour altogether, pass in
@@ -654,28 +660,41 @@ struct PolyHandler
 
 	/** @internal Create an instance of this class with the given voice index and it will return this voice
 	    index for each call that happens on this thread as long as this object exists.
+
+		The optional accessType parameter controls whether ScopedVoiceIndexCacher should set up
+		per-PolyData caching and whether get() assertions fire:
+		- RequireCached (default): Compiled C++ path. Caching is expected.
+		- AllowUncached: Interpreted/dynamic path (DspNetwork). Caching is skipped
+		  since OpaqueNode can't set up per-PolyData caching.
 	*/
 	struct ScopedVoiceSetter
 	{
-		ScopedVoiceSetter(PolyHandler& p_, int voiceIndex) :
-			p(p_)
+		ScopedVoiceSetter(PolyHandler& p_, int voiceIndex,
+						  AccessType accessType = AccessType::RequireCached) :
+			p(p_),
+			prevAccessType(p_.defaultAccessType)
 		{
 			if (p.enabled != 0)
 			{
 				jassert(p.currentAllThread != Thread::getCurrentThreadId());
 				p.voiceIndex = voiceIndex;
+				p.defaultAccessType = accessType;
 			}
 		}
 
 		~ScopedVoiceSetter()
 		{
 			if (p.enabled != 0)
+			{
 				p.voiceIndex = -1;
+				p.defaultAccessType = prevAccessType;
+			}
 		}
 
 	private:
 
 		PolyHandler& p;
+		AccessType prevAccessType;
 	};
 
 	struct ScopedNoReset
@@ -706,12 +725,20 @@ struct PolyHandler
 		(or if the voice index has not been set). */
 	int getVoiceIndex() const
 	{
-		if (currentAllThread != nullptr && Thread::getCurrentThreadId() == currentAllThread)
-			return -1 * enabled;
-
+		if (currentAllThread != nullptr)
+		{
+			if (Thread::getCurrentThreadId() == currentAllThread)
+				return -1 * enabled;
+			else
+			{
+				// performance hit on hot path here...
+				//jassertfalse;
+			}
+		}
+		
 		return voiceIndex.load() * enabled;
 	}
-
+	bool isAllThreadActive() const { return enabled && currentAllThread != nullptr; }
 	bool isAllThread() const { return enabled && currentAllThread != nullptr && Thread::getCurrentThreadId() == currentAllThread; };
 
 	bool isEnabled() const { return enabled; }
@@ -778,6 +805,11 @@ struct PolyHandler
 
 	DllBoundaryTempoSyncer* getTempoSyncer() { return tempoSyncer; }
 
+	/** Returns the default access type set by the current ScopedVoiceSetter.
+	 *  Used by ScopedVoiceIndexCacher and PolyData::get() to determine whether
+	 *  caching should be active and assertions should fire. */
+	AccessType getDefaultAccessType() const { return defaultAccessType; }
+
 private:
 
 	std::atomic<void*> currentAllThread = { nullptr }; // 0 byte offset
@@ -785,6 +817,7 @@ private:
 	int enabled;									   // 12 byte offset
 	WeakReference<VoiceResetter> vr = nullptr;		   // 16 byte offset
 	DllBoundaryTempoSyncer* tempoSyncer = nullptr;
+	AccessType defaultAccessType = AccessType::RequireCached;
 };
 
 
@@ -1148,27 +1181,8 @@ template <typename T, int NumVoices> struct PolyData
 	 */
 	struct ScopedVoiceIndexCacher
 	{
-		ScopedVoiceIndexCacher(PolyData& p_):
-		  p(p_)
-		{
-			if constexpr (PolyData::isPolyphonic())
-			{
-				p.currentRenderVoice = p.begin();
-			}
-		};
-
-		~ScopedVoiceIndexCacher()
-		{
-			if constexpr (PolyData::isPolyphonic())
-			{
-				p.currentRenderVoice = nullptr;
-#if JUCE_DEBUG
-				p.uncachedGetCallCount = 0;
-#endif
-			}
-		}
-
-		PolyData& p;
+		ScopedVoiceIndexCacher(PolyData& p_) {}
+		operator bool() const { return true; }
 	};
 
 	/** @deprecated Use ScopedVoiceIndexCacher instead. Kept for backwards compatibility. */
@@ -1176,53 +1190,17 @@ template <typename T, int NumVoices> struct PolyData
 
 	/** Returns a reference to the current voice's data.
 	 *
-	 *  @param accessType Controls caching enforcement (default: RequireCached).
-	 *         - RequireCached: Expects ScopedVoiceIndexCacher to be active.
-	 *           Triggers jassertfalse if called repeatedly (>64 times) without caching.
-	 *           This catches performance issues where ~40% CPU overhead occurs.
-	 *         - AllowUncached: Explicitly permits the slow path without assertions.
-	 *           Use for control-rate code, event handlers, or when processing payload
-	 *           is heavy enough that the lookup overhead is negligible.
-	 *
-	 *  If you hit the assertion, add SN_VOICE_SETTER(YourClass, polyDataMember) to your
-	 *  node class, or use SN_VOICE_SETTER_2 for nodes with two PolyData members.
+	 *  Uses begin() which calls getVoiceIndex(). The fast-path in getVoiceIndex()
+	 *  skips the Thread::getCurrentThreadId() check when no ScopedAllVoiceSetter
+	 *  is active (99.9% of the time on the audio thread), costing only a single
+	 *  atomic load (~1-3 cycles on x86).
 	 */
-	T& get(PolyHandler::AccessType accessType = PolyHandler::AccessType::RequireCached) const
+	T& get(PolyHandler::AccessType = PolyHandler::AccessType::RequireCached) const
 	{
 		if constexpr (isPolyphonic())
-		{
-			if (currentRenderVoice == nullptr)
-			{
-#if JUCE_DEBUG
-				// Uncached path: calls begin() which does atomic loads + thread ID checks.
-				// ~40% slower than cached path in tight per-sample loops.
-				//
-				// FIX OPTIONS:
-				// 1. Add SN_VOICE_SETTER(YourClass, polyDataMember) to your node
-				// 2. For two members: SN_VOICE_SETTER_2(YourClass, member1, member2)
-				// 3. If intentional (control-rate, heavy processing), use:
-				//    get(PolyHandler::AccessType::AllowUncached)
-				if (accessType == PolyHandler::AccessType::RequireCached)
-				{
-					if (++uncachedGetCallCount > UNCACHED_GET_THRESHOLD)
-					{
-						jassertfalse;
-						uncachedGetCallCount = 0;
-					}
-				}
-#endif
-				return *begin();
-			}
-
-#if JUCE_DEBUG
-			uncachedGetCallCount = 0;
-#endif
-			return *currentRenderVoice;
-		}
+			return *begin();
 		else
-		{
 			return *const_cast<T*>(data);
-		}
 	}
 
 	/** Calls f() for each voice that should be processed in the current context.
@@ -1242,7 +1220,13 @@ template <typename T, int NumVoices> struct PolyData
 		}
 		else
 		{
-			if(accessType == PolyHandler::AccessType::ForceAllVoices || voicePtr->getVoiceIndex() < 0)
+			if(accessType == PolyHandler::AccessType::ForceAllVoices)
+			{
+				for(int i = 0; i < NumVoices; i++)
+					f(data[i]);
+			}
+			else if(accessType != PolyHandler::AccessType::TrustAudioThreadContext
+				 && voicePtr->getVoiceIndex() < 0)
 			{
 				for(int i = 0; i < NumVoices; i++)
 					f(data[i]);

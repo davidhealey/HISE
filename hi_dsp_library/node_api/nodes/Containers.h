@@ -76,12 +76,53 @@ template <class ...Types> static constexpr int getSummedChannels()
 
 
 
+struct DummyVoiceSetter
+{
+	template <typename T> DummyVoiceSetter(T& obj) {};
+	operator bool() const { return true; }
+};
+
+// Detect T::VoiceSetter (direct, set by SN_FORWARD_VOICE_SETTER_T or SN_VOICE_SETTER)
 template <typename, typename = void>
-struct has_voice_setter : std::false_type {};
+struct has_direct_voice_setter : std::false_type {};
 
 template <typename T>
-struct has_voice_setter<T, std::void_t<typename T::ObjectType::VoiceSetter>>
+struct has_direct_voice_setter<T, std::void_t<typename T::VoiceSetter>>
 	: std::true_type {};
+
+// Detect T::ObjectType::VoiceSetter (indirect, through ObjectType alias)
+template <typename, typename = void>
+struct has_objecttype_voice_setter : std::false_type {};
+
+template <typename T>
+struct has_objecttype_voice_setter<T, std::void_t<typename T::ObjectType::VoiceSetter>>
+	: std::true_type {};
+
+// Combined: has a VoiceSetter through either path
+template <typename T>
+struct has_voice_setter : std::bool_constant<
+	has_direct_voice_setter<T>::value || has_objecttype_voice_setter<T>::value> {};
+
+/** Resolve VoiceSetter type with priority: T::VoiceSetter > T::ObjectType::VoiceSetter > DummyVoiceSetter.
+ *  This ensures wrappers using SN_OPAQUE_WRAPPER + SN_FORWARD_VOICE_SETTER_T get their
+ *  forwarded VoiceSetter used, rather than skipping to the inner type's ObjectType. */
+template <typename T, typename = void>
+struct get_voice_setter_impl {
+	using type = DummyVoiceSetter;
+};
+
+template <typename T>
+struct get_voice_setter_impl<T, std::void_t<typename T::ObjectType::VoiceSetter>> {
+	using type = typename T::ObjectType::VoiceSetter;
+};
+
+template <typename T, typename = void>
+struct get_voice_setter : get_voice_setter_impl<T> {};
+
+template <typename T>
+struct get_voice_setter<T, std::void_t<typename T::VoiceSetter>> {
+	using type = typename T::VoiceSetter;
+};
 
 
 
@@ -91,8 +132,7 @@ struct base_wrapper;
 template <typename T, std::size_t I>
 struct base_wrapper<T, I, true>
 {
-	using WT = typename T::ObjectType;
-    using VS = typename WT::VoiceSetter;
+	using VS = typename get_voice_setter<T>::type;
 
 	base_wrapper(T& obj) :
         vs(obj.getObject())
@@ -131,23 +171,11 @@ struct sub_tuple_helper_impl<std::tuple<Ts...>, std::index_sequence<Is...>>
 template <typename... Ts>
 using sub_tuple = sub_tuple_helper_impl<std::tuple<Ts...>, std::make_index_sequence<sizeof...(Ts)>>;
 
-struct DummyVoiceSetter
-{
-	template <typename T> DummyVoiceSetter(T& obj) {};
-	operator bool() const { return true; }
-};
-
-template <typename T, typename = void>
-struct get_voice_setter {
-	using type = DummyVoiceSetter;
-};
-
-template <typename T>
-struct get_voice_setter<T, std::void_t<typename T::ObjectType::VoiceSetter>> {
-	using type = typename T::ObjectType::VoiceSetter;
-};
-
 }
+
+/** Forwards the VoiceSetter from the wrapped type T through the wrapper.
+ *  Use in wrapper templates that pass through audio processing to an inner node. */
+#define SN_FORWARD_VOICE_SETTER_T using VoiceSetter = typename container::Helpers::get_voice_setter<T>::type;
 
 
 

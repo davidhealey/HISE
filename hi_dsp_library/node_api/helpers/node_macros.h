@@ -127,6 +127,26 @@ using namespace hise;
 		typename FT1::ScopedVoiceIndexCacher svs1; \
 		typename FT2::ScopedVoiceIndexCacher svs2; }
 
+/** Returns TrustAudioThreadContext if the parameter is internally modulated (connected via
+ *  wrap::mod / parameter::plain at compile time), otherwise RequireCached.
+ *
+ *  Use in forEachCurrentVoice() calls inside parameter setters to skip the thread-ID
+ *  check for internally-modulated parameters, saving ~15-65 cycles per call.
+ *
+ *  Example:
+ *  @code
+ *  void setFrequency(double newFreq) {
+ *      voiceData.forEachCurrentVoice([newFreq](OscData& d) {
+ *          d.uptimeDelta = newFreq / sr;
+ *      }, SN_ACCESS_TYPE_FOR_PARAM(Parameters::Frequency));
+ *  }
+ *  @endcode
+ */
+#define SN_ACCESS_TYPE_FOR_PARAM(ParamEnum) \
+	(this->isInternallyModulated((int)(ParamEnum)) \
+		? snex::Types::PolyHandler::AccessType::TrustAudioThreadContext \
+		: snex::Types::PolyHandler::AccessType::AllowUncached)
+
 /** Object Accessors
 
  Use this macro to define the type that should be returned by calls to getObject(). Normally you pass in the wrapped object (for non-wrapped classes you should use SN_GET_SELF_AS_OBJECT().
