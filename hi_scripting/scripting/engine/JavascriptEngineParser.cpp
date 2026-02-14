@@ -914,7 +914,28 @@ private:
 
 #else
 
-		refFileName = cleanedFileName;
+		if (File::isAbsolutePath(cleanedFileName))
+		{
+			refFileName = cleanedFileName;
+		}
+		else if (cleanedFileName.startsWith("./") || cleanedFileName.startsWith("../"))
+		{
+			// Resolve relative to the directory of the currently parsed file
+			if (currentExternalFilePath.isNotEmpty())
+			{
+				File currentFile(currentExternalFilePath);
+				refFileName = currentFile.getParentDirectory().getChildFile(cleanedFileName).getFullPathName();
+			}
+			else
+			{
+				// No parent file context, use as-is for collection lookup
+				refFileName = cleanedFileName;
+			}
+		}
+		else
+		{
+			refFileName = cleanedFileName;
+		}
 
 		if (File::isAbsolutePath(refFileName))
 		{
