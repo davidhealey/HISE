@@ -1293,6 +1293,7 @@ ScriptingObject(p),
 ApiClass(0),
 parentMidiProcessor(dynamic_cast<ScriptBaseMidiProcessor*>(p))
 {
+	setWantsCurrentLocation(true);
 	ADD_API_METHOD_0(getProjectInfo);
 	ADD_API_METHOD_0(allNotesOff);
 	ADD_API_METHOD_0(getUptime);
@@ -1575,8 +1576,29 @@ void ScriptingApi::Engine::loadFontAs(String fileName, String fontId)
 			return;
 	}
 
-	const String absolutePath = GET_PROJECT_HANDLER(getProcessor()).getFilePath(fileName, ProjectHandler::SubDirectories::Images);
-	File f(absolutePath);
+	File f;
+
+	if (fileName.startsWith("./") || fileName.startsWith("../"))
+	{
+		auto loc = getCurrentLocationInFunctionCall();
+
+		if (loc.fileName.isNotEmpty())
+		{
+			File scriptFile(loc.fileName);
+			f = scriptFile.getParentDirectory().getChildFile(fileName);
+		}
+		else
+		{
+			reportScriptError("Relative font path can only be used from an external script file");
+			return;
+		}
+	}
+	else
+	{
+		const String absolutePath = GET_PROJECT_HANDLER(getProcessor()).getFilePath(fileName, ProjectHandler::SubDirectories::Images);
+		f = File(absolutePath);
+	}
+
 	auto fis = f.createInputStream();
 
 	if (fis == nullptr)
