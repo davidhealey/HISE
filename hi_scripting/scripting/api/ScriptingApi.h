@@ -250,7 +250,7 @@ public:
 		/** Loads a font file. This is deprecated, because it might result in different names on various OS. Use loadFontAs() instead. */
 		void loadFont(const String &fileName);
 
-		/** Loads the font from the given file in the image folder and registers it under the fontId. This is platform agnostic. */
+		/** Loads the font from the given file in the image folder and registers it under the fontId. This is platform agnostic. If the fileName starts with "./" or "../", it will be resolved relative to the calling script file. */
 		void loadFontAs(String fileName, String fontId);
 
 		/** Sets the font that will be used as default font for various things. */
