@@ -163,8 +163,7 @@ public:
 	struct VoiceSetter
 	{
 		VoiceSetter(DspNetwork& p, int newVoiceIndex):
-			internalSetter(*p.getPolyHandler(), newVoiceIndex,
-						   snex::Types::PolyHandler::AccessType::AllowUncached)
+			internalSetter(*p.getPolyHandler(), newVoiceIndex)
 		{}
 
 	private:

@@ -171,12 +171,6 @@ template <class T, int P> struct single_base
         static_assert(std::is_same<typename OtherType::ObjectType, typename T::ObjectType>(), "target type mismatch");
 
 		obj = reinterpret_cast<void*>(&element.getObject());
-
-		// Mark this parameter as internally modulated on polyphonic targets.
-		// This allows the target's setParameter to use TrustAudioThreadContext,
-		// skipping the thread-ID check in forEachCurrentVoice() for ~20-40% speedup.
-		if constexpr (std::is_base_of<polyphonic_base, typename OtherType::WrappedObjectType>::value)
-			element.getWrappedObject().template setInternallyModulated<P>();
 	}
 
 	void* getObjectPtr() { return obj; }
