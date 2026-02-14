@@ -59,6 +59,55 @@ struct polyphonic_base
 		if(addProcessEventFlag)
 			cppgen::CustomNodeProperties::addNodeIdManually(id, PropertyIds::IsProcessingHiseEvent);
 	}
+
+	/** Mark parameter P as internally modulated (connected via wrap::mod / parameter::plain).
+	 *  Called at connection time by parameter::single_base::connect(). Parameters marked this
+	 *  way can use TrustAudioThreadContext to skip thread-ID checks in forEachCurrentVoice(). */
+	template <int P> void setInternallyModulated()
+	{
+		static_assert(P < 64, "Parameter index must be less than 64");
+		internallyModulatedParams |= (1ULL << P);
+	}
+
+	/** Returns true if parameter p is internally modulated AND we're not in a prepare() context.
+	 *  During prepare(), all parameters must iterate all voices regardless of modulation state,
+	 *  so this returns false when ScopedPrepareContext is active. */
+	bool isInternallyModulated(int p) const
+	{
+		if (forceAllVoiceIteration)
+			return false;
+
+		return (internallyModulatedParams & (1ULL << p)) != 0;
+	}
+
+	/** RAII guard for prepare() methods. While active, isInternallyModulated() returns false
+	 *  for all parameters, causing SN_ACCESS_TYPE_FOR_PARAM to return AllowUncached instead
+	 *  of TrustAudioThreadContext. This ensures parameter setters called from prepare()
+	 *  iterate all voices (since there's no active voice context during prepare). */
+	struct ScopedPrepareContext
+	{
+		ScopedPrepareContext(polyphonic_base& p_):
+		  p(p_),
+		  prev(p_.forceAllVoiceIteration)
+		{
+			p.forceAllVoiceIteration = true;
+		}
+
+		~ScopedPrepareContext()
+		{
+			p.forceAllVoiceIteration = prev;
+		}
+
+	private:
+
+		polyphonic_base& p;
+		bool prev;
+	};
+
+private:
+
+	bool forceAllVoiceIteration = false;
+	uint64_t internallyModulatedParams = 0;
 };
 
 class HiseDspBase: public ParameterHolder

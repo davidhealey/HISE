@@ -1566,10 +1566,8 @@ public:
 
 			uiData.uptimeDelta = newUptimeDelta;
 
-			voiceData.forEachCurrentVoice([newUptimeDelta](OscData& d)
-			{
+			for (auto& d : voiceData)
 				d.uptimeDelta = newUptimeDelta;
-			});
 		}
 	}
 
@@ -1594,10 +1592,8 @@ public:
 
 		uiData.phase = v;
 
-		voiceData.forEachCurrentVoice([v](OscData& d)
-		{
+		for (auto& d : voiceData)
 			d.phase = v;
-		});
 
 		sendDisplayUpdateMessage(0.0f);
 	}
@@ -1606,10 +1602,8 @@ public:
 	{
 		uiData.gain = gain;
 
-		voiceData.forEachCurrentVoice([gain](OscData& d)
-		{
+		for (auto& d : voiceData)
 			d.gain = gain;
-		});
 
 		sendDisplayUpdateMessage(0.0, true);
 	}
@@ -1618,10 +1612,8 @@ public:
 	{
 		auto pitchMultiplier = newMultiplier;
 
-		voiceData.forEachCurrentVoice([pitchMultiplier](OscData& d)
-		{
+		for (auto& d : voiceData)
 			d.multiplier = pitchMultiplier;
-		});
 
 		uiData.multiplier = pitchMultiplier;
 

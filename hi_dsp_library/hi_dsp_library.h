@@ -213,10 +213,11 @@ Set this to 1 if you want to embed the libraries created with this module into y
 #include "node_api/nodes/duplicate.h"
 
 #include "node_api/nodes/Base.h"
-#include "node_api/nodes/Bypass.h"
 #include "node_api/nodes/container_base.h"
 #include "node_api/nodes/container_base_impl.h"
 #include "node_api/nodes/Containers.h"
+#include "node_api/nodes/Bypass.h"
+
 #include "node_api/nodes/Container_Chain.h"
 #include "node_api/nodes/Container_Split.h"
 #include "node_api/nodes/Container_Multi.h"

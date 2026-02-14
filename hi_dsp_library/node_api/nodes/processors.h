@@ -32,7 +32,7 @@
 
 #pragma once
 
-#define SN_FORWARD_VOICE_SETTER_T using VoiceSetter = typename container::Helpers::get_voice_setter<T>::type;
+// SN_FORWARD_VOICE_SETTER_T is now defined in Containers.h (after get_voice_setter)
 
 namespace scriptnode
 {
@@ -252,6 +252,7 @@ template <int C, class T> class fix
 public:
 
 	SN_OPAQUE_WRAPPER(fix, T);
+	SN_FORWARD_VOICE_SETTER_T;
 
 	static const int NumChannels = C;
 
@@ -602,6 +603,7 @@ template <class T> class frame_x
 public:
 
 	SN_OPAQUE_WRAPPER(frame_x, T);
+	SN_FORWARD_VOICE_SETTER_T;
 
 	void initialise(ObjectWithValueTree* n)
 	{
@@ -1525,6 +1527,7 @@ public:
 template <class ParameterClass, class T> struct mod
 {
 	SN_SELF_AWARE_WRAPPER(mod, T);
+	SN_FORWARD_VOICE_SETTER_T;
 
 	template <typename ProcessDataType> void process(ProcessDataType& data) noexcept
 	{

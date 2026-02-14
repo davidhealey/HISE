@@ -305,6 +305,7 @@ template <class T> class simple : public SingleWrapper<T>
 public:
 
 	SN_SELF_AWARE_WRAPPER(simple, T);
+	SN_FORWARD_VOICE_SETTER_T;
 
 	constexpr OPTIONAL_BOOL_CLASS_FUNCTION(isProcessingHiseEvent);
 	constexpr OPTIONAL_BOOL_CLASS_FUNCTION(isPolyphonic);
