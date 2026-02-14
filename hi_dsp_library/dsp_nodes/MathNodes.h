@@ -755,8 +755,6 @@ public:
 	}
 
 	PolyData<float, NumVoices> value;
-
-	SN_VOICE_SETTER(OpNode, value);
 };
 
 #define DEFINE_MONO_OP_NODE(monoName) template <int NV> using monoName = OpNode<Operations::monoName, 1>;
@@ -1052,10 +1050,8 @@ private:
 
     void clearFilterState()
     {
-        filterState.forEachCurrentVoice([](FilterStateArray& voiceState)
-        {
+        for (auto& voiceState : filterState.all())
             voiceState.fill(0.0f);
-        }, PolyHandler::AccessType::ForceAllVoices);
     }
 
     float processHpfSample(float input, int channel, FilterStateArray& state)

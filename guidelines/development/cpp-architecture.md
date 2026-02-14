@@ -23,7 +23,7 @@ For architectural questions spanning multiple files or requiring deep analysis, 
 3. **Point to relevant documentation** - Reference files the subagent should read first
 4. **Define scope relative to known systems** - Frame the question in terms of how it relates to established architecture
 
-**Example:** When asking a subagent to analyze parameter handling, don't just say "analyze setParameter". Instead: "Analyze how setParameter interacts with the VoiceSetter system. Key classes: `ScopedVoiceIndexCacher` (caches voice pointer), `ScopedAllVoiceSetter` (UI thread protection). Read `voice-setter-system.md` first."
+**Example:** When asking a subagent to analyze parameter handling, don't just say "analyze setParameter". Instead: "Analyze how setParameter interacts with the PolyData voice iteration system. Key classes: `ScopedVoiceSetter` (sets voice index on audio thread), `ScopedAllVoiceSetter` (UI thread protection). Read `voice-setter-system.md` first."
 
 ### 3. Verify Understanding Before Proceeding
 When corrected, re-read relevant documentation/code before continuing. Explicitly state the corrected understanding and verify it's accurate before proposing next steps.
@@ -31,7 +31,7 @@ When corrected, re-read relevant documentation/code before continuing. Explicitl
 ### 4. Identify and Clarify Naming Confusions Early
 Similar names, parallel naming patterns, or related-sounding concepts cause confusion and lead to incorrect analysis. When encountering potentially confusing names:
 
-1. **Watch for similar names with different purposes** - `UIUpdater` vs `MessageThreadUpdater`, `ScopedVoiceSetter` vs `ScopedVoiceIndexCacher` may sound related but serve different roles
+1. **Watch for similar names with different purposes** - `UIUpdater` vs `MessageThreadUpdater`, `ScopedVoiceSetter` vs `ScopedAllVoiceSetter` may sound related but serve different roles
 2. **Watch for same names in different scopes** - `Outer::Foo` vs `Inner::Foo` may be completely different concepts
 3. **Clarify deprecated aliases** - Old names kept for compatibility can mislead analysis
 4. **Document distinctions explicitly** - When confusing similarities exist, create a comparison table showing the differences
@@ -51,7 +51,7 @@ When solving a new problem, first look for existing patterns in the codebase tha
 - Consistent API across related methods
 - Less cognitive load for users of the API
 - Fewer new concepts to document and maintain
-- Code that "rhymes" - if you know how `get()` works, you know how `forEachCurrentVoice()` works
+- Code that "rhymes" - if you know how `get()` works, you know how `all()` works
 
 ### 7. Separate Logic Verification from Implementation
 For complex changes, separate phases: (1) understand the problem, (2) verify the design, (3) implement. Don't rush to code before the logic is solid.
@@ -64,7 +64,7 @@ For complex changes, separate phases: (1) understand the problem, (2) verify the
 When a code path has performance (or correctness) implications that could silently degrade the system:
 
 1. **Make the safe path the default** - require explicit opt-out for dangerous/slow paths
-2. **Use enums, not bools** - `get(true)` is meaningless; `get(AccessType::AllowUncached)` documents intent
+2. **Use enums, not bools** - `get(true)` is meaningless; named methods like `all()` document intent
 3. **Add debug-mode assertions** - catch misuse during development, not in production
 4. **Name things by their intent** - `AllowUncached` explains *why* you're opting out
 

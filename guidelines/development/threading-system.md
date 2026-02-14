@@ -251,7 +251,7 @@ mc->getLockFreeDispatcher().callOnMessageThreadAfterSuspension(
 ### PolyData and ScopedAllVoiceSetter
 
 When `setInternalAttribute()` or any parameter setter touches `PolyData` (via scriptnode
-parameter callbacks or `forEachCurrentVoice()`), it **must** be wrapped with 
+parameter callbacks or `for(auto& d : polyData)` iteration), it **must** be wrapped with 
 `PolyHandler::ScopedAllVoiceSetter` if it can be called from a non-audio thread.
 
 Without this protection, the UI thread may read a stale `voiceIndex` set by the audio

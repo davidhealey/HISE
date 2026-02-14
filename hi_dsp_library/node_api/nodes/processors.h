@@ -32,8 +32,6 @@
 
 #pragma once
 
-// SN_FORWARD_VOICE_SETTER_T is now defined in Containers.h (after get_voice_setter)
-
 namespace scriptnode
 {
 using namespace juce;
@@ -252,7 +250,6 @@ template <int C, class T> class fix
 public:
 
 	SN_OPAQUE_WRAPPER(fix, T);
-	SN_FORWARD_VOICE_SETTER_T;
 
 	static const int NumChannels = C;
 
@@ -347,8 +344,6 @@ template <class T, class Initialiser> class init
 {
 public:
 
-	SN_FORWARD_VOICE_SETTER_T
-
 	SN_SELF_AWARE_WRAPPER(init, T);
 
 	init() : obj(), i(obj) {};
@@ -404,8 +399,6 @@ public:
 template <class T> class skip
 {
 public:
-
-	SN_EMPTY_VOICE_SETTER(skip);
 
 	SN_OPAQUE_WRAPPER(skip, T);
 
@@ -560,8 +553,6 @@ template <class T> class no_data
 {
 public:
 
-	SN_FORWARD_VOICE_SETTER_T;
-
 	SN_SELF_AWARE_WRAPPER(no_data, T);
 
 	constexpr OPTIONAL_BOOL_CLASS_FUNCTION(isPolyphonic);
@@ -603,7 +594,6 @@ template <class T> class frame_x
 public:
 
 	SN_OPAQUE_WRAPPER(frame_x, T);
-	SN_FORWARD_VOICE_SETTER_T;
 
 	void initialise(ObjectWithValueTree* n)
 	{
@@ -1527,7 +1517,6 @@ public:
 template <class ParameterClass, class T> struct mod
 {
 	SN_SELF_AWARE_WRAPPER(mod, T);
-	SN_FORWARD_VOICE_SETTER_T;
 
 	template <typename ProcessDataType> void process(ProcessDataType& data) noexcept
 	{
@@ -1750,25 +1739,20 @@ template <class T> struct node : public scriptnode::data::base
 
 	void process(FixBlockType& d)
 	{
-		if (auto sv = typename T::ObjectType::VoiceSetter(obj.getObject()))
-			obj.process(d);
+		obj.process(d);
 	}
 
 	void process(ProcessDataDyn& data) noexcept
 	{
 		jassert(data.getNumChannels() == NumChannels);
 		auto& fd = data.as<FixBlockType>();
-
-		if (auto sv = typename T::ObjectType::VoiceSetter(obj.getObject()))
-			obj.process(fd);
+		obj.process(fd);
 	}
 
 	template <typename FrameDataType> void processFrame(FrameDataType& data) noexcept
 	{
 		auto& fd = FrameType::as(data.begin());
-
-		if (auto sv = typename T::ObjectType::VoiceSetter(obj.getObject()))
-			obj.processFrame(fd);
+		obj.processFrame(fd);
 	}
 
 	void prepare(PrepareSpecs ps)
@@ -1783,8 +1767,7 @@ template <class T> struct node : public scriptnode::data::base
 
 	void handleHiseEvent(HiseEvent& e)
 	{
-		if (auto sv = typename T::ObjectType::VoiceSetter(obj.getObject()))
-			obj.handleHiseEvent(e);
+		obj.handleHiseEvent(e);
 	}
 
 	constexpr bool isPolyphonic()

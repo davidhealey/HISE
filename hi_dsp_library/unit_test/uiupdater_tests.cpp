@@ -301,14 +301,14 @@ struct NodeUIUpdaterTests : public juce::UnitTest
 
 		// PolyData single-threaded tests - get()
 		testPolyDataGetReturnsCurrentVoice();
-		testPolyDataGetWithCacher();
-		testPolyDataGetWithoutCacher();
 
-		// PolyData single-threaded tests - forEachCurrentVoice
-		testPolyDataForEachSingleVoice();
-		testPolyDataForEachAllVoices();
-		testPolyDataForEachForceAll();
-		testForEachCurrentVoiceWithAccessType();
+		// PolyData single-threaded tests - iteration with voice context
+		testPolyDataIterateSingleVoice();
+		testPolyDataIterateAllVoices();
+
+		// PolyData single-threaded tests - all()
+		testPolyDataAllReturnsAllVoices();
+		testPolyDataAllIgnoresVoiceContext();
 
 		// PolyData single-threaded tests - utility methods
 		testPolyDataIsFirst();
@@ -324,7 +324,6 @@ struct NodeUIUpdaterTests : public juce::UnitTest
 		testWithDataAggregatesPolyDataVoices();
 
 		// PolyData multi-threaded tests
-		testPolyDataCacherUnderLoad();
 		testPolyDataUIIterationUnderLoad();
 
 		// PolyData thread safety scenario tests
@@ -332,13 +331,6 @@ struct NodeUIUpdaterTests : public juce::UnitTest
 		testScenario6FixWithScopedAllVoiceSetter();
 		testScopedAllVoiceSetterNestingSafe();
 		testScenario7AudioThreadNoProtectionNeeded();
-
-#if JUCE_DEBUG
-		// PolyData debug counter tests (only run in debug builds)
-		testPolyDataAllowUncachedNoAssertion();
-		testPolyDataCounterResetOnCachedAccess();
-		testPolyDataCachedAccessNoAssertion();
-#endif
 
 		// Cleanup: destroy nodes while JUCE infrastructure is still alive
 		// (static destruction order would otherwise cause crash in CriticalSection)
@@ -1743,89 +1735,19 @@ struct NodeUIUpdaterTests : public juce::UnitTest
 		}
 	}
 
-	/** Setup: PolyData with PolyHandler and ScopedVoiceIndexCacher active.
-	 *
-	 *  Scenario: Create ScopedVoiceIndexCacher, call get() multiple times,
-	 *  verify it returns cached pointer (same address each time).
-	 *
-	 *  Expected: get() returns same pointer, which equals begin() at construction time.
-	 */
-	void testPolyDataGetWithCacher()
-	{
-		beginTest("PolyData get() uses cached pointer when ScopedVoiceIndexCacher active");
-
-		PolyHandler localPolyHandler(true);
-		PolyData<int, NUM_POLYPHONIC_VOICES> polyData;
-
-		PrepareSpecs specs;
-		specs.sampleRate = 44100.0;
-		specs.blockSize = 512;
-		specs.numChannels = 2;
-		specs.voiceIndex = &localPolyHandler;
-		polyData.prepare(specs);
-
-		{
-			PolyHandler::ScopedVoiceSetter svs(localPolyHandler, 5);
-
-			// Get expected pointer before cacher
-			int* expectedPtr = polyData.begin();
-
-			// Create cacher - this should cache the pointer
-			PolyData<int, NUM_POLYPHONIC_VOICES>::ScopedVoiceIndexCacher cacher(polyData);
-
-			// Multiple get() calls should return same cached pointer
-			int* ptr1 = &polyData.get();
-			int* ptr2 = &polyData.get();
-			int* ptr3 = &polyData.get();
-
-			expect(ptr1 == expectedPtr, "get() should return cached pointer");
-			expect(ptr1 == ptr2 && ptr2 == ptr3, "Multiple get() calls should return same pointer");
-		}
-	}
-
-	/** Setup: PolyData with PolyHandler, NO ScopedVoiceIndexCacher.
-	 *
-	 *  Scenario: Call get() multiple times with ScopedVoiceSetter.
-	 *
-	 *  Expected: get() still works (falls back to begin()), returns correct voice data.
-	 */
-	void testPolyDataGetWithoutCacher()
-	{
-		beginTest("PolyData get() works without ScopedVoiceIndexCacher (falls back to begin)");
-
-		PolyHandler localPolyHandler(true);
-		PolyData<int, NUM_POLYPHONIC_VOICES> polyData;
-
-		PrepareSpecs specs;
-		specs.sampleRate = 44100.0;
-		specs.blockSize = 512;
-		specs.numChannels = 2;
-		specs.voiceIndex = &localPolyHandler;
-		polyData.prepare(specs);
-
-		for (int i = 0; i < NUM_POLYPHONIC_VOICES; i++)
-			polyData.getWithIndex(i) = i * 100;
-
-		{
-			PolyHandler::ScopedVoiceSetter svs(localPolyHandler, 3);
-			// No ScopedVoiceIndexCacher - get() should still work via begin()
-			expectEquals(polyData.get(), 300, "get() should return voice 3 data (300)");
-		}
-	}
-
 	// =========================================
-	// PolyData Tests - forEachCurrentVoice
+	// PolyData Tests - Iteration with Voice Context
 	// =========================================
 
 	/** Setup: PolyData with PolyHandler, ScopedVoiceSetter(5) active.
 	 *
-	 *  Scenario: Call forEachCurrentVoice() with counting lambda.
+	 *  Scenario: Use range-based for loop to iterate and count.
 	 *
-	 *  Expected: Lambda called exactly once for voice 5.
+	 *  Expected: Loop executes once, processing voice 5.
 	 */
-	void testPolyDataForEachSingleVoice()
+	void testPolyDataIterateSingleVoice()
 	{
-		beginTest("PolyData forEachCurrentVoice calls lambda once for single voice");
+		beginTest("PolyData range-for processes single voice with ScopedVoiceSetter");
 
 		PolyHandler localPolyHandler(true);
 		PolyData<int, NUM_POLYPHONIC_VOICES> polyData;
@@ -1845,25 +1767,26 @@ struct NodeUIUpdaterTests : public juce::UnitTest
 
 			int count = 0;
 			int sum = 0;
-			polyData.forEachCurrentVoice([&](int& v) {
+			for (auto& v : polyData)
+			{
 				count++;
 				sum += v;
-			});
+			}
 
-			expectEquals(count, 1, "Lambda should be called once");
+			expectEquals(count, 1, "Should iterate once");
 			expectEquals(sum, 5, "Should process voice 5 (value=5)");
 		}
 	}
 
-	/** Setup: PolyData with PolyHandler, ScopedAllVoiceSetter active (simulating UI thread).
+	/** Setup: PolyData with PolyHandler, ScopedAllVoiceSetter active.
 	 *
-	 *  Scenario: Call forEachCurrentVoice() with counting lambda.
+	 *  Scenario: Use range-based for loop to iterate all voices.
 	 *
-	 *  Expected: Lambda called NUM_POLYPHONIC_VOICES times.
+	 *  Expected: Loop executes NUM_POLYPHONIC_VOICES times.
 	 */
-	void testPolyDataForEachAllVoices()
+	void testPolyDataIterateAllVoices()
 	{
-		beginTest("PolyData forEachCurrentVoice iterates all voices when isAllThread()");
+		beginTest("PolyData range-for iterates all voices with ScopedAllVoiceSetter");
 
 		PolyHandler localPolyHandler(true);
 		PolyData<int, NUM_POLYPHONIC_VOICES> polyData;
@@ -1879,67 +1802,29 @@ struct NodeUIUpdaterTests : public juce::UnitTest
 			polyData.getWithIndex(i) = 1;
 
 		{
-			// ScopedAllVoiceSetter makes isAllThread() return true
 			PolyHandler::ScopedAllVoiceSetter avs(localPolyHandler);
 
 			int count = 0;
-			polyData.forEachCurrentVoice([&](int& v) {
+			for (auto& v : polyData)
 				count++;
-			});
 
-			expectEquals(count, NUM_POLYPHONIC_VOICES, "Lambda should be called for all voices");
+			expectEquals(count, NUM_POLYPHONIC_VOICES, "Should iterate all voices");
 		}
 	}
 
-	/** Setup: PolyData with PolyHandler, ScopedVoiceSetter(5) active.
-	 *
-	 *  Scenario: Call forEachCurrentVoice() with AccessType::ForceAllVoices.
-	 *
-	 *  Expected: Lambda called NUM_POLYPHONIC_VOICES times despite single-voice context.
-	 */
-	void testPolyDataForEachForceAll()
-	{
-		beginTest("PolyData forEachCurrentVoice iterates all voices with ForceAllVoices");
-
-		PolyHandler localPolyHandler(true);
-		PolyData<int, NUM_POLYPHONIC_VOICES> polyData;
-
-		PrepareSpecs specs;
-		specs.sampleRate = 44100.0;
-		specs.blockSize = 512;
-		specs.numChannels = 2;
-		specs.voiceIndex = &localPolyHandler;
-		polyData.prepare(specs);
-
-		for (int i = 0; i < NUM_POLYPHONIC_VOICES; i++)
-			polyData.getWithIndex(i) = 1;
-
-		{
-			PolyHandler::ScopedVoiceSetter svs(localPolyHandler, 5);
-
-			// ForceAllVoices should make forEachCurrentVoice iterate all voices
-			// even though we're in a single-voice context (voice 5)
-			int count = 0;
-			polyData.forEachCurrentVoice([&](int& v) {
-				count++;
-			}, PolyHandler::AccessType::ForceAllVoices);
-
-			expectEquals(count, NUM_POLYPHONIC_VOICES, "Lambda should be called for all voices with ForceAllVoices");
-		}
-	}
+	// =========================================
+	// PolyData Tests - all()
+	// =========================================
 
 	/** Setup: PolyData with PolyHandler, ScopedVoiceSetter(5) active.
 	 *
-	 *  Scenario: Call forEachCurrentVoice() with each AccessType value and verify behavior.
+	 *  Scenario: Call all() and iterate, counting elements.
 	 *
-	 *  Expected:
-	 *  - RequireCached: single voice (voice 5) processed via get()
-	 *  - AllowUncached: single voice (voice 5) processed via get()
-	 *  - ForceAllVoices: all voices processed
+	 *  Expected: all() always iterates ALL voices regardless of voice context.
 	 */
-	void testForEachCurrentVoiceWithAccessType()
+	void testPolyDataAllReturnsAllVoices()
 	{
-		beginTest("forEachCurrentVoice AccessType controls iteration behavior");
+		beginTest("PolyData all() always iterates all voices");
 
 		PolyHandler localPolyHandler(true);
 		PolyData<int, NUM_POLYPHONIC_VOICES> polyData;
@@ -1954,54 +1839,61 @@ struct NodeUIUpdaterTests : public juce::UnitTest
 		for (int i = 0; i < NUM_POLYPHONIC_VOICES; i++)
 			polyData.getWithIndex(i) = i;
 
-		// RequireCached: processes only the active voice
-		{
-			PolyHandler::ScopedVoiceSetter svs(localPolyHandler, 5);
-			PolyData<int, NUM_POLYPHONIC_VOICES>::ScopedVoiceIndexCacher cacher(polyData);
-
-			int count = 0;
-			int sum = 0;
-			polyData.forEachCurrentVoice([&](int& v) {
-				count++;
-				sum += v;
-			}, PolyHandler::AccessType::RequireCached);
-
-			expectEquals(count, 1, "RequireCached: should process single voice");
-			expectEquals(sum, 5, "RequireCached: should process voice 5");
-		}
-
-		// AllowUncached: also processes only the active voice (no cacher needed)
-		{
-			PolyHandler::ScopedVoiceSetter svs(localPolyHandler, 3);
-
-			int count = 0;
-			int sum = 0;
-			polyData.forEachCurrentVoice([&](int& v) {
-				count++;
-				sum += v;
-			}, PolyHandler::AccessType::AllowUncached);
-
-			expectEquals(count, 1, "AllowUncached: should process single voice");
-			expectEquals(sum, 3, "AllowUncached: should process voice 3");
-		}
-
-		// ForceAllVoices: processes all voices regardless of context
+		// With ScopedVoiceSetter active, all() should STILL iterate all voices
 		{
 			PolyHandler::ScopedVoiceSetter svs(localPolyHandler, 5);
 
 			int count = 0;
 			int sum = 0;
-			polyData.forEachCurrentVoice([&](int& v) {
+			for (auto& v : polyData.all())
+			{
 				count++;
 				sum += v;
-			}, PolyHandler::AccessType::ForceAllVoices);
+			}
 
-			int expectedSum = 0;
-			for (int i = 0; i < NUM_POLYPHONIC_VOICES; i++)
-				expectedSum += i;
+			expectEquals(count, NUM_POLYPHONIC_VOICES, "all() should iterate all voices");
+			int expectedSum = (NUM_POLYPHONIC_VOICES - 1) * NUM_POLYPHONIC_VOICES / 2;
+			expectEquals(sum, expectedSum, "all() should access all voice data");
+		}
+	}
 
-			expectEquals(count, NUM_POLYPHONIC_VOICES, "ForceAllVoices: should process all voices");
-			expectEquals(sum, expectedSum, "ForceAllVoices: should have correct sum of all voices");
+	/** Setup: PolyData with PolyHandler, all() used for clearing state.
+	 *
+	 *  Scenario: Use all() to set all voices to 0 while inside a single voice context.
+	 *
+	 *  Expected: All voices are cleared regardless of voice context.
+	 */
+	void testPolyDataAllIgnoresVoiceContext()
+	{
+		beginTest("PolyData all() ignores voice context for operations like clearing");
+
+		PolyHandler localPolyHandler(true);
+		PolyData<int, NUM_POLYPHONIC_VOICES> polyData;
+
+		PrepareSpecs specs;
+		specs.sampleRate = 44100.0;
+		specs.blockSize = 512;
+		specs.numChannels = 2;
+		specs.voiceIndex = &localPolyHandler;
+		polyData.prepare(specs);
+
+		// Initialize all voices to non-zero
+		for (int i = 0; i < NUM_POLYPHONIC_VOICES; i++)
+			polyData.getWithIndex(i) = 100 + i;
+
+		// Clear all voices while inside voice 5 context
+		{
+			PolyHandler::ScopedVoiceSetter svs(localPolyHandler, 5);
+
+			for (auto& v : polyData.all())
+				v = 0;
+		}
+
+		// Verify ALL voices were cleared
+		for (int i = 0; i < NUM_POLYPHONIC_VOICES; i++)
+		{
+			expectEquals(polyData.getWithIndex(i), 0,
+				"Voice " + juce::String(i) + " should be cleared by all()");
 		}
 	}
 
@@ -2341,58 +2233,6 @@ struct NodeUIUpdaterTests : public juce::UnitTest
 	// PolyData Multi-Threaded Tests
 	// =========================================
 
-	/** Setup: AsyncUpdater with PolyData, ScopedVoiceIndexCacher used in audio thread.
-	 *
-	 *  Scenario: Audio thread creates cacher, calls get() multiple times per callback.
-	 *  Verify cacher optimization is active (same pointer returned).
-	 *
-	 *  Expected: get() returns consistent pointer throughout each callback.
-	 */
-	void testPolyDataCacherUnderLoad()
-	{
-		beginTest("PolyData ScopedVoiceIndexCacher optimization under load");
-
-		setupAsyncTest();
-
-		PolyData<int, NUM_POLYPHONIC_VOICES> polyData;
-		polyData.prepare(createDefaultSpecs());
-
-		std::atomic<int> audioCallbacks { 0 };
-		std::atomic<int> cacherWorked { 0 };
-
-		auto result = runThreadedTest(
-			AudioThread([&]()
-			{
-				PolyHandler::ScopedVoiceSetter svs(polyHandler, audioCallbacks % NUM_POLYPHONIC_VOICES);
-
-				// Create cacher
-				PolyData<int, NUM_POLYPHONIC_VOICES>::ScopedVoiceIndexCacher cacher(polyData);
-
-				// Multiple get() calls should return same pointer
-				int* ptr1 = &polyData.get();
-				int* ptr2 = &polyData.get();
-				int* ptr3 = &polyData.get();
-
-				if (ptr1 == ptr2 && ptr2 == ptr3)
-					cacherWorked++;
-
-				asyncNode->triggerAsyncUpdate();
-				audioCallbacks++;
-			}),
-			UIThread([&]()
-			{
-				// Just pump messages
-			}),
-			StopWhen([&]()
-			{
-				return audioCallbacks >= 50;
-			})
-		);
-
-		expect(result.completed, "Should complete without timeout");
-		expectEquals(cacherWorked.load(), 50, "Cacher should work for all 50 callbacks");
-	}
-
 	/** Setup: Timer with PolyData, audio writes per-voice, UI reads all.
 	 *
 	 *  Scenario: Audio thread writes to current voice slot. UI thread iterates
@@ -2467,19 +2307,16 @@ struct NodeUIUpdaterTests : public juce::UnitTest
 	// PolyData Thread Safety Scenario Tests
 	// =========================================
 
-	/** Setup: PolyData with PolyHandler. Audio thread has ScopedVoiceSetter(5) active.
+	/** Setup: PolyData with PolyHandler. ScopedVoiceSetter(5) active.
 	 *
-	 *  Scenario: Another thread (simulating UI) calls forEachCurrentVoice() WITHOUT
-	 *  ScopedAllVoiceSetter while the audio thread's voiceIndex is 5.
-	 *  This demonstrates the Scenario #6 race condition.
+	 *  Scenario: Use range-based for loop WITHOUT ScopedAllVoiceSetter 
+	 *  while voiceIndex is 5. This demonstrates Scenario #6 bug.
 	 *
-	 *  Expected: Without ScopedAllVoiceSetter, getVoiceIndex() returns 5 (the audio
-	 *  thread's value), so forEachCurrentVoice() only updates voice 5 instead of all.
-	 *  This proves why ScopedAllVoiceSetter is required for non-audio-thread access.
+	 *  Expected: Only voice 5 updated (the bug without protection).
 	 */
 	void testScenario6RaceWithoutProtection()
 	{
-		beginTest("Scenario #6: UI thread without ScopedAllVoiceSetter reads stale voiceIndex");
+		beginTest("Scenario #6: range-for without ScopedAllVoiceSetter reads stale voiceIndex");
 
 		PolyHandler localPolyHandler(true);
 		PolyData<int, NUM_POLYPHONIC_VOICES> polyData;
@@ -2491,37 +2328,30 @@ struct NodeUIUpdaterTests : public juce::UnitTest
 		specs.voiceIndex = &localPolyHandler;
 		polyData.prepare(specs);
 
-		// Initialize all voices to 0
 		for (int i = 0; i < NUM_POLYPHONIC_VOICES; i++)
 			polyData.getWithIndex(i) = 0;
 
 		// Simulate audio thread setting voiceIndex to 5
 		PolyHandler::ScopedVoiceSetter svs(localPolyHandler, 5);
 
-		// Now simulate a UI thread parameter setter calling forEachCurrentVoice
-		// WITHOUT ScopedAllVoiceSetter - this is the bug scenario.
-		// Since we're on the same thread, getVoiceIndex() returns 5.
+		// Without ScopedAllVoiceSetter, range-for only processes voice 5
 		int voicesUpdated = 0;
-		polyData.forEachCurrentVoice([&](int& v) {
+		for (auto& v : polyData)
+		{
 			v = 42;
 			voicesUpdated++;
-		}, PolyHandler::AccessType::AllowUncached);
+		}
 
-		// BUG: only voice 5 was updated
 		expectEquals(voicesUpdated, 1, "Without ScopedAllVoiceSetter, only 1 voice updated (the bug)");
 		expectEquals(polyData.getWithIndex(5), 42, "Voice 5 should be updated");
 		expectEquals(polyData.getWithIndex(0), 0, "Voice 0 should NOT be updated (demonstrates the bug)");
-		expectEquals(polyData.getWithIndex(3), 0, "Voice 3 should NOT be updated (demonstrates the bug)");
 	}
 
-	/** Setup: PolyData with PolyHandler. Audio thread has ScopedVoiceSetter(5) active.
+	/** Setup: PolyData with PolyHandler. ScopedVoiceSetter(5) active.
 	 *
-	 *  Scenario: Another thread (simulating UI) wraps access with ScopedAllVoiceSetter
-	 *  while the audio thread's voiceIndex is 5. This demonstrates the fix.
+	 *  Scenario: Use range-based for loop WITH ScopedAllVoiceSetter (the fix).
 	 *
-	 *  Expected: With ScopedAllVoiceSetter, getVoiceIndex() returns -1 (all voices),
-	 *  so forEachCurrentVoice() correctly updates ALL voices regardless of the audio
-	 *  thread's voiceIndex state.
+	 *  Expected: All voices updated.
 	 */
 	void testScenario6FixWithScopedAllVoiceSetter()
 	{
@@ -2537,28 +2367,25 @@ struct NodeUIUpdaterTests : public juce::UnitTest
 		specs.voiceIndex = &localPolyHandler;
 		polyData.prepare(specs);
 
-		// Initialize all voices to 0
 		for (int i = 0; i < NUM_POLYPHONIC_VOICES; i++)
 			polyData.getWithIndex(i) = 0;
 
-		// Simulate audio thread setting voiceIndex to 5
 		PolyHandler::ScopedVoiceSetter svs(localPolyHandler, 5);
 
-		// Now simulate a UI thread parameter setter WITH ScopedAllVoiceSetter (the fix)
 		{
 			PolyHandler::ScopedAllVoiceSetter avs(localPolyHandler);
 
 			int voicesUpdated = 0;
-			polyData.forEachCurrentVoice([&](int& v) {
+			for (auto& v : polyData)
+			{
 				v = 42;
 				voicesUpdated++;
-			}, PolyHandler::AccessType::AllowUncached);
+			}
 
 			expectEquals(voicesUpdated, NUM_POLYPHONIC_VOICES,
 				"With ScopedAllVoiceSetter, ALL voices should be updated");
 		}
 
-		// Verify all voices were updated
 		for (int i = 0; i < NUM_POLYPHONIC_VOICES; i++)
 		{
 			expectEquals(polyData.getWithIndex(i), 42,
@@ -2603,14 +2430,11 @@ struct NodeUIUpdaterTests : public juce::UnitTest
 		expect(!localPolyHandler.isAllThread(), "Should not be allThread after all wrappers destroyed");
 	}
 
-	/** Setup: PolyData with PolyHandler, voiceIndex = -1 (no ScopedVoiceSetter active).
+	/** Setup: PolyData with PolyHandler, voiceIndex = -1 (no ScopedVoiceSetter).
 	 *
-	 *  Scenario: Simulate the audio thread before voice rendering (e.g., MIDI CC
-	 *  handling). Call forEachCurrentVoice() without any ScopedAllVoiceSetter.
-	 *  This tests the Scenario #7 pattern (MIDI CC -> parameter setter -> PolyData).
+	 *  Scenario: Audio thread before voice rendering uses range-for loop.
 	 *
-	 *  Expected: All voices are updated because voiceIndex is -1 (natural state).
-	 *  No ScopedAllVoiceSetter needed because we're on the audio thread - no race.
+	 *  Expected: All voices updated (voiceIndex = -1 means iterate all).
 	 */
 	void testScenario7AudioThreadNoProtectionNeeded()
 	{
@@ -2626,146 +2450,26 @@ struct NodeUIUpdaterTests : public juce::UnitTest
 		specs.voiceIndex = &localPolyHandler;
 		polyData.prepare(specs);
 
-		// Initialize all voices to 0
 		for (int i = 0; i < NUM_POLYPHONIC_VOICES; i++)
 			polyData.getWithIndex(i) = 0;
 
-		// No ScopedVoiceSetter active (simulates audio thread before voice rendering)
-		// voiceIndex is -1, no ScopedAllVoiceSetter needed
+		// No ScopedVoiceSetter active (voiceIndex = -1)
 		int voicesUpdated = 0;
-		polyData.forEachCurrentVoice([&](int& v) {
+		for (auto& v : polyData)
+		{
 			v = 99;
 			voicesUpdated++;
-		}, PolyHandler::AccessType::AllowUncached);
+		}
 
 		expectEquals(voicesUpdated, NUM_POLYPHONIC_VOICES,
-			"All voices should be updated when voiceIndex = -1 (no protection needed)");
+			"All voices should be updated when voiceIndex = -1");
 
-		// Verify all voices were updated
 		for (int i = 0; i < NUM_POLYPHONIC_VOICES; i++)
 		{
 			expectEquals(polyData.getWithIndex(i), 99,
 				"Voice " + String(i) + " should be updated to 99");
 		}
 	}
-
-	// =========================================
-	// PolyData Debug Counter Tests
-	// =========================================
-
-#if JUCE_DEBUG
-	/** Setup: PolyData with PolyHandler, no ScopedVoiceIndexCacher.
-	 *
-	 *  Scenario: Call get(AccessType::AllowUncached) many times.
-	 *
-	 *  Expected: No assertion fires because AllowUncached bypasses the counter.
-	 */
-	void testPolyDataAllowUncachedNoAssertion()
-	{
-		beginTest("PolyData get(AllowUncached) does not trigger assertion");
-
-		PolyHandler localPolyHandler(true);
-		PolyData<int, NUM_POLYPHONIC_VOICES> polyData;
-
-		PrepareSpecs specs;
-		specs.sampleRate = 44100.0;
-		specs.blockSize = 512;
-		specs.numChannels = 2;
-		specs.voiceIndex = &localPolyHandler;
-		polyData.prepare(specs);
-
-		{
-			PolyHandler::ScopedVoiceSetter svs(localPolyHandler, 3);
-
-			// Call get(AllowUncached) more than threshold times - should NOT assert
-			for (int i = 0; i < 100; i++)
-			{
-				polyData.get(PolyHandler::AccessType::AllowUncached) = i;
-			}
-		}
-
-		// If we reach here, no assertion fired
-		expect(true, "get(AllowUncached) should not trigger assertion after 100 calls");
-	}
-
-	/** Setup: PolyData with PolyHandler, no ScopedVoiceIndexCacher, then activate cacher.
-	 *
-	 *  Scenario: Call get() 50 times (below threshold), then activate cacher and get(),
-	 *  then deactivate cacher and call get() 50 more times.
-	 *
-	 *  Expected: Counter resets when cacher is active, so total uncached calls stay below threshold.
-	 */
-	void testPolyDataCounterResetOnCachedAccess()
-	{
-		beginTest("PolyData debug counter resets when ScopedVoiceIndexCacher is used");
-
-		PolyHandler localPolyHandler(true);
-		PolyData<int, NUM_POLYPHONIC_VOICES> polyData;
-
-		PrepareSpecs specs;
-		specs.sampleRate = 44100.0;
-		specs.blockSize = 512;
-		specs.numChannels = 2;
-		specs.voiceIndex = &localPolyHandler;
-		polyData.prepare(specs);
-
-		{
-			PolyHandler::ScopedVoiceSetter svs(localPolyHandler, 3);
-
-			// Call get() 50 times (below threshold of 64)
-			for (int i = 0; i < 50; i++)
-				polyData.get(PolyHandler::AccessType::AllowUncached);
-
-			// Now activate cacher
-			{
-				PolyData<int, NUM_POLYPHONIC_VOICES>::ScopedVoiceIndexCacher cacher(polyData);
-				polyData.get(); // This should reset the counter
-			}
-
-			// Call get() 50 more times (below threshold again because counter was reset)
-			for (int i = 0; i < 50; i++)
-				polyData.get(PolyHandler::AccessType::AllowUncached);
-		}
-
-		// If we reach here, the counter was properly reset
-		expect(true, "Counter should reset when ScopedVoiceIndexCacher is active");
-	}
-
-	/** Setup: PolyData with cached access via ScopedVoiceIndexCacher.
-	 *
-	 *  Scenario: Call get() many times while cacher is active.
-	 *
-	 *  Expected: No assertion because cached path is used, counter stays at 0.
-	 */
-	void testPolyDataCachedAccessNoAssertion()
-	{
-		beginTest("PolyData cached access does not trigger assertion");
-
-		PolyHandler localPolyHandler(true);
-		PolyData<int, NUM_POLYPHONIC_VOICES> polyData;
-
-		PrepareSpecs specs;
-		specs.sampleRate = 44100.0;
-		specs.blockSize = 512;
-		specs.numChannels = 2;
-		specs.voiceIndex = &localPolyHandler;
-		polyData.prepare(specs);
-
-		{
-			PolyHandler::ScopedVoiceSetter svs(localPolyHandler, 3);
-			PolyData<int, NUM_POLYPHONIC_VOICES>::ScopedVoiceIndexCacher cacher(polyData);
-
-			// Call get() many times with cacher active - should NOT increment counter
-			for (int i = 0; i < 1000; i++)
-			{
-				polyData.get() = i;
-			}
-		}
-
-		// If we reach here, no assertion fired
-		expect(true, "Cached get() should not trigger assertion even after 1000 calls");
-	}
-#endif // JUCE_DEBUG
 };
 
 static NodeUIUpdaterTests nodeUIUpdaterTests;
