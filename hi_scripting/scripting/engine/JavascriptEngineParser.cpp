@@ -920,15 +920,33 @@ private:
 		}
 		else if (cleanedFileName.startsWith("./") || cleanedFileName.startsWith("../"))
 		{
-			// Resolve relative to the directory of the currently parsed file
+			// Resolve relative to the directory of the currently parsed file.
+			// In compiled plugins, currentExternalFilePath may contain virtual
+			// prefixes like {GLOBAL_SCRIPT_FOLDER}, so use string-based resolution
+			// rather than File operations.
 			if (currentExternalFilePath.isNotEmpty())
 			{
-				File currentFile(currentExternalFilePath);
-				refFileName = currentFile.getParentDirectory().getChildFile(cleanedFileName).getFullPathName();
+				// Extract any prefix (e.g. {GLOBAL_SCRIPT_FOLDER}) and the path portion
+				String prefix;
+				String parentPath = currentExternalFilePath;
+
+				if (parentPath.contains("{GLOBAL_SCRIPT_FOLDER}"))
+				{
+					prefix = "{GLOBAL_SCRIPT_FOLDER}";
+					parentPath = parentPath.fromFirstOccurrenceOf("{GLOBAL_SCRIPT_FOLDER}", false, false);
+				}
+
+				// Get directory of parent file
+				String parentDir = parentPath.upToLastOccurrenceOf("/", true, false);
+
+				// Use a temp File to handle ./ and ../ navigation correctly
+				File resolved = File("/").getChildFile(parentDir).getChildFile(cleanedFileName);
+				String resolvedPath = resolved.getRelativePathFrom(File("/"));
+
+				refFileName = prefix + resolvedPath;
 			}
 			else
 			{
-				// No parent file context, use as-is for collection lookup
 				refFileName = cleanedFileName;
 			}
 		}
@@ -970,7 +988,7 @@ private:
 				}
 			}
 
-			return dynamic_cast<Processor*>(hiseSpecialData->processor)->getMainController()->getExternalScriptFromCollection(fileNameInScript);
+			return dynamic_cast<Processor*>(hiseSpecialData->processor)->getMainController()->getExternalScriptFromCollection(refFileName);
 		}
 #endif
 	};
