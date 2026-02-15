@@ -4449,7 +4449,8 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawToggleButton(Graphics &g_, 
 		setColourOrBlack(obj, "itemColour2", b, HiseColourScheme::ComponentFillBottomColourId);
 		setColourOrBlack(obj, "textColour", b, HiseColourScheme::ComponentTextColourId);
 
-		addParentFloatingTile(b, obj);
+		if (addParentFloatingTile(b, obj))
+			setColourOrBlack(obj, "itemColour3", b, ToggleButtonList::ItemColour3);
 
 		if (get()->callWithGraphics(g_, "drawToggleButton", var(obj), &b))
 			return;

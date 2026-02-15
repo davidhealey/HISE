@@ -74,7 +74,12 @@ public:
 		btblaf.f = f;
 	}
 
-	void setColoursForPanel(Colour bgColour, Colour textColour, Colour itemColour1, Colour itemColour2)
+	enum ColourIds
+	{
+		ItemColour3 = 0x1003500
+	};
+
+	void setColoursForPanel(Colour bgColour, Colour textColour, Colour itemColour1, Colour itemColour2, Colour itemColour3)
 	{
 		for (auto* b : buttons)
 		{
@@ -82,6 +87,7 @@ public:
 			b->setColour(HiseColourScheme::ComponentTextColourId, textColour);
 			b->setColour(HiseColourScheme::ComponentFillTopColourId, itemColour1);
 			b->setColour(HiseColourScheme::ComponentFillBottomColourId, itemColour2);
+			b->setColour(ItemColour3, itemColour3);
 		}
 	}
 

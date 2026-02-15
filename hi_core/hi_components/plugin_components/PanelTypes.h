@@ -140,6 +140,7 @@ A list with all MIDI channels that can be enabled or disabled.
 `ColourData::textColour`  | the text colour
 `ColourData::itemColour1`  | the first item colour
 `ColourData::itemColour2`  | the second item colour
+`ColourData::itemColour3`  | the third item colour
 
 ### Example JSON
 
@@ -190,6 +191,7 @@ A list with all available MIDI devices that can be enabled / disabled (similar t
 `ColourData::textColour`  | the text colour
 `ColourData::itemColour1`  | the first item colour
 `ColourData::itemColour2`  | the second item colour
+`ColourData::itemColour3`  | the third item colour
 
 ### Example JSON
 
