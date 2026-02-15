@@ -4459,12 +4459,26 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawToggleButton(Graphics &g_, 
 		obj->setProperty("down", b.isMouseButtonDown(true));
 		obj->setProperty("value", b.getToggleState());
 
-		setColourOrBlack(obj, "bgColour", b, HiseColourScheme::ComponentOutlineColourId);
-		setColourOrBlack(obj, "itemColour1", b, HiseColourScheme::ComponentFillTopColourId);
-		setColourOrBlack(obj, "itemColour2", b, HiseColourScheme::ComponentFillBottomColourId);
-		setColourOrBlack(obj, "textColour", b, HiseColourScheme::ComponentTextColourId);
-
-		addParentFloatingTile(b, obj);
+		if (auto ft = b.findParentComponentOfClass<TableFloatingTileBase>())
+		{
+			auto d = ft->getLookAndFeelData();
+			obj->setProperty("bgColour", d.bgColour.getARGB());
+			obj->setProperty("itemColour1", d.itemColour1.getARGB());
+			obj->setProperty("itemColour2", d.itemColour2.getARGB());
+			obj->setProperty("itemColour3", ft->findPanelColour(FloatingTileContent::PanelColourId::itemColour3).getARGB());
+			obj->setProperty("textColour", d.textColour.getARGB());
+			obj->setProperty("parentType", d.parentType);
+			obj->setProperty("fontSize", d.f.getHeight());
+			obj->setProperty("font", d.f.getTypefaceName());
+		}
+		else
+		{
+			setColourOrBlack(obj, "bgColour", b, HiseColourScheme::ComponentOutlineColourId);
+			setColourOrBlack(obj, "itemColour1", b, HiseColourScheme::ComponentFillTopColourId);
+			setColourOrBlack(obj, "itemColour2", b, HiseColourScheme::ComponentFillBottomColourId);
+			setColourOrBlack(obj, "textColour", b, HiseColourScheme::ComponentTextColourId);
+			addParentFloatingTile(b, obj);
+		}
 
 		if (get()->callWithGraphics(g_, "drawToggleButton", var(obj), &b))
 			return;
