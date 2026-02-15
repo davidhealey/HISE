@@ -212,6 +212,7 @@ MidiChannelPanel::MidiChannelPanel(FloatingTile* parent) :
 	setDefaultPanelColour(PanelColourId::textColour, Colours::white);
 	setDefaultPanelColour(PanelColourId::itemColour1, Colour(0x00000000));
 	setDefaultPanelColour(PanelColourId::itemColour2, Colour(0x00000000));
+	setDefaultPanelColour(PanelColourId::itemColour3, Colour(0x00000000));
 
 	StringArray channelNames;
 	channelNames.add("All Channels");
@@ -274,7 +275,8 @@ void MidiChannelPanel::resized()
 	channelList->setColoursForPanel(findPanelColour(PanelColourId::bgColour),
 	                                findPanelColour(PanelColourId::textColour),
 	                                findPanelColour(PanelColourId::itemColour1),
-	                                findPanelColour(PanelColourId::itemColour2));
+	                                findPanelColour(PanelColourId::itemColour2),
+	                                findPanelColour(PanelColourId::itemColour3));
 }
 
 MidiSourcePanel::MidiSourcePanel(FloatingTile* parent) :
@@ -284,6 +286,7 @@ MidiSourcePanel::MidiSourcePanel(FloatingTile* parent) :
 	setDefaultPanelColour(PanelColourId::textColour, Colours::white);
 	setDefaultPanelColour(PanelColourId::itemColour1, Colour(0x00000000));
 	setDefaultPanelColour(PanelColourId::itemColour2, Colour(0x00000000));
+	setDefaultPanelColour(PanelColourId::itemColour3, Colour(0x00000000));
 
     StringArray midiInputs;
 
@@ -331,7 +334,8 @@ void MidiSourcePanel::resized()
 	midiInputList->setColoursForPanel(findPanelColour(PanelColourId::bgColour),
 	                                  findPanelColour(PanelColourId::textColour),
 	                                  findPanelColour(PanelColourId::itemColour1),
-	                                  findPanelColour(PanelColourId::itemColour2));
+	                                  findPanelColour(PanelColourId::itemColour2),
+	                                  findPanelColour(PanelColourId::itemColour3));
 }
 
 void MidiSourcePanel::periodicCheckCallback(ToggleButtonList* list)
