@@ -2163,7 +2163,8 @@ void TableFloatingTileBase::paintCell(Graphics& g, int rowNumber, int columnId, 
 		if (lafToUse == nullptr)
 			lafToUse = &fallbackLaf;
 
-		lafToUse->drawTableCell(g, getLookAndFeelData(), text, rowNumber, columnId - 1, width, height, rowIsSelected, false, rowNumber == hoverRow);
+		auto visualIndex = table.getHeader().getIndexOfColumnId(columnId, true);
+		lafToUse->drawTableCell(g, getLookAndFeelData(), text, rowNumber, visualIndex, width, height, rowIsSelected, false, rowNumber == hoverRow);
 	}
 }
 
