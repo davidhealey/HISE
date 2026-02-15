@@ -1893,6 +1893,8 @@ void TableFloatingTileBase::resized()
 
 			if (root->css.getWithAllStates(this, simple_css::Selector("th")) != nullptr)
 				table.getHeader().setLookAndFeel(css_laf);
+			else if (dynamic_cast<LookAndFeelMethods*>(&getLookAndFeel()))
+				table.getHeader().setLookAndFeel(&getLookAndFeel());
 			else
 				table.getHeader().setLookAndFeel(laf);
 		}
@@ -1976,8 +1978,14 @@ void TableFloatingTileBase::resized()
 
 	}
 
-	
-	
+	if (css_laf == nullptr)
+	{
+		if (dynamic_cast<LookAndFeelMethods*>(&getLookAndFeel()))
+			table.getHeader().setLookAndFeel(&getLookAndFeel());
+		else
+			table.getHeader().setLookAndFeel(laf);
+	}
+
 	table.setBounds(getLocalBounds());
 }
 
