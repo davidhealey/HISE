@@ -853,7 +853,7 @@ protected:
 		void setRowAndColumn(const int newRow, bool value);
 		void buttonClicked(Button *b);;
 
-		ScopedPointer<TextButton> t;
+		ScopedPointer<ToggleButton> t;
 
 	private:
 

@@ -1653,20 +1653,10 @@ juce::String MidiLearnPanel::getCellText(int rowNumber, int columnId) const
 TableFloatingTileBase::InvertedButton::InvertedButton(TableFloatingTileBase &owner_) :
 	owner(owner_)
 {
-	laf.setFontForAll(owner.font);
-
-	addAndMakeVisible(t = new TextButton("Inverted"));
-	t->setButtonText("Inverted");
-	t->setLookAndFeel(&laf);
-	t->setConnectedEdges(Button::ConnectedOnLeft | Button::ConnectedOnRight);
+	addAndMakeVisible(t = new ToggleButton("Inverted"));
+	t->setButtonText("Normal");
 	t->addListener(this);
 	t->setTooltip("Invert the range of the macro control for this parameter.");
-	t->setColour(TextButton::buttonColourId, Colour(0x88000000));
-	t->setColour(TextButton::buttonOnColourId, Colour(0x88FFFFFF));
-	t->setColour(TextButton::textColourOnId, Colour(0xaa000000));
-	t->setColour(TextButton::textColourOffId, Colour(0x99ffffff));
-
-	t->setClickingTogglesState(true);
 }
 
 void TableFloatingTileBase::InvertedButton::resized()
@@ -2123,10 +2113,9 @@ Component* TableFloatingTileBase::refreshComponentForCell(int rowNumber, int col
 			b->t->setLookAndFeel(css_laf.get());
 		}
 		
-		b->t->setColour(TextButton::buttonOnColourId, itemColour1);
-		b->t->setColour(TextButton::textColourOnId, textColour);
-		b->t->setColour(TextButton::buttonColourId, Colours::transparentBlack);
-		b->t->setColour(TextButton::textColourOffId, textColour);
+		b->t->setColour(ToggleButton::textColourId, textColour);
+		b->t->setColour(ToggleButton::tickColourId, itemColour1);
+		b->t->setColour(ToggleButton::tickDisabledColourId, textColour);
 
 		b->setRowAndColumn(rowNumber, isInverted(rowNumber));
 
