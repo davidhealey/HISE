@@ -5536,7 +5536,7 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawTableHeaderColumn(Graphics&
 		obj->setProperty("textColour", d.textColour.getARGB());
 
 		obj->setProperty("text", columnName);
-		obj->setProperty("columnIndex", columnId);
+		obj->setProperty("columnIndex", h.getIndexOfColumnId(columnId, true));
 		obj->setProperty("hover", isMouseOver);
 		obj->setProperty("down", isMouseDown);
 
