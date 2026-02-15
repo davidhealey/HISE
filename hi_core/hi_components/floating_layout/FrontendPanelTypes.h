@@ -728,6 +728,8 @@ public:
 		virtual void drawTableCell(Graphics& g, const LookAndFeelData& d, const String& text, int rowNumber, int columnId, int width, int height, bool rowIsSelected, bool cellIsClicked, bool cellIsHovered);
 	};
 
+	LookAndFeelData getLookAndFeelData() const;
+
 	TableFloatingTileBase(FloatingTile* parent);
 	void initTable(bool addChannelColumn=false);
 
@@ -861,8 +863,6 @@ protected:
 		int columnId;
 		HiPropertyPanelLookAndFeel laf;
 	};
-
-	LookAndFeelData getLookAndFeelData() const;
 
 	TableListBox table;     // the table component itself
 	Font font;
