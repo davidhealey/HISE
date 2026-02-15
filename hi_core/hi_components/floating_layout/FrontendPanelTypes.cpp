@@ -1734,6 +1734,31 @@ void TableFloatingTileBase::ValueSliderColumn::sliderValueChanged(Slider *)
 		slider->setValue(actualValue, dontSendNotification);
 }
 
+void TableFloatingTileBase::LookAndFeelMethods::drawTableRowBackground(Graphics& g, const LookAndFeelData& d, int rowNumber, int width, int height, bool rowIsSelected, bool rowIsHovered)
+{
+	if (rowIsSelected)
+		g.fillAll(Colours::white.withAlpha(0.2f));
+}
+
+void TableFloatingTileBase::LookAndFeelMethods::drawTableCell(Graphics& g, const LookAndFeelData& d, const String& text, int rowNumber, int columnId, int width, int height, bool rowIsSelected, bool cellIsClicked, bool cellIsHovered)
+{
+	g.setColour(d.textColour);
+	g.setFont(d.f);
+	g.drawText(text, 2, 0, width - 4, height, Justification::centredLeft, true);
+}
+
+TableFloatingTileBase::LookAndFeelData TableFloatingTileBase::getLookAndFeelData() const
+{
+	LookAndFeelData d;
+	d.f = font;
+	d.textColour = textColour;
+	d.bgColour = findPanelColour(FloatingTileContent::PanelColourId::bgColour);
+	d.itemColour1 = itemColour1;
+	d.itemColour2 = itemColour2;
+	d.parentType = getIdentifierForBaseClass().toString();
+	return d;
+}
+
 TableFloatingTileBase::TableFloatingTileBase(FloatingTile* parent) :
 	FloatingTileContent(parent),
 	font(GLOBAL_FONT())
@@ -1840,12 +1865,17 @@ void TableFloatingTileBase::paintRowBackground(Graphics& g, int rowNumber, int w
 	}
 	else
 	{
-		if (rowIsSelected)
-		{
-			g.fillAll(Colours::white.withAlpha(0.2f));
-		}
+		auto point = table.getMouseXYRelative();
+		auto hoverRow = table.getRowContainingPosition(point.getX(), point.getY());
+
+		auto lafToUse = dynamic_cast<LookAndFeelMethods*>(&getLookAndFeel());
+
+		if (lafToUse == nullptr)
+			lafToUse = &fallbackLaf;
+
+		lafToUse->drawTableRowBackground(g, getLookAndFeelData(), rowNumber, width, height, rowIsSelected, rowNumber == hoverRow);
 	}
-	
+
 }
 
 void TableFloatingTileBase::resized()
@@ -2113,7 +2143,7 @@ void TableFloatingTileBase::paintCell(Graphics& g, int rowNumber, int columnId, 
 	{
 		Renderer r(nullptr, rootDialog.stateWatcher);
 		auto state = r.getPseudoClassFromComponent(this);
-                
+
 		if(rowIsSelected)
 			state |= (int)PseudoClassType::Focus;
 
@@ -2125,9 +2155,15 @@ void TableFloatingTileBase::paintCell(Graphics& g, int rowNumber, int columnId, 
 	}
 	else
 	{
-		g.setColour(textColour);
-		g.setFont(font);
-		g.drawText(text, 2, 0, width - 4, height, Justification::centredLeft, true);
+		auto point = table.getMouseXYRelative();
+		auto hoverRow = table.getRowContainingPosition(point.getX(), point.getY());
+
+		auto lafToUse = dynamic_cast<LookAndFeelMethods*>(&getLookAndFeel());
+
+		if (lafToUse == nullptr)
+			lafToUse = &fallbackLaf;
+
+		lafToUse->drawTableCell(g, getLookAndFeelData(), text, rowNumber, columnId, width, height, rowIsSelected, false, rowNumber == hoverRow);
 	}
 }
 

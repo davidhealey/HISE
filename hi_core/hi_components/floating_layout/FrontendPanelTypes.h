@@ -712,6 +712,22 @@ public:
 		columnWidthRatio
 	};
 
+	struct LookAndFeelData
+	{
+		Font f = GLOBAL_BOLD_FONT();
+		Colour textColour, bgColour, itemColour1, itemColour2;
+		String parentType;
+	};
+
+	struct LookAndFeelMethods
+	{
+		virtual ~LookAndFeelMethods() {}
+
+		virtual void drawTableRowBackground(Graphics& g, const LookAndFeelData& d, int rowNumber, int width, int height, bool rowIsSelected, bool rowIsHovered);
+
+		virtual void drawTableCell(Graphics& g, const LookAndFeelData& d, const String& text, int rowNumber, int columnId, int width, int height, bool rowIsSelected, bool cellIsClicked, bool cellIsHovered);
+	};
+
 	TableFloatingTileBase(FloatingTile* parent);
 	void initTable(bool addChannelColumn=false);
 
@@ -846,11 +862,14 @@ protected:
 		HiPropertyPanelLookAndFeel laf;
 	};
 
+	LookAndFeelData getLookAndFeelData() const;
+
 	TableListBox table;     // the table component itself
 	Font font;
 	int numRows;            // The number of rows of data we've got
 	ScopedPointer<TableHeaderLookAndFeel> laf;
 	ScopedPointer<simple_css::StyleSheetLookAndFeel> css_laf;
+	LookAndFeelMethods fallbackLaf;
 };
 
 
