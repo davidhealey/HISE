@@ -331,6 +331,7 @@ public:
 	Colour highlightColour;
 	Colour textColour;
 	Colour modalBackgroundColour;
+	Colour itemColour3;
 	Font font;
 };
 
