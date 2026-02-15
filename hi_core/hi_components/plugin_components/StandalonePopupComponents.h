@@ -74,6 +74,17 @@ public:
 		btblaf.f = f;
 	}
 
+	void setColoursForPanel(Colour bgColour, Colour textColour, Colour itemColour1, Colour itemColour2)
+	{
+		for (auto* b : buttons)
+		{
+			b->setColour(HiseColourScheme::ComponentOutlineColourId, bgColour);
+			b->setColour(HiseColourScheme::ComponentTextColourId, textColour);
+			b->setColour(HiseColourScheme::ComponentFillTopColourId, itemColour1);
+			b->setColour(HiseColourScheme::ComponentFillBottomColourId, itemColour2);
+		}
+	}
+
 private:
 
 	
