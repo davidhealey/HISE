@@ -4444,12 +4444,26 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawToggleButton(Graphics &g_, 
 		obj->setProperty("down", b.isMouseButtonDown(true));
 		obj->setProperty("value", b.getToggleState());
 
-		setColourOrBlack(obj, "bgColour", b, HiseColourScheme::ComponentOutlineColourId);
-		setColourOrBlack(obj, "itemColour1", b, HiseColourScheme::ComponentFillTopColourId);
-		setColourOrBlack(obj, "itemColour2", b, HiseColourScheme::ComponentFillBottomColourId);
-		setColourOrBlack(obj, "textColour", b, HiseColourScheme::ComponentTextColourId);
-
-		addParentFloatingTile(b, obj);
+		if (auto ft = b.findParentComponentOfClass<TableFloatingTileBase>())
+		{
+			auto d = ft->getLookAndFeelData();
+			obj->setProperty("bgColour", d.bgColour.getARGB());
+			obj->setProperty("itemColour1", d.itemColour1.getARGB());
+			obj->setProperty("itemColour2", d.itemColour2.getARGB());
+			obj->setProperty("itemColour3", ft->findPanelColour(FloatingTileContent::PanelColourId::itemColour3).getARGB());
+			obj->setProperty("textColour", d.textColour.getARGB());
+			obj->setProperty("parentType", d.parentType);
+			obj->setProperty("fontSize", d.f.getHeight());
+			obj->setProperty("font", d.f.getTypefaceName());
+		}
+		else
+		{
+			setColourOrBlack(obj, "bgColour", b, HiseColourScheme::ComponentOutlineColourId);
+			setColourOrBlack(obj, "itemColour1", b, HiseColourScheme::ComponentFillTopColourId);
+			setColourOrBlack(obj, "itemColour2", b, HiseColourScheme::ComponentFillBottomColourId);
+			setColourOrBlack(obj, "textColour", b, HiseColourScheme::ComponentTextColourId);
+			addParentFloatingTile(b, obj);
+		}
 
 		if (get()->callWithGraphics(g_, "drawToggleButton", var(obj), &b))
 			return;
@@ -4568,7 +4582,25 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawLinearSlider(Graphics &g, i
 			setColourOrBlack(obj, "textColour", *parentPack, Slider::trackColourId);
 		}
 
-		addParentFloatingTile(slider, obj);
+		if (auto ft = slider.findParentComponentOfClass<TableFloatingTileBase>())
+		{
+			auto d = ft->getLookAndFeelData();
+			obj->setProperty("bgColour", d.bgColour.getARGB());
+			obj->setProperty("itemColour1", d.itemColour1.getARGB());
+			obj->setProperty("itemColour2", d.itemColour2.getARGB());
+			obj->setProperty("itemColour3", ft->findPanelColour(FloatingTileContent::PanelColourId::itemColour3).getARGB());
+			obj->setProperty("textColour", d.textColour.getARGB());
+			obj->setProperty("parentType", d.parentType);
+			obj->setProperty("fontSize", d.f.getHeight());
+			obj->setProperty("font", d.f.getTypefaceName());
+
+			slider.setColour(Slider::textBoxOutlineColourId, Colours::transparentBlack);
+			slider.setTextBoxStyle(Slider::NoTextBox, true, 0, 0);
+		}
+		else
+		{
+			addParentFloatingTile(slider, obj);
+		}
 
 		if (get()->callWithGraphics(g, "drawLinearSlider", var(obj), &slider))
 			return;
@@ -4973,11 +5005,25 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawScrollbar(Graphics& g_, Scr
 		obj->setProperty("vertical", isScrollbarVertical);
 		obj->setProperty("over", isMouseOver);
 		obj->setProperty("down", isMouseDown);
-		setColourOrBlack(obj, "bgColour",    scrollbar, ScrollBar::ColourIds::backgroundColourId);
-		setColourOrBlack(obj, "itemColour",  scrollbar, ScrollBar::ColourIds::thumbColourId);
-		setColourOrBlack(obj, "itemColour2", scrollbar, ScrollBar::ColourIds::trackColourId);
-
-		addParentFloatingTile(scrollbar, obj);
+		if (auto ft = scrollbar.findParentComponentOfClass<TableFloatingTileBase>())
+		{
+			auto d = ft->getLookAndFeelData();
+			obj->setProperty("bgColour", d.bgColour.getARGB());
+			obj->setProperty("itemColour1", d.itemColour1.getARGB());
+			obj->setProperty("itemColour2", d.itemColour2.getARGB());
+			obj->setProperty("itemColour3", ft->findPanelColour(FloatingTileContent::PanelColourId::itemColour3).getARGB());
+			obj->setProperty("textColour", d.textColour.getARGB());
+			obj->setProperty("parentType", d.parentType);
+			obj->setProperty("font", d.f.getTypefaceName());
+			obj->setProperty("fontSize", d.f.getHeight());
+		}
+		else
+		{
+			setColourOrBlack(obj, "bgColour",    scrollbar, ScrollBar::ColourIds::backgroundColourId);
+			setColourOrBlack(obj, "itemColour",  scrollbar, ScrollBar::ColourIds::thumbColourId);
+			setColourOrBlack(obj, "itemColour2", scrollbar, ScrollBar::ColourIds::trackColourId);
+			addParentFloatingTile(scrollbar, obj);
+		}
 
 		if (get()->callWithGraphics(g_, "drawScrollbar", var(obj), &scrollbar))
 			return;
@@ -5432,7 +5478,10 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawTableRowBackground(Graphics
 		obj->setProperty("bgColour", d.bgColour.getARGB());
 		obj->setProperty("itemColour", d.itemColour1.getARGB());
 		obj->setProperty("itemColour2", d.itemColour2.getARGB());
+		obj->setProperty("itemColour3", d.itemColour3.getARGB());
 		obj->setProperty("textColour", d.textColour.getARGB());
+		obj->setProperty("font", d.f.getTypefaceName());
+		obj->setProperty("fontSize", d.f.getHeight());
 
 		obj->setProperty("rowIndex", rowNumber);
 		obj->setProperty("selected", rowIsSelected);
@@ -5458,7 +5507,10 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawTableCell(Graphics& g_, con
 		obj->setProperty("bgColour", d.bgColour.getARGB());
 		obj->setProperty("itemColour", d.itemColour1.getARGB());
 		obj->setProperty("itemColour2", d.itemColour2.getARGB());
+		obj->setProperty("itemColour3", d.itemColour3.getARGB());
 		obj->setProperty("textColour", d.textColour.getARGB());
+		obj->setProperty("font", d.f.getTypefaceName());
+		obj->setProperty("fontSize", d.f.getHeight());
 
 		obj->setProperty("text", text);
 		obj->setProperty("rowIndex", rowNumber);
@@ -5489,10 +5541,15 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawTableHeaderBackground(Graph
 		obj->setProperty("bgColour", d.bgColour.getARGB());
 		obj->setProperty("itemColour", d.itemColour1.getARGB());
 		obj->setProperty("itemColour2", d.itemColour2.getARGB());
+		obj->setProperty("itemColour3", d.itemColour3.getARGB());
 		obj->setProperty("textColour", d.textColour.getARGB());
+		obj->setProperty("font", d.f.getTypefaceName());
+		obj->setProperty("fontSize", d.f.getHeight());
 
 		auto a = h.getLocalBounds();
 		obj->setProperty("area", ApiHelpers::getVarRectangle(useRectangleClass, a.toFloat()));
+
+		addParentFloatingTile(h, obj);
 
 		if (get()->callWithGraphics(g_, "drawTableHeaderBackground", var(obj), &h))
 			return;
@@ -5512,10 +5569,13 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawTableHeaderColumn(Graphics&
 		obj->setProperty("bgColour", d.bgColour.getARGB());
 		obj->setProperty("itemColour", d.itemColour1.getARGB());
 		obj->setProperty("itemColour2", d.itemColour2.getARGB());
+		obj->setProperty("itemColour3", d.itemColour3.getARGB());
 		obj->setProperty("textColour", d.textColour.getARGB());
+		obj->setProperty("font", d.f.getTypefaceName());
+		obj->setProperty("fontSize", d.f.getHeight());
 
 		obj->setProperty("text", columnName);
-		obj->setProperty("columnIndex", columnId);
+		obj->setProperty("columnIndex", h.getIndexOfColumnId(columnId, true));
 		obj->setProperty("hover", isMouseOver);
 		obj->setProperty("down", isMouseDown);
 
@@ -5526,11 +5586,76 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawTableHeaderColumn(Graphics&
 
 		obj->setProperty("area", ApiHelpers::getVarRectangle(useRectangleClass, a.toFloat()));
 
+		addParentFloatingTile(h, obj);
+
 		if (get()->callWithGraphics(g_, "drawTableHeaderColumn", var(obj), &h))
 			return;
 	}
 
 	drawDefaultTableHeaderColumn(g_, h, columnName, columnId, width, height, isMouseOver, isMouseDown, columnFlags);
+}
+
+void ScriptingObjects::ScriptedLookAndFeel::Laf::drawTableRowBackground(Graphics& g_, const TableFloatingTileBase::LookAndFeelData& d, int rowNumber, int width, int height, bool rowIsSelected, bool rowIsHovered)
+{
+	if (functionDefined("drawTableRowBackground"))
+	{
+		auto obj = new DynamicObject();
+
+		obj->setProperty("bgColour", d.bgColour.getARGB());
+		obj->setProperty("itemColour", d.itemColour1.getARGB());
+		obj->setProperty("itemColour2", d.itemColour2.getARGB());
+		obj->setProperty("itemColour3", d.itemColour3.getARGB());
+		obj->setProperty("textColour", d.textColour.getARGB());
+		obj->setProperty("font", d.f.getTypefaceName());
+		obj->setProperty("fontSize", d.f.getHeight());
+
+		obj->setProperty("rowIndex", rowNumber);
+		obj->setProperty("selected", rowIsSelected);
+		obj->setProperty("hover", rowIsHovered);
+		obj->setProperty("parentType", d.parentType);
+
+		Rectangle<int> a(0, 0, width, height);
+
+		obj->setProperty("area", ApiHelpers::getVarRectangle(useRectangleClass, a.toFloat()));
+
+		if (get()->callWithGraphics(g_, "drawTableRowBackground", var(obj), nullptr))
+			return;
+	}
+
+	TableFloatingTileBase::LookAndFeelMethods::drawTableRowBackground(g_, d, rowNumber, width, height, rowIsSelected, rowIsHovered);
+}
+
+void ScriptingObjects::ScriptedLookAndFeel::Laf::drawTableCell(Graphics& g_, const TableFloatingTileBase::LookAndFeelData& d, const String& text, int rowNumber, int columnId, int width, int height, bool rowIsSelected, bool cellIsClicked, bool cellIsHovered)
+{
+	if (functionDefined("drawTableCell"))
+	{
+		auto obj = new DynamicObject();
+
+		obj->setProperty("bgColour", d.bgColour.getARGB());
+		obj->setProperty("itemColour", d.itemColour1.getARGB());
+		obj->setProperty("itemColour2", d.itemColour2.getARGB());
+		obj->setProperty("itemColour3", d.itemColour3.getARGB());
+		obj->setProperty("textColour", d.textColour.getARGB());
+		obj->setProperty("font", d.f.getTypefaceName());
+		obj->setProperty("fontSize", d.f.getHeight());
+
+		obj->setProperty("text", text);
+		obj->setProperty("rowIndex", rowNumber);
+		obj->setProperty("columnIndex", columnId);
+		obj->setProperty("selected", rowIsSelected);
+		obj->setProperty("clicked", cellIsClicked);
+		obj->setProperty("hover", cellIsHovered);
+		obj->setProperty("parentType", d.parentType);
+
+		Rectangle<int> a(0, 0, width, height);
+
+		obj->setProperty("area", ApiHelpers::getVarRectangle(useRectangleClass, a.toFloat()));
+
+		if (get()->callWithGraphics(g_, "drawTableCell", var(obj), nullptr))
+			return;
+	}
+
+	TableFloatingTileBase::LookAndFeelMethods::drawTableCell(g_, d, text, rowNumber, columnId, width, height, rowIsSelected, cellIsClicked, cellIsHovered);
 }
 
 void ScriptingObjects::ScriptedLookAndFeel::Laf::drawMatrixPeakMeter(Graphics& g_, float* peakValues, float* maxPeaks, int numChannels, bool isVertical, float segmentSize, float paddingSize, Component* c)
