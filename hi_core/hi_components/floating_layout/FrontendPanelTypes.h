@@ -723,8 +723,6 @@ public:
 	{
 		virtual ~LookAndFeelMethods() {}
 
-		virtual void drawTableBackground(Graphics& g, const LookAndFeelData& d, int width, int height);
-
 		virtual void drawTableRowBackground(Graphics& g, const LookAndFeelData& d, int rowNumber, int width, int height, bool rowIsSelected, bool rowIsHovered);
 
 		virtual void drawTableCell(Graphics& g, const LookAndFeelData& d, const String& text, int rowNumber, int columnId, int width, int height, bool rowIsSelected, bool cellIsClicked, bool cellIsHovered);
@@ -787,12 +785,6 @@ public:
 				//b = ss->getBounds(b, PseudoState(r.getPseudoClassState()));
 				r.drawBackground(g, b, ss);
 			}
-		}
-
-		if (auto* tlaf = dynamic_cast<LookAndFeelMethods*>(&getLookAndFeel()))
-		{
-			auto d = getLookAndFeelData();
-			tlaf->drawTableBackground(g, d, getWidth(), getHeight());
 		}
 	}
 

@@ -5582,32 +5582,6 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawTableHeaderColumn(Graphics&
 	drawDefaultTableHeaderColumn(g_, h, columnName, columnId, width, height, isMouseOver, isMouseDown, columnFlags);
 }
 
-void ScriptingObjects::ScriptedLookAndFeel::Laf::drawTableBackground(Graphics& g_, const TableFloatingTileBase::LookAndFeelData& d, int width, int height)
-{
-	if (functionDefined("drawTableBackground"))
-	{
-		auto obj = new DynamicObject();
-
-		obj->setProperty("bgColour", d.bgColour.getARGB());
-		obj->setProperty("itemColour", d.itemColour1.getARGB());
-		obj->setProperty("itemColour2", d.itemColour2.getARGB());
-		obj->setProperty("itemColour3", d.itemColour3.getARGB());
-		obj->setProperty("textColour", d.textColour.getARGB());
-		obj->setProperty("font", d.f.getTypefaceName());
-		obj->setProperty("fontSize", d.f.getHeight());
-		obj->setProperty("parentType", d.parentType);
-
-		Rectangle<int> a(0, 0, width, height);
-
-		obj->setProperty("area", ApiHelpers::getVarRectangle(useRectangleClass, a.toFloat()));
-
-		if (get()->callWithGraphics(g_, "drawTableBackground", var(obj), nullptr))
-			return;
-	}
-
-	TableFloatingTileBase::LookAndFeelMethods::drawTableBackground(g_, d, width, height);
-}
-
 void ScriptingObjects::ScriptedLookAndFeel::Laf::drawTableRowBackground(Graphics& g_, const TableFloatingTileBase::LookAndFeelData& d, int rowNumber, int width, int height, bool rowIsSelected, bool rowIsHovered)
 {
 	if (functionDefined("drawTableRowBackground"))
