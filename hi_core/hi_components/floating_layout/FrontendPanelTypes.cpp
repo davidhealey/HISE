@@ -2083,10 +2083,11 @@ Component* TableFloatingTileBase::refreshComponentForCell(int rowNumber, int col
 
 		slider->slider->setDoubleClickReturnValue(true, columnId == Maximum ? fullRange.end : fullRange.start);
 
+		slider->slider->setComponentID(columnId == Maximum ? "max" : "min");
 		slider->slider->setColour(Slider::ColourIds::backgroundColourId, Colours::transparentBlack);
 		slider->slider->setColour(Slider::ColourIds::thumbColourId, itemColour1);
 		slider->slider->setColour(Slider::ColourIds::textBoxTextColourId, textColour);
-		
+
 		slider->setRowAndColumn(rowNumber, (ColumnId)columnId, value, fullRange);
 
 		ValueToTextConverter vtc = getValueToTextConverter(rowNumber);
