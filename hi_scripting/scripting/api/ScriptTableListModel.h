@@ -76,7 +76,7 @@ struct ScriptTableListModel : public juce::TableListBoxModel,
 
 		Font f = GLOBAL_BOLD_FONT();
 		Justification c = Justification::centredLeft;
-		Colour textColour, bgColour, itemColour1, itemColour2;
+		Colour textColour, bgColour, itemColour1, itemColour2, itemColour3;
 	};
 
 	struct LookAndFeelMethods

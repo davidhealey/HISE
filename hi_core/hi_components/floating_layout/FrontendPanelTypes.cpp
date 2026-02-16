@@ -1745,6 +1745,7 @@ TableFloatingTileBase::LookAndFeelData TableFloatingTileBase::getLookAndFeelData
 	d.bgColour = findPanelColour(FloatingTileContent::PanelColourId::bgColour);
 	d.itemColour1 = itemColour1;
 	d.itemColour2 = itemColour2;
+	d.itemColour3 = findPanelColour(FloatingTileContent::PanelColourId::itemColour3);
 	d.parentType = getIdentifierForBaseClass().toString();
 	return d;
 }

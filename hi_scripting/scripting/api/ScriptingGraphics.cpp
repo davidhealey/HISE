@@ -5465,7 +5465,10 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawTableRowBackground(Graphics
 		obj->setProperty("bgColour", d.bgColour.getARGB());
 		obj->setProperty("itemColour", d.itemColour1.getARGB());
 		obj->setProperty("itemColour2", d.itemColour2.getARGB());
+		obj->setProperty("itemColour3", d.itemColour3.getARGB());
 		obj->setProperty("textColour", d.textColour.getARGB());
+		obj->setProperty("font", d.f.getTypefaceName());
+		obj->setProperty("fontSize", d.f.getHeight());
 
 		obj->setProperty("rowIndex", rowNumber);
 		obj->setProperty("selected", rowIsSelected);
@@ -5491,7 +5494,10 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawTableCell(Graphics& g_, con
 		obj->setProperty("bgColour", d.bgColour.getARGB());
 		obj->setProperty("itemColour", d.itemColour1.getARGB());
 		obj->setProperty("itemColour2", d.itemColour2.getARGB());
+		obj->setProperty("itemColour3", d.itemColour3.getARGB());
 		obj->setProperty("textColour", d.textColour.getARGB());
+		obj->setProperty("font", d.f.getTypefaceName());
+		obj->setProperty("fontSize", d.f.getHeight());
 
 		obj->setProperty("text", text);
 		obj->setProperty("rowIndex", rowNumber);
@@ -5522,7 +5528,10 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawTableHeaderBackground(Graph
 		obj->setProperty("bgColour", d.bgColour.getARGB());
 		obj->setProperty("itemColour", d.itemColour1.getARGB());
 		obj->setProperty("itemColour2", d.itemColour2.getARGB());
+		obj->setProperty("itemColour3", d.itemColour3.getARGB());
 		obj->setProperty("textColour", d.textColour.getARGB());
+		obj->setProperty("font", d.f.getTypefaceName());
+		obj->setProperty("fontSize", d.f.getHeight());
 
 		auto a = h.getLocalBounds();
 		obj->setProperty("area", ApiHelpers::getVarRectangle(useRectangleClass, a.toFloat()));
@@ -5547,7 +5556,10 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawTableHeaderColumn(Graphics&
 		obj->setProperty("bgColour", d.bgColour.getARGB());
 		obj->setProperty("itemColour", d.itemColour1.getARGB());
 		obj->setProperty("itemColour2", d.itemColour2.getARGB());
+		obj->setProperty("itemColour3", d.itemColour3.getARGB());
 		obj->setProperty("textColour", d.textColour.getARGB());
+		obj->setProperty("font", d.f.getTypefaceName());
+		obj->setProperty("fontSize", d.f.getHeight());
 
 		obj->setProperty("text", columnName);
 		obj->setProperty("columnIndex", h.getIndexOfColumnId(columnId, true));
@@ -5579,7 +5591,10 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawTableRowBackground(Graphics
 		obj->setProperty("bgColour", d.bgColour.getARGB());
 		obj->setProperty("itemColour", d.itemColour1.getARGB());
 		obj->setProperty("itemColour2", d.itemColour2.getARGB());
+		obj->setProperty("itemColour3", d.itemColour3.getARGB());
 		obj->setProperty("textColour", d.textColour.getARGB());
+		obj->setProperty("font", d.f.getTypefaceName());
+		obj->setProperty("fontSize", d.f.getHeight());
 
 		obj->setProperty("rowIndex", rowNumber);
 		obj->setProperty("selected", rowIsSelected);
@@ -5606,7 +5621,10 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawTableCell(Graphics& g_, con
 		obj->setProperty("bgColour", d.bgColour.getARGB());
 		obj->setProperty("itemColour", d.itemColour1.getARGB());
 		obj->setProperty("itemColour2", d.itemColour2.getARGB());
+		obj->setProperty("itemColour3", d.itemColour3.getARGB());
 		obj->setProperty("textColour", d.textColour.getARGB());
+		obj->setProperty("font", d.f.getTypefaceName());
+		obj->setProperty("fontSize", d.f.getHeight());
 
 		obj->setProperty("text", text);
 		obj->setProperty("rowIndex", rowNumber);

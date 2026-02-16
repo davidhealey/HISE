@@ -724,6 +724,7 @@ ScriptTableListModel::LookAndFeelData ScriptTableListModel::LookAndFeelMethods::
 			d.bgColour = ftd.bgColour;
 			d.itemColour1 = ftd.itemColour1;
 			d.itemColour2 = ftd.itemColour2;
+			d.itemColour3 = ftd.itemColour3;
 			return d;
 		}
 	}
