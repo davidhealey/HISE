@@ -1795,9 +1795,9 @@ void TableFloatingTileBase::initTable(bool addChannelColumn)
 		table.getHeader().addColumn("Channel", Channel, fWidth, 30, -1, TableHeaderComponent::visible);
 
 	table.getHeader().addColumn("Parameter", ParameterName, 70, 30, -1);
-	table.getHeader().addColumn("Inverted", Inverted, 70, 70, 70);
-	table.getHeader().addColumn("Min", Minimum, 70, 70, 70);
-	table.getHeader().addColumn("Max", Maximum, 70, 70, 70);
+	table.getHeader().addColumn("Inverted", Inverted, 70, 30, -1);
+	table.getHeader().addColumn("Min", Minimum, 70, 30, -1);
+	table.getHeader().addColumn("Max", Maximum, 70, 30, -1);
 	table.getHeader().setStretchToFitActive(true);
 }
 
@@ -2019,13 +2019,15 @@ void TableFloatingTileBase::resized()
 
 		if (columnWidthRatios.size() == numCols)
 		{
+			table.getHeader().setStretchToFitActive(false);
 			auto w = (double)getWidth();
 
 			for (int i = 0; i < numCols; i++)
 			{
 				auto id = table.getHeader().getColumnIdOfIndex(i, true);
 				auto r = jlimit(0.0, 1.0, (double)columnWidthRatios[i]);
-				table.getHeader().setColumnWidth(id, roundToInt(w * r));
+				auto colWidth = roundToInt(w * r);
+				table.getHeader().setColumnWidth(id, colWidth);
 			}
 		}
 	}
