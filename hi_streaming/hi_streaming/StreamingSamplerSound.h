@@ -248,7 +248,16 @@ public:
 	}
 #else
 
+	const hlac::HiseSampleBuffer* getReleaseStartBuffer() const { return nullptr; }
+
+	float getCurrentReleasePeak() const
+	{
+		return 0.0f;
+	}
+
 	static constexpr bool isReleaseStartEnabled() { return false; }
+
+	void setIsReleaseSample(bool) {}
 
 #endif
 	

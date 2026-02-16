@@ -141,7 +141,12 @@ void GlobalModulatorContainer::restoreFromValueTree(const ValueTree &v)
 {
 	ModulatorSynth::restoreFromValueTree(v);
 
-	runtimeSource.restore(v.getChildWithName(MatrixIds::MatrixData), nullptr);
+	auto md = v.getChildWithName(MatrixIds::MatrixData);
+
+	if (md.isValid())
+		runtimeSource.restore(md, nullptr);
+	else
+		runtimeSource.clear();
 
 	refreshList();
 }

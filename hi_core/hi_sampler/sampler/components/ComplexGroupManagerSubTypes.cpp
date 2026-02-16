@@ -1476,7 +1476,10 @@ struct ComplexGroupManagerComponent::CustomBody: public LogicTypeComponent::Body
 
 		LOAD_EPATH_IF_URL("gain", HiBinaryData::ProcessorIcons::gainModulation);
 		LOAD_EPATH_IF_URL("group", HiBinaryData::SpecialSymbols::midiData);
+
+#if USE_BACKEND
 		LOAD_EPATH_IF_URL("dbg", BackendBinaryData::ToolbarIcons::debugPanel);
+#endif
 
 		return p;
 	}
