@@ -1785,9 +1785,9 @@ void TableFloatingTileBase::initTable(bool addChannelColumn)
 
 	auto first = getIndexName();
 
-	auto fWidth = (int)font.getStringWidthFloat(first) + 10;
+	auto fWidth = (int)font.getStringWidthFloat(first) + 20;
 
-	table.getHeader().addColumn(getIndexName(), CCNumber, fWidth, fWidth, fWidth, TableHeaderComponent::visible);
+	table.getHeader().addColumn(getIndexName(), CCNumber, fWidth, 30, -1, TableHeaderComponent::visible);
 
 	if(addChannelColumn)
 		table.getHeader().addColumn("Channel", Channel, fWidth, 30, -1, TableHeaderComponent::visible);
