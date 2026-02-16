@@ -4608,6 +4608,8 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawLinearSlider(Graphics &g, i
 			obj->setProperty("parentType", d.parentType);
 			obj->setProperty("fontSize", d.f.getHeight());
 			obj->setProperty("font", d.f.getTypefaceName());
+
+			slider.setTextBoxStyle(Slider::NoTextBox, true, 0, 0);
 		}
 		else
 		{
