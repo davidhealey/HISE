@@ -5028,6 +5028,14 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawScrollbar(Graphics& g_, Scr
 		setColourOrBlack(obj, "itemColour",  scrollbar, ScrollBar::ColourIds::thumbColourId);
 		setColourOrBlack(obj, "itemColour2", scrollbar, ScrollBar::ColourIds::trackColourId);
 
+		if (auto ft = scrollbar.findParentComponentOfClass<TableFloatingTileBase>())
+		{
+			auto d = ft->getLookAndFeelData();
+			obj->setProperty("itemColour3", ft->findPanelColour(FloatingTileContent::PanelColourId::itemColour3).getARGB());
+			obj->setProperty("font", d.f.getTypefaceName());
+			obj->setProperty("fontSize", d.f.getHeight());
+		}
+
 		addParentFloatingTile(scrollbar, obj);
 
 		if (get()->callWithGraphics(g_, "drawScrollbar", var(obj), &scrollbar))
