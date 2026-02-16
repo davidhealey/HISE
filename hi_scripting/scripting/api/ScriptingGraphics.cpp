@@ -4973,11 +4973,39 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawScrollbar(Graphics& g_, Scr
 		obj->setProperty("vertical", isScrollbarVertical);
 		obj->setProperty("over", isMouseOver);
 		obj->setProperty("down", isMouseDown);
-		setColourOrBlack(obj, "bgColour",    scrollbar, ScrollBar::ColourIds::backgroundColourId);
-		setColourOrBlack(obj, "itemColour",  scrollbar, ScrollBar::ColourIds::thumbColourId);
-		setColourOrBlack(obj, "itemColour2", scrollbar, ScrollBar::ColourIds::trackColourId);
+		if (auto ft = scrollbar.findParentComponentOfClass<TableFloatingTileBase>())
+		{
+			auto d = ft->getLookAndFeelData();
+			obj->setProperty("bgColour", d.bgColour.getARGB());
+			obj->setProperty("itemColour1", d.itemColour1.getARGB());
+			obj->setProperty("itemColour2", d.itemColour2.getARGB());
+			obj->setProperty("itemColour3", ft->findPanelColour(FloatingTileContent::PanelColourId::itemColour3).getARGB());
+			obj->setProperty("textColour", d.textColour.getARGB());
+			obj->setProperty("parentType", d.parentType);
+			obj->setProperty("font", d.f.getTypefaceName());
+			obj->setProperty("fontSize", d.f.getHeight());
+		}
+		else
+		{
+			static const Identifier pb("PresetBrowser");
 
-		addParentFloatingTile(scrollbar, obj);
+			if (getIdOfParentFloatingTile(scrollbar) == pb)
+			{
+				obj->setProperty("bgColour", backgroundColour.getARGB());
+				obj->setProperty("itemColour1", highlightColour.getARGB());
+				obj->setProperty("itemColour2", modalBackgroundColour.getARGB());
+				obj->setProperty("itemColour3", itemColour3.getARGB());
+				obj->setProperty("textColour", textColour.getARGB());
+				obj->setProperty("parentType", pb.toString());
+			}
+			else
+			{
+				setColourOrBlack(obj, "bgColour",    scrollbar, ScrollBar::ColourIds::backgroundColourId);
+				setColourOrBlack(obj, "itemColour",  scrollbar, ScrollBar::ColourIds::thumbColourId);
+				setColourOrBlack(obj, "itemColour2", scrollbar, ScrollBar::ColourIds::trackColourId);
+				addParentFloatingTile(scrollbar, obj);
+			}
+		}
 
 		if (get()->callWithGraphics(g_, "drawScrollbar", var(obj), &scrollbar))
 			return;
