@@ -616,8 +616,11 @@ public:
 
 			if (saveFunction)
 			{
-				ValueType initialValue = saveFunction(getProcessor());
-				updateUI(initialValue);
+				if (auto p = getProcessor())
+				{
+					ValueType initialValue = saveFunction(getProcessor());
+					updateUI(initialValue);
+				}
 			}
 		}
 

@@ -2085,7 +2085,7 @@ maximum(1.0f)
 	setDefaultValue(ScriptSlider::Properties::mouseSensitivity, 1.0f);
 	setDefaultValue(ScriptSlider::Properties::dragDirection, "Diagonal");
 	setDefaultValue(ScriptSlider::Properties::showValuePopup, "No");
-	setDefaultValue(ScriptSlider::Properties::showTextBox, true);
+	setDefaultValue(ScriptSlider::Properties::showTextBox, false);
 	setDefaultValue(ScriptSlider::Properties::scrollWheel, true);
 	setDefaultValue(ScriptSlider::Properties::enableMidiLearn, true);
 	setDefaultValue(ScriptSlider::Properties::sendValueOnDrag, true);
