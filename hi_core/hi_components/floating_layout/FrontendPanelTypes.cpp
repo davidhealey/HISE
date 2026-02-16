@@ -1996,6 +1996,9 @@ void TableFloatingTileBase::resized()
 			auto ma = ss->getArea(getLocalBounds().toFloat(), {"margin", 0});
 			ma = ss->getArea(ma, {"padding", 0} );
 			table.setBounds(ma.toNearestInt());
+
+			auto scrollbarWidth = table.getViewport()->getScrollBarThickness();
+			table.getHeader().resizeAllColumnsToFit(ma.toNearestInt().getWidth() - scrollbarWidth);
 			return;
 		}
 
@@ -2013,6 +2016,10 @@ void TableFloatingTileBase::resized()
 
 	table.setBounds(getLocalBounds());
 
+	auto scrollbarWidth = table.getViewport()->getScrollBarThickness();
+
+	table.getHeader().resizeAllColumnsToFit(getWidth() - scrollbarWidth);
+
 	if (columnWidthRatios.size() > 0)
 	{
 		auto numCols = table.getHeader().getNumColumns(true);
@@ -2020,7 +2027,7 @@ void TableFloatingTileBase::resized()
 		if (columnWidthRatios.size() == numCols)
 		{
 			table.getHeader().setStretchToFitActive(false);
-			auto w = (double)getWidth();
+			auto w = (double)(getWidth() - scrollbarWidth);
 
 			for (int i = 0; i < numCols; i++)
 			{
