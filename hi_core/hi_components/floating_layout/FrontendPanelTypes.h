@@ -708,8 +708,13 @@ public:
 		Inverted,
 		Minimum,
 		Maximum,
-		numColumns,
-		columnWidthRatio
+		numColumns
+	};
+
+	enum SpecialPanelIds
+	{
+		ColumnWidthRatio = (int)FloatingTileContent::PanelPropertyId::numPropertyIds,
+		numSpecialPanelIds
 	};
 
 	struct LookAndFeelData
@@ -736,7 +741,13 @@ public:
 	virtual ~TableFloatingTileBase() {};
 
 	void updateContent();
-	void fromDynamicObject(const var& object);
+
+	int getNumDefaultableProperties() const override { return (int)SpecialPanelIds::numSpecialPanelIds; }
+	Identifier getDefaultablePropertyId(int index) const override;
+	var getDefaultProperty(int index) const override;
+	var toDynamicObject() const override;
+	void fromDynamicObject(const var& object) override;
+
 	void paintRowBackground(Graphics& g, int /*rowNumber*/, int /*width*/, int /*height*/, bool rowIsSelected) override;
 
 	//==============================================================================
@@ -865,6 +876,8 @@ protected:
 	TableListBox table;     // the table component itself
 	Font font;
 	int numRows;            // The number of rows of data we've got
+	Array<var> columnWidthRatios;
+	bool hasChannelColumn = false;
 	ScopedPointer<TableHeaderLookAndFeel> laf;
 	ScopedPointer<simple_css::StyleSheetLookAndFeel> css_laf;
 	LookAndFeelMethods fallbackLaf;

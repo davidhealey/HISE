@@ -1756,6 +1756,8 @@ TableFloatingTileBase::TableFloatingTileBase(FloatingTile* parent) :
 
 void TableFloatingTileBase::initTable(bool addChannelColumn)
 {
+	hasChannelColumn = addChannelColumn;
+
 	// Create our table component and add it to this component..
 	addAndMakeVisible(table);
 	table.setModel(this);
@@ -1804,9 +1806,44 @@ void TableFloatingTileBase::updateContent()
 	table.updateContent();
 }
 
+var TableFloatingTileBase::toDynamicObject() const
+{
+	auto obj = FloatingTileContent::toDynamicObject();
+	storePropertyInObject(obj, SpecialPanelIds::ColumnWidthRatio, var(columnWidthRatios));
+	return obj;
+}
+
+Identifier TableFloatingTileBase::getDefaultablePropertyId(int index) const
+{
+	if (index < (int)PanelPropertyId::numPropertyIds)
+		return FloatingTileContent::getDefaultablePropertyId(index);
+
+	RETURN_DEFAULT_PROPERTY_ID(index, SpecialPanelIds::ColumnWidthRatio, "ColumnWidthRatio");
+
+	return {};
+}
+
+var TableFloatingTileBase::getDefaultProperty(int index) const
+{
+	if (index < (int)PanelPropertyId::numPropertyIds)
+		return FloatingTileContent::getDefaultProperty(index);
+
+	Array<var> defaultRatios;
+	RETURN_DEFAULT_PROPERTY(index, SpecialPanelIds::ColumnWidthRatio, var(defaultRatios));
+
+	return {};
+}
+
 void TableFloatingTileBase::fromDynamicObject(const var& object)
 {
 	FloatingTileContent::fromDynamicObject(object);
+
+	auto ratios = getPropertyWithDefault(object, SpecialPanelIds::ColumnWidthRatio);
+	if (ratios.isArray())
+	{
+		columnWidthRatios.clear();
+		columnWidthRatios.addArray(*ratios.getArray());
+	}
 
 	table.setColour(ListBox::backgroundColourId, findPanelColour(FloatingTileContent::PanelColourId::bgColour));
 
@@ -1975,6 +2012,23 @@ void TableFloatingTileBase::resized()
 	}
 
 	table.setBounds(getLocalBounds());
+
+	if (columnWidthRatios.size() > 0)
+	{
+		auto numCols = table.getHeader().getNumColumns(true);
+
+		if (columnWidthRatios.size() == numCols)
+		{
+			auto w = (double)getWidth();
+
+			for (int i = 0; i < numCols; i++)
+			{
+				auto id = table.getHeader().getColumnIdOfIndex(i, true);
+				auto r = jlimit(0.0, 1.0, (double)columnWidthRatios[i]);
+				table.getHeader().setColumnWidth(id, roundToInt(w * r));
+			}
+		}
+	}
 }
 
 double TableFloatingTileBase::setRangeValue(int row, ColumnId column, double newRangeValue)
