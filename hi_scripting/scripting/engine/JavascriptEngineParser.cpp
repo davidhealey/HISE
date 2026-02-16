@@ -1131,8 +1131,11 @@ private:
 		}
 #endif
 
-		if (currentInlineFunction != nullptr)
-			location.throwError("Can't declare var statement in inline function");
+		// Context-aware: treat 'var' as 'local' inside inline functions and callbacks
+		if (currentInlineFunction != nullptr || !currentlyParsedCallback.isNull())
+		{
+			return parseLocalAssignment();
+		}
 
 		ScopedPointer<VarStatement> s(new VarStatement(location));
 		s->name = parseIdentifier();
@@ -1319,8 +1322,27 @@ private:
 			return s.release();
 		}
 
-		throwError("Cannot define local variables outside of inline functions or callbacks.");
-		RETURN_IF_NO_THROW(nullptr)
+		// Context-aware: allow 'local' at root scope, but emit warning and treat as 'var'
+		debugToConsole(dynamic_cast<Processor*>(hiseSpecialData->processor), 
+			"Warning: 'local' used outside of callback/inline function, treating as 'var'");
+
+		ScopedPointer<VarStatement> s(new VarStatement(location));
+		s->name = parseIdentifier();
+
+		hiseSpecialData->checkIfExistsInOtherStorage(HiseSpecialData::VariableStorageType::RootScope, s->name, location);
+
+		s->initialiser = matchIf(TokenTypes::assign) ? parseExpression() : new Expression(location);
+
+		if (matchIf(TokenTypes::comma))
+		{
+			ScopedPointer<BlockStatement> block(new BlockStatement(location));
+			block->statements.add(s.release());
+			block->statements.add(parseLocalAssignment()); // Continue with local parsing for consistency
+			return block.release();
+		}
+
+		match(TokenTypes::semicolon);
+		return s.release();
 	}
 
 	Statement* parseCallback()
@@ -1780,10 +1802,7 @@ private:
 
 		const bool isVarInitialiser = matchIf(TokenTypes::var);
 		
-        if(currentInlineFunction && isVarInitialiser)
-        {
-            location.throwError("Can't use var initialiser inside inline function");
-        }
+		// Note: 'var' inside inline functions is now allowed and treated as 'local'
         
 		Expression *iter = parseExpression();
 
@@ -1825,6 +1844,21 @@ private:
                     
                     newExpression = assignment;
                     iter = lv;
+                }
+                else if(!currentlyParsedCallback.isNull())
+                {
+                    Callback* callback = hiseSpecialData->getCallback(currentlyParsedCallback);
+                    
+                    auto cls = new CallbackLocalStatement(location, callback);
+                    cls->name = id;
+                    
+                    hiseSpecialData->checkIfExistsInOtherStorage(HiseSpecialData::VariableStorageType::LocalScope, id, location);
+                    
+                    callback->localProperties.set(cls->name, var());
+                    cls->initialiser.swapWith(assignment->newValue);
+                    
+                    newExpression = assignment;
+                    iter = cls;
                 }
             }
 		}

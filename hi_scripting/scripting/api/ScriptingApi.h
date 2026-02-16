@@ -1425,6 +1425,9 @@ public:
 		/** Throws an error message if the value is a string. */
 		void assertNoString(var value);
 
+		/** Throws the given error message if the condition isn't met. */
+		void assertWithMessage(bool condition, String errorMessage);
+
 		/** Throws an error message if the value is not a legal number (eg. string or array or infinity or NaN). */
 		void assertLegalNumber(var value);
 

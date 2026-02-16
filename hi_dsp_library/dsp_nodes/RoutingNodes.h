@@ -1413,6 +1413,7 @@ template <typename... Ts> struct global_cable_cpp_manager: private advanced_tupl
 
 	virtual void prepare(PrepareSpecs ps)
 	{
+		polyHandler = ps.voiceIndex;
 		prepare_each(ps, this->getIndexSequence());
 	}
 
@@ -1436,8 +1437,20 @@ template <typename... Ts> struct global_cable_cpp_manager: private advanced_tupl
 	template <auto CableIndex> void registerDataCallback(const std::function<void(const var&)>& f)
 	{
 		static constexpr int Idx = static_cast<int>(CableIndex);
-        auto& c = this->template get<Idx>();
-        c.setDataCallback(f);
+		auto& c = this->template get<Idx>();
+		
+		c.setDataCallback([this, f](const var& data)
+		{
+			if (polyHandler != nullptr)
+			{
+				PolyHandler::ScopedAllVoiceSetter avs(*polyHandler);
+				f(data);
+			}
+			else
+			{
+				f(data);
+			}
+		});
 	}
 
 	template <auto CableIndex> void setGlobalCableValue(double value)
@@ -1464,6 +1477,7 @@ private:
 		using swallow = int[]; (void)swallow { 1, ( std::get<Ns>(this->elements).sendData(this->pendingData[Ns].getData(), this->pendingData[Ns].getSize()) , void(), int{})... };
 	};
 
+	PolyHandler* polyHandler = nullptr;
 	std::array<MemoryBlock, sizeof...(Ts)> pendingData;
 	bool dataEnableCalled = false;
 };

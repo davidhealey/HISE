@@ -866,7 +866,7 @@ struct HiseJavascriptEngine::RootObject::AnonymousFunctionWithCapture : public E
 		return function;
 	}
 
-	bool isConstant() const override { return true; }
+	bool isConstant() const override { return false; }
 
 	Statement* getChildStatement(int) override { return nullptr; };
 

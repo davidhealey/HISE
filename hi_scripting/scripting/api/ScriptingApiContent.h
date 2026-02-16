@@ -49,10 +49,11 @@ public:
 	class ScopedDelayer
 	{
 	public:
-		ScopedDelayer(ValueTreeUpdateWatcher* watcher_);;
+		ScopedDelayer(ValueTreeUpdateWatcher* watcher_, bool forceMessageThread_=false);;
 		~ScopedDelayer();
 	private:
 		WeakReference<ValueTreeUpdateWatcher> watcher;
+		bool forceMessageThread = false;
 	};
 
 	class ScopedSuspender
@@ -3408,19 +3409,22 @@ private:
 
 		if (auto sc = getComponentWithName(name))
 		{
+			if (x != -1 && y != -1)
+			{
+				sc->handleScriptPropertyChange("x");
+				sc->handleScriptPropertyChange("y");
+				sc->setScriptObjectProperty(ScriptComponent::Properties::x, x);
+				sc->setScriptObjectProperty(ScriptComponent::Properties::y, y);
+			}
 
-			sc->handleScriptPropertyChange("x");
-			sc->handleScriptPropertyChange("y");
-			sc->setScriptObjectProperty(ScriptComponent::Properties::x, x);
-			sc->setScriptObjectProperty(ScriptComponent::Properties::y, y);
 			return dynamic_cast<Subtype*>(sc);
 		}
 
 		ValueTree newChild("Component");
 		newChild.setProperty("type", Subtype::getStaticObjectName().toString(), nullptr);
 		newChild.setProperty("id", name.toString(), nullptr);
-		newChild.setProperty("x", x, nullptr);
-		newChild.setProperty("y", y, nullptr);
+		newChild.setProperty("x", jmax(0, x), nullptr);
+		newChild.setProperty("y", jmax(0, y), nullptr);
 		contentPropertyData.addChild(newChild, -1, nullptr);
 
 		Subtype *t = new Subtype(getScriptProcessor(), this, name, x, y, 0, 0);

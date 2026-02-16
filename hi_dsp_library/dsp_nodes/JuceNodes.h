@@ -112,7 +112,6 @@ protected:
 
 public:
 
-	SN_VOICE_SETTER(jwrapper, objects);
 };
 
 /** This template can be used in order to implement a modulation source node from a JUCE processor. 
@@ -268,13 +267,13 @@ template <int NV> struct jpanner : public base::jwrapper<juce::dsp::Panner<float
     
 	template <int P> void setParameter(double v)
 	{
-		this->objects.forEachCurrentVoice([v](juce::dsp::Panner<float>& obj)
+		for (auto& obj : this->objects)
 		{
 			if (P == 0)
 				obj.setPan(v);
 			if (P == 1)
 				obj.setRule((juce::dsp::Panner<float>::Rule)(int)v);
-		});
+		}
 	}
 
 	void createParameters(ParameterDataList& d) override
