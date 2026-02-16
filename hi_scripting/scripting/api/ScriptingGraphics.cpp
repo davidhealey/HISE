@@ -5038,10 +5038,24 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawScrollbar(Graphics& g_, Scr
 		}
 		else
 		{
-			setColourOrBlack(obj, "bgColour",    scrollbar, ScrollBar::ColourIds::backgroundColourId);
-			setColourOrBlack(obj, "itemColour",  scrollbar, ScrollBar::ColourIds::thumbColourId);
-			setColourOrBlack(obj, "itemColour2", scrollbar, ScrollBar::ColourIds::trackColourId);
-			addParentFloatingTile(scrollbar, obj);
+			static const Identifier pb("PresetBrowser");
+
+			if (getIdOfParentFloatingTile(scrollbar) == pb)
+			{
+				obj->setProperty("bgColour", backgroundColour.getARGB());
+				obj->setProperty("itemColour1", highlightColour.getARGB());
+				obj->setProperty("itemColour2", modalBackgroundColour.getARGB());
+				obj->setProperty("itemColour3", itemColour3.getARGB());
+				obj->setProperty("textColour", textColour.getARGB());
+				obj->setProperty("parentType", pb.toString());
+			}
+			else
+			{
+				setColourOrBlack(obj, "bgColour",    scrollbar, ScrollBar::ColourIds::backgroundColourId);
+				setColourOrBlack(obj, "itemColour",  scrollbar, ScrollBar::ColourIds::thumbColourId);
+				setColourOrBlack(obj, "itemColour2", scrollbar, ScrollBar::ColourIds::trackColourId);
+				addParentFloatingTile(scrollbar, obj);
+			}
 		}
 
 		if (get()->callWithGraphics(g_, "drawScrollbar", var(obj), &scrollbar))
