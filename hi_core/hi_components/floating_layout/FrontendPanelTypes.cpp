@@ -1724,6 +1724,10 @@ void TableFloatingTileBase::ValueSliderColumn::sliderValueChanged(Slider *)
 		slider->setValue(actualValue, dontSendNotification);
 }
 
+void TableFloatingTileBase::LookAndFeelMethods::drawTableBackground(Graphics& g, const LookAndFeelData& d, int width, int height)
+{
+}
+
 void TableFloatingTileBase::LookAndFeelMethods::drawTableRowBackground(Graphics& g, const LookAndFeelData& d, int rowNumber, int width, int height, bool rowIsSelected, bool rowIsHovered)
 {
 	if (rowIsSelected)

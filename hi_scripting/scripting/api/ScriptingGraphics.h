@@ -943,6 +943,8 @@ namespace ScriptingObjects
 
 			void drawTableHeaderColumn(Graphics& g, TableHeaderComponent&, const String& columnName, int columnId, int width, int height, bool isMouseOver, bool isMouseDown, int columnFlags) override;
 
+			void drawTableBackground(Graphics& g, const TableFloatingTileBase::LookAndFeelData& d, int width, int height) override;
+
 			void drawTableRowBackground(Graphics& g, const TableFloatingTileBase::LookAndFeelData& d, int rowNumber, int width, int height, bool rowIsSelected, bool rowIsHovered) override;
 
 			void drawTableCell(Graphics& g, const TableFloatingTileBase::LookAndFeelData& d, const String& text, int rowNumber, int columnId, int width, int height, bool rowIsSelected, bool cellIsClicked, bool cellIsHovered) override;
