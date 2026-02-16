@@ -1683,9 +1683,6 @@ TableFloatingTileBase::ValueSliderColumn::ValueSliderColumn(TableFloatingTileBas
 {
 	addAndMakeVisible(slider = new RangeSlider());
 
-	laf.setFontForAll(table.font);
-
-	slider->setLookAndFeel(&laf);
 	slider->setSliderStyle(Slider::LinearBar);
 	slider->setTextBoxStyle(Slider::TextBoxLeft, true, 80, 20);
 	slider->setColour(Slider::backgroundColourId, Colour(0x38ffffff));

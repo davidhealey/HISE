@@ -835,8 +835,6 @@ protected:
 	private:
 		TableFloatingTileBase &owner;
 
-		HiPropertyPanelLookAndFeel laf;
-
 		int row;
 		int columnId;
 
