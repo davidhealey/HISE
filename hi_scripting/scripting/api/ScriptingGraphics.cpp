@@ -4597,7 +4597,22 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawLinearSlider(Graphics &g, i
 			setColourOrBlack(obj, "textColour", *parentPack, Slider::trackColourId);
 		}
 
-		addParentFloatingTile(slider, obj);
+		if (auto ft = slider.findParentComponentOfClass<TableFloatingTileBase>())
+		{
+			auto d = ft->getLookAndFeelData();
+			obj->setProperty("bgColour", d.bgColour.getARGB());
+			obj->setProperty("itemColour1", d.itemColour1.getARGB());
+			obj->setProperty("itemColour2", d.itemColour2.getARGB());
+			obj->setProperty("itemColour3", ft->findPanelColour(FloatingTileContent::PanelColourId::itemColour3).getARGB());
+			obj->setProperty("textColour", d.textColour.getARGB());
+			obj->setProperty("parentType", d.parentType);
+			obj->setProperty("fontSize", d.f.getHeight());
+			obj->setProperty("font", d.f.getTypefaceName());
+		}
+		else
+		{
+			addParentFloatingTile(slider, obj);
+		}
 
 		if (get()->callWithGraphics(g, "drawLinearSlider", var(obj), &slider))
 			return;
