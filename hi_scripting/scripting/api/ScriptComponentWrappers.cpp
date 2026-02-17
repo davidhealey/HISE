@@ -2855,6 +2855,11 @@ ScriptCreatedComponentWrappers::AudioWaveformWrapper::AudioWaveformWrapper(Scrip
 			adc->getThumbnail()->setLookAndFeel(localLookAndFeel);
 		else if (auto s = dynamic_cast<HiseAudioThumbnail::LookAndFeelMethods*>(slaf))
 			adc->getThumbnail()->setLookAndFeel(slaf);
+		else if (form->getScriptProcessor()->getMainController_()->getCurrentScriptLookAndFeel() != nullptr)
+		{
+			thumbnailLaf = new ScriptingObjects::ScriptedLookAndFeel::Laf(form->getScriptProcessor()->getMainController_());
+			adc->getThumbnail()->setLookAndFeel(thumbnailLaf);
+		}
 	}
 }
 
@@ -2863,6 +2868,14 @@ ScriptCreatedComponentWrappers::AudioWaveformWrapper::AudioWaveformWrapper(Scrip
 ScriptCreatedComponentWrappers::AudioWaveformWrapper::~AudioWaveformWrapper()
 {
 	samplerListener = nullptr;
+
+	if (thumbnailLaf != nullptr)
+	{
+		if (auto adc = dynamic_cast<AudioDisplayComponent*>(component.get()))
+			adc->getThumbnail()->setLookAndFeel(nullptr);
+
+		thumbnailLaf = nullptr;
+	}
 
 	if (auto form = dynamic_cast<ScriptingApi::Content::ScriptAudioWaveform*>(getScriptComponent()))
 	{

@@ -970,8 +970,10 @@ public:
 		ScopedPointer<SamplerListener> samplerListener;
 
 		void updateColours(AudioDisplayComponent* asb);
-        
+
         int lastIndex = -1;
+
+		ScopedPointer<LookAndFeel> thumbnailLaf;
 	};
 
 	class WebViewWrapper : public ScriptCreatedComponentWrapper,
