@@ -1883,9 +1883,9 @@ void JavascriptProcessor::restoreInterfaceData(ValueTree propertyData)
 	}
 }
 
-String JavascriptProcessor::Helpers::resolveIncludeStatements(String& x, Array<File>& includedFiles, const JavascriptProcessor* p, const File& parentFile)
+String JavascriptProcessor::Helpers::resolveIncludeStatements(String& x, Array<File>& includedFiles, const JavascriptProcessor* p)
 {
-	String regex("include\\(\"([^\"]+)\"\\);");
+	String regex("include\\(\"(?:\\{GLOBAL_SCRIPT_FOLDER\\})?([/\\w\\s]+\\.\\w+)\"\\);");
 	StringArray results = RegexFunctions::search(regex, x, 0);
 	StringArray fileNames = RegexFunctions::search(regex, x, 1);
 	StringArray includedContents;
@@ -1894,31 +1894,20 @@ String JavascriptProcessor::Helpers::resolveIncludeStatements(String& x, Array<F
 
 	static const String globalWildcard("{GLOBAL_SCRIPT_FOLDER}");
 
-	auto scriptsDir = GET_PROJECT_HANDLER(dynamic_cast<const Processor*>(p)).getSubDirectory(ProjectHandler::SubDirectories::Scripts);
-
 	for (int i = 0; i < fileNames.size(); i++)
-	{
+	{				
 		File f;
-
-		auto isGlobalScript = fileNames[i].contains(globalWildcard);
-		auto isRelativePath = fileNames[i].startsWith("./") || fileNames[i].startsWith("../");
+		
+		auto isGlobalScript = results[i].contains(globalWildcard);
 
 		if (isGlobalScript)
 		{
-			auto relativePart = fileNames[i].fromFirstOccurrenceOf(globalWildcard, false, false);
-			f = globalScriptFolder.getChildFile(relativePart).getFullPathName();
-		}
-		else if (isRelativePath)
-		{
-			if (parentFile.existsAsFile())
-				f = parentFile.getParentDirectory().getChildFile(fileNames[i]).getFullPathName();
-			else
-				f = scriptsDir.getChildFile(fileNames[i]).getFullPathName();
+			f = globalScriptFolder.getChildFile(fileNames[i]).getFullPathName();
 		}
 		else
 		{
 			f = File::isAbsolutePath(fileNames[i]) ? File(fileNames[i]) :
-				scriptsDir.getChildFile(fileNames[i]);
+				GET_PROJECT_HANDLER(dynamic_cast<const Processor*>(p)).getSubDirectory(ProjectHandler::SubDirectories::Scripts).getChildFile(fileNames[i]);	
 		}
 
 		if (includedFiles.contains(f)) // skip multiple inclusions...
@@ -1930,18 +1919,16 @@ String JavascriptProcessor::Helpers::resolveIncludeStatements(String& x, Array<F
 		includedFiles.add(f);
 		String content = f.loadFileAsString();
 
-		content = resolveIncludeStatements(content, includedFiles, p, f);
+		content = resolveIncludeStatements(content, includedFiles, p);
 
 		String thisContent;
 
 		String fileRef;
 
 		if (isGlobalScript)
-			fileRef << fileNames[i];
-		else if (isRelativePath)
-			fileRef << f.getRelativePathFrom(scriptsDir);
-		else
-			fileRef << fileNames[i];
+			fileRef << globalWildcard;
+
+		fileRef << fileNames[i];
 
 		thisContent << "\n//{BEGIN}" + fileRef << "\n";
 		thisContent << content;

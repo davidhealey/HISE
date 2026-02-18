@@ -271,8 +271,7 @@ struct HiseJavascriptEngine::RootObject::ExpressionTreeBuilder : private TokenIt
 	ExpressionTreeBuilder(const String code, const String externalFile, HiseJavascriptPreprocessor::Ptr preprocessor_) :
 		TokenIterator(code, externalFile),
 		preprocessor(preprocessor_),
-	    currentErrorLocation(nullptr),
-	    currentExternalFilePath(externalFile)
+	    currentErrorLocation(nullptr)
 	{
 #if ENABLE_SCRIPTING_BREAKPOINTS
 		if (externalFile.isNotEmpty())
@@ -283,9 +282,6 @@ struct HiseJavascriptEngine::RootObject::ExpressionTreeBuilder : private TokenIt
 	}
 
     HiseJavascriptPreprocessor::Ptr preprocessor;
-
-	/** The full path of the file currently being parsed (used for resolving relative includes). */
-	String currentExternalFilePath;
 
 	void setupApiData(HiseSpecialData &data, const String& codeToPreprocess)
 	{
@@ -852,23 +848,8 @@ private:
 
 #if USE_BACKEND
 
-		if (File::isAbsolutePath(cleanedFileName))
+		if (File::isAbsolutePath(cleanedFileName)) 
 			refFileName = cleanedFileName;
-		else if (cleanedFileName.startsWith("./") || cleanedFileName.startsWith("../"))
-		{
-			// Resolve relative to the directory of the currently parsed file
-			if (currentExternalFilePath.isNotEmpty())
-			{
-				File currentFile(currentExternalFilePath);
-				refFileName = currentFile.getParentDirectory().getChildFile(cleanedFileName).getFullPathName();
-			}
-			else
-			{
-				// No parent file context, fall back to project Scripts directory
-				const String fileName = "{PROJECT_FOLDER}" + cleanedFileName;
-				refFileName = GET_PROJECT_HANDLER(dynamic_cast<Processor*>(hiseSpecialData->processor)).getFilePath(fileName, ProjectHandler::SubDirectories::Scripts);
-			}
-		}
 		else if (cleanedFileName.contains("{GLOBAL_SCRIPT_FOLDER}"))
 		{
 			File globalScriptFolder = PresetHandler::getGlobalScriptFolder(dynamic_cast<Processor*>(hiseSpecialData->processor));
@@ -914,28 +895,7 @@ private:
 
 #else
 
-		if (File::isAbsolutePath(cleanedFileName))
-		{
-			refFileName = cleanedFileName;
-		}
-		else if (cleanedFileName.startsWith("./") || cleanedFileName.startsWith("../"))
-		{
-			// Resolve relative to the directory of the currently parsed file
-			if (currentExternalFilePath.isNotEmpty())
-			{
-				File currentFile(currentExternalFilePath);
-				refFileName = currentFile.getParentDirectory().getChildFile(cleanedFileName).getFullPathName();
-			}
-			else
-			{
-				// No parent file context, use as-is for collection lookup
-				refFileName = cleanedFileName;
-			}
-		}
-		else
-		{
-			refFileName = cleanedFileName;
-		}
+		refFileName = cleanedFileName;
 
 		if (File::isAbsolutePath(refFileName))
 		{
@@ -2681,17 +2641,11 @@ void HiseJavascriptEngine::RootObject::ExpressionTreeBuilder::preprocessCode(con
 			it.match(TokenTypes::include_);
 			it.match(TokenTypes::openParen);
 			String fileName = it.currentValue.toString();
-
-			auto previousExternalFilePath = currentExternalFilePath;
-			currentExternalFilePath = externalFileName;
-
 			String externalCode = getFileContent(it.currentValue.toString(), fileName);
-
-
-
+			
+            
+            
 			preprocessCode(externalCode, fileName);
-
-			currentExternalFilePath = previousExternalFilePath;
 
 			continue;
 		}
