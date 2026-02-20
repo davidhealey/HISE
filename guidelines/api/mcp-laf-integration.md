@@ -4,7 +4,7 @@ This document explains how the HISE REST API integrates with LookAndFeel (LAF) o
 
 **Related Documentation:**
 - [rest-api.md](rest-api.md) - Full REST API specification
-- [laf-extraction-instructions.md](laf-extraction-instructions.md) - Technical procedure for extracting LAF function documentation
+- [laf-extraction.md](../../tools/api generator/doc_builders/laf-extraction.md) - Technical procedure for extracting LAF function documentation (in api_generator submodule)
 
 ## Overview
 
