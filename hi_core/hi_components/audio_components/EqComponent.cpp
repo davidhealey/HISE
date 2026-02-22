@@ -208,7 +208,11 @@ public:
 				ScopedPointer<LookAndFeel> scriptlaf = HiseColourScheme::createAlertWindowLookAndFeel(getProcessor()->getMainController());
 
 				if (auto s = dynamic_cast<FilterGraph::LookAndFeelMethods*>(scriptlaf.get()))
+				{
 					c->setSpecialLookAndFeel(scriptlaf.release(), true);
+					c->setOpaque(false);
+					getParentShell()->setOpaque(false);
+				}
 			}
 
 			if (dynamic_cast<FilterEffect*>(p) != nullptr)
@@ -496,7 +500,11 @@ struct FilterDragOverlay::Panel : public PanelWithProcessorConnection
 				ScopedPointer<LookAndFeel> scriptlaf = HiseColourScheme::createAlertWindowLookAndFeel(getProcessor()->getMainController());
 
 				if (auto s = dynamic_cast<FilterGraph::LookAndFeelMethods*>(scriptlaf.get()))
+				{
 					c->filterGraph.setSpecialLookAndFeel(scriptlaf.release(), true);
+					c->setOpaque(false);
+					getParentShell()->setOpaque(false);
+				}
 			}
 
 			return c;
@@ -557,7 +565,8 @@ void FilterDragOverlay::paint(Graphics &g)
 {
 	if (isInFloatingTile)
 	{
-		g.fillAll(findColour(bgColour));
+		if (isOpaque())
+			g.fillAll(findColour(bgColour));
 	}
 	else
 	{
