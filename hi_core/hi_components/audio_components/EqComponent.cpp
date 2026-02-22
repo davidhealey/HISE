@@ -203,6 +203,14 @@ public:
 
 			c->setOpaque(c->findColour(bgColour).isOpaque());
 
+			if (getProcessor()->getMainController()->getCurrentScriptLookAndFeel() != nullptr)
+			{
+				ScopedPointer<LookAndFeel> scriptlaf = HiseColourScheme::createAlertWindowLookAndFeel(getProcessor()->getMainController());
+
+				if (auto s = dynamic_cast<FilterGraph::LookAndFeelMethods*>(scriptlaf.get()))
+					c->setSpecialLookAndFeel(scriptlaf.release(), true);
+			}
+
 			if (dynamic_cast<FilterEffect*>(p) != nullptr)
 			{
 				c->addFilter(FilterType::LowPass);
@@ -482,6 +490,14 @@ struct FilterDragOverlay::Panel : public PanelWithProcessorConnection
 			c->fftAnalyser.setColour(RingBufferComponentBase::ColourId::fillColour, findPanelColour(PanelColourId::itemColour3));
 			c->setOpaque(c->findColour(ColourIds::bgColour).isOpaque());
 			c->font = getFont();
+
+			if (getProcessor()->getMainController()->getCurrentScriptLookAndFeel() != nullptr)
+			{
+				ScopedPointer<LookAndFeel> scriptlaf = HiseColourScheme::createAlertWindowLookAndFeel(getProcessor()->getMainController());
+
+				if (auto s = dynamic_cast<FilterGraph::LookAndFeelMethods*>(scriptlaf.get()))
+					c->filterGraph.setSpecialLookAndFeel(scriptlaf.release(), true);
+			}
 
 			return c;
 		}
