@@ -70,14 +70,38 @@ When a code path has performance (or correctness) implications that could silent
 
 **The test:** Can a developer reading the call site understand the implications without looking up documentation?
 
+### 9. Prefer Nested Structs for Small Helper PODs
+When a small data type (enum, POD struct, result type) exists solely to serve a specific class, nest it inside that class rather than polluting the enclosing namespace. This keeps the type's scope and ownership obvious.
+
+```cpp
+// Good: scoped to where it belongs
+struct ApiHelpers
+{
+    enum class CallScope : uint8 { Unknown, Init, Unsafe, Caution, Safe };
+    struct CallScopeInfo { CallScope scope; String note; };
+    
+    static CallScopeInfo getCallScope(const String& className, const String& methodName);
+};
+
+// Avoid: free-floating types that only serve one class
+enum class CallScope : uint8 { ... };
+struct CallScopeInfo { ... };
+```
+
+**When to nest:** The type is only used by the owning class, or is the return/parameter type of the class's methods.
+
+**When NOT to nest:** The type is shared across multiple unrelated classes, or nesting creates deeply nested access patterns (e.g., `Outer::Inner::Deeper::Type`).
+
+**The test:** Would this type make sense without its owning class? If not, nest it.
+
 ---
 
 ## Threading & Performance
 
-### 9. Be Precise About Thread Contexts
+### 10. Be Precise About Thread Contexts
 For audio/real-time code, always be explicit about which thread calls each method and what the lock-free requirements are. Document this in tables and comments.
 
-### 10. Trace Performance Implications Across Call Boundaries
+### 11. Trace Performance Implications Across Call Boundaries
 Code that is correct in isolation may defeat optimizations established by callers. Consider the full call chain:
 
 - Who calls this code and how often?
@@ -90,7 +114,7 @@ Code that is correct in isolation may defeat optimizations established by caller
 
 ## Code Quality
 
-### 11. Verify Changes End-to-End
+### 12. Verify Changes End-to-End
 After making changes, review them critically. Explain why each change was made. Watch for code smells that indicate a wrong approach:
 - Unnecessary casts (especially `const_cast`)
 - Working around the API rather than using it directly
@@ -98,7 +122,7 @@ After making changes, review them critically. Explain why each change was made. 
 
 **The test:** Does this change use the API as intended, or does it feel like a workaround?
 
-### 12. Explain "Why" in Comments When Patterns Deviate
+### 13. Explain "Why" in Comments When Patterns Deviate
 When code deviates from the expected pattern, add a comment explaining:
 1. **Why** - the reason this deviation is necessary
 2. **When** - the contexts where this applies
@@ -110,10 +134,10 @@ When code deviates from the expected pattern, add a comment explaining:
 
 ## Project Management
 
-### 13. Document Deferred Work Thoroughly
+### 14. Document Deferred Work Thoroughly
 When deferring work, create detailed TODO documentation capturing: problem statement, current state, proposed solution, files to modify, and dependencies. This enables clean handoff to future sessions.
 
-### 14. Keep Documentation in Sync with Evolving Understanding
+### 15. Keep Documentation in Sync with Evolving Understanding
 As understanding deepens during a session, previously written documentation may become outdated or incomplete. When significant new insights emerge:
 
 1. **Identify affected documentation** - What docs were written before this insight?
@@ -124,7 +148,7 @@ As understanding deepens during a session, previously written documentation may 
 
 ## Critical Thinking
 
-### 15. Critically Evaluate Proposals Before Planning Implementation
+### 16. Critically Evaluate Proposals Before Planning Implementation
 Don't assume user suggestions are optimal. Before planning implementation:
 
 1. **Ask "What problem does this actually solve?"** - Verify the diagnosis before accepting the prescription

@@ -27,28 +27,25 @@ Fixes for semantic mode:
 - fails with inserting table points OK
 - add content restore
 - show subtarget in log when click OK
+- add a simple replay button OK
 
 - filter console log. error ? only show error list, otherwise: just show log list
 - set the green indicator to match the error state (so if a script error occurs, make it red)
 - append the initial input list. so log window only shows: input list -> console log or error per run.
 - test popupment properly - panels, right click, etc!
-- add a simple replay button OK
 - make a comprehensive guide for the MCP server 
 - add get screenshot with downscaling & cropping. remove entire old screenshot endpoint
 - add autoscroll
-- add subcomponent resolving to allow more complex components to work (eg. Preset browser or slider packs). OK
 
-## big feature: project-based testing system! 
 
-- record (!) user interaction with event filtering & thinning OK
+- big feature: project-based testing system! 
 - record audio output too! make spectrogram with downsampling endpoint
 - use profiling toolkit
 - add MIDI event logic!
-- record audio
+- add REPL for evaluating HiseScript expressions at any given time
 - store in projectfolder/Tests
 - check with scriptnode test system
 - add autodump for screenshots, use projectfolder/Images/screenshots as default...
-- add embedded tool in HISE that replicates my current debug script.
 
 */
 
