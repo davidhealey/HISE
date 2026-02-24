@@ -537,6 +537,76 @@ public:
 			CodeLocation location;
 		};
 
+#if USE_BACKEND
+
+		struct RealtimeSafetyInfo
+		{
+			enum class CallScope : uint8
+			{
+				Unknown = 0,   // no enrichment data
+				Init,          // onInit only
+				Unsafe,        // runtime OK, not audio thread
+				Caution,       // audio thread OK with caveats
+				Safe           // anywhere, anytime
+			};
+
+			using StrictnessLevel = WeakCallbackHolder::CallableObject::StrictnessLevel;
+
+			struct Warning
+			{
+				String apiCall;                    // "Console.print" or "*.push" (greedy)
+				CallScope scope;                   // from the CallScopeInfo lookup
+				String note;                       // callScopeNote, e.g. "allocates MemoryOutputStream"
+				Array<CallStackEntry> callStack;   // full trace from caller to unsafe API call
+			};
+
+			struct Holder
+			{
+				virtual ~Holder() {}
+				virtual RealtimeSafetyInfo* getRealtimeSafetyInfo() = 0;
+			};
+
+			Array<Warning> warnings;
+
+			bool isEmpty() const { return warnings.isEmpty(); }
+
+			bool hasUnsafe() const
+			{
+				for (auto& w : warnings)
+					if (w.scope == CallScope::Unsafe || w.scope == CallScope::Init)
+						return true;
+				return false;
+			}
+
+			bool hasCaution() const
+			{
+				for (auto& w : warnings)
+					if (w.scope == CallScope::Caution)
+						return true;
+				return false;
+			}
+
+			/** Returns a formatted report string for the console.
+			 *  Filters based on strictness: Warn includes caution+unsafe, Error same.
+			 *  Relaxed returns empty (caller should not call this with Relaxed).
+			 */
+			String toString(StrictnessLevel l, Processor* p) const;
+
+			/** Encapsulates the full enforcement pattern at call sites.
+			 *
+			 *  1. Checks callable->isRealtimeSafe() — if false, returns true (structural rejection)
+			 *  2. Queries StrictnessLevel from settings
+			 *  3. Calls callable->getRealtimeSafetyReport(strictness)
+			 *  4. If failed: logs to console, returns true if Error strictness
+			 *  5. Otherwise returns false
+			 */
+			static bool check(WeakCallbackHolder::CallableObject* callable,
+			                  ScriptingObject* caller,
+			                  const String& context);
+		};
+
+#endif
+
 		struct Scope;
 
         HiseJavascriptPreprocessor::Ptr preprocessor;
@@ -614,6 +684,10 @@ public:
 			static bool callForEach(Statement* root, const std::function<bool(Statement* child)>& f);
 
 			OptimizationResult executePass(Statement* rootStatementToOptimize);
+
+#if USE_BACKEND
+			virtual void setCurrentRealtimeInfoHolder(RealtimeSafetyInfo::Holder*) {}
+#endif
 		};
 
 		struct ScriptAudioThreadGuard;

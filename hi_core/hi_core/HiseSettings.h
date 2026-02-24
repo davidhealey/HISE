@@ -155,6 +155,7 @@ DECLARE_ID(GlobalScriptPath);
 DECLARE_ID(CompileTimeout);
 DECLARE_ID(CodeFontSize);
 DECLARE_ID(EnableOptimizations);
+DECLARE_ID(CallScopeWarnings);
 DECLARE_ID(EnableDebugMode);
 DECLARE_ID(WarnIfUndefinedParameters);
 DECLARE_ID(SaveConnectedFilesOnCompile);
