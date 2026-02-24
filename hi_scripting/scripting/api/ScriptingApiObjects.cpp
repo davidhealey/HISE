@@ -7019,6 +7019,246 @@ juce::ValueTree ApiHelpers::getApiTree()
 	return v;
 }
 
+static ApiHelpers::CallScope parseCallScopeString(const String& s)
+{
+	using CS = ApiHelpers::CallScope;
+
+	if (s == "safe")    return CS::Safe;
+	if (s == "caution") return CS::Caution;
+	if (s == "unsafe")  return CS::Unsafe;
+	if (s == "init")    return CS::Init;
+	return CS::Unknown;
+}
+
+static int callScopeSeverity(ApiHelpers::CallScope s)
+{
+	using CS = ApiHelpers::CallScope;
+	switch (s)
+	{
+		case CS::Unsafe:  return 3;
+		case CS::Init:    return 2;
+		case CS::Caution: return 1;
+		case CS::Safe:    return 0;
+		case CS::Unknown: return 0;
+		default:          return 0;
+	}
+}
+
+/** Greedy lookup HashMap — built once on first greedy query. */
+struct GreedyCallScopeMap
+{
+	/** For each method name, stores the resolved greedy CallScopeInfo.
+	 *
+	 *  Resolution rule:
+	 *  - Collect all CallScope values for *.methodName across all classes
+	 *  - If ANY are Safe: store Safe (ambiguous — don't warn)
+	 *  - If ALL are not-safe: store the worst-case scope
+	 *  - Severity: Unsafe (3) > Init (2) > Caution (1) > Unknown/Safe (0)
+	 */
+	HashMap<String, ApiHelpers::CallScopeInfo> map;
+	bool built = false;
+
+	void buildFromTree(const ValueTree& apiTree)
+	{
+		using CS = ApiHelpers::CallScope;
+
+		// Temporary: collect all scopes per method name
+		HashMap<String, Array<ApiHelpers::CallScopeInfo>> collector;
+
+		for (int i = 0; i < apiTree.getNumChildren(); i++)
+		{
+			auto classNode = apiTree.getChild(i);
+
+			for (int j = 0; j < classNode.getNumChildren(); j++)
+			{
+				auto methodNode = classNode.getChild(j);
+				auto methodName = methodNode.getProperty("name").toString();
+				auto scopeStr = methodNode.getProperty("callScope").toString();
+
+				if (methodName.isEmpty())
+					continue;
+
+				ApiHelpers::CallScopeInfo info;
+				info.scope = parseCallScopeString(scopeStr);
+				info.note = methodNode.getProperty("callScopeNote").toString();
+
+				if (!collector.contains(methodName))
+					collector.set(methodName, {});
+
+				collector.getReference(methodName).add(info);
+			}
+		}
+
+		// Resolve each method name using the forgiving greedy rule
+		HashMap<String, Array<ApiHelpers::CallScopeInfo>>::Iterator it(collector);
+
+		while (it.next())
+		{
+			auto& methodName = it.getKey();
+			auto& infos = it.getValue();
+
+			bool anySafe = false;
+			CS worstScope = CS::Unknown;
+			String worstNote;
+
+			for (auto& info : infos)
+			{
+				if (info.scope == CS::Safe)
+				{
+					anySafe = true;
+					break;
+				}
+
+				if (callScopeSeverity(info.scope) > callScopeSeverity(worstScope))
+				{
+					worstScope = info.scope;
+					worstNote = info.note;
+				}
+			}
+
+			ApiHelpers::CallScopeInfo resolved;
+
+			if (anySafe)
+			{
+				resolved.scope = CS::Safe;
+			}
+			else
+			{
+				resolved.scope = worstScope;
+				resolved.note = worstNote;
+			}
+
+			map.set(methodName, resolved);
+		}
+
+		built = true;
+	}
+};
+
+static GreedyCallScopeMap& getGreedyMap()
+{
+	static GreedyCallScopeMap instance;
+
+	if (!instance.built)
+		instance.buildFromTree(ApiHelpers::getApiTree());
+
+	return instance;
+}
+
+ApiHelpers::CallScopeInfo ApiHelpers::getCallScope(const String& className, const String& methodName)
+{
+	using CS = CallScope;
+
+	if (className == "*")
+	{
+		// Greedy mode: use pre-built HashMap
+		auto& greedyMap = getGreedyMap();
+
+		if (greedyMap.map.contains(methodName))
+			return greedyMap.map[methodName];
+
+		// No match at all: non-API dynamic function dispatch
+		return { CS::Unsafe, {} };
+	}
+
+	// Exact mode: find class, then method
+	auto apiTree = getApiTree();
+	auto classNode = apiTree.getChildWithName(Identifier(className));
+
+	if (!classNode.isValid())
+		return { CS::Unknown, {} };
+
+	for (int i = 0; i < classNode.getNumChildren(); i++)
+	{
+		auto methodNode = classNode.getChild(i);
+
+		if (methodNode.getProperty("name").toString() == methodName)
+		{
+			auto scopeStr = methodNode.getProperty("callScope").toString();
+
+			CallScopeInfo info;
+			info.scope = parseCallScopeString(scopeStr);
+			info.note = methodNode.getProperty("callScopeNote").toString();
+			return info;
+		}
+	}
+
+	return { CS::Unknown, {} };
+}
+
+String HiseJavascriptEngine::RootObject::RealtimeSafetyInfo::toString(StrictnessLevel l, Processor* p) const
+{
+	if (l == StrictnessLevel::Relaxed || warnings.isEmpty())
+		return {};
+
+	const String nl = "\n";
+	String s;
+
+	for (auto& w : warnings)
+	{
+		String scopeLabel;
+
+		switch (w.scope)
+		{
+			case CallScope::Unsafe:  scopeLabel = "unsafe"; break;
+			case CallScope::Init:    scopeLabel = "init-only"; break;
+			case CallScope::Caution: scopeLabel = "caution"; break;
+			default: scopeLabel = "unknown"; break;
+		}
+
+		s << "[CallScope] " << w.apiCall << " (" << scopeLabel;
+
+		if (w.note.isNotEmpty())
+			s << ": " << w.note;
+
+		s << ")" << nl;
+
+		for (auto& entry : w.callStack)
+		{
+			auto error = Error::fromLocation(entry.location, "");
+			s << ":\t\t\t" << entry.functionName << "() - " << error.toString(p) << nl;
+		}
+	}
+
+	return s;
+}
+
+bool HiseJavascriptEngine::RootObject::RealtimeSafetyInfo::check(
+	WeakCallbackHolder::CallableObject* callable,
+	ScriptingObject* caller,
+	const String& context)
+{
+	if (callable == nullptr)
+		return true;
+
+	// Step 1: structural gate — rejects regular function objects and non-RT broadcasters
+	if (!callable->isRealtimeSafe())
+		return true;
+
+	// Step 2: query StrictnessLevel from settings
+	auto settingValue = GET_HISE_SETTING(dynamic_cast<Processor*>(caller), HiseSettings::Scripting::CallScopeWarnings).toString();
+
+	StrictnessLevel strictness = StrictnessLevel::Relaxed;
+	if (settingValue == "Warn")       strictness = StrictnessLevel::Warn;
+	else if (settingValue == "Error") strictness = StrictnessLevel::Error;
+
+	if (strictness == StrictnessLevel::Relaxed)
+		return false;
+
+	// Step 3: get the content-aware safety report
+	auto result = callable->getRealtimeSafetyReport(strictness);
+
+	if (result.failed())
+	{
+		debugToConsole(dynamic_cast<Processor*>(caller),
+		               "[" + context + "] " + result.getErrorMessage());
+
+		return strictness == StrictnessLevel::Error;
+	}
+
+	return false;
+}
+
 ScriptingObjects::ScriptBuffer::ScriptBuffer(ProcessorWithScriptingContent* p, int size):
 	ConstScriptingObject(p, 0)
 {

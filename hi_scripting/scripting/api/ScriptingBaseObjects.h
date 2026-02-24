@@ -227,6 +227,20 @@ struct WeakCallbackHolder : private ScriptingObject
 		virtual Result call(HiseJavascriptEngine* engine, const var::NativeFunctionArgs& args, var* returnValue);
 
         virtual bool isRealtimeSafe() const = 0;
+
+#if USE_BACKEND
+		enum class StrictnessLevel { Relaxed, Warn, Error };
+
+		/** Returns a safety report for this callable at the given strictness.
+		 *  Relaxed: always returns Result::ok().
+		 *  Warn/Error: returns Result::fail(message) if unsafe calls were found.
+		 *  Default: returns ok (no analysis data). Override in InlineFunction::Object (Layer 3).
+		 */
+		virtual juce::Result getRealtimeSafetyReport(StrictnessLevel) const
+		{
+			return Result::ok();
+		}
+#endif
         
 		virtual bool allowRefCount() const { return true; }
 

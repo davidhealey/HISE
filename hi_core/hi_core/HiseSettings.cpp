@@ -164,6 +164,7 @@ Array<juce::Identifier> HiseSettings::Scripting::getAllIds()
 
 	ids.add(EnableCallstack);
 	ids.add(EnableOptimizations);
+	ids.add(CallScopeWarnings);
 	ids.add(GlobalScriptPath);
 	ids.add(CompileTimeout);
 	ids.add(CodeFontSize);
@@ -601,6 +602,14 @@ Array<juce::Identifier> HiseSettings::SnexWorkbench::getAllIds()
 		D("> This setting is baked into a plugin when you compile it");
 		P_();
 
+		P(HiseSettings::Scripting::CallScopeWarnings);
+		D("Controls compile-time analysis of audio-thread safety for inline functions and MIDI callbacks.");
+		D("- **Relaxed**: No analysis (current behavior). No overhead.");
+		D("- **Warn**: Analyzes API calls inside inline functions and MIDI callbacks. Logs warnings to the console when potentially unsafe calls are detected.");
+		D("- **Error**: Same analysis as Warn, but also prevents compilation when unsafe calls are found in audio-thread contexts.");
+		D("> This only affects the HISE IDE. Exported plugins have zero overhead regardless of this setting.");
+		P_();
+
 		P(HiseSettings::Scripting::EnableMousePositioning);
 		D("Sets the default value of whether the interface designer should allow dragging UI components with the mouse");
 		D("> This was always enabled, but on larger projects it's easy to accidentally drag UI elements when you really just wanted to select them so this gives you the option to remove the dragging.");
@@ -1000,6 +1009,9 @@ juce::StringArray HiseSettings::Data::getOptionsFor(const Identifier& id)
 
 	    return { "Yes", "No" };
 
+	if (id == Scripting::CallScopeWarnings)
+		return { "Relaxed", "Warn", "Error" };
+
 	if (id == Compiler::VisualStudioVersion)
 		return { "Visual Studio 2022", "Visual Studio 2026" };
 
@@ -1238,6 +1250,7 @@ var HiseSettings::Data::getDefaultSetting(const Identifier& id) const
 	else if (id == Scripting::CodeFontSize)			return 17.0;
 	else if (id == Scripting::EnableCallstack)		return "No";
 	else if (id == Scripting::EnableOptimizations)	return "No";
+	else if (id == Scripting::CallScopeWarnings)	return "Relaxed";
 	else if (id == Scripting::EnableMousePositioning) return "Yes";
 	else if (id == Scripting::CompileTimeout)		return 5.0;
 	else if (id == Scripting::SaveConnectedFilesOnCompile) return "No";
@@ -1419,6 +1432,8 @@ void HiseSettings::Data::settingWasChanged(const Identifier& id, const var& newV
 	}
 		
 	else if (id == Scripting::EnableOptimizations)
+		mc->compileAllScripts();
+	else if (id == Scripting::CallScopeWarnings)
 		mc->compileAllScripts();
 	else if (id == Scripting::EnableDebugMode)
 		newValue ? mc->getDebugLogger().startLogging() : mc->getDebugLogger().stopLogging();
