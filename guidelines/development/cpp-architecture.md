@@ -8,14 +8,14 @@
 
 ## Research & Understanding
 
-### 1. Understand Deeply Before Acting
+### Understand Deeply Before Acting
 Before proposing solutions, thoroughly investigate existing code and documentation. This means:
 
 - **Anticipate related mechanisms** - If discussing read locks, proactively address write locks. If discussing one code path, consider parallel paths (like parameter setters alongside process methods)
 - **Focus on the architectural "why"** - Don't just understand what code does - understand why it exists and how it interacts with other systems
 - **Question whether existing patterns are correct** - Or just legacy that needs revisiting
 
-### 2. Delegate Research Effectively
+### Delegate Research Effectively
 For architectural questions spanning multiple files or requiring deep analysis, delegate to explore subagents. When delegating:
 
 1. **Include key class/pattern names** - Name the specific abstractions the research must consider, even if they seem obvious from prior conversation
@@ -25,10 +25,10 @@ For architectural questions spanning multiple files or requiring deep analysis, 
 
 **Example:** When asking a subagent to analyze parameter handling, don't just say "analyze setParameter". Instead: "Analyze how setParameter interacts with the PolyData voice iteration system. Key classes: `ScopedVoiceSetter` (sets voice index on audio thread), `ScopedAllVoiceSetter` (UI thread protection). Read `voice-setter-system.md` first."
 
-### 3. Verify Understanding Before Proceeding
+### Verify Understanding Before Proceeding
 When corrected, re-read relevant documentation/code before continuing. Explicitly state the corrected understanding and verify it's accurate before proposing next steps.
 
-### 4. Identify and Clarify Naming Confusions Early
+### Identify and Clarify Naming Confusions Early
 Similar names, parallel naming patterns, or related-sounding concepts cause confusion and lead to incorrect analysis. When encountering potentially confusing names:
 
 1. **Watch for similar names with different purposes** - `UIUpdater` vs `MessageThreadUpdater`, `ScopedVoiceSetter` vs `ScopedAllVoiceSetter` may sound related but serve different roles
@@ -43,24 +43,24 @@ Similar names, parallel naming patterns, or related-sounding concepts cause conf
 
 ## Solution Design
 
-### 5. Don't Over-Engineer Solutions
+### Don't Over-Engineer Solutions
 Start with minimal, targeted fixes. Avoid proposing elaborate patterns (like atomic flags, deferred updates) when simpler solutions using existing infrastructure suffice.
 
-### 6. Extend Existing Patterns Rather Than Inventing New Ones
+### Extend Existing Patterns Rather Than Inventing New Ones
 When solving a new problem, first look for existing patterns in the codebase that solve similar problems. Prefer extending those patterns (adding a parameter, reusing an enum) over creating new abstractions. This results in:
 - Consistent API across related methods
 - Less cognitive load for users of the API
 - Fewer new concepts to document and maintain
 - Code that "rhymes" - if you know how `get()` works, you know how `all()` works
 
-### 7. Separate Logic Verification from Implementation
+### Separate Logic Verification from Implementation
 For complex changes, separate phases: (1) understand the problem, (2) verify the design, (3) implement. Don't rush to code before the logic is solid.
 
 ---
 
 ## API Design
 
-### 8. Design APIs That Make Wrong Usage Visible
+### Design APIs That Make Wrong Usage Visible
 When a code path has performance (or correctness) implications that could silently degrade the system:
 
 1. **Make the safe path the default** - require explicit opt-out for dangerous/slow paths
@@ -70,7 +70,7 @@ When a code path has performance (or correctness) implications that could silent
 
 **The test:** Can a developer reading the call site understand the implications without looking up documentation?
 
-### 9. Prefer Nested Structs for Small Helper PODs
+### Prefer Nested Structs for Small Helper PODs
 When a small data type (enum, POD struct, result type) exists solely to serve a specific class, nest it inside that class rather than polluting the enclosing namespace. This keeps the type's scope and ownership obvious.
 
 ```cpp
@@ -98,10 +98,10 @@ struct CallScopeInfo { ... };
 
 ## Threading & Performance
 
-### 10. Be Precise About Thread Contexts
+### Be Precise About Thread Contexts
 For audio/real-time code, always be explicit about which thread calls each method and what the lock-free requirements are. Document this in tables and comments.
 
-### 11. Trace Performance Implications Across Call Boundaries
+### Trace Performance Implications Across Call Boundaries
 Code that is correct in isolation may defeat optimizations established by callers. Consider the full call chain:
 
 - Who calls this code and how often?
@@ -112,9 +112,24 @@ Code that is correct in isolation may defeat optimizations established by caller
 
 ---
 
+## Unity Build & Include Order
+
+### Never Let Include Order Drive Design Decisions
+HISE uses unity builds where include/definition order within a `.cpp` translation unit determines visibility. When a type defined later in the file is needed earlier:
+
+1. **Use out-of-line definitions** — Declare the method in the class, define it after the dependency is fully defined. C++ allows member function definitions to appear after the class body in the same translation unit.
+2. **Use forward declarations** — If only a pointer/reference is needed, forward-declare the type.
+3. **NEVER restructure the architecture** (extract helper structs, add indirection, change class hierarchies, introduce function pointers) just to work around definition order. The order of types in a unity build file is an implementation detail, not an architectural constraint.
+
+**The test:** If the same code were split across separate `.h`/`.cpp` files with proper `#include` directives, would this design change still make sense? If the answer is "no, it's only needed because of definition order," then find a simpler solution.
+
+**Anti-pattern:** Creating a `Helpers` struct or free functions solely because a method body needs a type that appears later in the file. Instead, just define the method body after that type.
+
+---
+
 ## Code Quality
 
-### 12. Verify Changes End-to-End
+### Verify Changes End-to-End
 After making changes, review them critically. Explain why each change was made. Watch for code smells that indicate a wrong approach:
 - Unnecessary casts (especially `const_cast`)
 - Working around the API rather than using it directly
@@ -122,7 +137,7 @@ After making changes, review them critically. Explain why each change was made. 
 
 **The test:** Does this change use the API as intended, or does it feel like a workaround?
 
-### 13. Explain "Why" in Comments When Patterns Deviate
+### Explain "Why" in Comments When Patterns Deviate
 When code deviates from the expected pattern, add a comment explaining:
 1. **Why** - the reason this deviation is necessary
 2. **When** - the contexts where this applies
@@ -134,10 +149,10 @@ When code deviates from the expected pattern, add a comment explaining:
 
 ## Project Management
 
-### 14. Document Deferred Work Thoroughly
+### Document Deferred Work Thoroughly
 When deferring work, create detailed TODO documentation capturing: problem statement, current state, proposed solution, files to modify, and dependencies. This enables clean handoff to future sessions.
 
-### 15. Keep Documentation in Sync with Evolving Understanding
+### Keep Documentation in Sync with Evolving Understanding
 As understanding deepens during a session, previously written documentation may become outdated or incomplete. When significant new insights emerge:
 
 1. **Identify affected documentation** - What docs were written before this insight?
@@ -148,7 +163,7 @@ As understanding deepens during a session, previously written documentation may 
 
 ## Critical Thinking
 
-### 16. Critically Evaluate Proposals Before Planning Implementation
+### Critically Evaluate Proposals Before Planning Implementation
 Don't assume user suggestions are optimal. Before planning implementation:
 
 1. **Ask "What problem does this actually solve?"** - Verify the diagnosis before accepting the prescription

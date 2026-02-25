@@ -6461,8 +6461,13 @@ void ScriptingObjects::ScriptedMidiPlayer::setRecordEventCallback(var recordEven
 {
 	if (auto co = dynamic_cast<WeakCallbackHolder::CallableObject*>(recordEventCallback.getObject()))
 	{
+#if USE_BACKEND
+		if (HiseJavascriptEngine::RootObject::RealtimeSafetyInfo::check(co, this, "MidiPlayer.setRecordEventCallback"))
+			reportScriptError("This callable object is not safe for audio-thread execution");
+#else
 		if (!co->isRealtimeSafe())
 			reportScriptError("This callable object is not realtime safe!");
+#endif
 
 		recordEventProcessor = nullptr;
 		recordEventProcessor = new ScriptEventRecordProcessor(*this, recordEventCallback);
@@ -6812,6 +6817,16 @@ void ScriptingObjects::ScriptedMidiPlayer::setPlaybackCallback(var newPlaybackCa
     
 	if (HiseJavascriptEngine::isJavascriptFunction(newPlaybackCallback))
 	{
+#if USE_BACKEND
+		if (isSync)
+		{
+			if (auto co = dynamic_cast<WeakCallbackHolder::CallableObject*>(newPlaybackCallback.getObject()))
+			{
+				if (HiseJavascriptEngine::RootObject::RealtimeSafetyInfo::check(co, this, "MidiPlayer.setPlaybackCallback"))
+					reportScriptError("Callback is not safe for synchronous audio-thread execution");
+			}
+		}
+#endif
 		playbackUpdater = new PlaybackUpdater(*this, newPlaybackCallback, isSync);
 	}
 }
@@ -7024,7 +7039,7 @@ static ApiHelpers::CallScope parseCallScopeString(const String& s)
 	using CS = ApiHelpers::CallScope;
 
 	if (s == "safe")    return CS::Safe;
-	if (s == "caution") return CS::Caution;
+	if (s == "warning") return CS::Warning;
 	if (s == "unsafe")  return CS::Unsafe;
 	if (s == "init")    return CS::Init;
 	return CS::Unknown;
@@ -7037,7 +7052,7 @@ static int callScopeSeverity(ApiHelpers::CallScope s)
 	{
 		case CS::Unsafe:  return 3;
 		case CS::Init:    return 2;
-		case CS::Caution: return 1;
+		case CS::Warning: return 1;
 		case CS::Safe:    return 0;
 		case CS::Unknown: return 0;
 		default:          return 0;
@@ -7053,7 +7068,7 @@ struct GreedyCallScopeMap
 	 *  - Collect all CallScope values for *.methodName across all classes
 	 *  - If ANY are Safe: store Safe (ambiguous — don't warn)
 	 *  - If ALL are not-safe: store the worst-case scope
-	 *  - Severity: Unsafe (3) > Init (2) > Caution (1) > Unknown/Safe (0)
+	 *  - Severity: Unsafe (3) > Init (2) > Warning (1) > Unknown/Safe (0)
 	 */
 	HashMap<String, ApiHelpers::CallScopeInfo> map;
 	bool built = false;
@@ -7202,7 +7217,7 @@ String HiseJavascriptEngine::RootObject::RealtimeSafetyInfo::toString(Strictness
 		{
 			case CallScope::Unsafe:  scopeLabel = "unsafe"; break;
 			case CallScope::Init:    scopeLabel = "init-only"; break;
-			case CallScope::Caution: scopeLabel = "caution"; break;
+			case CallScope::Warning: scopeLabel = "warning"; break;
 			default: scopeLabel = "unknown"; break;
 		}
 
@@ -7213,10 +7228,21 @@ String HiseJavascriptEngine::RootObject::RealtimeSafetyInfo::toString(Strictness
 
 		s << ")" << nl;
 
+		int entryIndex = 0;
+
 		for (auto& entry : w.callStack)
 		{
 			auto error = Error::fromLocation(entry.location, "");
-			s << ":\t\t\t" << entry.functionName << "() - " << error.toString(p) << nl;
+
+			if (entryIndex == 0 && w.outerHolderType.toString() == "Callback" && entry.functionName.isValid())
+				error.externalLocation = entry.functionName.toString() + "()";
+
+			if (p != nullptr)
+				s << ":\t\t\t" << entry.functionName << "() - " << error.toString(p) << nl;
+			else
+				s << ":\t\t\t" << entry.functionName << "() - " << error.getLocationString() << nl;
+
+			entryIndex++;
 		}
 	}
 
@@ -7231,12 +7257,10 @@ bool HiseJavascriptEngine::RootObject::RealtimeSafetyInfo::check(
 	if (callable == nullptr)
 		return true;
 
-	// Step 1: structural gate — rejects regular function objects and non-RT broadcasters
 	if (!callable->isRealtimeSafe())
 		return true;
 
-	// Step 2: query StrictnessLevel from settings
-	auto settingValue = GET_HISE_SETTING(dynamic_cast<Processor*>(caller), HiseSettings::Scripting::CallScopeWarnings).toString();
+	auto settingValue = GET_HISE_SETTING(dynamic_cast<Processor*>(caller->getScriptProcessor()), HiseSettings::Scripting::CallScopeWarnings).toString();
 
 	StrictnessLevel strictness = StrictnessLevel::Relaxed;
 	if (settingValue == "Warn")       strictness = StrictnessLevel::Warn;
@@ -7245,15 +7269,21 @@ bool HiseJavascriptEngine::RootObject::RealtimeSafetyInfo::check(
 	if (strictness == StrictnessLevel::Relaxed)
 		return false;
 
-	// Step 3: get the content-aware safety report
-	auto result = callable->getRealtimeSafetyReport(strictness);
+	auto report = callable->getRealtimeSafetyReport(strictness);
 
-	if (result.failed())
+	// Always log if there's a message (both Warn and Error mode)
+	if (report.message.isNotEmpty())
 	{
-		debugToConsole(dynamic_cast<Processor*>(caller),
-		               "[" + context + "] " + result.getErrorMessage());
+		debugToConsole(dynamic_cast<Processor*>(caller->getScriptProcessor()),
+		               "[" + context + "] " + report.message);
+	}
 
-		return strictness == StrictnessLevel::Error;
+	// Only block registration if Error strictness AND worst scope is Unsafe or Init
+	if (strictness == StrictnessLevel::Error)
+	{
+		if (report.worstScope == CallScope::Unsafe ||
+		    report.worstScope == CallScope::Init)
+			return true;
 	}
 
 	return false;
@@ -8343,6 +8373,13 @@ void ScriptingObjects::ScriptFFT::setMagnitudeFunction(var newMagnitudeFunction,
 
 	if (HiseJavascriptEngine::isJavascriptFunction(newMagnitudeFunction))
 	{
+#if USE_BACKEND
+		if (auto co = dynamic_cast<WeakCallbackHolder::CallableObject*>(newMagnitudeFunction.getObject()))
+		{
+			if (HiseJavascriptEngine::RootObject::RealtimeSafetyInfo::check(co, this, "FFT.setMagnitudeFunction"))
+				reportScriptError("Callback is not safe for audio-thread execution");
+		}
+#endif
 		convertMagnitudesToDecibel = convertDb;
 		magnitudeFunction = WeakCallbackHolder(getScriptProcessor(), this, newMagnitudeFunction, 2);
 		magnitudeFunction.incRefCount();
@@ -8356,6 +8393,13 @@ void ScriptingObjects::ScriptFFT::setPhaseFunction(var newPhaseFunction)
 
 	if (HiseJavascriptEngine::isJavascriptFunction(newPhaseFunction))
 	{
+#if USE_BACKEND
+		if (auto co = dynamic_cast<WeakCallbackHolder::CallableObject*>(newPhaseFunction.getObject()))
+		{
+			if (HiseJavascriptEngine::RootObject::RealtimeSafetyInfo::check(co, this, "FFT.setPhaseFunction"))
+				reportScriptError("Callback is not safe for audio-thread execution");
+		}
+#endif
 		phaseFunction = WeakCallbackHolder(getScriptProcessor(), this, newPhaseFunction, 2);
 		phaseFunction.incRefCount();
 		reinitialise();
@@ -9396,31 +9440,48 @@ struct ScriptingObjects::GlobalCableReference::Callback: public scriptnode::rout
 
 		auto ilf = dynamic_cast<WeakCallbackHolder::CallableObject*>(f.getObject());
 
-		if (ilf != nullptr && (!synchronous || ilf->isRealtimeSafe()))
-		{
-			if (auto dobj = dynamic_cast<DebugableObjectBase*>(ilf))
-			{
-				id << dobj->getDebugName();
-				funcLocation = dobj->getLocation();
-			}
-
-			callback.incRefCount();
-			callback.setHighPriority();
-
-			if (auto c = getCableFromVar(parent.cable))
-			{
-				c->addTarget(this);
-			}
-
-			if (!synchronous)
-				start();
-			else
-				stop();
-		}
-		else
+		if (ilf == nullptr)
 		{
 			stop();
+			return;
 		}
+
+		if (synchronous)
+		{
+#if USE_BACKEND
+			if (HiseJavascriptEngine::RootObject::RealtimeSafetyInfo::check(ilf, &p, "GlobalCable.registerCallback"))
+			{
+				p.reportScriptError("Callback is not safe for synchronous audio-thread execution");
+				stop();
+				return;
+			}
+#else
+			if (!ilf->isRealtimeSafe())
+			{
+				stop();
+				return;
+			}
+#endif
+		}
+
+		if (auto dobj = dynamic_cast<DebugableObjectBase*>(ilf))
+		{
+			id << dobj->getDebugName();
+			funcLocation = dobj->getLocation();
+		}
+
+		callback.incRefCount();
+		callback.setHighPriority();
+
+		if (auto c = getCableFromVar(parent.cable))
+		{
+			c->addTarget(this);
+		}
+
+		if (!synchronous)
+			start();
+		else
+			stop();
 	}
 
 	void timerCallback() override
@@ -10930,10 +10991,13 @@ void ScriptingObjects::ScriptingComplexGroupManager::registerGroupStartCallback(
 
 	if(auto obj = dynamic_cast<WeakCallbackHolder::CallableObject*>(callback.getObject()))
 	{
+#if USE_BACKEND
+		if(HiseJavascriptEngine::RootObject::RealtimeSafetyInfo::check(obj, this, "ComplexGroupManager.registerGroupStartCallback"))
+			reportScriptError("This function only works with callable objects that are safe for audio-thread execution");
+#else
 		if(!obj->isRealtimeSafe())
-		{
 			reportScriptError("This function only works with callable objects that are realtime safe");
-		}
+#endif
 
 		auto nc = new GroupCallback(*this, callback);
 		getManager()->setVoiceStartCallback(idx, nc);

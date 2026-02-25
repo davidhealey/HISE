@@ -541,16 +541,9 @@ public:
 
 		struct RealtimeSafetyInfo
 		{
-			enum class CallScope : uint8
-			{
-				Unknown = 0,   // no enrichment data
-				Init,          // onInit only
-				Unsafe,        // runtime OK, not audio thread
-				Caution,       // audio thread OK with caveats
-				Safe           // anywhere, anytime
-			};
-
+			using CallScope = WeakCallbackHolder::CallableObject::CallScope;
 			using StrictnessLevel = WeakCallbackHolder::CallableObject::StrictnessLevel;
+			using SafetyReport = WeakCallbackHolder::CallableObject::SafetyReport;
 
 			struct Warning
 			{
@@ -558,15 +551,19 @@ public:
 				CallScope scope;                   // from the CallScopeInfo lookup
 				String note;                       // callScopeNote, e.g. "allocates MemoryOutputStream"
 				Array<CallStackEntry> callStack;   // full trace from caller to unsafe API call
+				Identifier outerHolderType;        // "Callback" or "InlineFunction" — type of outermost holder
 			};
 
 			struct Holder
 			{
 				virtual ~Holder() {}
 				virtual RealtimeSafetyInfo* getRealtimeSafetyInfo() = 0;
+				virtual Identifier getCallScopeId() const { return {}; }
+				virtual Identifier getCallScopeType() const { return {}; }
 			};
 
 			Array<Warning> warnings;
+			bool analyzed = false;
 
 			bool isEmpty() const { return warnings.isEmpty(); }
 
@@ -578,16 +575,16 @@ public:
 				return false;
 			}
 
-			bool hasCaution() const
-			{
-				for (auto& w : warnings)
-					if (w.scope == CallScope::Caution)
-						return true;
-				return false;
-			}
+		bool hasWarning() const
+		{
+			for (auto& w : warnings)
+				if (w.scope == CallScope::Warning)
+					return true;
+			return false;
+		}
 
 			/** Returns a formatted report string for the console.
-			 *  Filters based on strictness: Warn includes caution+unsafe, Error same.
+			 *  Filters based on strictness: Warn includes warning+unsafe, Error same.
 			 *  Relaxed returns empty (caller should not call this with Relaxed).
 			 */
 			String toString(StrictnessLevel l, Processor* p) const;
@@ -596,9 +593,9 @@ public:
 			 *
 			 *  1. Checks callable->isRealtimeSafe() — if false, returns true (structural rejection)
 			 *  2. Queries StrictnessLevel from settings
-			 *  3. Calls callable->getRealtimeSafetyReport(strictness)
-			 *  4. If failed: logs to console, returns true if Error strictness
-			 *  5. Otherwise returns false
+			 *  3. Calls callable->getRealtimeSafetyReport(strictness) → SafetyReport
+			 *  4. Logs message if non-empty (both Warn and Error mode)
+			 *  5. Returns true (blocks registration) only if Error + worstScope is Unsafe/Init
 			 */
 			static bool check(WeakCallbackHolder::CallableObject* callable,
 			                  ScriptingObject* caller,
@@ -681,13 +678,43 @@ public:
 			*/
 			virtual Statement* getOptimizedStatement(Statement* parentStatement, Statement* statementToOptimize) = 0;
 
-			static bool callForEach(Statement* root, const std::function<bool(Statement* child)>& f);
+			
+
+			/** Called before (isBefore=true) and after (isBefore=false) iterating
+				a node's child statements during executePass. */
+			virtual void handleChildIteration(Statement*, bool isBefore) {}
+
+			static bool callForEach(Statement* root, const std::function<bool(Statement* child)>& f, OptimizationPass* p=nullptr);
+
+			
 
 			OptimizationResult executePass(Statement* rootStatementToOptimize);
 
-#if USE_BACKEND
-			virtual void setCurrentRealtimeInfoHolder(RealtimeSafetyInfo::Holder*) {}
-#endif
+		private:
+
+			struct ScopedChildIterationHandler
+			{
+				ScopedChildIterationHandler(OptimizationPass* p, Statement* s) :
+					pass(p),
+					st(s)
+				{
+					if (pass != nullptr)
+						pass->handleChildIteration(st, true);
+				}
+
+				~ScopedChildIterationHandler()
+				{
+					if (pass != nullptr)
+						pass->handleChildIteration(st, false);
+				}
+
+			private:
+
+				OptimizationPass* pass;
+				Statement* st;
+
+				JUCE_DECLARE_NON_COPYABLE(ScopedChildIterationHandler);
+			};
 		};
 
 		struct ScriptAudioThreadGuard;
@@ -754,7 +781,7 @@ public:
 		struct ScopedPrinter;			struct ScopedBefore;		struct ScopedAfter;
 		struct ScopedDumper;			struct ScopedNoop;			struct ScopedCounter;
 		struct ScopedProfiler;			struct ScopedSuspender;		struct ScopedBypasser;
-        struct ScopedSampling;          struct ScopedCall;
+        struct ScopedSampling;          struct ScopedCall;			struct ScopedSuppress;
 		
 
 		// Variables
@@ -818,6 +845,9 @@ public:
 		class Callback:  public DynamicObject,
 					     public DebugableObject,
                          public LocalScopeCreator
+#if USE_BACKEND
+						 , public RealtimeSafetyInfo::Holder
+#endif
 		{
 		public:
 
@@ -858,6 +888,13 @@ public:
 			void doubleClickCallback(const MouseEvent &/*e*/, Component* /*componentToNotify*/) override;
 
 			void cleanLocalProperties();
+
+#if USE_BACKEND
+			RealtimeSafetyInfo realtimeSafetyInfoData;
+			RealtimeSafetyInfo* getRealtimeSafetyInfo() override { return &realtimeSafetyInfoData; }
+			Identifier getCallScopeId() const override { return getName(); }
+			Identifier getCallScopeType() const override { RETURN_STATIC_IDENTIFIER("Callback"); }
+#endif
 
 			Identifier parameters[4];
 			var parameterValues[4];

@@ -400,6 +400,16 @@ void ScriptUserPresetHandler::attachAutomationCallback(String automationId, var 
 			}
 		}
 
+#if USE_BACKEND
+		if (n == dispatch::DispatchType::sendNotificationSync)
+		{
+			if (auto co = dynamic_cast<WeakCallbackHolder::CallableObject*>(updateCallback.getObject()))
+			{
+				if (HiseJavascriptEngine::RootObject::RealtimeSafetyInfo::check(co, this, "UserPresetHandler.attachAutomationCallback"))
+					reportScriptError("Callback is not safe for synchronous audio-thread execution");
+			}
+		}
+#endif
 		if (HiseJavascriptEngine::isJavascriptFunction(updateCallback))
 		{
 			attachedCallbacks.add(new AttachedCallback(this, cData, updateCallback, n));

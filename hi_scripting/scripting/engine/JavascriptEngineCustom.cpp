@@ -411,6 +411,9 @@ struct HiseJavascriptEngine::RootObject::InlineFunction
 					public WeakCallbackHolder::CallableObject,
 					public CyclicReferenceCheckBase,
                     public LocalScopeCreator
+#if USE_BACKEND
+					, public RealtimeSafetyInfo::Holder
+#endif
 	{
 	public:
 
@@ -598,6 +601,48 @@ struct HiseJavascriptEngine::RootObject::InlineFunction
 		}
 
         bool isRealtimeSafe() const override { return true; }
+
+#if USE_BACKEND
+		mutable RealtimeSafetyInfo realtimeSafetyInfoData;
+
+		RealtimeSafetyInfo* getRealtimeSafetyInfo() override
+		{
+			return &realtimeSafetyInfoData;
+		}
+
+		Identifier getCallScopeId() const override { return name; }
+		Identifier getCallScopeType() const override { RETURN_STATIC_IDENTIFIER("InlineFunction"); }
+
+		/** Defined out-of-line after CallScopeAnalyzer (needs full AST type definitions). */
+		void performLazyCallScopeAnalysis() const;
+
+		SafetyReport getRealtimeSafetyReport(StrictnessLevel strictness) const override
+		{
+			if (strictness == StrictnessLevel::Relaxed)
+				return {};
+
+			if (!realtimeSafetyInfoData.analyzed && body != nullptr)
+				performLazyCallScopeAnalysis();
+
+			if (realtimeSafetyInfoData.isEmpty())
+				return {};
+
+			auto msg = realtimeSafetyInfoData.toString(strictness, nullptr);
+			if (msg.isEmpty())
+				return {};
+
+			// Find worst (lowest enum value) scope across all warnings
+			CallScope worst = CallScope::Safe;
+
+			for (auto& w : realtimeSafetyInfoData.warnings)
+			{
+				if ((int)w.scope < (int)worst)
+					worst = w.scope;
+			}
+
+			return { worst, msg };
+		}
+#endif
         
 		var createDynamicObjectForBreakpoint()
 		{
@@ -1181,9 +1226,269 @@ struct FunctionInliner : public HiseJavascriptEngine::RootObject::OptimizationPa
 			}
 		}
 
-		return statementToOptimize;
+	return statementToOptimize;
 	}
 };
+
+#if USE_BACKEND
+
+struct CallScopeAnalyzer : public HiseJavascriptEngine::RootObject::OptimizationPass
+{
+	using RO = HiseJavascriptEngine::RootObject;
+	using Statement = RO::Statement;
+	using RealtimeSafetyInfo = RO::RealtimeSafetyInfo;
+	using CallStackEntry = RO::CallStackEntry;
+	using CodeLocation = RO::CodeLocation;
+
+	String getPassName() const override { return "CallScope Analyzer"; }
+
+	struct ScopedHolderSetter
+	{
+		ScopedHolderSetter(RO::OptimizationPass* a, RealtimeSafetyInfo::Holder* h):
+			analyser(dynamic_cast<CallScopeAnalyzer*>(a)),
+			prev(analyser != nullptr ? analyser->currentHolder : nullptr)
+		{
+			if(analyser != nullptr)
+				analyser->setCurrentRealtimeInfoHolder(h);
+		}
+
+		~ScopedHolderSetter()
+		{
+			if(analyser != nullptr)
+				analyser->setCurrentRealtimeInfoHolder(prev);
+		}
+
+	private:
+
+		CallScopeAnalyzer* analyser;
+		RealtimeSafetyInfo::Holder* prev;
+
+		JUCE_DECLARE_NON_COPYABLE(ScopedHolderSetter);
+	};
+
+	void setCurrentRealtimeInfoHolder(RealtimeSafetyInfo::Holder* h)
+	{
+		currentHolder = h;
+
+		if (currentHolder != nullptr)
+		{
+			if (auto* info = currentHolder->getRealtimeSafetyInfo())
+			{
+				info->warnings.clear();
+				info->analyzed = true;
+			}
+		}
+	}
+
+	
+
+	void handleChildIteration(Statement* statement, bool isBefore) override
+	{
+		auto* block = dynamic_cast<RO::BlockStatement*>(statement);
+		if (block == nullptr)
+			return;
+
+		auto level = block->getSuppressLevel();
+		if (level == ApiHelpers::CallScope::Safe)
+			return;
+
+		if (isBefore)
+		{
+			suppressStack.add(suppressLevel);
+			suppressLevel = level;
+		}
+		else
+		{
+			suppressLevel = suppressStack.getLast();
+			suppressStack.removeLast();
+		}
+	}
+
+	Statement* getOptimizedStatement(Statement* parent, Statement* statementToOptimize) override
+	{
+		if (currentHolder == nullptr)
+			return statementToOptimize;
+
+		auto* info = currentHolder->getRealtimeSafetyInfo();
+		if (info == nullptr)
+			return statementToOptimize;
+
+		// --- ApiCall: global API class method (Console.print, Engine.getSampleRate, etc.) ---
+		if (auto* apiCall = dynamic_cast<RO::ApiCall*>(statementToOptimize))
+		{
+			auto className = apiCall->apiClass->getObjectName().toString();
+			auto methodName = apiCall->functionName;
+
+			if (methodName.isNotEmpty())
+			{
+				auto scopeInfo = ApiHelpers::getCallScope(className, methodName);
+				addWarningIfNeeded(info, className + "." + methodName, scopeInfo,
+				                   statementToOptimize->location);
+			}
+		}
+		// --- ConstObjectApiCall: method on a const-declared scripting object ---
+		else if (auto* constCall = dynamic_cast<RO::ConstObjectApiCall*>(statementToOptimize))
+		{
+			auto methodName = constCall->functionName.toString();
+			String className;
+
+			if (constCall->objectPointer != nullptr)
+			{
+				if (auto* obj = dynamic_cast<ConstScriptingObject*>(constCall->objectPointer->getObject()))
+					className = obj->getObjectName().toString();
+			}
+
+			if (className.isNotEmpty() && methodName.isNotEmpty())
+			{
+				auto scopeInfo = ApiHelpers::getCallScope(className, methodName);
+				addWarningIfNeeded(info, className + "." + methodName, scopeInfo,
+				                   statementToOptimize->location);
+			}
+			else if (methodName.isNotEmpty())
+			{
+				// Object not resolved — fall back to greedy
+				auto scopeInfo = ApiHelpers::getCallScope("*", methodName);
+				addWarningIfNeeded(info, "*." + methodName, scopeInfo,
+				                   statementToOptimize->location);
+			}
+		}
+		// --- InlineFunction::FunctionCall: calling another inline function ---
+		else if (auto* ilCall = dynamic_cast<RO::InlineFunction::FunctionCall*>(statementToOptimize))
+		{
+			inheritCalleeWarnings(info, ilCall);
+		}
+		// --- FunctionCall: generic dot-operator or bare function call ---
+		else if (auto* funcCall = dynamic_cast<RO::FunctionCall*>(statementToOptimize))
+		{
+			if (auto* dot = dynamic_cast<RO::DotOperator*>(funcCall->object.get()))
+			{
+				auto methodName = dot->child.toString();
+				auto scopeInfo = ApiHelpers::getCallScope("*", methodName);
+				addWarningIfNeeded(info, "*." + methodName, scopeInfo,
+				                   statementToOptimize->location);
+			}
+			// Bare FunctionCall without DotOperator (var holding a function) is skipped.
+			// These are caught at registration time via isRealtimeSafe().
+		}
+
+		// Never replace statements — this is a read-only analysis pass
+		return statementToOptimize;
+	}
+
+private:
+
+	void addWarningIfNeeded(RealtimeSafetyInfo* info, const String& apiCall,
+	                        const ApiHelpers::CallScopeInfo& scopeInfo,
+	                        const CodeLocation& location)
+	{
+		using CS = ApiHelpers::CallScope;
+
+		if (scopeInfo.scope == CS::Safe || scopeInfo.scope == CS::Unknown)
+			return;
+
+		// Check suppression threshold
+		if (suppressLevel != CS::Safe && (int)scopeInfo.scope >= (int)suppressLevel)
+			return;
+
+		// Unsafe, Init, or Warning — add warning
+		RealtimeSafetyInfo::Warning w;
+		w.apiCall = apiCall;
+		w.scope = scopeInfo.scope;
+		w.note = scopeInfo.note;
+		w.outerHolderType = currentHolder->getCallScopeType();
+
+		CallStackEntry entry;
+		entry.location = location;
+		entry.functionName = currentHolder->getCallScopeId();
+		w.callStack.add(entry);
+
+		info->warnings.add(w);
+	}
+
+	void inheritCalleeWarnings(RealtimeSafetyInfo* info,
+	                           RO::InlineFunction::FunctionCall* ilCall)
+	{
+		if (ilCall->f == nullptr)
+			return;
+
+		auto* calleeInfo = ilCall->f->getRealtimeSafetyInfo();
+		if (calleeInfo == nullptr || calleeInfo->isEmpty())
+			return;
+
+		using CS = ApiHelpers::CallScope;
+
+		for (const auto& w : calleeInfo->warnings)
+		{
+			// Check suppression threshold for inherited warnings
+			if (suppressLevel != CS::Safe && (int)w.scope >= (int)suppressLevel)
+				continue;
+
+			RealtimeSafetyInfo::Warning inherited;
+			inherited.apiCall = w.apiCall;
+			inherited.scope = w.scope;
+			inherited.note = w.note;
+			inherited.outerHolderType = currentHolder->getCallScopeType();
+
+			// Prepend the call site (where the inline function is called from)
+			CallStackEntry callerEntry;
+			callerEntry.location = ilCall->location;
+			callerEntry.functionName = currentHolder->getCallScopeId();
+
+			inherited.callStack.add(callerEntry);
+			inherited.callStack.addArray(w.callStack);
+
+			// Deduplicate: skip if we already have a warning for the same API call at the same leaf location
+			auto& leafLoc = w.callStack.getLast().location.location;
+			bool alreadyPresent = false;
+
+			for (auto& existing : info->warnings)
+			{
+				if (existing.apiCall == inherited.apiCall
+					&& !existing.callStack.isEmpty()
+					&& existing.callStack.getLast().location.location == leafLoc)
+				{
+					alreadyPresent = true;
+					break;
+				}
+			}
+
+			if (alreadyPresent)
+				continue;
+
+			info->warnings.add(inherited);
+		}
+	}
+
+	RealtimeSafetyInfo::Holder* currentHolder = nullptr;
+	ApiHelpers::CallScope suppressLevel = ApiHelpers::CallScope::Safe;
+	Array<ApiHelpers::CallScope> suppressStack;
+};
+
+void HiseJavascriptEngine::RootObject::InlineFunction::Object::performLazyCallScopeAnalysis() const
+{
+	realtimeSafetyInfoData.analyzed = true;
+
+	// Ensure callee inline functions are analyzed first (for transitive inheritance).
+	OptimizationPass::callForEach(body, [](Statement* st) -> bool
+	{
+		if (auto* ilCall = dynamic_cast<InlineFunction::FunctionCall*>(st))
+		{
+			if (ilCall->f != nullptr && !ilCall->f->realtimeSafetyInfoData.analyzed
+				&& ilCall->f->body != nullptr)
+			{
+				ilCall->f->performLazyCallScopeAnalysis();
+			}
+		}
+		return false;
+	});
+
+	// Analyze using the same CallScopeAnalyzer as the optimization pass.
+	CallScopeAnalyzer analyzer;
+	analyzer.setCurrentRealtimeInfoHolder(const_cast<Object*>(this));
+	analyzer.executePass(body);
+}
+
+#endif // USE_BACKEND
 
 void HiseJavascriptEngine::RootObject::HiseSpecialData::registerOptimisationPasses()
 {
@@ -1196,6 +1501,10 @@ void HiseJavascriptEngine::RootObject::HiseSpecialData::registerOptimisationPass
 	shouldOptimize = enable == "1";
 
 	optimizations.add(new LocationInjector());
+
+	auto strictness = GET_HISE_SETTING(processor->mainController->getMainSynthChain(), HiseSettings::Scripting::CallScopeWarnings).toString();
+	if (strictness != "Relaxed")
+		optimizations.add(new CallScopeAnalyzer());
 
 #endif
 

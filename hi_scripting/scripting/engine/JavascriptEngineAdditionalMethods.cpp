@@ -171,6 +171,9 @@ bool HiseJavascriptEngine::RootObject::JavascriptNamespace::optimiseFunction(Opt
 	{
 		if (fo->body != nullptr)
 		{
+#if USE_BACKEND
+			CallScopeAnalyzer::ScopedHolderSetter svs(p, fo);
+#endif
 			auto tr = p->executePass(fo->body);
 			r.numOptimizedStatements += tr.numOptimizedStatements;
 			return true;
@@ -242,7 +245,12 @@ HiseJavascriptEngine::RootObject::OptimizationPass::OptimizationResult HiseJavas
 	{
 		if (c->statements != nullptr)
 		{
+
+#if USE_BACKEND
+			CallScopeAnalyzer::ScopedHolderSetter svs(p, c);
+#endif
 			auto tr = p->executePass(c->statements);
+
 			r.numOptimizedStatements += tr.numOptimizedStatements;
 		}
 	}

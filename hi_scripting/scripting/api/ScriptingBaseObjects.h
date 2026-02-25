@@ -229,16 +229,35 @@ struct WeakCallbackHolder : private ScriptingObject
         virtual bool isRealtimeSafe() const = 0;
 
 #if USE_BACKEND
+		enum class CallScope : uint8
+		{
+			Unknown = 0,   // no enrichment data
+			Init,          // onInit only
+			Unsafe,        // runtime OK, not audio thread
+			Warning,       // audio thread OK with caveats
+			Safe           // anywhere, anytime
+		};
+
 		enum class StrictnessLevel { Relaxed, Warn, Error };
 
-		/** Returns a safety report for this callable at the given strictness.
-		 *  Relaxed: always returns Result::ok().
-		 *  Warn/Error: returns Result::fail(message) if unsafe calls were found.
-		 *  Default: returns ok (no analysis data). Override in InlineFunction::Object (Layer 3).
+		/** Returned by getRealtimeSafetyReport(). The call site (which has access
+		 *  to the global StrictnessLevel setting) uses worstScope to decide whether
+		 *  to block registration or just log, and message for console output.
 		 */
-		virtual juce::Result getRealtimeSafetyReport(StrictnessLevel) const
+		struct SafetyReport
 		{
-			return Result::ok();
+			CallScope worstScope = CallScope::Safe;
+			String message;
+		};
+
+		/** Returns a safety report for this callable at the given strictness.
+		 *  Relaxed: always returns empty report.
+		 *  Warn/Error: returns worstScope + formatted message if issues were found.
+		 *  Default: returns empty (no analysis data). Override in InlineFunction::Object (Layer 3).
+		 */
+		virtual SafetyReport getRealtimeSafetyReport(StrictnessLevel) const
+		{
+			return {};
 		}
 #endif
         

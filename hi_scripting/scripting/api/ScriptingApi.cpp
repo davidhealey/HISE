@@ -1090,6 +1090,13 @@ bool ScriptingApi::Message::isArtificial() const
 
 void ScriptingApi::Message::setAllNotesOffCallback(var onAllNotesOffCallback)
 {
+#if USE_BACKEND
+	if (auto co = dynamic_cast<WeakCallbackHolder::CallableObject*>(onAllNotesOffCallback.getObject()))
+	{
+		if (HiseJavascriptEngine::RootObject::RealtimeSafetyInfo::check(co, this, "Message.setAllNotesOffCallback"))
+			reportScriptError("Callback is not safe for audio-thread execution");
+	}
+#endif
 	allNotesOffCallback = WeakCallbackHolder(getScriptProcessor(), this, onAllNotesOffCallback, 0);
 	allNotesOffCallback.incRefCount();
 }
@@ -8255,6 +8262,14 @@ ScriptingApi::TransportHandler::Callback::Callback(TransportHandler* p, const St
 		{
 			throw String("Parameter amount mismatch for callback. Expected " + String(numArgs));
 		}
+
+#if USE_BACKEND
+		if (auto co = dynamic_cast<WeakCallbackHolder::CallableObject*>(f.getObject()))
+		{
+			if (HiseJavascriptEngine::RootObject::RealtimeSafetyInfo::check(co, p, "TransportHandler." + name))
+				throw String("Callback contains unsafe API calls for audio-thread execution");
+		}
+#endif
 	}
 
 	setHandler(th->getMainController()->getGlobalUIUpdater());

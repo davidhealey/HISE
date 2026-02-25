@@ -2019,7 +2019,7 @@ hise::HiseJavascriptEngine::RootObject::OptimizationPass::OptimizationResult His
 		}
 
 		return false;
-	});
+	}, this);
 
 	return r;
 }
@@ -2103,8 +2103,10 @@ String HiseJavascriptEngine::RootObject::Error::toString(Processor* p) const
 	return s;
 }
 
-bool HiseJavascriptEngine::RootObject::OptimizationPass::callForEach(Statement* root, const std::function<bool(Statement* child)>& f)
+bool HiseJavascriptEngine::RootObject::OptimizationPass::callForEach(Statement* root, const std::function<bool(Statement* child)>& f, OptimizationPass* p)
 {
+	ScopedChildIterationHandler sh(p, root);
+	
 	if (f(root))
 		return true;
 
@@ -2112,7 +2114,7 @@ bool HiseJavascriptEngine::RootObject::OptimizationPass::callForEach(Statement* 
 
 	while (auto child = root->getChildStatement(index++))
 	{
-		if (callForEach(child, f))
+		if (callForEach(child, f, p))
 			return true;
 	}
 

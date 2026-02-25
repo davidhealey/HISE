@@ -7242,6 +7242,17 @@ String ScriptingApi::Content::ScriptMultipageDialog::bindCallback(String id, var
 {
 	auto n = ApiHelpers::getDispatchType(notificationType, false);
 
+#if USE_BACKEND
+	if (n == dispatch::DispatchType::sendNotificationSync)
+	{
+		if (auto co = dynamic_cast<WeakCallbackHolder::CallableObject*>(callback.getObject()))
+		{
+			if (HiseJavascriptEngine::RootObject::RealtimeSafetyInfo::check(co, this, "ScriptMultipageDialog.bindCallback"))
+				reportScriptError("Callback is not safe for synchronous audio-thread execution");
+		}
+	}
+#endif
+
 	auto nc = new ValueCallback(this, id, callback, n);
 	valueCallbacks.add(nc);
 	
