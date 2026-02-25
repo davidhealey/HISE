@@ -1601,6 +1601,30 @@ void JavascriptProcessor::compileScript(const ResultFunction& rf /*= ResultFunct
 	mainController->getKillStateHandler().killVoicesAndCall(dynamic_cast<Processor*>(this), f, MainController::KillStateHandler::TargetThread::ScriptingThread);
 }
 
+#if USE_BACKEND
+void JavascriptProcessor::shadowParseFile(const String& code, const String& fileName, const DiagnosticCallback& callback)
+{
+	auto f = [code, fileName, callback](Processor* p)
+	{
+		auto jp = dynamic_cast<JavascriptProcessor*>(p);
+		auto diagnostics = jp->scriptEngine->shadowParse(code, fileName);
+
+		auto postParse = [diagnostics, callback](Dispatchable* obj)
+		{
+			callback(diagnostics);
+			return Dispatchable::Status::OK;
+		};
+
+		jp->mainController->getLockFreeDispatcher().callOnMessageThreadAfterSuspension(jp, postParse);
+
+		return SafeFunctionCall::OK;
+	};
+
+	mainController->getKillStateHandler().killVoicesAndCall(
+		dynamic_cast<Processor*>(this), f,
+		MainController::KillStateHandler::TargetThread::ScriptingThread);
+}
+#endif
 
 void JavascriptProcessor::setupApi()
 {

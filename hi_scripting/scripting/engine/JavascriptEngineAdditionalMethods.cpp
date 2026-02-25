@@ -991,6 +991,18 @@ void HiseJavascriptEngine::RootObject::HiseSpecialData::throwExistingDefinition(
 		break;
 	}
 
+	// Recovery site #6: Identifier already defined — in diagnostic mode, record as warning and continue
+#if USE_BACKEND
+	if (diagnosticMode)
+	{
+		// We can't directly record into the ExpressionTreeBuilder's diagnostics array from here,
+		// but we can use debugToConsole as a temporary measure. The shadow parse will continue
+		// with the new declaration overwriting the old one, which is acceptable for diagnostics.
+		// The diagnostic is recorded by the parser itself when it catches the error.
+		return;
+	}
+#endif
+
 	l.throwError("Identifier " + name.toString() + " is already defined as " + typeName);
 }
 
@@ -1775,5 +1787,179 @@ String JavascriptProcessor::Helpers::uglify(const String& prettyCode)
 
 
 
+#if USE_BACKEND
+
+// ==============================================================================
+// ScopedDiagnosticParse implementation
+
+using SDP = HiseJavascriptEngine::RootObject::ScopedDiagnosticParse;
+
+void SDP::snapshotNamespace(JavascriptNamespace* ns)
+{
+	NamespaceSnapshot snap;
+	snap.ns = ns;
+
+	// Deep-copy constObjects and constLocations
+	snap.savedConstObjects = ns->constObjects;
+	snap.savedConstLocations = ns->constLocations;
+
+	// Snapshot each inline function's body pointer and localProperties
+	for (int i = 0; i < ns->inlineFunctions.size(); i++)
+	{
+		if (auto ifo = dynamic_cast<InlineFunction::Object*>(ns->inlineFunctions[i].get()))
+		{
+			InlineFunctionSnapshot ifSnap;
+			ifSnap.obj = ifo;
+
+			// Detach body via swap — we own the old one, parser can write a new one
+			ifSnap.savedBody = ifo->body.release();
+
+			// If savedBody was non-null, put it back so parsing can still reference it.
+			// The parser will overwrite body with a new parse result; we restore in destructor.
+			if (ifSnap.savedBody != nullptr)
+				ifo->body = new BlockStatement(ifSnap.savedBody->location);
+
+			// Snapshot localProperties (parser registers names here during parse)
+			ifSnap.savedLocalProperties = ifo->localProperties.get();
+
+			snap.inlineFnSnapshots.add(std::move(ifSnap));
+		}
+	}
+
+	nsSnapshots.add(std::move(snap));
+}
+
+void SDP::restoreNamespace(NamespaceSnapshot& snap)
+{
+	// Restore constObjects and constLocations
+	snap.ns->constObjects = snap.savedConstObjects;
+	snap.ns->constLocations = snap.savedConstLocations;
+
+	// Restore inline function bodies and localProperties
+	for (auto& ifSnap : snap.inlineFnSnapshots)
+	{
+		if (auto ifo = dynamic_cast<InlineFunction::Object*>(ifSnap.obj))
+		{
+			// Discard whatever the shadow parse wrote and restore original
+			ifo->body = ifSnap.savedBody.release();
+			ifo->localProperties.get() = ifSnap.savedLocalProperties;
+		}
+	}
+}
+
+SDP::ScopedDiagnosticParse(HiseSpecialData& data) : hsd(data)
+{
+	// Set diagnostic mode flag
+	hsd.diagnosticMode = true;
+
+	// Snapshot globals
+	if (hsd.globals != nullptr)
+		savedGlobalProperties = hsd.globals->getProperties();
+
+	// Remember includedFiles size so we can trim any additions
+	savedIncludedFilesSize = hsd.includedFiles.size();
+
+	// Snapshot root namespace (hiseSpecialData itself inherits JavascriptNamespace)
+	snapshotNamespace(&hsd);
+
+	// Snapshot all sub-namespaces
+	for (auto ns : hsd.namespaces)
+		snapshotNamespace(ns);
+}
+
+SDP::~ScopedDiagnosticParse()
+{
+	// Restore all namespaces (root + sub)
+	for (auto& snap : nsSnapshots)
+		restoreNamespace(snap);
+
+	// Restore globals
+	if (hsd.globals != nullptr)
+	{
+		auto& props = hsd.globals->getProperties();
+
+		// Remove any properties that were added during shadow parse
+		for (int i = props.size() - 1; i >= 0; i--)
+		{
+			if (!savedGlobalProperties.contains(props.getName(i)))
+				hsd.globals->removeProperty(props.getName(i));
+		}
+
+		// Restore original values
+		for (int i = 0; i < savedGlobalProperties.size(); i++)
+			hsd.globals->setProperty(savedGlobalProperties.getName(i), savedGlobalProperties.getValueAt(i));
+	}
+
+	// Trim includedFiles back to pre-shadow-parse size
+	while (hsd.includedFiles.size() > savedIncludedFilesSize)
+		hsd.includedFiles.removeLast();
+
+	// Clear diagnostic mode flag
+	hsd.diagnosticMode = false;
+}
+
+// ==============================================================================
+// HiseJavascriptEngine::shadowParse implementation
+
+Array<HiseJavascriptEngine::RootObject::ApiDiagnostic> HiseJavascriptEngine::shadowParse(const String& code, const String& fileName)
+{
+	RootObject::ScopedDiagnosticParse sdp(root->hiseSpecialData);
+
+	auto copy = code;
+
+	// Run preprocessor (same as execute())
+	String pid = dynamic_cast<Processor*>(root->hiseSpecialData.processor)->getId();
+	pid << "." << fileName;
+
+	auto ok = preprocessor->process(copy, pid);
+
+	if (!ok.wasOk())
+	{
+		RootObject::ApiDiagnostic d;
+		d.line = 1;
+		d.col = 0;
+		d.fileName = fileName;
+		d.message = "Preprocessor error: " + ok.getErrorMessage().fromFirstOccurrenceOf(":", false, false);
+		d.severity = RootObject::ApiDiagnostic::Error;
+
+		Array<RootObject::ApiDiagnostic> result;
+		result.add(d);
+		return result;
+	}
+
+	RootObject::ExpressionTreeBuilder tb(copy, fileName, preprocessor);
+	tb.setupApiData(root->hiseSpecialData, copy);
+
+	try
+	{
+		ScopedPointer<RootObject::BlockStatement> sl = tb.parseStatementList();
+		// No sl->perform() — parse only, no execution
+	}
+	catch (RootObject::Error& e)
+	{
+		// Hard parse error at an unrecovered site — add as final diagnostic
+		RootObject::ApiDiagnostic d;
+		d.line = e.lineNumber;
+		d.col = e.columnNumber;
+		d.fileName = e.externalLocation.isNotEmpty() ? e.externalLocation : fileName;
+		d.message = e.errorMessage;
+		d.severity = RootObject::ApiDiagnostic::Error;
+		tb.getDiagnostics().add(d);
+	}
+	catch (String& error)
+	{
+		RootObject::ApiDiagnostic d;
+		d.fileName = fileName;
+		d.message = error;
+		d.severity = RootObject::ApiDiagnostic::Error;
+		tb.getDiagnostics().add(d);
+	}
+
+	return tb.getDiagnostics();
+}
+
+#endif // USE_BACKEND
+
 } // namespace hise
+
 

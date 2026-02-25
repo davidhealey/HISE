@@ -288,7 +288,7 @@ public:
     }
     
     bool isInitialising() const { return initialising; };
-    
+
 	static bool isJavascriptFunction(const var& v);
     
 	static bool isInlineFunction(const var& v);
@@ -795,6 +795,9 @@ public:
 		struct RegisterVarStatement;	struct RegisterName;		struct RegisterAssignment;
 		struct ApiConstant;				struct ApiCall;				struct InlineFunction;
 		struct ConstVarStatement;		struct ConstReference;		struct ConstObjectApiCall;
+#if USE_BACKEND
+		struct DiagnosticPlaceholder;
+#endif
 		struct GlobalVarStatement;		struct GlobalReference;		struct LocalVarStatement;
 		struct LocalReference;			struct CallbackParameterReference;
 		struct CallbackLocalStatement;  struct CallbackLocalReference;  struct IsDefinedTest;		
@@ -1057,6 +1060,12 @@ public:
 
 			OwnedArray<ExternalFileData> includedFiles;
 
+#if USE_BACKEND
+			/** When true, the parser uses soft-fail recovery at semantic error sites
+			    instead of throwError(). Set by ScopedDiagnosticParse. */
+			bool diagnosticMode = false;
+#endif
+
 			/** Call this after compiling and a dictionary of all values will be created. */
 			void createDebugInformation(DynamicObject *root);
 
@@ -1101,6 +1110,64 @@ public:
 
 			JUCE_DECLARE_WEAK_REFERENCEABLE(HiseSpecialData);
 		};
+
+#if USE_BACKEND
+		/** Diagnostic data carrier for LSP-style shadow parse errors.
+		    Stores extracted location data instead of CodeLocation (which has no default ctor). */
+		struct ApiDiagnostic
+		{
+			int line = 0;
+			int col = 0;
+			String fileName;
+			String message;
+			StringArray suggestions;
+			enum Severity { Error, Warning, Info } severity = Error;
+		};
+
+		/** RAII snapshot/restore for shadow-parsing a single external .js file
+		    against live HiseSpecialData without corrupting runtime state.
+		    
+		    The constructor snapshots all mutable fields that the parser writes during
+		    parseStatementList(). The destructor restores them. While active, the
+		    diagnosticMode flag is set on HiseSpecialData, which causes the parser to
+		    use soft-fail recovery at semantic error sites instead of throwError().
+		    
+		    Threading: must run inside killVoicesAndCall on the scripting thread. */
+		struct ScopedDiagnosticParse
+		{
+			ScopedDiagnosticParse(HiseSpecialData& data);
+			~ScopedDiagnosticParse();
+
+			bool isDiagnosticMode() const { return true; }
+
+			struct InlineFunctionSnapshot
+			{
+				DynamicObject* obj;                     // actually InlineFunction::Object*, cast at restore
+				ScopedPointer<BlockStatement> savedBody;
+				NamedValueSet savedLocalProperties;
+			};
+
+			struct NamespaceSnapshot
+			{
+				JavascriptNamespace* ns;
+				NamedValueSet savedConstObjects;
+				Array<DebugableObject::Location> savedConstLocations;
+				Array<InlineFunctionSnapshot> inlineFnSnapshots;
+			};
+
+			Array<NamespaceSnapshot> nsSnapshots;
+			NamedValueSet savedGlobalProperties;
+			int savedIncludedFilesSize;
+
+		private:
+
+			HiseSpecialData& hsd;
+			void snapshotNamespace(JavascriptNamespace* ns);
+			void restoreNamespace(NamespaceSnapshot& snap);
+
+			JUCE_DECLARE_NON_COPYABLE(ScopedDiagnosticParse);
+		};
+#endif
 
 		void setUseCycleReferenceCheckForNextCompilation()
 		{
@@ -1156,6 +1223,12 @@ public:
 
     LambdaBroadcaster<bool> preCompileListeners;
 	std::vector<std::pair<WeakReference<DebugableObjectBase>, std::function<void(DebugInformationBase::Ptr)>>> debugInfoListeners;
+
+#if USE_BACKEND
+	/** Shadow-parse code in diagnostic mode without executing.
+	    Returns collected diagnostics (API errors, arg mismatches, etc.). */
+	Array<RootObject::ApiDiagnostic> shadowParse(const String& code, const String& fileName);
+#endif
 
 private:
 

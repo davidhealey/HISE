@@ -478,7 +478,14 @@ bool PopupIncludeEditor::keyPressed(const KeyPress& key)
 		jassertfalse;
 		return true;
 	}
-	
+
+#if USE_BACKEND
+	if (TopLevelWindowWithKeyMappings::matches(this, key, TextEditorShortcuts::shadow_parse))
+	{
+		shadowParse();
+		return true;
+	}
+#endif
 
 	return false;
 }
@@ -598,6 +605,10 @@ void PopupIncludeEditor::initKeyPresses(Component* root)
     TopLevelWindowWithKeyMappings::addShortcut(root, cat, TextEditorShortcuts::goto_undo, "Undo Goto", KeyPress(KeyPress::F12Key, ModifierKeys::commandModifier, 0));
     
     TopLevelWindowWithKeyMappings::addShortcut(root, cat, TextEditorShortcuts::goto_redo, "Redo Goto", KeyPress(KeyPress::F12Key, ModifierKeys::commandModifier | ModifierKeys::shiftModifier, 0));
+
+#if USE_BACKEND
+	TopLevelWindowWithKeyMappings::addShortcut(root, cat, TextEditorShortcuts::shadow_parse, "Shadow Parse", KeyPress(KeyPress::F7Key));
+#endif
 }
 
 File PopupIncludeEditor::getFile() const
@@ -689,6 +700,88 @@ void PopupIncludeEditor::compileInternal()
 		asmcl->clearWarningsAndErrors();
 	}
 }
+
+#if USE_BACKEND
+void PopupIncludeEditor::shadowParse()
+{
+	if (externalFile == nullptr)
+		return;
+
+	auto mc = dynamic_cast<Processor*>(jp.get())->getMainController();
+	mc->saveAllExternalFiles();
+
+	auto code = externalFile->getFile().loadFileAsString();
+	auto fileName = externalFile->getFile().getFullPathName();
+
+	Component::SafePointer<PopupIncludeEditor> safeThis(this);
+
+	jp->shadowParseFile(code, fileName, [safeThis](const JavascriptProcessor::DiagnosticList& diagnostics)
+	{
+		if (safeThis.getComponent() == nullptr)
+			return;
+
+		auto& ed = safeThis->editor->editor;
+		ed.clearWarningsAndErrors();
+
+		using Diag = HiseJavascriptEngine::RootObject::ApiDiagnostic;
+
+		auto p = dynamic_cast<Processor*>(safeThis->jp.get());
+
+		int numWarnings = 0;
+		int numErrors = 0;
+
+		for (const auto& d : diagnostics)
+		{
+			String formatted;
+			formatted << "Line " << d.line << "(" << d.col << "): " << d.message;
+
+			if (!d.suggestions.isEmpty())
+				formatted << " (did you mean: " << d.suggestions.joinIntoString(", ") << "?)";
+
+			if (d.severity == Diag::Error)
+			{
+				ed.setError(formatted);
+				debugError(p, formatted);
+				numErrors++;
+			}
+			else
+			{
+				ed.addWarning(formatted, true);
+				debugToConsole(p, formatted);
+				numWarnings++;
+			}
+		}
+
+		// Update bottom bar with summary
+		String summary;
+
+		if (numErrors == 0 && numWarnings == 0)
+			summary = "Shadow parse OK";
+		else
+		{
+			if (numWarnings > 0)
+				summary << String(numWarnings) << " warning" << (numWarnings > 1 ? "s" : "");
+
+			if (numErrors > 0)
+			{
+				if (numWarnings > 0)
+					summary << ", ";
+
+				summary << String(numErrors) << " error" << (numErrors > 1 ? "s" : "");
+			}
+		}
+
+		debugToConsole(p, "Shadow parse: " + summary);
+
+		// setError("") shows "Compiled OK", setError(text) shows text in error style
+		// For warnings-only we still want to show the count, so pass it as "error" text
+		if (numErrors > 0 || numWarnings > 0)
+			safeThis->bottomBar->setError(summary);
+		else
+			safeThis->bottomBar->setError("");
+	});
+}
+#endif
 
 void PopupIncludeEditor::scriptWasCompiled(JavascriptProcessor* p)
 {
