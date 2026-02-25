@@ -618,7 +618,7 @@ struct HiseJavascriptEngine::RootObject::InlineFunction
 
 		SafetyReport getRealtimeSafetyReport(StrictnessLevel strictness) const override
 		{
-			if (strictness == StrictnessLevel::Relaxed)
+			if (strictness <= StrictnessLevel::Unsafe)
 				return {};
 
 			if (!realtimeSafetyInfoData.analyzed && body != nullptr)
@@ -1502,9 +1502,7 @@ void HiseJavascriptEngine::RootObject::HiseSpecialData::registerOptimisationPass
 
 	optimizations.add(new LocationInjector());
 
-	auto strictness = GET_HISE_SETTING(processor->mainController->getMainSynthChain(), HiseSettings::Scripting::CallScopeWarnings).toString();
-	if (strictness != "Relaxed")
-		optimizations.add(new CallScopeAnalyzer());
+	optimizations.add(new CallScopeAnalyzer());
 
 #endif
 

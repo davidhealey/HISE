@@ -7203,7 +7203,7 @@ ApiHelpers::CallScopeInfo ApiHelpers::getCallScope(const String& className, cons
 
 String HiseJavascriptEngine::RootObject::RealtimeSafetyInfo::toString(StrictnessLevel l, Processor* p) const
 {
-	if (l == StrictnessLevel::Relaxed || warnings.isEmpty())
+	if (l <= StrictnessLevel::Unsafe || warnings.isEmpty())
 		return {};
 
 	const String nl = "\n";
@@ -7260,13 +7260,10 @@ bool HiseJavascriptEngine::RootObject::RealtimeSafetyInfo::check(
 	if (!callable->isRealtimeSafe())
 		return true;
 
-	auto settingValue = GET_HISE_SETTING(dynamic_cast<Processor*>(caller->getScriptProcessor()), HiseSettings::Scripting::CallScopeWarnings).toString();
+	auto strictness = dynamic_cast<JavascriptProcessor*>(caller->getScriptProcessor())
+	                  ->getStrictnessLevel();
 
-	StrictnessLevel strictness = StrictnessLevel::Relaxed;
-	if (settingValue == "Warn")       strictness = StrictnessLevel::Warn;
-	else if (settingValue == "Error") strictness = StrictnessLevel::Error;
-
-	if (strictness == StrictnessLevel::Relaxed)
+	if (strictness <= StrictnessLevel::Unsafe)
 		return false;
 
 	auto report = callable->getRealtimeSafetyReport(strictness);
@@ -7278,8 +7275,8 @@ bool HiseJavascriptEngine::RootObject::RealtimeSafetyInfo::check(
 		               "[" + context + "] " + report.message);
 	}
 
-	// Only block registration if Error strictness AND worst scope is Unsafe or Init
-	if (strictness == StrictnessLevel::Error)
+	// Only block registration if Strict strictness AND worst scope is Unsafe or Init
+	if (strictness == StrictnessLevel::Strict)
 	{
 		if (report.worstScope == CallScope::Unsafe ||
 		    report.worstScope == CallScope::Init)
@@ -9440,8 +9437,9 @@ struct ScriptingObjects::GlobalCableReference::Callback: public scriptnode::rout
 
 		auto ilf = dynamic_cast<WeakCallbackHolder::CallableObject*>(f.getObject());
 
-		if (ilf == nullptr)
+		if (ilf == nullptr && synchronous)
 		{
+			p.reportScriptError("Synchronous callbacks require an inline function");
 			stop();
 			return;
 		}

@@ -503,6 +503,12 @@ Preprocessor::TextBlockList Preprocessor::parseTextBlocks()
 
 	if (code.startsWith(PreprocessorTokens::on_))
 		start += 3;
+	else if (code.startsWith(PreprocessorTokens::strict_))
+		start += 7;
+	else if (code.startsWith(PreprocessorTokens::warn_))
+		start += 5;
+	else if (code.startsWith(PreprocessorTokens::unsafe_))
+		start += 7;
 
 	auto currentLine = start;
 	

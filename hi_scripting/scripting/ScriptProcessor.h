@@ -664,6 +664,17 @@ public:
 
 	void setOptimisationReport(const String& report);
 
+#if USE_BACKEND
+	/** Per-script override set by #strict/#warn/#unsafe preprocessor directive.
+	    Unset = use global setting. */
+	WeakCallbackHolder::CallableObject::StrictnessLevel callScopeOverride =
+		WeakCallbackHolder::CallableObject::StrictnessLevel::Unset;
+
+	/** Returns the effective strictness for this processor.
+	    Per-script override first, falls back to global HISE setting. */
+	WeakCallbackHolder::CallableObject::StrictnessLevel getStrictnessLevel() const;
+#endif
+
 protected:
 
 	String lastOptimisationReport;

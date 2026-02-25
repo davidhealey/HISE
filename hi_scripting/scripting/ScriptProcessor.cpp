@@ -893,6 +893,24 @@ DebugSession* JavascriptProcessor::getDebugSession()
 HiseJavascriptEngine* JavascriptProcessor::getScriptEngine()
 { return scriptEngine; }
 
+#if USE_BACKEND
+WeakCallbackHolder::CallableObject::StrictnessLevel JavascriptProcessor::getStrictnessLevel() const
+{
+	using SL = WeakCallbackHolder::CallableObject::StrictnessLevel;
+
+	if (callScopeOverride != SL::Unset)
+		return callScopeOverride;
+
+	auto s = GET_HISE_SETTING(dynamic_cast<const Processor*>(this),
+	                          HiseSettings::Scripting::CallScopeWarnings).toString();
+
+	if (s == "Strict") return SL::Strict;
+	if (s == "Warn")   return SL::Warn;
+	if (s == "Unsafe") return SL::Unsafe;
+	return SL::Unset;
+}
+#endif
+
 void JavascriptProcessor::toggleBreakpoint(const Identifier& snippetId, int lineNumber, int charNumber)
 {
 	HiseJavascriptEngine::Breakpoint bp(snippetId, "", lineNumber, charNumber, charNumber, breakpoints.size());

@@ -780,6 +780,20 @@ Result HiseJavascriptEngine::execute(const String& javascriptCode, bool allowCon
             loc.location = loc.program.getCharPointer() + ok.getErrorMessage().getIntValue();
             loc.throwError(ok.getErrorMessage().fromFirstOccurrenceOf(":", false, false));
         }
+
+		if (callbackIdTouse == onInit)
+		{
+			using SL = WeakCallbackHolder::CallableObject::StrictnessLevel;
+			auto jp = dynamic_cast<JavascriptProcessor*>(root->hiseSpecialData.processor);
+			jp->callScopeOverride = SL::Unset;
+
+			if (javascriptCode.startsWith(snex::jit::PreprocessorTokens::strict_))
+				jp->callScopeOverride = SL::Strict;
+			else if (javascriptCode.startsWith(snex::jit::PreprocessorTokens::warn_))
+				jp->callScopeOverride = SL::Warn;
+			else if (javascriptCode.startsWith(snex::jit::PreprocessorTokens::unsafe_))
+				jp->callScopeOverride = SL::Unsafe;
+		}
 #else
         auto& copy = javascriptCode;
 #endif

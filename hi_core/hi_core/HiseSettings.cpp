@@ -602,10 +602,12 @@ Array<juce::Identifier> HiseSettings::SnexWorkbench::getAllIds()
 
 		P(HiseSettings::Scripting::CallScopeWarnings);
 		D("Controls compile-time analysis of audio-thread safety for inline functions and MIDI callbacks.");
-		D("- **Relaxed**: No analysis (current behavior). No overhead.");
+		D("- **Unset**: No analysis (default). No overhead.");
+		D("- **Unsafe**: Same as Unset. Explicit opt-out when overriding a per-script directive.");
 		D("- **Warn**: Analyzes API calls inside inline functions and MIDI callbacks. Logs warnings to the console when potentially unsafe calls are detected.");
-		D("- **Error**: Same analysis as Warn, but also prevents compilation when unsafe calls are found in audio-thread contexts.");
+		D("- **Strict**: Same analysis as Warn, but also prevents compilation when unsafe calls are found in audio-thread contexts.");
 		D("> This only affects the HISE IDE. Exported plugins have zero overhead regardless of this setting.");
+		D("> Per-script override: use `#strict`, `#warn`, or `#unsafe` at the top of a script to override this setting for that processor.");
 		P_();
 
 		P(HiseSettings::Scripting::EnableMousePositioning);
@@ -996,7 +998,7 @@ juce::StringArray HiseSettings::Data::getOptionsFor(const Identifier& id)
 	    return { "Yes", "No" };
 
 	if (id == Scripting::CallScopeWarnings)
-		return { "Relaxed", "Warn", "Error" };
+		return { "Unset", "Unsafe", "Warn", "Strict" };
 
 	if (id == Compiler::VisualStudioVersion)
 		return { "Visual Studio 2022", "Visual Studio 2026" };
@@ -1236,7 +1238,7 @@ var HiseSettings::Data::getDefaultSetting(const Identifier& id) const
 	else if (id == Scripting::CodeFontSize)			return 17.0;
 	else if (id == Scripting::EnableCallstack)		return "No";
 	else if (id == Scripting::EnableOptimizations)	return "No";
-	else if (id == Scripting::CallScopeWarnings)	return "Relaxed";
+	else if (id == Scripting::CallScopeWarnings)	return "Unset";
 	else if (id == Scripting::EnableMousePositioning) return "Yes";
 	else if (id == Scripting::CompileTimeout)		return 5.0;
 	else if (id == Scripting::SaveConnectedFilesOnCompile) return "No";

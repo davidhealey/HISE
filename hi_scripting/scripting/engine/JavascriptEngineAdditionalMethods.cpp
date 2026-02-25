@@ -44,7 +44,10 @@ Result HiseJavascriptPreprocessor::process(String& code, const String& externalF
     
     jassert(externalFile.isNotEmpty());
     
-    auto hasLocalSwitch = code.startsWith(snex::jit::PreprocessorTokens::on_);
+    auto hasLocalSwitch = code.startsWith(snex::jit::PreprocessorTokens::on_)
+                       || code.startsWith(snex::jit::PreprocessorTokens::strict_)
+                       || code.startsWith(snex::jit::PreprocessorTokens::warn_)
+                       || code.startsWith(snex::jit::PreprocessorTokens::unsafe_);
     
     if (!hasLocalSwitch && !this->globalEnabled)
         return Result::ok();
