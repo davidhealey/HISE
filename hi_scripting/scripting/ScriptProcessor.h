@@ -547,6 +547,15 @@ public:
 
 	void compileScript(const ResultFunction& f = ResultFunction());
 
+#if USE_BACKEND
+	using DiagnosticList = Array<HiseJavascriptEngine::RootObject::ApiDiagnostic>;
+	using DiagnosticCallback = std::function<void(const DiagnosticList&)>;
+
+	/** Shadow-parse a file in diagnostic mode on the scripting thread.
+	    The callback receives the collected diagnostics on the message thread. */
+	void shadowParseFile(const String& code, const String& fileName, const DiagnosticCallback& callback);
+#endif
+
 	void setupApi();
 
 	virtual void registerApiClasses() = 0;

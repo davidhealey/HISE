@@ -316,6 +316,10 @@ private:
 	int fontSize;
 
 	ScopedPointer<JavascriptTokeniser> tokeniser;
+
+#if USE_BACKEND
+	void shadowParse();
+#endif
 	
 	JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(PopupIncludeEditor);
 	JUCE_DECLARE_WEAK_REFERENCEABLE(PopupIncludeEditor);

@@ -532,7 +532,7 @@ struct HiseJavascriptEngine::RootObject::Scope
 
 #if USE_BACKEND
 		if (Time::getCurrentTime() > root->timeout)
-			location.throwError("Execution timed-out");
+			location.throwError("Script execution timed out. Check for infinite loops or long-running operations.");
 #endif
 	}
 };
@@ -1162,7 +1162,7 @@ void HiseJavascriptEngine::checkValidParameter(int index, const var& valueToTest
 
 	if (valueToTest.isUndefined() || valueToTest.isVoid())
 	{
-		location.throwError("API call with undefined parameter " + String(index));
+		location.throwError("API call with undefined parameter at index " + String(index) + ". Use \"\" or false for an inactive value.");
 	}
     
     if(expectedType != VarTypeChecker::Undefined)

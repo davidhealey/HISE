@@ -111,7 +111,7 @@ struct HiseJavascriptEngine::RootObject::ScopedBypasser: public HiseJavascriptEn
 		}
 		else
 		{
-			location.throwError("expression is not a broadcaster");
+			location.throwError("Expected a broadcaster object, but the expression evaluated to a different type.");
 		}
 
 		if(!state)
@@ -181,7 +181,7 @@ struct HiseJavascriptEngine::RootObject::ScopedCall: public HiseJavascriptEngine
         }
         else
         {
-            location.throwError("expression is not a callable object");
+            location.throwError("Expected a callable object (function or Broadcaster), but the expression is not callable.");
         }
 
         return ResultCode::ok;
@@ -1204,7 +1204,7 @@ struct HiseJavascriptEngine::RootObject::LoopStatement : public Statement
 					return obj->getProperties().getName(loop->index).toString();
 				else if (auto fo = dynamic_cast<fixobj::Array*>(data->getObject()))
 					return fo->getAssignedValue(loop->index);
-				else location.throwError("Illegal iterator target");
+				else location.throwError("Illegal iterator target. for...in loops can only iterate over Arrays, Buffers, and Objects.");
 			}
 			
 			return var();
@@ -1264,7 +1264,7 @@ struct HiseJavascriptEngine::RootObject::LoopStatement : public Statement
 				size = fixArray->getConstantValue(0);
 			else
 			{
-				location.throwError("no iterable type");
+				location.throwError("Cannot iterate over this type. for...in loops support Arrays, Buffers, and Objects.");
 			}
 				
 			while (index < size)

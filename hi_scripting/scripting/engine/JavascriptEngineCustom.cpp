@@ -112,6 +112,27 @@ struct HiseJavascriptEngine::RootObject::ApiConstant : public Expression
 	var value;
 };
 
+#if USE_BACKEND
+/** Placeholder expression returned by parser soft-fail recovery in diagnostic mode.
+    Carries the error message and fuzzy suggestions so the ApiValidationAnalyzer can
+    collect them during its AST walk. Evaluates to var::undefined(). */
+struct HiseJavascriptEngine::RootObject::DiagnosticPlaceholder : public Expression
+{
+	DiagnosticPlaceholder(const CodeLocation& l, const String& errorMessage,
+	                      const StringArray& suggestions_ = {},
+	                      ApiDiagnostic::Severity sev = ApiDiagnostic::Error)
+		: Expression(l), message(errorMessage), suggestions(suggestions_), severity(sev) {}
+
+	var getResult(const Scope&) const override { return var::undefined(); }
+
+	Statement* getChildStatement(int) override { return nullptr; }
+
+	String message;
+	StringArray suggestions;
+	ApiDiagnostic::Severity severity;
+};
+#endif
+
 struct HiseJavascriptEngine::RootObject::ApiCall : public Expression
 {
 	struct DynamicCall
@@ -944,7 +965,7 @@ struct HiseJavascriptEngine::RootObject::InlineFunction
 			}
 			else
 			{
-				location.throwError("Accessing parameter reference outside the function call");
+				location.throwError("Accessing parameter reference outside the function call. The parameter is only valid during function execution.");
 				RETURN_IF_NO_THROW({});
 			}
 		}

@@ -349,7 +349,7 @@ void ApiClass::getAllFunctionNames(Array<Identifier> &listToFill) const
 	{
 		for(auto& idList: ids)
 		{
-			if(idList[i].isNull())
+			if(!idList[i].isNull())
 				listToFill.add(idList[i]);
 		}
 	}
