@@ -732,22 +732,26 @@ void PopupIncludeEditor::shadowParse()
 
 		for (const auto& d : diagnostics)
 		{
-			String formatted;
-			formatted << "Line " << d.line << "(" << d.col << "): " << d.message;
+			auto consoleMsg = d.toConsoleString(p);
 
-			if (!d.suggestions.isEmpty())
-				formatted << " (did you mean: " << d.suggestions.joinIntoString(", ") << "?)";
+			String editorMsg;
+			editorMsg << "Line " << d.line << "(" << d.col << "): " << d.message;
 
 			if (d.severity == Diag::Error)
 			{
-				ed.setError(formatted);
-				debugError(p, formatted);
+				ed.setError(editorMsg);
+				debugError(p, consoleMsg);
 				numErrors++;
+			}
+			else if (d.severity == Diag::Hint)
+			{
+				// Hints go to console only — no editor marker
+				debugToConsole(p, consoleMsg);
 			}
 			else
 			{
-				ed.addWarning(formatted, true);
-				debugToConsole(p, formatted);
+				ed.addWarning(editorMsg, true);
+				debugToConsole(p, consoleMsg);
 				numWarnings++;
 			}
 		}

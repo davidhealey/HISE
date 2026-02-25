@@ -1485,6 +1485,313 @@ private:
 	Array<ApiHelpers::CallScope> suppressStack;
 };
 
+/** AST analysis pass that validates method calls on const var objects and collects
+    DiagnosticPlaceholder nodes left by the parser's diagnostic-mode recovery sites.
+    
+    Tier 2 (exact): FunctionCall + DotOperator + ConstReference → resolve ConstScriptingObject,
+                    validate method existence, argument count, and literal argument types.
+    Tier 3 (greedy): FunctionCall + DotOperator without ConstReference → check method name
+                     against ALL known API classes via the enrichment ValueTree.
+    
+    This is a read-only pass — never replaces statements. */
+struct ApiValidationAnalyzer : public HiseJavascriptEngine::RootObject::OptimizationPass
+{
+	using RO = HiseJavascriptEngine::RootObject;
+	using Statement = RO::Statement;
+	using ApiDiagnostic = RO::ApiDiagnostic;
+
+	String getPassName() const override { return "API Validation Analyzer"; }
+
+	/** Must be called before running the pass. */
+	void setDiagnosticTarget(Array<ApiDiagnostic>* target, RO::HiseSpecialData* hsd)
+	{
+		diagnostics = target;
+		hiseSpecialData = hsd;
+	}
+
+	Statement* getOptimizedStatement(Statement*, Statement* statementToOptimize) override
+	{
+		if (diagnostics == nullptr)
+			return statementToOptimize;
+
+		// DiagnosticPlaceholder nodes are NOT collected here — the parser already
+		// recorded their diagnostics via recordDiagnostic() at each recovery site.
+		// The placeholders exist in the AST to allow parsing to continue past errors.
+
+		// --- FunctionCall: check for DotOperator pattern ---
+		if (auto* funcCall = dynamic_cast<RO::FunctionCall*>(statementToOptimize))
+		{
+			if (auto* dot = dynamic_cast<RO::DotOperator*>(funcCall->object.get()))
+			{
+				auto methodName = dot->child.toString();
+
+				if (auto* constRef = dynamic_cast<RO::ConstReference*>(dot->parent.get()))
+				{
+					// --- Tier 2: Exact resolution via ConstReference ---
+					validateTier2(funcCall, dot, constRef);
+				}
+				else
+				{
+					// --- Tier 3: Greedy lookup across all API classes ---
+					validateTier3(funcCall, dot);
+				}
+			}
+		}
+
+		// Never replace — read-only analysis pass
+		return statementToOptimize;
+	}
+
+private:
+
+	void validateTier2(RO::FunctionCall* funcCall, RO::DotOperator* dot,
+	                   RO::ConstReference* constRef)
+	{
+		if (constRef->ns == nullptr)
+			return;
+
+		auto constValue = constRef->ns->constObjects.getValueAt(constRef->index);
+		auto* cso = dynamic_cast<ConstScriptingObject*>(constValue.getObject());
+
+		if (cso == nullptr)
+			return; // Not a scripting object (could be a value, array, etc.)
+
+		auto className = cso->getObjectName().toString();
+		auto methodName = dot->child;
+
+		int functionIndex = -1;
+		int numArgs = 0;
+
+		if (!cso->getIndexAndNumArgsForFunction(methodName, functionIndex, numArgs))
+		{
+			// Method not found on this object — suggest correction
+			StringArray candidates;
+			Array<Identifier> funcIds;
+			cso->getAllFunctionNames(funcIds);
+			for (auto& id : funcIds)
+				candidates.add(id.toString());
+
+			auto suggestion = FuzzySearcher::suggestCorrection(methodName.toString(), candidates, 0.6);
+
+			String msg = className + " has no method '" + methodName.toString() + "'";
+			StringArray suggestions;
+
+			if (suggestion.isNotEmpty())
+			{
+				suggestions.add(suggestion);
+				msg << " (did you mean '" << suggestion << "'?)";
+			}
+
+			addDiagnostic(funcCall->location, msg, suggestions, ApiDiagnostic::Error, "api-validation");
+			return;
+		}
+
+		// Method exists — check argument count
+		auto numActualArgs = funcCall->arguments.size();
+
+		if (numActualArgs != numArgs)
+		{
+			String msg = className + "." + methodName.toString() + "() expects "
+			           + String(numArgs) + " argument" + (numArgs != 1 ? "s" : "")
+			           + ", got " + String(numActualArgs);
+
+			addDiagnostic(funcCall->location, msg, {}, ApiDiagnostic::Error, "api-validation");
+			return;
+		}
+
+		// Argument count matches — check literal argument types
+		checkLiteralArgTypes(funcCall, cso, functionIndex, numArgs, className, methodName.toString());
+	}
+
+	void validateTier3(RO::FunctionCall* funcCall, RO::DotOperator* dot)
+	{
+		auto methodName = dot->child.toString();
+
+		auto& methodMap = getGreedyApiMethodMap();
+		auto info = methodMap.find(methodName);
+
+		if (info == nullptr)
+			return; // Method not found in any API class — can't validate without knowing the object type
+
+		// Method exists somewhere — check arg count if unambiguous
+		if (info->ambiguousArgCount)
+			return; // Different classes have different arg counts — can't validate
+
+		auto numActualArgs = funcCall->arguments.size();
+
+		if (numActualArgs != info->numArgs)
+		{
+			String msg = "Method '" + methodName + "' expects "
+			           + String(info->numArgs) + " argument" + (info->numArgs != 1 ? "s" : "")
+			           + ", got " + String(numActualArgs);
+
+			addDiagnostic(funcCall->location, msg, {}, ApiDiagnostic::Warning, "api-validation");
+		}
+
+		// No type checking for Tier 3 — we don't know the concrete class
+	}
+
+	void checkLiteralArgTypes(RO::FunctionCall* funcCall, ConstScriptingObject* cso,
+	                          int functionIndex, int numArgs,
+	                          const String& className, const String& methodName)
+	{
+		auto types = cso->getForcedParameterTypes(functionIndex, numArgs);
+
+		for (int i = 0; i < numArgs; i++)
+		{
+			auto expectedType = types[i];
+
+			if (expectedType == VarTypeChecker::Undefined)
+				continue; // No type constraint for this parameter
+
+			var argValue;
+			bool hasKnownType = false;
+
+			if (auto* literal = dynamic_cast<RO::LiteralValue*>(funcCall->arguments[i]))
+			{
+				argValue = literal->value;
+				hasKnownType = true;
+			}
+			else if (auto* constRef = dynamic_cast<RO::ConstReference*>(funcCall->arguments[i]))
+			{
+				if (constRef->ns != nullptr)
+				{
+					argValue = constRef->ns->constObjects.getValueAt(constRef->index);
+					hasKnownType = true;
+				}
+			}
+
+			if (!hasKnownType)
+				continue; // Dynamic expression — skip type check
+
+			auto actualType = VarTypeChecker::getType(argValue);
+
+			if ((actualType & expectedType) == 0 && actualType != VarTypeChecker::Undefined)
+			{
+				auto expectedName = VarTypeChecker::getTypeName(expectedType);
+				auto actualName = VarTypeChecker::getTypeName(actualType);
+
+				String msg = className + "." + methodName + "() parameter " + String(i + 1)
+				           + " requires " + expectedName + ", got " + actualName;
+
+				addDiagnostic(funcCall->arguments[i]->location, msg, {}, ApiDiagnostic::Error, "type-check");
+			}
+		}
+	}
+
+	void addDiagnostic(const RO::CodeLocation& loc, const String& message,
+	                   const StringArray& suggestions, ApiDiagnostic::Severity severity,
+	                   const String& source)
+	{
+		ApiDiagnostic d;
+		loc.fillColumnAndLines(d.col, d.line);
+		d.fileName = loc.externalFile;
+		d.message = message;
+		d.suggestions = suggestions;
+		d.severity = severity;
+		d.source = source;
+		diagnostics->add(d);
+	}
+
+	// ==================== Greedy API Method Map (Tier 3) ====================
+
+	struct GreedyMethodInfo
+	{
+		int numArgs = 0;           // Consistent arg count (if not ambiguous)
+		bool ambiguousArgCount = false;  // True if different classes disagree on arg count
+	};
+
+	struct GreedyApiMethodMap
+	{
+		HashMap<String, GreedyMethodInfo> map;
+		StringArray allMethodNames;  // For fuzzy search
+		bool built = false;
+
+		GreedyMethodInfo* find(const String& methodName)
+		{
+			if (map.contains(methodName))
+				return &map.getReference(methodName);
+			return nullptr;
+		}
+
+		void buildFromTree(const ValueTree& apiTree)
+		{
+			for (int i = 0; i < apiTree.getNumChildren(); i++)
+			{
+				auto classNode = apiTree.getChild(i);
+
+				for (int j = 0; j < classNode.getNumChildren(); j++)
+				{
+					auto methodNode = classNode.getChild(j);
+					auto name = methodNode.getProperty("name").toString();
+
+					if (name.isEmpty())
+						continue;
+
+					auto argStr = methodNode.getProperty("arguments").toString();
+					int argCount = countArgsFromString(argStr);
+
+					if (map.contains(name))
+					{
+						auto& existing = map.getReference(name);
+
+						if (!existing.ambiguousArgCount && existing.numArgs != argCount)
+							existing.ambiguousArgCount = true;
+					}
+					else
+					{
+						GreedyMethodInfo info;
+						info.numArgs = argCount;
+						allMethodNames.add(name);
+						map.set(name, info);
+					}
+				}
+			}
+
+			built = true;
+		}
+
+		/** Parse an argument string like "(int x, double y)" to count parameters. */
+		static int countArgsFromString(const String& argStr)
+		{
+			auto trimmed = argStr.trim();
+
+			if (trimmed.isEmpty() || trimmed == "()")
+				return 0;
+
+			// Remove outer parens
+			auto inner = trimmed.substring(1, trimmed.length() - 1).trim();
+
+			if (inner.isEmpty())
+				return 0;
+
+			// Count commas + 1
+			int count = 1;
+
+			for (int i = 0; i < inner.length(); i++)
+			{
+				if (inner[i] == ',')
+					count++;
+			}
+
+			return count;
+		}
+	};
+
+	static GreedyApiMethodMap& getGreedyApiMethodMap()
+	{
+		static GreedyApiMethodMap instance;
+
+		if (!instance.built)
+			instance.buildFromTree(ApiHelpers::getApiTree());
+
+		return instance;
+	}
+
+	Array<ApiDiagnostic>* diagnostics = nullptr;
+	RO::HiseSpecialData* hiseSpecialData = nullptr;
+};
+
 void HiseJavascriptEngine::RootObject::InlineFunction::Object::performLazyCallScopeAnalysis() const
 {
 	realtimeSafetyInfoData.analyzed = true;

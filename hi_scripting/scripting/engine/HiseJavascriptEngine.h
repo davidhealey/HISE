@@ -1121,7 +1121,16 @@ public:
 			String fileName;
 			String message;
 			StringArray suggestions;
-			enum Severity { Error, Warning, Info } severity = Error;
+			enum Severity { Error, Warning, Info, Hint } severity = Error;
+
+			/** Diagnostic source category for REST endpoint / LSP classification.
+			    Values: "syntax", "api-validation", "type-check", "language", "callscope". */
+			String source;
+
+			/** Formats the diagnostic matching F5 compile error output:
+			    "locationString: message {{Base64(processorId|path|charIndex|line|col)}}"
+			    This makes console output double-clickable and parseable by RestHelpers::parseError(). */
+			String toConsoleString(Processor* p) const;
 		};
 
 		/** RAII snapshot/restore for shadow-parsing a single external .js file

@@ -562,7 +562,8 @@ private:
 
 	void recordDiagnostic(const CodeLocation& loc, const String& message,
 	                       const StringArray& suggestions = {},
-	                       ApiDiagnostic::Severity severity = ApiDiagnostic::Error)
+	                       ApiDiagnostic::Severity severity = ApiDiagnostic::Error,
+	                       const String& source = "api-validation")
 	{
 		ApiDiagnostic d;
 		loc.fillColumnAndLines(d.col, d.line);
@@ -570,6 +571,7 @@ private:
 		d.message = message;
 		d.suggestions = suggestions;
 		d.severity = severity;
+		d.source = source;
 		diagnostics.add(d);
 	}
 
@@ -612,7 +614,7 @@ private:
 			if (callName.isNotEmpty())
 				msg << " to " << callName << "()";
 			msg << " will cause a runtime error. Use \"\" or false for an inactive value.";
-			recordDiagnostic(location, msg, { "\"\"", "false" }, ApiDiagnostic::Error);
+			recordDiagnostic(location, msg, { "\"\"", "false" }, ApiDiagnostic::Error, "language");
 		}
 #endif
 		return parseExpression();
@@ -1209,7 +1211,7 @@ private:
 #if USE_BACKEND
 			if (isDiagnosticMode())
 			{
-				recordDiagnostic(location, msg, { "local", "reg" }, ApiDiagnostic::Error);
+				recordDiagnostic(location, msg, { "local", "reg" }, ApiDiagnostic::Error, "language");
 
 				// Downgrade to local declaration and continue parsing
 				return parseLocalAssignment();
@@ -1261,6 +1263,14 @@ private:
             
 			Identifier name = preparser->currentValue.toString();
 
+#if USE_BACKEND
+			// During shadow parse, registers from the last F5 compile still exist.
+			// Re-adding would leave varRegister count unchanged while registerLocations
+			// grows, triggering a false "register variable already defined" mismatch.
+			if (isDiagnosticMode() && ns->varRegister.getRegisterIndex(name) != -1)
+				return nullptr;
+#endif
+
 			ns->varRegister.addRegister(name, var::undefined(), varType);
             ns->registerLocations.add(preparser->createDebugLocation());
 
@@ -1274,7 +1284,7 @@ private:
 				if (!ns->id.isNull())
 					s << ns->id.toString() << ".";
 
-				s << name << ": error at inline function definition.";
+				s << name << ": register variable already defined.";
 
 				preparser->location.throwError(s);
 			}
@@ -1285,12 +1295,34 @@ private:
 		{
 			ScopedPointer<RegisterVarStatement> s(new RegisterVarStatement(location));
 
-            matchVarType();
+            auto varType = matchVarType();
             
 			s->name = parseIdentifier();
 			hiseSpecialData->checkIfExistsInOtherStorage(HiseSpecialData::VariableStorageType::Register, s->name, location);
 			s->varRegister = &ns->varRegister;
 			s->initialiser = matchIf(TokenTypes::assign) ? parseExpression() : new Expression(location);
+
+#if USE_BACKEND
+			// Hint: suggest type annotation for untyped reg with literal initializer
+			if (isDiagnosticMode() && varType == VarTypeChecker::Undefined)
+			{
+				if (auto* lit = dynamic_cast<LiteralValue*>(s->initialiser.get()))
+				{
+					auto litType = VarTypeChecker::getType(lit->value);
+
+					if (litType == VarTypeChecker::Integer ||
+					    litType == VarTypeChecker::Double ||
+					    litType == VarTypeChecker::String)
+					{
+						auto typeName = VarTypeChecker::getTypeName(litType).toString();
+
+						recordDiagnostic(s->initialiser->location,
+							"Consider using 'reg:" + typeName + " " + s->name.toString() + "' for type safety",
+							{}, ApiDiagnostic::Hint, "language");
+					}
+				}
+			}
+#endif
 
 			if (matchIf(TokenTypes::comma))
 			{
@@ -1491,7 +1523,7 @@ private:
 #if USE_BACKEND
 			if (isDiagnosticMode())
 			{
-				recordDiagnostic(location, msg, {}, ApiDiagnostic::Error);
+				recordDiagnostic(location, msg, {}, ApiDiagnostic::Error, "language");
 
 				// Generate a synthetic name to allow parsing to continue
 				Identifier syntheticName("__anonymous_" + String(diagnostics.size()));
@@ -1728,7 +1760,7 @@ private:
 #if USE_BACKEND
 				if (isDiagnosticMode())
 				{
-					recordDiagnostic(location, msg, {}, ApiDiagnostic::Error);
+					recordDiagnostic(location, msg, {}, ApiDiagnostic::Error, "language");
 
 					// Skip the inner inline function: match 'function', name, params, then skip body block
 					match(TokenTypes::function);
@@ -2450,7 +2482,7 @@ private:
 #if USE_BACKEND
 						if (isDiagnosticMode())
 						{
-							recordDiagnostic(location, msg, {}, ApiDiagnostic::Error);
+							recordDiagnostic(location, msg, {}, ApiDiagnostic::Error, "language");
 							parseIdentifier();
 							return parseSuffixes(new DiagnosticPlaceholder(location, msg));
 						}
@@ -2465,7 +2497,7 @@ private:
 #if USE_BACKEND
 						if (isDiagnosticMode())
 						{
-							recordDiagnostic(location, msg, {}, ApiDiagnostic::Error);
+							recordDiagnostic(location, msg, {}, ApiDiagnostic::Error, "language");
 							parseIdentifier();
 							return parseSuffixes(new DiagnosticPlaceholder(location, msg));
 						}
@@ -2649,7 +2681,7 @@ private:
 #if USE_BACKEND
 				if (isDiagnosticMode())
 				{
-					recordDiagnostic(location, msg, {}, ApiDiagnostic::Error);
+					recordDiagnostic(location, msg, {}, ApiDiagnostic::Error, "language");
 					// Fall through — ignore the name, return the function as LiteralValue
 				}
 				else
@@ -2948,6 +2980,21 @@ void HiseJavascriptEngine::RootObject::ExpressionTreeBuilder::preprocessCode(con
 
 		if (it.matchIf(TokenTypes::register_var))
 		{
+#if USE_BACKEND
+			if (hiseSpecialData->diagnosticMode)
+			{
+				try { parseRegisterVar(cns, &it); }
+				catch (Error& e)
+				{
+					recordDiagnostic(it.location, e.errorMessage, {}, ApiDiagnostic::Error, "syntax");
+				}
+				catch (String& s)
+				{
+					recordDiagnostic(it.location, s, {}, ApiDiagnostic::Error, "syntax");
+				}
+				continue;
+			}
+#endif
 			parseRegisterVar(cns, &it);
 			continue;
 		}
