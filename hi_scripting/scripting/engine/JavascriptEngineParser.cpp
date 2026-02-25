@@ -843,12 +843,12 @@ private:
 			using CS = ApiHelpers::CallScope;
 			CS level;
 
-			if (levelStr == "warning")
+			if (levelStr == "warn")
 				level = CS::Warning;
-			else if (levelStr == "unsafe")
+			else if (levelStr == "strict")
 				level = CS::Init;  // nuclear: suppress everything (Init=1, covers Unsafe=2 and Warning=3)
 			else
-				location.throwError("Invalid suppress level: " + levelStr + ". Use \"warning\" or \"unsafe\".");
+				location.throwError("Invalid suppress level: " + levelStr + ". Use \"warn\" or \"strict\".");
 
 			return new ScopedSuppress(location, condition, level);
 		}
@@ -2935,15 +2935,11 @@ void HiseJavascriptEngine::RootObject::execute(const String& code, bool allowCon
 #if USE_BACKEND
 	// Post-compilation: check MIDI callback bodies for callScope warnings
 	{
-		auto strictnessStr = GET_HISE_SETTING(dynamic_cast<Processor*>(hiseSpecialData.processor),
-		                                       HiseSettings::Scripting::CallScopeWarnings).toString();
-
 		using SL = RealtimeSafetyInfo::StrictnessLevel;
-		SL strictness = SL::Relaxed;
-		if (strictnessStr == "Warn")       strictness = SL::Warn;
-		else if (strictnessStr == "Error") strictness = SL::Error;
+		auto strictness = dynamic_cast<JavascriptProcessor*>(hiseSpecialData.processor)
+		                  ->getStrictnessLevel();
 
-		if (strictness != SL::Relaxed)
+		if (strictness > SL::Unsafe)
 		{
 			static const Identifier audioCallbacks[] = {
 				Identifier("onNoteOn"),
@@ -2981,7 +2977,7 @@ void HiseJavascriptEngine::RootObject::execute(const String& code, bool allowCon
 					    "[" + cbName.toString() + "] " + report);
 				}
 
-				if (strictness == SL::Error && info->hasUnsafe())
+				if (strictness == SL::Strict && info->hasUnsafe())
 				{
 					for (auto& w : info->warnings)
 					{

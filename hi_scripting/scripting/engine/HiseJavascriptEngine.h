@@ -592,10 +592,10 @@ public:
 			/** Encapsulates the full enforcement pattern at call sites.
 			 *
 			 *  1. Checks callable->isRealtimeSafe() — if false, returns true (structural rejection)
-			 *  2. Queries StrictnessLevel from settings
+			 *  2. Queries StrictnessLevel via JavascriptProcessor::getStrictnessLevel()
 			 *  3. Calls callable->getRealtimeSafetyReport(strictness) → SafetyReport
-			 *  4. Logs message if non-empty (both Warn and Error mode)
-			 *  5. Returns true (blocks registration) only if Error + worstScope is Unsafe/Init
+			 *  4. Logs message if non-empty (both Warn and Strict mode)
+			 *  5. Returns true (blocks registration) only if Strict + worstScope is Unsafe/Init
 			 */
 			static bool check(WeakCallbackHolder::CallableObject* callable,
 			                  ScriptingObject* caller,

@@ -238,7 +238,7 @@ struct WeakCallbackHolder : private ScriptingObject
 			Safe           // anywhere, anytime
 		};
 
-		enum class StrictnessLevel { Relaxed, Warn, Error };
+		enum class StrictnessLevel { Unset, Unsafe, Warn, Strict };
 
 		/** Returned by getRealtimeSafetyReport(). The call site (which has access
 		 *  to the global StrictnessLevel setting) uses worstScope to decide whether
@@ -251,8 +251,8 @@ struct WeakCallbackHolder : private ScriptingObject
 		};
 
 		/** Returns a safety report for this callable at the given strictness.
-		 *  Relaxed: always returns empty report.
-		 *  Warn/Error: returns worstScope + formatted message if issues were found.
+		 *  Unset/Unsafe: always returns empty report.
+		 *  Warn/Strict: returns worstScope + formatted message if issues were found.
 		 *  Default: returns empty (no analysis data). Override in InlineFunction::Object (Layer 3).
 		 */
 		virtual SafetyReport getRealtimeSafetyReport(StrictnessLevel) const
