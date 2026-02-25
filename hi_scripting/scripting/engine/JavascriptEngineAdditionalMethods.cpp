@@ -1790,6 +1790,27 @@ String JavascriptProcessor::Helpers::uglify(const String& prettyCode)
 #if USE_BACKEND
 
 // ==============================================================================
+// ApiDiagnostic implementation
+
+String HiseJavascriptEngine::RootObject::ApiDiagnostic::toConsoleString(Processor* p) const
+{
+	String s;
+
+	// Human-readable location prefix (matches Error::getLocationString() format)
+	if (fileName.isEmpty() || fileName.contains("()"))
+		s << "Line " << line << ", column " << col;
+	else
+		s << File(fileName).getFileName() << " (" << line << ")";
+
+	s << ": " << message << " ";
+
+	// Append encoded location for double-click navigation
+	s << Error::createEncodedLocation(p, fileName, 0, line, col);
+
+	return s;
+}
+
+// ==============================================================================
 // ScopedDiagnosticParse implementation
 
 using SDP = HiseJavascriptEngine::RootObject::ScopedDiagnosticParse;
@@ -1921,6 +1942,7 @@ Array<HiseJavascriptEngine::RootObject::ApiDiagnostic> HiseJavascriptEngine::sha
 		d.fileName = fileName;
 		d.message = "Preprocessor error: " + ok.getErrorMessage().fromFirstOccurrenceOf(":", false, false);
 		d.severity = RootObject::ApiDiagnostic::Error;
+		d.source = "syntax";
 
 		Array<RootObject::ApiDiagnostic> result;
 		result.add(d);
@@ -1928,12 +1950,121 @@ Array<HiseJavascriptEngine::RootObject::ApiDiagnostic> HiseJavascriptEngine::sha
 	}
 
 	RootObject::ExpressionTreeBuilder tb(copy, fileName, preprocessor);
-	tb.setupApiData(root->hiseSpecialData, copy);
 
 	try
 	{
+		tb.setupApiData(root->hiseSpecialData, copy);
 		ScopedPointer<RootObject::BlockStatement> sl = tb.parseStatementList();
 		// No sl->perform() — parse only, no execution
+
+		// --- Phase 2: Run ApiValidationAnalyzer on the parsed AST ---
+		if (sl != nullptr)
+		{
+			ApiValidationAnalyzer analyzer;
+			analyzer.setDiagnosticTarget(&tb.getDiagnostics(), &root->hiseSpecialData);
+			analyzer.executePass(sl);
+
+			// Also walk inline function bodies that were parsed in this file.
+			// They are temporarily stored in hiseSpecialData (restored by ScopedDiagnosticParse).
+			for (auto ns : root->hiseSpecialData.namespaces)
+			{
+				for (auto ifo : ns->inlineFunctions)
+				{
+					if (auto* obj = dynamic_cast<RootObject::InlineFunction::Object*>(ifo))
+					{
+						if (obj->body != nullptr)
+							analyzer.executePass(obj->body);
+					}
+				}
+			}
+
+			// Walk root namespace inline functions too
+			for (auto ifo : root->hiseSpecialData.inlineFunctions)
+			{
+				if (auto* obj = dynamic_cast<RootObject::InlineFunction::Object*>(ifo))
+				{
+					if (obj->body != nullptr)
+						analyzer.executePass(obj->body);
+				}
+			}
+
+			// --- Collect CallScope warnings from inline function bodies ---
+			// Only re-analyze functions that were registered to callback contexts
+			// during the last F5 compile (analyzed == true). Uses the same
+			// performLazyCallScopeAnalysis() as normal compilation, which handles
+			// recursive callee analysis (so newly defined helper functions called
+			// from an analyzed function get picked up automatically).
+			{
+				// Phase 1: Collect all previously-analyzed inline functions and
+				// reset their analyzed flag so performLazy... re-runs on the
+				// fresh shadow-parsed bodies. Reset ALL first so cross-calls
+				// between analyzed functions trigger re-analysis of callees
+				// rather than inheriting stale data.
+				Array<RootObject::InlineFunction::Object*> analyzedFunctions;
+
+				auto collectAnalyzed = [&](ReferenceCountedObject* ifo)
+				{
+					if (auto* obj = dynamic_cast<RootObject::InlineFunction::Object*>(ifo))
+					{
+						if (obj->realtimeSafetyInfoData.analyzed && obj->body != nullptr)
+						{
+							analyzedFunctions.add(obj);
+							obj->realtimeSafetyInfoData.analyzed = false;
+						}
+					}
+				};
+
+				for (auto ns : root->hiseSpecialData.namespaces)
+					for (auto ifo : ns->inlineFunctions)
+						collectAnalyzed(ifo);
+
+				for (auto ifo : root->hiseSpecialData.inlineFunctions)
+					collectAnalyzed(ifo);
+
+				// Phase 2: Re-analyze each function on its shadow-parsed body.
+				// performLazyCallScopeAnalysis() recursively analyzes unanalyzed
+				// callees first, so dependency order is handled automatically.
+				for (auto* obj : analyzedFunctions)
+				{
+					if (!obj->realtimeSafetyInfoData.analyzed)
+						obj->performLazyCallScopeAnalysis();
+				}
+
+				// Phase 3: Convert warnings to diagnostics.
+				for (auto* obj : analyzedFunctions)
+				{
+					for (const auto& w : obj->realtimeSafetyInfoData.warnings)
+					{
+						RootObject::ApiDiagnostic d;
+						d.severity = RootObject::ApiDiagnostic::Warning;
+						d.source = "callscope";
+
+						if (!w.callStack.isEmpty())
+						{
+							w.callStack[0].location.fillColumnAndLines(d.col, d.line);
+							d.fileName = w.callStack[0].location.externalFile;
+						}
+
+						String scopeLabel;
+						using CS = ApiHelpers::CallScope;
+						switch (w.scope)
+						{
+							case CS::Unsafe:  scopeLabel = "unsafe"; break;
+							case CS::Init:    scopeLabel = "init-only"; break;
+							case CS::Warning: scopeLabel = "warning"; break;
+							default: break;
+						}
+
+						d.message = "[CallScope] " + w.apiCall + " (" + scopeLabel + ")";
+
+						if (w.note.isNotEmpty())
+							d.message << ": " << w.note;
+
+						tb.getDiagnostics().add(d);
+					}
+				}
+			}
+		}
 	}
 	catch (RootObject::Error& e)
 	{
@@ -1944,6 +2075,7 @@ Array<HiseJavascriptEngine::RootObject::ApiDiagnostic> HiseJavascriptEngine::sha
 		d.fileName = e.externalLocation.isNotEmpty() ? e.externalLocation : fileName;
 		d.message = e.errorMessage;
 		d.severity = RootObject::ApiDiagnostic::Error;
+		d.source = "syntax";
 		tb.getDiagnostics().add(d);
 	}
 	catch (String& error)
@@ -1952,6 +2084,7 @@ Array<HiseJavascriptEngine::RootObject::ApiDiagnostic> HiseJavascriptEngine::sha
 		d.fileName = fileName;
 		d.message = error;
 		d.severity = RootObject::ApiDiagnostic::Error;
+		d.source = "syntax";
 		tb.getDiagnostics().add(d);
 	}
 
