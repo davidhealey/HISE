@@ -64,6 +64,11 @@
 
 #include "hi_tools/SiTraNoConverter.cpp"
 #include "hi_tools/MiscToolClasses.cpp"
+
+#if HI_RUN_UNIT_TESTS
+#include "hi_tools/FuzzySearcherTests.cpp"
+#endif
+
 #include "hi_dispatch/hi_dispatch.cpp"
 
 #include "hi_tools/PathFactory.cpp"
