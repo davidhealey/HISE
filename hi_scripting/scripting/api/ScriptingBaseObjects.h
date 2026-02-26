@@ -508,6 +508,24 @@ struct WeakCallbackHolder : private ScriptingObject
 		trackIndex = trackIndexToUse;
 	}
 
+	void addCallbackDiagnostic(ApiClass* c, const Identifier& methodName, int fIndex = 0)
+	{
+		auto numArgs = numExpectedArgs;
+
+		c->addDiagnostic(methodName, [numArgs, fIndex](ApiClass*, const Array<var>& args)
+			{
+				if (auto f = dynamic_cast<CallableObject*>(args[fIndex].getObject()))
+				{
+					auto numActual = f->getNumArguments();
+
+					if (numActual != numArgs)
+						return ApiClass::DiagnosticResult::fail("wrong argument count for callback").withExpectation(String(numActual) + " params", String(numArgs) + " params");
+				}
+
+				return ApiClass::DiagnosticResult::unknown();
+			});
+	}
+
 private:
 
 	var getThisObject();

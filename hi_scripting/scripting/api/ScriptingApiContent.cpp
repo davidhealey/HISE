@@ -438,10 +438,12 @@ ScriptingApi::Content::ScriptComponent::ScriptComponent(ProcessorWithScriptingCo
 	ADD_API_METHOD_0(changed);
 	ADD_API_METHOD_0(getGlobalPositionX);
 	ADD_API_METHOD_0(getGlobalPositionY);
-	ADD_API_METHOD_1(setControlCallback);
+	ADD_TYPED_API_METHOD_1(setControlCallback, VarTypeChecker::Function);
+	addDiagnostic("setControlCallback", WeakCallbackHolder::checkCallbackNumArgs<2>);
 	ADD_API_METHOD_0(getAllProperties);
 	ADD_API_METHOD_1(setZLevel);
-	ADD_API_METHOD_1(setKeyPressCallback);
+	ADD_TYPED_API_METHOD_1(setKeyPressCallback, VarTypeChecker::Function);
+	ADD_CALLBACK_DIAGNOSTIC(keyboardCallback, setKeyPressCallback, 0);
 	ADD_API_METHOD_1(setConsumedKeyPresses);
 	ADD_API_METHOD_0(loseFocus);
     ADD_API_METHOD_0(grabFocus);
@@ -2140,6 +2142,7 @@ maximum(1.0f)
 	initInternalPropertyFromValueTreeOrDefault(ScriptComponent::linkedTo);
 
 	ADD_TYPED_API_METHOD_1(setValuePopupFunction, VarTypeChecker::Function);
+	addDiagnostic("setValuePopupFunction", WeakCallbackHolder::checkCallbackNumArgs<1>);
 	ADD_TYPED_API_METHOD_1(setMidPoint, VarTypeChecker::Number);
 	ADD_API_METHOD_3(setRange);
 	ADD_TYPED_API_METHOD_1(setMode, VarTypeChecker::String);
@@ -4478,7 +4481,6 @@ ScriptingApi::Content::ScriptPanel::ScriptPanel(ScriptPanel* parent) :
 	fileDropRoutine	(parent->getScriptProcessor(), nullptr, var(), 1),
 	mouseCursorPath(MouseCursor::NormalCursor)
 {
-	
 	init();
 }
 
@@ -4531,14 +4533,20 @@ void ScriptingApi::Content::ScriptPanel::init()
 
 	//initInternalPropertyFromValueTreeOrDefault(visible);
 
+	
+
 	ADD_API_METHOD_0(repaint);
 	ADD_API_METHOD_0(repaintImmediately);
 	ADD_API_METHOD_1(setPaintRoutine);
 	ADD_API_METHOD_3(setImage);
-	ADD_API_METHOD_1(setMouseCallback);
-	ADD_API_METHOD_1(setLoadingCallback);
-	ADD_API_METHOD_1(setTimerCallback);
-	ADD_API_METHOD_3(setFileDropCallback);
+	ADD_TYPED_API_METHOD_1(setMouseCallback, VarTypeChecker::Function);		
+	ADD_CALLBACK_DIAGNOSTIC(mouseRoutine, setMouseCallback, 0);
+	ADD_TYPED_API_METHOD_1(setLoadingCallback, VarTypeChecker::Function);
+	ADD_CALLBACK_DIAGNOSTIC(loadRoutine, setLoadingCallback, 0);
+	ADD_TYPED_API_METHOD_1(setTimerCallback, VarTypeChecker::Function);
+	ADD_CALLBACK_DIAGNOSTIC(timerRoutine, setTimerCallback, 0);
+	ADD_TYPED_API_METHOD_3(setFileDropCallback, VarTypeChecker::String, VarTypeChecker::String, VarTypeChecker::Function);
+	ADD_CALLBACK_DIAGNOSTIC(fileDropRoutine, setFileDropCallback, 2);
 	ADD_API_METHOD_1(startTimer);
 	ADD_API_METHOD_0(stopTimer);
 	ADD_API_METHOD_2(loadImage);
@@ -5568,9 +5576,11 @@ ScriptingApi::Content::ScriptedViewport::ScriptedViewport(ProcessorWithScripting
 	ADD_API_METHOD_1(setTableMode);
 	ADD_API_METHOD_1(setTableColumns);
 	ADD_API_METHOD_1(setTableRowData);
-	ADD_API_METHOD_1(setTableCallback);
+	ADD_TYPED_API_METHOD_1(setTableCallback, VarTypeChecker::Function);
+	addDiagnostic("setTableCallback", WeakCallbackHolder::checkCallbackNumArgs<1>);
 	ADD_API_METHOD_1(getOriginalRowIndex);
-	ADD_API_METHOD_1(setTableSortFunction);
+	ADD_TYPED_API_METHOD_1(setTableSortFunction, VarTypeChecker::Function);
+	addDiagnostic("setTableSortFunction", WeakCallbackHolder::checkCallbackNumArgs<2>);
 	ADD_API_METHOD_1(setEventTypesForValueCallback);
 }
 
@@ -6219,13 +6229,15 @@ ScriptingApi::Content::ScriptDynamicContainer::ChildReference::ChildReference(Sc
 	ADD_API_METHOD_1(setValueWithUndo);
 	ADD_API_METHOD_0(changed);
 	ADD_API_METHOD_0(getValue);
-	ADD_API_METHOD_1(setControlCallback);
+	ADD_TYPED_API_METHOD_1(setControlCallback, VarTypeChecker::Function);
+	ADD_CALLBACK_DIAGNOSTIC(valueCallback, setControlCallback, 0);
 	ADD_API_METHOD_1(sendRepaintMessage); 
 	ADD_API_METHOD_1(updateValueFromProcessorConnection); 
 	ADD_API_METHOD_1(loseFocus); 
 	ADD_API_METHOD_1(resetValueToDefault);
 	ADD_API_METHOD_1(setPaintRoutine);
-	ADD_API_METHOD_1(setChildCallback);
+	ADD_TYPED_API_METHOD_1(setChildCallback, VarTypeChecker::Function);
+	ADD_CALLBACK_DIAGNOSTIC(childCallback, setChildCallback, 0);
 	ADD_API_METHOD_1(isEqual);
 	ADD_API_METHOD_0(getNumChildComponents);
 	ADD_API_METHOD_1(getChildComponentIndex);

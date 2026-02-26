@@ -21,6 +21,9 @@
 #define ADD_API_METHOD_4(name) static const Identifier name ## _id (#name); addFunction4(name ## _id, &Wrapper::name)
 #define ADD_API_METHOD_5(name) static const Identifier name ## _id (#name); addFunction5(name ## _id, &Wrapper::name)
 
+// appends a callback argument check
+#define ADD_CALLBACK_DIAGNOSTIC(wc, id, idx) wc.addCallbackDiagnostic(this, #id, idx);
+
 #if USE_BACKEND
 #define ADD_TYPED_API_METHOD_1(name, t1) static const Identifier name ## _id (#name); addFunction1(name ## _id, &Wrapper::name); addForcedParameterTypes(name ## _id, VarTypeChecker::createParameterTypes(t1));
 #define ADD_TYPED_API_METHOD_2(name, t1, t2) static const Identifier name ## _id (#name); addFunction2(name ## _id, &Wrapper::name); addForcedParameterTypes(name ## _id, VarTypeChecker::createParameterTypes(t1, t2));
