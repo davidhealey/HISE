@@ -341,6 +341,8 @@ expectEquals<int>(json["count"], 5, "Should have 5 items");
 | `/api/diagnose_script` | POST | scripting | Diagnostic shadow parse (no recompile) |
 | `/api/get_included_files` | GET | scripting | List included external script files |
 
+**Note:** The `diagnose_script` endpoint is consumed by the native LSP proxy binary at `tools/hise_lsp_server/`. The proxy forwards LSP `didSave` notifications to this endpoint and maps the response to standard LSP `publishDiagnostics`. See `tools/hise_lsp_server/README.md` for details.
+
 ---
 
 ## LAF (LookAndFeel) Integration
