@@ -706,6 +706,16 @@ const Array<RestHelpers::RouteMetadata>& RestHelpers::getRouteMetadata()
 				"Path to the external .js file (absolute or relative to Scripts folder). "
 				"Required if moduleId is not provided. When used alone, HISE resolves the owning processor.").asOptional()));
 		
+		// ApiRoute::GetIncludedFiles
+		m.add(RouteMetadata(ApiRoute::GetIncludedFiles, "api/get_included_files")
+			.withCategory("scripting")
+			.withDescription("List all included (watched) external script files. "
+							 "Without moduleId, returns all files across all processors with owning processor names. "
+							 "With moduleId, returns files for that processor only.")
+			.withReturns("Array of included files as full paths, optionally with owning processor ID")
+			.withQueryParam(RouteParameter(RestApiIds::moduleId, 
+				"Filter by script processor. If omitted, returns files from all processors with processor names.").asOptional()));
+		
 		// Verify count matches enum
 		jassert(m.size() == (int)ApiRoute::numRoutes);
 		
@@ -1987,6 +1997,59 @@ RestServer::Response RestHelpers::handleDiagnoseScript(MainController* mc, RestS
 		req->complete(RestServer::Response::ok(var(result.get())));
 	});
 	
+	return req->waitForResponse();
+}
+
+RestServer::Response RestHelpers::handleGetIncludedFiles(MainController* mc, RestServer::AsyncRequest::Ptr req)
+{
+	auto moduleId = req->getRequest()[RestApiIds::moduleId];
+	
+	DynamicObject::Ptr result = new DynamicObject();
+	result->setProperty(RestApiIds::success, true);
+	
+	if (moduleId.isNotEmpty())
+	{
+		// Filtered: return files for this specific processor
+		auto* jp = dynamic_cast<JavascriptProcessor*>(
+			ProcessorHelpers::getFirstProcessorWithName(mc->getMainSynthChain(), moduleId));
+		
+		if (jp == nullptr)
+			return req->fail(404, "module not found: " + moduleId);
+		
+		result->setProperty(RestApiIds::moduleId, moduleId);
+		
+		Array<var> fileArray;
+		
+		for (int i = 0; i < jp->getNumWatchedFiles(); i++)
+			fileArray.add(jp->getWatchedFile(i).getFullPathName().replace("\\", "/"));
+		
+		result->setProperty(RestApiIds::files, var(fileArray));
+	}
+	else
+	{
+		// Global: return all files across all processors with owning processor names
+		Array<File> files;
+		StringArray processors;
+		
+		mc->fillExternalFileList(files, processors);
+		
+		Array<var> fileArray;
+		
+		for (int i = 0; i < files.size(); i++)
+		{
+			DynamicObject::Ptr entry = new DynamicObject();
+			entry->setProperty(RestApiIds::path, files[i].getFullPathName().replace("\\", "/"));
+			entry->setProperty(RestApiIds::processor, processors[i]);
+			fileArray.add(var(entry.get()));
+		}
+		
+		result->setProperty(RestApiIds::files, var(fileArray));
+	}
+	
+	result->setProperty(RestApiIds::logs, Array<var>());
+	result->setProperty(RestApiIds::errors, Array<var>());
+	
+	req->complete(RestServer::Response::ok(var(result.get())));
 	return req->waitForResponse();
 }
 

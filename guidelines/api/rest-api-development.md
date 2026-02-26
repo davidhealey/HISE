@@ -339,6 +339,7 @@ expectEquals<int>(json["count"], 5, "Should have 5 items");
 | `/api/screenshot` | GET | ui | Capture UI screenshot |
 | `/api/get_selected_components` | GET | ui | Get selected components from Interface Designer |
 | `/api/diagnose_script` | POST | scripting | Diagnostic shadow parse (no recompile) |
+| `/api/get_included_files` | GET | scripting | List included external script files |
 
 ---
 

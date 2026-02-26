@@ -167,6 +167,10 @@ namespace RestApiIds
     DECLARE_ID(source);               // "syntax", "api-validation", "type-check", "language", "callscope"
     DECLARE_ID(message);              // Diagnostic message text
     DECLARE_ID(suggestions);          // Array of "did you mean?" suggestion strings
+    
+    // get_included_files
+    DECLARE_ID(files);                // Array of included file entries
+    DECLARE_ID(processor);            // Owning processor ID for an included file
 }
 
 #undef DECLARE_ID
@@ -200,6 +204,7 @@ struct RestHelpers
         GetSelectedComponents,  ///< GET  /api/get_selected_components - Get selected UI components
         SimulateInteractions,   ///< POST /api/simulate_interactions - Execute UI interaction sequence
         DiagnoseScript,         ///< POST /api/diagnose_script - Run diagnostic shadow parse
+        GetIncludedFiles,       ///< GET  /api/get_included_files - List included script files
         numRoutes
     };
     
@@ -511,6 +516,13 @@ struct RestHelpers
      */
     static RestServer::Response handleDiagnoseScript(MainController* mc, 
                                                      RestServer::AsyncRequest::Ptr req);
+    
+    /** Handler for GET /api/get_included_files - List included script files.
+     *  Without moduleId: returns all included files across all processors (with owning processor).
+     *  With moduleId: returns files for that specific processor only.
+     */
+    static RestServer::Response handleGetIncludedFiles(MainController* mc, 
+                                                       RestServer::AsyncRequest::Ptr req);
 };
 
 } // namespace hise

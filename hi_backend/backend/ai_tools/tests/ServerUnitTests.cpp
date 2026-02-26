@@ -96,6 +96,9 @@ public:
         testScreenshotFileOutputErrors();
         testGetSelectedComponents();
         testSimulateInteractionsExcluded();
+        testGetIncludedFilesGlobal();
+        testGetIncludedFilesForModule();
+        testGetIncludedFilesUnknownModule();
         testDiagnoseScriptErrorMissingParams();
         testDiagnoseScriptErrorUnknownModule();
         testDiagnoseScriptErrorNoExternalFiles();
@@ -2242,6 +2245,113 @@ private:
         f.replaceWithText(content);
         return f;
     }
+    
+    //==========================================================================
+    // get_included_files tests
+    //==========================================================================
+    
+    void testGetIncludedFilesGlobal()
+    {
+        /** Setup: Compile with an external file included
+         *  Scenario: Call get_included_files without moduleId
+         *  Expected: Returns all files with owning processor names
+         */
+        beginTest("GET /api/get_included_files (global)");
+        
+        ctx->reset();
+        
+        auto tempFile = createTempScriptFile("_test_included_global.js",
+            "Console.print(\"included\");\n");
+        
+        ctx->compile("Content.makeFrontInterface(600, 400);\n"
+                     "include(\"_test_included_global.js\");");
+        
+        auto response = ctx->httpGet("/api/get_included_files");
+        var json = ctx->parseJson(response);
+        
+        expect((bool)json["success"], "Should succeed: " + response);
+        expect(json["files"].isArray(), "Should have files array");
+        
+        bool found = false;
+        
+        for (int i = 0; i < json["files"].size(); i++)
+        {
+            auto entry = json["files"][i];
+            
+            if (entry["path"].toString().contains("_test_included_global.js"))
+            {
+                found = true;
+                expect(entry["processor"].toString() == "Interface",
+                       "Processor should be Interface");
+            }
+        }
+        
+        expect(found, "Should find the included file in global list");
+        
+        tempFile.deleteFile();
+    }
+    
+    void testGetIncludedFilesForModule()
+    {
+        /** Setup: Compile with an external file included
+         *  Scenario: Call get_included_files with moduleId=Interface
+         *  Expected: Returns flat list of file paths for that processor
+         */
+        beginTest("GET /api/get_included_files (with moduleId)");
+        
+        ctx->reset();
+        
+        auto tempFile = createTempScriptFile("_test_included_module.js",
+            "Console.print(\"included\");\n");
+        
+        ctx->compile("Content.makeFrontInterface(600, 400);\n"
+                     "include(\"_test_included_module.js\");");
+        
+        auto response = ctx->httpGet("/api/get_included_files?moduleId=Interface");
+        var json = ctx->parseJson(response);
+        
+        expect((bool)json["success"], "Should succeed: " + response);
+        expect(json["moduleId"].toString() == "Interface", "Should echo moduleId");
+        expect(json["files"].isArray(), "Should have files array");
+        expect(json["files"].size() > 0, "Should have at least one file");
+        
+        bool found = false;
+        
+        for (int i = 0; i < json["files"].size(); i++)
+        {
+            if (json["files"][i].toString().contains("_test_included_module.js"))
+                found = true;
+        }
+        
+        expect(found, "Should find the included file");
+        
+        // Verify flat string format (not object)
+        expect(json["files"][0].isString(), "Files should be flat strings when moduleId is provided");
+        
+        tempFile.deleteFile();
+    }
+    
+    void testGetIncludedFilesUnknownModule()
+    {
+        /** Setup: No special compilation
+         *  Scenario: Call get_included_files with unknown moduleId
+         *  Expected: 404 error
+         */
+        beginTest("GET /api/get_included_files (unknown module)");
+        
+        ctx->reset();
+        
+        auto response = ctx->httpGet("/api/get_included_files?moduleId=NonExistentModule");
+        var json = ctx->parseJson(response);
+        
+        expect(!(bool)json["success"], "Should fail for unknown module");
+        expect(json["errorMessage"].toString().contains("module not found"),
+               "Error should mention module not found: " + response);
+    }
+    
+    //==========================================================================
+    // diagnose_script tests
+    //==========================================================================
     
     void testDiagnoseScriptErrorMissingParams()
     {

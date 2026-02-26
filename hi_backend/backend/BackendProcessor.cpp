@@ -321,6 +321,9 @@ RestServer::Response BackendProcessor::onAsyncRequest(RestServer::AsyncRequest::
 		case RestHelpers::ApiRoute::DiagnoseScript:
 			return RestHelpers::handleDiagnoseScript(this, req);
 			
+		case RestHelpers::ApiRoute::GetIncludedFiles:
+			return RestHelpers::handleGetIncludedFiles(this, req);
+			
 		default:
 			return req->fail(404, "Unknown API endpoint: " + subURL);
 	}

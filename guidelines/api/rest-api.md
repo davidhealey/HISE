@@ -1105,6 +1105,67 @@ Requires at least one prior successful compile (F5 or `/api/set_script` with `co
 
 ---
 
+### GET /api/get_included_files
+
+List all currently included (watched) external script files. Useful for LSP auto-suggestion, debugging include issues, and verifying file associations.
+
+**Parameters** (query string — all optional):
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `moduleId` | string | no | Filter by script processor. If omitted, returns files from all processors. |
+
+**Request (global — all processors)**:
+```
+GET /api/get_included_files
+```
+
+**Response (global)**:
+```json
+{
+  "success": true,
+  "files": [
+    { "path": "D:/Projects/MyPlugin/Scripts/utils.js", "processor": "Interface" },
+    { "path": "D:/Projects/MyPlugin/Scripts/ui.js", "processor": "Interface" }
+  ],
+  "logs": [],
+  "errors": []
+}
+```
+
+**Request (filtered by processor)**:
+```
+GET /api/get_included_files?moduleId=Interface
+```
+
+**Response (filtered)**:
+```json
+{
+  "success": true,
+  "moduleId": "Interface",
+  "files": [
+    "D:/Projects/MyPlugin/Scripts/utils.js",
+    "D:/Projects/MyPlugin/Scripts/ui.js"
+  ],
+  "logs": [],
+  "errors": []
+}
+```
+
+**Notes**:
+- Without `moduleId`: returns objects with `path` and `processor` fields (de-duplicated across all processors)
+- With `moduleId`: returns flat string array of full paths (since processor is already known)
+- Paths use forward slashes on all platforms
+- Files are registered after a successful compile — call after F5 or `/api/set_script` with `compile: true`
+
+**Error Cases**:
+
+| Status | Condition |
+|--------|-----------|
+| 404 | Unknown `moduleId` |
+
+---
+
 ## Component Lifecycle & Callbacks
 
 ### When Control Callbacks Fire
