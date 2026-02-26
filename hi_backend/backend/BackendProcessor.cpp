@@ -318,6 +318,9 @@ RestServer::Response BackendProcessor::onAsyncRequest(RestServer::AsyncRequest::
 		case RestHelpers::ApiRoute::SimulateInteractions:
 			return RestHelpers::handleSimulateInteractions(this, req);
 			
+		case RestHelpers::ApiRoute::DiagnoseScript:
+			return RestHelpers::handleDiagnoseScript(this, req);
+			
 		default:
 			return req->fail(404, "Unknown API endpoint: " + subURL);
 	}

@@ -96,6 +96,12 @@ public:
         testScreenshotFileOutputErrors();
         testGetSelectedComponents();
         testSimulateInteractionsExcluded();
+        testDiagnoseScriptErrorMissingParams();
+        testDiagnoseScriptErrorUnknownModule();
+        testDiagnoseScriptErrorNoExternalFiles();
+        testDiagnoseScriptSuccess();
+        testDiagnoseScriptWithDiagnostics();
+        testDiagnoseScriptFilePath();
         
         // Verify all endpoints were tested
         verifyAllEndpointsTested();
@@ -761,6 +767,10 @@ private:
         auto errors = json["errors"];
         expect(errors.isArray(), "errors should be array");
         expect(errors.size() == 0, "Should have no errors");
+        
+        // Verify externalFiles is present (empty since no includes)
+        expect(json.hasProperty("externalFiles"), "set_script should return externalFiles");
+        expect(json["externalFiles"].isArray(), "externalFiles should be array");
     }
     
     //==========================================================================
@@ -897,6 +907,10 @@ private:
                 foundOutput = true;
         }
         expect(foundOutput, "Recompile should execute onInit again");
+        
+        // Verify externalFiles is present
+        expect(json.hasProperty("externalFiles"), "Recompile should return externalFiles");
+        expect(json["externalFiles"].isArray(), "externalFiles should be array");
     }
     
     //==========================================================================
@@ -2206,6 +2220,231 @@ private:
             }
         }
         expect(found, "simulate_interactions should exist in route metadata");
+    }
+    
+    //==========================================================================
+    // diagnose_script tests
+    
+    /** Helper: get the Scripts folder for the test context's project. */
+    File getTestScriptsFolder()
+    {
+        return ctx->mc->getSampleManager().getProjectHandler()
+            .getSubDirectory(FileHandlerBase::Scripts);
+    }
+    
+    /** Helper: create a temporary .js file in the Scripts folder.
+        Returns the file (caller must delete it after the test). */
+    File createTempScriptFile(const String& fileName, const String& content)
+    {
+        auto scriptsFolder = getTestScriptsFolder();
+        scriptsFolder.createDirectory();
+        auto f = scriptsFolder.getChildFile(fileName);
+        f.replaceWithText(content);
+        return f;
+    }
+    
+    void testDiagnoseScriptErrorMissingParams()
+    {
+        beginTest("POST /api/diagnose_script (missing params)");
+        
+        ctx->reset();
+        
+        // No moduleId or filePath — should fail with 400
+        DynamicObject::Ptr bodyObj = new DynamicObject();
+        
+        auto response = ctx->httpPost("/api/diagnose_script", 
+                                      JSON::toString(var(bodyObj.get())));
+        var json = ctx->parseJson(response);
+        
+        expect(!(bool)json["success"], "Should fail without moduleId or filePath");
+    }
+    
+    void testDiagnoseScriptErrorUnknownModule()
+    {
+        beginTest("POST /api/diagnose_script (unknown module)");
+        
+        ctx->reset();
+        
+        DynamicObject::Ptr bodyObj = new DynamicObject();
+        bodyObj->setProperty("moduleId", "NonExistentProcessor");
+        
+        auto response = ctx->httpPost("/api/diagnose_script",
+                                      JSON::toString(var(bodyObj.get())));
+        var json = ctx->parseJson(response);
+        
+        expect(!(bool)json["success"], "Should fail for unknown moduleId");
+    }
+    
+    void testDiagnoseScriptErrorNoExternalFiles()
+    {
+        beginTest("POST /api/diagnose_script (no external files)");
+        
+        ctx->reset();
+        
+        // Compile a script without any include() — no external files
+        ctx->compile("Content.makeFrontInterface(600, 400);");
+        
+        // Request diagnose with moduleId only — should fail since no external files
+        DynamicObject::Ptr bodyObj = new DynamicObject();
+        bodyObj->setProperty("moduleId", "Interface");
+        
+        auto response = ctx->httpPost("/api/diagnose_script",
+                                      JSON::toString(var(bodyObj.get())));
+        var json = ctx->parseJson(response);
+        
+        expect(!(bool)json["success"], "Should fail when processor has no external files and filePath is not provided");
+    }
+    
+    void testDiagnoseScriptSuccess()
+    {
+        /** Setup: External .js file with valid code, compiled via include()
+         *  Scenario: Diagnose the file via moduleId + filePath
+         *  Expected: Success with empty diagnostics array
+         */
+        beginTest("POST /api/diagnose_script (success, clean file)");
+        
+        ctx->reset();
+        
+        // Create a temp .js file with valid code
+        auto tempFile = createTempScriptFile("_test_diagnose_clean.js",
+            "// Valid HISEScript\nConsole.print(\"hello\");\n");
+        
+        // Compile with include
+        ctx->compile("Content.makeFrontInterface(600, 400);\n"
+                     "include(\"_test_diagnose_clean.js\");");
+        
+        // Diagnose via moduleId + filePath
+        DynamicObject::Ptr bodyObj = new DynamicObject();
+        bodyObj->setProperty("moduleId", "Interface");
+        bodyObj->setProperty("filePath", tempFile.getFullPathName().replace("\\", "/"));
+        
+        auto response = ctx->httpPost("/api/diagnose_script",
+                                      JSON::toString(var(bodyObj.get())));
+        var json = ctx->parseJson(response);
+        
+        expect((bool)json["success"], "Should succeed for clean file: " + response);
+        expect(json["moduleId"].toString() == "Interface", "Should return moduleId");
+        expect(json.hasProperty("filePath"), "Should have filePath in response");
+        expect(json.hasProperty("diagnostics"), "Should have diagnostics array");
+        
+        auto diagnostics = json["diagnostics"];
+        expect(diagnostics.isArray(), "diagnostics should be array");
+        expectEquals<int>(diagnostics.size(), 0, "Clean file should have 0 diagnostics");
+        
+        // Cleanup
+        tempFile.deleteFile();
+    }
+    
+    void testDiagnoseScriptWithDiagnostics()
+    {
+        /** Setup: External .js file with a known API hallucination
+         *  Scenario: Diagnose the file
+         *  Expected: Diagnostic with error severity, api-validation source, and suggestion
+         */
+        beginTest("POST /api/diagnose_script (with API error)");
+        
+        ctx->reset();
+        
+        // Create a temp .js file with a known bad API call
+        auto tempFile = createTempScriptFile("_test_diagnose_errors.js",
+            "Console.prnt(\"hello\");\n");  // 'prnt' should trigger fuzzy → 'print'
+        
+        // First compile with a valid include to register the file
+        auto cleanFile = createTempScriptFile("_test_diagnose_errors.js",
+            "Console.print(\"hello\");\n");
+        
+        ctx->compile("Content.makeFrontInterface(600, 400);\n"
+                     "include(\"_test_diagnose_errors.js\");");
+        
+        // Now write the bad code to the file (after compile registered it)
+        tempFile.replaceWithText("Console.prnt(\"hello\");\n");
+        
+        // Diagnose
+        DynamicObject::Ptr bodyObj = new DynamicObject();
+        bodyObj->setProperty("moduleId", "Interface");
+        bodyObj->setProperty("filePath", tempFile.getFullPathName().replace("\\", "/"));
+        
+        auto response = ctx->httpPost("/api/diagnose_script",
+                                      JSON::toString(var(bodyObj.get())));
+        var json = ctx->parseJson(response);
+        
+        expect((bool)json["success"], "Shadow parse should succeed (returns diagnostics, not failure): " + response);
+        
+        auto diagnostics = json["diagnostics"];
+        expect(diagnostics.isArray(), "diagnostics should be array");
+        expect(diagnostics.size() >= 1, "Should have at least 1 diagnostic for 'Console.prnt'");
+        
+        if (diagnostics.size() > 0)
+        {
+            auto d = diagnostics[0];
+            expect(d.hasProperty("line"), "Diagnostic should have line");
+            expect(d.hasProperty("column"), "Diagnostic should have column");
+            expect(d.hasProperty("severity"), "Diagnostic should have severity");
+            expect(d.hasProperty("source"), "Diagnostic should have source");
+            expect(d.hasProperty("message"), "Diagnostic should have message");
+            expect((int)d["line"] >= 1, "Line should be >= 1");
+            
+            auto severity = d["severity"].toString();
+            expect(severity == "error" || severity == "warning", 
+                   "Severity should be error or warning, got: " + severity);
+            
+            auto source = d["source"].toString();
+            expect(source.isNotEmpty(), "Source should not be empty");
+            
+            // Check for suggestions (fuzzy match should suggest 'print')
+            if (d.hasProperty("suggestions"))
+            {
+                auto suggestions = d["suggestions"];
+                if (suggestions.isArray() && suggestions.size() > 0)
+                {
+                    bool hasPrintSuggestion = false;
+                    for (int i = 0; i < suggestions.size(); i++)
+                    {
+                        if (suggestions[i].toString() == "print")
+                            hasPrintSuggestion = true;
+                    }
+                    expect(hasPrintSuggestion, "Should suggest 'print' for 'prnt'");
+                }
+            }
+        }
+        
+        // Cleanup
+        tempFile.deleteFile();
+    }
+    
+    void testDiagnoseScriptFilePath()
+    {
+        /** Setup: External .js file, diagnosed using filePath only (no moduleId)
+         *  Scenario: HISE resolves the owning processor automatically
+         *  Expected: Success with correct moduleId in response
+         */
+        beginTest("POST /api/diagnose_script (filePath only)");
+        
+        ctx->reset();
+        
+        // Create and compile with an external file
+        auto tempFile = createTempScriptFile("_test_diagnose_filepath.js",
+            "Console.print(\"filepath test\");\n");
+        
+        ctx->compile("Content.makeFrontInterface(600, 400);\n"
+                     "include(\"_test_diagnose_filepath.js\");");
+        
+        // Diagnose using filePath only — HISE should resolve the processor
+        DynamicObject::Ptr bodyObj = new DynamicObject();
+        bodyObj->setProperty("filePath", tempFile.getFullPathName().replace("\\", "/"));
+        
+        auto response = ctx->httpPost("/api/diagnose_script",
+                                      JSON::toString(var(bodyObj.get())));
+        var json = ctx->parseJson(response);
+        
+        expect((bool)json["success"], "Should succeed with filePath-only resolution: " + response);
+        expect(json["moduleId"].toString() == "Interface", 
+               "Should resolve to Interface processor");
+        expect(json["diagnostics"].isArray(), "Should have diagnostics array");
+        expectEquals<int>(json["diagnostics"].size(), 0, "Clean file should have 0 diagnostics");
+        
+        // Cleanup
+        tempFile.deleteFile();
     }
 };
 

@@ -296,6 +296,7 @@ curl -X POST "http://localhost:1900/api/set_script" \
 {
   "success": true,
   "result": "Recompiled OK",
+  "externalFiles": ["utils.js", "ui.js"],
   "logs": ["123"],
   "errors": []
 }
@@ -306,6 +307,7 @@ curl -X POST "http://localhost:1900/api/set_script" \
 {
   "success": false,
   "result": "Compilation / Runtime Error",
+  "externalFiles": ["utils.js"],
   "logs": [],
   "errors": [
     {
@@ -318,6 +320,8 @@ curl -X POST "http://localhost:1900/api/set_script" \
   ]
 }
 ```
+
+**Note**: `externalFiles` lists all external `.js` files included by this processor (via `include()`). This list may change after compilation if `include()` calls were added or removed. Use this to track which files the LSP should watch for changes.
 
 ---
 
@@ -338,12 +342,13 @@ curl -X POST "http://localhost:1900/api/recompile" \
   -d '{"moduleId": "Interface"}'
 ```
 
-**Response**: Same format as `set_script` compile response.
+**Response**: Same format as `set_script` compile response (includes `externalFiles` array).
 
 **When to use**:
 - After editing external `.js` files directly on disk
 - To re-run initialization code without changes
 - To check current compile state
+- The `externalFiles` array in the response reflects the current include list (may have changed if `include()` calls were added/removed)
 
 ---
 
@@ -989,6 +994,114 @@ curl "http://localhost:1900/api/get_selected_components?moduleId=Interface"
 - Batch property changes: "Make all selected buttons the same size"
 - Code generation: "Add control callbacks to all selected components"
 - Parent/child relationships: "Put all selected buttons inside this panel"
+
+---
+
+### POST /api/diagnose_script
+
+Run a diagnostic-only shadow parse on an external `.js` script file. Returns structured diagnostics (API hallucinations, type mismatches, language rule violations, audio-thread safety warnings) **without modifying runtime state** — no recompilation, no execution.
+
+Requires at least one prior successful compile (F5 or `/api/set_script` with `compile: true`) so that API objects are resolved.
+
+**Parameters** (JSON body — at least one required):
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `moduleId` | string | conditional | The script processor's module ID. If `filePath` is omitted, uses the processor's first external file. |
+| `filePath` | string | conditional | Path to the `.js` file (absolute, or relative to Scripts folder). If `moduleId` is omitted, HISE resolves the owning processor automatically. |
+
+**Request**:
+```json
+{
+  "moduleId": "Interface",
+  "filePath": "Scripts/UI.js"
+}
+```
+
+**Response (clean file)**:
+```json
+{
+  "success": true,
+  "moduleId": "Interface",
+  "filePath": "D:/Projects/MyPlugin/Scripts/UI.js",
+  "diagnostics": [],
+  "logs": [],
+  "errors": []
+}
+```
+
+**Response (with diagnostics)**:
+```json
+{
+  "success": true,
+  "moduleId": "Interface",
+  "filePath": "D:/Projects/MyPlugin/Scripts/UI.js",
+  "diagnostics": [
+    {
+      "line": 15,
+      "column": 5,
+      "severity": "error",
+      "source": "api-validation",
+      "message": "Function / constant not found: Console.prnt (did you mean: print?)",
+      "suggestions": ["print"]
+    },
+    {
+      "line": 23,
+      "column": 8,
+      "severity": "error",
+      "source": "type-check",
+      "message": "Message.setNoteNumber() parameter 1 expects int, got String"
+    },
+    {
+      "line": 31,
+      "column": 3,
+      "severity": "warning",
+      "source": "callscope",
+      "message": "[CallScope] cable.sendData (unsafe) in audio-thread context"
+    }
+  ],
+  "logs": [],
+  "errors": []
+}
+```
+
+**Diagnostic Fields**:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `line` | int | 1-based line number in the file |
+| `column` | int | 1-based column number |
+| `severity` | string | `"error"`, `"warning"`, `"info"`, or `"hint"` |
+| `source` | string | Diagnostic category (see table below) |
+| `message` | string | Human-readable diagnostic message |
+| `suggestions` | string[] | Optional "did you mean?" suggestions from fuzzy matching |
+
+**Source Categories**:
+
+| Source | What it catches |
+|--------|----------------|
+| `syntax` | Parse errors, preprocessor errors |
+| `api-validation` | Unknown methods/constants, wrong argument count |
+| `type-check` | Literal type mismatches (String where int expected, etc.) |
+| `language` | HISEScript rule violations (const var in function, nested inline, undefined literal) |
+| `callscope` | Unsafe API calls in audio-thread callbacks |
+
+**Error Cases**:
+
+| Status | Condition |
+|--------|-----------|
+| 400 | Neither `moduleId` nor `filePath` provided |
+| 400 | `moduleId` provided but processor has no external files and `filePath` is omitted |
+| 404 | Unknown `moduleId` |
+| 404 | `filePath` not found on disk |
+| 404 | No processor includes the specified file (never compiled) |
+
+**Notes**:
+- `success: true` means the shadow parse completed — diagnostics are in the `diagnostics` array, not in `errors`
+- The `errors` array is for REST-level errors (captured console output), not diagnostics
+- Always reads the file from disk — save pending edits before calling
+- The shadow parse takes ~50ms (audio is briefly suspended via `killVoicesAndCall`)
+- Does not modify any runtime state — safe to call repeatedly during editing
 
 ---
 

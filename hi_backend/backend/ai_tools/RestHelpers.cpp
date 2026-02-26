@@ -394,6 +394,21 @@ static var getLafInfoForComponent(ScriptingApi::Content::LafRegistry* registry,
 	return var(false);
 }
 
+/** Adds the externalFiles array to a compile response.
+    Lists all watched external .js files for the given processor. */
+static void addExternalFilesToResponse(Processor* p, DynamicObject* result)
+{
+	auto* jp = dynamic_cast<JavascriptProcessor*>(p);
+	if (jp == nullptr)
+		return;
+	
+	Array<var> files;
+	for (int i = 0; i < jp->getNumWatchedFiles(); i++)
+		files.add(jp->getWatchedFile(i).getFileName());
+	
+	result->setProperty(RestApiIds::externalFiles, var(files));
+}
+
 /** Checks for script-based LAF recipients and waits for them to render.
     If timeout occurs, adds lafRenderWarning to the result object.
     Skipped on test port (1901) to avoid test delays. */
@@ -486,6 +501,7 @@ RestServer::Response RestHelpers::handleRecompile(MainController* mc, RestServer
 					}
 				}
 
+				addExternalFilesToResponse(p, r.get());
 				req->complete(RestServer::Response::ok(var(r.get())));
 			};
 
@@ -676,6 +692,19 @@ const Array<RestHelpers::RouteMetadata>& RestHelpers::getRouteMetadata()
 				"'subtarget' (optional sub-component ID), 'rightClick' (boolean), 'shiftDown'/'ctrlDown'/'altDown'/'cmdDown' (modifiers), "
 				"'menuItemText' (for selectMenuItem), 'id'/'scale' (for screenshot)"))
 			.withBodyParam(RouteParameter(RestApiIds::verbose, "If true, include auto-insertion details and final mouseState in response").withDefault("false")));
+		
+		// ApiRoute::DiagnoseScript
+		m.add(RouteMetadata(ApiRoute::DiagnoseScript, "api/diagnose_script")
+			.withMethod(RestServer::POST)
+			.withCategory("scripting")
+			.withDescription("Run diagnostic-only shadow parse on a script file. Returns structured diagnostics "
+							 "without modifying runtime state. Requires at least one prior successful compile (F5).")
+			.withReturns("Array of diagnostics with line, column, severity, source, message, and suggestions")
+			.withBodyParam(RouteParameter(RestApiIds::moduleId, 
+				"The script processor's module ID. Required if filePath is not provided.").asOptional())
+			.withBodyParam(RouteParameter(RestApiIds::filePath,
+				"Path to the external .js file (absolute or relative to Scripts folder). "
+				"Required if moduleId is not provided. When used alone, HISE resolves the owning processor.").asOptional()));
 		
 		// Verify count matches enum
 		jassert(m.size() == (int)ApiRoute::numRoutes);
@@ -1039,6 +1068,7 @@ RestServer::Response RestHelpers::handleSetScript(MainController* mc, RestServer
 					}
 				}
 
+				addExternalFilesToResponse(p, r.get());
 				req->complete(RestServer::Response::ok(var(r.get())));
 			};
 
@@ -1055,6 +1085,7 @@ RestServer::Response RestHelpers::handleSetScript(MainController* mc, RestServer
 	result->setProperty(RestApiIds::moduleId, moduleId);
 	result->setProperty(RestApiIds::updatedCallbacks, var(updatedCallbackNames));
 	result->setProperty(RestApiIds::result, "Updated without compilation");
+	addExternalFilesToResponse(dynamic_cast<Processor*>(jp), result.get());
 	result->setProperty(RestApiIds::logs, Array<var>());
 	result->setProperty(RestApiIds::errors, Array<var>());
 	
@@ -1809,6 +1840,154 @@ RestServer::Response RestHelpers::handleSimulateInteractions(BackendProcessor* b
 		t->logResponse(interactionsVar, finalResponse.body, success);
 	
 	return finalResponse;
+}
+
+//==============================================================================
+// Diagnose Script handler
+
+/** Converts ApiDiagnostic::Severity enum to JSON string. */
+static const char* severityToString(HiseJavascriptEngine::RootObject::ApiDiagnostic::Severity s)
+{
+	using Severity = HiseJavascriptEngine::RootObject::ApiDiagnostic::Severity;
+	
+	switch (s)
+	{
+		case Severity::Error:   return "error";
+		case Severity::Warning: return "warning";
+		case Severity::Info:    return "info";
+		case Severity::Hint:    return "hint";
+		default:                return "error";
+	}
+}
+
+/** Finds the JavascriptProcessor that includes a given external file.
+    Walks all JavascriptProcessor instances in the module tree and checks their watched files. */
+static JavascriptProcessor* findProcessorForFile(MainController* mc, const File& targetFile)
+{
+	Processor::Iterator<JavascriptProcessor> iter(mc->getMainSynthChain());
+
+	while (auto* jp = iter.getNextProcessor())
+	{
+		for (int i = 0; i < jp->getNumWatchedFiles(); i++)
+		{
+			if (jp->getWatchedFile(i) == targetFile)
+				return jp;
+		}
+	}
+
+	return nullptr;
+}
+
+RestServer::Response RestHelpers::handleDiagnoseScript(MainController* mc, RestServer::AsyncRequest::Ptr req)
+{
+	auto obj = req->getRequest().getJsonBody();
+	
+	auto filePathStr = obj.getProperty(RestApiIds::filePath, "").toString();
+	auto moduleIdStr = obj.getProperty(RestApiIds::moduleId, "").toString();
+	
+	// Resolve the target file
+	File targetFile;
+	
+	if (filePathStr.isNotEmpty())
+	{
+		if (File::isAbsolutePath(filePathStr))
+			targetFile = File(filePathStr);
+		else
+			targetFile = mc->getSampleManager().getProjectHandler()
+				.getSubDirectory(FileHandlerBase::Scripts)
+				.getChildFile(filePathStr);
+	}
+	
+	// Resolve the processor
+	JavascriptProcessor* jp = nullptr;
+	
+	if (moduleIdStr.isNotEmpty())
+	{
+		// moduleId provided — use it to find the processor
+		jp = getScriptProcessor(mc, req);
+		
+		if (jp == nullptr)
+			return req->fail(404, "moduleId is not a valid script processor");
+		
+		if (filePathStr.isEmpty())
+		{
+			// moduleId only, no filePath — need to pick a file
+			// Use the first external file if available
+			if (jp->getNumWatchedFiles() > 0)
+			{
+				targetFile = jp->getWatchedFile(0);
+			}
+			else
+			{
+				return req->fail(400, "filePath is required (this processor has no external files)");
+			}
+		}
+		else if (!targetFile.existsAsFile())
+		{
+			return req->fail(404, "File not found: " + targetFile.getFullPathName());
+		}
+	}
+	else if (filePathStr.isNotEmpty())
+	{
+		// filePath only — resolve the owning processor
+		if (!targetFile.existsAsFile())
+			return req->fail(404, "File not found: " + targetFile.getFullPathName());
+		
+		jp = findProcessorForFile(mc, targetFile);
+		
+		if (jp == nullptr)
+			return req->fail(404, "No script processor includes this file. "
+								  "Has it been compiled at least once (F5)?");
+	}
+	else
+	{
+		return req->fail(400, "Either moduleId or filePath must be provided");
+	}
+	
+	// Read file from disk and run shadow parse
+	auto code = targetFile.loadFileAsString();
+	auto fileName = targetFile.getFullPathName();
+	auto resolvedModuleId = dynamic_cast<Processor*>(jp)->getId();
+	auto normalizedFilePath = fileName.replace("\\", "/");
+	
+	jp->shadowParseFile(code, fileName, 
+		[req, resolvedModuleId, normalizedFilePath](const JavascriptProcessor::DiagnosticList& diagnostics)
+	{
+		DynamicObject::Ptr result = new DynamicObject();
+		result->setProperty(RestApiIds::success, true);
+		result->setProperty(RestApiIds::moduleId, resolvedModuleId);
+		result->setProperty(RestApiIds::filePath, normalizedFilePath);
+		
+		Array<var> diagArray;
+		
+		for (const auto& d : diagnostics)
+		{
+			DynamicObject::Ptr dObj = new DynamicObject();
+			dObj->setProperty(RestApiIds::line, d.line);
+			dObj->setProperty(RestApiIds::column, d.col);
+			dObj->setProperty(RestApiIds::severity, String(severityToString(d.severity)));
+			dObj->setProperty(RestApiIds::source, d.source);
+			dObj->setProperty(RestApiIds::message, d.message);
+			
+			if (!d.suggestions.isEmpty())
+			{
+				Array<var> sugArr;
+				for (const auto& s : d.suggestions)
+					sugArr.add(s);
+				dObj->setProperty(RestApiIds::suggestions, var(sugArr));
+			}
+			
+			diagArray.add(var(dObj.get()));
+		}
+		
+		result->setProperty(RestApiIds::diagnostics, var(diagArray));
+		result->setProperty(RestApiIds::logs, Array<var>());
+		result->setProperty(RestApiIds::errors, Array<var>());
+		
+		req->complete(RestServer::Response::ok(var(result.get())));
+	});
+	
+	return req->waitForResponse();
 }
 
 } // namespace hise

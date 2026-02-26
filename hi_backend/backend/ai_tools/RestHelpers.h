@@ -158,6 +158,15 @@ namespace RestApiIds
     DECLARE_ID(selectedMenuItem);     // Object with selected menu item info
     DECLARE_ID(text);                 // Menu item display text
     DECLARE_ID(itemId);               // Menu item ID
+    
+    // diagnose_script response
+    DECLARE_ID(diagnostics);          // Array of diagnostic objects
+    DECLARE_ID(line);                 // Diagnostic line number
+    DECLARE_ID(column);               // Diagnostic column number
+    DECLARE_ID(severity);             // "error", "warning", "info", "hint"
+    DECLARE_ID(source);               // "syntax", "api-validation", "type-check", "language", "callscope"
+    DECLARE_ID(message);              // Diagnostic message text
+    DECLARE_ID(suggestions);          // Array of "did you mean?" suggestion strings
 }
 
 #undef DECLARE_ID
@@ -190,6 +199,7 @@ struct RestHelpers
         Screenshot,             ///< GET  /api/screenshot - Capture UI screenshot
         GetSelectedComponents,  ///< GET  /api/get_selected_components - Get selected UI components
         SimulateInteractions,   ///< POST /api/simulate_interactions - Execute UI interaction sequence
+        DiagnoseScript,         ///< POST /api/diagnose_script - Run diagnostic shadow parse
         numRoutes
     };
     
@@ -494,6 +504,13 @@ struct RestHelpers
      */
     static RestServer::Response handleSimulateInteractions(BackendProcessor* bp, 
                                                            RestServer::AsyncRequest::Ptr req);
+    
+    /** Handler for POST /api/diagnose_script - Run diagnostic shadow parse.
+     *  Accepts moduleId and/or filePath. Reads file from disk, runs shadow parse,
+     *  returns structured diagnostics without modifying runtime state.
+     */
+    static RestServer::Response handleDiagnoseScript(MainController* mc, 
+                                                     RestServer::AsyncRequest::Ptr req);
 };
 
 } // namespace hise
