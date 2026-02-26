@@ -7201,6 +7201,129 @@ ApiHelpers::CallScopeInfo ApiHelpers::getCallScope(const String& className, cons
 	return { CS::Unknown, {} };
 }
 
+// ==================== Deprecation Lookup ====================
+
+/** Severity ordering for deprecation: Error (4) > Warning (3) > Information (2) > Hint (1).
+ *  Matches LSP DiagnosticSeverity where lower numbers are more severe, but we invert
+ *  for comparison so "worst" means highest severity. */
+static int deprecationSeverityRank(const String& s)
+{
+	if (s == "Error")       return 4;
+	if (s == "Warning")     return 3;
+	if (s == "Information") return 2;
+	if (s == "Hint")        return 1;
+	return 3; // default to Warning
+}
+
+/** Greedy lookup HashMap for deprecation — built once on first greedy query. */
+struct GreedyDeprecationMap
+{
+	HashMap<String, ApiHelpers::DeprecationInfo> map;
+	bool built = false;
+
+	void buildFromTree(const ValueTree& apiTree)
+	{
+		for (int i = 0; i < apiTree.getNumChildren(); i++)
+		{
+			auto classNode = apiTree.getChild(i);
+
+			for (int j = 0; j < classNode.getNumChildren(); j++)
+			{
+				auto methodNode = classNode.getChild(j);
+				auto methodName = methodNode.getProperty("name").toString();
+
+				if (methodName.isEmpty())
+					continue;
+
+				if (!methodNode.hasProperty("deprecated"))
+					continue;
+
+				ApiHelpers::DeprecationInfo info;
+				info.deprecated = true;
+				info.replacement = methodNode.getProperty("replacement").toString();
+				info.note = methodNode.getProperty("deprecationNote").toString();
+				info.severity = methodNode.getProperty("severity").toString();
+
+				if (map.contains(methodName))
+				{
+					// Multiple classes mark the same method name deprecated —
+					// keep the worst-case severity.
+					auto& existing = map.getReference(methodName);
+
+					if (deprecationSeverityRank(info.severity) > deprecationSeverityRank(existing.severity))
+					{
+						existing.severity = info.severity;
+
+						// Also update replacement/note from the more severe entry
+						if (info.replacement.isNotEmpty())
+							existing.replacement = info.replacement;
+
+						if (info.note.isNotEmpty())
+							existing.note = info.note;
+					}
+				}
+				else
+				{
+					map.set(methodName, info);
+				}
+			}
+		}
+
+		built = true;
+	}
+};
+
+static GreedyDeprecationMap& getGreedyDeprecationMap()
+{
+	static GreedyDeprecationMap instance;
+
+	if (!instance.built)
+		instance.buildFromTree(ApiHelpers::getApiTree());
+
+	return instance;
+}
+
+ApiHelpers::DeprecationInfo ApiHelpers::getDeprecation(const String& className, const String& methodName)
+{
+	if (className == "*")
+	{
+		// Greedy mode: use pre-built HashMap
+		auto& greedyMap = getGreedyDeprecationMap();
+
+		if (greedyMap.map.contains(methodName))
+			return greedyMap.map[methodName];
+
+		return {};
+	}
+
+	// Exact mode: find class, then method
+	auto apiTree = getApiTree();
+	auto classNode = apiTree.getChildWithName(Identifier(className));
+
+	if (!classNode.isValid())
+		return {};
+
+	for (int i = 0; i < classNode.getNumChildren(); i++)
+	{
+		auto methodNode = classNode.getChild(i);
+
+		if (methodNode.getProperty("name").toString() == methodName)
+		{
+			if (!methodNode.hasProperty("deprecated"))
+				return {};
+
+			DeprecationInfo info;
+			info.deprecated = true;
+			info.replacement = methodNode.getProperty("replacement").toString();
+			info.note = methodNode.getProperty("deprecationNote").toString();
+			info.severity = methodNode.getProperty("severity").toString();
+			return info;
+		}
+	}
+
+	return {};
+}
+
 String HiseJavascriptEngine::RootObject::RealtimeSafetyInfo::toString(StrictnessLevel l, Processor* p) const
 {
 	if (l <= StrictnessLevel::Unsafe || warnings.isEmpty())

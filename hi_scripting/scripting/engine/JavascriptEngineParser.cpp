@@ -2274,6 +2274,33 @@ private:
 		s->functionName = functionName.toString();
 #endif
 
+#if USE_BACKEND
+		// Check for deprecated global API methods (diagnostic mode only)
+		if (isDiagnosticMode())
+		{
+			auto depInfo = ApiHelpers::getDeprecation(
+				apiClass->getObjectName().toString(), functionName.toString());
+
+			if (depInfo.deprecated)
+			{
+				String msg = prettyName + " is deprecated";
+				StringArray suggestions;
+
+				if (depInfo.replacement.isNotEmpty())
+				{
+					msg << " — use " << depInfo.replacement << " instead";
+					suggestions.add(depInfo.replacement);
+				}
+
+				if (depInfo.note.isNotEmpty())
+					msg << " (" << depInfo.note << ")";
+
+				recordDiagnostic(location, msg, suggestions,
+				                 parseDeprecationSeverity(depInfo.severity), "deprecation");
+			}
+		}
+#endif
+
 		if(matchIf(TokenTypes::openParen))
 		{
 			int numActualArguments = 0;
