@@ -1852,23 +1852,6 @@ RestServer::Response RestHelpers::handleSimulateInteractions(BackendProcessor* b
 	return finalResponse;
 }
 
-//==============================================================================
-// Diagnose Script handler
-
-/** Converts ApiDiagnostic::Severity enum to JSON string. */
-static const char* severityToString(HiseJavascriptEngine::RootObject::ApiDiagnostic::Severity s)
-{
-	using Severity = HiseJavascriptEngine::RootObject::ApiDiagnostic::Severity;
-	
-	switch (s)
-	{
-		case Severity::Error:   return "error";
-		case Severity::Warning: return "warning";
-		case Severity::Info:    return "info";
-		case Severity::Hint:    return "hint";
-		default:                return "error";
-	}
-}
 
 /** Finds the JavascriptProcessor that includes a given external file.
     Walks all JavascriptProcessor instances in the module tree and checks their watched files. */
@@ -1975,7 +1958,7 @@ RestServer::Response RestHelpers::handleDiagnoseScript(MainController* mc, RestS
 			DynamicObject::Ptr dObj = new DynamicObject();
 			dObj->setProperty(RestApiIds::line, d.line);
 			dObj->setProperty(RestApiIds::column, d.col);
-			dObj->setProperty(RestApiIds::severity, String(severityToString(d.severity)));
+			dObj->setProperty(RestApiIds::severity, ApiClass::DiagnosticResult::getSeverityString(d.severity));
 			dObj->setProperty(RestApiIds::source, ApiClass::DiagnosticResult::getClassificationString(d.classification));
 			dObj->setProperty(RestApiIds::message, d.message);
 			

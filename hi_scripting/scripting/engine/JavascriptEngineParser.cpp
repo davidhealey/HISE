@@ -269,6 +269,7 @@ private:
 struct HiseJavascriptEngine::RootObject::ExpressionTreeBuilder : private TokenIterator
 {
 	using CS = ApiClass::DiagnosticResult::Classification;
+	using SV = ApiClass::DiagnosticResult::Severity;
 
 	ExpressionTreeBuilder(const String code, const String externalFile, HiseJavascriptPreprocessor::Ptr preprocessor_) :
 		TokenIterator(code, externalFile),
@@ -564,7 +565,7 @@ private:
 
 	void recordDiagnostic(const CodeLocation& loc, const String& message,
 	                       const StringArray& suggestions = {},
-	                       ApiDiagnostic::Severity severity = ApiDiagnostic::Error,
+	                       SV severity = SV::Error,
 	                       CS source=CS::ApiValidation)
 	{
 		ApiDiagnostic d;
@@ -616,7 +617,7 @@ private:
 			if (callName.isNotEmpty())
 				msg << " to " << callName << "()";
 			msg << " will cause a runtime error. Use \"\" or false for an inactive value.";
-			recordDiagnostic(location, msg, { "\"\"", "false" }, ApiDiagnostic::Error, CS::Language);
+			recordDiagnostic(location, msg, { "\"\"", "false" }, SV::Error, CS::Language);
 		}
 #endif
 		return parseExpression();
@@ -1213,7 +1214,7 @@ private:
 #if USE_BACKEND
 			if (isDiagnosticMode())
 			{
-				recordDiagnostic(location, msg, { "local", "reg" }, ApiDiagnostic::Error, CS::Language);
+				recordDiagnostic(location, msg, { "local", "reg" }, SV::Error, CS::Language);
 
 				// Downgrade to local declaration and continue parsing
 				return parseLocalAssignment();
@@ -1320,7 +1321,7 @@ private:
 
 						recordDiagnostic(s->initialiser->location,
 							"Consider using 'reg:" + typeName + " " + s->name.toString() + "' for type safety",
-							{}, ApiDiagnostic::Hint, CS::Language);
+							{}, SV::Hint, CS::Language);
 					}
 				}
 			}
@@ -1525,7 +1526,7 @@ private:
 #if USE_BACKEND
 			if (isDiagnosticMode())
 			{
-				recordDiagnostic(location, msg, {}, ApiDiagnostic::Error, CS::Language);
+				recordDiagnostic(location, msg, {}, ApiClass::DiagnosticResult::Severity::Error, CS::Language);
 
 				// Generate a synthetic name to allow parsing to continue
 				Identifier syntheticName("__anonymous_" + String(diagnostics.size()));
@@ -1762,7 +1763,7 @@ private:
 #if USE_BACKEND
 				if (isDiagnosticMode())
 				{
-					recordDiagnostic(location, msg, {}, ApiDiagnostic::Error, CS::Language);
+					recordDiagnostic(location, msg, {}, SV::Error, CS::Language);
 
 					// Skip the inner inline function: match 'function', name, params, then skip body block
 					match(TokenTypes::function);
@@ -2511,7 +2512,7 @@ private:
 #if USE_BACKEND
 						if (isDiagnosticMode())
 						{
-							recordDiagnostic(location, msg, {}, ApiDiagnostic::Error, CS::Language);
+							recordDiagnostic(location, msg, {}, SV::Error, CS::Language);
 							parseIdentifier();
 							return parseSuffixes(new DiagnosticPlaceholder(location, msg));
 						}
@@ -2526,7 +2527,7 @@ private:
 #if USE_BACKEND
 						if (isDiagnosticMode())
 						{
-							recordDiagnostic(location, msg, {}, ApiDiagnostic::Error, CS::Language);
+							recordDiagnostic(location, msg, {}, SV::Error, CS::Language);
 							parseIdentifier();
 							return parseSuffixes(new DiagnosticPlaceholder(location, msg));
 						}
@@ -2710,7 +2711,7 @@ private:
 #if USE_BACKEND
 				if (isDiagnosticMode())
 				{
-					recordDiagnostic(location, msg, {}, ApiDiagnostic::Error, CS::Language);
+					recordDiagnostic(location, msg, {}, ApiClass::DiagnosticResult::Severity::Error, CS::Language);
 					// Fall through — ignore the name, return the function as LiteralValue
 				}
 				else
@@ -3015,11 +3016,11 @@ void HiseJavascriptEngine::RootObject::ExpressionTreeBuilder::preprocessCode(con
 				try { parseRegisterVar(cns, &it); }
 				catch (Error& e)
 				{
-					recordDiagnostic(it.location, e.errorMessage, {}, ApiDiagnostic::Error, CS::Syntax);
+					recordDiagnostic(it.location, e.errorMessage, {}, SV::Error, CS::Syntax);
 				}
 				catch (String& s)
 				{
-					recordDiagnostic(it.location, s, {}, ApiDiagnostic::Error, CS::Syntax);
+					recordDiagnostic(it.location, s, {}, SV::Error, CS::Syntax);
 				}
 				continue;
 			}
@@ -3309,16 +3310,19 @@ void HiseJavascriptEngine::RootObject::execute(const String& code, bool allowCon
 
 				if (strictness == SL::Strict && info->hasUnsafe())
 				{
-					for (auto& w : info->warnings)
+					for (auto item : info->items)
 					{
-						if (w.scope != RealtimeSafetyInfo::CallScope::Unsafe &&
-						    w.scope != RealtimeSafetyInfo::CallScope::Init)
+						if (item->scope != RealtimeSafetyInfo::CallScope::Unsafe &&
+						    item->scope != RealtimeSafetyInfo::CallScope::Init)
 							continue;
 
-						if (!w.callStack.isEmpty())
+						if (auto w = static_cast<RealtimeSafetyWarning*>(item))
 						{
-							w.callStack.getFirst().location.throwError(
-							    "Unsafe API call in audio-thread callback: " + w.apiCall);
+							if (!w->callStack.isEmpty())
+							{
+								w->callStack.getFirst().location.throwError(
+								    "Unsafe API call in audio-thread callback: " + item->apiCall);
+							}
 						}
 					}
 				}

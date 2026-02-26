@@ -1789,26 +1789,6 @@ String JavascriptProcessor::Helpers::uglify(const String& prettyCode)
 
 #if USE_BACKEND
 
-// ==============================================================================
-// ApiDiagnostic implementation
-
-String HiseJavascriptEngine::RootObject::ApiDiagnostic::toConsoleString(Processor* p) const
-{
-	String s;
-
-	// Human-readable location prefix (matches Error::getLocationString() format)
-	if (fileName.isEmpty() || fileName.contains("()"))
-		s << "Line " << line << ", column " << col;
-	else
-		s << File(fileName).getFileName() << " (" << line << ")";
-
-	s << ": " << message << " ";
-
-	// Append encoded location for double-click navigation
-	s << Error::createEncodedLocation(p, fileName, 0, line, col);
-
-	return s;
-}
 
 // ==============================================================================
 // ScopedDiagnosticParse implementation
@@ -1941,7 +1921,7 @@ Array<HiseJavascriptEngine::RootObject::ApiDiagnostic> HiseJavascriptEngine::sha
 		d.col = 0;
 		d.fileName = fileName;
 		d.message = "Preprocessor error: " + ok.getErrorMessage().fromFirstOccurrenceOf(":", false, false);
-		d.severity = RootObject::ApiDiagnostic::Error;
+		d.severity = ApiClass::DiagnosticResult::Severity::Error;
 		d.classification = ApiClass::DiagnosticResult::Classification::Syntax;
 
 		Array<RootObject::ApiDiagnostic> result;
@@ -2033,21 +2013,26 @@ Array<HiseJavascriptEngine::RootObject::ApiDiagnostic> HiseJavascriptEngine::sha
 				// Phase 3: Convert warnings to diagnostics.
 				for (auto* obj : analyzedFunctions)
 				{
-					for (const auto& w : obj->realtimeSafetyInfoData.warnings)
+					using RSW = RootObject::RealtimeSafetyWarning;
+
+					for (auto item : obj->realtimeSafetyInfoData.items)
 					{
 						RootObject::ApiDiagnostic d;
-						d.severity = RootObject::ApiDiagnostic::Warning;
+						d.severity = ApiClass::DiagnosticResult::Severity::Warning;
 						d.classification = ApiClass::DiagnosticResult::Classification::CallScope;
 
-						if (!w.callStack.isEmpty())
+						if (auto w = static_cast<RSW*>(item))
 						{
-							w.callStack[0].location.fillColumnAndLines(d.col, d.line);
-							d.fileName = w.callStack[0].location.externalFile;
+							if (!w->callStack.isEmpty())
+							{
+								w->callStack[0].location.fillColumnAndLines(d.col, d.line);
+								d.fileName = w->callStack[0].location.externalFile;
+							}
 						}
 
 						String scopeLabel;
 						using CS = ApiHelpers::CallScope;
-						switch (w.scope)
+						switch (item->scope)
 						{
 							case CS::Unsafe:  scopeLabel = "unsafe"; break;
 							case CS::Init:    scopeLabel = "init-only"; break;
@@ -2055,10 +2040,10 @@ Array<HiseJavascriptEngine::RootObject::ApiDiagnostic> HiseJavascriptEngine::sha
 							default: break;
 						}
 
-						d.message = "[CallScope] " + w.apiCall + " (" + scopeLabel + ")";
+						d.message = "[CallScope] " + item->apiCall + " (" + scopeLabel + ")";
 
-						if (w.note.isNotEmpty())
-							d.message << ": " << w.note;
+						if (item->note.isNotEmpty())
+							d.message << ": " << item->note;
 
 						tb.getDiagnostics().add(d);
 					}
@@ -2074,7 +2059,7 @@ Array<HiseJavascriptEngine::RootObject::ApiDiagnostic> HiseJavascriptEngine::sha
 		d.col = e.columnNumber;
 		d.fileName = e.externalLocation.isNotEmpty() ? e.externalLocation : fileName;
 		d.message = e.errorMessage;
-		d.severity = RootObject::ApiDiagnostic::Error;
+		d.severity = ApiClass::DiagnosticResult::Severity::Error;
 		d.classification = ApiClass::DiagnosticResult::Classification::Syntax;
 		tb.getDiagnostics().add(d);
 	}
@@ -2083,7 +2068,7 @@ Array<HiseJavascriptEngine::RootObject::ApiDiagnostic> HiseJavascriptEngine::sha
 		RootObject::ApiDiagnostic d;
 		d.fileName = fileName;
 		d.message = error;
-		d.severity = RootObject::ApiDiagnostic::Error;
+		d.severity = ApiClass::DiagnosticResult::Severity::Error;
 		d.classification = ApiClass::DiagnosticResult::Classification::Syntax;
 		tb.getDiagnostics().add(d);
 	}

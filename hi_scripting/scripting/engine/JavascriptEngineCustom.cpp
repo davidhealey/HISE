@@ -118,9 +118,11 @@ struct HiseJavascriptEngine::RootObject::ApiConstant : public Expression
     collect them during its AST walk. Evaluates to var::undefined(). */
 struct HiseJavascriptEngine::RootObject::DiagnosticPlaceholder : public Expression
 {
+	using Severity = ApiClass::DiagnosticResult::Severity;
+
 	DiagnosticPlaceholder(const CodeLocation& l, const String& errorMessage,
 	                      const StringArray& suggestions_ = {},
-	                      ApiDiagnostic::Severity sev = ApiDiagnostic::Error)
+	                      Severity sev = Severity::Error)
 		: Expression(l), message(errorMessage), suggestions(suggestions_), severity(sev) {}
 
 	var getResult(const Scope&) const override { return var::undefined(); }
@@ -129,7 +131,7 @@ struct HiseJavascriptEngine::RootObject::DiagnosticPlaceholder : public Expressi
 
 	String message;
 	StringArray suggestions;
-	ApiDiagnostic::Severity severity;
+	Severity severity;
 };
 #endif
 
@@ -657,10 +659,10 @@ struct HiseJavascriptEngine::RootObject::InlineFunction
 			// Find worst (lowest enum value) scope across all warnings
 			CallScope worst = CallScope::Safe;
 
-			for (auto& w : realtimeSafetyInfoData.warnings)
+			for (auto w : realtimeSafetyInfoData.items)
 			{
-				if ((int)w.scope < (int)worst)
-					worst = w.scope;
+				if ((int)w->scope < (int)worst)
+					worst = w->scope;
 			}
 
 			return { worst, msg };
@@ -1260,6 +1262,7 @@ struct CallScopeAnalyzer : public HiseJavascriptEngine::RootObject::Optimization
 	using RO = HiseJavascriptEngine::RootObject;
 	using Statement = RO::Statement;
 	using RealtimeSafetyInfo = RO::RealtimeSafetyInfo;
+	using RealtimeSafetyWarning = RO::RealtimeSafetyWarning;
 	using CallStackEntry = RO::CallStackEntry;
 	using CodeLocation = RO::CodeLocation;
 
@@ -1297,7 +1300,7 @@ struct CallScopeAnalyzer : public HiseJavascriptEngine::RootObject::Optimization
 		{
 			if (auto* info = currentHolder->getRealtimeSafetyInfo())
 			{
-				info->warnings.clear();
+				info->items.clear();
 				info->analyzed = true;
 			}
 		}
@@ -1414,18 +1417,18 @@ private:
 			return;
 
 		// Unsafe, Init, or Warning — add warning
-		RealtimeSafetyInfo::Warning w;
-		w.apiCall = apiCall;
-		w.scope = scopeInfo.scope;
-		w.note = scopeInfo.note;
-		w.outerHolderType = currentHolder->getCallScopeType();
+		auto w = new RealtimeSafetyWarning();
+		w->apiCall = apiCall;
+		w->scope = scopeInfo.scope;
+		w->note = scopeInfo.note;
+		w->outerHolderType = currentHolder->getCallScopeType();
 
 		CallStackEntry entry;
 		entry.location = location;
 		entry.functionName = currentHolder->getCallScopeId();
-		w.callStack.add(entry);
+		w->callStack.add(entry);
 
-		info->warnings.add(w);
+		info->items.add(w);
 	}
 
 	void inheritCalleeWarnings(RealtimeSafetyInfo* info,
@@ -1440,35 +1443,34 @@ private:
 
 		using CS = ApiHelpers::CallScope;
 
-		for (const auto& w : calleeInfo->warnings)
+		for (auto item : calleeInfo->items)
 		{
 			// Check suppression threshold for inherited warnings
-			if (suppressLevel != CS::Safe && (int)w.scope >= (int)suppressLevel)
+			if (suppressLevel != CS::Safe && (int)item->scope >= (int)suppressLevel)
 				continue;
 
-			RealtimeSafetyInfo::Warning inherited;
-			inherited.apiCall = w.apiCall;
-			inherited.scope = w.scope;
-			inherited.note = w.note;
-			inherited.outerHolderType = currentHolder->getCallScopeType();
+			auto inherited = item->clone();
+			inherited->outerHolderType = currentHolder->getCallScopeType();
+
+			auto* w = static_cast<RealtimeSafetyWarning*>(inherited.get());
 
 			// Prepend the call site (where the inline function is called from)
 			CallStackEntry callerEntry;
 			callerEntry.location = ilCall->location;
 			callerEntry.functionName = currentHolder->getCallScopeId();
-
-			inherited.callStack.add(callerEntry);
-			inherited.callStack.addArray(w.callStack);
+			w->callStack.insert(0, callerEntry);
 
 			// Deduplicate: skip if we already have a warning for the same API call at the same leaf location
-			auto& leafLoc = w.callStack.getLast().location.location;
+			auto leafLoc = w->callStack.getLast().location.location;
 			bool alreadyPresent = false;
 
-			for (auto& existing : info->warnings)
+			for (auto existing : info->items)
 			{
-				if (existing.apiCall == inherited.apiCall
-					&& !existing.callStack.isEmpty()
-					&& existing.callStack.getLast().location.location == leafLoc)
+				auto* ew = static_cast<RealtimeSafetyWarning*>(existing);
+
+				if (ew->apiCall == w->apiCall
+					&& !ew->callStack.isEmpty()
+					&& ew->callStack.getLast().location.location == leafLoc)
 				{
 					alreadyPresent = true;
 					break;
@@ -1478,7 +1480,7 @@ private:
 			if (alreadyPresent)
 				continue;
 
-			info->warnings.add(inherited);
+			info->items.add(inherited);
 		}
 	}
 
@@ -1490,10 +1492,10 @@ private:
 /** Map enrichment JSON severity string to ApiDiagnostic::Severity enum.
     JSON values (PascalCase from deprecated_methods.md): Error, Warning, Information, Hint.
     Visible to both JavascriptEngineCustom.cpp and JavascriptEngineParser.cpp via unity build. */
-static HiseJavascriptEngine::RootObject::ApiDiagnostic::Severity
+static ApiClass::DiagnosticResult::Severity
 parseDeprecationSeverity(const String& s)
 {
-	using S = HiseJavascriptEngine::RootObject::ApiDiagnostic::Severity;
+	using S = ApiClass::DiagnosticResult::Severity;
 
 	if (s == "Error")       return S::Error;
 	if (s == "Warning")     return S::Warning;
@@ -1517,6 +1519,7 @@ struct ApiValidationAnalyzer : public HiseJavascriptEngine::RootObject::Optimiza
 	using Statement = RO::Statement;
 	using ApiDiagnostic = RO::ApiDiagnostic;
 	using CS = ApiClass::DiagnosticResult::Classification;
+	using SV = ApiClass::DiagnosticResult::Severity;
 
 	String getPassName() const override { return "API Validation Analyzer"; }
 
@@ -1567,8 +1570,6 @@ struct ApiValidationAnalyzer : public HiseJavascriptEngine::RootObject::Optimiza
 				diagnosticArgs.add(var());
 		}
 
-		
-
 		auto dr = c->performDiagnostic(methodName, diagnosticArgs);
 
 		if (dr.shouldReport())
@@ -1580,8 +1581,7 @@ struct ApiValidationAnalyzer : public HiseJavascriptEngine::RootObject::Optimiza
 			msg << id.toString() << "." << methodName.toString() << " - ";
 			msg << dr.getErrorMessage();
 
-			auto asInt = (int)dr.getSeverity() - 2;
-			addDiagnostic(s->location, msg, dr.getSuggestions(), (ApiDiagnostic::Severity)asInt, dr.getClassification());
+			addDiagnostic(s->location, msg, dr.getSuggestions(), dr.getSeverity(), dr.getClassification());
 		}
 			
 	}
@@ -1666,7 +1666,7 @@ private:
 				msg << " (did you mean '" << suggestion << "'?)";
 			}
 
-			addDiagnostic(funcCall->location, msg, suggestions, ApiDiagnostic::Error, CS::ApiValidation);
+			addDiagnostic(funcCall->location, msg, suggestions, SV::Error, CS::ApiValidation);
 			return;
 		}
 
@@ -1679,7 +1679,7 @@ private:
 			           + String(numArgs) + " argument" + (numArgs != 1 ? "s" : "")
 			           + ", got " + String(numActualArgs);
 
-			addDiagnostic(funcCall->location, msg, {}, ApiDiagnostic::Error, CS::ApiValidation);
+			addDiagnostic(funcCall->location, msg, {}, SV::Error, CS::ApiValidation);
 			return;
 		}
 
@@ -1732,7 +1732,7 @@ private:
 			           + String(info->numArgs) + " argument" + (info->numArgs != 1 ? "s" : "")
 			           + ", got " + String(numActualArgs);
 
-			addDiagnostic(funcCall->location, msg, {}, ApiDiagnostic::Warning, CS::ApiValidation);
+			addDiagnostic(funcCall->location, msg, {}, SV::Warning, CS::ApiValidation);
 		}
 
 		// No type checking for Tier 3 — we don't know the concrete class
@@ -1802,14 +1802,13 @@ private:
 				String msg = className + "." + methodName + "() parameter " + String(i + 1)
 				           + " requires " + expectedName + ", got " + actualName;
 
-				addDiagnostic(funcCall->arguments[i]->location, msg, {}, ApiDiagnostic::Error, CS::TypeCheck);
+				addDiagnostic(funcCall->arguments[i]->location, msg, {}, SV::Error, CS::TypeCheck);
 			}
 		}
 	}
 
 	void addDiagnostic(const RO::CodeLocation& loc, const String& message,
-	                   const StringArray& suggestions, ApiDiagnostic::Severity severity,
-	                   const ApiClass::DiagnosticResult::Classification& source)
+	                   const StringArray& suggestions, SV severity, CS source)
 	{
 		ApiDiagnostic d;
 		loc.fillColumnAndLines(d.col, d.line);
