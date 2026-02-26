@@ -621,6 +621,8 @@ struct HiseJavascriptEngine::RootObject::InlineFunction
 			setFunctionCall(nullptr);
 		}
 
+		int getNumArguments() const override { return parameterNames.size(); }
+
         bool isRealtimeSafe() const override { return true; }
 
 #if USE_BACKEND
@@ -1514,6 +1516,7 @@ struct ApiValidationAnalyzer : public HiseJavascriptEngine::RootObject::Optimiza
 	using RO = HiseJavascriptEngine::RootObject;
 	using Statement = RO::Statement;
 	using ApiDiagnostic = RO::ApiDiagnostic;
+	using CS = ApiClass::DiagnosticResult::Classification;
 
 	String getPassName() const override { return "API Validation Analyzer"; }
 
@@ -1524,6 +1527,65 @@ struct ApiValidationAnalyzer : public HiseJavascriptEngine::RootObject::Optimiza
 		hiseSpecialData = hsd;
 	}
 
+	void checkApiClassDiagnostic(ApiClass* c, Statement* s, const Identifier& methodName)
+	{
+		if (!c->hasDiagnosticCheck(methodName))
+			return;
+
+		
+		Array<RO::Expression*> args;
+
+		if (auto fc = dynamic_cast<RO::FunctionCall*>(s))
+		{
+			for (auto a : fc->arguments)
+			{
+				if (a->isConstant())
+					args.add(a);
+				
+				else
+					args.add(nullptr);
+			}
+		}
+		if (auto ac = dynamic_cast<RO::ApiCall*>(s))
+		{
+			for (int i = 0; i < ac->expectedNumArguments; i++)
+			{
+				if (ac->argumentList[i]->isConstant())
+					args.add(ac->argumentList[i].get());
+				else
+					args.add(nullptr);
+			}
+		}
+
+		Array<var> diagnosticArgs;
+
+		for (auto a : args)
+		{
+			if (a != nullptr)
+				diagnosticArgs.add(a->getResult(RO::Scope(nullptr, nullptr, nullptr)));
+			else
+				diagnosticArgs.add(var());
+		}
+
+		
+
+		auto dr = c->performDiagnostic(methodName, diagnosticArgs);
+
+		if (dr.shouldReport())
+		{
+			auto id = c->getObjectName();
+			
+			String msg;
+
+			msg << id.toString() << "." << methodName.toString() << " - ";
+			msg << dr.getErrorMessage();
+
+			auto asInt = (int)dr.getSeverity() - 2;
+			addDiagnostic(s->location, msg, dr.getSuggestions(), (ApiDiagnostic::Severity)asInt, dr.getClassification());
+		}
+			
+	}
+
 	Statement* getOptimizedStatement(Statement*, Statement* statementToOptimize) override
 	{
 		if (diagnostics == nullptr)
@@ -1532,6 +1594,13 @@ struct ApiValidationAnalyzer : public HiseJavascriptEngine::RootObject::Optimiza
 		// DiagnosticPlaceholder nodes are NOT collected here — the parser already
 		// recorded their diagnostics via recordDiagnostic() at each recovery site.
 		// The placeholders exist in the AST to allow parsing to continue past errors.
+
+		
+		if (auto ac = dynamic_cast<RO::ApiCall*>(statementToOptimize))
+		{
+			checkApiClassDiagnostic(ac->apiClass.get(), ac, ac->functionName);
+		}
+
 
 		// --- FunctionCall: check for DotOperator pattern ---
 		if (auto* funcCall = dynamic_cast<RO::FunctionCall*>(statementToOptimize))
@@ -1597,7 +1666,7 @@ private:
 				msg << " (did you mean '" << suggestion << "'?)";
 			}
 
-			addDiagnostic(funcCall->location, msg, suggestions, ApiDiagnostic::Error, "api-validation");
+			addDiagnostic(funcCall->location, msg, suggestions, ApiDiagnostic::Error, CS::ApiValidation);
 			return;
 		}
 
@@ -1610,9 +1679,11 @@ private:
 			           + String(numArgs) + " argument" + (numArgs != 1 ? "s" : "")
 			           + ", got " + String(numActualArgs);
 
-			addDiagnostic(funcCall->location, msg, {}, ApiDiagnostic::Error, "api-validation");
+			addDiagnostic(funcCall->location, msg, {}, ApiDiagnostic::Error, CS::ApiValidation);
 			return;
 		}
+
+		checkApiClassDiagnostic(cso, funcCall, methodName);
 
 		// Argument count matches — check literal argument types
 		checkLiteralArgTypes(funcCall, cso, functionIndex, numArgs, className, methodName.toString());
@@ -1635,7 +1706,7 @@ private:
 				msg << " (" << depInfo.note << ")";
 
 			addDiagnostic(funcCall->location, msg, suggestions,
-			              parseDeprecationSeverity(depInfo.severity), "deprecation");
+			              parseDeprecationSeverity(depInfo.severity), CS::Deprecation);
 		}
 	}
 
@@ -1661,7 +1732,7 @@ private:
 			           + String(info->numArgs) + " argument" + (info->numArgs != 1 ? "s" : "")
 			           + ", got " + String(numActualArgs);
 
-			addDiagnostic(funcCall->location, msg, {}, ApiDiagnostic::Warning, "api-validation");
+			addDiagnostic(funcCall->location, msg, {}, ApiDiagnostic::Warning, CS::ApiValidation);
 		}
 
 		// No type checking for Tier 3 — we don't know the concrete class
@@ -1684,7 +1755,7 @@ private:
 				msg << " (" << depInfo.note << ")";
 
 			addDiagnostic(funcCall->location, msg, suggestions,
-			              parseDeprecationSeverity(depInfo.severity), "deprecation");
+			              parseDeprecationSeverity(depInfo.severity), CS::Deprecation);
 		}
 	}
 
@@ -1731,14 +1802,14 @@ private:
 				String msg = className + "." + methodName + "() parameter " + String(i + 1)
 				           + " requires " + expectedName + ", got " + actualName;
 
-				addDiagnostic(funcCall->arguments[i]->location, msg, {}, ApiDiagnostic::Error, "type-check");
+				addDiagnostic(funcCall->arguments[i]->location, msg, {}, ApiDiagnostic::Error, CS::TypeCheck);
 			}
 		}
 	}
 
 	void addDiagnostic(const RO::CodeLocation& loc, const String& message,
 	                   const StringArray& suggestions, ApiDiagnostic::Severity severity,
-	                   const String& source)
+	                   const ApiClass::DiagnosticResult::Classification& source)
 	{
 		ApiDiagnostic d;
 		loc.fillColumnAndLines(d.col, d.line);
@@ -1746,7 +1817,7 @@ private:
 		d.message = message;
 		d.suggestions = suggestions;
 		d.severity = severity;
-		d.source = source;
+		d.classification = source;
 		diagnostics->add(d);
 	}
 

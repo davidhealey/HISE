@@ -1976,7 +1976,7 @@ RestServer::Response RestHelpers::handleDiagnoseScript(MainController* mc, RestS
 			dObj->setProperty(RestApiIds::line, d.line);
 			dObj->setProperty(RestApiIds::column, d.col);
 			dObj->setProperty(RestApiIds::severity, String(severityToString(d.severity)));
-			dObj->setProperty(RestApiIds::source, d.source);
+			dObj->setProperty(RestApiIds::source, ApiClass::DiagnosticResult::getClassificationString(d.classification));
 			dObj->setProperty(RestApiIds::message, d.message);
 			
 			if (!d.suggestions.isEmpty())

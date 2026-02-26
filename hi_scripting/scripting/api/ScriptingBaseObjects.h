@@ -272,6 +272,8 @@ struct WeakCallbackHolder : private ScriptingObject
 
 		virtual Identifier getCallId() const = 0;
 
+		virtual int getNumArguments() const = 0;
+
 	protected:
 
 		Result lastResult;
@@ -279,6 +281,19 @@ struct WeakCallbackHolder : private ScriptingObject
 
 		JUCE_DECLARE_WEAK_REFERENCEABLE(CallableObject);
 	};
+
+	template <int E, int FIndex=0> static ApiClass::DiagnosticResult checkCallbackNumArgs(ApiClass*, const Array<var>& args)
+	{
+		if (auto f = dynamic_cast<CallableObject*>(args[FIndex].getObject()))
+		{
+			auto numActual = f->getNumArguments();
+
+			if (numActual != E)
+				return ApiClass::DiagnosticResult::fail("wrong argument count for callback").withExpectation(String(numActual) + " params", String(E) + " params");
+		}
+
+		return ApiClass::DiagnosticResult::unknown();
+	}
 
 	struct CallableObjectManager
 	{

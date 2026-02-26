@@ -268,6 +268,8 @@ private:
 //==============================================================================
 struct HiseJavascriptEngine::RootObject::ExpressionTreeBuilder : private TokenIterator
 {
+	using CS = ApiClass::DiagnosticResult::Classification;
+
 	ExpressionTreeBuilder(const String code, const String externalFile, HiseJavascriptPreprocessor::Ptr preprocessor_) :
 		TokenIterator(code, externalFile),
 		preprocessor(preprocessor_),
@@ -563,7 +565,7 @@ private:
 	void recordDiagnostic(const CodeLocation& loc, const String& message,
 	                       const StringArray& suggestions = {},
 	                       ApiDiagnostic::Severity severity = ApiDiagnostic::Error,
-	                       const String& source = "api-validation")
+	                       CS source=CS::ApiValidation)
 	{
 		ApiDiagnostic d;
 		loc.fillColumnAndLines(d.col, d.line);
@@ -571,7 +573,7 @@ private:
 		d.message = message;
 		d.suggestions = suggestions;
 		d.severity = severity;
-		d.source = source;
+		d.classification = source;
 		diagnostics.add(d);
 	}
 
@@ -614,7 +616,7 @@ private:
 			if (callName.isNotEmpty())
 				msg << " to " << callName << "()";
 			msg << " will cause a runtime error. Use \"\" or false for an inactive value.";
-			recordDiagnostic(location, msg, { "\"\"", "false" }, ApiDiagnostic::Error, "language");
+			recordDiagnostic(location, msg, { "\"\"", "false" }, ApiDiagnostic::Error, CS::Language);
 		}
 #endif
 		return parseExpression();
@@ -1211,7 +1213,7 @@ private:
 #if USE_BACKEND
 			if (isDiagnosticMode())
 			{
-				recordDiagnostic(location, msg, { "local", "reg" }, ApiDiagnostic::Error, "language");
+				recordDiagnostic(location, msg, { "local", "reg" }, ApiDiagnostic::Error, CS::Language);
 
 				// Downgrade to local declaration and continue parsing
 				return parseLocalAssignment();
@@ -1318,7 +1320,7 @@ private:
 
 						recordDiagnostic(s->initialiser->location,
 							"Consider using 'reg:" + typeName + " " + s->name.toString() + "' for type safety",
-							{}, ApiDiagnostic::Hint, "language");
+							{}, ApiDiagnostic::Hint, CS::Language);
 					}
 				}
 			}
@@ -1523,7 +1525,7 @@ private:
 #if USE_BACKEND
 			if (isDiagnosticMode())
 			{
-				recordDiagnostic(location, msg, {}, ApiDiagnostic::Error, "language");
+				recordDiagnostic(location, msg, {}, ApiDiagnostic::Error, CS::Language);
 
 				// Generate a synthetic name to allow parsing to continue
 				Identifier syntheticName("__anonymous_" + String(diagnostics.size()));
@@ -1760,7 +1762,7 @@ private:
 #if USE_BACKEND
 				if (isDiagnosticMode())
 				{
-					recordDiagnostic(location, msg, {}, ApiDiagnostic::Error, "language");
+					recordDiagnostic(location, msg, {}, ApiDiagnostic::Error, CS::Language);
 
 					// Skip the inner inline function: match 'function', name, params, then skip body block
 					match(TokenTypes::function);
@@ -2296,7 +2298,7 @@ private:
 					msg << " (" << depInfo.note << ")";
 
 				recordDiagnostic(location, msg, suggestions,
-				                 parseDeprecationSeverity(depInfo.severity), "deprecation");
+				                 parseDeprecationSeverity(depInfo.severity), CS::Deprecation);
 			}
 		}
 #endif
@@ -2509,7 +2511,7 @@ private:
 #if USE_BACKEND
 						if (isDiagnosticMode())
 						{
-							recordDiagnostic(location, msg, {}, ApiDiagnostic::Error, "language");
+							recordDiagnostic(location, msg, {}, ApiDiagnostic::Error, CS::Language);
 							parseIdentifier();
 							return parseSuffixes(new DiagnosticPlaceholder(location, msg));
 						}
@@ -2524,7 +2526,7 @@ private:
 #if USE_BACKEND
 						if (isDiagnosticMode())
 						{
-							recordDiagnostic(location, msg, {}, ApiDiagnostic::Error, "language");
+							recordDiagnostic(location, msg, {}, ApiDiagnostic::Error, CS::Language);
 							parseIdentifier();
 							return parseSuffixes(new DiagnosticPlaceholder(location, msg));
 						}
@@ -2708,7 +2710,7 @@ private:
 #if USE_BACKEND
 				if (isDiagnosticMode())
 				{
-					recordDiagnostic(location, msg, {}, ApiDiagnostic::Error, "language");
+					recordDiagnostic(location, msg, {}, ApiDiagnostic::Error, CS::Language);
 					// Fall through — ignore the name, return the function as LiteralValue
 				}
 				else
@@ -3013,11 +3015,11 @@ void HiseJavascriptEngine::RootObject::ExpressionTreeBuilder::preprocessCode(con
 				try { parseRegisterVar(cns, &it); }
 				catch (Error& e)
 				{
-					recordDiagnostic(it.location, e.errorMessage, {}, ApiDiagnostic::Error, "syntax");
+					recordDiagnostic(it.location, e.errorMessage, {}, ApiDiagnostic::Error, CS::Syntax);
 				}
 				catch (String& s)
 				{
-					recordDiagnostic(it.location, s, {}, ApiDiagnostic::Error, "syntax");
+					recordDiagnostic(it.location, s, {}, ApiDiagnostic::Error, CS::Syntax);
 				}
 				continue;
 			}

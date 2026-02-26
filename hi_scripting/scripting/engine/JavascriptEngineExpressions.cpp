@@ -534,6 +534,17 @@ struct HiseJavascriptEngine::RootObject::ObjectDeclaration : public Expression
 		return newObject.get();
 	}
 
+	bool isConstant() const override
+	{
+		for (auto& s : initialisers)
+		{
+			if (!s->isConstant())
+				return false;
+		}
+
+		return true;
+	}
+
 	Statement* getChildStatement(int index) override
 	{
 		if (isPositiveAndBelow(index, initialisers.size()))
@@ -595,6 +606,8 @@ struct HiseJavascriptEngine::RootObject::FunctionObject : public DynamicObject,
 	FunctionObject(const FunctionObject& other);
 
 	DynamicObject::Ptr clone() const override    { return new FunctionObject(*this); }
+
+	int getNumArguments() const override { return parameters.size(); }
 
 	void writeAsJSON(OutputStream& out, int /*indentLevel*/, bool /*allOnOneLine*/, int /*maximumDecimalPlaces*/) override
 	{

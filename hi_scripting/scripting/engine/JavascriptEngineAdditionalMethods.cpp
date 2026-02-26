@@ -1942,7 +1942,7 @@ Array<HiseJavascriptEngine::RootObject::ApiDiagnostic> HiseJavascriptEngine::sha
 		d.fileName = fileName;
 		d.message = "Preprocessor error: " + ok.getErrorMessage().fromFirstOccurrenceOf(":", false, false);
 		d.severity = RootObject::ApiDiagnostic::Error;
-		d.source = "syntax";
+		d.classification = ApiClass::DiagnosticResult::Classification::Syntax;
 
 		Array<RootObject::ApiDiagnostic> result;
 		result.add(d);
@@ -2037,7 +2037,7 @@ Array<HiseJavascriptEngine::RootObject::ApiDiagnostic> HiseJavascriptEngine::sha
 					{
 						RootObject::ApiDiagnostic d;
 						d.severity = RootObject::ApiDiagnostic::Warning;
-						d.source = "callscope";
+						d.classification = ApiClass::DiagnosticResult::Classification::CallScope;
 
 						if (!w.callStack.isEmpty())
 						{
@@ -2075,7 +2075,7 @@ Array<HiseJavascriptEngine::RootObject::ApiDiagnostic> HiseJavascriptEngine::sha
 		d.fileName = e.externalLocation.isNotEmpty() ? e.externalLocation : fileName;
 		d.message = e.errorMessage;
 		d.severity = RootObject::ApiDiagnostic::Error;
-		d.source = "syntax";
+		d.classification = ApiClass::DiagnosticResult::Classification::Syntax;
 		tb.getDiagnostics().add(d);
 	}
 	catch (String& error)
@@ -2084,7 +2084,7 @@ Array<HiseJavascriptEngine::RootObject::ApiDiagnostic> HiseJavascriptEngine::sha
 		d.fileName = fileName;
 		d.message = error;
 		d.severity = RootObject::ApiDiagnostic::Error;
-		d.source = "syntax";
+		d.classification = ApiClass::DiagnosticResult::Classification::Syntax;
 		tb.getDiagnostics().add(d);
 	}
 
