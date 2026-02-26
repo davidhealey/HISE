@@ -1626,8 +1626,10 @@ ScriptingObjects::ScriptAudioFile::ScriptAudioFile(ProcessorWithScriptingContent
 	ADD_API_METHOD_0(getSampleRate);
 	ADD_API_METHOD_0(getCurrentlyLoadedFile);
 	ADD_API_METHOD_0(getCurrentlyDisplayedIndex);
-	ADD_API_METHOD_1(setDisplayCallback);
-	ADD_API_METHOD_1(setContentCallback);
+	ADD_TYPED_API_METHOD_1(setDisplayCallback, VarTypeChecker::Function);
+	ADD_CALLBACK_DIAGNOSTIC(displayCallback, setDisplayCallback, 0);
+	ADD_TYPED_API_METHOD_1(setContentCallback, VarTypeChecker::Function);
+	ADD_CALLBACK_DIAGNOSTIC(contentCallback, setContentCallback, 0);
 	ADD_API_METHOD_1(linkTo);
 	ADD_API_METHOD_3(loadBuffer);
 }
@@ -2101,8 +2103,10 @@ ScriptingObjects::ScriptTableData::ScriptTableData(ProcessorWithScriptingContent
 	ADD_API_METHOD_4(setTablePoint);
 	ADD_API_METHOD_1(getTableValueNormalised);
 	ADD_API_METHOD_0(getCurrentlyDisplayedIndex);
-	ADD_API_METHOD_1(setDisplayCallback);
-	ADD_API_METHOD_1(setContentCallback);
+	ADD_TYPED_API_METHOD_1(setDisplayCallback, VarTypeChecker::Function);
+	ADD_CALLBACK_DIAGNOSTIC(displayCallback, setDisplayCallback, 0);
+	ADD_TYPED_API_METHOD_1(setContentCallback, VarTypeChecker::Function);
+	ADD_CALLBACK_DIAGNOSTIC(contentCallback, setContentCallback, 0);
 	ADD_API_METHOD_1(setTablePointsFromArray);
 	ADD_API_METHOD_0(getTablePointsAsArray);
     ADD_API_METHOD_1(linkTo);
@@ -2238,8 +2242,10 @@ ScriptingObjects::ScriptSliderPackData::ScriptSliderPackData(ProcessorWithScript
 	ADD_API_METHOD_0(getNumSliders);
 	ADD_API_METHOD_3(setRange);
 	ADD_API_METHOD_0(getCurrentlyDisplayedIndex);
-	ADD_API_METHOD_1(setDisplayCallback);
-	ADD_API_METHOD_1(setContentCallback);
+	ADD_TYPED_API_METHOD_1(setDisplayCallback, VarTypeChecker::Function);
+	ADD_CALLBACK_DIAGNOSTIC(displayCallback, setDisplayCallback, 0);
+	ADD_TYPED_API_METHOD_1(setContentCallback, VarTypeChecker::Function);
+	ADD_CALLBACK_DIAGNOSTIC(contentCallback, setContentCallback, 0);
     ADD_API_METHOD_1(setUsePreallocatedLength);
     ADD_API_METHOD_1(linkTo);
 	ADD_API_METHOD_1(setAllValuesWithUndo);
@@ -5384,7 +5390,8 @@ ScriptingObjects::TimerObject::TimerObject(ProcessorWithScriptingContent *p) :
 	ADD_API_METHOD_0(isTimerRunning);
 	ADD_API_METHOD_1(startTimer);
 	ADD_API_METHOD_0(stopTimer);
-	ADD_API_METHOD_1(setTimerCallback);
+	ADD_TYPED_API_METHOD_1(setTimerCallback, VarTypeChecker::Function);
+	ADD_CALLBACK_DIAGNOSTIC(tc, setTimerCallback, 0);
 	ADD_API_METHOD_0(resetCounter);
 	ADD_API_METHOD_0(getMilliSecondsSinceCounterReset);
 }
@@ -6280,11 +6287,14 @@ ScriptingObjects::ScriptedMidiPlayer::ScriptedMidiPlayer(ProcessorWithScriptingC
 	ADD_API_METHOD_0(getTicksPerQuarter);
 	ADD_API_METHOD_0(getLastPlayedNotePosition);
 	ADD_API_METHOD_1(setAutomationHandlerConsumesControllerEvents);
-	ADD_API_METHOD_1(setSequenceCallback);
+	ADD_TYPED_API_METHOD_1(setSequenceCallback, VarTypeChecker::Function);
+	ADD_CALLBACK_DIAGNOSTIC(updateCallback, setSequenceCallback, 0);
 	ADD_API_METHOD_0(asMidiProcessor);
 	ADD_API_METHOD_1(setGlobalPlaybackRatio);
-	ADD_API_METHOD_2(setPlaybackCallback);
-	ADD_API_METHOD_1(setRecordEventCallback);
+	ADD_TYPED_API_METHOD_2(setPlaybackCallback, VarTypeChecker::Function, VarTypeChecker::Number);
+	addDiagnostic("setPlaybackCallback", WeakCallbackHolder::checkCallbackNumArgs<2>);
+	ADD_TYPED_API_METHOD_1(setRecordEventCallback, VarTypeChecker::Function);
+	addDiagnostic("setRecordEventCallback", WeakCallbackHolder::checkCallbackNumArgs<1>);
 	ADD_API_METHOD_1(setUseGlobalUndoManager);
 	ADD_API_METHOD_1(connectToMetronome);
 	ADD_API_METHOD_1(isSequenceEmpty);
@@ -7907,7 +7917,8 @@ ScriptingObjects::ScriptBackgroundTask::ScriptBackgroundTask(ProcessorWithScript
 	ADD_API_METHOD_2(setProperty);
 	ADD_API_METHOD_1(getProperty);
 	ADD_API_METHOD_3(runProcess);
-	ADD_API_METHOD_1(setFinishCallback);
+	ADD_TYPED_API_METHOD_1(setFinishCallback, VarTypeChecker::Function);
+	ADD_CALLBACK_DIAGNOSTIC(finishCallback, setFinishCallback, 0);
 	ADD_API_METHOD_1(callOnBackgroundThread);
 	ADD_API_METHOD_1(killVoicesAndCall);
 	ADD_API_METHOD_0(getProgress);
@@ -8323,8 +8334,10 @@ ScriptingObjects::ScriptFFT::ScriptFFT(ProcessorWithScriptingContent* p) :
 	ADD_API_METHOD_2(prepare);
 	ADD_API_METHOD_1(setOverlap);
 	ADD_API_METHOD_1(process);
-	ADD_API_METHOD_2(setMagnitudeFunction);
-	ADD_API_METHOD_1(setPhaseFunction);
+	ADD_TYPED_API_METHOD_2(setMagnitudeFunction, VarTypeChecker::Function, VarTypeChecker::Number);
+	ADD_CALLBACK_DIAGNOSTIC(magnitudeFunction, setMagnitudeFunction, 0);
+	ADD_TYPED_API_METHOD_1(setPhaseFunction, VarTypeChecker::Function);
+	ADD_CALLBACK_DIAGNOSTIC(phaseFunction, setPhaseFunction, 0);
 	ADD_API_METHOD_1(setEnableSpectrum2D);
 	ADD_API_METHOD_1(setEnableInverseFFT);
 	ADD_API_METHOD_1(setSpectrum2DParameters);
@@ -9290,14 +9303,14 @@ ScriptingObjects::GlobalCableReference::GlobalCableReference(ProcessorWithScript
 	ADD_API_METHOD_2(setRange);
 	ADD_API_METHOD_3(setRangeWithSkew);
 	ADD_API_METHOD_3(setRangeWithStep);
-	ADD_API_METHOD_2(registerCallback);
-	ADD_API_METHOD_1(registerDataCallback);
+	ADD_TYPED_API_METHOD_2(registerCallback, VarTypeChecker::Function, VarTypeChecker::Number);
+	addDiagnostic("registerCallback", WeakCallbackHolder::checkCallbackNumArgs<1>);
+	ADD_TYPED_API_METHOD_1(registerDataCallback, VarTypeChecker::Function);
+	addDiagnostic("registerDataCallback", WeakCallbackHolder::checkCallbackNumArgs<1>);
 	ADD_API_METHOD_1(deregisterCallback);
 	ADD_API_METHOD_3(connectToMacroControl);
     ADD_API_METHOD_2(connectToGlobalModulator);
     ADD_API_METHOD_3(connectToModuleParameter);
-
-	addDiagnostic("registerCallback", WeakCallbackHolder::checkCallbackNumArgs<1>);
 
 	inputRange.checkIfIdentity();
 }

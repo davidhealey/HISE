@@ -479,6 +479,7 @@ allNotesOffCallback(p, nullptr, var(), 0)
     ADD_TYPED_API_METHOD_1(setStartOffset, VarTypeChecker::Number);
     ADD_TYPED_API_METHOD_1(store, VarTypeChecker::ScriptObject);
     ADD_TYPED_API_METHOD_1(setAllNotesOffCallback, VarTypeChecker::Function);
+    ADD_CALLBACK_DIAGNOSTIC(allNotesOffCallback, setAllNotesOffCallback, 0);
     
 	ADD_API_METHOD_0(getControllerNumber);
 	ADD_API_METHOD_0(getControllerValue);
@@ -8077,24 +8078,16 @@ ScriptingApi::Server::Server(JavascriptProcessor* jp_):
 	ADD_API_METHOD_0(isOnline);
     ADD_API_METHOD_0(resendLastCall);
 	ADD_API_METHOD_1(setNumAllowedDownloads);
-	ADD_API_METHOD_1(setServerCallback);
+	ADD_TYPED_API_METHOD_1(setServerCallback, VarTypeChecker::Function);
+	ADD_CALLBACK_DIAGNOSTIC(serverCallback, setServerCallback, 0);
 	ADD_API_METHOD_0(cleanFinishedDownloads);
 	ADD_API_METHOD_1(isEmailAddress);
     ADD_API_METHOD_1(setTimeoutMessageString);
     ADD_API_METHOD_1(setEnforceTrailingSlash);
 
-	addDiagnostic("callWithGET", [](ApiClass* c, const Array<var>& args)
-	{
-		if (auto s = dynamic_cast<Server*>(c))
-		{
-			if (!s->globalServer.isBaseURLDefined())
-				return DiagnosticResult::fail("setBaseURL not called");
-
-			return DiagnosticResult::ok();
-		}
-
-		return DiagnosticResult::fail("not a Server object");
-	});
+	addDiagnostic("callWithGET", checkBaseURLAndCallbackArgs<2, 2>);
+	addDiagnostic("callWithPOST", checkBaseURLAndCallbackArgs<2, 2>);
+	addDiagnostic("downloadFile", checkBaseURLAndCallbackArgs<0, 3>);
 }
 
 void ScriptingApi::Server::setBaseURL(String url)
@@ -8397,11 +8390,17 @@ ScriptingApi::TransportHandler::TransportHandler(ProcessorWithScriptingContent* 
 	getMainController()->addTempoListener(this);
 
 	ADD_TYPED_API_METHOD_2(setOnTempoChange, VarTypeChecker::Number, VarTypeChecker::Function);
+	addDiagnostic("setOnTempoChange", WeakCallbackHolder::checkCallbackNumArgs<1, 1>);
 	ADD_TYPED_API_METHOD_2(setOnBeatChange, VarTypeChecker::Number, VarTypeChecker::Function);
+	addDiagnostic("setOnBeatChange", WeakCallbackHolder::checkCallbackNumArgs<2, 1>);
 	ADD_TYPED_API_METHOD_2(setOnGridChange, VarTypeChecker::Number, VarTypeChecker::Function);
+	addDiagnostic("setOnGridChange", WeakCallbackHolder::checkCallbackNumArgs<3, 1>);
 	ADD_TYPED_API_METHOD_2(setOnSignatureChange, VarTypeChecker::Number, VarTypeChecker::Function);
+	addDiagnostic("setOnSignatureChange", WeakCallbackHolder::checkCallbackNumArgs<2, 1>);
 	ADD_TYPED_API_METHOD_2(setOnTransportChange, VarTypeChecker::Number, VarTypeChecker::Function);
+	addDiagnostic("setOnTransportChange", WeakCallbackHolder::checkCallbackNumArgs<1, 1>);
 	ADD_TYPED_API_METHOD_1(setOnBypass, VarTypeChecker::Function);
+	addDiagnostic("setOnBypass", WeakCallbackHolder::checkCallbackNumArgs<1>);
 	ADD_API_METHOD_1(setSyncMode);
 	ADD_API_METHOD_1(startInternalClock);
 	ADD_API_METHOD_1(stopInternalClock);

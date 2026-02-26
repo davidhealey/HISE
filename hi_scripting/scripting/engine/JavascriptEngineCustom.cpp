@@ -1530,10 +1530,12 @@ struct ApiValidationAnalyzer : public HiseJavascriptEngine::RootObject::Optimiza
 		hiseSpecialData = hsd;
 	}
 
-	void checkApiClassDiagnostic(ApiClass* c, Statement* s, const Identifier& methodName)
+	/** Returns true if a Deprecation diagnostic was emitted (so the caller can skip
+	    the ValueTree deprecation lookup to avoid duplicate warnings). */
+	bool checkApiClassDiagnostic(ApiClass* c, Statement* s, const Identifier& methodName)
 	{
 		if (!c->hasDiagnosticCheck(methodName))
-			return;
+			return false;
 
 		
 		Array<RO::Expression*> args;
@@ -1582,8 +1584,11 @@ struct ApiValidationAnalyzer : public HiseJavascriptEngine::RootObject::Optimiza
 			msg << dr.getErrorMessage();
 
 			addDiagnostic(s->location, msg, dr.getSuggestions(), dr.getSeverity(), dr.getClassification());
+
+			return dr.getClassification() == CS::Deprecation;
 		}
-			
+
+		return false;
 	}
 
 	Statement* getOptimizedStatement(Statement*, Statement* statementToOptimize) override
@@ -1683,30 +1688,35 @@ private:
 			return;
 		}
 
-		checkApiClassDiagnostic(cso, funcCall, methodName);
+		bool hadDeprecationFromQuery = checkApiClassDiagnostic(cso, funcCall, methodName);
 
 		// Argument count matches — check literal argument types
 		checkLiteralArgTypes(funcCall, cso, functionIndex, numArgs, className, methodName.toString());
 
-		// Check for deprecated methods (exact lookup by class name)
-		auto depInfo = ApiHelpers::getDeprecation(className, methodName.toString());
-
-		if (depInfo.deprecated)
+		// Check for deprecated methods (exact lookup by class name).
+		// Skip if the QueryFunction already emitted a Deprecation diagnostic
+		// to avoid duplicate warnings.
+		if (!hadDeprecationFromQuery)
 		{
-			String msg = className + "." + methodName.toString() + "() is deprecated";
-			StringArray suggestions;
+			auto depInfo = ApiHelpers::getDeprecation(className, methodName.toString());
 
-			if (depInfo.replacement.isNotEmpty())
+			if (depInfo.deprecated)
 			{
-				msg << " — use " << depInfo.replacement << " instead";
-				suggestions.add(depInfo.replacement);
+				String msg = className + "." + methodName.toString() + "() is deprecated";
+				StringArray suggestions;
+
+				if (depInfo.replacement.isNotEmpty())
+				{
+					msg << " — use " << depInfo.replacement << " instead";
+					suggestions.add(depInfo.replacement);
+				}
+
+				if (depInfo.note.isNotEmpty())
+					msg << " (" << depInfo.note << ")";
+
+				addDiagnostic(funcCall->location, msg, suggestions,
+				              parseDeprecationSeverity(depInfo.severity), CS::Deprecation);
 			}
-
-			if (depInfo.note.isNotEmpty())
-				msg << " (" << depInfo.note << ")";
-
-			addDiagnostic(funcCall->location, msg, suggestions,
-			              parseDeprecationSeverity(depInfo.severity), CS::Deprecation);
 		}
 	}
 
