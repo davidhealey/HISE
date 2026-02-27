@@ -143,20 +143,6 @@ public:
 	 */
 	static CallScopeInfo getCallScope(const String& className, const String& methodName);
 
-	/** Look up deprecation info for a given class + method.
-	 *
-	 *  Returns DiagnosticResult::ok() when not deprecated, or a DiagnosticResult
-	 *  with Deprecation classification when deprecated.
-	 *
-	 *  Exact mode (className = specific class name):
-	 *    Finds the class child in the API ValueTree, checks for "deprecated" property.
-	 *
-	 *  Greedy mode (className = "*"):
-	 *    Checks all classes — if ANY mark the method deprecated, returns deprecated
-	 *    with worst-case severity.
-	 */
-	static ApiClass::DiagnosticResult getDeprecation(const String& className, const String& methodName);
-
 #endif
 };
 

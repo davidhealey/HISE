@@ -1727,7 +1727,7 @@ private:
 	}
 
 	/** Tier 2 validation with a known ConstScriptingObject.
-	    Coalesces QueryFunction, arg count, and deprecation checks via DR::max. */
+	    Coalesces QueryFunction and arg count checks via DR::max. */
 	void validateWithKnownObject(RO::FunctionCall* funcCall, RO::DotOperator* dot,
 	                             ConstScriptingObject* cso)
 	{
@@ -1744,12 +1744,10 @@ private:
 			return;
 		}
 
-		// Coalesce three checks
 		auto queryDr = getQueryDiagnostic(cso, funcCall, methodName);
 		auto argDr   = checkArgCount(funcCall, numArgs);
-		auto depDr   = ApiHelpers::getDeprecation(className, methodName.toString());
 
-		auto best = DR::max(DR::max(queryDr, argDr), depDr);
+		auto best = DR::max(queryDr, argDr);
 
 		if (best.shouldReport())
 			emitDiagnostic(funcCall->location, className, methodName, best);
@@ -1783,13 +1781,12 @@ private:
 		}
 
 		auto argDr = checkArgCount(funcCall, info->numArgs);
-		auto depDr = ApiHelpers::getDeprecation("*", methodName);
 
 		// Tier 3 arg count is Warning (not Error) — less certainty without type info
 		if (argDr.shouldReport())
 			argDr = argDr.withSeverity(DR::Severity::Warning);
 
-		auto best = DR::max(DR::max(queryDr, argDr), depDr);
+		auto best = DR::max(queryDr, argDr);
 
 		if (best.shouldReport())
 		{
