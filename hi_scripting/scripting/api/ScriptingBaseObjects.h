@@ -152,6 +152,41 @@ private:
 
 	Identifier name;
 
+	using CreateFunction = std::function<ConstScriptingObject*(ProcessorWithScriptingContent*)>;
+	
+	static std::map<Identifier, CreateFunction>& getDiagnosticPrototypeFactory()
+	{
+		static std::map<Identifier, CreateFunction> map;
+		return map;
+	}
+	
+public:
+
+	static ReferenceCountedObjectPtr<ConstScriptingObject> createDiagnosticPrototype(const Identifier& className,
+		ProcessorWithScriptingContent* pwsc)
+	{
+		auto& map = getDiagnosticPrototypeFactory();
+		auto it = map.find(className);
+
+		if (it != map.end())
+			return it->second(pwsc);
+
+		return nullptr;
+	}
+
+protected:
+
+	template <typename T, typename...As> void registerDiagnosticPrototype(T& obj, As... arguments)
+	{
+		auto id = obj.getObjectName();
+
+		getDiagnosticPrototypeFactory()[id] = [arguments...](ProcessorWithScriptingContent* pwsc)
+		{
+			return new T(pwsc, arguments...);
+		};
+	}
+
+private:
 
 	JUCE_DECLARE_WEAK_REFERENCEABLE(ConstScriptingObject);
 };
@@ -364,7 +399,7 @@ struct WeakCallbackHolder : private ScriptingObject
 
 	};
 
-	template <int E, int FIndex=0> static ApiClass::DiagnosticResult checkCallbackNumArgs(ApiClass*, const Array<var>& args)
+	template <int E, int FIndex=0> static ApiClass::DiagnosticResult checkCallbackNumArgs(ApiClass*, const Identifier&, const Array<var>& args)
 	{
 		if (auto f = dynamic_cast<CallableObject*>(args[FIndex].getObject()))
 		{
@@ -512,18 +547,18 @@ struct WeakCallbackHolder : private ScriptingObject
 	{
 		auto numArgs = numExpectedArgs;
 
-		c->addDiagnostic(methodName, [numArgs, fIndex](ApiClass*, const Array<var>& args)
+		c->addDiagnostic(methodName, [numArgs, fIndex](ApiClass*, const Identifier&, const Array<var>& args)
+		{
+			if (auto f = dynamic_cast<CallableObject*>(args[fIndex].getObject()))
 			{
-				if (auto f = dynamic_cast<CallableObject*>(args[fIndex].getObject()))
-				{
-					auto numActual = f->getNumArguments();
+				auto numActual = f->getNumArguments();
 
-					if (numActual != numArgs)
-						return ApiClass::DiagnosticResult::fail("wrong argument count for callback").withExpectation(String(numActual) + " params", String(numArgs) + " params");
-				}
+				if (numActual != numArgs)
+					return ApiClass::DiagnosticResult::fail("wrong argument count for callback").withExpectation(String(numActual) + " params", String(numArgs) + " params");
+			}
 
-				return ApiClass::DiagnosticResult::unknown();
-			});
+			return ApiClass::DiagnosticResult::unknown();
+		});
 	}
 
 private:

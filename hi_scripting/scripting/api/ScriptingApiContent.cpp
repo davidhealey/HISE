@@ -466,7 +466,7 @@ ScriptingApi::Content::ScriptComponent::ScriptComponent(ProcessorWithScriptingCo
 
 	useRectangleClass = HISE_GET_PREPROCESSOR(getScriptProcessor()->getMainController_(), HISE_USE_SCRIPT_RECTANGLE_OBJECT);
 
-	auto checkProperty = [](ApiClass* c, const Array<var>& args)
+	auto checkProperty = [](ApiClass* c, const Identifier&, const Array<var>& args)
 	{
 		if (auto sc = dynamic_cast<ScriptComponent*>(c))
 		{

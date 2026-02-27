@@ -1730,14 +1730,14 @@ private:
 		}
 
 		// Compose base URL check + callback arg count validation for callWithGET/callWithPOST/downloadFile
-		template <int E, int I> static ApiClass::DiagnosticResult checkBaseURLAndCallbackArgs(ApiClass* c, const Array<var>& args)
+		template <int E, int I> static ApiClass::DiagnosticResult checkBaseURLAndCallbackArgs(ApiClass* c, const Identifier& fName,  const Array<var>& args)
 		{
 			if (auto s = dynamic_cast<Server*>(c))
 			{
 				if (!s->globalServer.isBaseURLDefined())
 					return DiagnosticResult::fail("setBaseURL not called");
 
-				return WeakCallbackHolder::checkCallbackNumArgs<E, I>(c, args);
+				return WeakCallbackHolder::checkCallbackNumArgs<E, I>(c, fName, args);
 			}
 
 			return DiagnosticResult::fail("not a Server object");

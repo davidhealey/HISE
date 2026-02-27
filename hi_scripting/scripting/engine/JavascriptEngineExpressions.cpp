@@ -7,6 +7,8 @@ struct HiseJavascriptEngine::RootObject::LiteralValue : public Expression
 
 	bool isConstant() const override { return true; }
 
+	String getProfileName() const override { return value.toString(); }
+
 	Statement* getChildStatement(int) override { return nullptr; };
 
 	var value;
@@ -229,6 +231,8 @@ struct HiseJavascriptEngine::RootObject::ArraySubscript : public Expression
 
 		Expression::assign(s, newValue);
 	}
+
+	String getProfileName() const override { return object->getProfileName() + "[" + index->getProfileName() + "]"; }
 
 	Statement* getChildStatement(int idx) override 
 	{
