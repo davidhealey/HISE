@@ -479,6 +479,8 @@ RestServer::Response RestHelpers::handleRecompile(MainController* mc, RestServer
 
 	if (auto jp = getScriptProcessor(mc, req))
 	{
+		mc->refreshExternalFiles(true);
+
 		mc->getKillStateHandler().killVoicesAndCall(dynamic_cast<Processor*>(jp), [req, forceSync, mc](Processor* p)
 		{
 			JavascriptProcessor::ResultFunction rf = [req, forceSync, mc, p](const JavascriptProcessor::SnippetResult& result)
