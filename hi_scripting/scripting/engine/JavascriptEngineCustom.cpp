@@ -1532,10 +1532,10 @@ struct ApiValidationAnalyzer : public HiseJavascriptEngine::RootObject::Optimiza
 
 	/** Returns true if a Deprecation diagnostic was emitted (so the caller can skip
 	    the ValueTree deprecation lookup to avoid duplicate warnings). */
-	bool checkApiClassDiagnostic(ApiClass* c, Statement* s, const Identifier& methodName)
+	std::pair<SV, CS> checkApiClassDiagnostic(ApiClass* c, Statement* s, const Identifier& methodName)
 	{
 		if (!c->hasDiagnosticCheck(methodName))
-			return false;
+			return { SV::Unknown, CS::ApiValidation };
 
 		
 		Array<RO::Expression*> args;
@@ -1584,11 +1584,9 @@ struct ApiValidationAnalyzer : public HiseJavascriptEngine::RootObject::Optimiza
 			msg << dr.getErrorMessage();
 
 			addDiagnostic(s->location, msg, dr.getSuggestions(), dr.getSeverity(), dr.getClassification());
-
-			return dr.getClassification() == CS::Deprecation;
 		}
 
-		return false;
+		return { dr.getSeverity(), dr.getClassification() };
 	}
 
 	Statement* getOptimizedStatement(Statement*, Statement* statementToOptimize) override
@@ -1600,6 +1598,33 @@ struct ApiValidationAnalyzer : public HiseJavascriptEngine::RootObject::Optimiza
 		// recorded their diagnostics via recordDiagnostic() at each recovery site.
 		// The placeholders exist in the AST to allow parsing to continue past errors.
 
+		// --- Walk into anonymous function bodies ---
+		// LiteralValue and AnonymousFunctionWithCapture wrap FunctionObject in a var,
+		// making getChildStatement() return nullptr and blocking the tree walker.
+		// We extract the FunctionObject and recursively walk its body so that
+		// g.fillRect(...) etc. inside paint routines get validated.
+		if (auto* lit = dynamic_cast<RO::LiteralValue*>(statementToOptimize))
+		{
+			if (auto* fo = dynamic_cast<RO::FunctionObject*>(lit->value.getDynamicObject()))
+			{
+				if (fo->body != nullptr)
+				{
+					clearAllPrototypeTouchedState();
+					executePass(fo->body);
+				}
+			}
+		}
+		else if (auto* anon = dynamic_cast<RO::AnonymousFunctionWithCapture*>(statementToOptimize))
+		{
+			if (auto* fo = dynamic_cast<RO::FunctionObject*>(anon->function.getDynamicObject()))
+			{
+				if (fo->body != nullptr)
+				{
+					clearAllPrototypeTouchedState();
+					executePass(fo->body);
+				}
+			}
+		}
 		
 		if (auto ac = dynamic_cast<RO::ApiCall*>(statementToOptimize))
 		{
@@ -1624,6 +1649,25 @@ struct ApiValidationAnalyzer : public HiseJavascriptEngine::RootObject::Optimiza
 					// --- Tier 3: Greedy lookup across all API classes ---
 					validateTier3(funcCall, dot);
 				}
+#if 0 // REMOVE G HACK IF DONE
+				else if (auto* un = dynamic_cast<RO::UnqualifiedName*>(dot->parent.get()))
+				{
+
+					// --- Tier 2 via naming convention: g -> Graphics ---
+					// The parameter name "g" universally means a GraphicsObject
+					// in paint routines and LAF functions. Validate at Tier 2
+					// against a prototype GraphicsObject instance.
+					if (un->name == Identifier("g"))
+					{
+						if (auto* gObj = getOrCreatePrototype("Graphics", "g"))
+							validateWithKnownObject(funcCall, dot, gObj);
+					}
+					else
+					{
+						
+					}
+				}
+#endif
 			}
 		}
 
@@ -1645,6 +1689,14 @@ private:
 		if (cso == nullptr)
 			return; // Not a scripting object (could be a value, array, etc.)
 
+		validateWithKnownObject(funcCall, dot, cso);
+	}
+
+	/** Tier 2 validation with a known ConstScriptingObject.
+	    Shared by the ConstReference path and the g -> Graphics hack. */
+	void validateWithKnownObject(RO::FunctionCall* funcCall, RO::DotOperator* dot,
+	                             ConstScriptingObject* cso)
+	{
 		auto className = cso->getObjectName().toString();
 		auto methodName = dot->child;
 
@@ -1675,22 +1727,16 @@ private:
 			return;
 		}
 
-		// Method exists — check argument count
-		auto numActualArgs = funcCall->arguments.size();
+		auto [severity, classification] = checkApiClassDiagnostic(cso, funcCall, methodName);
 
-		if (numActualArgs != numArgs)
-		{
-			String msg = className + "." + methodName.toString() + "() expects "
-			           + String(numArgs) + " argument" + (numArgs != 1 ? "s" : "")
-			           + ", got " + String(numActualArgs);
-
-			addDiagnostic(funcCall->location, msg, {}, SV::Error, CS::ApiValidation);
+		// If the QueryFunction emitted an Error, it produced a better message
+		// than the generic arg count check — skip the rest.
+		if (severity == SV::Error)
 			return;
-		}
 
-		bool hadDeprecationFromQuery = checkApiClassDiagnostic(cso, funcCall, methodName);
+		bool hadDeprecationFromQuery = classification == CS::Deprecation;
 
-		// Argument count matches — check literal argument types
+		// Check literal argument types
 		checkLiteralArgTypes(funcCall, cso, functionIndex, numArgs, className, methodName.toString());
 
 		// Check for deprecated methods (exact lookup by class name).
@@ -1718,6 +1764,19 @@ private:
 				              parseDeprecationSeverity(depInfo.severity), CS::Deprecation);
 			}
 		}
+
+		// Method exists — check argument count
+		auto numActualArgs = funcCall->arguments.size();
+
+		if (numActualArgs != numArgs)
+		{
+			String msg = className + "." + methodName.toString() + "() expects "
+				+ String(numArgs) + " argument" + (numArgs != 1 ? "s" : "")
+				+ ", got " + String(numActualArgs);
+
+			addDiagnostic(funcCall->location, msg, {}, SV::Error, CS::ApiValidation);
+			return;
+		}
 	}
 
 	void validateTier3(RO::FunctionCall* funcCall, RO::DotOperator* dot)
@@ -1733,6 +1792,18 @@ private:
 		// Method exists somewhere — check arg count if unambiguous
 		if (info->ambiguousArgCount)
 			return; // Different classes have different arg counts — can't validate
+
+		auto objectKey = dot->parent->getProfileName();
+
+		if (auto* proto = getOrCreatePrototype(info->className, objectKey))
+		{
+			proto->markMethodTouched(Identifier(methodName));
+			auto [sev, unused] = checkApiClassDiagnostic(proto, funcCall, Identifier(methodName));
+
+			// skip arg count check & deprecation, error message is better
+			if (sev == SV::Error)
+				return;
+		}
 
 		auto numActualArgs = funcCall->arguments.size();
 
@@ -1836,6 +1907,7 @@ private:
 	{
 		int numArgs = 0;           // Consistent arg count (if not ambiguous)
 		bool ambiguousArgCount = false;  // True if different classes disagree on arg count
+		Identifier className;
 	};
 
 	struct GreedyApiMethodMap
@@ -1853,13 +1925,12 @@ private:
 
 		void buildFromTree(const ValueTree& apiTree)
 		{
-			for (int i = 0; i < apiTree.getNumChildren(); i++)
+			for (const auto& classNode: apiTree)
 			{
-				auto classNode = apiTree.getChild(i);
+				auto parentClassName = classNode.getType();
 
-				for (int j = 0; j < classNode.getNumChildren(); j++)
+				for (const auto& methodNode: classNode)
 				{
-					auto methodNode = classNode.getChild(j);
 					auto name = methodNode.getProperty("name").toString();
 
 					if (name.isEmpty())
@@ -1872,6 +1943,9 @@ private:
 					{
 						auto& existing = map.getReference(name);
 
+						if(existing.className != parentClassName)
+							existing.className = {};
+
 						if (!existing.ambiguousArgCount && existing.numArgs != argCount)
 							existing.ambiguousArgCount = true;
 					}
@@ -1879,6 +1953,7 @@ private:
 					{
 						GreedyMethodInfo info;
 						info.numArgs = argCount;
+						info.className = parentClassName;
 						allMethodNames.add(name);
 						map.set(name, info);
 					}
@@ -1923,6 +1998,34 @@ private:
 			instance.buildFromTree(ApiHelpers::getApiTree());
 
 		return instance;
+	}
+
+	// Contains prototypes for all tier 3 function call parents that can be resolved unambiguously
+	// by their method name
+	std::map<std::pair<Identifier, String>, ReferenceCountedObjectPtr<ConstScriptingObject>> prototypeCache;
+
+	ConstScriptingObject* getOrCreatePrototype(const Identifier& className, const String& expression)
+	{
+		std::pair<Identifier, String> key = { className, expression };
+
+		if (prototypeCache.find(key) != prototypeCache.end())
+			return prototypeCache.at(key).get();
+
+		auto pwsc = dynamic_cast<ProcessorWithScriptingContent*>(hiseSpecialData->processor);
+		jassert(pwsc != nullptr);
+
+		auto n = ConstScriptingObject::createDiagnosticPrototype(className, pwsc);
+
+		if(n != nullptr)
+			prototypeCache[key] = n;
+
+		return n.get();
+	}
+
+	void clearAllPrototypeTouchedState()
+	{
+		for (auto& pair : prototypeCache)
+			pair.second->clearTouchedMethods();
 	}
 
 	Array<ApiDiagnostic>* diagnostics = nullptr;

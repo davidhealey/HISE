@@ -5341,7 +5341,7 @@ struct ScriptingApi::Synth::Wrapper
 
 struct ModuleDiagnoser
 {
-	template <typename T> static ApiClass::DiagnosticResult check(ApiClass* c, const Array<var>& args)
+	template <typename T> static ApiClass::DiagnosticResult check(ApiClass* c, const Identifier&, const Array<var>& args)
 	{
 		if (auto s = dynamic_cast<ScriptingApi::Synth*>(c))
 		{

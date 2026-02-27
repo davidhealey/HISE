@@ -1657,42 +1657,104 @@ struct ScriptingObjects::GraphicsObject::Wrapper
 	API_METHOD_WRAPPER_1(GraphicsObject, getStringWidth);
 };
 
+struct GraphicsDiagnostics
+{
+	using DR = ApiClass::DiagnosticResult;
+
+	static DR checkColourSet(ApiClass* c, const Identifier& id, const Array<var>& args)
+	{
+		auto colourSet =   c->wasMethodTouched("setColour");
+		auto gradientSet = c->wasMethodTouched("setGradientFill");
+
+		if (!colourSet && !gradientSet)
+			return DR("called before setColour / setGradientFill").withSeverity(DR::Severity::Warning);
+
+		return DR::ok();
+	}
+
+	static DR checkInLayer(ApiClass* c, const Identifier& id, const Array<var>& args)
+	{
+		if (!c->wasMethodTouched("beginLayer"))
+			return DR::fail("no graphic layer set").withSuggestion("Call g.beginLayer(...) before using this method");
+
+		return DR::ok();
+	}
+
+	static DR checkFontSet(ApiClass* c, const Identifier& id, const Array<var>& args)
+	{
+		auto f1 = c->wasMethodTouched("setFont");
+		auto f2 = c->wasMethodTouched("setFontWithSpacing");
+
+		if (!f1 && !f2)
+			return DR("font not set").withSeverity(DR::Severity::Warning);
+
+		return DR::ok();
+	}
+
+	static DR checkAreaAsArray(ApiClass* c, const Identifier& id, const Array<var>& args)
+	{
+		int numExpected = 0;
+		int unused = 0;
+		c->getIndexAndNumArgsForFunction(id, unused, numExpected);
+
+		if (args.size() > numExpected)
+		{
+			String sug;
+			sug << "g." << id.toString() << "([x, y, w, h]";
+
+			if (numExpected > 1)
+				sug << ", ...";
+
+			sug << ")";
+
+			return DR::fail("wrong signature").withSuggestion(sug);
+		}
+
+		return DR::ok();
+	}
+};
+
+
+
 ScriptingObjects::GraphicsObject::GraphicsObject(ProcessorWithScriptingContent *p, ConstScriptingObject* parent_) :
 	ConstScriptingObject(p, 0),
 	parent(parent_),
 	rectangleResult(Result::ok())
 {
+	registerDiagnosticPrototype(*this, parent);
+
+#define CHECK_AREA_AND_COLOUR(x) addDiagnostic(#x, DiagnosticResult::combine(GraphicsDiagnostics::checkColourSet, GraphicsDiagnostics::checkAreaAsArray));
+#define CHECK_FONT_AND_COLOUR(x) addDiagnostic(#x, DiagnosticResult::combine(GraphicsDiagnostics::checkColourSet, GraphicsDiagnostics::checkFontSet));
+
 	ADD_API_METHOD_1(fillAll);
 	ADD_API_METHOD_1(setColour);
 	ADD_API_METHOD_1(setOpacity);
-	ADD_API_METHOD_2(drawRect);
-	ADD_API_METHOD_1(fillRect);
-	ADD_API_METHOD_3(drawRoundedRectangle);
-	ADD_API_METHOD_2(fillRoundedRectangle);
+	ADD_API_METHOD_2(drawRect);					CHECK_AREA_AND_COLOUR(drawRect);
+	ADD_API_METHOD_1(fillRect);					CHECK_AREA_AND_COLOUR(fillRect);
+	ADD_API_METHOD_3(drawRoundedRectangle);		CHECK_AREA_AND_COLOUR(drawRoundedRectangle);
+	ADD_API_METHOD_2(fillRoundedRectangle);		CHECK_AREA_AND_COLOUR(fillRoundedRectangle);
 	ADD_API_METHOD_5(drawLine);
 	ADD_API_METHOD_3(drawHorizontalLine);
 	ADD_API_METHOD_3(drawVerticalLine);
 	ADD_API_METHOD_2(setFont);
 	ADD_API_METHOD_3(setFontWithSpacing);
-	ADD_API_METHOD_2(drawText);
-	ADD_API_METHOD_3(drawAlignedText);
-	ADD_API_METHOD_4(drawAlignedTextShadow);
-	ADD_API_METHOD_5(drawFittedText);
-	ADD_API_METHOD_5(drawMultiLineText);
+	ADD_API_METHOD_2_DEPRECATED(drawText,       "use drawAlignedText for better placement");
+	ADD_API_METHOD_3(drawAlignedText);			CHECK_FONT_AND_COLOUR(drawAlignedText);
+	ADD_API_METHOD_4(drawAlignedTextShadow);	CHECK_FONT_AND_COLOUR(drawAlignedTextShadow)
+	ADD_API_METHOD_5(drawMultiLineText);		CHECK_FONT_AND_COLOUR(drawMultiLineText)
 	ADD_API_METHOD_1(drawMarkdownText);
     ADD_API_METHOD_3(drawSVG);
 	ADD_API_METHOD_1(setGradientFill);
-	ADD_API_METHOD_2(drawEllipse);
-	ADD_API_METHOD_1(fillEllipse);
+	ADD_API_METHOD_2(drawEllipse);				CHECK_AREA_AND_COLOUR(drawEllipse);
+	ADD_API_METHOD_1(fillEllipse);				CHECK_AREA_AND_COLOUR(fillEllipse);
 	ADD_API_METHOD_4(drawImage);
 	ADD_API_METHOD_3(drawDropShadow);
 	ADD_API_METHOD_5(drawDropShadowFromPath);
 	ADD_API_METHOD_5(drawInnerShadowFromPath);
 	ADD_API_METHOD_2(addDropShadowFromAlpha);
-	ADD_API_METHOD_3(drawTriangle);
+	ADD_API_METHOD_3(drawTriangle);				CHECK_AREA_AND_COLOUR(drawTriangle);
 	ADD_API_METHOD_2(fillTriangle);
-	ADD_API_METHOD_2(fillPath);
-	
+	ADD_API_METHOD_2(fillPath);					
 	ADD_API_METHOD_3(drawPath);
 	ADD_API_METHOD_2(rotate);
 	ADD_API_METHOD_2(drawFFTSpectrum);

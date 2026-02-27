@@ -354,7 +354,7 @@ public:
 
     struct DiagnosticResult
     {
-        using QueryFunction = std::function<DiagnosticResult(ApiClass*, const Array<var>&)>;
+        using QueryFunction = std::function<DiagnosticResult(ApiClass*, const Identifier&, const Array<var>&)>;
 
 		enum class Severity
 		{
@@ -499,6 +499,42 @@ public:
         StringArray getSuggestions() const { return suggestions; }
         Classification getClassification() const { return source; }
 
+        /** Compose multiple diagnostic check functions into a single QueryFunction.
+        Runs all checks and returns the result with the highest severity.
+        Works with static functions, lambdas, and any callable matching the
+        QueryFunction signature. */
+        template <typename... Fns> static QueryFunction combine(Fns... checks)
+        {
+            return [=](ApiClass* c, const Identifier& id, const Array<var>& args) -> DiagnosticResult
+            {
+                DiagnosticResult best = ok();
+
+				auto max = [](const DiagnosticResult& a, const DiagnosticResult& b)
+				{
+					auto severityPriority = [](Severity s)
+					{
+						switch (s)
+						{
+						case Severity::OK:      return 0;
+						case Severity::Hint:    return 1;
+						case Severity::Info:    return 2;
+						case Severity::Warning: return 3;
+						case Severity::Error:   return 4;
+						default:                return -1;
+						}
+					};
+
+					if (severityPriority(a.getSeverity()) >= severityPriority(b.getSeverity()))
+						return a;
+
+					return b;
+				};
+
+                ((best = max(best, checks(c, id, args))), ...);
+                return best;
+            };
+        }
+
     private:
 
         Severity severity;
@@ -614,7 +650,7 @@ public:
     DiagnosticResult performDiagnostic(const Identifier& methodName, const Array<var>& args)
     {
         jassert(hasDiagnosticCheck(methodName));
-        return diagnostics.at(methodName)(this, args);
+        return diagnostics.at(methodName)(this, methodName, args);
     }
 
     /** Used by the parser to check whether to evaluate the arguments for the check. */
@@ -747,12 +783,32 @@ public:
 		currentLocation.charNumber = charNumber;
 	}
 
+    void markMethodTouched(const Identifier& methodName)
+    {
+        int unused;
+        jassert(getIndexAndNumArgsForFunction(methodName, unused, unused));
+        touchedMethods.insert(methodName);
+    }
+
+    bool wasMethodTouched(const Identifier& methodName) const
+    {
+        return touchedMethods.count(methodName) > 0;
+    }
+
+    void clearTouchedMethods()
+    {
+        touchedMethods.clear();
+    }
+
+
+
 private:
 
 	bool wantsLocation = false;
 	DebugableObjectBase::Location currentLocation;
 
     std::map<Identifier, DiagnosticResult::QueryFunction> diagnostics;
+    std::set<Identifier> touchedMethods;
 
 	Array<WeakReference<DebugableObjectBase>> optimizableFunctions;
 
