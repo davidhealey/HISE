@@ -1260,7 +1260,12 @@ juce::String HiseJavascriptEngine::toConsoleString(const ApiClass::DiagnosticRes
 	else
 		s << File(i.fileName).getFileName() << " (" << i.line << ")";
 
-	s << ": " << i.message << " ";
+	s << ": " << i.message;
+
+	if (!i.suggestions.isEmpty())
+		s << ". Use: " << i.suggestions.joinIntoString(", ");
+
+	s << " ";
 
 	// Append encoded location for double-click navigation
 	s << RootObject::Error::createEncodedLocation(p, i.fileName, 0, i.line, i.col);

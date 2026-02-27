@@ -2246,10 +2246,7 @@ private:
 			auto suggestion = FuzzySearcher::suggestCorrection(functionName.toString(), candidates, 0.6);
 			StringArray suggestions;
 			if (suggestion.isNotEmpty())
-			{
 				suggestions.add(suggestion);
-				msg << " (did you mean '" << suggestion << "'?)";
-			}
 
 #if USE_BACKEND
 			if (isDiagnosticMode())
@@ -2281,25 +2278,14 @@ private:
 		// Check for deprecated global API methods (diagnostic mode only)
 		if (isDiagnosticMode())
 		{
-			auto depInfo = ApiHelpers::getDeprecation(
+			auto depDr = ApiHelpers::getDeprecation(
 				apiClass->getObjectName().toString(), functionName.toString());
 
-			if (depInfo.deprecated)
+			if (depDr.shouldReport())
 			{
-				String msg = prettyName + " is deprecated";
-				StringArray suggestions;
-
-				if (depInfo.replacement.isNotEmpty())
-				{
-					msg << " — use " << depInfo.replacement << " instead";
-					suggestions.add(depInfo.replacement);
-				}
-
-				if (depInfo.note.isNotEmpty())
-					msg << " (" << depInfo.note << ")";
-
-				recordDiagnostic(location, msg, suggestions,
-				                 parseDeprecationSeverity(depInfo.severity), CS::Deprecation);
+				String msg = prettyName + " " + depDr.getErrorMessage();
+				recordDiagnostic(location, msg, depDr.getSuggestions(),
+				                 depDr.getSeverity(), CS::Deprecation);
 			}
 		}
 #endif

@@ -7213,22 +7213,34 @@ ApiHelpers::CallScopeInfo ApiHelpers::getCallScope(const String& className, cons
 
 // ==================== Deprecation Lookup ====================
 
-/** Severity ordering for deprecation: Error (4) > Warning (3) > Information (2) > Hint (1).
- *  Matches LSP DiagnosticSeverity where lower numbers are more severe, but we invert
- *  for comparison so "worst" means highest severity. */
-static int deprecationSeverityRank(const String& s)
+/** Build a DiagnosticResult from a deprecated method's ValueTree node properties. */
+static ApiClass::DiagnosticResult buildDeprecationResult(const ValueTree& methodNode)
 {
-	if (s == "Error")       return 4;
-	if (s == "Warning")     return 3;
-	if (s == "Information") return 2;
-	if (s == "Hint")        return 1;
-	return 3; // default to Warning
+	using DR = ApiClass::DiagnosticResult;
+
+	auto replacement = methodNode.getProperty("replacement").toString();
+	auto note = methodNode.getProperty("deprecationNote").toString();
+	auto severity = DR::parseSeverity(methodNode.getProperty("severity").toString());
+
+	String msg = "deprecated";
+	if (note.isNotEmpty())
+		msg << " (" << note << ")";
+
+	auto dr = DR(severity, msg)
+		.withClassification(DR::Classification::Deprecation);
+
+	if (replacement.isNotEmpty())
+		dr = dr.withSuggestion(replacement);
+
+	return dr;
 }
 
 /** Greedy lookup HashMap for deprecation — built once on first greedy query. */
 struct GreedyDeprecationMap
 {
-	HashMap<String, ApiHelpers::DeprecationInfo> map;
+	using DR = ApiClass::DiagnosticResult;
+
+	HashMap<String, DR> map;
 	bool built = false;
 
 	void buildFromTree(const ValueTree& apiTree)
@@ -7248,33 +7260,18 @@ struct GreedyDeprecationMap
 				if (!methodNode.hasProperty("deprecated"))
 					continue;
 
-				ApiHelpers::DeprecationInfo info;
-				info.deprecated = true;
-				info.replacement = methodNode.getProperty("replacement").toString();
-				info.note = methodNode.getProperty("deprecationNote").toString();
-				info.severity = methodNode.getProperty("severity").toString();
+				auto dr = buildDeprecationResult(methodNode);
 
 				if (map.contains(methodName))
 				{
 					// Multiple classes mark the same method name deprecated —
-					// keep the worst-case severity.
+					// keep the worst-case severity via DiagnosticResult::max.
 					auto& existing = map.getReference(methodName);
-
-					if (deprecationSeverityRank(info.severity) > deprecationSeverityRank(existing.severity))
-					{
-						existing.severity = info.severity;
-
-						// Also update replacement/note from the more severe entry
-						if (info.replacement.isNotEmpty())
-							existing.replacement = info.replacement;
-
-						if (info.note.isNotEmpty())
-							existing.note = info.note;
-					}
+					existing = DR::max(existing, dr);
 				}
 				else
 				{
-					map.set(methodName, info);
+					map.set(methodName, dr);
 				}
 			}
 		}
@@ -7293,8 +7290,10 @@ static GreedyDeprecationMap& getGreedyDeprecationMap()
 	return instance;
 }
 
-ApiHelpers::DeprecationInfo ApiHelpers::getDeprecation(const String& className, const String& methodName)
+ApiClass::DiagnosticResult ApiHelpers::getDeprecation(const String& className, const String& methodName)
 {
+	using DR = ApiClass::DiagnosticResult;
+
 	if (className == "*")
 	{
 		// Greedy mode: use pre-built HashMap
@@ -7303,7 +7302,7 @@ ApiHelpers::DeprecationInfo ApiHelpers::getDeprecation(const String& className, 
 		if (greedyMap.map.contains(methodName))
 			return greedyMap.map[methodName];
 
-		return {};
+		return DR::ok();
 	}
 
 	// Exact mode: find class, then method
@@ -7311,7 +7310,7 @@ ApiHelpers::DeprecationInfo ApiHelpers::getDeprecation(const String& className, 
 	auto classNode = apiTree.getChildWithName(Identifier(className));
 
 	if (!classNode.isValid())
-		return {};
+		return DR::ok();
 
 	for (int i = 0; i < classNode.getNumChildren(); i++)
 	{
@@ -7320,18 +7319,13 @@ ApiHelpers::DeprecationInfo ApiHelpers::getDeprecation(const String& className, 
 		if (methodNode.getProperty("name").toString() == methodName)
 		{
 			if (!methodNode.hasProperty("deprecated"))
-				return {};
+				return DR::ok();
 
-			DeprecationInfo info;
-			info.deprecated = true;
-			info.replacement = methodNode.getProperty("replacement").toString();
-			info.note = methodNode.getProperty("deprecationNote").toString();
-			info.severity = methodNode.getProperty("severity").toString();
-			return info;
+			return buildDeprecationResult(methodNode);
 		}
 	}
 
-	return {};
+	return DR::ok();
 }
 
 ScriptingObjects::ScriptBuffer::ScriptBuffer(ProcessorWithScriptingContent* p, int size):

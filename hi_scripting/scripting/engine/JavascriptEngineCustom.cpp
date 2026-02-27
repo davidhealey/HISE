@@ -1489,21 +1489,6 @@ private:
 	Array<ApiHelpers::CallScope> suppressStack;
 };
 
-/** Map enrichment JSON severity string to ApiDiagnostic::Severity enum.
-    JSON values (PascalCase from deprecated_methods.md): Error, Warning, Information, Hint.
-    Visible to both JavascriptEngineCustom.cpp and JavascriptEngineParser.cpp via unity build. */
-static ApiClass::DiagnosticResult::Severity
-parseDeprecationSeverity(const String& s)
-{
-	using S = ApiClass::DiagnosticResult::Severity;
-
-	if (s == "Error")       return S::Error;
-	if (s == "Warning")     return S::Warning;
-	if (s == "Information") return S::Info;
-	if (s == "Hint")        return S::Hint;
-	return S::Warning;  // default for deprecated methods
-}
-
 /** AST analysis pass that validates method calls on const var objects and collects
     DiagnosticPlaceholder nodes left by the parser's diagnostic-mode recovery sites.
     
@@ -1530,14 +1515,17 @@ struct ApiValidationAnalyzer : public HiseJavascriptEngine::RootObject::Optimiza
 		hiseSpecialData = hsd;
 	}
 
-	/** Returns true if a Deprecation diagnostic was emitted (so the caller can skip
-	    the ValueTree deprecation lookup to avoid duplicate warnings). */
-	std::pair<SV, CS> checkApiClassDiagnostic(ApiClass* c, Statement* s, const Identifier& methodName)
+	// ==================== Diagnostic helpers ====================
+
+	using DR = ApiClass::DiagnosticResult;
+
+	/** Run the QueryFunction for a method (if registered) and return the result.
+	    Does NOT emit — the caller coalesces with other checks before emitting. */
+	DR getQueryDiagnostic(ApiClass* c, Statement* s, const Identifier& methodName)
 	{
 		if (!c->hasDiagnosticCheck(methodName))
-			return { SV::Unknown, CS::ApiValidation };
+			return DR::ok();
 
-		
 		Array<RO::Expression*> args;
 
 		if (auto fc = dynamic_cast<RO::FunctionCall*>(s))
@@ -1546,7 +1534,6 @@ struct ApiValidationAnalyzer : public HiseJavascriptEngine::RootObject::Optimiza
 			{
 				if (a->isConstant())
 					args.add(a);
-				
 				else
 					args.add(nullptr);
 			}
@@ -1572,22 +1559,62 @@ struct ApiValidationAnalyzer : public HiseJavascriptEngine::RootObject::Optimiza
 				diagnosticArgs.add(var());
 		}
 
-		auto dr = c->performDiagnostic(methodName, diagnosticArgs);
+		return c->performDiagnostic(methodName, diagnosticArgs);
+	}
 
-		if (dr.shouldReport())
+	/** Check argument count against expected. Returns Error on mismatch, OK otherwise. */
+	DR checkArgCount(RO::FunctionCall* funcCall, int numExpected)
+	{
+		auto numActual = funcCall->arguments.size();
+
+		if (numActual != numExpected)
 		{
-			auto id = c->getObjectName();
-			
 			String msg;
+			msg << "expects " << numExpected << " argument"
+			    << (numExpected != 1 ? "s" : "")
+			    << ", got " << numActual;
 
-			msg << id.toString() << "." << methodName.toString() << " - ";
-			msg << dr.getErrorMessage();
-
-			addDiagnostic(s->location, msg, dr.getSuggestions(), dr.getSeverity(), dr.getClassification());
+			return DR::fail(msg);
 		}
 
-		return { dr.getSeverity(), dr.getClassification() };
+		return DR::ok();
 	}
+
+	/** Emit a single diagnostic with "ClassName.methodName - message" format. */
+	void emitDiagnostic(const RO::CodeLocation& loc, const String& className,
+	                    const Identifier& methodName, const DR& dr)
+	{
+		String msg;
+		msg << className << "." << methodName.toString();
+
+		auto errorMsg = dr.getErrorMessage();
+		if (errorMsg.isNotEmpty())
+			msg << " - " << errorMsg;
+
+		addDiagnostic(loc, msg, dr.getSuggestions(), dr.getSeverity(), dr.getClassification());
+	}
+
+	/** Emit method-not-found with fuzzy suggestion. */
+	void emitMethodNotFound(RO::FunctionCall* funcCall, ConstScriptingObject* cso,
+	                        const String& className, const Identifier& methodName)
+	{
+		StringArray candidates;
+		Array<Identifier> funcIds;
+		cso->getAllFunctionNames(funcIds);
+		for (auto& id : funcIds)
+			candidates.add(id.toString());
+
+		String msg = className + " has no method '" + methodName.toString() + "'";
+
+		StringArray suggestions;
+		auto suggestion = FuzzySearcher::suggestCorrection(methodName.toString(), candidates, 0.6);
+		if (suggestion.isNotEmpty())
+			suggestions.add(suggestion);
+
+		addDiagnostic(funcCall->location, msg, suggestions, SV::Error, CS::ApiValidation);
+	}
+
+	// ==================== Main pass ====================
 
 	Statement* getOptimizedStatement(Statement*, Statement* statementToOptimize) override
 	{
@@ -1625,10 +1652,17 @@ struct ApiValidationAnalyzer : public HiseJavascriptEngine::RootObject::Optimiza
 				}
 			}
 		}
-		
+
+		// --- Tier 1: ApiCall (global API classes like Synth, Engine, Console) ---
 		if (auto ac = dynamic_cast<RO::ApiCall*>(statementToOptimize))
 		{
-			checkApiClassDiagnostic(ac->apiClass.get(), ac, ac->functionName);
+			auto queryDr = getQueryDiagnostic(ac->apiClass.get(), ac, ac->functionName);
+
+			if (queryDr.shouldReport())
+			{
+				auto className = ac->apiClass->getObjectName().toString();
+				emitDiagnostic(ac->location, className, ac->functionName, queryDr);
+			}
 		}
 
 
@@ -1693,7 +1727,7 @@ private:
 	}
 
 	/** Tier 2 validation with a known ConstScriptingObject.
-	    Shared by the ConstReference path and the g -> Graphics hack. */
+	    Coalesces QueryFunction, arg count, and deprecation checks via DR::max. */
 	void validateWithKnownObject(RO::FunctionCall* funcCall, RO::DotOperator* dot,
 	                             ConstScriptingObject* cso)
 	{
@@ -1703,80 +1737,26 @@ private:
 		int functionIndex = -1;
 		int numArgs = 0;
 
+		// Method existence — hard error, not coalesced
 		if (!cso->getIndexAndNumArgsForFunction(methodName, functionIndex, numArgs))
 		{
-			// Method not found on this object — suggest correction
-			StringArray candidates;
-			Array<Identifier> funcIds;
-			cso->getAllFunctionNames(funcIds);
-			for (auto& id : funcIds)
-				candidates.add(id.toString());
-
-			auto suggestion = FuzzySearcher::suggestCorrection(methodName.toString(), candidates, 0.6);
-
-			String msg = className + " has no method '" + methodName.toString() + "'";
-			StringArray suggestions;
-
-			if (suggestion.isNotEmpty())
-			{
-				suggestions.add(suggestion);
-				msg << " (did you mean '" << suggestion << "'?)";
-			}
-
-			addDiagnostic(funcCall->location, msg, suggestions, SV::Error, CS::ApiValidation);
+			emitMethodNotFound(funcCall, cso, className, methodName);
 			return;
 		}
 
-		auto [severity, classification] = checkApiClassDiagnostic(cso, funcCall, methodName);
+		// Coalesce three checks
+		auto queryDr = getQueryDiagnostic(cso, funcCall, methodName);
+		auto argDr   = checkArgCount(funcCall, numArgs);
+		auto depDr   = ApiHelpers::getDeprecation(className, methodName.toString());
 
-		// If the QueryFunction emitted an Error, it produced a better message
-		// than the generic arg count check — skip the rest.
-		if (severity == SV::Error)
-			return;
+		auto best = DR::max(DR::max(queryDr, argDr), depDr);
 
-		bool hadDeprecationFromQuery = classification == CS::Deprecation;
+		if (best.shouldReport())
+			emitDiagnostic(funcCall->location, className, methodName, best);
 
-		// Check literal argument types
-		checkLiteralArgTypes(funcCall, cso, functionIndex, numArgs, className, methodName.toString());
-
-		// Check for deprecated methods (exact lookup by class name).
-		// Skip if the QueryFunction already emitted a Deprecation diagnostic
-		// to avoid duplicate warnings.
-		if (!hadDeprecationFromQuery)
-		{
-			auto depInfo = ApiHelpers::getDeprecation(className, methodName.toString());
-
-			if (depInfo.deprecated)
-			{
-				String msg = className + "." + methodName.toString() + "() is deprecated";
-				StringArray suggestions;
-
-				if (depInfo.replacement.isNotEmpty())
-				{
-					msg << " — use " << depInfo.replacement << " instead";
-					suggestions.add(depInfo.replacement);
-				}
-
-				if (depInfo.note.isNotEmpty())
-					msg << " (" << depInfo.note << ")";
-
-				addDiagnostic(funcCall->location, msg, suggestions,
-				              parseDeprecationSeverity(depInfo.severity), CS::Deprecation);
-			}
-		}
-
-		// Method exists — check argument count
-		auto numActualArgs = funcCall->arguments.size();
-
-		if (numActualArgs != numArgs)
-		{
-			String msg = className + "." + methodName.toString() + "() expects "
-				+ String(numArgs) + " argument" + (numArgs != 1 ? "s" : "")
-				+ ", got " + String(numActualArgs);
-
-			addDiagnostic(funcCall->location, msg, {}, SV::Error, CS::ApiValidation);
-			return;
-		}
+		// Per-argument type check — independent, only when arg count is correct
+		if (argDr.getSeverity() == DR::Severity::OK)
+			checkLiteralArgTypes(funcCall, cso, functionIndex, numArgs, className, methodName.toString());
 	}
 
 	void validateTier3(RO::FunctionCall* funcCall, RO::DotOperator* dot)
@@ -1794,50 +1774,44 @@ private:
 			return; // Different classes have different arg counts — can't validate
 
 		auto objectKey = dot->parent->getProfileName();
+		DR queryDr = DR::ok();
 
 		if (auto* proto = getOrCreatePrototype(info->className, objectKey))
 		{
 			proto->markMethodTouched(Identifier(methodName));
-			auto [sev, unused] = checkApiClassDiagnostic(proto, funcCall, Identifier(methodName));
-
-			// skip arg count check & deprecation, error message is better
-			if (sev == SV::Error)
-				return;
+			queryDr = getQueryDiagnostic(proto, funcCall, Identifier(methodName));
 		}
 
-		auto numActualArgs = funcCall->arguments.size();
+		auto argDr = checkArgCount(funcCall, info->numArgs);
+		auto depDr = ApiHelpers::getDeprecation("*", methodName);
 
-		if (numActualArgs != info->numArgs)
+		// Tier 3 arg count is Warning (not Error) — less certainty without type info
+		if (argDr.shouldReport())
+			argDr = argDr.withSeverity(DR::Severity::Warning);
+
+		auto best = DR::max(DR::max(queryDr, argDr), depDr);
+
+		if (best.shouldReport())
 		{
-			String msg = "Method '" + methodName + "' expects "
-			           + String(info->numArgs) + " argument" + (info->numArgs != 1 ? "s" : "")
-			           + ", got " + String(numActualArgs);
+			if (info->className.isValid())
+			{
+				emitDiagnostic(funcCall->location, info->className.toString(),
+				               Identifier(methodName), best);
+			}
+			else
+			{
+				// Ambiguous class — fall back to generic format
+				String msg = "Method '" + methodName + "'";
+				auto errorMsg = best.getErrorMessage();
+				if (errorMsg.isNotEmpty())
+					msg << " - " << errorMsg;
 
-			addDiagnostic(funcCall->location, msg, {}, SV::Warning, CS::ApiValidation);
+				addDiagnostic(funcCall->location, msg, best.getSuggestions(),
+				              best.getSeverity(), best.getClassification());
+			}
 		}
 
 		// No type checking for Tier 3 — we don't know the concrete class
-
-		// Check for deprecated methods (greedy lookup across all classes)
-		auto depInfo = ApiHelpers::getDeprecation("*", methodName);
-
-		if (depInfo.deprecated)
-		{
-			String msg = "Method '" + methodName + "' is deprecated";
-			StringArray suggestions;
-
-			if (depInfo.replacement.isNotEmpty())
-			{
-				msg << " — use " << depInfo.replacement << " instead";
-				suggestions.add(depInfo.replacement);
-			}
-
-			if (depInfo.note.isNotEmpty())
-				msg << " (" << depInfo.note << ")";
-
-			addDiagnostic(funcCall->location, msg, suggestions,
-			              parseDeprecationSeverity(depInfo.severity), CS::Deprecation);
-		}
 	}
 
 	void checkLiteralArgTypes(RO::FunctionCall* funcCall, ConstScriptingObject* cso,
