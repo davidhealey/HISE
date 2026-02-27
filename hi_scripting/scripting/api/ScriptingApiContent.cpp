@@ -226,7 +226,6 @@ struct ScriptingApi::Content::ScriptComponent::Wrapper
 	API_VOID_METHOD_WRAPPER_1(ScriptComponent, setValueNormalized);
 	API_VOID_METHOD_WRAPPER_1(ScriptComponent, setValueWithUndo);
 	API_METHOD_WRAPPER_0(ScriptComponent, getValueNormalized);
-	API_VOID_METHOD_WRAPPER_2(ScriptComponent, setColour);
 	API_VOID_METHOD_WRAPPER_4(ScriptComponent, setPosition);
 	API_VOID_METHOD_WRAPPER_1(ScriptComponent, setTooltip);
 	API_VOID_METHOD_WRAPPER_1(ScriptComponent, showControl);
@@ -426,7 +425,6 @@ ScriptingApi::Content::ScriptComponent::ScriptComponent(ProcessorWithScriptingCo
 	ADD_API_METHOD_1(setValueNormalized);
 	ADD_API_METHOD_1(setValueWithUndo);
 	ADD_API_METHOD_0(getValueNormalized);
-	ADD_API_METHOD_2(setColour);
 	ADD_API_METHOD_4(setPosition);
 	ADD_API_METHOD_1(setTooltip);
 	ADD_API_METHOD_1(showControl);
@@ -1220,18 +1218,6 @@ void ScriptingApi::Content::ScriptComponent::setValue(var controlValue)
 	triggerAsyncUpdate();
 	sendValueListenerMessage();
 };
-
-void ScriptingApi::Content::ScriptComponent::setColour(int colourId, int colourAs32bitHex)
-{
-	switch (colourId)
-	{
-	case 0: propertyTree.setProperty(getIdFor(bgColour), (int64)colourAs32bitHex, nullptr); break;
-	case 1:	propertyTree.setProperty(getIdFor(itemColour), (int64)colourAs32bitHex, nullptr); break;
-	case 2:	propertyTree.setProperty(getIdFor(itemColour2), (int64)colourAs32bitHex, nullptr); break;
-	case 3:	propertyTree.setProperty(getIdFor(textColour), (int64)colourAs32bitHex, nullptr); break;
-	}
-}
-
 
 void ScriptingApi::Content::ScriptComponent::setPropertiesFromJSON(const var &jsonData)
 {
@@ -7815,7 +7801,6 @@ colour(Colour(0xff777777))
 	setMethod("storeAllControlsAsPreset", Wrapper::storeAllControlsAsPreset);
 	setMethod("restoreAllControlsFromPreset", Wrapper::restoreAllControlsFromPreset);
 	setMethod("setUseHighResolutionForPanels", Wrapper::setUseHighResolutionForPanels);
-	setMethod("setColour", Wrapper::setColour);
 	setMethod("clear", Wrapper::clear);
 	setMethod("isCtrlDown", Wrapper::isCtrlDown);
 	setMethod("createPath", Wrapper::createPath);

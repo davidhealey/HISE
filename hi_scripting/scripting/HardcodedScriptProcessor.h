@@ -363,7 +363,6 @@ public:
 		}
 
 		Content.setHeight(100);
-		Content.setColour(140, 120, 200);
 		Content.setName("Release Trigger");
 
 		enableButton = Content.addButton("TimeAttenuate", 0, 0);

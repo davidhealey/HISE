@@ -541,9 +541,6 @@ public:
 		/** Returns the normalized value. */
 		virtual double getValueNormalized() const { return getValue(); };
 
-		/** sets the colour of the component (BG, IT1, IT2, TXT). */
-		void setColour(int colourId, int colourAs32bitHex);
-
         /** Returns the absolute x-position relative to the interface. */
         int getGlobalPositionX();
         
@@ -3014,9 +3011,6 @@ public:
     
 	/** Creates a MarkdownRenderer. */
 	var createMarkdownRenderer();
-
-	/** Sets the colour for the panel. */
-	void setColour(int red, int green, int blue) { colour = Colour((uint8)red, (uint8)green, (uint8)blue); };
 
 	/** Sets the height of the content. */
 	void setHeight(int newHeight) noexcept;
