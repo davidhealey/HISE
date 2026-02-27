@@ -477,6 +477,13 @@ RestServer::Response RestHelpers::handleRecompile(MainController* mc, RestServer
 	if (forceSync)
 		syncMode = std::make_unique<MainController::ScopedBadBabysitter>(mc);
 
+	// Start attached profiling session if requested (fire-and-forget).
+	// Results are retrieved later via POST /api/profile { "mode": "get" }
+#if HISE_INCLUDE_PROFILING_TOOLKIT
+	if ((bool)obj.getProperty(RestApiIds::profile, false))
+		startProfilingSession(mc, obj, 2000.0);
+#endif
+
 	if (auto jp = getScriptProcessor(mc, req))
 	{
 		mc->refreshExternalFiles(true);
@@ -615,7 +622,9 @@ const Array<RestHelpers::RouteMetadata>& RestHelpers::getRouteMetadata()
 			.withDescription("Recompile a processor (restores preset values, triggering callbacks for saveInPreset components)")
 			.withReturns("Compilation result with success status, logs, errors, and optional lafRenderWarning listing unrendered LAF components with reason (invisible or timeout)")
 			.withBodyParam(RouteParameter(RestApiIds::moduleId, "The script processor's module ID"))
-			.withBodyParam(RouteParameter(RestApiIds::forceSynchronousExecution, "Debug tool: Bypass threading model for synchronous execution. WARNING: May cause crashes due to race conditions - use only as last resort after saving.").withDefault("false")));
+			.withBodyParam(RouteParameter(RestApiIds::forceSynchronousExecution, "Debug tool: Bypass threading model for synchronous execution. WARNING: May cause crashes due to race conditions - use only as last resort after saving.").withDefault("false"))
+			.withBodyParam(RouteParameter(RestApiIds::profile, "Start a profiling session alongside compilation. Retrieve results later via POST /api/profile with mode=\"get\".").withDefault("false"))
+			.withBodyParam(RouteParameter(RestApiIds::durationMs, "Profiling duration in ms when profile=true (100-5000).").withDefault("2000")));
 		
 		// ApiRoute::ListComponents
 		m.add(RouteMetadata(ApiRoute::ListComponents, "api/list_components")
@@ -720,6 +729,57 @@ const Array<RestHelpers::RouteMetadata>& RestHelpers::getRouteMetadata()
 			.withReturns("Array of included files as full paths, optionally with owning processor ID")
 			.withQueryParam(RouteParameter(RestApiIds::moduleId, 
 				"Filter by script processor. If omitted, returns files from all processors with processor names.").asOptional()));
+		
+		// ApiRoute::StartProfiling
+		m.add(RouteMetadata(ApiRoute::StartProfiling, "api/profile")
+			.withMethod(RestServer::POST)
+			.withCategory("scripting")
+			.withDescription("Start a profiling session or retrieve last result. "
+							 "mode=\"record\" starts a new session (non-blocking, returns immediately). "
+							 "mode=\"get\" returns last result with optional filtering/summary. "
+							 "Workflow: record once, then query with different filters.")
+			.withReturns("Full tree (threads+flows), filtered results, or recording status")
+			.withBodyParam(RouteParameter(RestApiIds::mode,
+				"\"record\" = start new session (non-blocking), "
+				"\"get\" = return last result (blocks if recording in progress)")
+				.withDefault("record"))
+			.withBodyParam(RouteParameter(RestApiIds::durationMs,
+				"Recording duration in milliseconds (100-5000). Used in record mode.")
+				.withDefault("1000"))
+			.withBodyParam(RouteParameter(RestApiIds::threadFilter,
+				"Array of thread names to include (default: all). In record mode, controls "
+				"which threads are recorded. In get mode, filters which threads are queried. "
+				"Valid: Audio Thread, Scripting Thread, UI Thread, Loading Thread, etc.")
+				.asOptional())
+			.withBodyParam(RouteParameter(RestApiIds::eventFilter,
+				"Array of event source types to record (default: all). Used in record mode. "
+				"Valid: DSP, Script, Lock, Callback, Trace, TimerCallback, Scriptnode, etc.")
+				.asOptional())
+			.withBodyParam(RouteParameter(RestApiIds::summary,
+				"If true, aggregate repeated events with count/median/peak/min/total stats. "
+				"Used in get mode.")
+				.withDefault("false"))
+			.withBodyParam(RouteParameter(RestApiIds::filter,
+				"Wildcard pattern matched against event name (e.g. \"slow*\", \"*.processBlock*\"). "
+				"Case-insensitive. Used in get mode.")
+				.asOptional())
+			.withBodyParam(RouteParameter(RestApiIds::minDuration,
+				"Only include events with duration >= this value in ms. Used in get mode.")
+				.asOptional())
+			.withBodyParam(RouteParameter(RestApiIds::sourceTypeFilter,
+				"Wildcard pattern matched against sourceType (e.g. \"Trace\", \"Script\"). "
+				"Case-insensitive. Used in get mode.")
+				.asOptional())
+			.withBodyParam(RouteParameter(RestApiIds::nested,
+				"When filtering, include children of matched events. Used in get mode.")
+				.withDefault("false"))
+			.withBodyParam(RouteParameter(RestApiIds::limit,
+				"Max number of results in filtered/summary mode (1-100). Used in get mode.")
+				.withDefault("15"))
+			.withBodyParam(RouteParameter(RestApiIds::wait,
+				"If false, return immediately when recording is in progress instead of "
+				"blocking. Returns {recording: true}. Used in get mode.")
+				.withDefault("true")));
 		
 		// Verify count matches enum
 		jassert(m.size() == (int)ApiRoute::numRoutes);
@@ -2063,6 +2123,661 @@ RestServer::Response RestHelpers::handleGetIncludedFiles(MainController* mc, Res
 	
 	req->complete(RestServer::Response::ok(var(result.get())));
 	return req->waitForResponse();
+}
+
+//==============================================================================
+// Profiling endpoint helpers and handler
+
+#if HISE_INCLUDE_PROFILING_TOOLKIT
+
+bool RestHelpers::startProfilingSession(MainController* mc, const var& bodyJson,
+                                         double defaultDurationMs)
+{
+	auto& dh = mc->getDebugSession();
+
+	if (dh.isRecordingMultithread())
+		return false;
+
+	double durationMs = jlimit(100.0, 5000.0,
+		(double)bodyJson.getProperty(RestApiIds::durationMs, defaultDurationMs));
+
+	// Build options object matching DebugSession::Options::fromDynamicObject format
+	DynamicObject::Ptr optionsObj = new DynamicObject();
+	optionsObj->setProperty("recordingTrigger", 0);  // Manual trigger
+	optionsObj->setProperty("recordingLength", String((int)durationMs) + " ms");
+
+	// Thread filter
+	auto tfProp = bodyJson.getProperty(RestApiIds::threadFilter, var());
+
+	if (tfProp.isArray())
+	{
+		optionsObj->setProperty("threadFilter", tfProp);
+	}
+	else
+	{
+		Array<var> allThreads;
+
+		for (int i = 0; i < (int)DebugSession::ThreadIdentifier::Type::numTypes; i++)
+			allThreads.add(DebugSession::ThreadIdentifier::getThreadName(
+				(DebugSession::ThreadIdentifier::Type)i));
+
+		optionsObj->setProperty("threadFilter", var(allThreads));
+	}
+
+	// Event filter
+	auto efProp = bodyJson.getProperty(RestApiIds::eventFilter, var());
+
+	if (efProp.isArray())
+	{
+		optionsObj->setProperty("eventFilter", efProp);
+	}
+	else
+	{
+		Array<var> allEvents;
+
+		for (int i = 0; i < (int)DebugSession::ProfileDataSource::SourceType::numSourceTypes; i++)
+			allEvents.add(DebugSession::ProfileDataSource::getSourceTypeName(
+				(DebugSession::ProfileDataSource::SourceType)i));
+
+		optionsObj->setProperty("eventFilter", var(allEvents));
+	}
+
+	dh.setOptions(var(optionsObj.get()));
+	dh.startRecording(durationMs, nullptr);
+	return true;
+}
+
+/** File-local: a flow endpoint collected during tree traversal. */
+struct FlowEndpoint
+{
+	int trackId;
+	String eventName;
+	String threadName;
+};
+
+/** File-local: build matched flows array from collected flow endpoints. */
+static Array<var> buildMatchedFlows(
+	const std::vector<FlowEndpoint>& flowSources,
+	const std::vector<FlowEndpoint>& flowTargets)
+{
+	Array<var> flowsArray;
+
+	for (size_t s = 0; s < flowSources.size(); s++)
+	{
+		for (size_t t = 0; t < flowTargets.size(); t++)
+		{
+			if (flowSources[s].trackId == flowTargets[t].trackId)
+			{
+				DynamicObject::Ptr flowObj = new DynamicObject();
+				flowObj->setProperty(RestApiIds::trackId, flowSources[s].trackId);
+				flowObj->setProperty(RestApiIds::sourceEvent, flowSources[s].eventName);
+				flowObj->setProperty(RestApiIds::sourceThread, flowSources[s].threadName);
+				flowObj->setProperty(RestApiIds::targetEvent, flowTargets[t].eventName);
+				flowObj->setProperty(RestApiIds::targetThread, flowTargets[t].threadName);
+				flowsArray.add(var(flowObj.get()));
+				break;
+			}
+		}
+	}
+
+	return flowsArray;
+}
+
+/** File-local helper: convert a single ProfileInfo event to JSON recursively.
+    Also collects flow endpoints (trackSource/trackTarget) into the provided vectors. */
+static var profileEventToJson(DebugSession::ProfileDataSource::ProfileInfo* event,
+                              const String& threadName,
+                              std::vector<FlowEndpoint>& flowSources,
+                              std::vector<FlowEndpoint>& flowTargets)
+{
+	DynamicObject::Ptr obj = new DynamicObject();
+
+	String eventName;
+
+	if (event->data.source != nullptr)
+	{
+		eventName = event->data.source->name;
+		obj->setProperty(RestApiIds::name, eventName);
+		obj->setProperty(RestApiIds::sourceType,
+			DebugSession::ProfileDataSource::getSourceTypeName(event->data.source->sourceType));
+	}
+
+	obj->setProperty(RestApiIds::start, event->data.start);
+	obj->setProperty(RestApiIds::duration, event->data.delta);
+
+	int ts = event->data.trackSource;
+	int tt = event->data.trackTarget;
+
+	if (ts != -1)
+	{
+		obj->setProperty(RestApiIds::trackSource, ts);
+		flowSources.push_back({ ts, eventName, threadName });
+	}
+
+	if (tt != -1)
+	{
+		obj->setProperty(RestApiIds::trackTarget, tt);
+		flowTargets.push_back({ tt, eventName, threadName });
+	}
+
+	Array<var> childArray;
+
+	for (int i = 0; i < event->children.size(); i++)
+	{
+		auto pi = dynamic_cast<DebugSession::ProfileDataSource::ProfileInfo*>(event->children[i].get());
+
+		if (pi != nullptr)
+			childArray.add(profileEventToJson(pi, threadName, flowSources, flowTargets));
+	}
+
+	obj->setProperty(RestApiIds::children, var(childArray));
+
+	return var(obj.get());
+}
+
+var RestHelpers::profilingResultToJson(
+	DebugSession::ProfileDataSource::ProfileInfoBase* root)
+{
+	using ProfileInfo = DebugSession::ProfileDataSource::ProfileInfo;
+	using CombinedRoot = DebugSession::ProfileDataSource::CombinedRoot;
+
+	DynamicObject::Ptr resultObj = new DynamicObject();
+	Array<var> threadsArray;
+	std::vector<FlowEndpoint> flowSources;
+	std::vector<FlowEndpoint> flowTargets;
+
+	if (root == nullptr)
+	{
+		resultObj->setProperty(RestApiIds::threads, var(threadsArray));
+		resultObj->setProperty(RestApiIds::flows, var(Array<var>()));
+		return var(resultObj.get());
+	}
+
+	for (int i = 0; i < root->children.size(); i++)
+	{
+		auto* child = root->children[i].get();
+
+		// CombinedRoot = one per recorded thread
+		auto combined = dynamic_cast<CombinedRoot*>(child);
+
+		if (combined != nullptr)
+		{
+			DynamicObject::Ptr threadObj = new DynamicObject();
+			String threadName = DebugSession::ThreadIdentifier::getThreadName(combined->threadType);
+			threadObj->setProperty(RestApiIds::thread, threadName);
+
+			Array<var> eventsArray;
+
+			for (int j = 0; j < combined->children.size(); j++)
+			{
+				auto pi = dynamic_cast<ProfileInfo*>(combined->children[j].get());
+
+				if (pi != nullptr)
+					eventsArray.add(profileEventToJson(pi, threadName, flowSources, flowTargets));
+			}
+
+			threadObj->setProperty(RestApiIds::events, var(eventsArray));
+			threadsArray.add(var(threadObj.get()));
+			continue;
+		}
+
+		// Direct ProfileInfo at root level (single-thread recording)
+		auto pi = dynamic_cast<ProfileInfo*>(child);
+
+		if (pi != nullptr)
+		{
+			DynamicObject::Ptr threadObj = new DynamicObject();
+			String threadName = DebugSession::ThreadIdentifier::getThreadName(pi->data.threadType);
+			threadObj->setProperty(RestApiIds::thread, threadName);
+
+			Array<var> eventsArray;
+			eventsArray.add(profileEventToJson(pi, threadName, flowSources, flowTargets));
+			threadObj->setProperty(RestApiIds::events, var(eventsArray));
+			threadsArray.add(var(threadObj.get()));
+		}
+	}
+
+	resultObj->setProperty(RestApiIds::threads, var(threadsArray));
+	resultObj->setProperty(RestApiIds::flows, var(buildMatchedFlows(flowSources, flowTargets)));
+
+	return var(resultObj.get());
+}
+
+/** File-local: a collected event from the profiling tree for filtering/aggregation. */
+struct CollectedEvent
+{
+	String name;
+	String sourceType;
+	String thread;
+	double start;
+	double duration;
+	int trackSource = -1;
+	int trackTarget = -1;
+	DebugSession::ProfileDataSource::ProfileInfo* profileInfo = nullptr;  // for nested output
+};
+
+/** File-local: recursively collect events matching the query options.
+    Always recurses the full tree; matched events are added to collected. */
+static void collectMatchingEvents(
+	DebugSession::ProfileDataSource::ProfileInfo* event,
+	const String& threadName,
+	const RestHelpers::ProfileQueryOptions& options,
+	std::vector<CollectedEvent>& collected,
+	std::vector<FlowEndpoint>& flowSources,
+	std::vector<FlowEndpoint>& flowTargets)
+{
+	String eventName;
+	String sourceTypeName;
+
+	if (event->data.source != nullptr)
+	{
+		eventName = event->data.source->name;
+		sourceTypeName = DebugSession::ProfileDataSource::getSourceTypeName(
+			event->data.source->sourceType);
+	}
+
+	// Skip profiler self-cost events
+	if (eventName == "Processing profile data")
+		return;
+
+	double dur = event->data.delta;
+	bool matches = true;
+
+	if (options.filter.isNotEmpty() && !eventName.matchesWildcard(options.filter, false))
+		matches = false;
+
+	if (matches && options.sourceTypeFilter.isNotEmpty()
+		&& !sourceTypeName.matchesWildcard(options.sourceTypeFilter, false))
+		matches = false;
+
+	if (matches && options.minDuration > 0.0 && dur < options.minDuration)
+		matches = false;
+
+	if (matches && eventName.isNotEmpty())
+	{
+		CollectedEvent ce;
+		ce.name = eventName;
+		ce.sourceType = sourceTypeName;
+		ce.thread = threadName;
+		ce.start = event->data.start;
+		ce.duration = dur;
+		ce.trackSource = event->data.trackSource;
+		ce.trackTarget = event->data.trackTarget;
+		ce.profileInfo = event;
+		collected.push_back(ce);
+
+		if (ce.trackSource != -1)
+			flowSources.push_back({ ce.trackSource, eventName, threadName });
+
+		if (ce.trackTarget != -1)
+			flowTargets.push_back({ ce.trackTarget, eventName, threadName });
+	}
+
+	// Always recurse to find deeper matches (even if this node matched)
+	for (int i = 0; i < event->children.size(); i++)
+	{
+		auto pi = dynamic_cast<DebugSession::ProfileDataSource::ProfileInfo*>(
+			event->children[i].get());
+
+		if (pi != nullptr)
+			collectMatchingEvents(pi, threadName, options, collected, flowSources, flowTargets);
+	}
+}
+
+var RestHelpers::profilingResultToSummary(
+	DebugSession::ProfileDataSource::ProfileInfoBase* root,
+	const ProfileQueryOptions& options)
+{
+	using ProfileInfo = DebugSession::ProfileDataSource::ProfileInfo;
+	using CombinedRoot = DebugSession::ProfileDataSource::CombinedRoot;
+
+	DynamicObject::Ptr resultObj = new DynamicObject();
+
+	if (root == nullptr)
+	{
+		resultObj->setProperty(RestApiIds::results, var(Array<var>()));
+		resultObj->setProperty(RestApiIds::flows, var(Array<var>()));
+		return var(resultObj.get());
+	}
+
+	// Collect all matching events across all threads
+	std::vector<CollectedEvent> collected;
+	std::vector<FlowEndpoint> flowSources;
+	std::vector<FlowEndpoint> flowTargets;
+
+	for (int i = 0; i < root->children.size(); i++)
+	{
+		auto* child = root->children[i].get();
+		auto combined = dynamic_cast<CombinedRoot*>(child);
+
+		if (combined != nullptr)
+		{
+			String threadName = DebugSession::ThreadIdentifier::getThreadName(combined->threadType);
+
+			// Skip entire thread if threadFilter is active and doesn't include it
+			if (options.threadFilter.size() > 0 && !options.threadFilter.contains(threadName))
+				continue;
+
+			for (int j = 0; j < combined->children.size(); j++)
+			{
+				auto pi = dynamic_cast<ProfileInfo*>(combined->children[j].get());
+
+				if (pi != nullptr)
+					collectMatchingEvents(pi, threadName, options, collected, flowSources, flowTargets);
+			}
+
+			continue;
+		}
+
+		auto pi = dynamic_cast<ProfileInfo*>(child);
+
+		if (pi != nullptr)
+		{
+			String threadName = DebugSession::ThreadIdentifier::getThreadName(pi->data.threadType);
+
+			if (options.threadFilter.size() > 0 && !options.threadFilter.contains(threadName))
+				continue;
+
+			collectMatchingEvents(pi, threadName, options, collected, flowSources, flowTargets);
+		}
+	}
+
+	Array<var> resultsArray;
+
+	if (options.summary)
+	{
+		// Group by name + sourceType + thread, compute stats
+		struct AggKey
+		{
+			String name;
+			String sourceType;
+			String thread;
+
+			bool operator==(const AggKey& other) const
+			{
+				return name == other.name && sourceType == other.sourceType
+					   && thread == other.thread;
+			}
+		};
+
+		struct AggGroup
+		{
+			AggKey key;
+			std::vector<double> durations;
+		};
+
+		std::vector<AggGroup> groups;
+
+		for (size_t i = 0; i < collected.size(); i++)
+		{
+			const auto& ce = collected[i];
+			AggKey key = { ce.name, ce.sourceType, ce.thread };
+
+			bool found = false;
+
+			for (size_t g = 0; g < groups.size(); g++)
+			{
+				if (groups[g].key == key)
+				{
+					groups[g].durations.push_back(ce.duration);
+					found = true;
+					break;
+				}
+			}
+
+			if (!found)
+			{
+				AggGroup newGroup;
+				newGroup.key = key;
+				newGroup.durations.push_back(ce.duration);
+				groups.push_back(std::move(newGroup));
+			}
+		}
+
+		// Build result entries with stats
+		struct SortEntry
+		{
+			DynamicObject::Ptr obj;
+			double total;
+		};
+
+		std::vector<SortEntry> entries;
+
+		for (size_t g = 0; g < groups.size(); g++)
+		{
+			auto& group = groups[g];
+			auto& durs = group.durations;
+			int cnt = (int)durs.size();
+
+			double total = 0.0;
+			double peak = 0.0;
+			double minVal = durs[0];
+
+			for (size_t d = 0; d < durs.size(); d++)
+			{
+				total += durs[d];
+
+				if (durs[d] > peak)
+					peak = durs[d];
+
+				if (durs[d] < minVal)
+					minVal = durs[d];
+			}
+
+			// Median via nth_element
+			size_t mid = durs.size() / 2;
+			std::nth_element(durs.begin(), durs.begin() + mid, durs.end());
+			double medianVal = durs[mid];
+
+			DynamicObject::Ptr obj = new DynamicObject();
+			obj->setProperty(RestApiIds::name, group.key.name);
+			obj->setProperty(RestApiIds::sourceType, group.key.sourceType);
+			obj->setProperty(RestApiIds::thread, group.key.thread);
+			obj->setProperty(RestApiIds::count, cnt);
+			obj->setProperty(RestApiIds::median, medianVal);
+			obj->setProperty(RestApiIds::peak, peak);
+			obj->setProperty(RestApiIds::min, minVal);
+			obj->setProperty(RestApiIds::total, total);
+
+			SortEntry se;
+			se.obj = obj;
+			se.total = total;
+			entries.push_back(se);
+		}
+
+		// Sort by total descending
+		std::sort(entries.begin(), entries.end(),
+			[](const SortEntry& a, const SortEntry& b) { return a.total > b.total; });
+
+		int cap = jmin((int)entries.size(), options.limit);
+
+		for (int i = 0; i < cap; i++)
+			resultsArray.add(var(entries[i].obj.get()));
+	}
+	else
+	{
+		// Non-summary filtered mode: flat list sorted by duration descending
+		std::sort(collected.begin(), collected.end(),
+			[](const CollectedEvent& a, const CollectedEvent& b)
+			{ return a.duration > b.duration; });
+
+		int cap = jmin((int)collected.size(), options.limit);
+
+		for (int i = 0; i < cap; i++)
+		{
+			const auto& ce = collected[i];
+
+			if (options.nested && ce.profileInfo != nullptr)
+			{
+				// Build full subtree using profileEventToJson (captures child flows too)
+				var eventVar = profileEventToJson(ce.profileInfo, ce.thread,
+					flowSources, flowTargets);
+				auto eventObj = eventVar.getDynamicObject();
+
+				if (eventObj != nullptr)
+					eventObj->setProperty(RestApiIds::thread, ce.thread);
+
+				resultsArray.add(eventVar);
+			}
+			else
+			{
+				DynamicObject::Ptr obj = new DynamicObject();
+				obj->setProperty(RestApiIds::name, ce.name);
+				obj->setProperty(RestApiIds::sourceType, ce.sourceType);
+				obj->setProperty(RestApiIds::thread, ce.thread);
+				obj->setProperty(RestApiIds::start, ce.start);
+				obj->setProperty(RestApiIds::duration, ce.duration);
+
+				if (ce.trackSource != -1)
+					obj->setProperty(RestApiIds::trackSource, ce.trackSource);
+
+				if (ce.trackTarget != -1)
+					obj->setProperty(RestApiIds::trackTarget, ce.trackTarget);
+
+				resultsArray.add(var(obj.get()));
+			}
+		}
+	}
+
+	resultObj->setProperty(RestApiIds::results, var(resultsArray));
+	resultObj->setProperty(RestApiIds::flows, var(buildMatchedFlows(flowSources, flowTargets)));
+
+	return var(resultObj.get());
+}
+
+#endif // HISE_INCLUDE_PROFILING_TOOLKIT
+
+RestServer::Response RestHelpers::handleStartProfiling(MainController* mc,
+                                                        RestServer::AsyncRequest::Ptr req)
+{
+#if !HISE_INCLUDE_PROFILING_TOOLKIT
+	return req->fail(400,
+		"Profiling toolkit not enabled (requires HISE_INCLUDE_PROFILING_TOOLKIT=1)");
+#else
+	auto obj = req->getRequest().getJsonBody();
+	auto mode = obj.getProperty(RestApiIds::mode, "record").toString();
+	auto& dh = mc->getDebugSession();
+
+	// Parse query options for filtering/summary (used by get mode)
+	ProfileQueryOptions queryOpts = ProfileQueryOptions::fromJson(obj);
+
+	// File-local helper: convert a ProfileInfoBase to JSON using either the full
+	// tree format or the filtered/summary format based on query options.
+	auto buildProfileResponse = [&queryOpts](
+		DebugSession::ProfileDataSource::ProfileInfoBase* p) -> var
+	{
+		if (p == nullptr)
+			return var();
+
+		if (queryOpts.hasFilters())
+			return profilingResultToSummary(p, queryOpts);
+
+		return profilingResultToJson(p);
+	};
+
+	// Helper lambda: wait for an in-progress recording via broadcaster listener,
+	// then build JSON response from the result and complete the request.
+	auto waitForRecording = [&]() -> RestServer::Response
+	{
+		auto& rs = dynamic_cast<BackendProcessor*>(mc)->getRestServer();
+
+		// Capture queryOpts by value for the async callback
+		auto capturedOpts = queryOpts;
+
+		dh.recordingFlushBroadcaster.addListener(rs,
+			[req, capturedOpts](RestServer&,
+			      DebugSession::ProfileDataSource::ProfileInfoBase::Ptr p)
+		{
+			DynamicObject::Ptr result = new DynamicObject();
+			result->setProperty(RestApiIds::success, p != nullptr);
+			result->setProperty(RestApiIds::recording, false);
+
+			var profileData;
+
+			if (p != nullptr)
+			{
+				if (capturedOpts.hasFilters())
+					profileData = profilingResultToSummary(p.get(), capturedOpts);
+				else
+					profileData = profilingResultToJson(p.get());
+			}
+
+			auto profileObj = profileData.getDynamicObject();
+
+			if (profileObj != nullptr)
+			{
+				for (auto& prop : profileObj->getProperties())
+					result->setProperty(prop.name, prop.value);
+			}
+
+			req->complete(RestServer::Response::ok(var(result.get())));
+		}, false);  // false = don't fire with initial/last value
+
+		auto response = req->waitForResponse();
+		dh.recordingFlushBroadcaster.removeListener(rs);
+		return response;
+	};
+
+	if (mode == "get")
+	{
+		if (dh.isRecordingMultithread())
+		{
+			// Check wait param — if false, return immediately with recording status
+			bool shouldWait = (bool)obj.getProperty(RestApiIds::wait, true);
+
+			if (!shouldWait)
+			{
+				DynamicObject::Ptr result = new DynamicObject();
+				result->setProperty(RestApiIds::success, true);
+				result->setProperty(RestApiIds::recording, true);
+
+				req->complete(RestServer::Response::ok(var(result.get())));
+				return req->waitForResponse();
+			}
+
+			// Recording in progress — block until it finishes
+			return waitForRecording();
+		}
+
+		// Not recording — return last result immediately (or "no data")
+		auto lastResult = dh.recordingFlushBroadcaster.getLastValue<0>();
+
+		DynamicObject::Ptr result = new DynamicObject();
+		result->setProperty(RestApiIds::success, lastResult != nullptr);
+		result->setProperty(RestApiIds::recording, false);
+
+		auto profileData = buildProfileResponse(lastResult.get());
+		auto profileObj = profileData.getDynamicObject();
+
+		if (profileObj != nullptr)
+		{
+			for (auto& prop : profileObj->getProperties())
+				result->setProperty(prop.name, prop.value);
+		}
+
+		if (lastResult == nullptr)
+			result->setProperty(RestApiIds::message, "No profiling data available");
+
+		req->complete(RestServer::Response::ok(var(result.get())));
+		return req->waitForResponse();
+	}
+	else // "record" mode (default) — non-blocking, returns immediately
+	{
+		if (!startProfilingSession(mc, obj))
+			return req->fail(409, "A profiling session is already in progress");
+
+		double durationMs = jlimit(100.0, 5000.0,
+			(double)obj.getProperty(RestApiIds::durationMs, 1000.0));
+
+		DynamicObject::Ptr result = new DynamicObject();
+		result->setProperty(RestApiIds::success, true);
+		result->setProperty(RestApiIds::recording, true);
+		result->setProperty(RestApiIds::durationMs, durationMs);
+
+		req->complete(RestServer::Response::ok(var(result.get())));
+		return req->waitForResponse();
+	}
+#endif
 }
 
 } // namespace hise

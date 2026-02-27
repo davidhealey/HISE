@@ -324,6 +324,9 @@ RestServer::Response BackendProcessor::onAsyncRequest(RestServer::AsyncRequest::
 		case RestHelpers::ApiRoute::GetIncludedFiles:
 			return RestHelpers::handleGetIncludedFiles(this, req);
 			
+		case RestHelpers::ApiRoute::StartProfiling:
+			return RestHelpers::handleStartProfiling(this, req);
+			
 		default:
 			return req->fail(404, "Unknown API endpoint: " + subURL);
 	}

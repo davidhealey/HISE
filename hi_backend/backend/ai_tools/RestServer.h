@@ -425,6 +425,7 @@ private:
     std::unique_ptr<Impl> pimpl;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(RestServer)
+    JUCE_DECLARE_WEAK_REFERENCEABLE(RestServer)
 };
 
 } // namespace hise

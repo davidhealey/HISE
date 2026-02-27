@@ -172,6 +172,45 @@ namespace RestApiIds
     // get_included_files
     DECLARE_ID(files);                // Array of included file entries
     DECLARE_ID(processor);            // Owning processor ID for an included file
+    
+    // profile / attachable profiling
+    DECLARE_ID(durationMs);           // Profiling duration in milliseconds
+    DECLARE_ID(threadFilter);         // Array of thread names to filter
+    DECLARE_ID(eventFilter);          // Array of event type names to filter
+    DECLARE_ID(threads);              // Array of thread profiling results
+    DECLARE_ID(thread);               // Thread name string
+    DECLARE_ID(events);               // Array of profiled events in a thread
+    DECLARE_ID(duration);             // Event duration in ms
+    DECLARE_ID(sourceType);           // Event source type name
+    DECLARE_ID(children);             // Nested child events
+    DECLARE_ID(start);                // Event start time in ms
+    DECLARE_ID(mode);                 // "record" or "get"
+    DECLARE_ID(recording);            // Whether a recording is in progress
+    DECLARE_ID(profile);              // Enable attached profiling on an endpoint
+    DECLARE_ID(trackSource);          // Track source ID (causal link open end, -1 = none)
+    DECLARE_ID(trackTarget);          // Track target ID (causal link close end, -1 = none)
+    DECLARE_ID(flows);                // Array of cross-thread causal flow connections
+    DECLARE_ID(trackId);              // Shared integer ID connecting a flow source to target
+    DECLARE_ID(sourceEvent);          // Name of the event that caused the flow
+    DECLARE_ID(targetEvent);          // Name of the event that was caused
+    DECLARE_ID(sourceThread);         // Thread where the flow originated
+    DECLARE_ID(targetThread);         // Thread where the flow terminated
+    
+    // Profile query/summary parameters
+    DECLARE_ID(summary);              // If true, aggregate repeated events with stats
+    DECLARE_ID(filter);               // Wildcard pattern matched against event name
+    DECLARE_ID(minDuration);          // Only include events with duration >= this (ms)
+    DECLARE_ID(sourceTypeFilter);     // Wildcard pattern matched against sourceType name
+    DECLARE_ID(nested);               // When filtering, include children of matched events
+    DECLARE_ID(limit);                // Max results returned (default 15)
+    DECLARE_ID(wait);                 // If false, return immediately when recording in progress
+    
+    // Summary result fields
+    DECLARE_ID(results);              // Flat array of filtered/aggregated events
+    DECLARE_ID(count);                // Number of occurrences in summary
+    DECLARE_ID(median);               // Median duration (ms)
+    DECLARE_ID(peak);                 // Maximum duration (ms)
+    DECLARE_ID(total);                // Sum of durations (ms)
 }
 
 #undef DECLARE_ID
@@ -206,6 +245,7 @@ struct RestHelpers
         SimulateInteractions,   ///< POST /api/simulate_interactions - Execute UI interaction sequence
         DiagnoseScript,         ///< POST /api/diagnose_script - Run diagnostic shadow parse
         GetIncludedFiles,       ///< GET  /api/get_included_files - List included script files
+        StartProfiling,         ///< POST /api/profile - Run profiling session or retrieve last result
         numRoutes
     };
     
@@ -524,6 +564,73 @@ struct RestHelpers
      */
     static RestServer::Response handleGetIncludedFiles(MainController* mc, 
                                                        RestServer::AsyncRequest::Ptr req);
+    
+    /** Handler for POST /api/profile - Start profiling or retrieve last result.
+     *  mode="record": starts a new session (non-blocking, returns immediately).
+     *  mode="get": returns last result, with optional filter/summary parameters.
+     *  When recording is in progress, "get" blocks until done (unless wait=false).
+     */
+    static RestServer::Response handleStartProfiling(MainController* mc, 
+                                                      RestServer::AsyncRequest::Ptr req);
+
+#if HISE_INCLUDE_PROFILING_TOOLKIT
+    /** Query options for filtering and summarizing profiling results. */
+    struct ProfileQueryOptions
+    {
+        bool summary = false;
+        bool nested = false;
+        String filter;              // wildcard pattern (e.g., "slow*"), empty = no filter
+        String sourceTypeFilter;    // wildcard pattern (e.g., "Trace"), empty = no filter
+        double minDuration = 0.0;
+        int limit = 15;
+        StringArray threadFilter;   // thread names to include (empty = all threads)
+
+        bool hasFilters() const
+        {
+            return summary || filter.isNotEmpty() || sourceTypeFilter.isNotEmpty()
+                   || minDuration > 0.0 || threadFilter.size() > 0;
+        }
+
+        static ProfileQueryOptions fromJson(const var& json)
+        {
+            ProfileQueryOptions opts;
+            opts.summary = (bool)json.getProperty(RestApiIds::summary, false);
+            opts.nested = (bool)json.getProperty(RestApiIds::nested, false);
+            opts.filter = json.getProperty(RestApiIds::filter, "").toString();
+            opts.sourceTypeFilter = json.getProperty(RestApiIds::sourceTypeFilter, "").toString();
+            opts.minDuration = (double)json.getProperty(RestApiIds::minDuration, 0.0);
+            opts.limit = jlimit(1, 100, (int)json.getProperty(RestApiIds::limit, 15));
+
+            auto tf = json.getProperty(RestApiIds::threadFilter, var());
+
+            if (tf.isArray())
+            {
+                for (int i = 0; i < tf.size(); i++)
+                    opts.threadFilter.add(tf[i].toString());
+            }
+
+            return opts;
+        }
+    };
+
+    /** Starts a fire-and-forget profiling session from body JSON params.
+     *  Reads durationMs, threadFilter, eventFilter from bodyJson.
+     *  Returns true if recording started, false if already recording.
+     */
+    static bool startProfilingSession(MainController* mc, const var& bodyJson, 
+                                       double defaultDurationMs = 1000.0);
+
+    /** Walks a ProfileInfoBase tree and returns a JSON-ready DynamicObject 
+        with "threads" array and "flows" array (cross-thread causal connections). */
+    static var profilingResultToJson(
+        DebugSession::ProfileDataSource::ProfileInfoBase* root);
+
+    /** Walks a ProfileInfoBase tree with filtering/aggregation and returns a 
+        JSON-ready DynamicObject with "results" array and "flows" array. */
+    static var profilingResultToSummary(
+        DebugSession::ProfileDataSource::ProfileInfoBase* root,
+        const ProfileQueryOptions& options);
+#endif
 };
 
 } // namespace hise
