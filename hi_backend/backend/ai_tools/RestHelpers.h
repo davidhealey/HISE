@@ -167,6 +167,7 @@ namespace RestApiIds
     DECLARE_ID(source);               // "syntax", "api-validation", "type-check", "language", "callscope"
     DECLARE_ID(message);              // Diagnostic message text
     DECLARE_ID(suggestions);          // Array of "did you mean?" suggestion strings
+    DECLARE_ID(async);                // If true, defer shadow parse to scripting thread (default: false)
     
     // get_included_files
     DECLARE_ID(files);                // Array of included file entries

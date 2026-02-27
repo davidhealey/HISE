@@ -431,6 +431,10 @@ private:
     //==============================================================================
     void handleRequest(const RouteInfo& routeInfo, const httplib::Request& req, httplib::Response& res)
     {
+        // Serialize all request handling — prevents ScopedConsoleHandler contention
+        // and ensures consistent engine state across concurrent httplib worker threads.
+        const ScopedLock sl(requestSerializationLock);
+
         // Notify listeners
         String methodStr;
         switch (routeInfo.method)
@@ -503,6 +507,8 @@ private:
     int currentPort = 0;
     String currentBindAddress;
     std::atomic<bool> running{false};
+
+    CriticalSection requestSerializationLock;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(Impl)
 };

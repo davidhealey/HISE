@@ -1602,8 +1602,22 @@ void JavascriptProcessor::compileScript(const ResultFunction& rf /*= ResultFunct
 }
 
 #if USE_BACKEND
-void JavascriptProcessor::shadowParseFile(const String& code, const String& fileName, const DiagnosticCallback& callback)
+void JavascriptProcessor::shadowParseFile(const String& code, const String& fileName, const DiagnosticCallback& callback,
+										   NotificationType notificationType)
 {
+	if (notificationType == sendNotificationSync)
+	{
+		// HTTP-direct path: run on the calling thread with a read lock to
+		// block until any in-progress compilation finishes.
+		SimpleReadWriteLock::ScopedReadLock sl(
+			mainController->getJavascriptThreadPool().getLookAndFeelRenderLock());
+
+		auto diagnostics = scriptEngine->shadowParse(code, fileName);
+		callback(diagnostics);
+		return;
+	}
+
+	// Async path (IDE F7): defer to scripting thread, callback on message thread.
 	auto f = [code, fileName, callback](Processor* p)
 	{
 		auto jp = dynamic_cast<JavascriptProcessor*>(p);

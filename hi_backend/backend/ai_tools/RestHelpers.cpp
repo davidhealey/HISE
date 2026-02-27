@@ -706,7 +706,10 @@ const Array<RestHelpers::RouteMetadata>& RestHelpers::getRouteMetadata()
 				"The script processor's module ID. Required if filePath is not provided.").asOptional())
 			.withBodyParam(RouteParameter(RestApiIds::filePath,
 				"Path to the external .js file (absolute or relative to Scripts folder). "
-				"Required if moduleId is not provided. When used alone, HISE resolves the owning processor.").asOptional()));
+				"Required if moduleId is not provided. When used alone, HISE resolves the owning processor.").asOptional())
+			.withBodyParam(RouteParameter(RestApiIds::async,
+				"If true, defer the shadow parse to the scripting thread (slower, blocks audio). "
+				"Default is false: runs directly on the HTTP thread with a read lock.").withDefault("false")));
 		
 		// ApiRoute::GetIncludedFiles
 		m.add(RouteMetadata(ApiRoute::GetIncludedFiles, "api/get_included_files")
@@ -1945,14 +1948,11 @@ RestServer::Response RestHelpers::handleDiagnoseScript(MainController* mc, RestS
 	auto resolvedModuleId = dynamic_cast<Processor*>(jp)->getId();
 	auto normalizedFilePath = fileName.replace("\\", "/");
 	
-	jp->shadowParseFile(code, fileName, 
-		[req, resolvedModuleId, normalizedFilePath](const JavascriptProcessor::DiagnosticList& diagnostics)
+	auto useAsync = (bool)obj.getProperty(RestApiIds::async, false);
+	
+	// Shared lambda for building the diagnostics JSON array
+	auto buildDiagArray = [](const JavascriptProcessor::DiagnosticList& diagnostics)
 	{
-		DynamicObject::Ptr result = new DynamicObject();
-		result->setProperty(RestApiIds::success, true);
-		result->setProperty(RestApiIds::moduleId, resolvedModuleId);
-		result->setProperty(RestApiIds::filePath, normalizedFilePath);
-		
 		Array<var> diagArray;
 		
 		for (const auto& d : diagnostics)
@@ -1975,14 +1975,41 @@ RestServer::Response RestHelpers::handleDiagnoseScript(MainController* mc, RestS
 			diagArray.add(var(dObj.get()));
 		}
 		
-		result->setProperty(RestApiIds::diagnostics, var(diagArray));
-		result->setProperty(RestApiIds::logs, Array<var>());
-		result->setProperty(RestApiIds::errors, Array<var>());
-		
-		req->complete(RestServer::Response::ok(var(result.get())));
-	});
+		return diagArray;
+	};
 	
-	return req->waitForResponse();
+	auto buildResponse = [resolvedModuleId, normalizedFilePath](const Array<var>& diagArray)
+	{
+		DynamicObject::Ptr result = new DynamicObject();
+		result->setProperty(RestApiIds::success, true);
+		result->setProperty(RestApiIds::moduleId, resolvedModuleId);
+		result->setProperty(RestApiIds::filePath, normalizedFilePath);
+		result->setProperty(RestApiIds::diagnostics, var(diagArray));
+		return RestServer::Response::ok(var(result.get()));
+	};
+	
+	if (useAsync)
+	{
+		// Async path: defer to scripting thread, callback completes the request on the message thread.
+		jp->shadowParseFile(code, fileName, 
+			[req, buildDiagArray, buildResponse](const JavascriptProcessor::DiagnosticList& diagnostics)
+		{
+			req->complete(buildResponse(buildDiagArray(diagnostics)));
+		}, sendNotificationAsync);
+		
+		return req->waitForResponse();
+	}
+	
+	// Sync path (default): run directly on the calling thread.
+	Array<var> diagArray;
+	
+	jp->shadowParseFile(code, fileName, 
+		[&diagArray, &buildDiagArray](const JavascriptProcessor::DiagnosticList& diagnostics)
+	{
+		diagArray = buildDiagArray(diagnostics);
+	}, sendNotificationSync);
+	
+	return buildResponse(diagArray);
 }
 
 RestServer::Response RestHelpers::handleGetIncludedFiles(MainController* mc, RestServer::AsyncRequest::Ptr req)
