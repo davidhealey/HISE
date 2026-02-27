@@ -2274,22 +2274,6 @@ private:
 		s->functionName = functionName.toString();
 #endif
 
-#if USE_BACKEND
-		// Check for deprecated global API methods (diagnostic mode only)
-		if (isDiagnosticMode())
-		{
-			auto depDr = ApiHelpers::getDeprecation(
-				apiClass->getObjectName().toString(), functionName.toString());
-
-			if (depDr.shouldReport())
-			{
-				String msg = prettyName + " " + depDr.getErrorMessage();
-				recordDiagnostic(location, msg, depDr.getSuggestions(),
-				                 depDr.getSeverity(), CS::Deprecation);
-			}
-		}
-#endif
-
 		if(matchIf(TokenTypes::openParen))
 		{
 			int numActualArguments = 0;

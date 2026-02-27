@@ -448,19 +448,6 @@ public:
         static DiagnosticResult unknown(const String& msg={}) { return {Severity::Unknown, msg }; }
         static DiagnosticResult fail(const String& msg) { return { Severity::Error, msg }; }
 
-
-
-        /** Parse a severity string from the enrichment JSON (PascalCase).
-            Used by getDeprecation() and replaces the local parseDeprecationSeverity helper. */
-        static Severity parseSeverity(const String& s)
-        {
-            if (s == "Error")       return Severity::Error;
-            if (s == "Warning")     return Severity::Warning;
-            if (s == "Information") return Severity::Info;
-            if (s == "Hint")        return Severity::Hint;
-            return Severity::Warning; // default for unrecognised
-        }
-
         bool shouldReport() const { return severity > Severity::Unknown; }
 
         DiagnosticResult withSuggestion(const String& s) const { auto copy = *this; copy.suggestions.add(s); return copy; }
