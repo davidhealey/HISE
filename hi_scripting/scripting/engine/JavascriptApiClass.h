@@ -437,7 +437,7 @@ public:
 		{
 		}
 
-        DiagnosticResult(const String& msg) :
+        DiagnosticResult(const String& msg=String()) :
             severity(Severity::Unknown),
             message(msg)
         {}
@@ -447,6 +447,19 @@ public:
         static DiagnosticResult ok() { return { Severity::OK, "" }; }
         static DiagnosticResult unknown(const String& msg={}) { return {Severity::Unknown, msg }; }
         static DiagnosticResult fail(const String& msg) { return { Severity::Error, msg }; }
+
+
+
+        /** Parse a severity string from the enrichment JSON (PascalCase).
+            Used by getDeprecation() and replaces the local parseDeprecationSeverity helper. */
+        static Severity parseSeverity(const String& s)
+        {
+            if (s == "Error")       return Severity::Error;
+            if (s == "Warning")     return Severity::Warning;
+            if (s == "Information") return Severity::Info;
+            if (s == "Hint")        return Severity::Hint;
+            return Severity::Warning; // default for unrecognised
+        }
 
         bool shouldReport() const { return severity > Severity::Unknown; }
 
@@ -499,6 +512,28 @@ public:
         StringArray getSuggestions() const { return suggestions; }
         Classification getClassification() const { return source; }
 
+        /** Numeric priority for coalescing — higher value = more severe. */
+        static int severityPriority(Severity s)
+        {
+            switch (s)
+            {
+            case Severity::OK:      return 0;
+            case Severity::Hint:    return 1;
+            case Severity::Info:    return 2;
+            case Severity::Warning: return 3;
+            case Severity::Error:   return 4;
+            default:                return -1;
+            }
+        }
+
+        /** Return the more severe of two results. */
+        static DiagnosticResult max(const DiagnosticResult& a, const DiagnosticResult& b)
+        {
+            if (severityPriority(a.getSeverity()) >= severityPriority(b.getSeverity()))
+                return a;
+            return b;
+        }
+
         /** Compose multiple diagnostic check functions into a single QueryFunction.
         Runs all checks and returns the result with the highest severity.
         Works with static functions, lambdas, and any callable matching the
@@ -508,29 +543,7 @@ public:
             return [=](ApiClass* c, const Identifier& id, const Array<var>& args) -> DiagnosticResult
             {
                 DiagnosticResult best = ok();
-
-				auto max = [](const DiagnosticResult& a, const DiagnosticResult& b)
-				{
-					auto severityPriority = [](Severity s)
-					{
-						switch (s)
-						{
-						case Severity::OK:      return 0;
-						case Severity::Hint:    return 1;
-						case Severity::Info:    return 2;
-						case Severity::Warning: return 3;
-						case Severity::Error:   return 4;
-						default:                return -1;
-						}
-					};
-
-					if (severityPriority(a.getSeverity()) >= severityPriority(b.getSeverity()))
-						return a;
-
-					return b;
-				};
-
-                ((best = max(best, checks(c, id, args))), ...);
+                ((best = DiagnosticResult::max(best, checks(c, id, args))), ...);
                 return best;
             };
         }

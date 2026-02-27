@@ -143,16 +143,10 @@ public:
 	 */
 	static CallScopeInfo getCallScope(const String& className, const String& methodName);
 
-	/** Deprecation metadata from the enrichment ValueTree. */
-	struct DeprecationInfo
-	{
-		bool deprecated = false;
-		String replacement;
-		String note;
-		String severity;  // "Error", "Warning", "Information", "Hint" from enrichment JSON
-	};
-
 	/** Look up deprecation info for a given class + method.
+	 *
+	 *  Returns DiagnosticResult::ok() when not deprecated, or a DiagnosticResult
+	 *  with Deprecation classification when deprecated.
 	 *
 	 *  Exact mode (className = specific class name):
 	 *    Finds the class child in the API ValueTree, checks for "deprecated" property.
@@ -161,7 +155,7 @@ public:
 	 *    Checks all classes — if ANY mark the method deprecated, returns deprecated
 	 *    with worst-case severity.
 	 */
-	static DeprecationInfo getDeprecation(const String& className, const String& methodName);
+	static ApiClass::DiagnosticResult getDeprecation(const String& className, const String& methodName);
 
 #endif
 };
