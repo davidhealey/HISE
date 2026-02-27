@@ -682,19 +682,6 @@ var ScriptingApi::Content::Wrapper::setValuePopupData(const var::NativeFunctionA
 }
 
 
-var ScriptingApi::Content::Wrapper::setColour (const var::NativeFunctionArgs& args)
-{
-	if (ScriptingApi::Content::ScriptComponent* thisObject = GET_OBJECT(Content::ScriptComponent))
-	{
-		CHECK_ARGUMENTS("setColour()", 2);
-
-		thisObject->setColour((int)args.arguments[0], (int)args.arguments[1]);
-	}
-
-	return var();
-};
-
-
 
 // =================================================================================================== Content Component Wrappers
 
