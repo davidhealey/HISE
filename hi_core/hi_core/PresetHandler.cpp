@@ -568,7 +568,7 @@ String PresetHandler::getCustomName(const String &typeName, const String& thisMe
 
     ScopedPointer<AlertWindow> nameWindow = new AlertWindow(useCustomMessage ? ("Enter " + typeName) : ("Enter name for " + typeName), "", AlertWindow::AlertIconType::NoIcon);
 
-
+	nameWindow->setOpaque(false);
 	nameWindow->setLookAndFeel(laf);
 
 	nameWindow->addCustomComponent(comp);
@@ -620,9 +620,10 @@ bool PresetHandler::showYesNoWindow(const String &title, const String &message, 
 	
 	ScopedPointer<AlertWindow> nameWindow = new AlertWindow(title, "", AlertWindow::AlertIconType::NoIcon);
 
+	nameWindow->setOpaque(false);
 	nameWindow->setLookAndFeel(laf);
 	nameWindow->addCustomComponent(comp);
-	
+
 	nameWindow->addButton("OK", 1, KeyPress(KeyPress::returnKey));
 	nameWindow->addButton("Cancel", 0, KeyPress(KeyPress::escapeKey));
 
@@ -667,6 +668,7 @@ void PresetHandler::showMessageWindow(const String &title, const String &message
 		ScopedPointer<MessageWithIcon> comp = new MessageWithIcon(type, laf, message);
 		ScopedPointer<AlertWindow> nameWindow = new AlertWindow(title, "", AlertWindow::AlertIconType::NoIcon);
 
+		nameWindow->setOpaque(false);
 		nameWindow->setLookAndFeel(laf);
 		nameWindow->addCustomComponent(comp);
 		nameWindow->addButton("OK", 1, KeyPress(KeyPress::returnKey));
