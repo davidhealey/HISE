@@ -850,6 +850,8 @@ namespace ScriptingObjects
 
 			void drawAlertBox(Graphics&, AlertWindow&, const Rectangle<int>& textArea, TextLayout&) override;
 
+			int getAlertWindowMargin() override;
+
 			Font getAlertWindowMessageFont() override;
 			Font getAlertWindowTitleFont() override;
 			Font getTextButtonFont(TextButton &, int) override;
