@@ -4173,7 +4173,12 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawAlertBox(Graphics& g_, Aler
 	{
 		auto obj = new DynamicObject();
 
-		obj->setProperty("area", ApiHelpers::getVarRectangle(useRectangleClass, w.getLocalBounds().toFloat()));
+		auto fullArea = w.getLocalBounds().toFloat();
+		auto margin = (float)getAlertWindowMargin();
+		auto contentArea = fullArea.reduced(margin);
+
+		obj->setProperty("area", ApiHelpers::getVarRectangle(useRectangleClass, contentArea));
+		obj->setProperty("bounds", ApiHelpers::getVarRectangle(useRectangleClass, fullArea));
 		obj->setProperty("title", w.getName());
 
 		addParentFloatingTile(w, obj);
@@ -4183,6 +4188,14 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawAlertBox(Graphics& g_, Aler
 	}
 
 	GlobalHiseLookAndFeel::drawAlertBox(g_, w, ta, tl);
+}
+
+int ScriptingObjects::ScriptedLookAndFeel::Laf::getAlertWindowMargin()
+{
+	if (functionDefined("drawAlertWindow"))
+		return 50;
+
+	return 0;
 }
 
 void ScriptingObjects::ScriptedLookAndFeel::Laf::getIdealPopupMenuItemSize(const String &text, bool isSeparator, int standardMenuItemHeight, int &idealWidth, int &idealHeight)
