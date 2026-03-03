@@ -124,6 +124,9 @@ namespace RestApiIds
     
     // set_script response
     DECLARE_ID(updatedCallbacks);
+
+    // repl
+    DECLARE_ID(expression);
     
     // screenshot
     DECLARE_ID(scale);
@@ -234,6 +237,7 @@ struct RestHelpers
         Status,                 ///< GET  /api/status - Get project status
         GetScript,              ///< GET  /api/get_script - Read script content
         SetScript,              ///< POST /api/set_script - Update script content
+        EvaluateREPL,           ///< POST /api/repl - Evaluate an expression and get the result
         Recompile,              ///< POST /api/recompile - Recompile a processor
         ListComponents,         ///< GET  /api/list_components - List UI components
         GetComponentProperties, ///< GET  /api/get_component_properties - Get component properties
@@ -517,6 +521,10 @@ struct RestHelpers
     static RestServer::Response handleRecompile(MainController* mc, 
                                                 RestServer::AsyncRequest::Ptr req);
     
+    /** Handler for POST /api/repl - Evaluate a REPL expression. */
+	static RestServer::Response evaluateREPL(MainController* mc,
+		                                     RestServer::AsyncRequest::Ptr req);
+
     /** Handler for GET /api/list_components - List UI components. */
     static RestServer::Response handleListComponents(MainController* mc, 
                                                      RestServer::AsyncRequest::Ptr req);
