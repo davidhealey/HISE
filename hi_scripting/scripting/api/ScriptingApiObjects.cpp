@@ -9646,12 +9646,16 @@ struct ProcessorParameterTarget : public scriptnode::routing::GlobalRoutingManag
         return id;
     }
 
+	bool shouldBeCleanedUp() const override { return processor.get() == nullptr; }
+
     void sendValue(double v) override
     {
 		lastValue.set(v);
         auto newValue = jlimit(0.0f, 1.0f, (float)lastValue.advance());
         auto cv = targetRange.convertFrom0to1(newValue, true);
-        processor->setAttribute(parameterIndex, cv, sendNotification);
+
+		if(processor != nullptr)
+			processor->setAttribute(parameterIndex, cv, sendNotificationSync);
     }
 
     Path getTargetIcon() const override
@@ -10476,9 +10480,11 @@ void ScriptingObjects::ScriptBuilder::clear()
 
 		mc->getProcessorChangeHandler().sendProcessorChangeMessage(mc->getMainSynthChain(), MainController::ProcessorChangeHandler::EventType::ClearBeforeRebuild, false);
 
-		MessageManager::callAsync([this]()
+		auto sp = getScriptProcessor();
+
+		MessageManager::callAsync([sp]()
 		{
-			getScriptProcessor()->getScriptingContent()->setIsRebuilding(true);
+			sp->getScriptingContent()->setIsRebuilding(true);
 		});
 
 		Thread::getCurrentThread()->wait(500);
@@ -10528,6 +10534,11 @@ void ScriptingObjects::ScriptBuilder::clear()
 		}
 	}
 
+	using GRM = scriptnode::routing::GlobalRoutingManager;
+
+	if (auto gm = GRM::Helpers::getOrCreate(mc))
+		gm->removeUnconnectedSlots(GRM::SlotBase::SlotType::Cable);
+
 	flushed = false;
 }
 
@@ -10539,12 +10550,14 @@ void ScriptingObjects::ScriptBuilder::flush()
 	{
 		flushed = true;
 
-		MessageManager::callAsync([this]()
+		auto sp = getScriptProcessor();
+
+		MessageManager::callAsync([sp]()
 		{
-			auto synthChain = getScriptProcessor()->getMainController_()->getMainSynthChain();
-			getScriptProcessor()->getScriptingContent()->setIsRebuilding(false);
+			auto synthChain = sp->getMainController_()->getMainSynthChain();
+			sp->getScriptingContent()->setIsRebuilding(false);
 			synthChain->sendRebuildMessage(true);
-			getScriptProcessor()->getMainController_()->getProcessorChangeHandler().sendProcessorChangeMessage(synthChain, MainController::ProcessorChangeHandler::EventType::RebuildModuleList, false);
+			sp->getMainController_()->getProcessorChangeHandler().sendProcessorChangeMessage(synthChain, MainController::ProcessorChangeHandler::EventType::RebuildModuleList, false);
 		});
 	}
 }

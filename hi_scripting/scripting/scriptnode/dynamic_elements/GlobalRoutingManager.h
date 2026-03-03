@@ -95,6 +95,8 @@ struct GlobalRoutingManager: public ReferenceCountedObject
 
 		virtual ~CableTargetBase() {};
 
+		virtual bool shouldBeCleanedUp() const { return false; }
+
 		virtual void sendValue(double v) = 0;
 
 		virtual void sendData(const void* data, size_t numBytes) {};
