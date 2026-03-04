@@ -81,7 +81,16 @@ public:
 
     void restoreFromValueTree(const ValueTree &v) override;
 
+	
+
 protected:
+
+	/** Call this in the constructor of your subclass to update the parameter slots. */
+	void callOnInitAndInitialiseParameters()
+	{
+		onInit();
+		flushContentParameters();
+	}
 
 	void flushContentParameters()
 	{

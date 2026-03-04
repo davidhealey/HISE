@@ -372,9 +372,9 @@ template <typename DataType> struct Data
 		static void load(Processor* p, const DataType& newValue)
 		{
 			if (inverted)
-				p->setBypassed(!static_cast<bool>(newValue), sendNotification);
+				p->setBypassed(!static_cast<bool>(newValue), sendNotificationAsync);
 			else
-				p->setBypassed(static_cast<bool>(newValue), sendNotification);
+				p->setBypassed(static_cast<bool>(newValue), sendNotificationAsync);
 		}
 	};
 
@@ -390,7 +390,7 @@ template <typename DataType> struct Data
 		{
 			float value = static_cast<float>(newValue);
 			FloatSanitizers::sanitizeFloatNumber(value);
-			p->setAttribute(attributeIndex, value, sendNotification);
+			p->setAttribute(attributeIndex, value, sendNotificationAsync);
 		}
 	};
 
@@ -408,7 +408,7 @@ template <typename DataType> struct Data
 		{
 			static_assert(std::is_same<DataType, bool>(), "only allowed with bool data type");
 			float value = newValue ? 0.0f : 1.0f;
-			p->setAttribute(attributeIndex, value, sendNotification);
+			p->setAttribute(attributeIndex, value, sendNotificationAsync);
 		}
 	};
 
@@ -667,7 +667,6 @@ public:
         typename Data<ValueType>::SaveFunction saveFunction;
 
 		Component::SafePointer<ComponentType> component;
-		WeakReference<Processor> processor;
 		
 		JUCE_DECLARE_NON_COPYABLE(Base);
 	};
