@@ -26,6 +26,10 @@
 #if USE_BACKEND
 // appends a callback argument check
 #define ADD_CALLBACK_DIAGNOSTIC(wc, id, idx) wc.addCallbackDiagnostic(this, #id, idx);
+#define ADD_CALLBACK_DIAGNOSTIC_RAW(methodName, ...) addDiagnostic(Identifier(#methodName), [](ApiClass* c, const Identifier& id, const Array<var>& args) \
+{ \
+	return (__VA_ARGS__)(c, id, args); \
+});
 
 #define DIAGNOSTIC_MARK_DEPRECATED(methodName, text) addDiagnostic(Identifier(#methodName), [](ApiClass* c, const Identifier& id, const Array<var>& args) \
 { \
@@ -36,6 +40,7 @@
 });
 #else
 #define ADD_CALLBACK_DIAGNOSTIC(wc, id, idx)
+#define ADD_CALLBACK_DIAGNOSTIC_RAW(methodName, ...) ;
 #define DIAGNOSTIC_MARK_DEPRECATED(methodName, text)
 #endif
 

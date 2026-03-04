@@ -339,6 +339,47 @@ struct ScriptingApi::Content::ScriptComponent::GlobalCableConnection : public sc
 };
 
 
+struct ScriptingApi::Content::ScriptComponent::Validators
+{
+#if USE_BACKEND
+	using DiagnosticResult = ApiClass::DiagnosticResult;
+
+	static DiagnosticResult checkProperty(ApiClass* c, const Identifier&, const Array<var>& args)
+	{
+		if (auto sc = dynamic_cast<ScriptComponent*>(c))
+		{
+			// if the parameter call is not resolvable at parse time
+			// (eg. not an literal), then this is undefined
+			if (!args[0].isUndefined())
+			{
+				auto propertyId = args[0].toString();
+
+				StringArray sa;
+
+				for (const auto& p : sc->propertyIds)
+					sa.add(p.toString());
+
+				auto exists = sc->getIndexForProperty(Identifier(propertyId)) != -1;
+
+				if (!sa.contains(propertyId))
+					return DiagnosticResult::fail("unknown property").withWrongToken(propertyId).withFuzzySuggestion(sa);
+
+				if (sc->deactivatedProperties.contains(Identifier(propertyId)))
+					return DiagnosticResult::fail("deactivated property").withWrongToken(propertyId);
+
+				return DiagnosticResult::ok();
+			};
+
+			// couldn't defer the property string, 
+			return DiagnosticResult::unknown();
+		}
+
+		return DiagnosticResult::fail("not a ScriptComponent");
+	};
+#endif
+};
+
+
 ScriptingApi::Content::ScriptComponent::ScriptComponent(ProcessorWithScriptingContent* base, Identifier name_, int numConstants /*= 0*/) :
 	ConstScriptingObject(base, numConstants),
 	UpdateDispatcher::Listener(base->getScriptingContent()->getUpdateDispatcher()),
@@ -437,7 +478,7 @@ ScriptingApi::Content::ScriptComponent::ScriptComponent(ProcessorWithScriptingCo
 	ADD_API_METHOD_0(getGlobalPositionX);
 	ADD_API_METHOD_0(getGlobalPositionY);
 	ADD_TYPED_API_METHOD_1(setControlCallback, VarTypeChecker::Function);
-	addDiagnostic("setControlCallback", WeakCallbackHolder::checkCallbackNumArgs<2>);
+	ADD_CALLBACK_DIAGNOSTIC_RAW(setControlCallback, WeakCallbackHolder::checkCallbackNumArgs<2>);
 	ADD_API_METHOD_0(getAllProperties);
 	ADD_API_METHOD_1(setZLevel);
 	ADD_TYPED_API_METHOD_1(setKeyPressCallback, VarTypeChecker::Function);
@@ -464,42 +505,9 @@ ScriptingApi::Content::ScriptComponent::ScriptComponent(ProcessorWithScriptingCo
 
 	useRectangleClass = HISE_GET_PREPROCESSOR(getScriptProcessor()->getMainController_(), HISE_USE_SCRIPT_RECTANGLE_OBJECT);
 
-	auto checkProperty = [](ApiClass* c, const Identifier&, const Array<var>& args)
-	{
-		if (auto sc = dynamic_cast<ScriptComponent*>(c))
-		{
-			// if the parameter call is not resolvable at parse time
-			// (eg. not an literal), then this is undefined
-			if (!args[0].isUndefined())
-			{
-				auto propertyId = args[0].toString();
-
-				StringArray sa;
-
-				for (const auto& p : sc->propertyIds)
-					sa.add(p.toString());
-
-				auto exists = sc->getIndexForProperty(Identifier(propertyId)) != -1;
-
-				if (!sa.contains(propertyId))
-					return DiagnosticResult::fail("unknown property").withWrongToken(propertyId).withFuzzySuggestion(sa);
-
-				if (sc->deactivatedProperties.contains(Identifier(propertyId)))
-					return DiagnosticResult::fail("deactivated property").withWrongToken(propertyId);
-
-				return DiagnosticResult::ok();
-			};
-
-			// couldn't defer the property string, 
-			return DiagnosticResult::unknown();
-		}
-
-		return DiagnosticResult::fail("not a ScriptComponent");
-	};
-
 	// same lambda, same logic...
-	addDiagnostic("set", checkProperty);
-	addDiagnostic("get", checkProperty);
+	ADD_CALLBACK_DIAGNOSTIC_RAW(set, Validators::checkProperty);
+	ADD_CALLBACK_DIAGNOSTIC_RAW(get, Validators::checkProperty);
 
 	//setName(name_.toString());
 
@@ -2132,7 +2140,7 @@ maximum(1.0f)
 	initInternalPropertyFromValueTreeOrDefault(ScriptComponent::linkedTo);
 
 	ADD_TYPED_API_METHOD_1(setValuePopupFunction, VarTypeChecker::Function);
-	addDiagnostic("setValuePopupFunction", WeakCallbackHolder::checkCallbackNumArgs<1>);
+	ADD_CALLBACK_DIAGNOSTIC_RAW(setValuePopupFunction, WeakCallbackHolder::checkCallbackNumArgs<1>);
 	ADD_TYPED_API_METHOD_1(setMidPoint, VarTypeChecker::Number);
 	ADD_API_METHOD_3(setRange);
 	ADD_TYPED_API_METHOD_1(setMode, VarTypeChecker::String);
@@ -5567,10 +5575,10 @@ ScriptingApi::Content::ScriptedViewport::ScriptedViewport(ProcessorWithScripting
 	ADD_API_METHOD_1(setTableColumns);
 	ADD_API_METHOD_1(setTableRowData);
 	ADD_TYPED_API_METHOD_1(setTableCallback, VarTypeChecker::Function);
-	addDiagnostic("setTableCallback", WeakCallbackHolder::checkCallbackNumArgs<1>);
+	ADD_CALLBACK_DIAGNOSTIC_RAW(setTableCallback, WeakCallbackHolder::checkCallbackNumArgs<1>);
 	ADD_API_METHOD_1(getOriginalRowIndex);
 	ADD_TYPED_API_METHOD_1(setTableSortFunction, VarTypeChecker::Function);
-	addDiagnostic("setTableSortFunction", WeakCallbackHolder::checkCallbackNumArgs<2>);
+	ADD_CALLBACK_DIAGNOSTIC_RAW(setTableSortFunction, WeakCallbackHolder::checkCallbackNumArgs<2>);
 	ADD_API_METHOD_1(setEventTypesForValueCallback);
 }
 

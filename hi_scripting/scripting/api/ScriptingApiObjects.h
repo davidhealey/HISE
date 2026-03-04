@@ -115,13 +115,15 @@ public:
 
 	static PathStrokeType createPathStrokeType(var strokeType);
 
+	using CallScope = WeakCallbackHolder::CallableObject::CallScope;
+
 #if USE_BACKEND
 
 	static String getValueType(const var& v);
 
 	static ValueTree getApiTree();
 
-	using CallScope = WeakCallbackHolder::CallableObject::CallScope;
+	
 
 	struct CallScopeInfo
 	{

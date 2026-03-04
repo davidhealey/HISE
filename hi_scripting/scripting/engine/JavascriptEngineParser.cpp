@@ -268,8 +268,10 @@ private:
 //==============================================================================
 struct HiseJavascriptEngine::RootObject::ExpressionTreeBuilder : private TokenIterator
 {
+#if USE_BACKEND
 	using CS = ApiClass::DiagnosticResult::Classification;
 	using SV = ApiClass::DiagnosticResult::Severity;
+#endif
 
 	ExpressionTreeBuilder(const String code, const String externalFile, HiseJavascriptPreprocessor::Ptr preprocessor_) :
 		TokenIterator(code, externalFile),

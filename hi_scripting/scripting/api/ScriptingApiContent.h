@@ -676,6 +676,7 @@ public:
 		Array<MouseListenerData> mouseListeners;
 
 		struct Wrapper;
+		struct Validators;
 
 		bool isConnectedToProcessor() const;;
 

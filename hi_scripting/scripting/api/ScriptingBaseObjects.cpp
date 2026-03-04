@@ -986,6 +986,7 @@ bool DynamicScriptingObject::checkValidObject() const
 void DynamicScriptingObject::setName(const String& name_) noexcept
 { name = name_; }
 
+#if USE_BACKEND
 juce::String WeakCallbackHolder::RealtimeSafetyInfo::toString(StrictnessLevel l, Processor* p) const
 {
 	if (l <= StrictnessLevel::Unsafe || items.isEmpty())
@@ -1051,6 +1052,7 @@ bool WeakCallbackHolder::RealtimeSafetyInfo::check(WeakCallbackHolder::CallableO
 
 	return false;
 }
+#endif
 
 } // namespace hise
 

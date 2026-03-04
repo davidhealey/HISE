@@ -388,9 +388,11 @@ ApiClass::Constant& ApiClass::Constant::operator=(const Constant& other)
 	return *this;
 }
 
+#if USE_BACKEND
 juce::String ApiClass::DiagnosticResult::Item::toConsoleString(Processor* p) const
 {
 	return HiseJavascriptEngine::toConsoleString(*this, p);
 }
+#endif
 
 } // namespace hise

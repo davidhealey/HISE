@@ -352,6 +352,7 @@ class ApiClass : public ReferenceCountedObject,
 {
 public:
 
+#if USE_BACKEND
     struct DiagnosticResult
     {
         using QueryFunction = std::function<DiagnosticResult(ApiClass*, const Identifier&, const Array<var>&)>;
@@ -545,6 +546,7 @@ public:
         StringArray suggestions;
 
     };
+#endif
 
 	// ================================================================================================================
 
@@ -621,43 +623,6 @@ public:
      *
      *   You don't need to use this directly, but use the macro ADD_API_METHOD_5() for it. */
     void addFunction5(const Identifier &id, call5 newFunction);
-
-    /** Registers a diagnostic function that is evaluated at parse time. 
-    
-        A diagnostic function is a lambda that performs dynamic checks on the validity of a API call.
-        What this check is implementing is completely up to the call site. It is used by the ApiValidationAnalyzer
-        in the shadow parser to collect dynamic diagnostic reports for the LSP server.
-
-        QueryFunction must be a callable object with this signature:
-
-        DiagnosticResult getDiagnostics(ApiClass* c, const Array<var>& arguments>)
-
-        Note that the arguments object might contain undefined values for parameter values that
-        could not be deduced at parse time. If you rely on that check, then just return
-        DiagnosticResult::unknown().
-    */
-    void addDiagnostic(const Identifier& methodName, const DiagnosticResult::QueryFunction& qf)
-    {
-        int unused;
-        auto ok = getIndexAndNumArgsForFunction(methodName, unused, unused);
-
-        // if you hit this you need to add the function first...
-        jassert(ok);
-        diagnostics[methodName] = qf;
-    }
-
-    /** Performs the assigned diagnostic check in the parser. */
-    DiagnosticResult performDiagnostic(const Identifier& methodName, const Array<var>& args)
-    {
-        jassert(hasDiagnosticCheck(methodName));
-        return diagnostics.at(methodName)(this, methodName, args);
-    }
-
-    /** Used by the parser to check whether to evaluate the arguments for the check. */
-    bool hasDiagnosticCheck(const Identifier& methodName) const
-    {
-        return diagnostics.find(methodName) != diagnostics.end();
-    }
 
 #if ENABLE_SCRIPTING_SAFE_CHECKS
     void addForcedParameterTypes(const Identifier& id, const VarTypeChecker::ParameterTypes& types)
@@ -783,6 +748,7 @@ public:
 		currentLocation.charNumber = charNumber;
 	}
 
+#if USE_BACKEND
     void markMethodTouched(const Identifier& methodName)
     {
         int unused;
@@ -800,15 +766,54 @@ public:
         touchedMethods.clear();
     }
 
+    /** Registers a diagnostic function that is evaluated at parse time.
 
+        A diagnostic function is a lambda that performs dynamic checks on the validity of a API call.
+        What this check is implementing is completely up to the call site. It is used by the ApiValidationAnalyzer
+        in the shadow parser to collect dynamic diagnostic reports for the LSP server.
+
+        QueryFunction must be a callable object with this signature:
+
+        DiagnosticResult getDiagnostics(ApiClass* c, const Array<var>& arguments>)
+
+        Note that the arguments object might contain undefined values for parameter values that
+        could not be deduced at parse time. If you rely on that check, then just return
+        DiagnosticResult::unknown().
+    */
+    void addDiagnostic(const Identifier& methodName, const DiagnosticResult::QueryFunction& qf)
+    {
+        int unused;
+        auto ok = getIndexAndNumArgsForFunction(methodName, unused, unused);
+
+        // if you hit this you need to add the function first...
+        jassert(ok);
+        diagnostics[methodName] = qf;
+    }
+
+    /** Performs the assigned diagnostic check in the parser. */
+    DiagnosticResult performDiagnostic(const Identifier& methodName, const Array<var>& args)
+    {
+        jassert(hasDiagnosticCheck(methodName));
+        return diagnostics.at(methodName)(this, methodName, args);
+    }
+
+    /** Used by the parser to check whether to evaluate the arguments for the check. */
+    bool hasDiagnosticCheck(const Identifier& methodName) const
+    {
+        return diagnostics.find(methodName) != diagnostics.end();
+    }
+
+#endif
 
 private:
 
 	bool wantsLocation = false;
 	DebugableObjectBase::Location currentLocation;
 
+#if USE_BACKEND
     std::map<Identifier, DiagnosticResult::QueryFunction> diagnostics;
     std::set<Identifier> touchedMethods;
+#endif
 
 	Array<WeakReference<DebugableObjectBase>> optimizableFunctions;
 

@@ -1657,6 +1657,7 @@ struct ScriptingObjects::GraphicsObject::Wrapper
 	API_METHOD_WRAPPER_1(GraphicsObject, getStringWidth);
 };
 
+#if USE_BACKEND
 struct GraphicsDiagnostics
 {
 	using DR = ApiClass::DiagnosticResult;
@@ -1713,6 +1714,7 @@ struct GraphicsDiagnostics
 		return DR::ok();
 	}
 };
+#endif
 
 
 
@@ -1723,8 +1725,13 @@ ScriptingObjects::GraphicsObject::GraphicsObject(ProcessorWithScriptingContent *
 {
 	registerDiagnosticPrototype(*this, parent);
 
+#if USE_BACKEND
 #define CHECK_AREA_AND_COLOUR(x) addDiagnostic(#x, DiagnosticResult::combine(GraphicsDiagnostics::checkColourSet, GraphicsDiagnostics::checkAreaAsArray));
 #define CHECK_FONT_AND_COLOUR(x) addDiagnostic(#x, DiagnosticResult::combine(GraphicsDiagnostics::checkColourSet, GraphicsDiagnostics::checkFontSet));
+#else
+#define CHECK_AREA_AND_COLOUR(x) ;
+#define CHECK_FONT_AND_COLOUR(x) ;
+#endif
 
 	ADD_API_METHOD_1(fillAll);
 	ADD_API_METHOD_1(setColour);
@@ -1787,6 +1794,9 @@ ScriptingObjects::GraphicsObject::GraphicsObject(ProcessorWithScriptingContent *
 		if (safeP.get() != nullptr)
 			debugError(safeP.get(), m);
 	};
+
+#undef CHECK_AREA_AND_COLOUR
+#undef CHECK_FONT_AND_COLOUR
 }
 
 ScriptingObjects::GraphicsObject::~GraphicsObject()

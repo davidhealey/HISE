@@ -6292,9 +6292,9 @@ ScriptingObjects::ScriptedMidiPlayer::ScriptedMidiPlayer(ProcessorWithScriptingC
 	ADD_API_METHOD_0(asMidiProcessor);
 	ADD_API_METHOD_1(setGlobalPlaybackRatio);
 	ADD_TYPED_API_METHOD_2(setPlaybackCallback, VarTypeChecker::Function, VarTypeChecker::Number);
-	addDiagnostic("setPlaybackCallback", WeakCallbackHolder::checkCallbackNumArgs<2>);
+	ADD_CALLBACK_DIAGNOSTIC_RAW(setPlaybackCallback, WeakCallbackHolder::checkCallbackNumArgs<2>);
 	ADD_TYPED_API_METHOD_1(setRecordEventCallback, VarTypeChecker::Function);
-	addDiagnostic("setRecordEventCallback", WeakCallbackHolder::checkCallbackNumArgs<1>);
+	ADD_CALLBACK_DIAGNOSTIC_RAW(setRecordEventCallback, WeakCallbackHolder::checkCallbackNumArgs<1>);
 	ADD_API_METHOD_1(setUseGlobalUndoManager);
 	ADD_API_METHOD_1(connectToMetronome);
 	ADD_API_METHOD_1(isSequenceEmpty);
@@ -9181,9 +9181,9 @@ ScriptingObjects::GlobalCableReference::GlobalCableReference(ProcessorWithScript
 	ADD_API_METHOD_3(setRangeWithSkew);
 	ADD_API_METHOD_3(setRangeWithStep);
 	ADD_TYPED_API_METHOD_2(registerCallback, VarTypeChecker::Function, VarTypeChecker::Number);
-	addDiagnostic("registerCallback", WeakCallbackHolder::checkCallbackNumArgs<1>);
+	ADD_CALLBACK_DIAGNOSTIC_RAW(registerCallback, WeakCallbackHolder::checkCallbackNumArgs<1>);
 	ADD_TYPED_API_METHOD_1(registerDataCallback, VarTypeChecker::Function);
-	addDiagnostic("registerDataCallback", WeakCallbackHolder::checkCallbackNumArgs<1>);
+	ADD_CALLBACK_DIAGNOSTIC_RAW(registerDataCallback, WeakCallbackHolder::checkCallbackNumArgs<1>);
 	ADD_API_METHOD_1(deregisterCallback);
 	ADD_API_METHOD_3(connectToMacroControl);
     ADD_API_METHOD_2(connectToGlobalModulator);

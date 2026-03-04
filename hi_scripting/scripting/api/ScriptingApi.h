@@ -1729,6 +1729,7 @@ private:
 			return globalServer.getWithParameters(subURL, parameters);
 		}
 
+#if USE_BACKEND
 		// Compose base URL check + callback arg count validation for callWithGET/callWithPOST/downloadFile
 		template <int E, int I> static ApiClass::DiagnosticResult checkBaseURLAndCallbackArgs(ApiClass* c, const Identifier& fName,  const Array<var>& args)
 		{
@@ -1742,6 +1743,7 @@ private:
 
 			return DiagnosticResult::fail("not a Server object");
 		};
+#endif
 
 	private:
 
