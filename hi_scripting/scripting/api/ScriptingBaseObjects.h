@@ -263,7 +263,7 @@ struct WeakCallbackHolder : private ScriptingObject
 
         virtual bool isRealtimeSafe() const = 0;
 
-#if USE_BACKEND
+
 		enum class CallScope : uint8
 		{
 			Unknown = 0,   // no enrichment data
@@ -273,8 +273,10 @@ struct WeakCallbackHolder : private ScriptingObject
 			Safe           // anywhere, anytime
 		};
 
+
 		enum class StrictnessLevel { Unset, Unsafe, Warn, Strict };
 
+#if USE_BACKEND
 		/** Returned by getRealtimeSafetyReport(). The call site (which has access
 		 *  to the global StrictnessLevel setting) uses worstScope to decide whether
 		 *  to block registration or just log, and message for console output.
@@ -317,6 +319,7 @@ struct WeakCallbackHolder : private ScriptingObject
 		JUCE_DECLARE_WEAK_REFERENCEABLE(CallableObject);
 	};
 
+#if USE_BACKEND
 	struct RealtimeSafetyInfo
 	{
 		using CallScope = CallableObject::CallScope;
@@ -412,6 +415,7 @@ struct WeakCallbackHolder : private ScriptingObject
 		return ApiClass::DiagnosticResult::unknown();
 	}
 
+#endif
 	struct CallableObjectManager
 	{
 		virtual ~CallableObjectManager() {};
@@ -543,6 +547,7 @@ struct WeakCallbackHolder : private ScriptingObject
 		trackIndex = trackIndexToUse;
 	}
 
+#if USE_BACKEND
 	void addCallbackDiagnostic(ApiClass* c, const Identifier& methodName, int fIndex = 0)
 	{
 		auto numArgs = numExpectedArgs;
@@ -560,6 +565,7 @@ struct WeakCallbackHolder : private ScriptingObject
 			return ApiClass::DiagnosticResult::unknown();
 		});
 	}
+#endif
 
 private:
 

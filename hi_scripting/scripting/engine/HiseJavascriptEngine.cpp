@@ -1250,6 +1250,7 @@ juce::String HiseJavascriptEngine::getHoverString(const String& token)
 	}
 }
 
+#if USE_BACKEND
 juce::String HiseJavascriptEngine::toConsoleString(const ApiClass::DiagnosticResult::Item& i, Processor* p)
 {
 	String s;
@@ -1296,6 +1297,7 @@ String HiseJavascriptEngine::RootObject::RealtimeSafetyWarning::toCallStackStrin
 
 	return s;
 }
+#endif
 
 HiseJavascriptEngine::RootObject::Callback::Callback(const Identifier &id, int numArgs_, double bufferTime_) :
 callbackName(id),

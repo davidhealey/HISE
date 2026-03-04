@@ -1167,12 +1167,14 @@ public:
 
 	static void checkValidParameter(int index, const var& valueToTest, const RootObject::CodeLocation& location, VarTypeChecker::VarTypes expectedType);
 
-	static String toConsoleString(const ApiClass::DiagnosticResult::Item& i, Processor* p);
+	
 
     LambdaBroadcaster<bool> preCompileListeners;
 	std::vector<std::pair<WeakReference<DebugableObjectBase>, std::function<void(DebugInformationBase::Ptr)>>> debugInfoListeners;
 
 #if USE_BACKEND
+	static String toConsoleString(const ApiClass::DiagnosticResult::Item& i, Processor* p);
+
 	/** Shadow-parse code in diagnostic mode without executing.
 	    Returns collected diagnostics (API errors, arg mismatches, etc.). */
 	Array<RootObject::ApiDiagnostic> shadowParse(const String& code, const String& fileName);
