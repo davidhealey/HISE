@@ -97,6 +97,38 @@ public:
 		Timer::callAfterDelay(milliseconds, SafeAsyncCaller<T>(&object, f));
 	}
 
+	/** Dispatches f to the message thread and blocks until complete (or timeout).
+	    If already on the message thread, executes directly.
+	    Returns true if executed, false if timed out or object was deleted.
+	*/
+	template <typename T> static bool callAsyncAndWait(T& object, std::function<void(T&)> f, int timeoutMs = 500)
+	{
+		if (MessageManager::getInstance()->isThisTheMessageThread())
+		{
+			f(object);
+			return true;
+		}
+
+		auto event = std::make_shared<WaitableEvent>(true);
+		WeakReference<T> weak(&object);
+
+		MessageManager::callAsync([weak, f, event]()
+		{
+			if (auto* obj = weak.get())
+				f(*obj);
+
+			event->signal();
+		});
+
+		if (!event->wait(timeoutMs))
+		{
+			jassertfalse;
+			return false;
+		}
+
+		return true;
+	}
+
 	static void resized(Component* c)
 	{
 		callAsyncIfNotOnMessageThread<Component>(*c, [](Component& c) { c.resized(); });

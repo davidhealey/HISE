@@ -413,6 +413,9 @@ void TokenCollection::signalRebuild()
 
 void TokenCollection::signalClear(NotificationType n)
 {
+	if (!enabled)
+		return;
+
 	{
 		SimpleReadWriteLock::ScopedMultiWriteLock sl(buildLock);
 		dirty = false;
@@ -451,6 +454,9 @@ void TokenCollection::run()
 
 void TokenCollection::clearTokenProviders()
 {
+	if (!enabled)
+		return;
+
 	SimpleReadWriteLock::ScopedMultiWriteLock sl(buildLock);
 	tokenProviders.clear();
 	tokens.clear();
@@ -458,6 +464,9 @@ void TokenCollection::clearTokenProviders()
 
 void TokenCollection::addTokenProvider(Provider* ownedProvider)
 {
+	if (!enabled)
+		return;
+
 	if (tokenProviders.isEmpty() && useBackgroundThread)
 		startThread();
 
@@ -510,6 +519,9 @@ void TokenCollection::removeListener(Listener* l)
 
 void TokenCollection::handleAsyncUpdate()
 {
+	if (!enabled)
+		return;
+
 	for (auto l : listeners)
 	{
 		if (l != nullptr)
@@ -531,6 +543,9 @@ int64 TokenCollection::getHashFromTokens(const List& l)
 
 void TokenCollection::rebuild()
 {
+	if (!enabled)
+		return;
+
 	if(useBackgroundThread)
 		PerfettoHelpers::setCurrentThreadName("Token Rebuild Thread");
     

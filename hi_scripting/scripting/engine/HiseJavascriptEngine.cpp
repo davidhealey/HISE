@@ -1879,166 +1879,174 @@ void HiseJavascriptEngine::TokenProvider::addTokens(mcl::TokenCollection::List& 
 {
 	if (jp != nullptr)
 	{
-		LockHelpers::SafeLock ssl(dynamic_cast<Processor*>(jp.get())->getMainController(), LockHelpers::Type::ScriptLock);
+		auto mc = dynamic_cast<Processor*>(jp.get())->getMainController();
+		auto& scriptLock = LockHelpers::getLockUnchecked(mc, LockHelpers::Type::ScriptLock);
 
-		File scriptFolder = dynamic_cast<Processor*>(jp.get())->getMainController()->getCurrentFileHandler().getSubDirectory(FileHandlerBase::Scripts);
-		auto scriptFiles = scriptFolder.findChildFiles(File::findFiles, true, "*.js");
+		CriticalSection::ScopedTryLockType sl(scriptLock);
 
-		for (auto sf: scriptFiles)
+		if (sl.isLocked())
 		{
-			if (sf.isHidden())
-				continue;
+			File scriptFolder = dynamic_cast<Processor*>(jp.get())->getMainController()->getCurrentFileHandler().getSubDirectory(FileHandlerBase::Scripts);
+			auto scriptFiles = scriptFolder.findChildFiles(File::findFiles, true, "*.js");
 
-			auto alreadyIncluded = false;
-
-			for (int i = 0; i < jp->getNumWatchedFiles(); i++)
+			for (auto sf : scriptFiles)
 			{
-				if (jp->getWatchedFile(i) == sf)
-				{
-					alreadyIncluded = true;
-					break;
-				}
-			}
-
-			if (alreadyIncluded)
-				continue;
-
-			auto pf = sf.getParentDirectory().getFullPathName();
-
-			if (pf.contains("ScriptProcessors") || pf.contains("ConnectedScripts"))
-				continue;
-
-			tokens.add(new IncludeFileToken(scriptFolder, sf));
-		}
-		
-
-		//ScopedReadLock sl(jp->getDebugLock());
-
-		auto holder = dynamic_cast<ApiProviderBase::Holder*>(jp.get());
-
-		auto v = holder->createApiTree();
-
-		auto copy = jp->autoCompleteTemplates;
-
-		copy.add({ "g", Identifier("Graphics") });
-
-		for (const auto& t : copy)
-		{
-			auto cTree = v.getChildWithName(t.classId);
-
-			for (auto m : cTree)
-			{
-				if (t.expression.isEmpty())
+				if (sf.isHidden())
 					continue;
 
-				tokens.add(new TemplateToken(t.expression, m));
-			}
-		}
+				auto alreadyIncluded = false;
 
-		if (WeakReference<HiseJavascriptEngine> e = jp->getScriptEngine())
-		{
-            e->preCompileListeners.addListener(*this, TokenProvider::precompileCallback, false);
-            
-			auto numObjects = e->getNumDebugObjects();
-
-			if (true)
-			{
-				auto classTree = v.getChildWithName("Content");
-
-				for (auto methodTree : classTree)
+				for (int i = 0; i < jp->getNumWatchedFiles(); i++)
 				{
-					if (Thread::currentThreadShouldExit() || jp->shouldReleaseDebugLock())
+					if (jp->getWatchedFile(i) == sf)
+					{
+						alreadyIncluded = true;
+						break;
+					}
+				}
+
+				if (alreadyIncluded)
+					continue;
+
+				auto pf = sf.getParentDirectory().getFullPathName();
+
+				if (pf.contains("ScriptProcessors") || pf.contains("ConnectedScripts"))
+					continue;
+
+				tokens.add(new IncludeFileToken(scriptFolder, sf));
+			}
+
+
+			//ScopedReadLock sl(jp->getDebugLock());
+
+			auto holder = dynamic_cast<ApiProviderBase::Holder*>(jp.get());
+
+			auto v = holder->createApiTree();
+
+			auto copy = jp->autoCompleteTemplates;
+
+			copy.add({ "g", Identifier("Graphics") });
+
+			for (const auto& t : copy)
+			{
+				auto cTree = v.getChildWithName(t.classId);
+
+				for (auto m : cTree)
+				{
+					if (t.expression.isEmpty())
+						continue;
+
+					tokens.add(new TemplateToken(t.expression, m));
+				}
+			}
+
+			if (WeakReference<HiseJavascriptEngine> e = jp->getScriptEngine())
+			{
+				e->preCompileListeners.addListener(*this, TokenProvider::precompileCallback, false);
+
+				auto numObjects = e->getNumDebugObjects();
+
+				if (true)
+				{
+					auto classTree = v.getChildWithName("Content");
+
+					for (auto methodTree : classTree)
+					{
+						if (Thread::currentThreadShouldExit() || jp->shouldReleaseDebugLock())
+							return;
+
+						tokens.add(new ApiToken("Content", methodTree));
+					}
+
+				}
+
+				for (int i = 0; i < numObjects; i++)
+				{
+					if (shouldAbortTokenRebuild(Thread::getCurrentThread()))
 						return;
 
-					tokens.add(new ApiToken("Content", methodTree));
-				}
-
-			}
-
-			for (int i = 0; i < numObjects; i++)
-			{
-				if (shouldAbortTokenRebuild(Thread::getCurrentThread()))
-					return;
-
-				if (e == nullptr)
-				{
-					tokens.clear();
-					return;
-				}
-
-				auto ptr = e->getDebugInformation(i);
-
-				if (ptr == nullptr)
-					return;
-
-				Colour c2;
-				char s;
-
-				holder->getProviderBase()->getColourAndLetterForType(ptr->getType(), c2, s);
-
-				tokens.add(new DebugInformationToken(ptr, v, c2));
-
-				auto t = ptr->getTextForDataType();
-
-				if (t.isNotEmpty())
-				{
-					Identifier cid(ptr->getTextForDataType());
-
-					if (ApiHelpers::getGlobalApiClasses().contains(cid))
+					if (e == nullptr)
 					{
-						auto classTree = v.getChildWithName(cid);
+						tokens.clear();
+						return;
+					}
 
-						for (auto methodTree : classTree)
+					auto ptr = e->getDebugInformation(i);
+
+					if (ptr == nullptr)
+						return;
+
+					Colour c2;
+					char s;
+
+					holder->getProviderBase()->getColourAndLetterForType(ptr->getType(), c2, s);
+
+					tokens.add(new DebugInformationToken(ptr, v, c2));
+
+					auto t = ptr->getTextForDataType();
+
+					if (t.isNotEmpty())
+					{
+						Identifier cid(ptr->getTextForDataType());
+
+						if (ApiHelpers::getGlobalApiClasses().contains(cid))
 						{
-							if (shouldAbortTokenRebuild(Thread::getCurrentThread()))
-								return;
+							auto classTree = v.getChildWithName(cid);
 
-							tokens.add(new ApiToken(cid, methodTree));
+							for (auto methodTree : classTree)
+							{
+								if (shouldAbortTokenRebuild(Thread::getCurrentThread()))
+									return;
+
+								tokens.add(new ApiToken(cid, methodTree));
+							}
 						}
-					}
-					else
-					{
-						TokenHelpers::addObjectAPIMethods(jp, tokens, ptr.get(), v, true);
-					}
+						else
+						{
+							TokenHelpers::addObjectAPIMethods(jp, tokens, ptr.get(), v, true);
+						}
 
-					TokenHelpers::addRecursive(jp, tokens, ptr, c2, v, true);
+						TokenHelpers::addRecursive(jp, tokens, ptr, c2, v, true);
+					}
+				}
+			}
+
+	#if USE_BACKEND
+			for (const auto& def : jp->getScriptEngine()->preprocessor->definitions)
+			{
+				tokens.add(new snex::debug::PreprocessorMacroProvider::PreprocessorToken(def));
+			}
+	#endif
+
+
+
+	#define X(unused, name) tokens.add(new KeywordToken(name));
+
+			X(var, "var")      X(if_, "if")     X(else_, "else")   X(do_, "do")       X(null_, "null")
+				X(while_, "while")    X(for_, "for")    X(break_, "break")  X(continue_, "continue") X(undefined, "undefined")
+				X(function, "function") X(return_, "return") X(true_, "true")   X(false_, "false")    X(new_, "new")
+				X(typeof_, "typeof")	X(switch_, "switch") X(case_, "case")	 X(default_, "default")  X(register_var, "reg")
+				X(in, "in")		X(inline_, "inline") X(const_, "const")	 X(global_, "global")	  X(local_, "local")
+				X(include_, "include") X(rLock_, "readLock") X(wLock_, "writeLock") 	X(extern_, "extern") X(namespace_, "namespace")
+				X(isDefined_, "isDefined");
+
+	#undef X
+
+			for (int i = 0; i < tokens.size(); i++)
+			{
+				if (tokens[i]->tokenContent.contains("[") ||
+					tokens[i]->tokenContent.contains("%PARENT%") ||
+					tokens[i]->tokenContent.endsWith(".args") ||
+					tokens[i]->tokenContent.endsWith(".locals"))
+				{
+					tokens.remove(i--);
 				}
 			}
 		}
-		
-#if USE_BACKEND
-		for (const auto& def : jp->getScriptEngine()->preprocessor->definitions)
+		else
 		{
-			tokens.add(new snex::debug::PreprocessorMacroProvider::PreprocessorToken(def));
+			debugToConsole(mc->getMainSynthChain(), "Skip token rebuild during recompilation");
 		}
-#endif
-
-		
-
-#define X(unused, name) tokens.add(new KeywordToken(name));
-
-		X(var, "var")      X(if_, "if")     X(else_, "else")   X(do_, "do")       X(null_, "null") 
-		X(while_, "while")    X(for_, "for")    X(break_, "break")  X(continue_, "continue") X(undefined, "undefined") 
-		X(function, "function") X(return_, "return") X(true_, "true")   X(false_, "false")    X(new_, "new") 
-		X(typeof_, "typeof")	X(switch_, "switch") X(case_, "case")	 X(default_, "default")  X(register_var, "reg") 
-		X(in, "in")		X(inline_, "inline") X(const_, "const")	 X(global_, "global")	  X(local_, "local") 
-		X(include_, "include") X(rLock_, "readLock") X(wLock_, "writeLock") 	X(extern_, "extern") X(namespace_, "namespace") 
-		X(isDefined_, "isDefined");
-
-#undef X
-
-		for (int i = 0; i < tokens.size(); i++)
-		{
-			if(tokens[i]->tokenContent.contains("[") ||
-			   tokens[i]->tokenContent.contains("%PARENT%") ||
-			   tokens[i]->tokenContent.endsWith(".args") ||
-			   tokens[i]->tokenContent.endsWith(".locals"))
-			{
-				tokens.remove(i--);
-			}
-		}
-
-
 	}
 }
 
