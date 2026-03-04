@@ -204,8 +204,11 @@ BackendRootWindow::BackendRootWindow(AudioProcessor *ownerProcessor, var editorS
 {
 	funkytooltips.setLookAndFeel(&ttlaf);
 
-	if(!owner->isSnippetBrowser())
+	if (!owner->isSnippetBrowser())
+	{
+		owner->getRestServer().addListener(this);
 		Desktop::getInstance().setDefaultLookAndFeel(&globalLookAndFeel);
+	}
 
 	addAndMakeVisible(floatingRoot = new FloatingTile(owner, nullptr));
 
@@ -541,6 +544,8 @@ BackendRootWindow::~BackendRootWindow()
 
 	if(!isSnippetBrowser)
 	{
+		owner->getRestServer().removeListener(this);
+
 		for(auto w: allWindowsAndBrowsers)
 		{
 			if(w.getComponent() == nullptr)
@@ -683,6 +688,9 @@ mcl::TokenCollection::Ptr BackendRootWindow::getJavascriptTokenCollection(Compon
 		if(brw->javascriptTokens == nullptr)
 			brw->javascriptTokens = new mcl::TokenCollection(mcl::LanguageIds::HiseScript);
 
+		if (brw->getBackendProcessor()->getRestServer().isRunning())
+			brw->javascriptTokens->setEnabled(false, false);
+
 		return brw->javascriptTokens;
 	}
 
@@ -691,6 +699,12 @@ mcl::TokenCollection::Ptr BackendRootWindow::getJavascriptTokenCollection(Compon
 
 void BackendRootWindow::rebuildTokenProviders(const Identifier& languageId)
 {
+	// Skip token rebuild entirely when the REST server is running.
+	// Rapid API-driven compilations cause deadlocks and use-after-free
+	// crashes in the token rebuild thread.
+	if (getBackendProcessor()->getRestServer().isRunning())
+		return;
+
 	if(languageId == mcl::LanguageIds::HiseScript)
 	{
 		if(javascriptTokens == nullptr)

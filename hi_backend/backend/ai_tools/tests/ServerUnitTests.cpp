@@ -68,6 +68,13 @@ public:
         testGetScript();
         testGetScriptExternalFiles();
         testRecompile();
+        testEvaluateREPLSuccess();
+        testEvaluateREPLArithmetic();
+        testEvaluateREPLUndefined();
+        testEvaluateREPLRuntimeError();
+        testEvaluateREPLMissingExpression();
+        testEvaluateREPLMissingModuleId();
+        testEvaluateREPLUnknownModule();
         testGetComponentValue();
         testSetComponentValue();
         testSetComponentValueTriggersCallback();
@@ -921,6 +928,173 @@ private:
         // Verify externalFiles is present
         expect(json.hasProperty("externalFiles"), "Recompile should return externalFiles");
         expect(json["externalFiles"].isArray(), "externalFiles should be array");
+    }
+    
+    //==========================================================================
+    void testEvaluateREPLSuccess()
+    {
+        /** Setup: Compile a script that defines a variable
+         *  Scenario: Evaluate a REPL expression that reads the variable
+         *  Expected: Returns success with the variable's value
+         */
+        beginTest("POST /api/repl (success)");
+        
+        ctx->reset();
+        
+        ctx->compile("Content.makeFrontInterface(600, 400);\n"
+                     "const var testValue = 42;");
+        
+        DynamicObject::Ptr bodyObj = new DynamicObject();
+        bodyObj->setProperty("moduleId", "Interface");
+        bodyObj->setProperty("expression", "testValue");
+        
+        auto response = ctx->httpPost("/api/repl", JSON::toString(var(bodyObj.get())));
+        var json = ctx->parseJson(response);
+        
+        expect((bool)json["success"], "Should succeed");
+        expect(json["moduleId"].toString() == "Interface", "Should return moduleId");
+        expect(json["result"].toString() == "REPL Evaluation OK", "Should have success result message");
+        expectEquals<int>((int)json["value"], 42, "Should return the variable value");
+    }
+    
+    //==========================================================================
+    void testEvaluateREPLArithmetic()
+    {
+        /** Setup: Compile a basic script
+         *  Scenario: Evaluate an arithmetic expression
+         *  Expected: Returns the computed result
+         */
+        beginTest("POST /api/repl (arithmetic)");
+        
+        ctx->reset();
+        
+        ctx->compile("Content.makeFrontInterface(600, 400);");
+        
+        DynamicObject::Ptr bodyObj = new DynamicObject();
+        bodyObj->setProperty("moduleId", "Interface");
+        bodyObj->setProperty("expression", "2 + 3 * 4");
+        
+        auto response = ctx->httpPost("/api/repl", JSON::toString(var(bodyObj.get())));
+        var json = ctx->parseJson(response);
+        
+        expect((bool)json["success"], "Should succeed");
+        expectEquals<int>((int)json["value"], 14, "Should compute 2 + 3 * 4 = 14");
+    }
+    
+    //==========================================================================
+    void testEvaluateREPLUndefined()
+    {
+        /** Setup: Compile a basic script
+         *  Scenario: Evaluate an expression referencing an undeclared variable
+         *  Expected: Returns success=true with value="undefined"
+         */
+        beginTest("POST /api/repl (undefined result)");
+        
+        ctx->reset();
+        
+        ctx->compile("Content.makeFrontInterface(600, 400);");
+        
+        DynamicObject::Ptr bodyObj = new DynamicObject();
+        bodyObj->setProperty("moduleId", "Interface");
+        bodyObj->setProperty("expression", "undeclaredVariable");
+        
+        auto response = ctx->httpPost("/api/repl", JSON::toString(var(bodyObj.get())));
+        var json = ctx->parseJson(response);
+        
+        expect((bool)json["success"], "Undeclared variable should return success");
+        expect(json["moduleId"].toString() == "Interface", "Should return moduleId");
+        expect(json["value"].toString() == "undefined", "Should return 'undefined' for undeclared variable");
+    }
+    
+    //==========================================================================
+    void testEvaluateREPLRuntimeError()
+    {
+        /** Setup: Compile a basic script
+         *  Scenario: Evaluate Console.assertTrue(false) which triggers a runtime error
+         *  Expected: Returns success=false with error detail in errors array
+         */
+        beginTest("POST /api/repl (runtime error)");
+        
+        ctx->reset();
+        
+        ctx->compile("Content.makeFrontInterface(600, 400);");
+        
+        DynamicObject::Ptr bodyObj = new DynamicObject();
+        bodyObj->setProperty("moduleId", "Interface");
+        bodyObj->setProperty("expression", "Console.assertTrue(false)");
+        
+        auto response = ctx->httpPost("/api/repl", JSON::toString(var(bodyObj.get())));
+        var json = ctx->parseJson(response);
+        
+        expect(!(bool)json["success"], "Should fail for failed assertion");
+        expect(json["moduleId"].toString() == "Interface", "Should return moduleId");
+        expect(json["result"].toString() == "Error at REPL Evaluation", "Should have error result message");
+        expect(json["errors"].isArray(), "Should have errors array");
+        expect(json["errors"].size() >= 1, "Should have at least one error");
+        expect(json["errors"][0]["errorMessage"].toString().isNotEmpty(), "Error should have a message");
+    }
+    
+    //==========================================================================
+    void testEvaluateREPLMissingExpression()
+    {
+        /** Setup: None
+         *  Scenario: POST to /api/repl without an expression field
+         *  Expected: Returns error response
+         */
+        beginTest("POST /api/repl (missing expression)");
+        
+        DynamicObject::Ptr bodyObj = new DynamicObject();
+        bodyObj->setProperty("moduleId", "Interface");
+        // No expression field
+        
+        auto response = ctx->httpPost("/api/repl", JSON::toString(var(bodyObj.get())));
+        var json = ctx->parseJson(response);
+        
+        expect((bool)json["error"], "Should have error flag");
+        expect(json["message"].toString().contains("expression"),
+               "Error message should mention expression");
+    }
+    
+    //==========================================================================
+    void testEvaluateREPLMissingModuleId()
+    {
+        /** Setup: None
+         *  Scenario: POST to /api/repl without a moduleId field
+         *  Expected: Returns error response
+         */
+        beginTest("POST /api/repl (missing moduleId)");
+        
+        DynamicObject::Ptr bodyObj = new DynamicObject();
+        bodyObj->setProperty("expression", "1 + 1");
+        // No moduleId field
+        
+        auto response = ctx->httpPost("/api/repl", JSON::toString(var(bodyObj.get())));
+        var json = ctx->parseJson(response);
+        
+        expect((bool)json["error"], "Should have error flag");
+        expect(json["message"].toString().contains("moduleId"),
+               "Error message should mention moduleId");
+    }
+    
+    //==========================================================================
+    void testEvaluateREPLUnknownModule()
+    {
+        /** Setup: None
+         *  Scenario: POST to /api/repl with a non-existent moduleId
+         *  Expected: Returns error response
+         */
+        beginTest("POST /api/repl (unknown module)");
+        
+        DynamicObject::Ptr bodyObj = new DynamicObject();
+        bodyObj->setProperty("moduleId", "NonExistentModule");
+        bodyObj->setProperty("expression", "1 + 1");
+        
+        auto response = ctx->httpPost("/api/repl", JSON::toString(var(bodyObj.get())));
+        var json = ctx->parseJson(response);
+        
+        expect((bool)json["error"], "Should have error flag");
+        expect(json["message"].toString().contains("not found"),
+               "Error message should mention not found");
     }
     
     //==========================================================================
@@ -2352,7 +2526,7 @@ private:
         var json = ctx->parseJson(response);
         
         expect(!(bool)json["success"], "Should fail for unknown module");
-        expect(json["errorMessage"].toString().contains("module not found"),
+        expect(json["message"].toString().contains("module not found"),
                "Error should mention module not found: " + response);
     }
     

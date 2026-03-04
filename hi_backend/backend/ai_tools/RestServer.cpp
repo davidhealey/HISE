@@ -567,10 +567,16 @@ int RestServer::getPort() const
 void RestServer::addListener(Listener* listener)
 {
     pimpl->listeners.add(listener);
+
+	if (isRunning())
+		listener->serverStarted(getPort());
 }
 
 void RestServer::removeListener(Listener* listener)
 {
+	if (isRunning())
+		listener->serverStopped();
+
     pimpl->listeners.remove(listener);
 }
 

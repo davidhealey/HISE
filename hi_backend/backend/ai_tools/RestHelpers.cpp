@@ -526,57 +526,46 @@ RestServer::Response RestHelpers::handleRecompile(MainController* mc, RestServer
 	return req->waitForResponse();
 }
 
-RestServer::Response RestHelpers::evaluateREPL(MainController* mc, RestServer::AsyncRequest::Ptr req)
+RestServer::Response RestHelpers::handleEvaluateREPL(MainController* mc, RestServer::AsyncRequest::Ptr req)
 {
 	auto obj = req->getRequest().getJsonBody();
-
 	auto moduleId = obj[RestApiIds::moduleId].toString();
 	auto expression = obj[RestApiIds::expression].toString();
-	
+
+	if (moduleId.isEmpty())
+		return req->fail(400, "moduleId is required in request body");
+
 	if (expression.isEmpty())
-		return req->fail(400, "missing expression");
+		return req->fail(400, "expression is required in request body");
 
-	if (auto p = ProcessorHelpers::getFirstProcessorWithName(mc->getMainSynthChain(), moduleId))
-	{
-		if (auto jp = dynamic_cast<JavascriptProcessor*>(p))
-		{
-			if (auto engine = jp->getScriptEngine())
-			{
-				auto r = Result::ok();
-				auto v = engine->evaluate(expression, &r);
+	auto jp = dynamic_cast<JavascriptProcessor*>(
+		ProcessorHelpers::getFirstProcessorWithName(mc->getMainSynthChain(), moduleId));
 
-				if (v.isUndefined() || v.isVoid())
-					v = "undefined";
+	if (jp == nullptr)
+		return req->fail(404, "module not found: " + moduleId);
 
-				DynamicObject::Ptr res = new DynamicObject();
-				res->setProperty(RestApiIds::success, r.wasOk());
-				res->setProperty(RestApiIds::result, r.wasOk() ? "REPL Evaluation OK" : "Error at REPL Evaluation");
-				res->setProperty(RestApiIds::value, v);
+	auto engine = jp->getScriptEngine();
 
-				if (!r.wasOk())
-				{
-					debugError(p, r.getErrorMessage());
-				}
+	if (engine == nullptr)
+		return req->fail(500, "no script engine present. Compile at least once before this method");
 
-				req->complete(RestServer::Response::ok(var(res.get())));
-				return req->waitForResponse();
-			}
-			else
-			{
-				return req->fail(500, "no script engine present. Compile at least once before this method");
-			}
-		}
-		else
-		{
-			return req->fail(500, moduleId + " is not a script processor");
-		}
-	}
-	else
-	{
-		return req->fail(404, moduleId + " not found");
-	}
+	auto r = Result::ok();
+	auto v = engine->evaluate(expression, &r);
 
-	
+	if (v.isUndefined() || v.isVoid())
+		v = "undefined";
+
+	DynamicObject::Ptr res = new DynamicObject();
+	res->setProperty(RestApiIds::success, r.wasOk());
+	res->setProperty(RestApiIds::moduleId, moduleId);
+	res->setProperty(RestApiIds::result, r.wasOk() ? "REPL Evaluation OK" : "Error at REPL Evaluation");
+	res->setProperty(RestApiIds::value, v);
+
+	if (!r.wasOk())
+		debugError(dynamic_cast<Processor*>(jp), r.getErrorMessage());
+
+	req->complete(RestServer::Response::ok(var(res.get())));
+	return req->waitForResponse();
 }
 
 /** Internal recursive helper that includes LAF info when registry is provided. */

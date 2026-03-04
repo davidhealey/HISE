@@ -298,7 +298,7 @@ RestServer::Response BackendProcessor::onAsyncRequest(RestServer::AsyncRequest::
 			return RestHelpers::handleListComponents(this, req);
 
 		case RestHelpers::ApiRoute::EvaluateREPL:
-			return RestHelpers::evaluateREPL(this, req);
+			return RestHelpers::handleEvaluateREPL(this, req);
 			
 		case RestHelpers::ApiRoute::GetComponentProperties:
 			return RestHelpers::handleGetComponentProperties(this, req);

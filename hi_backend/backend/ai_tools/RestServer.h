@@ -317,8 +317,9 @@ public:
         @note Listeners are called on the server thread, not the message thread.
               Use MessageManager::callAsync() if you need to update UI.
         
-        @note Events are not queued. If you register a listener after the server
-              has started, check isRunning() and getPort() to catch up on state.
+        @note State is automatically synchronised on registration: addListener()
+              calls serverStarted() if the server is already running, and
+              removeListener() calls serverStopped() before removing.
     */
     class Listener
     {

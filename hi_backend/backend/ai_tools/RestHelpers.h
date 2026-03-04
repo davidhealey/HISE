@@ -522,8 +522,8 @@ struct RestHelpers
                                                 RestServer::AsyncRequest::Ptr req);
     
     /** Handler for POST /api/repl - Evaluate a REPL expression. */
-	static RestServer::Response evaluateREPL(MainController* mc,
-		                                     RestServer::AsyncRequest::Ptr req);
+	static RestServer::Response handleEvaluateREPL(MainController* mc,
+		                                           RestServer::AsyncRequest::Ptr req);
 
     /** Handler for GET /api/list_components - List UI components. */
     static RestServer::Response handleListComponents(MainController* mc, 
