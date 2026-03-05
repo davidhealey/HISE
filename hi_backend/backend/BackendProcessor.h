@@ -446,6 +446,9 @@ public:
 
 	Component* getRootComponent() override;
 
+	static void setUseCommandLineServerMode(int port) { commandLineServerPort = port; }
+	static bool isUsingCommandLineServerMode() { return commandLineServerPort != 0; }
+
 	bool databaseDirectoryInitialised() const override
 	{
 		auto path = getSettingsObject().getSetting(HiseSettings::Documentation::DocRepository).toString();
@@ -639,6 +642,8 @@ private:
 	RestServer restServer;
 	
 	std::unique_ptr<InteractionTester> interactionTester;
+
+	static int commandLineServerPort;
 
 	JUCE_DECLARE_WEAK_REFERENCEABLE(BackendProcessor);
 	JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(BackendProcessor)

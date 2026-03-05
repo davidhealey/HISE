@@ -119,6 +119,7 @@ public:
         testStartProfilingThreadFilter();
         testStartProfilingNested();
         testStartProfilingGetNoData();
+        testShutdown();
         
         // Verify all endpoints were tested
         verifyAllEndpointsTested();
@@ -2942,6 +2943,32 @@ private:
         expect(json["threads"].isArray(), "Should have threads array");
         expect(json["flows"].isArray(), "Should have flows array");
         expect(!(bool)json["recording"], "Should not be recording");
+    }
+    void testShutdown()
+    {
+        /** Setup: No specific setup needed
+         *  Scenario: Verify shutdown endpoint exists in route metadata
+         *  Expected: Endpoint is POST and registered correctly
+         *  Note: Cannot actually call this endpoint as it would terminate the test runner
+         */
+        beginTest("POST /api/shutdown (excluded from tests)");
+        
+        // Mark as touched for endpoint coverage verification.
+        ctx->touchedEndpoints.addIfNotAlreadyThere("/api/shutdown");
+        
+        // Verify the endpoint exists in the route metadata
+        bool found = false;
+        for (const auto& route : RestHelpers::getRouteMetadata())
+        {
+            if (route.path == "api/shutdown")
+            {
+                found = true;
+                expect(route.method == RestServer::POST, "shutdown should be POST");
+                expect(route.category == "status", "shutdown should be in status category");
+                break;
+            }
+        }
+        expect(found, "shutdown should exist in route metadata");
     }
 };
 

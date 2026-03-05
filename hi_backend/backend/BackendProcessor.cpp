@@ -267,6 +267,8 @@ void PluginParameterRamp::bump(PluginParameterSimulatorInfo& info, double milliS
 	info.performChange();
 }
 
+int BackendProcessor::commandLineServerPort = 0;
+
 RestServer::Response BackendProcessor::onAsyncRequest(RestServer::AsyncRequest::Ptr req)
 {
 	debugToConsole(getMainSynthChain(), "\tincoming HTTP request: " + req->getRequest().url.toString(true));
@@ -329,6 +331,9 @@ RestServer::Response BackendProcessor::onAsyncRequest(RestServer::AsyncRequest::
 			
 		case RestHelpers::ApiRoute::StartProfiling:
 			return RestHelpers::handleStartProfiling(this, req);
+			
+		case RestHelpers::ApiRoute::Shutdown:
+			return RestHelpers::handleShutdown(this, req);
 			
 		default:
 			return req->fail(404, "Unknown API endpoint: " + subURL);
@@ -447,9 +452,13 @@ if (!inUnitTestMode())
 	{
 		getAutoSaver().initialise();
 
-		// Auto-start REST API server if enabled in settings
-		if (getSettingsObject().getSetting(HiseSettings::Scripting::AutoStartRestServer).toString() == "Yes")
+		if (BackendProcessor::isUsingCommandLineServerMode())
 		{
+			restServer.start(commandLineServerPort);
+		}
+		else if (getSettingsObject().getSetting(HiseSettings::Scripting::AutoStartRestServer).toString() == "Yes")
+		{
+			// Auto-start REST API server if enabled in settings
 			int port = (int)getSettingsObject().getSetting(HiseSettings::Scripting::RestApiPort);
 			restServer.start(port);
 		}

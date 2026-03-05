@@ -250,6 +250,7 @@ struct RestHelpers
         DiagnoseScript,         ///< POST /api/diagnose_script - Run diagnostic shadow parse
         GetIncludedFiles,       ///< GET  /api/get_included_files - List included script files
         StartProfiling,         ///< POST /api/profile - Run profiling session or retrieve last result
+        Shutdown,               ///< POST /api/shutdown - Gracefully quit HISE
         numRoutes
     };
     
@@ -580,6 +581,12 @@ struct RestHelpers
      */
     static RestServer::Response handleStartProfiling(MainController* mc, 
                                                       RestServer::AsyncRequest::Ptr req);
+    
+    /** Handler for POST /api/shutdown - Gracefully quit HISE.
+     *  Sends the HTTP 200 response before scheduling the quit on the message thread.
+     */
+    static RestServer::Response handleShutdown(MainController* mc, 
+                                                RestServer::AsyncRequest::Ptr req);
 
 #if HISE_INCLUDE_PROFILING_TOOLKIT
     /** Query options for filtering and summarizing profiling results. */

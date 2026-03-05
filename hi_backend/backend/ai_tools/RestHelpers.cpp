@@ -831,6 +831,13 @@ const Array<RestHelpers::RouteMetadata>& RestHelpers::getRouteMetadata()
 				"blocking. Returns {recording: true}. Used in get mode.")
 				.withDefault("true")));
 		
+		// ApiRoute::Shutdown
+		m.add(RouteMetadata(ApiRoute::Shutdown, "api/shutdown")
+			.withMethod(RestServer::POST)
+			.withCategory("status")
+			.withDescription("Gracefully quit the HISE application")
+			.withReturns("Success confirmation before shutdown begins"));
+		
 		// Verify count matches enum
 		jassert(m.size() == (int)ApiRoute::numRoutes);
 		
@@ -956,6 +963,21 @@ RestServer::Response RestHelpers::handleListMethods(MainController* mc, RestServ
 
 RestServer::Response RestHelpers::handleStatus(MainController* mc, RestServer::AsyncRequest::Ptr req)
 {
+	// Wait for HISE to fully initialise (audio thread running, interface compiled).
+	// This makes /api/status a reliable readiness probe after launch.
+	if (!mc->isInitialised())
+	{
+		auto startTime = Time::getMillisecondCounter();
+
+		while (!mc->isInitialised())
+		{
+			if (Time::getMillisecondCounter() - startTime > 10000)
+				return req->fail(503, "HISE is still initialising");
+
+			Thread::sleep(100);
+		}
+	}
+
 	DynamicObject::Ptr result = new DynamicObject();
 	result->setProperty(RestApiIds::success, true);
 
@@ -2828,6 +2850,28 @@ RestServer::Response RestHelpers::handleStartProfiling(MainController* mc,
 		return req->waitForResponse();
 	}
 #endif
+}
+
+RestServer::Response RestHelpers::handleShutdown(MainController* mc, 
+                                                   RestServer::AsyncRequest::Ptr req)
+{
+	DynamicObject::Ptr result = new DynamicObject();
+	result->setProperty(RestApiIds::success, true);
+	result->setProperty(RestApiIds::result, "Shutdown initiated");
+	result->setProperty(RestApiIds::logs, Array<var>());
+	result->setProperty(RestApiIds::errors, Array<var>());
+
+	req->complete(RestServer::Response::ok(var(result.get())));
+
+	// Schedule quit on the message thread after the HTTP response has been sent.
+	// The handler returns the Response to cpp-httplib which flushes it to the
+	// client, then on the next message loop iteration the quit fires.
+	MessageManager::callAsync([]()
+	{
+		JUCEApplication::quit();
+	});
+
+	return req->waitForResponse();
 }
 
 } // namespace hise
