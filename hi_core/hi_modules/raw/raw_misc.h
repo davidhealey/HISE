@@ -655,7 +655,32 @@ public:
 
 		void otherChange(Processor* p) override;
 		
+		void registerParameterIndex(int idx)
+		{
+			attributeListener = new InternalAttributeListener(*this, idx);
+		}
+
 	private:
+
+		struct InternalAttributeListener : public Processor::AttributeListener
+		{
+			InternalAttributeListener(Base& parent_, int index):
+			  AttributeListener(parent_.processor->getMainController()->getRootDispatcher()),
+			  parent(parent_)
+			{
+				auto pi = static_cast<uint16>(index);
+				addToProcessor(parent.processor, &pi, 1, dispatch::sendNotificationAsync);
+			}
+
+			void onAttributeUpdate(Processor* p, uint16 index) override
+			{
+				parent.otherChange(p);
+			}
+
+			Base& parent;
+		};
+
+		ScopedPointer<InternalAttributeListener> attributeListener;
 
 		UndoManager* undoManager = nullptr;
 
