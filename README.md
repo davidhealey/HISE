@@ -92,6 +92,22 @@ sudo apt-get -y install build-essential make llvm clang libfreetype6-dev libx11-
 6. Type `make CONFIG=Release` and wait. If you need the debug version (that is slower but allows you to jump around in the source code, use `make CONFIG=Debug`.
 
 
+## AI Development Tools
+
+HISE includes optional tooling for AI-assisted development with [OpenCode](https://opencode.ai), [Claude Code](https://claude.ai), or other MCP/LSP-compatible AI coding agents.
+
+### MCP Server
+
+Gives your AI agent access to HISE documentation and, when HISE is running with the REST server enabled (**Tools > Enable REST Server**), live interaction with your project — compile scripts, capture screenshots, manipulate UI components.
+
+**Setup:** See [`tools/mcp_server/README.md`](tools/mcp_server/README.md)
+
+### LSP Server
+
+A diagnostic-only Language Server that catches HISEScript errors (API hallucinations, wrong argument counts, type mismatches) in `.js` files before you compile. Configure this **per-project** to avoid overriding the standard JavaScript LSP in non-HISE projects.
+
+**Setup:** See [`tools/hise_lsp_server/README.md`](tools/hise_lsp_server/README.md)
+
 ## License
 
 HISE is licensed under the GPL v3, but there will be a commercial license for closed source usage. Every instrument you'll build will inheritate this license so in order to release a closed source product you'll have to obtain a HISE commercial license as well as a JUCE commercial license. Please get in touch with me for further informations.

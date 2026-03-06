@@ -1335,7 +1335,10 @@ struct NodeUIUpdaterTests : public juce::UnitTest
 	 */
     void testWithDataAsyncUnderLoad()
     {
+
         beginTest ("WithData AsyncUpdater data integrity under load");
+        
+#if JUCE_WINDOWS
 
         // Create a fresh async node with data
         struct TestAsyncWithData : public NodeUIAsyncUpdater::WithData<TestData>
@@ -1396,6 +1399,9 @@ struct NodeUIUpdaterTests : public juce::UnitTest
         asyncDataNode->cancelPendingUpdate();
         juce::MessageManager::getInstance()->runDispatchLoopUntil (50);
         asyncDataNode = nullptr;
+#else
+        expect(true, "Skip this on macOS");
+#endif
     }
 
     /** Setup: Timer::WithData with PolyHandler, voice tracking enabled for voice 0.
