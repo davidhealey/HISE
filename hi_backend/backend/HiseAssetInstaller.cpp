@@ -809,7 +809,7 @@ bool HiseAssetInstaller::FileInstallAction::perform()
 
 		{
 			FileOutputStream fos(targetFile);
-			numWritten = fos.writeFromInputStream(*is, is->getTotalLength());
+			numWritten = fos.writeFromInputStream(*is, (int)is->getTotalLength());
 			fos.flush();
 		}
 		

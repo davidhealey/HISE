@@ -230,7 +230,7 @@ private:
         auto* arr = result.interactions.getArray();
         expect(arr != nullptr && arr->size() == 1, "Should have 1 interaction");
         
-        auto& click = (*arr)[0];
+        auto click = (*arr)[0];
         expect(click[RestApiIds::type].toString() == InteractionIds::click.toString(), "Should be click");
     }
     

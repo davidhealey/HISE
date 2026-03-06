@@ -359,8 +359,6 @@ struct ScriptingApi::Content::ScriptComponent::Validators
 				for (const auto& p : sc->propertyIds)
 					sa.add(p.toString());
 
-				auto exists = sc->getIndexForProperty(Identifier(propertyId)) != -1;
-
 				if (!sa.contains(propertyId))
 					return DiagnosticResult::fail("unknown property").withWrongToken(propertyId).withFuzzySuggestion(sa);
 

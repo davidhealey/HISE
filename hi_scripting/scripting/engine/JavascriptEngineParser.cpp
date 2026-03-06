@@ -920,7 +920,7 @@ private:
 			match(TokenTypes::closeParen);
 
 			using CS = ApiHelpers::CallScope;
-			CS level;
+			CS level = CS::Unknown;
 
 			if (levelStr == "warn")
 				level = CS::Warning;

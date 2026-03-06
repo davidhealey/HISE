@@ -787,6 +787,7 @@ public:
 
         // if you hit this you need to add the function first...
         jassert(ok);
+        ignoreUnused(ok);
         diagnostics[methodName] = qf;
     }
 

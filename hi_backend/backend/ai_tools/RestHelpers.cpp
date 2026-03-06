@@ -286,51 +286,6 @@ static String renderStyleToString(ScriptingApi::Content::LafRegistry::LafInfo::R
 	}
 }
 
-/** Decodes a Base64-encoded location string to file:line:col format.
-    Input: "{{Base64(processorId|path|charIndex|line|col)}}"
-    Output: "path:line:col" or "moduleId.js:line:col" for inline callbacks */
-static String decodeLocationString(const String& encodedLocation, 
-                                    const File& scriptRoot, 
-                                    const String& moduleId)
-{
-	String encoded = encodedLocation.fromFirstOccurrenceOf("{{", false, false)
-	                                 .upToFirstOccurrenceOf("}}", false, false);
-	
-	if (encoded.isEmpty())
-		return encodedLocation;  // Return as-is if not encoded
-	
-	MemoryOutputStream mos;
-	if (!Base64::convertFromBase64(mos, encoded))
-		return encodedLocation;
-	
-	String decoded(static_cast<const char*>(mos.getData()), mos.getDataSize());
-	StringArray parts = StringArray::fromTokens(decoded, "|", "");
-	
-	if (parts.size() < 5)
-		return encodedLocation;
-	
-	// Format: "processorId|relativePath|charIndex|line|col"
-	String path = parts[1];
-	int line = parts[3].getIntValue();
-	int col = parts[4].getIntValue();
-	
-	String fullPath;
-	if (path.isEmpty() || path.contains("()"))
-	{
-		fullPath = moduleId + ".js";
-	}
-	else
-	{
-		File f = scriptRoot.getChildFile(path);
-		if (f.existsAsFile())
-			fullPath = f.getRelativePathFrom(scriptRoot.getParentDirectory()).replaceCharacter('\\', '/');
-		else
-			fullPath = path;
-	}
-	
-	return fullPath + ":" + String(line) + ":" + String(col);
-}
-
 /** Builds LAF info object for a component, or returns false if no LAF assigned.
     Computes location lazily - by this point watched files are populated. */
 static var getLafInfoForComponent(ScriptingApi::Content::LafRegistry* registry, 

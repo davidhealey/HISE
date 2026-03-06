@@ -301,8 +301,6 @@ juce::String ScriptingApiDatabase::Resolver::createMethodText(ValueTree& mv)
 
 	auto extendedDescription = fileLink.toString(MarkdownLink::ContentWithoutHeader, rootURL.getRoot());
 
-	auto exampleFound = false;
-
 	if(extendedDescription.contains("```"))
 	{
 		auto code = extendedDescription.fromFirstOccurrenceOf("```", false, false).upToLastOccurrenceOf("```", false, false);

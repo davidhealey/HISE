@@ -389,8 +389,6 @@ struct branch_editor : public ScriptnodeExtraComponent<mothernode>,
 			}
 			else
 			{
-				auto copy = top;
-
 				for (int i = 0; i < numLastParameters; i++)
 				{
 					auto r = circles.getRectangle(i);

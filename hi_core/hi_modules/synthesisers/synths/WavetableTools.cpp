@@ -103,9 +103,6 @@ ValueTree WavetableHelpers::StoreData::store(bool exportAsHwt, const ConfigData&
 	if (numChannels == -1)
 		numChannels = dataBuffer.getNumChannels();
 
-	if (numParts == -1)
-		numParts = numParts;
-
 	if (sampleRate == -1.0)
 		sampleRate = 48000.0;
 		

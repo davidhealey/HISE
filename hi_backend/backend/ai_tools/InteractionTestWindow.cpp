@@ -56,32 +56,6 @@ using namespace juce;
 // Debug helper for generating unit test data from recorded sessions
 //==============================================================================
 
-#if JUCE_DEBUG
-static void dumpMockComponents(Component* component, ScriptContentComponent* scc)
-{
-    for (int i = 0; i < component->getNumChildComponents(); i++)
-    {
-        auto* child = component->getChildComponent(i);
-        String name;
-        
-        if (dynamic_cast<HiToggleButton*>(child) != nullptr)
-            name = child->getName();
-        else if (dynamic_cast<HiSlider*>(child) != nullptr)
-            name = child->getName();
-        else if (dynamic_cast<HiComboBox*>(child) != nullptr)
-            name = child->getName();
-        
-        if (name.isNotEmpty())
-        {
-            auto topLeft = scc->getLocalPoint(child, Point<int>(0, 0));
-            auto size = child->getLocalBounds();
-        }
-        
-        dumpMockComponents(child, scc);
-    }
-}
-#endif
-
 //==============================================================================
 // InteractionTestWindow::CursorOverlay implementation
 
@@ -883,6 +857,8 @@ void InteractionTestWindow::StatusBar::paint(Graphics& g)
     auto stateArea = b.removeFromLeft(90);        // state indicator
     auto logArea = b.removeFromLeft(28);          // log button handled by child
     auto progressArea = b.reduced(4, 4);          // remaining = progress bar with text inside
+
+    ignoreUnused(dumpArea, logArea);
     
     // State indicator (colored dot)
     auto dotArea = stateArea.removeFromLeft(20);
