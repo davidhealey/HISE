@@ -8,3 +8,6 @@
 [submodule "tools/api generator"]
 	path = tools/api generator
 	url = https://github.com/christoph-hart/hise_api_generator.git
+[submodule "tools/hise_lsp_server"]
+	path = tools/hise_lsp_server
+	url = https://github.com/christoph-hart/hise_lsp_server.git
