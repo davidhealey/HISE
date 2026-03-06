@@ -464,6 +464,43 @@ ScriptingApi::Content::ScriptComponent::ScriptComponent(ProcessorWithScriptingCo
 
 	useRectangleClass = HISE_GET_PREPROCESSOR(getScriptProcessor()->getMainController_(), HISE_USE_SCRIPT_RECTANGLE_OBJECT);
 
+	auto checkProperty = [](ApiClass* c, const Array<var>& args)
+	{
+		if (auto sc = dynamic_cast<ScriptComponent*>(c))
+		{
+			// if the parameter call is not resolvable at parse time
+			// (eg. not an literal), then this is undefined
+			if (!args[0].isUndefined())
+			{
+				auto propertyId = args[0].toString();
+
+				StringArray sa;
+
+				for (const auto& p : sc->propertyIds)
+					sa.add(p.toString());
+
+				auto exists = sc->getIndexForProperty(Identifier(propertyId)) != -1;
+
+				if (!sa.contains(propertyId))
+					return DiagnosticResult::fail("unknown property").withWrongToken(propertyId).withFuzzySuggestion(sa);
+
+				if (sc->deactivatedProperties.contains(Identifier(propertyId)))
+					return DiagnosticResult::fail("deactivated property").withWrongToken(propertyId);
+
+				return DiagnosticResult::ok();
+			};
+
+			// couldn't defer the property string, 
+			return DiagnosticResult::unknown();
+		}
+
+		return DiagnosticResult::fail("not a ScriptComponent");
+	};
+
+	// same lambda, same logic...
+	addDiagnostic("set", checkProperty);
+	addDiagnostic("get", checkProperty);
+
 	//setName(name_.toString());
 
 

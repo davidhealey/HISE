@@ -5338,6 +5338,40 @@ struct ScriptingApi::Synth::Wrapper
 	
 };
 
+struct ModuleDiagnoser
+{
+	template <typename T> static ApiClass::DiagnosticResult check(ApiClass* c, const Array<var>& args)
+	{
+		if (auto s = dynamic_cast<ScriptingApi::Synth*>(c))
+		{
+			if (args[0].isString())
+			{
+				auto id = args[0].toString();
+				auto mc = s->getScriptProcessor()->getMainController_();
+
+				Processor::Iterator<T> iter(mc->getMainSynthChain());
+
+				StringArray sa;
+
+				while (auto p = iter.getNextProcessor())
+				{
+					auto pid = dynamic_cast<Processor*>(p)->getId();
+
+					if (pid == id)
+						return ApiClass::DiagnosticResult::ok();
+
+					sa.add(pid);
+				}
+
+				return ApiClass::DiagnosticResult::fail("module not found").withWrongToken(id).withFuzzySuggestion(sa);
+			}
+
+			return ApiClass::DiagnosticResult::unknown();
+		}
+
+		return ApiClass::DiagnosticResult::unknown();
+	}
+};
 
 ScriptingApi::Synth::Synth(ProcessorWithScriptingContent *p, Message* messageObject_, ModulatorSynth *ownerSynth) :
 	ScriptingObject(p),
@@ -5391,15 +5425,15 @@ ScriptingApi::Synth::Synth(ProcessorWithScriptingContent *p, Message* messageObj
 	ADD_API_METHOD_1(getMidiPlayer);
 	ADD_API_METHOD_1(removeEffect);
 	ADD_API_METHOD_1(removeModulator);
-	ADD_API_METHOD_1(getModulator);
+	ADD_API_METHOD_1(getModulator);				addDiagnostic("getModulator", ModuleDiagnoser::check<Modulator>);
 	ADD_API_METHOD_1(getAudioSampleProcessor);
 	ADD_API_METHOD_1(getDisplayBufferSource);
 	ADD_API_METHOD_1(getTableProcessor);
 	ADD_API_METHOD_1(getSliderPackProcessor);
 	ADD_API_METHOD_1(getWavetableController);
 	ADD_API_METHOD_1(getSampler);
-	ADD_API_METHOD_1(getSlotFX);
-	ADD_API_METHOD_1(getEffect);
+	ADD_API_METHOD_1(getSlotFX);				addDiagnostic("getSlotFX", ModuleDiagnoser::check<HotswappableProcessor>);
+	ADD_API_METHOD_1(getEffect);				addDiagnostic("getEffect", ModuleDiagnoser::check<EffectProcessor>);
 	ADD_API_METHOD_1(getAllEffects);
 	ADD_API_METHOD_1(getRoutingMatrix);
 	ADD_API_METHOD_1(getMidiProcessor);
@@ -5416,7 +5450,6 @@ ScriptingApi::Synth::Synth(ProcessorWithScriptingContent *p, Message* messageObj
 	ADD_API_METHOD_1(setClockSpeed);
 	ADD_API_METHOD_1(setShouldKillRetriggeredNote);
 	ADD_API_METHOD_0(createBuilder);
-	
 };
 
 
@@ -8049,6 +8082,19 @@ ScriptingApi::Server::Server(JavascriptProcessor* jp_):
 	ADD_API_METHOD_1(isEmailAddress);
     ADD_API_METHOD_1(setTimeoutMessageString);
     ADD_API_METHOD_1(setEnforceTrailingSlash);
+
+	addDiagnostic("callWithGET", [](ApiClass* c, const Array<var>& args)
+	{
+		if (auto s = dynamic_cast<Server*>(c))
+		{
+			if (!s->globalServer.isBaseURLDefined())
+				return DiagnosticResult::fail("setBaseURL not called");
+
+			return DiagnosticResult::ok();
+		}
+
+		return DiagnosticResult::fail("not a Server object");
+	});
 }
 
 void ScriptingApi::Server::setBaseURL(String url)

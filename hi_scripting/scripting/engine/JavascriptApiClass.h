@@ -352,6 +352,131 @@ class ApiClass : public ReferenceCountedObject,
 {
 public:
 
+    struct DiagnosticResult
+    {
+        using QueryFunction = std::function<DiagnosticResult(ApiClass*, const Array<var>&)>;
+
+		enum class Severity
+		{
+			OK,
+			Unknown,
+			Error,
+			Warning,
+			Info,
+			Hint,
+			numSeverity
+		};
+
+        enum class Classification
+        {
+            Syntax,
+            ApiValidation,
+            TypeCheck,
+            Language,
+            CallScope,
+            Deprecation
+        };
+
+        static String getClassificationString(Classification c)
+        {
+            switch (c)
+            {
+            case Classification::Syntax:
+                return "syntax";
+            case Classification::ApiValidation:
+                return "api-validation";
+            case Classification::TypeCheck:
+                return "type-check";
+            case Classification::Language:
+                return "language";
+            case Classification::CallScope:
+                return "callscope";
+            case Classification::Deprecation:
+                return "deprecation";
+            default:
+                return "unknown";
+            }
+        }
+
+		DiagnosticResult(Severity s, const String& msg) :
+			severity(s),
+			message(msg)
+		{
+		}
+
+        DiagnosticResult(const String& msg) :
+            severity(Severity::Unknown),
+            message(msg)
+        {}
+
+        DiagnosticResult withSeverity(Severity s) const { auto copy = *this; copy.severity = s; return copy; }
+
+        static DiagnosticResult ok() { return { Severity::OK, "" }; }
+        static DiagnosticResult unknown(const String& msg={}) { return {Severity::Unknown, msg }; }
+        static DiagnosticResult fail(const String& msg) { return { Severity::Error, msg }; }
+
+        bool shouldReport() const { return severity > Severity::Unknown; }
+
+        DiagnosticResult withSuggestion(const String& s) const { auto copy = *this; copy.suggestions.add(s); return copy; }
+
+        DiagnosticResult withFuzzySuggestion(const StringArray& availableTokens) const
+        {
+            auto copy = *this;
+            jassert(wrongToken.isNotEmpty());
+            copy.suggestions.add(FuzzySearcher::suggestCorrection(wrongToken, availableTokens, 0.6));
+            return copy;
+        }
+
+        DiagnosticResult withWrongToken(const String& wrongToken) const
+        {
+            auto copy = *this;
+            copy.wrongToken = wrongToken;
+            return copy;
+        }
+
+        DiagnosticResult withExpectation(const String& expected, const String& actual) const
+        {
+            auto copy = *this;
+            copy.wrongToken = actual;
+            copy.rightToken = expected;
+            return copy;
+        }
+
+        DiagnosticResult withClassification(Classification c) const
+        {
+            auto copy = *this;
+            copy.source = c;
+            return copy;
+        }
+
+        Severity getSeverity() const { return severity; }
+        String getErrorMessage() const 
+        { 
+            String msg;
+
+            msg << message;
+
+            if (wrongToken.isNotEmpty() && rightToken.isNotEmpty())
+                msg << ": expected: " << rightToken << ", actual: " << wrongToken;
+            else if (wrongToken.isNotEmpty())
+                msg << ": " << wrongToken;
+
+            return msg;
+        }
+        StringArray getSuggestions() const { return suggestions; }
+        Classification getClassification() const { return source; }
+
+    private:
+
+        Severity severity;
+        Classification source = Classification::ApiValidation;
+        String message;
+        String wrongToken;
+        String rightToken;
+        StringArray suggestions;
+
+    };
+
 	// ================================================================================================================
 
 	typedef var(*call0)(ApiClass*);
@@ -427,6 +552,43 @@ public:
      *
      *   You don't need to use this directly, but use the macro ADD_API_METHOD_5() for it. */
     void addFunction5(const Identifier &id, call5 newFunction);
+
+    /** Registers a diagnostic function that is evaluated at parse time. 
+    
+        A diagnostic function is a lambda that performs dynamic checks on the validity of a API call.
+        What this check is implementing is completely up to the call site. It is used by the ApiValidationAnalyzer
+        in the shadow parser to collect dynamic diagnostic reports for the LSP server.
+
+        QueryFunction must be a callable object with this signature:
+
+        DiagnosticResult getDiagnostics(ApiClass* c, const Array<var>& arguments>)
+
+        Note that the arguments object might contain undefined values for parameter values that
+        could not be deduced at parse time. If you rely on that check, then just return
+        DiagnosticResult::unknown().
+    */
+    void addDiagnostic(const Identifier& methodName, const DiagnosticResult::QueryFunction& qf)
+    {
+        int unused;
+        auto ok = getIndexAndNumArgsForFunction(methodName, unused, unused);
+
+        // if you hit this you need to add the function first...
+        jassert(ok);
+        diagnostics[methodName] = qf;
+    }
+
+    /** Performs the assigned diagnostic check in the parser. */
+    DiagnosticResult performDiagnostic(const Identifier& methodName, const Array<var>& args)
+    {
+        jassert(hasDiagnosticCheck(methodName));
+        return diagnostics.at(methodName)(this, args);
+    }
+
+    /** Used by the parser to check whether to evaluate the arguments for the check. */
+    bool hasDiagnosticCheck(const Identifier& methodName) const
+    {
+        return diagnostics.find(methodName) != diagnostics.end();
+    }
 
 #if ENABLE_SCRIPTING_SAFE_CHECKS
     void addForcedParameterTypes(const Identifier& id, const VarTypeChecker::ParameterTypes& types)
@@ -556,6 +718,8 @@ private:
 
 	bool wantsLocation = false;
 	DebugableObjectBase::Location currentLocation;
+
+    std::map<Identifier, DiagnosticResult::QueryFunction> diagnostics;
 
 	Array<WeakReference<DebugableObjectBase>> optimizableFunctions;
 

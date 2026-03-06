@@ -9359,6 +9359,8 @@ struct ScriptingObjects::GlobalCableReference::DummyTarget : public scriptnode::
 	GlobalCableReference& parent;
 };
 
+
+
 ScriptingObjects::GlobalCableReference::GlobalCableReference(ProcessorWithScriptingContent* ps, var c) :
 	ConstScriptingObject(ps, 0),
 	cable(c),
@@ -9379,6 +9381,8 @@ ScriptingObjects::GlobalCableReference::GlobalCableReference(ProcessorWithScript
 	ADD_API_METHOD_3(connectToMacroControl);
     ADD_API_METHOD_2(connectToGlobalModulator);
     ADD_API_METHOD_3(connectToModuleParameter);
+
+	addDiagnostic("registerCallback", WeakCallbackHolder::checkCallbackNumArgs<1>);
 
 	inputRange.checkIfIdentity();
 }

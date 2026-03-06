@@ -1123,9 +1123,7 @@ public:
 			StringArray suggestions;
 			enum Severity { Error, Warning, Info, Hint } severity = Error;
 
-			/** Diagnostic source category for REST endpoint / LSP classification.
-			    Values: "syntax", "api-validation", "type-check", "language", "callscope". */
-			String source;
+			ApiClass::DiagnosticResult::Classification classification;
 
 			/** Formats the diagnostic matching F5 compile error output:
 			    "locationString: message {{Base64(processorId|path|charIndex|line|col)}}"
