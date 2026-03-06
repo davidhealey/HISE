@@ -398,6 +398,39 @@ public:
             }
         }
 
+		static String getSeverityString(Severity s)
+		{
+			switch (s)
+			{
+			case Severity::Error:   return "error";
+			case Severity::Warning: return "warning";
+			case Severity::Info:    return "info";
+			case Severity::Hint:    return "hint";
+            case Severity::Unknown: return "unknown";
+            case Severity::OK:      return "ok";
+			default:                return "error";
+			}
+		}
+
+        /** A small helper POD that carries over the data from a diagnostic event. */
+        struct Item
+        {
+            int line = 0;
+            int col = 0;
+            String fileName;
+            String message;
+            StringArray suggestions;
+            Severity severity = Severity::Error;
+
+            ApiClass::DiagnosticResult::Classification classification;
+
+            /** Formats the diagnostic matching F5 compile error output:
+                "locationString: message {{Base64(processorId|path|charIndex|line|col)}}"
+                This makes console output double-clickable and parseable by RestHelpers::parseError(). */
+            String toConsoleString(Processor* p) const;
+
+        };
+
 		DiagnosticResult(Severity s, const String& msg) :
 			severity(s),
 			message(msg)

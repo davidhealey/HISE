@@ -538,70 +538,24 @@ public:
 		};
 
 #if USE_BACKEND
+		using RealtimeSafetyInfo = WeakCallbackHolder::RealtimeSafetyInfo;
 
-		struct RealtimeSafetyInfo
+		/** Concrete RealtimeSafetyInfo item that carries a structured call stack.
+		    Defined here (not in ScriptingBaseObjects.h) because it depends on CallStackEntry. */
+		struct RealtimeSafetyWarning : public RealtimeSafetyInfo::ItemBase
 		{
-			using CallScope = WeakCallbackHolder::CallableObject::CallScope;
-			using StrictnessLevel = WeakCallbackHolder::CallableObject::StrictnessLevel;
-			using SafetyReport = WeakCallbackHolder::CallableObject::SafetyReport;
+			Array<CallStackEntry> callStack;
 
-			struct Warning
+			Ptr clone() const override
 			{
-				String apiCall;                    // "Console.print" or "*.push" (greedy)
-				CallScope scope;                   // from the CallScopeInfo lookup
-				String note;                       // callScopeNote, e.g. "allocates MemoryOutputStream"
-				Array<CallStackEntry> callStack;   // full trace from caller to unsafe API call
-				Identifier outerHolderType;        // "Callback" or "InlineFunction" — type of outermost holder
-			};
-
-			struct Holder
-			{
-				virtual ~Holder() {}
-				virtual RealtimeSafetyInfo* getRealtimeSafetyInfo() = 0;
-				virtual Identifier getCallScopeId() const { return {}; }
-				virtual Identifier getCallScopeType() const { return {}; }
-			};
-
-			Array<Warning> warnings;
-			bool analyzed = false;
-
-			bool isEmpty() const { return warnings.isEmpty(); }
-
-			bool hasUnsafe() const
-			{
-				for (auto& w : warnings)
-					if (w.scope == CallScope::Unsafe || w.scope == CallScope::Init)
-						return true;
-				return false;
+				auto copy = new RealtimeSafetyWarning();
+				cloneBaseMembers(copy);
+				copy->callStack = callStack;
+				return copy;
 			}
 
-		bool hasWarning() const
-		{
-			for (auto& w : warnings)
-				if (w.scope == CallScope::Warning)
-					return true;
-			return false;
-		}
-
-			/** Returns a formatted report string for the console.
-			 *  Filters based on strictness: Warn includes warning+unsafe, Error same.
-			 *  Relaxed returns empty (caller should not call this with Relaxed).
-			 */
-			String toString(StrictnessLevel l, Processor* p) const;
-
-			/** Encapsulates the full enforcement pattern at call sites.
-			 *
-			 *  1. Checks callable->isRealtimeSafe() — if false, returns true (structural rejection)
-			 *  2. Queries StrictnessLevel via JavascriptProcessor::getStrictnessLevel()
-			 *  3. Calls callable->getRealtimeSafetyReport(strictness) → SafetyReport
-			 *  4. Logs message if non-empty (both Warn and Strict mode)
-			 *  5. Returns true (blocks registration) only if Strict + worstScope is Unsafe/Init
-			 */
-			static bool check(WeakCallbackHolder::CallableObject* callable,
-			                  ScriptingObject* caller,
-			                  const String& context);
+			String toCallStackString(Processor* p = nullptr) const override;
 		};
-
 #endif
 
 		struct Scope;
@@ -1112,24 +1066,9 @@ public:
 		};
 
 #if USE_BACKEND
-		/** Diagnostic data carrier for LSP-style shadow parse errors.
-		    Stores extracted location data instead of CodeLocation (which has no default ctor). */
-		struct ApiDiagnostic
-		{
-			int line = 0;
-			int col = 0;
-			String fileName;
-			String message;
-			StringArray suggestions;
-			enum Severity { Error, Warning, Info, Hint } severity = Error;
 
-			ApiClass::DiagnosticResult::Classification classification;
 
-			/** Formats the diagnostic matching F5 compile error output:
-			    "locationString: message {{Base64(processorId|path|charIndex|line|col)}}"
-			    This makes console output double-clickable and parseable by RestHelpers::parseError(). */
-			String toConsoleString(Processor* p) const;
-		};
+		using ApiDiagnostic = ApiClass::DiagnosticResult::Item;
 
 		/** RAII snapshot/restore for shadow-parsing a single external .js file
 		    against live HiseSpecialData without corrupting runtime state.
@@ -1227,6 +1166,8 @@ public:
 	}
 
 	static void checkValidParameter(int index, const var& valueToTest, const RootObject::CodeLocation& location, VarTypeChecker::VarTypes expectedType);
+
+	static String toConsoleString(const ApiClass::DiagnosticResult::Item& i, Processor* p);
 
     LambdaBroadcaster<bool> preCompileListeners;
 	std::vector<std::pair<WeakReference<DebugableObjectBase>, std::function<void(DebugInformationBase::Ptr)>>> debugInfoListeners;

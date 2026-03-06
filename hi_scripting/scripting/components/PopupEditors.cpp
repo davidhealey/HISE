@@ -723,7 +723,7 @@ void PopupIncludeEditor::shadowParse()
 		auto& ed = safeThis->editor->editor;
 		ed.clearWarningsAndErrors();
 
-		using Diag = HiseJavascriptEngine::RootObject::ApiDiagnostic;
+		using Severity = ApiClass::DiagnosticResult::Severity;
 
 		auto p = dynamic_cast<Processor*>(safeThis->jp.get());
 
@@ -737,13 +737,13 @@ void PopupIncludeEditor::shadowParse()
 			String editorMsg;
 			editorMsg << "Line " << d.line << "(" << d.col << "): " << d.message;
 
-			if (d.severity == Diag::Error)
+			if (d.severity == Severity::Error)
 			{
 				ed.setError(editorMsg);
 				debugError(p, consoleMsg);
 				numErrors++;
 			}
-			else if (d.severity == Diag::Hint)
+			else if (d.severity == Severity::Hint)
 			{
 				// Hints go to console only — no editor marker
 				debugToConsole(p, consoleMsg);

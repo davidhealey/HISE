@@ -1250,6 +1250,48 @@ juce::String HiseJavascriptEngine::getHoverString(const String& token)
 	}
 }
 
+juce::String HiseJavascriptEngine::toConsoleString(const ApiClass::DiagnosticResult::Item& i, Processor* p)
+{
+	String s;
+
+	// Human-readable location prefix (matches Error::getLocationString() format)
+	if (i.fileName.isEmpty() || i.fileName.contains("()"))
+		s << "Line " << i.line << ", column " << i.col;
+	else
+		s << File(i.fileName).getFileName() << " (" << i.line << ")";
+
+	s << ": " << i.message << " ";
+
+	// Append encoded location for double-click navigation
+	s << RootObject::Error::createEncodedLocation(p, i.fileName, 0, i.line, i.col);
+
+	return s;
+}
+
+String HiseJavascriptEngine::RootObject::RealtimeSafetyWarning::toCallStackString(Processor* p) const
+{
+	const String nl = "\n";
+	String s;
+	int entryIndex = 0;
+
+	for (auto& entry : callStack)
+	{
+		auto error = Error::fromLocation(entry.location, "");
+
+		if (entryIndex == 0 && outerHolderType.toString() == "Callback" && entry.functionName.isValid())
+			error.externalLocation = entry.functionName.toString() + "()";
+
+		if (p != nullptr)
+			s << ":\t\t\t" << entry.functionName << "() - " << error.toString(p) << nl;
+		else
+			s << ":\t\t\t" << entry.functionName << "() - " << error.getLocationString() << nl;
+
+		entryIndex++;
+	}
+
+	return s;
+}
+
 HiseJavascriptEngine::RootObject::Callback::Callback(const Identifier &id, int numArgs_, double bufferTime_) :
 callbackName(id),
 bufferTime(bufferTime_),

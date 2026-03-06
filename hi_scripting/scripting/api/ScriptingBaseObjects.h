@@ -282,6 +282,88 @@ struct WeakCallbackHolder : private ScriptingObject
 		JUCE_DECLARE_WEAK_REFERENCEABLE(CallableObject);
 	};
 
+	struct RealtimeSafetyInfo
+	{
+		using CallScope = CallableObject::CallScope;
+		using StrictnessLevel = CallableObject::StrictnessLevel;
+		using SafetyReport = CallableObject::SafetyReport;
+
+		struct ItemBase: public ReferenceCountedObject
+		{
+			using Ptr = ReferenceCountedObjectPtr<ItemBase>;
+			using List = ReferenceCountedArray<ItemBase>;
+
+			virtual ~ItemBase() {};
+
+			String apiCall;                    // "Console.print" or "*.push" (greedy)
+			CallScope scope;                   // from the CallScopeInfo lookup
+			String note;                       // callScopeNote, e.g. "allocates MemoryOutputStream"
+			Identifier outerHolderType;        // "Callback" or "InlineFunction" — type of outermost holder
+
+			virtual Ptr clone() const = 0;
+			virtual String toCallStackString(Processor* p = nullptr) const = 0;
+
+		protected:
+
+			/** Copies all base members into target. Call from subclass clone(). */
+			void cloneBaseMembers(ItemBase* target) const
+			{
+				target->apiCall = apiCall;
+				target->scope = scope;
+				target->note = note;
+				target->outerHolderType = outerHolderType;
+			}
+		};
+
+		struct Holder
+		{
+			virtual ~Holder() {}
+			virtual RealtimeSafetyInfo* getRealtimeSafetyInfo() = 0;
+			virtual Identifier getCallScopeId() const { return {}; }
+			virtual Identifier getCallScopeType() const { return {}; }
+		};
+
+		ItemBase::List items;
+		bool analyzed = false;
+
+		bool isEmpty() const { return items.isEmpty(); }
+
+		bool hasUnsafe() const
+		{
+			for (auto w : items)
+				if (w->scope == CallScope::Unsafe || w->scope == CallScope::Init)
+					return true;
+			return false;
+		}
+
+		bool hasWarning() const
+		{
+			for (auto w : items)
+				if (w->scope == CallScope::Warning)
+					return true;
+			return false;
+		}
+
+		/** Returns a formatted report string for the console.
+		 *  Filters based on strictness: Warn includes warning+unsafe, Error same.
+		 *  Relaxed returns empty (caller should not call this with Relaxed).
+		 */
+
+		String toString(StrictnessLevel l, Processor* p) const;
+
+		/** Encapsulates the full enforcement pattern at call sites.
+		 *
+		 *  1. Checks callable->isRealtimeSafe() — if false, returns true (structural rejection)
+		 *  2. Queries StrictnessLevel via JavascriptProcessor::getStrictnessLevel()
+		 *  3. Calls callable->getRealtimeSafetyReport(strictness) → SafetyReport
+		 *  4. Logs message if non-empty (both Warn and Strict mode)
+		 *  5. Returns true (blocks registration) only if Strict + worstScope is Unsafe/Init
+		 */
+
+		static bool check(WeakCallbackHolder::CallableObject* callable, ScriptingObject* caller, const String& context);
+
+	};
+
 	template <int E, int FIndex=0> static ApiClass::DiagnosticResult checkCallbackNumArgs(ApiClass*, const Array<var>& args)
 	{
 		if (auto f = dynamic_cast<CallableObject*>(args[FIndex].getObject()))
