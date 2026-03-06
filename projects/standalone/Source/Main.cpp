@@ -1974,12 +1974,14 @@ public:
 			UnitTestRunner runner;
 			runner.setAssertOnFailure(true);
             
-            // If you're working on a unit test, just add the "Current" category
-            // and then uncomment this line.
-            if(UnitTest::getTestsInCategory("AI Tools").isEmpty())
+			// If you're working on a unit test, just set this to the "Current" category
+			const String category = "allofem";
+
+            if(UnitTest::getTestsInCategory(category).isEmpty())
                 runner.runAllTests();
             else
-                runner.runTestsInCategory("AI Tools");
+               
+				runner.runTestsInCategory(category);
 
 			for (int i = 0; i < runner.getNumResults(); i++)
 			{

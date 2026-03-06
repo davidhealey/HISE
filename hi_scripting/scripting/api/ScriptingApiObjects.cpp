@@ -7119,14 +7119,14 @@ struct GreedyCallScopeMap
 
 		while (it.next())
 		{
-			auto& methodName = it.getKey();
-			auto& infos = it.getValue();
+			const auto methodName = it.getKey();
+			const auto infos = it.getValue();
 
 			bool anySafe = false;
 			CS worstScope = CS::Unknown;
 			String worstNote;
 
-			for (auto& info : infos)
+			for (const auto& info : infos)
 			{
 				if (info.scope == CS::Safe)
 				{
