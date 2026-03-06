@@ -487,6 +487,29 @@ struct HiseJavascriptEngine::RootObject::ScopedNoop: public HiseJavascriptEngine
 	}
 };
 
+struct HiseJavascriptEngine::RootObject::ScopedSuppress: public HiseJavascriptEngine::RootObject::ScopedBlockStatement
+{
+	ScopedSuppress(CodeLocation l, ExpPtr c, ApiHelpers::CallScope level):
+	  ScopedBlockStatement(l, c),
+	  suppressLevel(level)
+	{}
+
+	SN_NODE_ID("suppress");
+
+	bool isDebugStatement() const override { return true; }
+
+	ResultCode perform(const Scope& s, var*) const override
+	{
+		return ResultCode::ok;
+	}
+
+	void cleanup(const Scope& s) const override
+	{
+	}
+
+	ApiHelpers::CallScope suppressLevel;
+};
+
 struct HiseJavascriptEngine::RootObject::ScopedCounter: public HiseJavascriptEngine::RootObject::ScopedBlockStatement
 {
 	ScopedCounter(CodeLocation l, ExpPtr c, const String& name_):
@@ -757,6 +780,19 @@ struct HiseJavascriptEngine::RootObject::BlockStatement : public Statement
 		s << "{...} (Line " + String(line) + ")";
 		return s;
 	}
+
+#if USE_BACKEND
+	ApiHelpers::CallScope getSuppressLevel() const
+	{
+		for (auto sb : scopedBlockStatements)
+		{
+			if (auto* sup = dynamic_cast<ScopedSuppress*>(sb))
+				return sup->suppressLevel;
+		}
+
+		return ApiHelpers::CallScope::Safe;
+	}
+#endif
 
 	using ScopedBlockProfiler = DebugSession::ProfileDataSource::ScopedProfiler;
 

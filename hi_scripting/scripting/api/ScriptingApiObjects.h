@@ -121,7 +121,7 @@ public:
 
 	static ValueTree getApiTree();
 
-	using CallScope = HiseJavascriptEngine::RootObject::RealtimeSafetyInfo::CallScope;
+	using CallScope = WeakCallbackHolder::CallableObject::CallScope;
 
 	struct CallScopeInfo
 	{
