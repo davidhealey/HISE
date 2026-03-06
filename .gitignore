@@ -4,6 +4,10 @@
 !/.gitignore
 !/.travis.yml
 !/.vscode/*
+
+# clangd/LSP tooling config (local development only)
+AppConfig.h
+compile_flags.txt
 api generator/xml
 changelog.md
 changelog.txt

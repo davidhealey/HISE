@@ -161,6 +161,8 @@ DECLARE_ID(WarnIfUndefinedParameters);
 DECLARE_ID(SaveConnectedFilesOnCompile);
 DECLARE_ID(RecompileOnFileChange);
 DECLARE_ID(EnableMousePositioning);
+DECLARE_ID(RestApiPort);
+DECLARE_ID(AutoStartRestServer);
 
 Array<Identifier> getAllIds();
 

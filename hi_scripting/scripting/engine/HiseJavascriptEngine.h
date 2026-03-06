@@ -681,6 +681,11 @@ public:
             
 			static Error fromLocation(const CodeLocation& location, const String& errorMessage);
 
+			/** Creates an encoded location string from components.
+			    Format: "{{Base64(processorId|path|charIndex|line|col)}}" */
+			static String createEncodedLocation(Processor* p, const String& externalLocation,
+			                                     int charIndex, int lineNumber, int columnNumber);
+
 			String getLocationString() const;
 
 			String getEncodedLocation(Processor* p) const;

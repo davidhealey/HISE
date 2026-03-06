@@ -758,6 +758,21 @@ bool ScriptContentComponent::keyPressed(const KeyPress& k)
 	return false;
 }
 
+Component* ScriptContentComponent::getScriptComponentComponent(Point<int> pos)
+{
+	auto c = getComponentAt(pos.toFloat());
+
+	while (c != nullptr && c != this)
+	{
+		if (getScriptComponentFor(c) != nullptr)
+			return c;
+
+		c = c->getParentComponent();
+	}
+
+	return nullptr;
+}
+
 void ScriptContentComponent::processorDeleted(Processor* /*deletedProcessor*/)
 {
 	contentData->resetContentProperties();
@@ -880,6 +895,17 @@ Component* ScriptContentComponent::getComponentFor(ScriptingApi::Content::Script
 				return cw->getComponent();
 			}
 		}
+	}
+
+	return nullptr;
+}
+
+Component* ScriptContentComponent::getComponentForScriptComponentWithId(const Identifier& id)
+{
+	for (auto w : componentWrappers)
+	{
+		if (w->getScriptComponent()->getName() == id)
+			return w->getComponent();
 	}
 
 	return nullptr;

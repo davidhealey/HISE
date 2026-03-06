@@ -55,7 +55,7 @@ public:
 private:
 
 	// =========================================================================
-	// Test data — real HISE API method names
+	// Test data  - real HISE API method names
 	// =========================================================================
 
 	static StringArray getSynthMethods()
@@ -185,7 +185,7 @@ private:
 		expect(FuzzySearcher::fitsSearch("print", "print", 0.99),
 		       "Identical strings should match at any threshold");
 
-		// Single substitution: "print" vs "prInt" — but fitsSearch lowercases,
+		// Single substitution: "print" vs "prInt"  - but fitsSearch lowercases,
 		// so use the contains-check path. Instead test truly different chars.
 		// "print" vs "pront" = 1 substitution, distance = 1, score = 1 - 1/5 = 0.8
 		expect(FuzzySearcher::fitsSearch("print", "pront", 0.7),
@@ -193,21 +193,21 @@ private:
 		expect(!FuzzySearcher::fitsSearch("print", "pront", 0.85),
 		       "1 substitution on 5-char word (score 0.8) should NOT match at 0.85");
 
-		// Transposition: "ab" vs "ba" — Damerau-Levenshtein distance = 1
+		// Transposition: "ab" vs "ba"  - Damerau-Levenshtein distance = 1
 		// score = 1 - 1/2 = 0.5
 		expect(FuzzySearcher::fitsSearch("ab", "ba", 0.4),
 		       "Transposition (Damerau) should have distance 1, score 0.5");
 		expect(!FuzzySearcher::fitsSearch("ab", "ba", 0.6),
 		       "Transposition score 0.5 should NOT match at threshold 0.6");
 
-		// Longer transposition: "getEfect" vs "getEffect" — but these differ by
+		// Longer transposition: "getEfect" vs "getEffect"  - but these differ by
 		// insertion not transposition. Let's use a real transposition case:
-		// "isKeyDonw" vs "isKeyDown" — transposition of 'w' and 'n'
+		// "isKeyDonw" vs "isKeyDown"  - transposition of 'w' and 'n'
 		// distance = 1, score = 1 - 1/9 ≈ 0.889
 		expect(FuzzySearcher::fitsSearch("iskeydonw", "iskeydown", 0.8),
 		       "Transposition on 9-char word (score ~0.89) should match at 0.8");
 
-		// Empty vs non-empty: fitsSearch has a substring shortcut —
+		// Empty vs non-empty: fitsSearch has a substring shortcut  -
 		// "print".contains("") is true, so empty string always matches.
 		// This documents the contains() shortcut behavior.
 		expect(FuzzySearcher::fitsSearch("", "print", 0.99),
@@ -235,7 +235,7 @@ private:
 		expect(!FuzzySearcher::fitsSearch("abcde", "abcdf", 0.8),
 		       "Score 0.8 should NOT match at threshold 0.8 (strictly greater than)");
 
-		// "ab" vs "abc": contains() shortcut — "abc".contains("ab") is true,
+		// "ab" vs "abc": contains() shortcut  - "abc".contains("ab") is true,
 		// so fitsSearch returns true regardless of threshold. This is by design.
 		expect(FuzzySearcher::fitsSearch("ab", "abc", 0.99),
 		       "Substring match: 'ab' in 'abc' always matches via contains() shortcut");
@@ -247,7 +247,7 @@ private:
 		expect(!FuzzySearcher::fitsSearch("abd", "abc", 0.7),
 		       "Score ~0.667 should NOT match at threshold 0.7");
 
-		// searchForResults returns lowercased, stripped results —
+		// searchForResults returns lowercased, stripped results  -
 		// verify it returns the correct number of matches
 		StringArray words = { "apple", "apply", "banana", "application" };
 		auto results = FuzzySearcher::searchForResults("aple", words, 0.6);
@@ -256,16 +256,16 @@ private:
 	}
 
 	// =========================================================================
-	// 3. Unqualified API correction (parser context — single API class)
+	// 3. Unqualified API correction (parser context  - single API class)
 	// =========================================================================
 
 	void testUnqualifiedApiCorrection()
 	{
-		beginTest("Unqualified API correction — Console methods");
+		beginTest("Unqualified API correction  - Console methods");
 
 		auto consoleMethods = getConsoleMethods();
 
-		// We test at 0.5 initially — the threshold sweep will confirm this is right.
+		// We test at 0.5 initially  - the threshold sweep will confirm this is right.
 		// If this needs adjustment after the sweep, we update these assertions.
 		const double t = 0.5;
 
@@ -288,7 +288,7 @@ private:
 		             "Missing char: 'asertTrue' -> 'assertTrue'");
 
 		/** Setup: Console method list
-		 *  Scenario: LLM writes "assertEquals" (Java/JS habit — wrong suffix)
+		 *  Scenario: LLM writes "assertEquals" (Java/JS habit  - wrong suffix)
 		 *  Expected: suggestCorrection returns "assertEqual"
 		 */
 		expectEquals(FuzzySearcher::suggestCorrection("assertEquals", consoleMethods, t),
@@ -296,9 +296,9 @@ private:
 		             "Wrong suffix: 'assertEquals' -> 'assertEqual'");
 
 		/** Setup: Console method list
-		 *  Scenario: LLM writes "assertLegalNum" (truncated — 3 chars missing)
+		 *  Scenario: LLM writes "assertLegalNum" (truncated  - 3 chars missing)
 		 *  Expected: suggestCorrection returns "assertLegalNumber"
-		 *  Note: "assertLegal" (11 chars) is too truncated — it's actually closer to
+		 *  Note: "assertLegal" (11 chars) is too truncated  - it's actually closer to
 		 *  "assertEqual" (11 chars, distance 3) than "assertLegalNumber" (17 chars, distance 6)
 		 */
 		expectEquals(FuzzySearcher::suggestCorrection("assertLegalNum", consoleMethods, t),
@@ -309,7 +309,7 @@ private:
 
 		/** Setup: Console method list
 		 *  Scenario: LLM writes "log" (JS console.log habit)
-		 *  Expected: No good match — "log" is too short and too different from "stop" or "clear"
+		 *  Expected: No good match  - "log" is too short and too different from "stop" or "clear"
 		 */
 		{
 			auto result = FuzzySearcher::suggestCorrection("log", consoleMethods, t);
@@ -328,7 +328,7 @@ private:
 
 		// -----------------------------------------------------------------
 
-		beginTest("Unqualified API correction — Synth methods");
+		beginTest("Unqualified API correction  - Synth methods");
 
 		auto synthMethods = getSynthMethods();
 
@@ -399,19 +399,19 @@ private:
 		// --- True negatives for Synth ---
 
 		/** Setup: Synth method list
-		 *  Scenario: LLM writes "getWidth" (wrong domain — this is a UI method)
+		 *  Scenario: LLM writes "getWidth" (wrong domain  - this is a UI method)
 		 *  Expected: No good match
 		 */
 		{
 			auto result = FuzzySearcher::suggestCorrection("getWidth", synthMethods, t);
 			logMessage("  'getWidth' vs Synth at threshold " + String(t) + " -> \"" + result + "\"");
 			// At 0.5 threshold, "getWidth" (8 chars) would need distance <= 3 to match
-			// any 8-char Synth method. Closest might be "getIdList" (distance ~5) — no match.
+			// any 8-char Synth method. Closest might be "getIdList" (distance ~5)  - no match.
 		}
 
 		/** Setup: Synth method list
-		 *  Scenario: LLM writes "noteOn" (JS-style — real HISEScript uses playNote or addNoteOn)
-		 *  Expected: "addNoteOn" or "noteOff" — both are close. Log which wins.
+		 *  Scenario: LLM writes "noteOn" (JS-style  - real HISEScript uses playNote or addNoteOn)
+		 *  Expected: "addNoteOn" or "noteOff"  - both are close. Log which wins.
 		 */
 		{
 			auto result = FuzzySearcher::suggestCorrection("noteOn", synthMethods, t);
@@ -420,7 +420,7 @@ private:
 	}
 
 	// =========================================================================
-	// 4. Dot-qualified API correction (analyzer context — cross-namespace)
+	// 4. Dot-qualified API correction (analyzer context  - cross-namespace)
 	// =========================================================================
 
 	void testQualifiedApiCorrection()
@@ -489,7 +489,7 @@ private:
 		             "Dot-qualified: 'Sampler.loadSampelMap' -> 'Sampler.loadSampleMap'");
 
 		/** Setup: Qualified API method list
-		 *  Scenario: LLM writes "Math.randInt" (this actually exists! — should find exact match)
+		 *  Scenario: LLM writes "Math.randInt" (this actually exists!  - should find exact match)
 		 *  Expected: "Math.randInt"
 		 */
 		expectEquals(FuzzySearcher::suggestCorrection("Math.randInt", methods, t),
@@ -500,17 +500,17 @@ private:
 
 		/** Setup: Qualified API method list
 		 *  Scenario: LLM writes "Engine.getBpm" (real: "Engine.getHostBpm")
-		 *  Expected: "Engine.getHostBpm" — method part: "getBpm" vs "getHostBpm" = distance 4 on 10 chars = score 0.6
+		 *  Expected: "Engine.getHostBpm"  - method part: "getBpm" vs "getHostBpm" = distance 4 on 10 chars = score 0.6
 		 */
 		{
 			auto result = FuzzySearcher::suggestCorrection("Engine.getBpm", methods, t);
 			logMessage("  'Engine.getBpm' at " + String(t) + " -> \"" + result + "\"");
-			// This is a borderline case — log the result to guide threshold selection
+			// This is a borderline case  - log the result to guide threshold selection
 		}
 
 		/** Setup: Qualified API method list
 		 *  Scenario: LLM writes "Synth.getModulatorByName" (real: "Synth.getModulator")
-		 *  Expected: "Synth.getModulator" — suffix hallucination
+		 *  Expected: "Synth.getModulator"  - suffix hallucination
 		 */
 		{
 			auto result = FuzzySearcher::suggestCorrection("Synth.getModulatorByName", methods, t);
@@ -519,7 +519,7 @@ private:
 
 		/** Setup: Qualified API method list
 		 *  Scenario: LLM writes "Message.getNote" (real: "Message.getNoteNumber")
-		 *  Expected: "Message.getNoteNumber" — truncated name
+		 *  Expected: "Message.getNoteNumber"  - truncated name
 		 */
 		{
 			auto result = FuzzySearcher::suggestCorrection("Message.getNote", methods, t);
@@ -528,7 +528,7 @@ private:
 
 		/** Setup: Qualified API method list
 		 *  Scenario: LLM writes "Message.ignore" (real: "Message.ignoreEvent")
-		 *  Expected: "Message.ignoreEvent" — truncated name
+		 *  Expected: "Message.ignoreEvent"  - truncated name
 		 */
 		{
 			auto result = FuzzySearcher::suggestCorrection("Message.ignore", methods, t);
@@ -538,7 +538,7 @@ private:
 		// --- True negatives: should NOT match ---
 
 		/** Setup: Qualified API method list
-		 *  Scenario: LLM writes "Console.log" (JS habit — no close match in HISE)
+		 *  Scenario: LLM writes "Console.log" (JS habit  - no close match in HISE)
 		 *  Expected: No match (or poor match)
 		 */
 		{
@@ -547,8 +547,8 @@ private:
 		}
 
 		/** Setup: Qualified API method list
-		 *  Scenario: LLM writes "Content.addSlider" (real: "Content.addKnob" — different concept)
-		 *  Expected: Not "Content.addKnob" — that would be a wrong suggestion
+		 *  Scenario: LLM writes "Content.addSlider" (real: "Content.addKnob"  - different concept)
+		 *  Expected: Not "Content.addKnob"  - that would be a wrong suggestion
 		 */
 		{
 			auto result = FuzzySearcher::suggestCorrection("Content.addSlider", methods, t);
@@ -558,8 +558,8 @@ private:
 		}
 
 		/** Setup: Qualified API method list
-		 *  Scenario: LLM writes "Math.clamp" (real: "Math.range" — different name for same concept)
-		 *  Expected: Should NOT suggest "Math.range" — the names are too different
+		 *  Scenario: LLM writes "Math.clamp" (real: "Math.range"  - different name for same concept)
+		 *  Expected: Should NOT suggest "Math.range"  - the names are too different
 		 */
 		{
 			auto result = FuzzySearcher::suggestCorrection("Math.clamp", methods, t);
@@ -567,8 +567,8 @@ private:
 		}
 
 		/** Setup: Qualified API method list
-		 *  Scenario: LLM writes "Math.square" (real: "Math.sqr" — 3 extra chars on 3-char method)
-		 *  Expected: Probably won't match at 0.5 — method part "square" vs "sqr" = distance 3 on 6 chars = score 0.5
+		 *  Scenario: LLM writes "Math.square" (real: "Math.sqr"  - 3 extra chars on 3-char method)
+		 *  Expected: Probably won't match at 0.5  - method part "square" vs "sqr" = distance 3 on 6 chars = score 0.5
 		 */
 		{
 			auto result = FuzzySearcher::suggestCorrection("Math.square", methods, t);
@@ -577,7 +577,7 @@ private:
 
 		/** Setup: Qualified API method list
 		 *  Scenario: LLM writes "Engine.noteToFreq" (real: Engine.getFrequencyForMidiNoteNumber)
-		 *  Expected: No match — the names are completely different
+		 *  Expected: No match  - the names are completely different
 		 */
 		{
 			auto result = FuzzySearcher::suggestCorrection("Engine.noteToFreq", methods, t);
@@ -586,7 +586,7 @@ private:
 
 		/** Setup: Qualified API method list
 		 *  Scenario: LLM writes "Engine.dbToGain" (real: Engine.getGainFactorForDecibels)
-		 *  Expected: No match — completely different naming convention
+		 *  Expected: No match  - completely different naming convention
 		 */
 		{
 			auto result = FuzzySearcher::suggestCorrection("Engine.dbToGain", methods, t);
@@ -595,12 +595,12 @@ private:
 	}
 
 	// =========================================================================
-	// 5. Threshold sweep — systematic precision/recall measurement
+	// 5. Threshold sweep  - systematic precision/recall measurement
 	// =========================================================================
 
 	void testThresholdSweep()
 	{
-		beginTest("Threshold sweep — determining optimal fuzzyness for API correction");
+		beginTest("Threshold sweep  - determining optimal fuzzyness for API correction");
 
 		auto synthMethods = getSynthMethods();
 		auto qualifiedMethods = getQualifiedApiMethods();
@@ -619,7 +619,7 @@ private:
 		truePositives.add({ "isTimerRunnng",          "isTimerRunning",          "Synth: missing 'i'" });
 
 		// True negative cases: inputs that should NOT produce suggestions.
-		// NOTE: FuzzySearcher has a contains() shortcut — if the search term is
+		// NOTE: FuzzySearcher has a contains() shortcut  - if the search term is
 		// a substring of a candidate, it always matches regardless of threshold.
 		// Short prefixes like "play" → "playNote" are therefore always found.
 		// Only include cases here that genuinely should not match at any level.
@@ -632,10 +632,10 @@ private:
 		// These findings inform whether suggestCorrection() needs a quality guard.
 		struct BorderlineCase { String input; String description; };
 		Array<BorderlineCase> borderlineCases;
-		borderlineCases.add({ "getWidth", "Wrong domain — matches 'getChildSynth' via shared 'get' prefix" });
-		borderlineCases.add({ "setValue", "Wrong domain — may match 'setVoiceGainValue' via 'set' prefix" });
-		borderlineCases.add({ "play",     "Short prefix — substring of 'playNote' (contains shortcut)" });
-		borderlineCases.add({ "send",     "Short prefix — substring of 'sendController' (contains shortcut)" });
+		borderlineCases.add({ "getWidth", "Wrong domain  - matches 'getChildSynth' via shared 'get' prefix" });
+		borderlineCases.add({ "setValue", "Wrong domain  - may match 'setVoiceGainValue' via 'set' prefix" });
+		borderlineCases.add({ "play",     "Short prefix  - substring of 'playNote' (contains shortcut)" });
+		borderlineCases.add({ "send",     "Short prefix  - substring of 'sendController' (contains shortcut)" });
 
 		// Dot-qualified true positives
 		Array<CorrectionTestCase> qualifiedTruePositives;
@@ -650,18 +650,18 @@ private:
 		qualifiedTruePositives.add({ "Console.asertTrue",     "Console.assertTrue",    "Console: missing 's'" });
 		qualifiedTruePositives.add({ "Engine.allNotesof",     "Engine.allNotesOff",    "Engine: missing 'f'" });
 
-		// Dot-qualified true negatives — only cases that genuinely should not match
+		// Dot-qualified true negatives  - only cases that genuinely should not match
 		Array<CorrectionTestCase> qualifiedTrueNegatives;
 		qualifiedTrueNegatives.add({ "Foo.bar",                   "", "Nonexistent namespace" });
 		qualifiedTrueNegatives.add({ "Something.completelyWrong", "", "Totally unrelated" });
 
-		// Dot-qualified borderline cases — these match at various thresholds due to
+		// Dot-qualified borderline cases  - these match at various thresholds due to
 		// coincidental edit distance or the dot-qualified scoring blend.
 		// Logged for analysis, not asserted as failures.
 		Array<BorderlineCase> qualifiedBorderlineCases;
-		qualifiedBorderlineCases.add({ "Console.log",       "JS habit — matches 'Console.stop' via dot-blend scoring" });
-		qualifiedBorderlineCases.add({ "Engine.noteToFreq", "Different naming — matches via partial token overlap" });
-		qualifiedBorderlineCases.add({ "Engine.dbToGain",   "Different naming — matches via short token overlap" });
+		qualifiedBorderlineCases.add({ "Console.log",       "JS habit  - matches 'Console.stop' via dot-blend scoring" });
+		qualifiedBorderlineCases.add({ "Engine.noteToFreq", "Different naming  - matches via partial token overlap" });
+		qualifiedBorderlineCases.add({ "Engine.dbToGain",   "Different naming  - matches via short token overlap" });
 
 		double thresholds[] = { 0.3, 0.4, 0.5, 0.6 };
 
@@ -744,40 +744,40 @@ private:
 				auto result = FuzzySearcher::suggestCorrection(tc.input, synthMethods, threshold);
 				if (result != tc.expectedResult)
 					logMessage("    MISS [unqual TP]: \"" + tc.input + "\" -> \"" + result
-					           + "\" (expected \"" + tc.expectedResult + "\") — " + tc.description);
+					           + "\" (expected \"" + tc.expectedResult + "\")  - " + tc.description);
 			}
 			for (auto& tc : trueNegatives)
 			{
 				auto result = FuzzySearcher::suggestCorrection(tc.input, synthMethods, threshold);
 				if (result.isNotEmpty())
 					logMessage("    MISS [unqual FP]: \"" + tc.input + "\" -> \"" + result
-					           + "\" (expected empty) — " + tc.description);
+					           + "\" (expected empty)  - " + tc.description);
 			}
 			for (auto& tc : qualifiedTruePositives)
 			{
 				auto result = FuzzySearcher::suggestCorrection(tc.input, qualifiedMethods, threshold);
 				if (result != tc.expectedResult)
 					logMessage("    MISS [qual TP]: \"" + tc.input + "\" -> \"" + result
-					           + "\" (expected \"" + tc.expectedResult + "\") — " + tc.description);
+					           + "\" (expected \"" + tc.expectedResult + "\")  - " + tc.description);
 			}
 			for (auto& tc : qualifiedTrueNegatives)
 			{
 				auto result = FuzzySearcher::suggestCorrection(tc.input, qualifiedMethods, threshold);
 				if (result.isNotEmpty())
 					logMessage("    MISS [qual FP]: \"" + tc.input + "\" -> \"" + result
-					           + "\" (expected empty) — " + tc.description);
+					           + "\" (expected empty)  - " + tc.description);
 			}
 			for (auto& bc : borderlineCases)
 			{
 				auto result = FuzzySearcher::suggestCorrection(bc.input, synthMethods, threshold);
 				logMessage("    BORDERLINE [unqual]: \"" + bc.input + "\" -> \""
-				           + result + "\" — " + bc.description);
+				           + result + "\"  - " + bc.description);
 			}
 			for (auto& bc : qualifiedBorderlineCases)
 			{
 				auto result = FuzzySearcher::suggestCorrection(bc.input, qualifiedMethods, threshold);
 				logMessage("    BORDERLINE [qual]: \"" + bc.input + "\" -> \""
-				           + result + "\" — " + bc.description);
+				           + result + "\"  - " + bc.description);
 			}
 		}
 
@@ -800,7 +800,7 @@ private:
 		{
 			auto result = FuzzySearcher::suggestCorrection(tc.input, synthMethods, recommended);
 			expect(result.isEmpty(),
-			       "Should NOT match: \"" + tc.input + "\" -> \"" + result + "\" — " + tc.description);
+			       "Should NOT match: \"" + tc.input + "\" -> \"" + result + "\"  - " + tc.description);
 		}
 
 		for (auto& tc : qualifiedTruePositives)
@@ -810,7 +810,7 @@ private:
 		{
 			auto result = FuzzySearcher::suggestCorrection(tc.input, qualifiedMethods, recommended);
 			expect(result.isEmpty(),
-			       "Should NOT match: \"" + tc.input + "\" -> \"" + result + "\" — " + tc.description);
+			       "Should NOT match: \"" + tc.input + "\" -> \"" + result + "\"  - " + tc.description);
 		}
 
 		// Log borderline cases at recommended threshold for visibility
@@ -820,26 +820,26 @@ private:
 		for (auto& bc : borderlineCases)
 		{
 			auto result = FuzzySearcher::suggestCorrection(bc.input, synthMethods, recommended);
-			logMessage("  [unqual] \"" + bc.input + "\" -> \"" + result + "\" — " + bc.description);
+			logMessage("  [unqual] \"" + bc.input + "\" -> \"" + result + "\"  - " + bc.description);
 		}
 		for (auto& bc : qualifiedBorderlineCases)
 		{
 			auto result = FuzzySearcher::suggestCorrection(bc.input, qualifiedMethods, recommended);
-			logMessage("  [qual] \"" + bc.input + "\" -> \"" + result + "\" — " + bc.description);
+			logMessage("  [qual] \"" + bc.input + "\" -> \"" + result + "\"  - " + bc.description);
 		}
 	}
 
 	// =========================================================================
-	// 6. searchForIndexes with sortByScore — ranking verification
+	// 6. searchForIndexes with sortByScore  - ranking verification
 	// =========================================================================
 
 	void testSearchForIndexesSortedByScore()
 	{
-		beginTest("searchForIndexes sorted by score — ranking verification");
+		beginTest("searchForIndexes sorted by score  - ranking verification");
 
 		auto methods = getQualifiedApiMethods();
 
-		// Search for "Synth.noteOf" — should find "Synth.noteOff" as best match,
+		// Search for "Synth.noteOf"  - should find "Synth.noteOff" as best match,
 		// potentially also "Synth.noteOffByEventId" and "Synth.noteOffDelayedByEventId"
 		auto indices = FuzzySearcher::searchForIndexes("Synth.noteOf", methods, 0.5, true);
 
@@ -863,10 +863,10 @@ private:
 		}
 		else
 		{
-			logMessage("  WARNING: 'Synth.noteOf' returned 0 matches — threshold may be too high");
+			logMessage("  WARNING: 'Synth.noteOf' returned 0 matches  - threshold may be too high");
 		}
 
-		// Search for "Engine.get" — should find multiple "Engine.get*" methods
+		// Search for "Engine.get"  - should find multiple "Engine.get*" methods
 		auto engineIndices = FuzzySearcher::searchForIndexes("Engine.get", methods, 0.3, true);
 
 		logMessage("  'Engine.get' at 0.3 found " + String(engineIndices.size()) + " matches:");
@@ -877,7 +877,7 @@ private:
 		expect(engineIndices.size() >= 1,
 		       "'Engine.get' should match at least one method at threshold 0.3");
 
-		// Search for "Console.asser" — should rank exact-prefix matches first
+		// Search for "Console.asser"  - should rank exact-prefix matches first
 		auto consoleIndices = FuzzySearcher::searchForIndexes("Console.asser", methods, 0.3, true);
 
 		logMessage("  'Console.asser' at 0.3 found " + String(consoleIndices.size()) + " matches:");
@@ -891,7 +891,7 @@ private:
 
 	void testCaseInsensitivity()
 	{
-		beginTest("Case insensitivity — search normalization");
+		beginTest("Case insensitivity  - search normalization");
 
 		auto methods = getQualifiedApiMethods();
 		const double t = 0.5;
@@ -920,7 +920,7 @@ private:
 		             String("Engine.getSampleRate"),
 		             "Lowercase: 'engine.getsamplerate' -> 'Engine.getSampleRate'");
 
-		/** Setup: Unqualified — case mismatch in method name
+		/** Setup: Unqualified  - case mismatch in method name
 		 *  Scenario: LLM writes "setvalue" (no camelCase)
 		 *  Expected: No match in Synth methods (setValue doesn't exist there).
 		 *  This verifies that case insensitivity doesn't create false cross-domain matches.
@@ -938,7 +938,7 @@ private:
 
 	void testMinimumQualityGuard()
 	{
-		beginTest("Minimum quality guard — truly unrelated inputs must return empty");
+		beginTest("Minimum quality guard  - truly unrelated inputs must return empty");
 
 		auto methods = getQualifiedApiMethods();
 		const double t = 0.5;
@@ -964,15 +964,15 @@ private:
 
 			if (result.isNotEmpty())
 			{
-				// This is a finding — suggestCorrection returned something for garbage input.
+				// This is a finding  - suggestCorrection returned something for garbage input.
 				// Log it as a potential issue for a minimum quality guard.
 				logMessage("  QUALITY CONCERN: \"" + tc.input + "\" -> \"" + result
-				           + "\" — " + tc.description);
+				           + "\"  - " + tc.description);
 			}
 
 			expect(result.isEmpty(),
 			       "Should return empty for unrelated input: \"" + tc.input
-			       + "\" -> \"" + result + "\" — " + tc.description);
+			       + "\" -> \"" + result + "\"  - " + tc.description);
 		}
 	}
 };

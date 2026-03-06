@@ -623,6 +623,7 @@ void FilterDragOverlay::addFilterDragger(int index)
 		FilterDragComponent *dc = new FilterDragComponent(*this, index);
 		addAndMakeVisible(dc);
 		dc->setConstrainer(constrainer);
+		DocumentWindowWithEmbeddedPopupMenu::setSubComponentTargetId(dc, String(index));
 		dragComponents.add(dc);
 		selectDragger(dragComponents.size() - 1, dontSendNotification);
 	}

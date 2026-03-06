@@ -1602,8 +1602,22 @@ void JavascriptProcessor::compileScript(const ResultFunction& rf /*= ResultFunct
 }
 
 #if USE_BACKEND
-void JavascriptProcessor::shadowParseFile(const String& code, const String& fileName, const DiagnosticCallback& callback)
+void JavascriptProcessor::shadowParseFile(const String& code, const String& fileName, const DiagnosticCallback& callback,
+										   NotificationType notificationType)
 {
+	if (notificationType == sendNotificationSync)
+	{
+		// HTTP-direct path: run on the calling thread with a read lock to
+		// block until any in-progress compilation finishes.
+		SimpleReadWriteLock::ScopedReadLock sl(
+			mainController->getJavascriptThreadPool().getLookAndFeelRenderLock());
+
+		auto diagnostics = scriptEngine->shadowParse(code, fileName);
+		callback(diagnostics);
+		return;
+	}
+
+	// Async path (IDE F7): defer to scripting thread, callback on message thread.
 	auto f = [code, fileName, callback](Processor* p)
 	{
 		auto jp = dynamic_cast<JavascriptProcessor*>(p);
@@ -1689,6 +1703,39 @@ const JavascriptProcessor::SnippetDocument * JavascriptProcessor::getSnippet(con
 	}
 
 	return nullptr;
+}
+
+CodeDocument* JavascriptProcessor::getSnippet(const DebugableObjectBase::Location& loc)
+{
+	auto fileName = loc.fileName;
+
+	if (fileName.isEmpty() || fileName == "onInit")
+	{
+		// onInit callback - empty fileName or "onInit" means onInit
+		return getSnippet(Identifier("onInit"));
+	}
+	else if (fileName.contains("()"))
+	{
+		// Other callback like "onNoteOn()" - strip the "()"
+		auto callbackName = fileName.upToFirstOccurrenceOf("()", false, false);
+		return getSnippet(Identifier(callbackName));
+	}
+	else
+	{
+		auto scriptFolder = GET_PROJECT_HANDLER(dynamic_cast<Processor*>(this)).getSubDirectory(FileHandlerBase::Scripts);
+
+		// External file - fileName is full path
+		auto f = File(scriptFolder).getChildFile(fileName);
+
+		for (int i = 0; i < getNumWatchedFiles(); i++)
+		{
+			
+
+			if (getWatchedFile(i) == f)
+				return &getWatchedFileDocument(i);
+		}
+		return nullptr;
+	}
 }
 
 #if 0

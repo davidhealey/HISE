@@ -2125,27 +2125,44 @@ String HiseJavascriptEngine::RootObject::Error::getLocationString() const
 	}
 }
 
-String HiseJavascriptEngine::RootObject::Error::getEncodedLocation(Processor* p) const
+String HiseJavascriptEngine::RootObject::Error::createEncodedLocation(
+	Processor* p, const String& externalLocation,
+	int charIndex, int lineNumber, int columnNumber)
 {
-	ignoreUnused(p);
+	ignoreUnused(p, externalLocation, charIndex, lineNumber, columnNumber);
 
 #if USE_BACKEND
 	String l;
 
 	l << p->getId() << "|";
 
-	if (externalLocation.contains("()"))
+	if (externalLocation.isEmpty() || externalLocation == "onInit")
+	{
+		// Inline callback (onInit) - leave path empty
+	}
+	else if (externalLocation.contains("()"))
+	{
+		// Other callback like "onNoteOn()" - include as-is
 		l << externalLocation;
-	else if (!externalLocation.isEmpty())
+	}
+	else
+	{
+		// External file - convert to relative path
 		l << File(externalLocation).getRelativePathFrom(GET_PROJECT_HANDLER(p).getSubDirectory(ProjectHandler::SubDirectories::Scripts));
+	}
 
 	l << "|" << String(charIndex);
 	l << "|" << String(lineNumber) << "|" << String(columnNumber);
 
 	return "{{" + Base64::toBase64(l) + "}}";
 #else
-				return {};
+	return {};
 #endif
+}
+
+String HiseJavascriptEngine::RootObject::Error::getEncodedLocation(Processor* p) const
+{
+	return createEncodedLocation(p, externalLocation, charIndex, lineNumber, columnNumber);
 }
 
 String HiseJavascriptEngine::RootObject::Error::toString(Processor* p) const

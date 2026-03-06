@@ -477,6 +477,11 @@ public:
 
 		virtual bool isShowing(bool checkParentComponentVisibility = true) const;
 
+		/** Returns true if the control callback is pending execution. 
+		    Used by REST API to wait for callbacks to complete before returning.
+		*/
+		bool isControlCallbackPending() const { return controlSender.isChangePending(); }
+
 		template <class ChildType> class ChildIterator
 		{
 		public:
@@ -857,6 +862,9 @@ public:
 			void sendControlCallbackMessage();
 
 			void cancelMessage();
+
+			/** Returns true if a callback is pending (posted but not yet executed). */
+			bool isChangePending() const { return changePending; }
 
 		private:
 
@@ -3377,18 +3385,19 @@ public:
 
 			operator bool() const { return renderStyle != RenderStyle::Unassigned; }
 
-			struct RegisteredComponent
+		struct RegisteredComponent
 			{
 				bool operator==(const RegisteredComponent& other) const { return name == other.name; }
 
 				Identifier name;
 				Atomic<int> rendered = 0;
+				bool isShowing = true;  // Captured at registerLaf() time
 			};
 
-			Array<RegisteredComponent> assignedComponents;
+		Array<RegisteredComponent> assignedComponents;
 			String variableName;     // "LafNamespace.buttonLaf"
 			RenderStyle renderStyle = RenderStyle::Unassigned; // Script, Css, CssInline, Mixed
-			String location;         // createLocalLookAndFeel() location - always present
+			DebugableObjectBase::Location location;  // Raw location, encoded lazily by REST API
 			String cssLocation;      // CSS file full path - empty for inline/script style
 		};
 
@@ -3400,11 +3409,18 @@ public:
 		// Returns true if any recipients use Script or Mixed style (need render wait)
 		bool hasScriptBasedRecipients() const;
 
-		// Returns true when all script-based recipients have rendered at least once
+		// Returns true when all visible script-based recipients have rendered at least once
 		bool allRecipientsRendered() const;
 
-		// Returns IDs of script-based components that haven't rendered yet
-		StringArray getUnrenderedComponentIds() const;
+		// Info about an unrendered component
+		struct UnrenderedInfo
+		{
+			Identifier id;
+			bool isInvisible;
+		};
+
+		// Returns info about script-based components that haven't rendered yet
+		Array<UnrenderedInfo> getUnrenderedComponents() const;
 
 		// Returns LAF info for a component (any style), or nullopt if no LAF
 		LafInfo::Ptr getLafInfoForComponent(const Identifier& componentId) const;
@@ -3415,14 +3431,20 @@ public:
 		void registerLaf(DebugableObjectBase* laf, const String& variableName, const DebugableObjectBase::Location& location);
 
 		// Called by setLocalLookAndFeel()
-		void registerRecipient(DebugableObjectBase* laf, const Identifier& componentId);
+		void registerRecipient(DebugableObjectBase* laf, ScriptComponent* component);
 
 		// Called by callWithGraphics() on successful execution
 		bool markAsRendered(const Identifier& componentId);
 
 	private:
 
-		std::map<Identifier, WeakReference<DebugableObjectBase>> pendingRegisterComponents;
+		struct PendingComponent
+		{
+			WeakReference<ScriptComponent> component;
+			WeakReference<DebugableObjectBase> laf;
+		};
+
+		std::map<Identifier, PendingComponent> pendingRegisterComponents;
 
 		LafInfo::List list;
 

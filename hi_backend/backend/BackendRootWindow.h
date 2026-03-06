@@ -88,7 +88,8 @@ class BackendRootWindow : public TopLevelWindowWithOptionalOpenGL,
 						  public ComponentWithHelp::GlobalHandler,
                           public ProjectHandler::Listener,
 						  public GlobalScriptCompileListener,
-						  public MainController::LockFreeDispatcher::PresetLoadListener
+						  public MainController::LockFreeDispatcher::PresetLoadListener,
+						  public RestServer::Listener
 {
 public:
 
@@ -125,6 +126,17 @@ public:
 	void deleteThisSnippetInstance(bool sync);
 
 	void toggleSnippetBrowser();
+	
+	void serverStarted(int port) override 
+	{ 
+		if(javascriptTokens != nullptr)
+			javascriptTokens->setEnabled(false, false); 
+	}
+	void serverStopped() override
+	{ 
+		if(javascriptTokens != nullptr)
+			javascriptTokens->setEnabled(true, false); 
+	}
 
 	ScopedPointer<multipage::library::SnippetBrowser> snippetBrowser;
 

@@ -490,6 +490,122 @@ public:
 
 	ScopedPointer<GlContextHolder> contextHolder;
 };
+
+
+struct DocumentWindowWithEmbeddedPopupMenu : public juce::DocumentWindow,
+											 public TopLevelWindowWithOptionalOpenGL
+{
+	DocumentWindowWithEmbeddedPopupMenu(const String& name, Colour backgroundColour, int requiredButtons, bool addToDesktop = true) :
+		DocumentWindow(name, backgroundColour, requiredButtons, addToDesktop)
+	{
+	};
+
+	virtual ~DocumentWindowWithEmbeddedPopupMenu() = default;
+
+	static Component* getParentOf(Component* c) { return c != nullptr ? dynamic_cast<DocumentWindowWithEmbeddedPopupMenu*>(c->getTopLevelComponent()) : nullptr; }
+
+	static String getSubComponentTargetId(Component* c) { return c->getProperties()["subTargetId"].toString(); }
+	static void setSubComponentTargetId(Component* c, const String& subTargetId) { c->getProperties().set("subTargetId", subTargetId); }
+
+	
+
+	/** Use this if you have a component that should consider zones within this component as target areas. */
+	static void setSubTargetAreas(Component* c, const std::map<String, Rectangle<int>>& subAreas)
+	{
+		auto prop = c->getProperties();
+
+		DynamicObject::Ptr obj = new DynamicObject();
+
+		for (auto& sa : subAreas)
+			obj->setProperty(Identifier(sa.first), sa.second.toString());
+
+		prop.set("subTargetAreas", var(obj.get()));
+	}
+
+	/**/
+	static std::map<String, Rectangle<int>> getSubTargetAreas(Component* c)
+	{
+		std::map<String, Rectangle<int>> m;
+
+		if (auto obj = c->getProperties()["subTargetAreas"].getDynamicObject())
+		{
+			for (const auto& nv : obj->getProperties())
+				m[nv.name.toString()] = Rectangle<int>::fromString(nv.value.toString());
+		}
+
+		return m;
+	}
+
+	static Rectangle<int> resolveToGlobalBounds(Component* root, Component* c, const String& subTargetId)
+	{
+		jassert(subTargetId.isNotEmpty());
+		jassert(root != nullptr);
+		jassert(c != nullptr);
+
+		if (getSubComponentTargetId(c) == subTargetId)
+			return root->getLocalArea(c, c->getLocalBounds());
+
+		for (const auto& m : getSubTargetAreas(c))
+		{
+			if (m.first == subTargetId)
+				return root->getLocalArea(c, m.second);
+		}
+
+		for (int i = c->getNumChildComponents() - 1; i >= 0; i--)
+		{
+			auto nextChild = c->getChildComponent(i);
+
+			if (!nextChild->isVisible())
+				continue;
+
+			auto r = resolveToGlobalBounds(root, nextChild, subTargetId);
+
+			if (!r.isEmpty())
+				return r;
+
+		}
+
+		return {};
+	}
+
+	/** Recursively searches child components until it finds one that has the sub component target ID set.
+		If nothing is found, then it will return the original component.
+	*/
+	static std::pair<String, Rectangle<int>> findSubTargetId(Component* root, Component* c, Point<int> pos)
+	{
+		auto subTargetId = getSubComponentTargetId(c);
+
+		if (subTargetId.isNotEmpty())
+			return { subTargetId, root->getLocalArea(c, c->getLocalBounds()) };
+
+		for (const auto& sa : getSubTargetAreas(c))
+		{
+			if (sa.second.contains(pos))
+				return { sa.first, root->getLocalArea(c, sa.second) };
+		}
+
+		for (int i = c->getNumChildComponents() - 1; i >= 0; i--)
+		{
+			auto nextChild = c->getChildComponent(i);
+
+			if (!nextChild->isVisible())
+				continue;
+
+			if (nextChild->getBoundsInParent().contains(pos))
+			{
+				auto localPos = nextChild->getLocalPoint(c, pos);
+				auto id = findSubTargetId(root, nextChild, localPos);
+
+				if (id.first.isNotEmpty())
+					return id;
+			}
+		}
+
+		return { "", Rectangle<int>() };
+	}
+
+};
+
 #endif
 
 
@@ -1840,8 +1956,9 @@ public:
 	/** Returns a string array with the results. */
 	static StringArray searchForResults(const String &word, const StringArray &wordList, double fuzzyness);
 
-	/** Returns a index array with the results for the given wordlist. */
-	static Array<int> searchForIndexes(const String &word, const StringArray &wordList, double fuzzyness);
+	/** Returns a index array with the results for the given wordlist. 
+	    If sortByScore is true, results are sorted by Levenshtein distance (best match first). */
+	static Array<int> searchForIndexes(const String &word, const StringArray &wordList, double fuzzyness, bool sortByScore = false);
 
 	static String suggestCorrection(const juce::String& wrongToken, const juce::StringArray& availableTokens, double fuzzyness = 0.3);
 

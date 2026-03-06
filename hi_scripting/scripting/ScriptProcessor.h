@@ -551,9 +551,13 @@ public:
 	using DiagnosticList = Array<HiseJavascriptEngine::RootObject::ApiDiagnostic>;
 	using DiagnosticCallback = std::function<void(const DiagnosticList&)>;
 
-	/** Shadow-parse a file in diagnostic mode on the scripting thread.
-	    The callback receives the collected diagnostics on the message thread. */
-	void shadowParseFile(const String& code, const String& fileName, const DiagnosticCallback& callback);
+	/** Shadow-parse a file in diagnostic mode.
+	    sendNotificationAsync (default): defers to the scripting thread via killVoicesAndCall,
+	    callback receives diagnostics on the message thread. Used by IDE (F7).
+	    sendNotificationSync: executes directly on the calling thread with a read lock
+	    on lookAndFeelRenderLock, callback invoked inline. Used by REST API. */
+	void shadowParseFile(const String& code, const String& fileName, const DiagnosticCallback& callback,
+						 NotificationType notificationType = sendNotificationAsync);
 #endif
 
 	void setupApi();
@@ -581,6 +585,9 @@ public:
 
 	SnippetDocument *getSnippet(const Identifier& id);
 	const SnippetDocument *getSnippet(const Identifier& id) const;
+
+	/** Returns the code document for a debug location (handles callbacks and external files). */
+	CodeDocument* getSnippet(const DebugableObjectBase::Location& loc);
 
 	void saveScript(ValueTree &v) const;
 	void restoreScript(const ValueTree &v);

@@ -466,10 +466,38 @@ StringArray FuzzySearcher::searchForResults(const String &word, const StringArra
 	return foundWords;
 }
 
-Array<int> FuzzySearcher::searchForIndexes(const String &word, const StringArray &wordList, double fuzzyness)
+Array<int> FuzzySearcher::searchForIndexes(const String &word, const StringArray &wordList, double fuzzyness, bool sortByScore)
 {
 	Array<int> foundIndexes;
 	search(&foundIndexes, true, word, wordList, fuzzyness);
+	
+	if (sortByScore && foundIndexes.size() > 1)
+	{
+		String searchWord = word.toLowerCase();
+		searchWord = searchWord.removeCharacters("()`[]*_-` ");
+		
+		// Precompute distances for each matched index
+		HashMap<int, int> distances;
+		for (int idx : foundIndexes)
+		{
+			String w = wordList[idx].toLowerCase();
+			w = w.removeCharacters("()`[]*_-` ").substring(0, 32);
+			distances.set(idx, getLevenshteinDistance(searchWord, w));
+		}
+		
+		struct DistanceSorter
+		{
+			const HashMap<int, int>& distances;
+			
+			int compareElements(int a, int b) const
+			{
+				return distances[a] - distances[b];
+			}
+		} sorter { distances };
+		
+		foundIndexes.sort(sorter);
+	}
+	
 	return foundIndexes;
 }
 

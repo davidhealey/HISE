@@ -1251,6 +1251,8 @@ public:
 			customLogger = l;
 		}
 
+		bool hasCustomLogger() const { return (bool)customLogger; }
+
 	private:
 
 		CustomLogger customLogger;

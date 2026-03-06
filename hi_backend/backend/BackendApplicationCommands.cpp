@@ -146,6 +146,8 @@ void BackendCommandTarget::getAllCommands(Array<CommandID>& commands)
         MenuExportCheckPluginParameters,
 		MenuToolsConvertSVGToPathData,
         MenuToolsBroadcasterWizard,
+		MenuToolsToggleRestServer,
+		MenuToolsShowInteractionTestWindow,
 		MenuExportRestoreToDefault,
 		MenuExportValidateUserPresets,
 		MenuExportCheckAllSampleMaps,
@@ -505,6 +507,15 @@ void BackendCommandTarget::getCommandInfo(CommandID commandID, ApplicationComman
 		setCommandTarget(result, "Show Broadcaster Wizard", true, false, 'X', false);
 		result.categoryName = "Tools";
 		break;
+	case MenuToolsToggleRestServer:
+		setCommandTarget(result, "Toggle REST API Server", true, 
+			bpe->getBackendProcessor()->getRestServer().isRunning(), 'X', false);
+		result.categoryName = "Tools";
+		break;
+	case MenuToolsShowInteractionTestWindow:
+		setCommandTarget(result, "Show Interaction Test Window", true, false, 'X', false);
+		result.categoryName = "Tools";
+		break;
 	case MenuToolsCreateExternalScriptFile:
 		setCommandTarget(result, "Create external script file", true, false, 'X', false);
 		result.categoryName = "Tools";
@@ -785,6 +796,26 @@ bool BackendCommandTarget::perform(const InvocationInfo &info)
         s->setModalBaseWindowComponent(bpe);
         return true;
     }
+	case MenuToolsToggleRestServer:
+	{
+		auto& server = bpe->getBackendProcessor()->getRestServer();
+		if (server.isRunning())
+		{
+			server.stop();
+		}
+		else
+		{
+			int port = (int)bpe->getBackendProcessor()->getSettingsObject().getSetting(HiseSettings::Scripting::RestApiPort);
+			server.start(port);
+		}
+		updateCommands();
+		return true;
+	}
+	case MenuToolsShowInteractionTestWindow:
+	{
+		bpe->getBackendProcessor()->showInteractionTestWindow();
+		return true;
+	}
 	case MenuToolsEditShortcuts:		Actions::editShortcuts(bpe); return true;
 	case MenuViewReset:				    bpe->resetInterface(); updateCommands(); return true;
 	case MenuViewRotate:
@@ -1126,6 +1157,8 @@ PopupMenu BackendCommandTarget::getMenuForIndex(int topLevelMenuIndex, const Str
             ADD_MENU_ITEM(MenuToolsRecompile);
             ADD_MENU_ITEM(MenuToolsConvertSVGToPathData);
             ADD_MENU_ITEM(MenuToolsBroadcasterWizard);
+            ADD_MENU_ITEM(MenuToolsToggleRestServer);
+            ADD_MENU_ITEM(MenuToolsShowInteractionTestWindow);
             p.addSeparator();
             ADD_MENU_ITEM(MenuToolsShowDspNetworkDllInfo);
             ADD_MENU_ITEM(MenuToolsRecordOneSecond);
@@ -1140,6 +1173,8 @@ PopupMenu BackendCommandTarget::getMenuForIndex(int topLevelMenuIndex, const Str
 			ADD_MENU_ITEM(MenuToolsCheckCyclicReferences);
 			ADD_MENU_ITEM(MenuToolsConvertSVGToPathData);
             ADD_MENU_ITEM(MenuToolsBroadcasterWizard);
+            ADD_MENU_ITEM(MenuToolsToggleRestServer);
+            ADD_MENU_ITEM(MenuToolsShowInteractionTestWindow);
             
 			p.addSeparator();
 			p.addSectionHeader("Sample Management");
@@ -3056,6 +3091,35 @@ void BackendCommandTarget::Actions::copyUpdateInfo(BackendRootWindow* bpe)
 {
 	auto hisePath = GET_HISE_SETTING(bpe->getBackendProcessor()->getMainSynthChain(), HiseSettings::Compiler::HisePath).toString();
 
+
+
+	StringPairArray params;
+
+	params.set("path", File(hisePath).getFullPathName().replace("\\", "/"));
+	params.set("status", File(hisePath).getChildFile(".git").isDirectory() ? "valid" : "invalid");
+	
+
+#if HISE_INCLUDE_FAUST
+	params.set("faust", "1");
+#else
+	params.set("faust", "0");
+#endif
+
+#if JUCE_MAC && JUCE_ARM
+	params.set("arch", "arm64");
+#else
+	params.set("arch", "x64");
+#endif
+
+	params.set("commit", String(PREVIOUS_HISE_COMMIT));
+	params.set("commit", String("2d14c3235865ff5510ca6902b6ce636306666857"));
+
+	URL baseURL("https://hise-install-wizard.vercel.app/");
+
+	auto url = baseURL.getChildURL("api/check-update").withParameters(params);
+	
+	debugToConsole(bpe->getBackendProcessor()->getMainSynthChain(), "\tChecking for updates on server...");
+
 	String output;
 
 	output << hisePath;
@@ -3079,18 +3143,46 @@ void BackendCommandTarget::Actions::copyUpdateInfo(BackendRootWindow* bpe)
 
 	output << "|" << String(PREVIOUS_HISE_COMMIT);
 
+	debugToConsole(bpe->getBackendProcessor()->getMainSynthChain(), "HISE stats: " + output);
+
 	SystemClipboard::copyTextToClipboard(output);
 
-	String message;
-
-	message << "Press OK to launch the HISE updater in your browser.  \n> You can paste the current clipboard content in the field";
-
-	if (PresetHandler::showYesNoWindow("Run HISE update wizard", message))
+	Thread::launch([url, baseURL]()
 	{
-		URL("https://hise-install-wizard.vercel.app/update").launchInDefaultBrowser();
-	}
+		auto response = url.readEntireTextStream(false);
+		auto obj = JSON::parse(response);
 
-	//PresetHandler::showMessageWindow("HISE Info copied", "The following string was copied to the clipboard:\n> `" + output + "\n\nClose HISE now and paste this in the setup wizard to proceed with updating HISE.");
+		if (obj["error"])
+		{
+			PresetHandler::showMessageWindow("Update error", obj["message"].toString(), PresetHandler::IconType::Error);
+		}
+		else
+		{
+			if (obj["updateAvailable"])
+			{
+				auto updateUrl = obj["updateUrl"].toString();
+
+				auto u = URL(baseURL).getChildURL(updateUrl);
+
+				MessageManager::callAsync([u]()
+				{
+					if (PresetHandler::showYesNoWindow("Update available", "Press OK to close HISE and show the update wizard in your default browser."))
+					{
+						u.launchInDefaultBrowser();
+						JUCEApplication::quit();
+					}
+				});
+			}
+			else
+			{
+				MessageManager::callAsync([]()
+				{
+					PresetHandler::showMessageWindow("Everything up to date", "Noicenoicenoice");
+				});
+			}
+		}
+	});
+
 }
 
 void BackendCommandTarget::Actions::createThirdPartyNode(BackendRootWindow* bpe)

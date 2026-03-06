@@ -1108,7 +1108,9 @@ void ScriptingApi::Content::ScriptComponent::changed()
 		return;
 	}
 
-	ScopedValueSetter<bool> svs(getScriptProcessor()->getMainController_()->getDeferNotifyHostFlag(), true);
+	auto mc = getScriptProcessor()->getMainController_();
+
+	ScopedValueSetter<bool> svs(mc->getDeferNotifyHostFlag(), true);
 	
 	controlSender.sendControlCallbackMessage();
 	sendValueListenerMessage();
@@ -1118,7 +1120,9 @@ void ScriptingApi::Content::ScriptComponent::changed()
 		// We need to throw an error again to stop the execution of the script
 		// (a recursive function call to this method will not be terminated because
 		// (the error is already consumed by the control callback handling).
-		if (!jp->getLastErrorMessage().wasOk())
+		// Note: In flaky threading mode, we don't throw an error as this exception might
+		// not be handled by the callstack...
+		if (!jp->getLastErrorMessage().wasOk() && !mc->isFlakyThreadingAllowed())
 			reportScriptError("Aborting script execution after error occured during changed() callback");
 	}
 }
@@ -1901,7 +1905,7 @@ void ScriptingApi::Content::ScriptComponent::setLocalLookAndFeel(var lafObject)
 	{
 		if (auto registry = getScriptProcessor()->getScriptingContent()->lafRegistry.get())
 		{
-			registry->registerRecipient(l, getName());
+			registry->registerRecipient(l, this);
 		}
 
 		if(l->currentStyleSheet.isNotEmpty())
@@ -8470,12 +8474,12 @@ juce::var ScriptingApi::Content::createLocalLookAndFeel()
 	{
 		if (auto jp = dynamic_cast<JavascriptProcessor*>(getScriptProcessor()))
 		{
-			jp->getScriptEngine()->debugInfoListeners.push_back({ laf , [registry](DebugInformationBase::Ptr debugInfo)
+			jp->getScriptEngine()->debugInfoListeners.push_back({ laf, [registry](DebugInformationBase::Ptr debugInfo)
 			{
 				auto id = debugInfo->getTextForName();
 				auto loc = debugInfo->getLocation();
 				registry->registerLaf(debugInfo->getObject(), id, loc);
-			} });
+			}});
 		}
 	}
 
@@ -9189,7 +9193,7 @@ bool hise::ScriptingApi::Content::LafRegistry::hasScriptBasedRecipients() const
 	return false;
 }
 
-// Returns true when all script-based recipients have rendered at least once
+// Returns true when all visible script-based recipients have rendered at least once
 bool hise::ScriptingApi::Content::LafRegistry::allRecipientsRendered() const
 {
 	for (auto l : list)
@@ -9198,6 +9202,10 @@ bool hise::ScriptingApi::Content::LafRegistry::allRecipientsRendered() const
 		{
 			for (const auto& r : l->assignedComponents)
 			{
+				// Skip invisible components - they won't render
+				if (!r.isShowing)
+					continue;
+					
 				if (r.rendered.get() == 0)
 					return false;
 			}
@@ -9207,10 +9215,10 @@ bool hise::ScriptingApi::Content::LafRegistry::allRecipientsRendered() const
 	return true;
 }
 
-// Returns IDs of script-based components that haven't rendered yet
-StringArray hise::ScriptingApi::Content::LafRegistry::getUnrenderedComponentIds() const
+// Returns info about script-based components that haven't rendered yet
+Array<ScriptingApi::Content::LafRegistry::UnrenderedInfo> hise::ScriptingApi::Content::LafRegistry::getUnrenderedComponents() const
 {
-	StringArray ids;
+	Array<UnrenderedInfo> result;
 
 	for (auto l : list)
 	{
@@ -9219,12 +9227,12 @@ StringArray hise::ScriptingApi::Content::LafRegistry::getUnrenderedComponentIds(
 			for (const auto& r : l->assignedComponents)
 			{
 				if (r.rendered.get() == 0)
-					ids.add(r.name.toString());
+					result.add({ r.name, !r.isShowing });
 			}
 		}
 	}
 
-	return ids;
+	return result;
 }
 
 // Returns LAF info for a component (any style), or nullopt if no LAF
@@ -9249,7 +9257,7 @@ void hise::ScriptingApi::Content::LafRegistry::registerLaf(DebugableObjectBase* 
 		auto newInfo = new LafInfo();
 
 		newInfo->variableName = variableName;
-		newInfo->location = location.toGotoString();
+		newInfo->location = location;
 
 		auto useCSS = typed->isUsingCSS();
 		auto useScript = typed->isUsingScriptFunctions();
@@ -9272,10 +9280,16 @@ void hise::ScriptingApi::Content::LafRegistry::registerLaf(DebugableObjectBase* 
 		}
 
 		// now add all pending components that match the laf.
-		for (auto pc : pendingRegisterComponents)
+		for (auto& pc : pendingRegisterComponents)
 		{
-			if (pc.second == laf)
-				newInfo->assignedComponents.add({ pc.first, false });
+			if (pc.second.laf == laf)
+			{
+				LafInfo::RegisteredComponent rc;
+				rc.name = pc.first;
+				rc.rendered.set(0);
+				rc.isShowing = pc.second.component != nullptr && pc.second.component->isShowing();
+				newInfo->assignedComponents.add(rc);
+			}
 		}
 
 		list.add(newInfo);
@@ -9287,12 +9301,12 @@ void hise::ScriptingApi::Content::LafRegistry::registerLaf(DebugableObjectBase* 
 }
 
 
-void ScriptingApi::Content::LafRegistry::registerRecipient(DebugableObjectBase* laf, const Identifier& componentId)
+void ScriptingApi::Content::LafRegistry::registerRecipient(DebugableObjectBase* laf, ScriptComponent* component)
 {
 	// only store this in the pending component list, as this is called before the registry is created.
 	// note that calling this subsequently with the same component ID is expected behaviour and overwrites the assigned
 	// laf. This can occur if multiple setLocalLookAndFeel calls are made and behaves as expected.
-	pendingRegisterComponents[componentId] = laf;
+	pendingRegisterComponents[component->getName()] = { component, laf };
 }
 
 bool ScriptingApi::Content::LafRegistry::markAsRendered(const Identifier& componentId)
