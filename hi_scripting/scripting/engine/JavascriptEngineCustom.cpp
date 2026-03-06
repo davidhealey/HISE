@@ -1485,6 +1485,21 @@ private:
 	Array<ApiHelpers::CallScope> suppressStack;
 };
 
+/** Map enrichment JSON severity string to ApiDiagnostic::Severity enum.
+    JSON values (PascalCase from deprecated_methods.md): Error, Warning, Information, Hint.
+    Visible to both JavascriptEngineCustom.cpp and JavascriptEngineParser.cpp via unity build. */
+static HiseJavascriptEngine::RootObject::ApiDiagnostic::Severity
+parseDeprecationSeverity(const String& s)
+{
+	using S = HiseJavascriptEngine::RootObject::ApiDiagnostic::Severity;
+
+	if (s == "Error")       return S::Error;
+	if (s == "Warning")     return S::Warning;
+	if (s == "Information") return S::Info;
+	if (s == "Hint")        return S::Hint;
+	return S::Warning;  // default for deprecated methods
+}
+
 /** AST analysis pass that validates method calls on const var objects and collects
     DiagnosticPlaceholder nodes left by the parser's diagnostic-mode recovery sites.
     
@@ -1601,6 +1616,27 @@ private:
 
 		// Argument count matches — check literal argument types
 		checkLiteralArgTypes(funcCall, cso, functionIndex, numArgs, className, methodName.toString());
+
+		// Check for deprecated methods (exact lookup by class name)
+		auto depInfo = ApiHelpers::getDeprecation(className, methodName.toString());
+
+		if (depInfo.deprecated)
+		{
+			String msg = className + "." + methodName.toString() + "() is deprecated";
+			StringArray suggestions;
+
+			if (depInfo.replacement.isNotEmpty())
+			{
+				msg << " — use " << depInfo.replacement << " instead";
+				suggestions.add(depInfo.replacement);
+			}
+
+			if (depInfo.note.isNotEmpty())
+				msg << " (" << depInfo.note << ")";
+
+			addDiagnostic(funcCall->location, msg, suggestions,
+			              parseDeprecationSeverity(depInfo.severity), "deprecation");
+		}
 	}
 
 	void validateTier3(RO::FunctionCall* funcCall, RO::DotOperator* dot)
@@ -1629,6 +1665,27 @@ private:
 		}
 
 		// No type checking for Tier 3 — we don't know the concrete class
+
+		// Check for deprecated methods (greedy lookup across all classes)
+		auto depInfo = ApiHelpers::getDeprecation("*", methodName);
+
+		if (depInfo.deprecated)
+		{
+			String msg = "Method '" + methodName + "' is deprecated";
+			StringArray suggestions;
+
+			if (depInfo.replacement.isNotEmpty())
+			{
+				msg << " — use " << depInfo.replacement << " instead";
+				suggestions.add(depInfo.replacement);
+			}
+
+			if (depInfo.note.isNotEmpty())
+				msg << " (" << depInfo.note << ")";
+
+			addDiagnostic(funcCall->location, msg, suggestions,
+			              parseDeprecationSeverity(depInfo.severity), "deprecation");
+		}
 	}
 
 	void checkLiteralArgTypes(RO::FunctionCall* funcCall, ConstScriptingObject* cso,
