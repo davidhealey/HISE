@@ -434,7 +434,7 @@ public:
         Point<int> getCurrentCursorPosition() const override;
         void setCursorPosition(Point<int> pos) override;
         
-        Array<VisibleMenuItemInfo> getVisibleMenuItems() const override;
+        Array<PopupMenu::VisibleMenuItem> getVisibleMenuItems() const override;
         
         int waitUntilReady() override;
         
