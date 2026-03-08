@@ -389,6 +389,20 @@ private:
 };
 
 //==============================================================================
+/** Represents a single visible item in an open popup menu.
+ *
+ *  Defined here rather than as PopupMenu::VisibleMenuItem because the latter
+ *  is a HISE-specific extension to JUCE that is not available on all
+ *  platforms (notably Linux builds using standard JUCE).
+ */
+struct VisibleMenuItemInfo
+{
+    String text;
+    int itemId = 0;
+    Rectangle<int> screenBounds;
+};
+
+//==============================================================================
 /** Base interface for executing mouse/screenshot actions.
  *  Real implementation injects into JUCE.
  *  Test implementation logs for verification.
@@ -452,7 +466,7 @@ struct InteractionExecutorBase
     virtual void setCursorPosition(Point<int> pos) = 0;
     
     /** Get all currently visible menu items from open popup menus. */
-    virtual Array<PopupMenu::VisibleMenuItem> getVisibleMenuItems() const = 0;
+    virtual Array<VisibleMenuItemInfo> getVisibleMenuItems() const = 0;
     
     /** Wait until the executor is ready to process events.
      *  @returns The number of milliseconds waited, or -1 if timed out.
