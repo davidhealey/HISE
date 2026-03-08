@@ -684,6 +684,14 @@ struct HiseJavascriptEngine::RootObject::StringClass : public DynamicObject
 		setMethod("decrypt", decrypt);
 		setMethod("contains", contains);
 
+		// JS-compatible aliases and additions
+		setMethod("startsWith", startsWith);
+		setMethod("endsWith", endsWith);
+		setMethod("includes", contains);       // alias for contains
+		setMethod("slice", substring);          // alias for substring
+		setMethod("replaceAll", replace);       // alias for replace (HISE replace already replaces all)
+		setMethod("match", match);
+
 		setMethod("getTrailingIntValue", getTrailingIntValue);
 		setMethod("getIntValue", getIntValue);
 		setMethod("hash", hash);
@@ -696,8 +704,10 @@ struct HiseJavascriptEngine::RootObject::StringClass : public DynamicObject
 	static Identifier getClassName()  { static const Identifier i("String"); return i; }
 
 	static var contains(Args a)		 { return a.thisObject.toString().contains(getString(a, 0)); }
+	static var startsWith(Args a)    { return a.thisObject.toString().startsWith(getString(a, 0)); }
+	static var endsWith(Args a)      { return a.thisObject.toString().endsWith(getString(a, 0)); }
 	static var fromCharCode(Args a)  { return String::charToString(getInt(a, 0)); }
-	static var substring(Args a)     { return a.thisObject.toString().substring(getInt(a, 0), getInt(a, 1)); }
+	static var substring(Args a)     { return a.thisObject.toString().substring(getInt(a, 0), a.numArguments > 1 ? getInt(a, 1) : 0x7fffffff); }
 	static var indexOf(Args a)       { return a.thisObject.toString().indexOf(getString(a, 0)); }
 	static var lastIndexOf(Args a)		 { return a.thisObject.toString().lastIndexOf(getString(a, 0)); }
 	static var charCodeAt(Args a)    { return (int)a.thisObject.toString()[getInt(a, 0)]; }
@@ -715,6 +725,32 @@ struct HiseJavascriptEngine::RootObject::StringClass : public DynamicObject
 	static var fromLastOccurrenceOf(Args a) { return a.thisObject.toString().fromLastOccurrenceOf(getString(a, 0), false, false); }
 	static var upToFirstOccurrenceOf(Args a) { return a.thisObject.toString().upToFirstOccurrenceOf(getString(a, 0), false, false); }
 	static var upToLastOccurrenceOf(Args a) { return a.thisObject.toString().upToLastOccurrenceOf(getString(a, 0), false, false); }
+
+	static var match(Args a)
+	{
+		try
+		{
+			std::string s = a.thisObject.toString().toStdString();
+			std::regex reg(getString(a, 0).toStdString());
+			std::smatch m;
+			var returnArray;
+			int safeCount = 0;
+
+			while (std::regex_search(s, m, reg) && ++safeCount < 100000)
+			{
+				for (auto x : m)
+					returnArray.insert(-1, String(x));
+
+				s = m.suffix();
+			}
+
+			return returnArray;
+		}
+		catch (std::regex_error e)
+		{
+			return var::undefined();
+		}
+	}
 
 	static var concat(Args a)
 	{
@@ -889,6 +925,24 @@ public:
 
 	/** Checks if the string contains the given substring. */
 	bool contains(String otherString) { return false; }
+
+	/** Checks if the string starts with the given prefix. */
+	bool startsWith(String prefix) { return false; }
+
+	/** Checks if the string ends with the given suffix. */
+	bool endsWith(String suffix) { return false; }
+
+	/** Checks if the string contains the given substring (JS-compatible alias for contains). */
+	bool includes(String substring) { return false; }
+
+	/** Returns a section of the string (alias for substring). */
+	String slice(int startIndex, int endIndex) { return String(); }
+
+	/** Returns a copy of the string with all occurrences replaced (alias for replace). */
+	String replaceAll(var substringToLookFor, var replacement) { return String(); }
+
+	/** Returns an array of regex matches from the string. */
+	Array match(String regex) { return Array(); }
 
 	/** Converts a string to uppercase letters. */
 	String toUpperCase() { return String(); }
