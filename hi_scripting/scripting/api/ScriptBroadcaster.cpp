@@ -3433,8 +3433,13 @@ bool ScriptBroadcaster::addListener(var object, var metadata, var function)
     {
         if(auto c = dynamic_cast<WeakCallbackHolder::CallableObject*>(function.getObject()))
         {
+#if USE_BACKEND
+            if(HiseJavascriptEngine::RootObject::RealtimeSafetyInfo::check(c, this, "Broadcaster.addListener"))
+                reportScriptError("Listener callback is not safe for audio-thread execution");
+#else
             if(!c->isRealtimeSafe())
                 reportScriptError("You need to use inline functions in order to ensure realtime safe execution");
+#endif
         }
     }
     

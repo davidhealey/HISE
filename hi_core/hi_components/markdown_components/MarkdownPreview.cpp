@@ -106,6 +106,9 @@ void DocUpdater::SnippetCreator::createSnippetDatabase()
 				if(catIndex != -1)
 					cat = (Category)catIndex;
 
+				tags = StringArray::fromTokens(h.getKeyValue("tags"), ",", "");
+				tags.trim();
+
 				snippet = h.getKeyValue("HiseSnippet");
 			}
 
@@ -134,8 +137,22 @@ void DocUpdater::SnippetCreator::createSnippetDatabase()
 					String extractedCode;
 					jmp->mergeCallbacksToScript(extractedCode, "\n");
 
-					x->setProperty("title", name + "(" + getCategories()[(int)cat] + ")");
+					x->setProperty("title", name);
+					x->setProperty("category", getCategories()[(int)cat]);
+					
+
+					Array<var> tl;
+
+					for (auto& t : tags)
+						tl.add(var(t));
+
+					x->setProperty("tags", var(tl));
+
 					x->setProperty("description", description);
+
+					DBG(name);
+					DBG(extractedCode);
+
 					x->setProperty("code", extractedCode);
 
 					return var(x);
@@ -257,7 +274,7 @@ void DocUpdater::SnippetCreator::createSnippetDatabase()
 			String snippet;
 			int priority = 3;
 			String name;
-
+			StringArray tags;
 			
 		};
 
@@ -281,14 +298,12 @@ void DocUpdater::SnippetCreator::createSnippetDatabase()
 		auto targetDirectory = holder.getDatabaseRootDirectory().getChildFile("tutorials/");
 		auto imgDirectory = holder.getDatabaseRootDirectory().getChildFile("images").getChildFile("snippets");
 
-		auto codeFile = targetDirectory.getChildFile("snippet_dataset.js");
+		auto codeFile = holder.getDatabaseRootDirectory().getChildFile("rag").getChildFile("snippet_dataset.json");
 
 		if(imgDirectory.isDirectory())
 			imgDirectory.deleteRecursively();
 
 		imgDirectory.createDirectory();
-
-				
 
 		targetDirectory.createDirectory();
 
@@ -353,9 +368,12 @@ void DocUpdater::SnippetCreator::createSnippetDatabase()
 
 		if(ds.size() > 0)
 		{
-			auto t = JSON::toString(ds);
+			auto ok = codeFile.deleteFile();
+			ok = codeFile.create().wasOk();
 
-			codeFile.replaceWithText(t);
+			FileOutputStream fos(codeFile);
+			JSON::writeToStream(fos, ds);
+			fos.flush();
 		}
 	}
 	else

@@ -1,0 +1,651 @@
+/*  ===========================================================================
+*
+*   This file is part of HISE.
+*   Copyright 2016 Christoph Hart
+*
+*   HISE is free software: you can redistribute it and/or modify
+*   it under the terms of the GNU General Public License as published by
+*   the Free Software Foundation, either version 3 of the License, or
+*   (at your option) any later version.
+*
+*   HISE is distributed in the hope that it will be useful,
+*   but WITHOUT ANY WARRANTY; without even the implied warranty of
+*   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+*   GNU General Public License for more details.
+*
+*   You should have received a copy of the GNU General Public License
+*   along with HISE.  If not, see <http://www.gnu.org/licenses/>.
+*
+*   Commercial licenses for using HISE in an closed source project are
+*   available on request. Please visit the project's website to get more
+*   information about commercial licensing:
+*
+*   http://www.hise.audio/
+*
+*   HISE is based on the JUCE library,
+*   which must be separately licensed for closed source applications:
+*
+*   http://www.juce.com
+*
+*   ===========================================================================
+*/
+
+#pragma once
+
+namespace hise { using namespace juce;
+
+// Forward declaration for ReplayConsoleHandler
+class InteractionTestWindow;
+
+//==============================================================================
+/** Identifiers for REST API parameter names and JSON response keys.
+    Using Identifiers instead of string literals provides compile-time safety
+    and better performance for property lookups.
+*/
+#define DECLARE_ID(x) const Identifier x(#x);
+
+namespace RestApiIds
+{
+    // Request/body parameters
+    DECLARE_ID(moduleId);
+    DECLARE_ID(callback);
+    DECLARE_ID(script);
+    DECLARE_ID(compile);
+    DECLARE_ID(hierarchy);
+    
+    // Common response fields
+    DECLARE_ID(success);
+    DECLARE_ID(result);
+    DECLARE_ID(logs);
+    DECLARE_ID(errors);
+    DECLARE_ID(errorMessage);
+    DECLARE_ID(callstack);
+    
+    // list_methods response
+    DECLARE_ID(methods);
+    DECLARE_ID(path);
+    DECLARE_ID(method);
+    DECLARE_ID(category);
+    DECLARE_ID(description);
+    DECLARE_ID(returns);
+    DECLARE_ID(queryParameters);
+    DECLARE_ID(bodyParameters);
+    DECLARE_ID(name);
+    DECLARE_ID(required);
+    DECLARE_ID(defaultValue);
+    
+    // status response
+    DECLARE_ID(server);
+    DECLARE_ID(version);
+    DECLARE_ID(compileTimeout);
+    DECLARE_ID(project);
+    DECLARE_ID(projectFolder);
+    DECLARE_ID(scriptsFolder);
+    DECLARE_ID(scriptProcessors);
+    DECLARE_ID(isMainInterface);
+    DECLARE_ID(externalFiles);
+    DECLARE_ID(callbacks);
+    DECLARE_ID(id);
+    DECLARE_ID(type);
+    DECLARE_ID(empty);
+    
+    // list_components response
+    DECLARE_ID(components);
+    DECLARE_ID(childComponents);
+    DECLARE_ID(visible);
+    DECLARE_ID(enabled);
+    DECLARE_ID(x);
+    DECLARE_ID(y);
+    DECLARE_ID(width);
+    DECLARE_ID(height);
+    
+    // get_component_properties response
+    DECLARE_ID(properties);
+    DECLARE_ID(value);
+    DECLARE_ID(isDefault);
+    DECLARE_ID(options);
+    
+    // get/set_component_value
+    DECLARE_ID(min);
+    DECLARE_ID(max);
+    DECLARE_ID(validateRange);
+    
+    // Debug parameters
+    DECLARE_ID(forceSynchronousExecution);
+    DECLARE_ID(warning);
+    
+    // set_component_property
+    DECLARE_ID(changes);
+    DECLARE_ID(force);
+    DECLARE_ID(applied);
+    DECLARE_ID(locked);
+    DECLARE_ID(property);
+    DECLARE_ID(recompileRequired);
+    
+    // set_script response
+    DECLARE_ID(updatedCallbacks);
+
+    // repl
+    DECLARE_ID(expression);
+    
+    // screenshot
+    DECLARE_ID(scale);
+    DECLARE_ID(imageData);
+    DECLARE_ID(outputPath);
+    DECLARE_ID(filePath);
+    DECLARE_ID(selectionCount);
+    
+    // LAF (LookAndFeel) integration
+    DECLARE_ID(laf);                  // LAF info object for a component
+    DECLARE_ID(location);             // location of the LAF definition
+    DECLARE_ID(renderStyle);          // "script", "css", "css_inline", "mixed"
+    DECLARE_ID(cssLocation);          // Full path to external CSS file
+    DECLARE_ID(lafRenderWarning);     // Warning object when LAF render timeout
+    DECLARE_ID(unrenderedComponents); // Array of unrendered component objects
+    DECLARE_ID(timeoutMs);            // Timeout value in milliseconds
+    DECLARE_ID(reason);               // Reason for not rendering: "invisible" or "timeout"
+    
+    // Interaction testing
+    DECLARE_ID(interactions);         // Array of interaction objects
+    DECLARE_ID(interactionsCompleted); // Number of interactions successfully executed
+    DECLARE_ID(totalElapsedMs);       // Total execution time in milliseconds
+    DECLARE_ID(executionLog);         // Array of executed events with timing
+    DECLARE_ID(screenshots);          // Object with screenshot id -> base64 PNG data
+    DECLARE_ID(parseWarnings);        // Array of non-fatal parse warnings
+    DECLARE_ID(verbose);              // If true, include extra debug info in response
+    DECLARE_ID(mouseState);           // Final mouse state object (when verbose=true)
+    DECLARE_ID(currentTarget);        // Component ID mouse is currently over
+    DECLARE_ID(pixelPosition);        // Absolute pixel position {x, y}
+    
+    // SelectMenuItem response fields
+    DECLARE_ID(selectedMenuItem);     // Object with selected menu item info
+    DECLARE_ID(text);                 // Menu item display text
+    DECLARE_ID(itemId);               // Menu item ID
+    
+    // diagnose_script response
+    DECLARE_ID(diagnostics);          // Array of diagnostic objects
+    DECLARE_ID(line);                 // Diagnostic line number
+    DECLARE_ID(column);               // Diagnostic column number
+    DECLARE_ID(severity);             // "error", "warning", "info", "hint"
+    DECLARE_ID(source);               // "syntax", "api-validation", "type-check", "language", "callscope"
+    DECLARE_ID(message);              // Diagnostic message text
+    DECLARE_ID(suggestions);          // Array of "did you mean?" suggestion strings
+    DECLARE_ID(async);                // If true, defer shadow parse to scripting thread (default: false)
+    
+    // get_included_files
+    DECLARE_ID(files);                // Array of included file entries
+    DECLARE_ID(processor);            // Owning processor ID for an included file
+    
+    // profile / attachable profiling
+    DECLARE_ID(durationMs);           // Profiling duration in milliseconds
+    DECLARE_ID(threadFilter);         // Array of thread names to filter
+    DECLARE_ID(eventFilter);          // Array of event type names to filter
+    DECLARE_ID(threads);              // Array of thread profiling results
+    DECLARE_ID(thread);               // Thread name string
+    DECLARE_ID(events);               // Array of profiled events in a thread
+    DECLARE_ID(duration);             // Event duration in ms
+    DECLARE_ID(sourceType);           // Event source type name
+    DECLARE_ID(children);             // Nested child events
+    DECLARE_ID(start);                // Event start time in ms
+    DECLARE_ID(mode);                 // "record" or "get"
+    DECLARE_ID(recording);            // Whether a recording is in progress
+    DECLARE_ID(profile);              // Enable attached profiling on an endpoint
+    DECLARE_ID(trackSource);          // Track source ID (causal link open end, -1 = none)
+    DECLARE_ID(trackTarget);          // Track target ID (causal link close end, -1 = none)
+    DECLARE_ID(flows);                // Array of cross-thread causal flow connections
+    DECLARE_ID(trackId);              // Shared integer ID connecting a flow source to target
+    DECLARE_ID(sourceEvent);          // Name of the event that caused the flow
+    DECLARE_ID(targetEvent);          // Name of the event that was caused
+    DECLARE_ID(sourceThread);         // Thread where the flow originated
+    DECLARE_ID(targetThread);         // Thread where the flow terminated
+    
+    // Profile query/summary parameters
+    DECLARE_ID(summary);              // If true, aggregate repeated events with stats
+    DECLARE_ID(filter);               // Wildcard pattern matched against event name
+    DECLARE_ID(minDuration);          // Only include events with duration >= this (ms)
+    DECLARE_ID(sourceTypeFilter);     // Wildcard pattern matched against sourceType name
+    DECLARE_ID(nested);               // When filtering, include children of matched events
+    DECLARE_ID(limit);                // Max results returned (default 15)
+    DECLARE_ID(wait);                 // If false, return immediately when recording in progress
+    
+    // Summary result fields
+    DECLARE_ID(results);              // Flat array of filtered/aggregated events
+    DECLARE_ID(count);                // Number of occurrences in summary
+    DECLARE_ID(median);               // Median duration (ms)
+    DECLARE_ID(peak);                 // Maximum duration (ms)
+    DECLARE_ID(total);                // Sum of durations (ms)
+}
+
+#undef DECLARE_ID
+
+/** Helper utilities for REST API request handling.
+    
+    This struct contains utilities for handling REST API requests that interact
+    with HISE's scripting system, including console output capture, error parsing,
+    and script compilation. It also provides the central registry of all API routes
+    and their handler implementations.
+*/
+struct RestHelpers
+{
+    //==========================================================================
+    // Route types (nested to avoid polluting hise namespace)
+    
+    /** Identifies REST API endpoints. The enum value is the index into getRouteMetadata(). */
+    enum class ApiRoute
+    {
+        ListMethods,            ///< GET  /           - List all available API methods
+        Status,                 ///< GET  /api/status - Get project status
+        GetScript,              ///< GET  /api/get_script - Read script content
+        SetScript,              ///< POST /api/set_script - Update script content
+        EvaluateREPL,           ///< POST /api/repl - Evaluate an expression and get the result
+        Recompile,              ///< POST /api/recompile - Recompile a processor
+        ListComponents,         ///< GET  /api/list_components - List UI components
+        GetComponentProperties, ///< GET  /api/get_component_properties - Get component properties
+        GetComponentValue,      ///< GET  /api/get_component_value - Get component runtime value
+        SetComponentValue,      ///< POST /api/set_component_value - Set component runtime value
+        SetComponentProperties, ///< POST /api/set_component_properties - Set component properties
+        Screenshot,             ///< GET  /api/screenshot - Capture UI screenshot
+        GetSelectedComponents,  ///< GET  /api/get_selected_components - Get selected UI components
+        SimulateInteractions,   ///< POST /api/simulate_interactions - Execute UI interaction sequence
+        DiagnoseScript,         ///< POST /api/diagnose_script - Run diagnostic shadow parse
+        GetIncludedFiles,       ///< GET  /api/get_included_files - List included script files
+        StartProfiling,         ///< POST /api/profile - Run profiling session or retrieve last result
+        Shutdown,               ///< POST /api/shutdown - Gracefully quit HISE
+        numRoutes
+    };
+    
+    /** Metadata for a REST API route parameter. Uses fluent builder pattern. */
+    struct RouteParameter
+    {
+        Identifier name;
+        String description;
+        String defaultValue;  ///< Empty = no default
+        bool required = true;
+        
+        /** Constructor with required fields. */
+        RouteParameter(const Identifier& name_, const String& desc_)
+            : name(name_), description(desc_) {}
+        
+        /** Set a default value (implies optional). */
+        RouteParameter withDefault(const String& def) const
+        {
+            auto copy = *this;
+            copy.defaultValue = def;
+            copy.required = false;
+            return copy;
+        }
+        
+        /** Mark as optional without a default value. */
+        RouteParameter asOptional() const
+        {
+            auto copy = *this;
+            copy.required = false;
+            return copy;
+        }
+    };
+    
+    /** Metadata for a registered REST API route. Uses fluent builder pattern. */
+    struct RouteMetadata
+    {
+        ApiRoute id = ApiRoute::numRoutes;
+        String path;              ///< e.g., "api/status" (without leading /)
+        RestServer::Method method = RestServer::GET;
+        String category;          ///< "status", "scripting", "ui"
+        String description;       ///< One-liner description
+        String returns;           ///< One-liner describing response
+        Array<RouteParameter> queryParameters;   ///< For GET requests
+        Array<RouteParameter> bodyParameters;    ///< For POST requests (JSON body)
+        
+        /** Default constructor for juce::Array compatibility. */
+        RouteMetadata() = default;
+        
+        /** Constructor with required fields. */
+        RouteMetadata(ApiRoute id_, const String& path_)
+            : id(id_), path(path_) {}
+        
+        RouteMetadata withMethod(RestServer::Method m) const
+        {
+            auto copy = *this;
+            copy.method = m;
+            return copy;
+        }
+        
+        RouteMetadata withCategory(const String& cat) const
+        {
+            auto copy = *this;
+            copy.category = cat;
+            return copy;
+        }
+        
+        RouteMetadata withDescription(const String& desc) const
+        {
+            auto copy = *this;
+            copy.description = desc;
+            return copy;
+        }
+        
+        RouteMetadata withReturns(const String& ret) const
+        {
+            auto copy = *this;
+            copy.returns = ret;
+            return copy;
+        }
+        
+        RouteMetadata withQueryParam(const RouteParameter& p) const
+        {
+            auto copy = *this;
+            copy.queryParameters.add(p);
+            return copy;
+        }
+        
+        RouteMetadata withBodyParam(const RouteParameter& p) const
+        {
+            auto copy = *this;
+            copy.bodyParameters.add(p);
+            return copy;
+        }
+        
+        /** Convenience: adds standard moduleId query parameter. */
+        RouteMetadata withModuleIdParam() const
+        {
+            return withQueryParam(RouteParameter(RestApiIds::moduleId, "The script processor's module ID"));
+        }
+    };
+    
+    //==========================================================================
+    
+    /** Base class for scoped console capture.
+     *  
+     *  Captures console output during its lifetime by setting a custom logger
+     *  on the MainController's CodeHandler. Only captures if enabled AND no
+     *  existing custom logger is set.
+     *
+     *  Subclasses implement handleMessage() and handleError() to process captured output.
+     */
+    struct BaseScopedConsoleHandler : public ControlledObject
+    {
+        BaseScopedConsoleHandler(MainController* mc, bool enabled);
+        virtual ~BaseScopedConsoleHandler();
+        
+        bool isCapturing() const { return capturing; }
+        
+    protected:
+        virtual void handleMessage(const String& message) = 0;
+        virtual void handleError(const String& message, const StringArray& callstack) = 0;
+        
+        // Error parsing utilities
+        struct ParsedError
+        {
+            String message;      // "API call with undefined parameter 0"
+            String location;     // "Scripts/funky.js:9:16"
+            String functionName; // "dudel" (empty if not a callstack entry)
+            
+            /** Returns formatted callstack entry: "dudel() at Scripts/funky.js:9:16"
+                or just location if no function name. */
+            String toCallstackString() const;
+        };
+        
+        /** Parses an error string and extracts message, location, and optional function name.
+            
+            Handles both formats:
+            - Error message: "API call with undefined parameter 0 {{SW50ZXJm...}}"
+            - Callstack entry: ":\t\t\tdudel() - funky.js (9)\t{{SW50ZXJm...}}"
+            
+            @param errorString   The full error/callstack string
+            @param scriptRoot    The project's Scripts folder for resolving full paths
+            @param moduleId      The script processor's module ID - used as fallback filename
+            
+            @returns ParsedError with message, location, and optional functionName
+        */
+        ParsedError parseError(const String& errorString,
+                               const File& scriptRoot,
+                               const String& moduleId);
+        
+    private:
+        void onMessage(const String& message, int warning, const Processor* p);
+        bool capturing = false;
+    };
+    
+    //==========================================================================
+    
+    /** Scoped handler that captures console output during request processing.
+        
+        While this object exists, any Console.print() calls or error messages
+        will be captured and added to the AsyncRequest's logs/errors arrays,
+        which are then merged into the JSON response.
+        
+        Inherits from IConsoleCapture so it can be attached to AsyncRequest
+        with proper lifetime management (destroyed when request completes).
+    */
+    struct ScopedConsoleHandler : public BaseScopedConsoleHandler,
+                                  public RestServer::AsyncRequest::IConsoleCapture
+    {
+        ScopedConsoleHandler(MainController* mc, RestServer::AsyncRequest::Ptr request_);
+        
+    protected:
+        void handleMessage(const String& message) override;
+        void handleError(const String& message, const StringArray& callstack) override;
+        
+    private:
+        // Reference - safe because AsyncRequest owns this ScopedConsoleHandler,
+        // so AsyncRequest always outlives this object
+        RestServer::AsyncRequest& request;
+    };
+    
+    //==========================================================================
+    
+    /** Console handler for replay that captures to StatusBar log.
+     *  
+     *  Used when executeInteractions() is called directly (not through REST API)
+     *  to capture console output and display it in the test window's log panel.
+     */
+    struct ReplayConsoleHandler : public BaseScopedConsoleHandler
+    {
+        ReplayConsoleHandler(MainController* mc, InteractionTestWindow* window, bool enabled);
+        
+        /** Build result JSON and log to StatusBar. Call after execution completes. */
+        void finalize(const var& inputInteractions, bool success, 
+                      int interactionsCompleted, int totalElapsedMs);
+        
+    protected:
+        void handleMessage(const String& message) override;
+        void handleError(const String& message, const StringArray& callstack) override;
+        
+    private:
+        InteractionTestWindow* window;
+        StringArray logs;
+        Array<var> errors;
+    };
+    
+    /** Gets a JavascriptProcessor from the request's moduleId parameter.
+        
+        @param mc   The MainController
+        @param req  The async request containing the moduleId parameter
+        @returns    The JavascriptProcessor, or nullptr if not found
+    */
+    static JavascriptProcessor* getScriptProcessor(MainController* mc, 
+                                                   RestServer::AsyncRequest::Ptr req);
+    
+    /** Waits for any pending control callbacks to complete by pumping the message loop.
+        
+        @param sc        The component to wait for
+        @param timeoutMs Maximum time to wait (default 200ms)
+    */
+    static void waitForPendingCallbacks(ScriptComponent* sc, int timeoutMs = 200);
+    
+    /** Builds a hierarchical property tree for a UI component.
+        
+        Creates a DynamicObject with the component's properties and recursively
+        includes all child components in a "childComponents" array.
+        
+        Used by the /api/list_components?hierarchy=true endpoint.
+        
+        @param sc   The script component to build the tree for
+        @returns    DynamicObject with id, type, position, size, and childComponents
+    */
+    static DynamicObject::Ptr createRecursivePropertyTree(ScriptComponent* sc);
+    
+    //==========================================================================
+    // Route metadata registry
+    
+    /** Returns metadata for all registered API routes.
+        The array index corresponds to the ApiRoute enum value.
+    */
+    static const Array<RouteMetadata>& getRouteMetadata();
+    
+    /** Get the path string for a route. */
+    static String getRoutePath(ApiRoute route);
+    
+    /** Find route by subURL path. Returns ApiRoute::numRoutes if not found. */
+    static ApiRoute findRoute(const String& subURL);
+    
+    //==========================================================================
+    // Route handlers (static methods called from BackendProcessor::onAsyncRequest)
+    
+    /** Handler for GET / - List all available API methods. */
+    static RestServer::Response handleListMethods(MainController* mc, 
+                                                  RestServer::AsyncRequest::Ptr req);
+    
+    /** Handler for GET /api/status - Get project status. */
+    static RestServer::Response handleStatus(MainController* mc, 
+                                             RestServer::AsyncRequest::Ptr req);
+    
+    /** Handler for GET /api/get_script - Read script content. */
+    static RestServer::Response handleGetScript(MainController* mc, 
+                                                RestServer::AsyncRequest::Ptr req);
+    
+    /** Handler for POST /api/set_script - Update script content. */
+    static RestServer::Response handleSetScript(MainController* mc, 
+                                                RestServer::AsyncRequest::Ptr req);
+    
+    /** Handler for POST /api/recompile - Recompile a script processor. */
+    static RestServer::Response handleRecompile(MainController* mc, 
+                                                RestServer::AsyncRequest::Ptr req);
+    
+    /** Handler for POST /api/repl - Evaluate a REPL expression. */
+	static RestServer::Response handleEvaluateREPL(MainController* mc,
+		                                           RestServer::AsyncRequest::Ptr req);
+
+    /** Handler for GET /api/list_components - List UI components. */
+    static RestServer::Response handleListComponents(MainController* mc, 
+                                                     RestServer::AsyncRequest::Ptr req);
+    
+    /** Handler for GET /api/get_component_properties - Get component properties. */
+    static RestServer::Response handleGetComponentProperties(MainController* mc, 
+                                                             RestServer::AsyncRequest::Ptr req);
+    
+    /** Handler for GET /api/get_component_value - Get component runtime value. */
+    static RestServer::Response handleGetComponentValue(MainController* mc, 
+                                                        RestServer::AsyncRequest::Ptr req);
+    
+    /** Handler for POST /api/set_component_value - Set component runtime value. */
+    static RestServer::Response handleSetComponentValue(MainController* mc, 
+                                                        RestServer::AsyncRequest::Ptr req);
+    
+    /** Handler for POST /api/set_component_properties - Set component properties. */
+    static RestServer::Response handleSetComponentProperties(MainController* mc, 
+                                                             RestServer::AsyncRequest::Ptr req);
+    
+    /** Handler for GET /api/screenshot - Capture UI screenshot. */
+    static RestServer::Response handleScreenshot(MainController* mc, 
+                                                 RestServer::AsyncRequest::Ptr req);
+    
+    /** Handler for GET /api/get_selected_components - Get selected UI components. */
+    static RestServer::Response handleGetSelectedComponents(MainController* mc, 
+                                                            RestServer::AsyncRequest::Ptr req);
+    
+    /** Handler for POST /api/simulate_interactions - Execute UI interaction sequence.
+     *  Note: Takes BackendProcessor* to access InteractionTester.
+     */
+    static RestServer::Response handleSimulateInteractions(BackendProcessor* bp, 
+                                                           RestServer::AsyncRequest::Ptr req);
+    
+    /** Handler for POST /api/diagnose_script - Run diagnostic shadow parse.
+     *  Accepts moduleId and/or filePath. Reads file from disk, runs shadow parse,
+     *  returns structured diagnostics without modifying runtime state.
+     */
+    static RestServer::Response handleDiagnoseScript(MainController* mc, 
+                                                     RestServer::AsyncRequest::Ptr req);
+    
+    /** Handler for GET /api/get_included_files - List included script files.
+     *  Without moduleId: returns all included files across all processors (with owning processor).
+     *  With moduleId: returns files for that specific processor only.
+     */
+    static RestServer::Response handleGetIncludedFiles(MainController* mc, 
+                                                       RestServer::AsyncRequest::Ptr req);
+    
+    /** Handler for POST /api/profile - Start profiling or retrieve last result.
+     *  mode="record": starts a new session (non-blocking, returns immediately).
+     *  mode="get": returns last result, with optional filter/summary parameters.
+     *  When recording is in progress, "get" blocks until done (unless wait=false).
+     */
+    static RestServer::Response handleStartProfiling(MainController* mc, 
+                                                      RestServer::AsyncRequest::Ptr req);
+    
+    /** Handler for POST /api/shutdown - Gracefully quit HISE.
+     *  Sends the HTTP 200 response before scheduling the quit on the message thread.
+     */
+    static RestServer::Response handleShutdown(MainController* mc, 
+                                                RestServer::AsyncRequest::Ptr req);
+
+#if HISE_INCLUDE_PROFILING_TOOLKIT
+    /** Query options for filtering and summarizing profiling results. */
+    struct ProfileQueryOptions
+    {
+        bool summary = false;
+        bool nested = false;
+        String filter;              // wildcard pattern (e.g., "slow*"), empty = no filter
+        String sourceTypeFilter;    // wildcard pattern (e.g., "Trace"), empty = no filter
+        double minDuration = 0.0;
+        int limit = 15;
+        StringArray threadFilter;   // thread names to include (empty = all threads)
+
+        bool hasFilters() const
+        {
+            return summary || filter.isNotEmpty() || sourceTypeFilter.isNotEmpty()
+                   || minDuration > 0.0 || threadFilter.size() > 0;
+        }
+
+        static ProfileQueryOptions fromJson(const var& json)
+        {
+            ProfileQueryOptions opts;
+            opts.summary = (bool)json.getProperty(RestApiIds::summary, false);
+            opts.nested = (bool)json.getProperty(RestApiIds::nested, false);
+            opts.filter = json.getProperty(RestApiIds::filter, "").toString();
+            opts.sourceTypeFilter = json.getProperty(RestApiIds::sourceTypeFilter, "").toString();
+            opts.minDuration = (double)json.getProperty(RestApiIds::minDuration, 0.0);
+            opts.limit = jlimit(1, 100, (int)json.getProperty(RestApiIds::limit, 15));
+
+            auto tf = json.getProperty(RestApiIds::threadFilter, var());
+
+            if (tf.isArray())
+            {
+                for (int i = 0; i < tf.size(); i++)
+                    opts.threadFilter.add(tf[i].toString());
+            }
+
+            return opts;
+        }
+    };
+
+    /** Starts a fire-and-forget profiling session from body JSON params.
+     *  Reads durationMs, threadFilter, eventFilter from bodyJson.
+     *  Returns true if recording started, false if already recording.
+     */
+    static bool startProfilingSession(MainController* mc, const var& bodyJson, 
+                                       double defaultDurationMs = 1000.0);
+
+    /** Walks a ProfileInfoBase tree and returns a JSON-ready DynamicObject 
+        with "threads" array and "flows" array (cross-thread causal connections). */
+    static var profilingResultToJson(
+        DebugSession::ProfileDataSource::ProfileInfoBase* root);
+
+    /** Walks a ProfileInfoBase tree with filtering/aggregation and returns a 
+        JSON-ready DynamicObject with "results" array and "flows" array. */
+    static var profilingResultToSummary(
+        DebugSession::ProfileDataSource::ProfileInfoBase* root,
+        const ProfileQueryOptions& options);
+#endif
+};
+
+} // namespace hise

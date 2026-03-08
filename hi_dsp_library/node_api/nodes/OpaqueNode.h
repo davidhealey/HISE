@@ -109,10 +109,8 @@ struct OpaqueNode
 
 	OpaqueNode();
 
-	OpaqueNode(OpaqueNode&& other) = default;
-	
-
-	OpaqueNode(const OpaqueNode& other) = default;
+    OpaqueNode(OpaqueNode&& other) = delete;
+    OpaqueNode(const OpaqueNode& other) = delete;
 
 	virtual ~OpaqueNode();
 

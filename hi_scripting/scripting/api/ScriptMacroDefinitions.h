@@ -12,7 +12,7 @@
 #define SCRIPTMACRODEFINITIONS_H_INCLUDED
 
 
-// Macros for APIClass objects
+// Macros for APIClass objects ======================================================================
 
 #define ADD_API_METHOD_0(name) static const Identifier name ## _id (#name); addFunction(name ## _id, &Wrapper::name)
 #define ADD_API_METHOD_1(name) static const Identifier name ## _id (#name); addFunction1(name ## _id, &Wrapper::name)
@@ -20,6 +20,38 @@
 #define ADD_API_METHOD_3(name) static const Identifier name ## _id (#name); addFunction3(name ## _id, &Wrapper::name)
 #define ADD_API_METHOD_4(name) static const Identifier name ## _id (#name); addFunction4(name ## _id, &Wrapper::name)
 #define ADD_API_METHOD_5(name) static const Identifier name ## _id (#name); addFunction5(name ## _id, &Wrapper::name)
+
+// MACROS FOR DIAGNOSTICS ======================================================================
+
+#if USE_BACKEND
+// appends a callback argument check
+#define ADD_CALLBACK_DIAGNOSTIC(wc, id, idx) wc.addCallbackDiagnostic(this, #id, idx);
+#define ADD_CALLBACK_DIAGNOSTIC_RAW(methodName, ...) addDiagnostic(Identifier(#methodName), [](ApiClass* c, const Identifier& id, const Array<var>& args) \
+{ \
+	return (__VA_ARGS__)(c, id, args); \
+});
+
+#define DIAGNOSTIC_MARK_DEPRECATED(methodName, text) addDiagnostic(Identifier(#methodName), [](ApiClass* c, const Identifier& id, const Array<var>& args) \
+{ \
+	return DiagnosticResult("this method is deprecated") \
+		.withSuggestion(text) \
+		.withClassification(ApiClass::DiagnosticResult::Classification::Deprecation) \
+		.withSeverity(ApiClass::DiagnosticResult::Severity::Warning); \
+});
+#else
+#define ADD_CALLBACK_DIAGNOSTIC(wc, id, idx)
+#define ADD_CALLBACK_DIAGNOSTIC_RAW(methodName, ...) ;
+#define DIAGNOSTIC_MARK_DEPRECATED(methodName, text)
+#endif
+
+#define ADD_API_METHOD_0_DEPRECATED(methodName, text) ADD_API_METHOD_0(methodName); DIAGNOSTIC_MARK_DEPRECATED(methodName, text);
+#define ADD_API_METHOD_1_DEPRECATED(methodName, text) ADD_API_METHOD_1(methodName); DIAGNOSTIC_MARK_DEPRECATED(methodName, text);
+#define ADD_API_METHOD_2_DEPRECATED(methodName, text) ADD_API_METHOD_2(methodName); DIAGNOSTIC_MARK_DEPRECATED(methodName, text);
+#define ADD_API_METHOD_3_DEPRECATED(methodName, text) ADD_API_METHOD_3(methodName); DIAGNOSTIC_MARK_DEPRECATED(methodName, text);
+#define ADD_API_METHOD_4_DEPRECATED(methodName, text) ADD_API_METHOD_4(methodName); DIAGNOSTIC_MARK_DEPRECATED(methodName, text);
+#define ADD_API_METHOD_5_DEPRECATED(methodName, text) ADD_API_METHOD_5(methodName); DIAGNOSTIC_MARK_DEPRECATED(methodName, text);
+
+// TYPED METHOD REGISTRATIONS ======================================================================
 
 #if USE_BACKEND
 #define ADD_TYPED_API_METHOD_1(name, t1) static const Identifier name ## _id (#name); addFunction1(name ## _id, &Wrapper::name); addForcedParameterTypes(name ## _id, VarTypeChecker::createParameterTypes(t1));

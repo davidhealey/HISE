@@ -718,6 +718,9 @@ DebugableObjectBase* DynamicObjectDebugInformation::getObject()
 		return wrapper.get();
 	}
 
+	if (auto dbo = dynamic_cast<DebugableObjectBase*>(v.getObject()))
+		return dbo;
+
 	return nullptr;
 }
 

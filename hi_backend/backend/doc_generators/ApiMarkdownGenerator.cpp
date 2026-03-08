@@ -211,16 +211,24 @@ juce::String ScriptingApiDatabase::Resolver::getContent(const MarkdownLink& url)
 			s << "  \n";
 			s << "# Class methods  \n";
 
-			apiDump << "### API Class: " << classTree.getType().toString() << "\n";
+			auto obj = ValueTreeConverters::convertValueTreeToDynamicObject(classTree);
 
-			apiDump << "\n```javascript\n";
+			apiDump->setProperty(classTree.getType(), obj);
 
 			for (auto c : classTree)
 			{
 				s << createMethodText(c);
 			}
 
+#if 0
+			apiDump << "### API Class: " << classTree.getType().toString() << "\n";
+
+			apiDump << "\n```javascript\n";
+
+			
+
 			apiDump << "\n```\n";
+#endif
 
 			return s;
 		}
@@ -239,11 +247,36 @@ juce::String ScriptingApiDatabase::Resolver::createMethodText(ValueTree& mv)
 {
 	String s;
 
+
 	String className = mv.getParent().getType().toString();
 	String methodName = mv.getProperty("name").toString();
 
+	DynamicObject::Ptr methodObject;
+
+	auto methodList = apiDump->getProperty(className);
+
+	if (methodList.isArray())
+	{
+		for (auto& mo : *methodList.getArray())
+		{
+			if (mo["name"] == methodName)
+			{
+				methodObject = mo.getDynamicObject();
+				break;
+			}
+		}
+	}
+
+	if (methodObject == nullptr)
+	{
+		DBG("Missing doc entry: " + className + "." + methodName);
+		methodObject = new DynamicObject();
+	}
+
+#if 0
 	apiDump << "/* " << mv.getProperty("description").toString().trim() << " */\n";
 	apiDump << className << "." << methodName << mv.getProperty("arguments").toString() << ";\n\n";
+#endif
 
 	s << "## `" << methodName;
 	
@@ -274,8 +307,21 @@ juce::String ScriptingApiDatabase::Resolver::createMethodText(ValueTree& mv)
 
 		if(code.startsWith("javascript"))
 			code = code.fromFirstOccurrenceOf("javascript", false, false);
+		
+		
 
-		exampleDump << code.trim();
+		methodObject->setProperty("example", code.trim());
+
+#if 0
+		String key;
+		key << className << "." << methodName;
+
+		exampleDump->setProperty(Identifier(key), code.trim());
+#endif
+	}
+	else
+	{
+		methodObject->setProperty("example", "");
 	}
 
 	s << extendedDescription;

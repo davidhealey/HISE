@@ -105,6 +105,8 @@ struct ScriptBroadcaster :  public ConstScriptingObject,
 
 	bool isRealtimeSafe() const override;
 
+	int getNumArguments() const override { return argumentIds.size(); }
+
 	bool allowRefCount() const override;;
         
 	void timerCallback() override;

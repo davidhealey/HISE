@@ -481,6 +481,7 @@ allNotesOffCallback(p, nullptr, var(), 0)
     ADD_TYPED_API_METHOD_1(setStartOffset, VarTypeChecker::Number);
     ADD_TYPED_API_METHOD_1(store, VarTypeChecker::ScriptObject);
     ADD_TYPED_API_METHOD_1(setAllNotesOffCallback, VarTypeChecker::Function);
+    ADD_CALLBACK_DIAGNOSTIC(allNotesOffCallback, setAllNotesOffCallback, 0);
     
 	ADD_API_METHOD_0(getControllerNumber);
 	ADD_API_METHOD_0(getControllerValue);
@@ -1092,6 +1093,13 @@ bool ScriptingApi::Message::isArtificial() const
 
 void ScriptingApi::Message::setAllNotesOffCallback(var onAllNotesOffCallback)
 {
+#if USE_BACKEND
+	if (auto co = dynamic_cast<WeakCallbackHolder::CallableObject*>(onAllNotesOffCallback.getObject()))
+	{
+		if (HiseJavascriptEngine::RootObject::RealtimeSafetyInfo::check(co, this, "Message.setAllNotesOffCallback"))
+			reportScriptError("Callback is not safe for audio-thread execution");
+	}
+#endif
 	allNotesOffCallback = WeakCallbackHolder(getScriptProcessor(), this, onAllNotesOffCallback, 0);
 	allNotesOffCallback.incRefCount();
 }
@@ -5372,6 +5380,42 @@ struct ScriptingApi::Synth::Wrapper
 	
 };
 
+#if USE_BACKEND
+struct ModuleDiagnoser
+{
+	template <typename T> static ApiClass::DiagnosticResult check(ApiClass* c, const Identifier&, const Array<var>& args)
+	{
+		if (auto s = dynamic_cast<ScriptingApi::Synth*>(c))
+		{
+			if (args[0].isString())
+			{
+				auto id = args[0].toString();
+				auto mc = s->getScriptProcessor()->getMainController_();
+
+				Processor::Iterator<T> iter(mc->getMainSynthChain());
+
+				StringArray sa;
+
+				while (auto p = iter.getNextProcessor())
+				{
+					auto pid = dynamic_cast<Processor*>(p)->getId();
+
+					if (pid == id)
+						return ApiClass::DiagnosticResult::ok();
+
+					sa.add(pid);
+				}
+
+				return ApiClass::DiagnosticResult::fail("module not found").withWrongToken(id).withFuzzySuggestion(sa);
+			}
+
+			return ApiClass::DiagnosticResult::unknown();
+		}
+
+		return ApiClass::DiagnosticResult::unknown();
+	}
+};
+#endif
 
 ScriptingApi::Synth::Synth(ProcessorWithScriptingContent *p, Message* messageObject_, ModulatorSynth *ownerSynth) :
 	ScriptingObject(p),
@@ -5388,6 +5432,12 @@ ScriptingApi::Synth::Synth(ProcessorWithScriptingContent *p, Message* messageObj
 	jassert(owner != nullptr);
 
 	keyDown.setRange(0, 128, false);
+
+#if USE_BACKEND
+#define CHECK_MODULE(methodName, className) addDiagnostic(#methodName, ModuleDiagnoser::check<className>)
+#else
+#define CHECK_MODULE(methodName, className) ;
+#endif
 
 	ADD_API_METHOD_0(getNumChildSynths);
 	ADD_API_METHOD_1(addToFront);
@@ -5422,23 +5472,23 @@ ScriptingApi::Synth::Synth(ProcessorWithScriptingContent *p, Message* messageObj
 	ADD_API_METHOD_2(setUseUniformVoiceHandler);
 	ADD_API_METHOD_3(addModulator);
 	ADD_API_METHOD_3(addEffect);
-	ADD_API_METHOD_1(getMidiPlayer);
+	ADD_API_METHOD_1(getMidiPlayer);			CHECK_MODULE(getMidiPlayer, hise::MidiPlayer);
 	ADD_API_METHOD_1(removeEffect);
 	ADD_API_METHOD_1(removeModulator);
-	ADD_API_METHOD_1(getModulator);
-	ADD_API_METHOD_1(getAudioSampleProcessor);
-	ADD_API_METHOD_1(getDisplayBufferSource);
-	ADD_API_METHOD_1(getTableProcessor);
-	ADD_API_METHOD_1(getSliderPackProcessor);
-	ADD_API_METHOD_1(getWavetableController);
-	ADD_API_METHOD_1(getSampler);
-	ADD_API_METHOD_1(getSlotFX);
-	ADD_API_METHOD_1(getEffect);
+	ADD_API_METHOD_1(getModulator);				CHECK_MODULE(getModulator, Modulator);
+	ADD_API_METHOD_1(getAudioSampleProcessor);	CHECK_MODULE(getAudioSampleProcessor, ProcessorWithExternalData);
+	ADD_API_METHOD_1(getDisplayBufferSource);	CHECK_MODULE(getDisplayBufferSource, ProcessorWithExternalData);
+	ADD_API_METHOD_1(getTableProcessor);		CHECK_MODULE(getTableProcessor, ProcessorWithExternalData);
+	ADD_API_METHOD_1(getSliderPackProcessor);	CHECK_MODULE(getSliderPackProcessor, ProcessorWithExternalData);
+	ADD_API_METHOD_1(getWavetableController);	CHECK_MODULE(getWavetableController, hise::WavetableSynth);
+	ADD_API_METHOD_1(getSampler);				CHECK_MODULE(getSampler, ModulatorSampler);
+	ADD_API_METHOD_1(getSlotFX);				CHECK_MODULE(getSlotFX, HotswappableProcessor);
+	ADD_API_METHOD_1(getEffect);				CHECK_MODULE(getEffect, EffectProcessor);
 	ADD_API_METHOD_1(getAllEffects);
-	ADD_API_METHOD_1(getRoutingMatrix);
-	ADD_API_METHOD_1(getMidiProcessor);
-	ADD_API_METHOD_1(getChildSynth);
-	ADD_API_METHOD_1(getChildSynthByIndex);
+	ADD_API_METHOD_1(getRoutingMatrix);			CHECK_MODULE(getRoutingMatrix, hise::RoutableProcessor);
+	ADD_API_METHOD_1(getMidiProcessor);			CHECK_MODULE(getMidiProcessor, hise::MidiProcessor);
+	ADD_API_METHOD_1(getChildSynth);			CHECK_MODULE(getChildSynth, hise::ModulatorSynth);
+	ADD_API_METHOD_1(getChildSynthByIndex);	
 	ADD_API_METHOD_1(getIdList);
 	ADD_API_METHOD_2(getModulatorIndex);
 	ADD_API_METHOD_1(getAllModulators);
@@ -5450,7 +5500,8 @@ ScriptingApi::Synth::Synth(ProcessorWithScriptingContent *p, Message* messageObj
 	ADD_API_METHOD_1(setClockSpeed);
 	ADD_API_METHOD_1(setShouldKillRetriggeredNote);
 	ADD_API_METHOD_0(createBuilder);
-	
+
+#undef CHECK_MODULE
 };
 
 
@@ -8073,15 +8124,19 @@ ScriptingApi::Server::Server(JavascriptProcessor* jp_):
 
 	ADD_API_METHOD_1(setBaseURL);
 	ADD_TYPED_API_METHOD_3(callWithPOST, VarTypeChecker::String, VarTypeChecker::ComplexType, VarTypeChecker::Function);
+	ADD_CALLBACK_DIAGNOSTIC_RAW(callWithPOST, checkBaseURLAndCallbackArgs<2, 2>);
 	ADD_TYPED_API_METHOD_3(callWithGET, VarTypeChecker::String, VarTypeChecker::ComplexType, VarTypeChecker::Function);
+	ADD_CALLBACK_DIAGNOSTIC_RAW(callWithGET, checkBaseURLAndCallbackArgs<2, 2>);
 	ADD_TYPED_API_METHOD_1(setHttpHeader, VarTypeChecker::String);
     ADD_TYPED_API_METHOD_4(downloadFile, VarTypeChecker::String, VarTypeChecker::JSON, VarTypeChecker::ScriptObject, VarTypeChecker::Function);
+	ADD_CALLBACK_DIAGNOSTIC_RAW(downloadFile, checkBaseURLAndCallbackArgs<0, 3>);
 	ADD_API_METHOD_0(getPendingDownloads);
 	ADD_API_METHOD_0(getPendingCalls);
 	ADD_API_METHOD_0(isOnline);
     ADD_API_METHOD_0(resendLastCall);
 	ADD_API_METHOD_1(setNumAllowedDownloads);
-	ADD_API_METHOD_1(setServerCallback);
+	ADD_TYPED_API_METHOD_1(setServerCallback, VarTypeChecker::Function);
+	ADD_CALLBACK_DIAGNOSTIC(serverCallback, setServerCallback, 0);
 	ADD_API_METHOD_0(cleanFinishedDownloads);
 	ADD_API_METHOD_1(isEmailAddress);
     ADD_API_METHOD_1(setTimeoutMessageString);
@@ -8299,6 +8354,14 @@ ScriptingApi::TransportHandler::Callback::Callback(TransportHandler* p, const St
 		{
 			throw String("Parameter amount mismatch for callback. Expected " + String(numArgs));
 		}
+
+#if USE_BACKEND
+		if (auto co = dynamic_cast<WeakCallbackHolder::CallableObject*>(f.getObject()))
+		{
+			if (HiseJavascriptEngine::RootObject::RealtimeSafetyInfo::check(co, p, "TransportHandler." + name))
+				throw String("Callback contains unsafe API calls for audio-thread execution");
+		}
+#endif
 	}
 
 	setHandler(th->getMainController()->getGlobalUIUpdater());
@@ -8380,11 +8443,17 @@ ScriptingApi::TransportHandler::TransportHandler(ProcessorWithScriptingContent* 
 	getMainController()->addTempoListener(this);
 
 	ADD_TYPED_API_METHOD_2(setOnTempoChange, VarTypeChecker::Number, VarTypeChecker::Function);
+	ADD_CALLBACK_DIAGNOSTIC_RAW(setOnTempoChange, WeakCallbackHolder::checkCallbackNumArgs<1, 1>);
 	ADD_TYPED_API_METHOD_2(setOnBeatChange, VarTypeChecker::Number, VarTypeChecker::Function);
+	ADD_CALLBACK_DIAGNOSTIC_RAW(setOnBeatChange, WeakCallbackHolder::checkCallbackNumArgs<2, 1>);
 	ADD_TYPED_API_METHOD_2(setOnGridChange, VarTypeChecker::Number, VarTypeChecker::Function);
+	ADD_CALLBACK_DIAGNOSTIC_RAW(setOnGridChange, WeakCallbackHolder::checkCallbackNumArgs<3, 1>);
 	ADD_TYPED_API_METHOD_2(setOnSignatureChange, VarTypeChecker::Number, VarTypeChecker::Function);
+	ADD_CALLBACK_DIAGNOSTIC_RAW(setOnSignatureChange, WeakCallbackHolder::checkCallbackNumArgs<2, 1>);
 	ADD_TYPED_API_METHOD_2(setOnTransportChange, VarTypeChecker::Number, VarTypeChecker::Function);
+	ADD_CALLBACK_DIAGNOSTIC_RAW(setOnTransportChange, WeakCallbackHolder::checkCallbackNumArgs<1, 1>);
 	ADD_TYPED_API_METHOD_1(setOnBypass, VarTypeChecker::Function);
+	ADD_CALLBACK_DIAGNOSTIC_RAW(setOnBypass, WeakCallbackHolder::checkCallbackNumArgs<1>);
 	ADD_API_METHOD_1(setSyncMode);
 	ADD_API_METHOD_1(startInternalClock);
 	ADD_API_METHOD_1(stopInternalClock);

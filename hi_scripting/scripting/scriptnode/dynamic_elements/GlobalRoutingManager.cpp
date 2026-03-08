@@ -529,6 +529,8 @@ struct HiseOSCSender: public OSCSender,
 
 		}
 
+		bool shouldBeCleanedUp() const override { return sender == nullptr; }
+
 		String getTargetId() const override
 		{
 			return "OSC Output";
@@ -1676,7 +1678,7 @@ bool GlobalRoutingManager::Cable::cleanup()
 {
 	for (int i = 0; i < targets.size(); i++)
 	{
-		if (targets[i] == nullptr)
+		if (targets[i] == nullptr || targets[i]->shouldBeCleanedUp())
 			targets.remove(i--);
 	}
 

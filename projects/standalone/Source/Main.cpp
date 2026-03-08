@@ -30,6 +30,7 @@ private:
     {
 #if JUCE_DEBUG
         DBG(message);
+		std::cout << message << std::endl;
 #else
         std::cout << message << std::endl;
 #endif
@@ -194,7 +195,7 @@ public:
 		print("Compiles the DSP networks in the given project folder. Use the -c flag to specify the build");
 		print("configuration ('Debug' or 'Release')");
 		print("");
-		print("create_builder_cache");
+		print("create_module_list");
 		print("Creates a cache file that contains all relevant properties for the Builder AI agent to work.");
 		print("This includes an updated list of all modules & parameters as well as project-specific assets like samplemaps & audio files");
 		print("Run this whenever the project structure change to ensure that the Builder agent has the correct dataset to work with.");
@@ -216,6 +217,9 @@ public:
 		print("outputs (and copies to the clipboard) a string that is used by the HISE install wizard to setup the update procedure");
 		print("Format: <hisepath>|<status:valid|invalid>|<faust|nofaust>|<architecture:arm64|x64><PREV_GIT_HASH>");
 		print("Example: > C:\\HISE,valid,faust,x64|d385f6a01ca50ef673c1ff0021e9d486a06816c7");
+		print("");
+		print("start_server [-port:1900]");
+		print("starts the Rest API server when launching HISE. You can specify the port number, but it defaults to 1900.");
 		print("");
 
 		exit(0);
@@ -575,6 +579,17 @@ return 0;
 			throwErrorAndQuit(r.getErrorMessage());
 
 		exporter.threadFinished();
+	}
+
+	static void startServer(const String& commandLine)
+	{
+		auto args = getCommandLineArgs(commandLine);
+		auto port = getArgument(args, "-port:").getIntValue();
+
+		if (port == 0)
+			port = 1900;
+
+		BackendProcessor::setUseCommandLineServerMode(port);
 	}
 
 	static void setProjectFolder(const String& commandLine, bool exitOnSuccess=true)
@@ -1429,9 +1444,7 @@ return 0;
 			jassertfalse;
 		}
 
-		print(JSON::toString(var(go.get())));
-
-		int x = 5;
+		instance.getProjectRoot().getChildFile("builderCache.js").replaceWithText(JSON::toString(var(go.get())));
 	}
 
 	static void cleanBuildFolder(const String& commandLine)
@@ -1961,12 +1974,14 @@ public:
 			UnitTestRunner runner;
 			runner.setAssertOnFailure(true);
             
-            // If you're working on a unit test, just add the "Current" category
-            // and then uncomment this line.
-            if(UnitTest::getTestsInCategory("Current").isEmpty())
+			// If you're working on a unit test, just set this to the "Current" category
+			const String category = "allofem";
+
+            if(UnitTest::getTestsInCategory(category).isEmpty())
                 runner.runAllTests();
             else
-                runner.runTestsInCategory("Current");
+               
+				runner.runTestsInCategory(category);
 
 			for (int i = 0; i < runner.getNumResults(); i++)
 			{
@@ -2078,6 +2093,11 @@ public:
 		}
 		else
 		{
+			if (commandLine.startsWith("start_server"))
+			{
+				CommandLineActions::startServer(commandLine);
+			}
+
 			mainWindow = new MainWindow(commandLine);
 			mainWindow->setUsingNativeTitleBar(true);
 			mainWindow->toFront(true);

@@ -287,11 +287,17 @@ struct HiseAssetInstaller: public ControlledObject
 
 	bool install(const UninstallInfo& infoToUse);
 
-	bool uninstall(const Error& seekToError=Error());
+	struct UninstallResult
+	{
+		bool success = false;
+		StringArray skippedFiles;
+		bool hasSkippedFiles() const { return !skippedFiles.isEmpty(); }
+	};
 
-	bool hasLocalChanges();
+	UninstallResult uninstall(const Error& seekToError=Error());
 
-	Array<std::pair<File, LineDiff::HashedDiff::Ptr>> checkLocalChanges();
+	/** Force-deletes files left over from a partial uninstall and removes the log entry. */
+	bool cleanup();
 
 	var getInstallInfoFromLog(const UninstallInfo& infoToUse);
 
@@ -607,10 +613,6 @@ private:
 			return getMainController()->getCurrentFileHandler().getRootFolder();
 		}
 
-		bool isChanged() const;
-
-		LineDiff::HashedDiff::Ptr getDiffReport();
-
 		String toString(bool getUndoDescription) const override;
 
 		var toJSON() const override;
@@ -619,7 +621,6 @@ private:
 		ScopedPointer<InputStream> is;
 		Time modificationTime;
 		int64 hash = 0;
-		String b64Content;
 	};
 
 	struct ClipboardInstallAction: public UndoableInstallAction

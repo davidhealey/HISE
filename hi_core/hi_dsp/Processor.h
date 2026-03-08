@@ -570,6 +570,9 @@ public:
         }
 
         NEW_PROCESSOR_DISPATCH(dispatch::library::Processor::OtherChangeListener dispatcher);
+
+    protected:
+
         WeakReference<Processor> processor;
     };
     

@@ -567,8 +567,10 @@ ScriptModulationMatrix::ScriptModulationMatrix(ProcessorWithScriptingContent* p,
 	ADD_API_METHOD_3(connect);
 	ADD_API_METHOD_1(fromBase64);
 	ADD_API_METHOD_0(toBase64);
-	ADD_API_METHOD_1(setConnectionCallback);
-	ADD_API_METHOD_2(setEditCallback);
+	ADD_TYPED_API_METHOD_1(setConnectionCallback, VarTypeChecker::Function);
+	ADD_CALLBACK_DIAGNOSTIC(connectionCallback, setConnectionCallback, 0);
+	ADD_TYPED_API_METHOD_2(setEditCallback, VarTypeChecker::ComplexType, VarTypeChecker::Function);
+	ADD_CALLBACK_DIAGNOSTIC(editCallback, setEditCallback, 1);
 	ADD_API_METHOD_0(getSourceList);
 	ADD_API_METHOD_0(getTargetList);
 	ADD_API_METHOD_1(getTargetId);
@@ -577,8 +579,10 @@ ScriptModulationMatrix::ScriptModulationMatrix(ProcessorWithScriptingContent* p,
 	ADD_API_METHOD_1(clearAllConnections);
 
 	ADD_API_METHOD_1(setCurrentlySelectedSource);
-	ADD_API_METHOD_1(setSourceSelectionCallback);
-	ADD_API_METHOD_1(setDragCallback);
+	ADD_TYPED_API_METHOD_1(setSourceSelectionCallback, VarTypeChecker::Function);
+	ADD_CALLBACK_DIAGNOSTIC(sourceSelectionCallback, setSourceSelectionCallback, 0);
+	ADD_TYPED_API_METHOD_1(setDragCallback, VarTypeChecker::Function);
+	ADD_CALLBACK_DIAGNOSTIC(dragCallback, setDragCallback, 0);
 
 	ADD_API_METHOD_1(setMatrixModulationProperties);
 	ADD_API_METHOD_0(getMatrixModulationProperties);

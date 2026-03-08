@@ -550,6 +550,8 @@ struct DllBoundaryTempoSyncer: public hise::TempoListener
 	{
 		if(uuidManager != nullptr)
 			return uuidManager->deregisterUUID(obj);
+        
+        return false;
 	}
 
 	/** @internal This can be used to temporarily change the pointer to the mod value.
