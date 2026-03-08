@@ -84,7 +84,10 @@ public:
     static constexpr int TestPort = 1901;
     
     //==============================================================================
-    enum Method { GET, POST, PUT, DELETE };
+    // Note: "DELETE" is avoided as an enumerator name because on Linux it is
+    // #defined to ns_uop_delete (== 0) via <arpa/nameser_compat.h>, which
+    // would cause a duplicate-case-value error when used in switch statements.
+    enum Method { GET, POST, PUT, HTTP_DELETE };
 
     //==============================================================================
     /** Represents an incoming HTTP request. */

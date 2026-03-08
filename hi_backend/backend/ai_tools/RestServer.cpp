@@ -364,7 +364,7 @@ public:
                 case GET:    server->Get(pathStr, wrappedHandler); break;
                 case POST:   server->Post(pathStr, wrappedHandler); break;
                 case PUT:    server->Put(pathStr, wrappedHandler); break;
-                case DELETE: server->Delete(pathStr, wrappedHandler); break;
+                case HTTP_DELETE: server->Delete(pathStr, wrappedHandler); break;
             }
         }
 
@@ -442,7 +442,7 @@ private:
             case GET:    methodStr = "GET"; break;
             case POST:   methodStr = "POST"; break;
             case PUT:    methodStr = "PUT"; break;
-            case DELETE: methodStr = "DELETE"; break;
+            case HTTP_DELETE: methodStr = "DELETE"; break;
         }
         
         listeners.call(&RestServer::Listener::requestReceived, methodStr, String(req.path));
