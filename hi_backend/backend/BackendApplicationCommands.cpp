@@ -115,7 +115,6 @@ void BackendCommandTarget::getAllCommands(Array<CommandID>& commands)
 		MenuToolsCreateThirdPartyNode,
 		MenuFileExtractEmbeddeSnippetFiles,
 		MenuFileImportSnippet,
-		MenuExportSetupWizard,
 		MenuExportCompileProject,
 		MenuExportFileAsPlugin,
 		MenuExportFileAsEffectPlugin,
@@ -341,10 +340,6 @@ void BackendCommandTarget::getCommandInfo(CommandID commandID, ApplicationComman
 	case MenuToolsCreateThirdPartyNode:
 		setCommandTarget(result, "Create C++ third party node template", true, false, 'X', false);
 		result.categoryName = "Tools";
-		break;
-	case MenuExportSetupWizard:
-		setCommandTarget(result, "Setup Export Wizard", true, false, 'X', false);
-		result.categoryName = "Export";
 		break;
 	case MenuExportCompileProject:
 		setCommandTarget(result, "Compile project", true, false, 'X', false);
@@ -766,7 +761,6 @@ bool BackendCommandTarget::perform(const InvocationInfo &info)
 	case MenuExportValidateUserPresets:	Actions::validateUserPresets(bpe); return true;
 	case MenuExportRestoreToDefault:		Actions::restoreToDefault(bpe); return true;
 	case MenuExportCheckUnusedImages:	Actions::checkUnusedImages(bpe); return true;
-	case MenuExportSetupWizard:			Actions::setupExportWizard(bpe); return true;
 	case MenuExportCreateAssetPayload:	Actions::createAssetPayload(bpe); return true;
 	case MenuToolsShowDspNetworkDllInfo: Actions::showNetworkDllInfo(bpe); return true;
 	case MenuToolsForcePoolSearch:		Actions::toggleForcePoolSearch(bpe); updateCommands(); return true;
@@ -1102,8 +1096,6 @@ PopupMenu BackendCommandTarget::getMenuForIndex(int topLevelMenuIndex, const Str
 		}
 		else 
 		{
-			ADD_MENU_ITEM(MenuExportSetupWizard);
-
 			ADD_MENU_ITEM(MenuExportCompileProject);
 
 			p.addSectionHeader("Export As");
@@ -2751,16 +2743,6 @@ juce::Result BackendCommandTarget::Actions::createSampleArchive(BackendProcessor
 
 void BackendCommandTarget::Actions::compileNetworksToDll(BackendRootWindow* bpe)
 {
-	auto exportIsReady = (bool)bpe->getBackendProcessor()->getSettingsObject().getSetting(HiseSettings::Compiler::ExportSetup);
-
-	if(!exportIsReady)
-	{
-		if(PresetHandler::showYesNoWindow("System not configured", "Your system has not been setup for export. Do you want to launch the Export Setup wizard?"))
-			Actions::setupExportWizard(bpe);
-
-		return;
-	}
-
 #if JUCE_WINDOWS || JUCE_MAC
 	auto s = new multipage::library::NetworkCompiler(bpe);
 	s->setModalBaseWindowComponent(bpe);
@@ -3482,33 +3464,8 @@ void BackendCommandTarget::Actions::showExampleBrowser(BackendRootWindow* bpe)
 	
 }
 
-namespace multipage
-{
-	
-
-
-}
-
-
-void BackendCommandTarget::Actions::setupExportWizard(BackendRootWindow* bpe)
-{
-	auto np = new multipage::library::ExportSetupWizard(bpe);
-	np->setModalBaseWindowComponent(bpe);
-
-	
-}
-
 void BackendCommandTarget::Actions::exportProject(BackendRootWindow* bpe, int buildOption)
 {
-	auto exportIsReady = (bool)bpe->getBackendProcessor()->getSettingsObject().getSetting(HiseSettings::Compiler::ExportSetup);
-
-	#if !JUCE_LINUX
-	if(!exportIsReady)
-	{
-		PresetHandler::showMessageWindow("System not configured", "This computer is not setup for export yet. Please run the Export Wizard (**Tools -> Setup Export Wizard**) in order to silence this message.");
-	}
-	#endif
-
 	CompileExporter exporter(bpe->getMainSynthChain());
 
 	switch((CompileExporter::BuildOption)buildOption)

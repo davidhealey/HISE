@@ -120,7 +120,6 @@ DECLARE_ID(CustomNodePath);
 DECLARE_ID(FaustPath);
 DECLARE_ID(FaustExternalEditor);
 DECLARE_ID(EnableLoris);
-DECLARE_ID(ExportSetup);
 DECLARE_ID(DefaultProjectFolder);
 
 Array<Identifier> getAllIds();

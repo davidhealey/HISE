@@ -130,28 +130,6 @@ struct CleanDspNetworkFiles: public EncodedDialogBase
 };
 
 
-struct ExportSetupWizard: public EncodedDialogBase
-{
-	ExportSetupWizard(BackendRootWindow* bpe);
-
-	void bindCallbacks() override
-	{
-		MULTIPAGE_BIND_CPP(ExportSetupWizard, prevDownload);
-		MULTIPAGE_BIND_CPP(ExportSetupWizard, skipIfDesired);
-		MULTIPAGE_BIND_CPP(ExportSetupWizard, checkIDE);
-		MULTIPAGE_BIND_CPP(ExportSetupWizard, checkHisePath);
-		MULTIPAGE_BIND_CPP(ExportSetupWizard, checkSDK);
-		MULTIPAGE_BIND_CPP(ExportSetupWizard, onPost);
-	}
-
-	var checkHisePath(const var::NativeFunctionArgs& args);
-	var checkIDE(const var::NativeFunctionArgs& args);
-	var checkSDK(const var::NativeFunctionArgs& args);
-	var prevDownload(const var::NativeFunctionArgs& args);
-	var skipIfDesired(const var::NativeFunctionArgs& args);
-	var onPost(const var::NativeFunctionArgs& args);
-};
-
 struct EncodedBroadcasterWizard: public EncodedDialogBase
 {
 	EncodedBroadcasterWizard(BackendRootWindow* bpe_);;
