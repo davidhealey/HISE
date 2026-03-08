@@ -2622,7 +2622,13 @@ private:
 
 		auto prevLocation = location;
 
-		if (matchIf(TokenTypes::openParen))        return parseSuffixes(parseCloseParen(parseExpression()));
+		if (matchIf(TokenTypes::openParen))
+		{
+			if (matchIf(TokenTypes::closeParen))
+				return parseSuffixes(new ExpressionList(location));
+
+			return parseSuffixes(parseCloseParen(parseExpression()));
+		}
 		if (matchIf(TokenTypes::true_))            return parseSuffixes(new LiteralValue(prevLocation, (int)1));
 		if (matchIf(TokenTypes::false_))           return parseSuffixes(new LiteralValue(prevLocation, (int)0));
 		if (matchIf(TokenTypes::null_))            return parseSuffixes(new LiteralValue(prevLocation, var()));
@@ -2745,6 +2751,7 @@ private:
 		if (matchIf(TokenTypes::plusplus))    return parsePreIncDec<AdditionOp>();
 		if (matchIf(TokenTypes::minusminus))  return parsePreIncDec<SubtractionOp>();
 		if (matchIf(TokenTypes::typeof_))     return parseTypeof();
+		if (matchIf(TokenTypes::bitwiseNot))  { ExpPtr a(parseUnary()); return new BitwiseNotOp(location, a); }
 
 		return parseFactor();
 	}

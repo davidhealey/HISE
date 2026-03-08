@@ -720,6 +720,7 @@ public:
 		struct AdditionOp;				struct SubtractionOp;
 		struct MultiplyOp;				struct DivideOp;			struct ModuloOp;
 		struct BitwiseAndOp;			struct BitwiseOrOp;			struct BitwiseXorOp;
+		struct BitwiseNotOp;
 		struct LeftShiftOp;				struct RightShiftOp;		struct RightShiftUnsignedOp;
 
 		// Branching

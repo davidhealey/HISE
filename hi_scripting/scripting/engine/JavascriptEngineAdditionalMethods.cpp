@@ -276,6 +276,8 @@ hiseSpecialData(this)
 	setMethod("charToInt", charToInt);
 	setMethod("parseInt", IntegerClass::parseInt);
 	setMethod("parseFloat", IntegerClass::parseFloat);
+	setMethod("isNaN", IntegerClass::isNaN_);
+	setMethod("isFinite", IntegerClass::isFinite_);
 	setMethod("typeof", typeof_internal);
 	setMethod("Rectangle", ApiHelpers::createRectangle);
 

@@ -8,11 +8,32 @@ struct HiseJavascriptEngine::RootObject::ObjectClass : public DynamicObject
 	{
 		setMethod("dump", dump);
 		setMethod("clone", cloneFn);
+		setMethod("keys", keys);
+		setMethod("toString", toStringMethod);
 	}
 
 	static Identifier getClassName()   { static const Identifier i("Object"); return i; }
 	static var dump(Args a)          { DBG(JSON::toString(a.thisObject)); ignoreUnused(a); return var::undefined(); }
 	static var cloneFn(Args a)        { return a.thisObject.clone(); }
+
+	static var keys(Args a)
+	{
+		var result;
+
+		if (auto* obj = get(a, 0).getDynamicObject())
+			for (auto& prop : obj->getProperties())
+				result.append(prop.name.toString());
+
+		return result;
+	}
+
+	static var toStringMethod(Args a)
+	{
+		if (a.thisObject.getDynamicObject())
+			return JSON::toString(a.thisObject);
+
+		return a.thisObject.toString();
+	}
 };
 
 
@@ -120,6 +141,7 @@ public:
 		setMethod("lastIndexOf", lastIndexOf);
 		setMethod("isEmpty", isEmpty);
 		setMethod("slice", slice);
+		setMethod("toString", toStringMethod);
 	}
 
 	static Identifier getClassName()   { static const Identifier i("Array"); return i; }
@@ -558,6 +580,24 @@ public:
 		}
 
 		return var();
+	}
+
+	static var toStringMethod(Args a)
+	{
+		if (const Array<var>* array = a.thisObject.getArray())
+		{
+			String result;
+
+			for (int i = 0; i < array->size(); ++i)
+			{
+				if (i > 0) result << ",";
+				result << array->getReference(i).toString();
+			}
+
+			return result;
+		}
+
+		return a.thisObject.toString();
 	}
 
 private:
@@ -1061,9 +1101,10 @@ public:
 //==============================================================================
 struct HiseJavascriptEngine::RootObject::JSONClass : public DynamicObject
 {
-	JSONClass()                        { setMethod("stringify", stringify); }
+	JSONClass()                        { setMethod("stringify", stringify); setMethod("parse", parse); }
 	static Identifier getClassName()   { static const Identifier i("JSON"); return i; }
 	static var stringify(Args a)      { return JSON::toString(get(a, 0)); }
+	static var parse(Args a)          { return JSON::parse(getString(a, 0)); }
 };
 
 //==============================================================================
@@ -1095,8 +1136,32 @@ struct HiseJavascriptEngine::RootObject::IntegerClass : public DynamicObject
 
 		const String s(getString(a, 0).trim());
 
+		if (a.numArguments > 1)
+		{
+			int radix = getInt(a, 1);
+
+			if (radix == 16)
+				return s.getHexValue64();
+			if (radix == 8)
+				return getOctalValue(s);
+			if (radix == 10)
+				return s.getLargeIntValue();
+
+			return (int64)strtoll(s.toRawUTF8(), nullptr, radix);
+		}
+
 		return s[0] == '0' ? (s[1] == 'x' ? s.substring(2).getHexValue64() : getOctalValue(s))
 			: s.getLargeIntValue();
+	}
+
+	static var isNaN_(Args a)
+	{
+		return std::isnan((double)get(a, 0));
+	}
+
+	static var isFinite_(Args a)
+	{
+		return std::isfinite((double)get(a, 0));
 	}
 };
 
