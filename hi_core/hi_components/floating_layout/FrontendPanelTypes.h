@@ -507,6 +507,7 @@ public:
     FullPathFavorites,
     FullPathSearch,
     FavoriteIconOffset,
+		ShowExpansionEditButtons,
 		numSpecialProperties
 	};
 

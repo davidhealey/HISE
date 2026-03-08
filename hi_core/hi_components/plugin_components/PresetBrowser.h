@@ -97,6 +97,7 @@ public:
 		bool fullPathFavorites = false;
 		bool fullPathSearch = false;
 		bool showExpansions = false;
+		bool showExpansionEditButtons = false;
 	};
 
 	// ============================================================================================
