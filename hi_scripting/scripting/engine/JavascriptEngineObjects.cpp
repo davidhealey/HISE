@@ -114,7 +114,12 @@ public:
 		setMethod("reverse", reverse);
         setMethod("reserve", reserve);
 		setMethod("clear", clear);
-		
+
+		// JS-compatible aliases and additions
+		setMethod("includes", contains);       // alias for contains
+		setMethod("lastIndexOf", lastIndexOf);
+		setMethod("isEmpty", isEmpty);
+		setMethod("slice", slice);
 	}
 
 	static Identifier getClassName()   { static const Identifier i("Array"); return i; }
@@ -505,6 +510,56 @@ public:
         return get(a, 0).isArray();
     }
 
+	static var lastIndexOf(Args a)
+	{
+		if (const Array<var>* array = a.thisObject.getArray())
+		{
+			const var target(get(a, 0));
+
+			for (int i = array->size() - 1; i >= 0; --i)
+			{
+				if (array->getReference(i) == target)
+					return i;
+			}
+		}
+
+		return -1;
+	}
+
+	static var isEmpty(Args a)
+	{
+		if (const Array<var>* array = a.thisObject.getArray())
+			return array->isEmpty();
+
+		return true;
+	}
+
+	static var slice(Args a)
+	{
+		if (const Array<var>* array = a.thisObject.getArray())
+		{
+			int size = array->size();
+			int start = getInt(a, 0);
+			int end = a.numArguments > 1 ? getInt(a, 1) : size;
+
+			// Handle negative indices (JS spec)
+			if (start < 0) start = jmax(0, size + start);
+			if (end < 0) end = jmax(0, size + end);
+
+			start = jmin(start, size);
+			end = jmin(end, size);
+
+			var result;
+
+			for (int i = start; i < end; ++i)
+				result.append(array->getReference(i));
+
+			return result;
+		}
+
+		return var();
+	}
+
 private:
 
 	using ReturnFunction = std::function<bool(int index, const var& functionReturnValue, const var& elementValue, var* totalReturnValue)>;
@@ -656,6 +711,18 @@ public:
 	
 	/** Removes and returns the first element. */
 	var shift() { return var(); }
+
+	/** Checks if the array contains the given element (JS-compatible alias for contains). */
+	bool includes(var elementToLookFor) { return false; }
+
+	/** Returns the last index of the element in the array, searching from the end. */
+	int lastIndexOf(var elementToLookFor) { return -1; }
+
+	/** Returns true if the array has no elements. */
+	bool isEmpty() { return false; }
+
+	/** Returns a shallow copy of a portion of the array from start to end (end not included). Supports negative indices. */
+	var slice(int startIndex, int endIndex) { return var(); }
 };
 
 
