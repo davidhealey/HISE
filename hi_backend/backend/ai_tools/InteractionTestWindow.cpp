@@ -277,27 +277,28 @@ InteractionTestWindow::RecordingListener::detectPopupMenuSelection(const MouseEv
 {
     PopupMenuSelectionInfo result;
     
-    // Get all visible menu items from open popup menus
+    // PopupMenu::getVisibleMenuItems is a HISE-specific JUCE extension not
+    // available on Linux — popup menu click detection is skipped there.
+#if !JUCE_LINUX
     auto menuItems = PopupMenu::getVisibleMenuItems(e.eventComponent);
-    
-    if (menuItems.isEmpty())
-        return result;  // No popup menu open
-    
-    // Get the click position in screen coordinates
-    Point<int> screenPos = e.getScreenPosition();
-    
-    // Check if click is inside any menu item's bounds
-    for (const auto& item : menuItems)
+
+    if (!menuItems.isEmpty())
     {
-        if (item.screenBounds.contains(screenPos))
+        Point<int> screenPos = e.getScreenPosition();
+
+        for (const auto& item : menuItems)
         {
-            result.isMenuClick = true;
-            result.itemId = item.itemId;
-            result.itemText = item.text;
-            return result;
+            if (item.screenBounds.contains(screenPos))
+            {
+                result.isMenuClick = true;
+                result.itemId = item.itemId;
+                result.itemText = item.text;
+                return result;
+            }
         }
     }
-    
+#endif
+
     return result;  // Click was not on a menu item (e.g., menu background or outside)
 }
 
@@ -1321,30 +1322,36 @@ void InteractionTestWindow::RealExecutor::beginSyntheticInputMode()
     if (window != nullptr)
         window->grabKeyboardFocus();
     
+    // These are HISE-specific JUCE extensions not available on Linux.
+#if !JUCE_LINUX
     PopupMenu::setSyntheticInputMode(true);
-    
+
     auto& desktop = Desktop::getInstance();
     for (int i = 0; i < desktop.getNumMouseSources(); ++i)
     {
         if (auto* source = desktop.getMouseSource(i))
             source->setSyntheticPositionMode(true);
     }
-    
+
     ComponentPeer::getNativeRealtimeModifiers = &RealExecutor::getSyntheticModifiersCallback;
+#endif
 }
 
 void InteractionTestWindow::RealExecutor::endSyntheticInputMode()
 {
+    // These are HISE-specific JUCE extensions not available on Linux.
+#if !JUCE_LINUX
     PopupMenu::setSyntheticInputMode(false);
-    
+
     auto& desktop = Desktop::getInstance();
     for (int i = 0; i < desktop.getNumMouseSources(); ++i)
     {
         if (auto* source = desktop.getMouseSource(i))
             source->setSyntheticPositionMode(false);
     }
-    
+
     ComponentPeer::getNativeRealtimeModifiers = nullptr;
+#endif
     activeExecutor = nullptr;
 }
 
@@ -1594,27 +1601,31 @@ void InteractionTestWindow::RealExecutor::setCursorPosition(Point<int> pos)
     cursorPosition = pos;
 }
 
-Array<PopupMenu::VisibleMenuItem> InteractionTestWindow::RealExecutor::getVisibleMenuItems() const
+Array<VisibleMenuItemInfo> InteractionTestWindow::RealExecutor::getVisibleMenuItems() const
 {
+    Array<VisibleMenuItemInfo> localItems;
+
+    // PopupMenu::getVisibleMenuItems is a HISE-specific JUCE extension not
+    // available on Linux — returns empty array there.
+#if !JUCE_LINUX
     auto screenItems = PopupMenu::getVisibleMenuItems(window);
-    
-    Array<PopupMenu::VisibleMenuItem> localItems;
-    
+
     if (window != nullptr)
     {
         for (auto& item : screenItems)
         {
             auto localBounds = window->getLocalArea(nullptr, item.screenBounds);
             localBounds.translate(0, -TopBar::HEIGHT);  // Offset for TopBar
-            
-            PopupMenu::VisibleMenuItem localItem;
+
+            VisibleMenuItemInfo localItem;
             localItem.text = item.text;
             localItem.itemId = item.itemId;
             localItem.screenBounds = localBounds;
             localItems.add(localItem);
         }
     }
-    
+#endif
+
     return localItems;
 }
 
