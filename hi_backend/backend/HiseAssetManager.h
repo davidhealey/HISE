@@ -35,215 +35,9 @@
 namespace hise {
 using namespace juce;
 
-struct DiffViewer: public Component,
-				   public juce::CodeDocument::Listener,
-				   public Timer
-{
-	static constexpr int TopHeight = 24;
-
-	struct FileDiff: public Component
-	{
-		enum class LineType
-		{
-			Header,
-			Context,
-			Add,
-			Remove,
-			numLineTypes
-		};
-
-		FileDiff(const File& rootDir, const File& file, const LineDiff::HashedDiff::Ptr diff);
-
-		void paint(Graphics& g) override;
-
-		void resized() override;
-
-		void updateFromCurrentContent()
-		{
-
-		}
-
-		struct DiffTokeniser: public juce::CodeTokeniser
-		{
-			CodeEditorComponent::ColourScheme getDefaultColourScheme() override;
-
-			int readNextToken (CodeDocument::Iterator& source);
-		};
-
-		struct ChangeEditor: public Component
-		{
-			ChangeEditor(const LineDiff::Change& c);
-
-			void mouseDown(const MouseEvent& e);
-
-			void resized() override
-			{
-				editor.setBounds(getLocalBounds());
-				discardButton.setBounds(getLocalBounds().removeFromTop(TopHeight).reduced(0, 2).removeFromRight(80));
-			}
-
-			LineDiff::Change change;
-			DiffTokeniser tokeniser;
-			juce::CodeDocument doc;
-			juce::CodeEditorComponent editor;
-			TextButton discardButton;
-			ScopedPointer<LookAndFeel> laf;
-		};
-
-		OwnedArray<ChangeEditor> changes;
-		File rootDir;
-		File editedFile;
-		TextButton revertButton;
-		TextButton editButton;
-		TextButton moreButton;
-		LineDiff::HashedDiff::Ptr diff;
-		ScopedPointer<LookAndFeel> laf;
-	};
-
-	void addDiff(const File& f, const LineDiff::HashedDiff::Ptr diffReport);
-
-	DiffViewer(const File& rootDirectory);
-
-	void updateReport(LineDiff::HashedDiff::Ptr reportToReplace, String newContent)
-	{
-		for (int i = 0; i < diffs.size(); i++)
-		{
-			if (diffs[i]->diff == reportToReplace)
-			{
-				auto A = StringArray::fromLines(reportToReplace->getContent(true));
-				auto B = StringArray::fromLines(newContent);
-
-				LineDiff::HashedDiff::Ptr newReport = new LineDiff::HashedDiff(A, B);
-
-				if (newReport->createHunks().empty())
-				{
-					diffs.remove(i);
-
-					setEditedFile(File(), nullptr, isShowingOriginal);
-				}
-				else
-				{
-					auto nd = new FileDiff(rootDir, editedFile, newReport);
-					diffs.set(i, nd);
-					content.addAndMakeVisible(nd);
-
-					if(currentEditor != nullptr)
-						setEditedFile(editedFile, newReport, isShowingOriginal);
-				}
-
-				updateBounds();
-				break;
-			}
-		}
-
-		repaint();
-	}
-
-	bool keyPressed(const KeyPress& k) override
-	{
-		if(k == KeyPress::F5Key)
-		{
-			if (currentReport != nullptr && currentEditor != nullptr)
-			{
-				auto sa = StringArray::fromLines(currentCodeDoc->getAllContent());
-
-				currentEditor->clearWarningsAndErrors();
-
-				try
-				{
-					currentReport->merge(sa);
-					currentCodeDoc->replaceAllContent(sa.joinIntoString("\n"));
-
-					
-				}
-				catch(LineDiff::MergeError& error)
-				{
-					String msg;
-					
-					int lineNumber = -1;
-
-					if(error.theirs.oldLine != -1)
-						lineNumber = error.theirs.oldLine;
-					if (error.theirs.newLine != -1)
-						lineNumber = error.theirs.newLine;
-
-					msg << "Line " << String(lineNumber) << "(0): Merge conflict";
-
-					currentEditor->setError(msg);
-				}
-			}
-
-			return true;
-		}
-
-		return false;
-	}
-	
-	void codeDocumentTextInserted(const String& newText, int insertIndex) override
-	{
-		startTimer(300);
-	}
-
-	void codeDocumentTextDeleted(int startIndex, int endIndex) override
-	{
-		startTimer(300);
-	}
-
-	void timerCallback() override
-	{
-		if(currentCodeDoc != nullptr)
-		{
-			applyButton.setEnabled(false);
-
-			auto A = StringArray::fromLines(currentReport->getContent(true));
-			auto B = StringArray::fromLines(currentCodeDoc->getAllContent());
-
-			LineDiff::HashedDiff::Ptr newReport = new LineDiff::HashedDiff(A, B);
-
-			auto changes = newReport->createHunks();
-			setEditorChanges(changes);
-			checkSaveButton();
-		}
-
-		stopTimer();
-	}
-
-	void paint(Graphics& g) override;
-	void resized() override;
-	void updateBounds();
-
-	void setEditorChanges(const std::vector<LineDiff::Change>& changes)
-	{
-		currentEditor->setDiffLines(LineDiff::Change::createChangeMap(changes));
-	}
-
-	void checkSaveButton();
-
-	void setEditedFile(const File& f, const LineDiff::HashedDiff::Ptr p, bool showOld);
-
-	LineDiff::HashedDiff::Ptr currentReport;
-
-	File rootDir;
-	OwnedArray<FileDiff> diffs;
-	Component content;
-	ScrollbarFader sf;
-	Viewport vp;
-	File editedFile;
-	ScopedPointer<juce::CodeDocument> currentCodeDoc;
-	ScopedPointer<mcl::TextDocument> currentTextDoc;
-	ScopedPointer<mcl::TextEditor> currentEditor;
-
-	TextButton applyButton;
-	TextButton cancelButton;
-	ScopedPointer<LookAndFeel> laf;
-
-	bool isShowingOriginal = false;
-};
-
 /** TODO:
 
 - add proper change log
-- add file modification logic (warn if overriding custom file)
 
 */
 
@@ -286,7 +80,7 @@ struct HiseAssetManager: public Component,
 		ShowInStore = 1,
 		Install,
 		Uninstall,
-		CheckLocalChanges,
+		Cleanup,
 		RemoveLocalFolder
 	};
 
@@ -297,7 +91,6 @@ struct HiseAssetManager: public Component,
 			String operator[](const String& d) const;
 			var operator[](int index) const;
 
-			void dump();
 			void forEachListElement(const std::function<void(const var&)>& f);
 
 			int statusCode = -1;
@@ -320,6 +113,8 @@ struct HiseAssetManager: public Component,
 		virtual bool perform(HiseAssetManager* manager) = 0;
 		virtual void onCompletion(HiseAssetManager* manager) = 0;
 		virtual String getMessage() const = 0;
+
+		bool succeeded = false;
 
 		JUCE_DECLARE_WEAK_REFERENCEABLE(ActionBase);
 	};
@@ -345,6 +140,7 @@ struct HiseAssetManager: public Component,
 	ProductInfo::List products;
 
 	struct ButtonLaf;
+	struct LogoutButtonLaf;
 
 	struct ProductList: public Component
 	{
@@ -375,14 +171,15 @@ struct HiseAssetManager: public Component,
 
 		struct RowInfo
 		{
-			enum class State
-			{
-				Uninstalled,
-				UpdateAvailable,
-				UpToDate,
-				NotOwned,
-				numStates
-			};
+		enum class State
+		{
+			Uninstalled,
+			UpdateAvailable,
+			UpToDate,
+			NeedsCleanup,
+			NotOwned,
+			numStates
+		};
 
 			RowInfo(const HiseAssetInstaller::UninstallInfo& info);
 			RowInfo(const var& obj);
@@ -405,6 +202,7 @@ struct HiseAssetManager: public Component,
 			String downloadLink;
 
 			State state = State::Uninstalled;
+			bool needsCleanup = false;
 			String repoPath;
 			String prettyName;
 			var installData;
@@ -424,7 +222,7 @@ struct HiseAssetManager: public Component,
 			Rectangle<int> imgBounds;
 		};
 
-		struct SpecialRow: public RowBase
+	struct SpecialRow: public RowBase
 		{
 			SpecialRow();
 
@@ -444,31 +242,57 @@ struct HiseAssetManager: public Component,
 			Rectangle<float> textBounds;
 		};
 
+		struct LoginRow: public RowBase,
+						 public ButtonListener
+		{
+			LoginRow(HiseAssetManager* manager);
+
+			bool matchesFlag(int filterFlag, const String& searchTerm) const override;
+
+			void buttonClicked(Button* b) override;
+			void paint(Graphics& g) override;
+			void resized() override;
+
+			HiseAssetManager* manager;
+			std::unique_ptr<Drawable> icon;
+			AttributedString helpText;
+
+			TextEditor tokenEditor;
+			TextButton loginButton;
+			TextButton getTokenButton;
+			ScopedPointer<LookAndFeel> blaf;
+
+			Rectangle<float> textBounds;
+		};
+
 		struct Row: public RowBase,
 					public ButtonListener
 		{
-			struct RowAction: public ActionBase
-			{
-				RowAction(Row* r, const String& message_) :
-					rowComponent(r),
-					repoPath(r->info.repoPath),
-					message(message_)
-				{}
+		struct RowAction: public ActionBase
+		{
+			RowAction(Row* r, const String& message_) :
+				rowComponent(r),
+				repoPath(r->info.repoPath),
+				installInfo(r->info.installInfo),
+				message(message_)
+			{}
 
-				HiseAssetInstaller::UninstallInfo getInfo() const 
-				{ 
-					return rowComponent.getComponent()->info.installInfo; 
-				}
+			/** Returns the install info captured at construction time (safe for background threads). */
+			HiseAssetInstaller::UninstallInfo getInfo() const 
+			{ 
+				return installInfo; 
+			}
 
-				String getMessage() const override { return message; }
-				Helpers::RequestData rd;
-				String repoPath;
-				Component::SafePointer<Row> rowComponent;
-				const String message;
+			String getMessage() const override { return message; }
+			Helpers::RequestData rd;
+			String repoPath;
+			HiseAssetInstaller::UninstallInfo installInfo;
+			Component::SafePointer<Row> rowComponent;
+			const String message;
 			};
 
-			struct FetchVersion; struct FetchInfo; struct FetchChangeLog;
-			struct UninstallAction; struct UpdateAction;
+		struct FetchVersion; struct FetchInfo; struct FetchChangeLog;
+		struct UninstallAction; struct UpdateAction; struct CleanupAction;
 
 
 			Row(const RowInfo& r, HiseAssetManager* manager);
@@ -497,10 +321,8 @@ struct HiseAssetManager: public Component,
 			TextButton actionButton;
 			TextButton moreButton;
 
-			bool initialised = false;
-			ScopedPointer<LookAndFeel> blaf;
-
-			bool hasLocalChanges = false;
+		bool initialised = false;
+		ScopedPointer<LookAndFeel> blaf;
 		};
 
 		struct Content: public Component
@@ -551,7 +373,6 @@ struct HiseAssetManager: public Component,
 		TextButton installedButton;
 		TextButton uninstalledButton;
 		TextButton onlineButton;
-		TextButton sortButton;
 		TextEditor searchBar;
 		ProductList* list;
 	};
@@ -559,12 +380,6 @@ struct HiseAssetManager: public Component,
 	HiseAssetManager(BackendRootWindow* brw);
 	~HiseAssetManager();
 	
-	void setModalComponent(Component* nc)
-	{
-		addAndMakeVisible(modalComponent = nc);
-		resized();
-	}
-
 	void projectChanged(const File& newRootDirectory);
 	void initialiseLocalAssets();
 	void rebuildProductsAsync();
@@ -572,8 +387,6 @@ struct HiseAssetManager: public Component,
 	Path createPath(const String& url) const override;
 
 	void tryToLogin();
-
-	void showLoginPrompt();
 	void addNewAssetFolder();
 
 	void performAction(SpecialAction a, ProductList::Row* r, bool silent=true);
@@ -622,11 +435,11 @@ struct HiseAssetManager: public Component,
 	juce::ComponentDragger dragger;
 	juce::ResizableCornerComponent resizer;
 	HiseShapeButton closeButton;
+	TextButton logoutButton;
+	ScopedPointer<LookAndFeel> logoutLaf;
 	
 	Rectangle<float> projectFolderBounds;
 	AttributedString projectInfo;
-
-	ScopedPointer<Component> modalComponent;
 };
 
 }
