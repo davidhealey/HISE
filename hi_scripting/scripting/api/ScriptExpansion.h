@@ -427,6 +427,8 @@ public:
 
 	Result initialise() override;
 
+	void loadSampleMapsIfEmpty() override;
+
 	Result encodeExpansion() override;
 
 	ValueTree getEmbeddedNetwork(const String& id) override;
