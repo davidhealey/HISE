@@ -367,7 +367,7 @@ public:
 	void setModulationData(ModulationPopupData::Ptr modData);
 
 
-	void onAttributeChange(dispatch::library::Processor* p, uint8 index);
+	void onAttributeChange(dispatch::library::Processor* p, uint16 index);
 
 	juce::AudioProcessorParameter* getConnectedPluginParameter() const;
 

@@ -658,7 +658,7 @@ void ScriptCreatedComponentWrappers::SliderWrapper::updateSliderRange(ScriptingA
 	{
 		NormalisableRange<double> nr(min, max, stepsize);
 
-		if(nr.getRange().contains(middlePos))
+		if(nr.getRange().contains(middlePos) && middlePos > nr.start)
 			nr.setSkewForCentre(middlePos);
 
 		s->setMode(sc->m, nr);
