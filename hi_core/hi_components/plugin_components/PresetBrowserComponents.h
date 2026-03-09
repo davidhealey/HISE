@@ -310,10 +310,15 @@ public:
 			showFavoritesOnly = shouldShowFavoritesOnly;
 		}
 
+		bool getShowFavoritesOnly() const { return showFavoritesOnly; }
+
 		File getFileForIndex(int fileIndex) const
 		{
 			return entries[fileIndex];
 		};
+
+		// Defined in the .cpp where PresetBrowser is fully declared.
+		bool isFavoriteInAnyDatabase(const File& f) const;
 
 		int getIndexForFile(const File& f) const
 		{
