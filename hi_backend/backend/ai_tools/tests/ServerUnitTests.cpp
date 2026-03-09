@@ -119,6 +119,13 @@ public:
         testStartProfilingThreadFilter();
         testStartProfilingNested();
         testStartProfilingGetNoData();
+        testParseCSSValid();
+        testParseCSSError();
+        testParseCSSWarnings();
+        testParseCSSResolveSpecificity();
+        testParseCSSResolvedValues();
+        testParseCSSFromFile();
+        testParseCSSEmptyCode();
         testShutdown();
         
         // Verify all endpoints were tested
@@ -2944,6 +2951,216 @@ private:
         expect(json["flows"].isArray(), "Should have flows array");
         expect(!(bool)json["recording"], "Should not be recording");
     }
+    //==========================================================================
+    // parse_css tests
+    //==========================================================================
+    
+    void testParseCSSValid()
+    {
+        /** Setup: Valid CSS with two rules
+         *  Scenario: Parse the CSS and check diagnostics and selectors
+         *  Expected: success=true, no diagnostics, selectors list matches input
+         */
+        beginTest("POST /api/parse_css (valid CSS)");
+        
+        DynamicObject::Ptr bodyObj = new DynamicObject();
+        bodyObj->setProperty("code", "button { background-color: red; }\n"
+                                     ".my-class { color: white; }");
+        
+        auto response = ctx->httpPost("/api/parse_css",
+                                      JSON::toString(var(bodyObj.get())));
+        var json = ctx->parseJson(response);
+        
+        expect((bool)json["success"], "Should succeed: " + response);
+        expect(json["diagnostics"].isArray(), "Should have diagnostics array");
+        expectEquals<int>(json["diagnostics"].size(), 0, "Should have no diagnostics");
+        expect(json["selectors"].isArray(), "Should have selectors array");
+        expect(json["selectors"].size() >= 2, "Should have at least 2 selectors");
+    }
+    
+    void testParseCSSError()
+    {
+        /** Setup: CSS with a syntax error (missing closing brace)
+         *  Scenario: Parse the CSS
+         *  Expected: success=false, diagnostics array has an error with line/column
+         */
+        beginTest("POST /api/parse_css (syntax error)");
+        
+        DynamicObject::Ptr bodyObj = new DynamicObject();
+        bodyObj->setProperty("code", "button { background-color: red;\n"
+                                     ".my-class { color: white; }");
+        
+        auto response = ctx->httpPost("/api/parse_css",
+                                      JSON::toString(var(bodyObj.get())));
+        var json = ctx->parseJson(response);
+        
+        expect(!(bool)json["success"], "Should fail");
+        expect(json["diagnostics"].isArray(), "Should have diagnostics array");
+        expect(json["diagnostics"].size() > 0, "Should have at least one diagnostic");
+        
+        auto diag = json["diagnostics"][0];
+        expectEquals(diag["severity"].toString(), String("error"), "Should be error severity");
+        expectEquals(diag["source"].toString(), String("css"), "Source should be css");
+        expect((int)diag["line"] > 0, "Should have a line number");
+        expect((int)diag["column"] > 0, "Should have a column number");
+        expect(diag["message"].toString().isNotEmpty(), "Should have a message");
+    }
+    
+    void testParseCSSWarnings()
+    {
+        /** Setup: CSS with an unsupported property
+         *  Scenario: Parse the CSS
+         *  Expected: success=true, diagnostics array has a warning
+         */
+        beginTest("POST /api/parse_css (warnings)");
+        
+        DynamicObject::Ptr bodyObj = new DynamicObject();
+        bodyObj->setProperty("code", "button { text-decoration: underline; }");
+        
+        auto response = ctx->httpPost("/api/parse_css",
+                                      JSON::toString(var(bodyObj.get())));
+        var json = ctx->parseJson(response);
+        
+        expect((bool)json["success"], "Should succeed (warnings don't fail parse)");
+        expect(json["diagnostics"].isArray(), "Should have diagnostics array");
+        expect(json["diagnostics"].size() > 0, "Should have at least one warning");
+        
+        // Find the warning about the unsupported property
+        bool foundWarning = false;
+        for (int i = 0; i < json["diagnostics"].size(); i++)
+        {
+            auto d = json["diagnostics"][i];
+            if (d["severity"].toString() == "warning" &&
+                d["message"].toString().containsIgnoreCase("text-decoration"))
+            {
+                foundWarning = true;
+                expect((int)d["line"] > 0, "Warning should have line number");
+                expect((int)d["column"] > 0, "Warning should have column number");
+            }
+        }
+        expect(foundWarning, "Should have warning about unsupported property");
+    }
+    
+    void testParseCSSResolveSpecificity()
+    {
+        /** Setup: CSS with class and ID rules for the same property
+         *  Scenario: Query with selectors that match both rules
+         *  Expected: ID selector wins over class selector (higher specificity)
+         */
+        beginTest("POST /api/parse_css (specificity resolution)");
+        
+        DynamicObject::Ptr bodyObj = new DynamicObject();
+        bodyObj->setProperty("code",
+            ".my-button { background-color: 0xFFFF0000; }\n"
+            "#Button1 { background-color: 0xFF00FF00; }");
+        
+        Array<var> selectors;
+        selectors.add("button");
+        selectors.add(".my-button");
+        selectors.add("#Button1");
+        bodyObj->setProperty("selectors", var(selectors));
+        
+        auto response = ctx->httpPost("/api/parse_css",
+                                      JSON::toString(var(bodyObj.get())));
+        var json = ctx->parseJson(response);
+        
+        expect((bool)json["success"], "Should succeed: " + response);
+        expect(json.hasProperty("properties"), "Should have properties object");
+        
+        auto props = json["properties"];
+        auto bgColor = props["background-color"].toString();
+        
+        // The ID selector (#Button1) should win: green (0xFF00FF00)
+        expectEquals(bgColor, String("0xFF00FF00"),
+            "ID selector should take precedence over class selector");
+    }
+    
+    void testParseCSSResolvedValues()
+    {
+        /** Setup: CSS with percentage and em values
+         *  Scenario: Query with selectors and provide width/height for resolution
+         *  Expected: Properties have both raw values and resolved pixel values
+         */
+        beginTest("POST /api/parse_css (resolved values)");
+        
+        DynamicObject::Ptr bodyObj = new DynamicObject();
+        bodyObj->setProperty("code",
+            "button { width: 50%; padding-left: 2em; }");
+        
+        Array<var> selectors;
+        selectors.add("button");
+        bodyObj->setProperty("selectors", var(selectors));
+        bodyObj->setProperty("width", 600);
+        bodyObj->setProperty("height", 400);
+        
+        auto response = ctx->httpPost("/api/parse_css",
+                                      JSON::toString(var(bodyObj.get())));
+        var json = ctx->parseJson(response);
+        
+        expect((bool)json["success"], "Should succeed: " + response);
+        expect(json.hasProperty("properties"), "Should have properties object");
+        
+        auto props = json["properties"];
+        
+        // width: 50% of 600 = 300
+        auto widthProp = props["width"];
+        expect(widthProp.isObject(), "width should be object with value/resolved");
+        expectEquals(widthProp["value"].toString(), String("50%"), "Raw value should be 50%");
+        expectEquals<double>((double)widthProp["resolved"], 300.0,
+            "50% of 600px width should resolve to 300");
+        
+        // padding-left: 2em = 2 * 16 (default font size) = 32
+        auto paddingProp = props["padding-left"];
+        expect(paddingProp.isObject(), "padding-left should be object with value/resolved");
+        expectEquals(paddingProp["value"].toString(), String("2em"), "Raw value should be 2em");
+        expectEquals<double>((double)paddingProp["resolved"], 32.0,
+            "2em should resolve to 32px (2 * 16px default)");
+    }
+    
+    void testParseCSSFromFile()
+    {
+        /** Setup: Create a temporary .css file in the Scripts directory
+         *  Scenario: Pass the relative file path to parse_css
+         *  Expected: Parses successfully, returns resolved filePath
+         */
+        beginTest("POST /api/parse_css (from file)");
+        
+        auto tempFile = createTempScriptFile("_test_parse.css",
+            "button { background-color: 0xFF112233; }\n");
+        
+        DynamicObject::Ptr bodyObj = new DynamicObject();
+        bodyObj->setProperty("filePath", "_test_parse.css");
+        
+        auto response = ctx->httpPost("/api/parse_css",
+                                      JSON::toString(var(bodyObj.get())));
+        var json = ctx->parseJson(response);
+        
+        expect((bool)json["success"], "Should succeed: " + response);
+        expect(json.hasProperty("filePath"), "Should have resolved filePath");
+        expect(json["filePath"].toString().contains("_test_parse.css"),
+            "filePath should contain the file name");
+        expect(json["selectors"].isArray(), "Should have selectors");
+        
+        tempFile.deleteFile();
+    }
+    
+    void testParseCSSEmptyCode()
+    {
+        /** Setup: POST with neither code nor filePath
+         *  Scenario: Call parse_css with empty body
+         *  Expected: 400 error
+         */
+        beginTest("POST /api/parse_css (empty code)");
+        
+        DynamicObject::Ptr bodyObj = new DynamicObject();
+        
+        auto response = ctx->httpPost("/api/parse_css",
+                                      JSON::toString(var(bodyObj.get())));
+        var json = ctx->parseJson(response);
+        
+        expect(!(bool)json["success"], "Should fail with empty input");
+    }
+    
     void testShutdown()
     {
         /** Setup: No specific setup needed

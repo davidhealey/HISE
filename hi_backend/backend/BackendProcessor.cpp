@@ -332,6 +332,9 @@ RestServer::Response BackendProcessor::onAsyncRequest(RestServer::AsyncRequest::
 		case RestHelpers::ApiRoute::StartProfiling:
 			return RestHelpers::handleStartProfiling(this, req);
 			
+		case RestHelpers::ApiRoute::ParseCSS:
+			return RestHelpers::handleParseCSS(this, req);
+			
 		case RestHelpers::ApiRoute::Shutdown:
 			return RestHelpers::handleShutdown(this, req);
 			

@@ -786,6 +786,30 @@ const Array<RestHelpers::RouteMetadata>& RestHelpers::getRouteMetadata()
 				"blocking. Returns {recording: true}. Used in get mode.")
 				.withDefault("true")));
 		
+		// ApiRoute::ParseCSS
+		m.add(RouteMetadata(ApiRoute::ParseCSS, "api/parse_css")
+			.withMethod(RestServer::POST)
+			.withCategory("scripting")
+			.withDescription("Parse CSS code and return structured diagnostics. "
+				"Accepts either inline code or a file path to a .css file. "
+				"Optionally resolves properties for a set of selectors using CSS specificity rules")
+			.withReturns("Diagnostics array with line/column/severity/message, "
+				"list of parsed selectors, "
+				"and resolved properties when selectors are provided")
+			.withBodyParam(RouteParameter(RestApiIds::code,
+				"The CSS code to parse (provide this or filePath)").asOptional())
+			.withBodyParam(RouteParameter(RestApiIds::filePath,
+				"Path to a .css file. Relative paths resolve against the Scripts/ directory "
+				"(provide this or code)").asOptional())
+			.withBodyParam(RouteParameter(RestApiIds::selectors,
+				"Array of selector strings representing a component's selectors "
+				"(e.g. [\"button\", \".my-class\", \"#MyId\"]). "
+				"Resolves properties using CSS specificity").asOptional())
+			.withBodyParam(RouteParameter(RestApiIds::width,
+				"Reference width in pixels for resolving percentage and relative units").asOptional())
+			.withBodyParam(RouteParameter(RestApiIds::height,
+				"Reference height in pixels for resolving percentage and relative units").asOptional()));
+		
 		// ApiRoute::Shutdown
 		m.add(RouteMetadata(ApiRoute::Shutdown, "api/shutdown")
 			.withMethod(RestServer::POST)
@@ -2805,6 +2829,215 @@ RestServer::Response RestHelpers::handleStartProfiling(MainController* mc,
 		return req->waitForResponse();
 	}
 #endif
+}
+
+RestServer::Response RestHelpers::handleParseCSS(MainController* mc,
+                                                   RestServer::AsyncRequest::Ptr req)
+{
+	auto obj = req->getRequest().getJsonBody();
+	auto code = obj.getProperty(RestApiIds::code, "").toString();
+	auto filePathStr = obj.getProperty(RestApiIds::filePath, "").toString();
+	
+	String resolvedFilePath;
+	
+	// Resolve CSS code from either inline code or file path
+	if (code.isEmpty() && filePathStr.isEmpty())
+		return req->fail(400, "Either code or filePath must be provided");
+	
+	if (code.isEmpty())
+	{
+		File targetFile;
+		
+		if (File::isAbsolutePath(filePathStr))
+			targetFile = File(filePathStr);
+		else
+			targetFile = mc->getSampleManager().getProjectHandler()
+				.getSubDirectory(FileHandlerBase::Scripts)
+				.getChildFile(filePathStr);
+		
+		if (!targetFile.existsAsFile())
+			return req->fail(404, "File not found: " + targetFile.getFullPathName());
+		
+		code = targetFile.loadFileAsString();
+		resolvedFilePath = targetFile.getFullPathName().replace("\\", "/");
+	}
+	
+	// Parse the CSS
+	simple_css::Parser parser(code);
+	auto parseResult = parser.parse();
+	
+	// Helper to parse "Line X, column Y: message" into structured diagnostic data
+	auto parseDiagLocation = [](const String& s, int& line, int& col, String& msg)
+	{
+		if (s.startsWith("Line "))
+		{
+			line = s.fromFirstOccurrenceOf("Line ", false, false).getIntValue();
+			auto afterColumn = s.fromFirstOccurrenceOf("column ", false, false);
+			col = afterColumn.getIntValue();
+			// The message starts after "column N: "
+			msg = afterColumn.fromFirstOccurrenceOf(": ", false, false);
+		}
+		else
+		{
+			line = 1;
+			col = 1;
+			msg = s;
+		}
+	};
+	
+	// Build diagnostics array
+	Array<var> diagArray;
+	bool parseOk = parseResult.wasOk();
+	
+	if (!parseOk)
+	{
+		int line, col;
+		String msg;
+		parseDiagLocation(parseResult.getErrorMessage(), line, col, msg);
+		
+		DynamicObject::Ptr d = new DynamicObject();
+		d->setProperty(RestApiIds::line, line);
+		d->setProperty(RestApiIds::column, col);
+		d->setProperty(RestApiIds::severity, "error");
+		d->setProperty(RestApiIds::source, "css");
+		d->setProperty(RestApiIds::message, msg);
+		diagArray.add(var(d.get()));
+	}
+	
+	// Add warnings (present even on partial parse failure)
+	for (const auto& w : parser.getWarnings())
+	{
+		int line, col;
+		String msg;
+		parseDiagLocation(w, line, col, msg);
+		
+		DynamicObject::Ptr d = new DynamicObject();
+		d->setProperty(RestApiIds::line, line);
+		d->setProperty(RestApiIds::column, col);
+		d->setProperty(RestApiIds::severity, "warning");
+		d->setProperty(RestApiIds::source, "css");
+		d->setProperty(RestApiIds::message, msg);
+		diagArray.add(var(d.get()));
+	}
+	
+	// Build response
+	DynamicObject::Ptr result = new DynamicObject();
+	result->setProperty(RestApiIds::success, parseOk);
+	result->setProperty(RestApiIds::diagnostics, var(diagArray));
+	
+	if (resolvedFilePath.isNotEmpty())
+		result->setProperty(RestApiIds::filePath, resolvedFilePath);
+	
+	// List all selectors found in the parsed CSS
+	if (parseOk)
+	{
+		Array<var> selectorArray;
+		for (const auto& s : parser.getSelectors())
+		{
+			auto str = s.toString().trim();
+			if (str.isNotEmpty())
+				selectorArray.add(str);
+		}
+		result->setProperty(RestApiIds::selectors, var(selectorArray));
+	}
+	
+	// Optional: resolve properties for given selectors using CSS specificity
+	auto selectorInput = obj.getProperty(RestApiIds::selectors, var());
+	
+	if (parseOk && selectorInput.isArray() && selectorInput.size() > 0)
+	{
+		auto collection = parser.getCSSValues();
+		
+		// Set up a dummy animator (required by getForComponent)
+
+		auto bp = dynamic_cast<BackendProcessor*>(mc);
+		auto& animator = bp->getCssParseAnimator();
+		collection.setAnimator(&animator);
+		
+		// Build a dummy component with the appropriate CSS selectors
+		Component dummy;
+		
+		Array<var> classArray;
+		String typeSelector;
+		String idSelector;
+		
+		for (int i = 0; i < selectorInput.size(); i++)
+		{
+			auto s = selectorInput[i].toString().trim();
+			
+			if (s.startsWithChar('#'))
+				idSelector = s.substring(1);
+			else if (s.startsWithChar('.'))
+				classArray.add(s.substring(1));
+			else if (s.isNotEmpty())
+				typeSelector = s;
+		}
+		
+		if (typeSelector.isNotEmpty())
+			dummy.getProperties().set("custom-type", typeSelector);
+		
+		if (idSelector.isNotEmpty())
+			dummy.getProperties().set("id", idSelector);
+		
+		if (!classArray.isEmpty())
+			dummy.getProperties().set("class", var(classArray));
+		
+		if (auto resolved = collection.getForComponent(&dummy))
+		{
+			// Check if size was provided for pixel resolution
+			auto widthVal = (float)(double)obj.getProperty(RestApiIds::width, 0);
+			auto heightVal = (float)(double)obj.getProperty(RestApiIds::height, 0);
+			bool hasSize = widthVal > 0.0f || heightVal > 0.0f;
+			
+			if (hasSize)
+			{
+				Rectangle<float> area(0.0f, 0.0f, widthVal, heightVal);
+				resolved->setFullArea(area);
+			}
+			
+			DynamicObject::Ptr props = new DynamicObject();
+			
+			resolved->forEachProperty(simple_css::PseudoElementType::None,
+				[&](simple_css::PseudoElementType, simple_css::Property& p)
+			{
+				auto pv = p.getProperty(0);
+				if (!pv) return false;
+				
+				auto raw = pv.getRawValueString();
+				
+				if (hasSize)
+				{
+					auto isPixelResolvable = simple_css::Parser::isPixelValueProperty(p.name);
+					
+					DynamicObject::Ptr propObj = new DynamicObject();
+					propObj->setProperty(RestApiIds::value, raw);
+					
+					if (isPixelResolvable)
+					{
+						Rectangle<float> area(0.0f, 0.0f, widthVal, heightVal);
+						auto val = resolved->getPixelValue(area, { p.name, {} });
+						propObj->setProperty(RestApiIds::resolved, val);
+					}
+					
+					props->setProperty(Identifier(p.name), var(propObj.get()));
+				}
+				else
+				{
+					props->setProperty(Identifier(p.name), raw);
+				}
+				
+				return false;
+			});
+			
+			result->setProperty(RestApiIds::properties, var(props.get()));
+		}
+	}
+	
+	result->setProperty(RestApiIds::logs, Array<var>());
+	result->setProperty(RestApiIds::errors, Array<var>());
+	
+	req->complete(RestServer::Response::ok(var(result.get())));
+	return req->waitForResponse();
 }
 
 RestServer::Response RestHelpers::handleShutdown(MainController* mc, 

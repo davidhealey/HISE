@@ -541,6 +541,8 @@ public:
 
 	RestServer& getRestServer() { return restServer; }
 
+	simple_css::Animator& getCssParseAnimator() { return restServerAnimator; }
+
 	LambdaBroadcaster<bool> pluginParameterRefreshBroadcaster;
 
 	ScriptUnlocker scriptUnlocker;
@@ -640,6 +642,7 @@ private:
 	AutoSaver autosaver;
 
 	RestServer restServer;
+	simple_css::Animator restServerAnimator;
 	
 	std::unique_ptr<InteractionTester> interactionTester;
 

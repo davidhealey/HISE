@@ -214,6 +214,11 @@ namespace RestApiIds
     DECLARE_ID(median);               // Median duration (ms)
     DECLARE_ID(peak);                 // Maximum duration (ms)
     DECLARE_ID(total);                // Sum of durations (ms)
+    
+    // parse_css
+    DECLARE_ID(code);                 // CSS code string to parse
+    DECLARE_ID(selectors);            // Array of selector strings for specificity resolution
+    DECLARE_ID(resolved);             // Resolved pixel value for a property
 }
 
 #undef DECLARE_ID
@@ -250,6 +255,7 @@ struct RestHelpers
         DiagnoseScript,         ///< POST /api/diagnose_script - Run diagnostic shadow parse
         GetIncludedFiles,       ///< GET  /api/get_included_files - List included script files
         StartProfiling,         ///< POST /api/profile - Run profiling session or retrieve last result
+        ParseCSS,               ///< POST /api/parse_css - Parse CSS and return diagnostics
         Shutdown,               ///< POST /api/shutdown - Gracefully quit HISE
         numRoutes
     };
@@ -581,6 +587,14 @@ struct RestHelpers
      */
     static RestServer::Response handleStartProfiling(MainController* mc, 
                                                       RestServer::AsyncRequest::Ptr req);
+    
+    /** Handler for POST /api/parse_css - Parse CSS code and return diagnostics.
+     *  HISE-agnostic: does not require a script processor.
+     *  Accepts either inline code or a file path to a .css file.
+     *  Optionally resolves properties for a set of selectors using CSS specificity.
+     */
+    static RestServer::Response handleParseCSS(MainController* mc, 
+                                               RestServer::AsyncRequest::Ptr req);
     
     /** Handler for POST /api/shutdown - Gracefully quit HISE.
      *  Sends the HTTP 200 response before scheduling the quit on the message thread.
