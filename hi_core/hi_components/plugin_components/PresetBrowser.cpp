@@ -699,6 +699,36 @@ Point<int> PresetBrowser::getMouseHoverInformation() const
 	return p;
 }
 
+Array<File> PresetBrowser::getAllSearchRoots() const
+{
+	Array<File> roots;
+
+	if (currentlySelectedExpansion != nullptr)
+	{
+		auto userPresetsDir = currentlySelectedExpansion->getSubDirectory(FileHandlerBase::UserPresets);
+		if (userPresetsDir.isDirectory())
+			roots.add(userPresetsDir);
+		return roots;
+	}
+
+	if (defaultRoot.isDirectory())
+		roots.add(defaultRoot);
+
+	auto& handler = getMainController()->getExpansionHandler();
+
+	for (int i = 0; i < handler.getNumExpansions(); ++i)
+	{
+		if (auto e = handler.getExpansion(i))
+		{
+			auto userPresetsDir = e->getSubDirectory(FileHandlerBase::UserPresets);
+			if (userPresetsDir.isDirectory() && !roots.contains(userPresetsDir))
+				roots.add(userPresetsDir);
+		}
+	}
+
+	return roots;
+}
+
 void PresetBrowser::presetChanged(const File& newPreset)
 {
 	// After we switched the expansions we need to make sure to run this logic so that it ca
@@ -912,7 +942,10 @@ void PresetBrowser::resized()
 	if (showOnlyPresets)
 	{
 		if (expansionColumn != nullptr)
-			listArea.removeFromLeft(expansionColumn->getWidth() + 4);
+		{
+			expansionColumn->setVisible(true);
+			expansionColumn->setBounds(listArea.removeFromLeft(expansionColumn->getWidth()).reduced(2, 2));
+		}
 
 		presetColumn->setBounds(listArea.reduced(2));
 	}
@@ -941,7 +974,10 @@ void PresetBrowser::resized()
 		}
 
 		if(expansionColumn != nullptr)
+		{
+			expansionColumn->setVisible(true);
 			expansionColumn->setBounds(listArea.removeFromLeft(columnWidths[0]).reduced(2, 2));
+		}
 
 		if(numColumns > 1)
 			bankColumn->setBounds(listArea.removeFromLeft(columnWidths[0+folderOffset]).reduced(2, 2));
@@ -1091,6 +1127,11 @@ void PresetBrowser::setShowSearchBar(bool shouldBeShown)
 void PresetBrowser::setShowFullPathFavorites(bool shouldShowFullPathFavorites)
 {
 	fullPathFavorites = shouldShowFullPathFavorites;
+}
+
+void PresetBrowser::setShowFullPathSearch(bool shouldShowFullPathSearch)
+{
+	fullPathSearch = shouldShowFullPathSearch;
 }
 
 void PresetBrowser::setHighlightColourAndFont(Colour c, Colour bgColour, Font f)
@@ -1322,7 +1363,8 @@ void PresetBrowser::setOptions(const Options& newOptions)
 	setShowFavorites(newOptions.showFavoriteIcons);
 	setFavoriteIconOffset(newOptions.favoriteIconOffset);
 	setShowFullPathFavorites(newOptions.fullPathFavorites);
-	
+	setShowFullPathSearch(newOptions.fullPathSearch);
+
 	if (expansionColumn != nullptr)
 		expansionColumn->update();
 
@@ -1376,15 +1418,25 @@ void PresetBrowser::selectionChanged(int columnIndex, int /*rowIndex*/, const Fi
 		bankColumn->setNewRootDirectory(rootFile);
 		categoryColumn->setModel(new PresetBrowserColumn::ColumnListModel(this, 1, this), rootFile);
 		categoryColumn->setNewRootDirectory(currentCategoryFile);
-		presetColumn->setNewRootDirectory(File());
-		
-		auto pc = new PresetBrowserColumn::ColumnListModel(this, 2, this);
-		pc->setDisplayDirectories(false);
-		presetColumn->setModel(pc, rootFile);
-		
+
 		loadPresetDatabase(rootFile);
 		presetColumn->setDatabase(getDataBase());
 		rebuildAllPresets();
+
+		if (showOnlyPresets)
+		{
+			// Keep the existing model so the search wildcard is preserved; just
+			// refresh the list — getAllSearchRoots() now returns the new expansion.
+			presetColumn->setNewRootDirectory(rootFile);
+		}
+		else
+		{
+			presetColumn->setNewRootDirectory(File());
+
+			auto pc = new PresetBrowserColumn::ColumnListModel(this, 2, this);
+			pc->setDisplayDirectories(false);
+			presetColumn->setModel(pc, rootFile);
+		}
 	}
 
 	if (columnIndex == 0)
