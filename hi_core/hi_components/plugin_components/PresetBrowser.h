@@ -196,6 +196,8 @@ public:
 
 	void loadPresetDatabase(const File& rootDirectory);
 	void savePresetDatabase(const File& rootDirectory);
+	/** Flush the in-memory favourite database for the currently loaded root to disk. */
+	void saveCurrentDatabase() { savePresetDatabase(rootFile); }
 	var getDataBase() { return presetDatabase; }
 	const var getDataBase() const { return presetDatabase; }
 
@@ -239,6 +241,13 @@ public:
 	Point<int> getMouseHoverInformation() const;
 
 	Array<File> getAllSearchRoots() const;
+	Array<File> getAllFavoritePresets();
+	bool isFavoriteInAnyDatabase(const File& presetFile) const;
+
+	/** Mark the favourites cache as stale so it is rebuilt on next access.
+	    Call this whenever the favourite state of any preset changes or
+	    whenever the set of visible roots changes (e.g. expansion switch). */
+	void invalidateFavoritesCache() { favoritesCacheDirty = true; }
 
 	Component* getColumn(int columnIndex)
 	{
@@ -321,6 +330,16 @@ private:
 	WeakReference<Expansion> currentlySelectedExpansion;
 
 	var presetDatabase;
+
+	// Cached list of favourite files.  Rebuilt lazily whenever
+	// favoritesCacheDirty is true (on first access after a favourite toggle
+	// or expansion switch).  mutable so it can be populated from const
+	// query methods.
+	mutable Array<File> cachedFavorites;
+	mutable bool favoritesCacheDirty = true;
+
+	// Rebuild cachedFavorites from disk/in-memory databases.
+	void rebuildFavoritesCache() const;
 
 	JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(PresetBrowser);
 
