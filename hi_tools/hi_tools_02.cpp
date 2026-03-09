@@ -31,7 +31,7 @@
 */
 
 
-
+#if 0
 
 #include "hi_tools.h"
 #include <juce_product_unlocking/juce_product_unlocking.h>
@@ -39,4 +39,5 @@
 #if !HISE_NO_GUI_TOOLS
 #include "simple_css/simple_css.cpp"
 #include "hi_multipage/multipage.cpp"
+#endif
 #endif

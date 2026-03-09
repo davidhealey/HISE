@@ -48,6 +48,8 @@
 #include <limits.h>
 #include <regex>
 
+#include <juce_product_unlocking/juce_product_unlocking.h>
+
 #include "../hi_dsp_library/hi_dsp_library.h"
 #include "hi_tools.h"
 
@@ -144,3 +146,8 @@
 
 #include "hi_neural/onnx_loader.cpp"
 
+
+#if !HISE_NO_GUI_TOOLS
+#include "simple_css/simple_css.cpp"
+#include "hi_multipage/multipage.cpp"
+#endif

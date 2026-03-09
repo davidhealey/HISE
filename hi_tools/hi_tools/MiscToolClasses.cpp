@@ -35,7 +35,9 @@
 #include "xmmintrin.h"
 #endif
 
-
+#if !HISE_INCLUDE_XSIMD
+#include "../hi_neural/RTNeural/modules/xsimd/xsimd.hpp"
+#endif
 
 
 namespace hise {

@@ -245,14 +245,14 @@ struct FileAction: public ImmediateAction
 {
     enum FileActionType
     {
-        CheckIfExists,
-	    DeleteFile,
-        CopyFile,
-        MoveFile,
-        LoadAsString,
-        LoadAsObject,
-        WriteString,
-        WriteObject,
+        CheckIfExists2,
+	    ASDDeleteFile222,
+        CopyFile2,
+        MoveFile2,
+        LoadAsString2,
+        LoadAsObject2,
+        WriteString2,
+        WriteObject2,
         numFileActionTypes
     };
 
