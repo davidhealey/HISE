@@ -113,10 +113,10 @@ void ProcessorMetadataRegistry::registerAllMetadata()
 
 	// --- TimeVariantModulators ---
 
-	add(ProcessorMetadata::createFallback<ControlModulator>());
+	add(ControlModulator::createMetadata());
 	add(LfoModulator::createMetadata());
-	add(ProcessorMetadata::createFallback<PitchwheelModulator>());
-	add(ProcessorMetadata::createFallback<MacroModulator>());
+	add(PitchwheelModulator::createMetadata());
+	add(MacroModulator::createMetadata());
 	add(GlobalTimeVariantModulator::createMetadata());
 	add(ProcessorMetadata::createFallback<JavascriptTimeVariantModulator>());
 	add(ProcessorMetadata::createFallback<HardcodedTimeVariantModulator>());

@@ -97,6 +97,8 @@ struct EventDataEditor: public ProcessorEditorBody
 	{
 		auto isEnvelope = dynamic_cast<EventDataEnvelope*>(getProcessor()) != nullptr;
 
+		auto md = getProcessor()->getMetadata();
+
 		addAndMakeVisible(defaultValue);
 		defaultValue.setup(getProcessor(), isEnvelope ?
 			(int)EventDataEnvelope::Parameter::DefaultValue :
@@ -124,10 +126,7 @@ struct EventDataEditor: public ProcessorEditorBody
 		if(isEnvelope)
 		{
 			addAndMakeVisible(smoothingSlider = new HiSlider("SmoothingTime"));
-			smoothingSlider->setup(getProcessor(), EventDataEnvelope::Parameter::SmoothingTime, "SmoothingTime");
-			NormalisableRange<double> tr(0.0, 2000.0);
-			tr.setSkewForCentre(100.0);
-			smoothingSlider->setMode(HiSlider::Time, tr);
+			md.setup(*smoothingSlider, getProcessor(), EventDataEnvelope::Parameter::SmoothingTime);
 			smoothingSlider->setTooltip (TRANS("The value if the event data hasn't been written"));
 		    smoothingSlider->setSliderStyle (Slider::RotaryHorizontalVerticalDrag);
 		    smoothingSlider->setTextBoxStyle (Slider::TextBoxRight, true, 80, 20);

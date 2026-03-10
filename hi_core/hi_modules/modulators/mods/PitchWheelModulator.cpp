@@ -32,6 +32,30 @@
 
 namespace hise { using namespace juce;
 
+hise::ProcessorMetadata PitchwheelModulator::createMetadata()
+{
+	return ProcessorMetadata(getClassType())
+		.withPrettyName("Pitch Wheel Modulator")
+		.withDescription("Creates a monophonic modulation signal from the pitch wheel, with smoothing to reduce stepping artifacts.")
+		.withType<hise::TimeVariantModulator>()
+		.withComplexDataInterface(ExternalData::DataType::Table)
+		.withParameter(ProcessorMetadata::ParameterMetadata(Parameters::Inverted)
+			.withId("Inverted")
+			.withDescription("Inverts the modulation signal so pitch bend up produces lower values")
+			.asToggle()
+			.withDefault(0.0f))
+		.withParameter(ProcessorMetadata::ParameterMetadata(Parameters::UseTable)
+			.withId("UseTable")
+			.withDescription("Enables a lookup table for custom pitch wheel response curves")
+			.asToggle()
+			.withDefault(0.0f))
+		.withParameter(ProcessorMetadata::ParameterMetadata(Parameters::SmoothTime)
+			.withId("SmoothTime")
+			.withDescription("Smoothing time in milliseconds to reduce stepping on fast pitch wheel movements")
+			.withSliderMode(HiSlider::Time)
+			.withDefault(200.0f));
+}
+
 PitchwheelModulator::PitchwheelModulator(MainController *mc, const String &id, Modulation::Mode m):
 	TimeVariantModulator(mc, id, m),
 	LookupTableProcessor(mc, 1),
@@ -46,10 +70,6 @@ PitchwheelModulator::PitchwheelModulator(MainController *mc, const String &id, M
 	this->enableConsoleOutput(false);
 	
 	getTableUnchecked(0)->setXTextConverter(Modulation::getDomainAsPitchBendRange);
-
-	parameterNames.add("Inverted");
-	parameterNames.add("UseTable");
-	parameterNames.add("SmoothTime");
 
 	updateParameterSlots();
 

@@ -32,6 +32,40 @@
 
 namespace hise { using namespace juce;
 
+hise::ProcessorMetadata ControlModulator::createMetadata()
+{
+	return ProcessorMetadata(getClassType())
+		.withPrettyName("Midi Controller")
+		.withDescription("Creates a modulation signal from MIDI CC messages with adjustable smoothing and optional table mapping for custom response curves.")
+		.withType<hise::TimeVariantModulator>()
+		.withComplexDataInterface(ExternalData::DataType::Table)
+		.withParameter(ProcessorMetadata::ParameterMetadata(Parameters::Inverted)
+			.withId("Inverted")
+			.withDescription("Inverts the modulation signal (1 - value)")
+			.asToggle()
+			.withDefault(0.0f))
+		.withParameter(ProcessorMetadata::ParameterMetadata(Parameters::UseTable)
+			.withId("UseTable")
+			.withDescription("Enables a lookup table for custom MIDI CC response curves")
+			.asToggle()
+			.withDefault(0.0f))
+		.withParameter(ProcessorMetadata::ParameterMetadata(Parameters::ControllerNumber)
+			.withId("ControllerNumber")
+			.withDescription("The MIDI controller number to respond to (1-127 for CC, 128 for aftertouch, 129 for pitch wheel)")
+			.withSliderMode(HiSlider::Discrete, scriptnode::InvertableParameterRange(0.0, 129.0, 1.0))
+			.withDefault(1.0f))
+		.withParameter(ProcessorMetadata::ParameterMetadata(Parameters::SmoothTime)
+			.withId("SmoothTime")
+			.withDescription("Smoothing time in milliseconds to reduce zipper noise on value changes")
+			.withSliderMode(HiSlider::Time)
+			.withDefault(200.0f))
+		.withParameter(ProcessorMetadata::ParameterMetadata(Parameters::DefaultValue)
+			.withId("DefaultValue")
+			.withDescription("The initial value before any MIDI CC message is received")
+			.withSliderMode(HiSlider::NormalizedPercentage)
+			.withDefault(0.0f));
+}
+
 ControlModulator::ControlModulator(MainController *mc, const String &id, Modulation::Mode m):
 	TimeVariantModulator(mc, id, m),
 	LookupTableProcessor(mc, 1),
@@ -52,12 +86,6 @@ ControlModulator::ControlModulator(MainController *mc, const String &id, Modulat
 	{
 		polyValues[i] = -1.0;
 	}
-
-	parameterNames.add("Inverted");
-	parameterNames.add("UseTable");
-	parameterNames.add("ControllerNumber");
-	parameterNames.add("SmoothTime");
-	parameterNames.add("DefaultValue");
 
 	updateParameterSlots();
 
