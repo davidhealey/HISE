@@ -1049,7 +1049,13 @@ float EnvelopeModulator::getDefaultValue(int parameterIndex) const
 	{
 	case Parameters::Monophonic: return getVoiceAmount() == 1 ? 1.0f : 0.0f;
 	case Parameters::Retrigger:  return 1.0f;
-	default:					 jassertfalse; return 0.0f;
+	default:					 
+
+		if (hasInitialisedMetadata())
+			return getMetadata()[parameterIndex].defaultValue;
+
+		jassertfalse; 
+		return 0.0f;
 	}
 }
 

@@ -129,6 +129,46 @@ public:
 		PitchChain = 1
 	};
 
+	/** Base metadata for all sound generators. Derived classes chain from this
+	 *  via ModulatorSynth::createBaseMetadata() to inherit the 4 base parameters
+	 *  and 2 standard modulation chains.
+	 */
+	static ProcessorMetadata createBaseMetadata()
+	{
+		using Par = ProcessorMetadata::ParameterMetadata;
+		using Mod = ProcessorMetadata::ModulationMetadata;
+
+		return ProcessorMetadata("ModulatorSynth")
+			.withParameter(Par(Gain)
+				.withId("Gain")
+				.withDescription("The output volume of the sound generator")
+				.withSliderMode(HiSlider::Decibel)
+				.withDefault(1.0f))
+			.withParameter(Par(Balance)
+				.withId("Balance")
+				.withDescription("The stereo balance")
+				.withSliderMode(HiSlider::Pan)
+				.withDefault(0.0f))
+			.withParameter(Par(VoiceLimit)
+				.withId("VoiceLimit")
+				.withDescription("The maximum number of voices")
+				.withSliderMode(HiSlider::Discrete, {1.0, 256.0, 1.0})
+				.withDefault(64.0f))
+			.withParameter(Par(KillFadeTime)
+				.withId("KillFadeTime")
+				.withDescription("The fade out time when voices are killed")
+				.withSliderMode(HiSlider::Time, {0.0, 20000.0, 1.0})
+				.withDefault(20.0f))
+			.withModulation(Mod(GainModulation)
+				.withId("Gain Modulation")
+				.withDescription("Modulates the output volume")
+				.withMode(scriptnode::modulation::ParameterMode::ScaleOnly))
+			.withModulation(Mod(PitchModulation)
+				.withId("Pitch Modulation")
+				.withDescription("Modulates the pitch of all voices")
+				.withMode(scriptnode::modulation::ParameterMode::Pitch));
+	}
+
 	// ===================================================================================================================
 
 	ModulatorSynth(MainController *mc, const String &id, int numVoices);

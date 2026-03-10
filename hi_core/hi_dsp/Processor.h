@@ -343,7 +343,10 @@ public:
      */
     virtual int getNumChildProcessors() const = 0;
     
-    /** Return a one-line description of the processor. */
+    /** Return a one-line description of the processor. 
+    
+    TODO_MODULE: Fold into getMetadata().description
+    */
     virtual String getDescription() const = 0;
     
     /** If your processor uses internal chains, you can return the number here.
@@ -746,7 +749,13 @@ public:
 
     virtual int getNumAttributes() const { return parameterNames.size(); }
 
-    
+	/** Returns the metadata for this processor type.
+	*
+	*	The default implementation does a registry lookup using the processor's type identifier.
+	*	Dynamic modules (scripts, DLL nodes) override this to augment static metadata
+	*	with runtime parameters.
+	*/
+	virtual ProcessorMetadata getMetadata() const;
 
     String getDescriptionForParameters(int parameterIndex);
     
@@ -841,17 +850,35 @@ public:
 
 	void setParentProcessor(Processor* newParent);
 
+    // Fold into ParameterMetadata
 	Array<Identifier> parameterNames;
 
-    void updateParameterSlots(int numForced = -1)
+    bool updateParameterSlots(int numForced = -1)
 	{
+        // Cache metadata from registry (virtual dispatch is safe here - called from derived constructors)
+        metadata.first = false;
+        metadata = { true, getMetadata() };
+
+        // For migrated processors: populate parameterNames from metadata
+        // (replaces the manual parameterNames.add() boilerplate).
+        // Uses clearQuick() rather than isEmpty() guard because base classes
+        // (e.g. ModulatorSynth) may have already added their own parameter
+        // names before the derived constructor calls updateParameterSlots().
+        if (hasInitialisedMetadata())
+        {
+            parameterNames.clearQuick();
+
+            for (auto& p : metadata.second.parameters)
+                parameterNames.add(p.id);
+        }
+
         if(numForced == -1)
             numForced = getNumAttributes();
 
 		NEW_PROCESSOR_DISPATCH(dispatcher.setNumAttributes(numForced));
-	}
 
-    
+        return metadata.first;
+	}
 
     virtual void connectToRuntimeTargets(scriptnode::OpaqueNode& on, bool shouldAdd)
     {
@@ -899,6 +926,8 @@ public:
 	/** Call this from the baseclass whenever you want its editor to display a value change. */
 	void setOutputValue(float newValue);;
 
+    bool hasInitialisedMetadata() const { return metadata.first && metadata.second.isValidAndNoFallback(); }
+
 protected:
 
 	/** Overwrite this method if you want to supply a custom symbol for the Processor. 
@@ -931,12 +960,16 @@ protected:
 	bool consoleEnabled;
 
 	
-	StringArray parameterDescriptions;
+    // Fold into ParameterMetadata
+	StringArray parameterDescriptions;          
+
 	Array<Identifier> editorStateIdentifiers;
 
 	NEW_PROCESSOR_DISPATCH(dispatch::library::Processor dispatcher);
 
 private:
+
+    std::pair<bool, ProcessorMetadata> metadata;
 
     bool forceDeactivateUpdates = false;
 

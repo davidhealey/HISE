@@ -190,6 +190,9 @@ void ModulatorSynth::setInternalAttribute(int parameterIndex, float newValue)
 
 float ModulatorSynth::getDefaultValue(int parameterIndex) const
 {
+	if (hasInitialisedMetadata())
+		return getMetadata()[parameterIndex].defaultValue;
+
 	switch (parameterIndex)
 	{
 	case Gain:			return 1.0;

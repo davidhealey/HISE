@@ -586,7 +586,27 @@ public:
 		numParameters
 	};
 
-	
+	/** Base metadata for all envelope modulators. Derived classes chain from this
+	 *  via EnvelopeModulator::createBaseMetadata() to inherit the 2 base parameters
+	 *  (Monophonic, Retrigger). No base modulation chains.
+	 */
+	static ProcessorMetadata createBaseMetadata()
+	{
+		using Par = ProcessorMetadata::ParameterMetadata;
+
+		return ProcessorMetadata("EnvelopeModulator")
+			.withParameter(Par(Monophonic)
+				.withId("Monophonic")
+				.withDescription("Enables monophonic mode where only one voice is rendered")
+				.asToggle()
+				.withDefault(0.0f))
+			.withParameter(Par(Retrigger)
+				.withId("Retrigger")
+				.withDescription("Restarts the envelope when a new note is triggered in monophonic mode")
+				.asToggle()
+				.withDefault(1.0f));
+	}
+
 	virtual ~EnvelopeModulator();;
 
 	static Path getSymbolPath();

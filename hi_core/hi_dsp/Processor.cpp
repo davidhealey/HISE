@@ -219,8 +219,13 @@ void Processor::setAttribute(int parameterIndex, float newValue, dispatch::Dispa
 	
 }
 
-float Processor::getDefaultValue(int) const
-{ return 1.0f; }
+float Processor::getDefaultValue(int parameterIndex) const
+{ 
+	if (hasInitialisedMetadata())
+		return getMetadata()[parameterIndex].defaultValue;
+
+	return 1.0f; 
+}
 
 int Processor::getNumInternalChains() const
 { return 0;}
@@ -438,6 +443,9 @@ void Processor::BypassListener::onBypassUpdate(dispatch::library::Processor* p, 
 
 String Processor::getDescriptionForParameters(int parameterIndex)
 {
+	if (hasInitialisedMetadata())
+		return getMetadata()[parameterIndex].description;
+
 	if (parameterNames.size() == parameterDescriptions.size())
 		return parameterDescriptions[parameterIndex];
 
@@ -557,6 +565,9 @@ Identifier Processor::getIdentifierForParameterIndex(int parameterIndex) const
 	// Use ProcessorWithScriptingContent
 	jassert(dynamic_cast<const ProcessorWithScriptingContent*>(this) == nullptr);
 
+	if (hasInitialisedMetadata())
+		return getMetadata()[parameterIndex].id;
+
 	if (parameterIndex > parameterNames.size()) return Identifier();
 
 	return parameterNames[parameterIndex];
@@ -567,12 +578,24 @@ int Processor::getParameterIndexForIdentifier(const Identifier& id) const
 	// Use ProcessorWithScriptingContent
 	jassert(dynamic_cast<const ProcessorWithScriptingContent*>(this) == nullptr);
 
+	if (hasInitialisedMetadata())
+	{
+		for (const auto& p : metadata.second.parameters)
+		{
+			if (p.id == id)
+				return p.parameterIndex;
+		}
+	}
+
 	return parameterNames.indexOf(id);
 }
 
 
 int Processor::getNumParameters() const
 {
+	if (hasInitialisedMetadata())
+		return metadata.second.parameters.size();
+
 	if (auto jp = dynamic_cast<const JavascriptProcessor*>(this))
 	{
 		if (auto n = jp->getActiveOrDebuggedNetwork())
@@ -1632,6 +1655,27 @@ juce::String ProcessorDocumentation::Entry::createHelpText(int headLineLevel) co
 	s << "  \n";
 	s << helpText;
 	return s;
+}
+
+ProcessorMetadata Processor::getMetadata() const
+{
+	if (hasInitialisedMetadata())
+		return metadata.second;
+
+	SharedResourcePointer<ProcessorMetadataRegistry> registry;
+
+	if (auto md = registry->get(getType()))
+	{
+		return *md;
+	}
+	
+	// No registry entry - return a minimal metadata with just the name and type
+	ProcessorMetadata fallback;
+	fallback.id = getType();
+	fallback.dataType = ProcessorMetadata::DataType::Fallback;
+	fallback.prettyName = getName();
+	fallback.description = getDescription();
+	return fallback;
 }
 
 } // namespace hise
