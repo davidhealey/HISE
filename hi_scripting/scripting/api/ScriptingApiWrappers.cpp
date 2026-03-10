@@ -75,6 +75,7 @@ struct ScriptingApi::Content::Wrapper
 	static var addDynamicContainer(const var::NativeFunctionArgs& args);
 	static var getComponent(const var::NativeFunctionArgs& args);
 	static var getAllComponents(const var::NativeFunctionArgs& args);
+	static var setUpdateExistingPosition(const var::NativeFunctionArgs& args);
 	static var set(const var::NativeFunctionArgs& args);
 	static var get(const var::NativeFunctionArgs& args);
 	static var addToMacroControl(const var::NativeFunctionArgs& args);
@@ -1184,6 +1185,15 @@ juce::var ScriptingApi::Content::Wrapper::getComponentUnderDrag(const var::Nativ
 	return var();
 }
 
+var ScriptingApi::Content::Wrapper::setUpdateExistingPosition(const var::NativeFunctionArgs& args)
+{
+	if (auto thisObject = GET_OBJECT(Content))
+	{
+		thisObject->setUpdateExistingPosition(args.arguments[0]);
+	}
+
+	return var();
+}
 
 #undef GET_OBJECT
 #undef CHECK_ARGUMENTS

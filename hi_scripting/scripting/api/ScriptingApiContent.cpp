@@ -7798,6 +7798,7 @@ colour(Colour(0xff777777))
 	setMethod("setWidth", Wrapper::setWidth);
 	setMethod("createScreenshot", Wrapper::createScreenshot);
 	setMethod("addVisualGuide", Wrapper::addVisualGuide);
+	setMethod("setUpdateExistingPosition", Wrapper::setUpdateExistingPosition);
 	setMethod("getInterfaceSize", Wrapper::getInterfaceSize);
     setMethod("makeFrontInterface", Wrapper::makeFrontInterface);
 	setMethod("makeFullScreenInterface", Wrapper::makeFullScreenInterface);
@@ -10125,6 +10126,10 @@ void ScriptingApi::Content::setIsRebuilding(bool isCurrentlyRebuilding)
 	}
 }
 
+void ScriptingApi::Content::setUpdateExistingPosition(bool shouldUpdateExistingComponents)
+{
+	updateExistingPositions = shouldUpdateExistingComponents;
+}
 
 hise::ScriptComponentPropertyTypeSelector::SelectorTypes ScriptComponentPropertyTypeSelector::getTypeForId(const Identifier &id) const
 {

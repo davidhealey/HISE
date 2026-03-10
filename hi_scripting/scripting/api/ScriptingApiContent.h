@@ -2991,6 +2991,9 @@ public:
 	/** Adds a dynamic container component. */
 	ScriptDynamicContainer* addDynamicContainer(Identifier containerId, int x, int y);
 
+	/** Whether to update the component position at addXXX() calls with existing components. */
+	void setUpdateExistingPosition(bool shouldUpdateExistingComponents);
+
 	/** Returns the reference to the given component. */
 	var getComponent(var name);
 	
@@ -3497,6 +3500,7 @@ private:
 	ReferenceCountedArray<ScriptPanel> popupPanels;
 
 	bool allowAsyncFunctions = false;
+	bool updateExistingPositions = true;
 
 	void sendRebuildMessage();
 
@@ -3517,7 +3521,7 @@ private:
 
 		if (auto sc = getComponentWithName(name))
 		{
-			if (x != -1 && y != -1)
+			if ((x != -1 && y != -1) && updateExistingPositions)
 			{
 				sc->handleScriptPropertyChange("x");
 				sc->handleScriptPropertyChange("y");

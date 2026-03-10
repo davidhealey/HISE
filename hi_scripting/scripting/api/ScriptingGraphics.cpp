@@ -1025,6 +1025,7 @@ struct ScriptingObjects::PathObject::Wrapper
 ScriptingObjects::PathObject::PathObject(ProcessorWithScriptingContent* p) :
 	ConstScriptingObject(p, 0)
 {
+
 	ADD_API_METHOD_1(loadFromData);
 	ADD_API_METHOD_0(closeSubPath);
 	ADD_API_METHOD_0(clear);
