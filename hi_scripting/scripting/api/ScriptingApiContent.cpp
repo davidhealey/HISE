@@ -8457,9 +8457,12 @@ bool ScriptingApi::Content::isEmpty()
 	return components.size() == 0;
 }
 
-var ScriptingApi::Content::createPath()
+var ScriptingApi::Content::createPath(var data)
 {
 	ScriptingObjects::PathObject* obj = new ScriptingObjects::PathObject(getScriptProcessor());
+
+	if (data.isString() || data.isArray())
+		obj->loadFromData(data);
 
 	return var(obj);
 }

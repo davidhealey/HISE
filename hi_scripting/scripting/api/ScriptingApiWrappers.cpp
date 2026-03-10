@@ -1030,9 +1030,12 @@ var ScriptingApi::Content::Wrapper::createPath(const var::NativeFunctionArgs& ar
 {
 	if (ScriptingApi::Content* thisObject = GET_OBJECT(Content))
 	{
-		CHECK_ARGUMENTS("createPath()", 0);
+		var data;
 
-		return thisObject->createPath();
+		if (args.numArguments > 0)
+			data = args.arguments[0];
+
+		return thisObject->createPath(data);
 	}
 
 	return var();

@@ -3009,8 +3009,8 @@ public:
 	/** sets the data for the value popups. */
 	void setValuePopupData(var jsonData);
 
-	/** Creates a Path that can be drawn to a ScriptPanel. */
-	var createPath();
+	/** Creates a Path that can be drawn to a ScriptPanel. If data (base64 string or Array) is provided it will load it. */
+	var createPath(var data);
 
 	/** Creates an OpenGL framgent shader. */
 	var createShader(const String& fileName);
