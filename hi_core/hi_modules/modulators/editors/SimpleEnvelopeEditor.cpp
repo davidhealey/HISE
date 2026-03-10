@@ -67,13 +67,10 @@ SimpleEnvelopeEditorBody::SimpleEnvelopeEditorBody (ProcessorEditor *p)
 
 
 
-	attackSlider->setup(getProcessor(), SimpleEnvelope::Attack, "Attack Time");
-	attackSlider->setMode(HiSlider::Time);
-
-	releaseSlider->setup(getProcessor(), SimpleEnvelope::Release, "Release Time");
-	releaseSlider->setMode(HiSlider::Time);
-
-	useLinearMode->setup(getProcessor(), SimpleEnvelope::LinearMode, "Linear Mode");
+	auto md = getProcessor()->getMetadata();
+	md.setup(*attackSlider, getProcessor(), SimpleEnvelope::Attack);
+	md.setup(*releaseSlider, getProcessor(), SimpleEnvelope::Release);
+	md.setup(*useLinearMode, getProcessor(), SimpleEnvelope::LinearMode);
 
     //[/UserPreSize]
 

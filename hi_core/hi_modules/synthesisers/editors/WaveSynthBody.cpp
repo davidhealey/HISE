@@ -196,43 +196,32 @@ WaveSynthBody::WaveSynthBody (ProcessorEditor *p)
 
     //[UserPreSize]
 
-	waveFormSelector->setup(getProcessor(), WaveSynth::SpecialParameters::WaveForm1, "Waveform 1");
-	waveFormSelector2->setup(getProcessor(), WaveSynth::SpecialParameters::WaveForm2, "Waveform 2");
+	auto md = getProcessor()->getMetadata();
 
-	octaveSlider->setup(getProcessor(), WaveSynth::SpecialParameters::OctaveTranspose1, "Octave 1");
-    octaveSlider->setMode(HiSlider::Discrete, {-5.0, 5.0, 1.0});
-	octaveSlider2->setup(getProcessor(), WaveSynth::SpecialParameters::OctaveTranspose2, "Octave 2");
-    octaveSlider2->setMode(HiSlider::Discrete, {-5.0, 5.0, 1.0});
+	md.setup(*waveFormSelector, getProcessor(), WaveSynth::WaveForm1);
+	md.setup(*waveFormSelector2, getProcessor(), WaveSynth::WaveForm2);
 
-	detuneSlider->setup(getProcessor(), WaveSynth::SpecialParameters::Detune1, "Detune 1");
-	detuneSlider2->setup(getProcessor(), WaveSynth::SpecialParameters::Detune2, "Detune 2");
-    detuneSlider->setMode(HiSlider::Mode::Linear, {-100.0, 100.0});
-    detuneSlider2->setMode(HiSlider::Mode::Linear, {-100.0, 100.0});
+	md.setup(*octaveSlider, getProcessor(), WaveSynth::OctaveTranspose1);
+	md.setup(*octaveSlider2, getProcessor(), WaveSynth::OctaveTranspose2);
+
+	md.setup(*detuneSlider, getProcessor(), WaveSynth::Detune1);
+	md.setup(*detuneSlider2, getProcessor(), WaveSynth::Detune2);
 	detuneSlider->setTextValueSuffix("ct");
 	detuneSlider2->setTextValueSuffix("ct");
 
-	panSlider->setup(getProcessor(), WaveSynth::SpecialParameters::Pan1, "Pan 1");
-	panSlider2->setup(getProcessor(), WaveSynth::SpecialParameters::Pan2, "Pan 2");
-	panSlider->setMode(HiSlider::Pan);
-	panSlider2->setMode(HiSlider::Pan);
+	md.setup(*panSlider, getProcessor(), WaveSynth::Pan1);
+	md.setup(*panSlider2, getProcessor(), WaveSynth::Pan2);
 
-	mixSlider->setup(getProcessor(), WaveSynth::SpecialParameters::Mix, "Mix");
-	mixSlider->setMode(HiSlider::Mode::NormalizedPercentage);
+	md.setup(*mixSlider, getProcessor(), WaveSynth::Mix);
 
-	enableSecondButton->setup(getProcessor(), WaveSynth::SpecialParameters::EnableSecondOscillator, "Enable 2nd Osc");
-	enableSyncButton->setup(getProcessor(), WaveSynth::SpecialParameters::HardSync, "Sync 2nd Osc");
+	md.setup(*enableSecondButton, getProcessor(), WaveSynth::EnableSecondOscillator);
+	md.setup(*enableSyncButton, getProcessor(), WaveSynth::HardSync);
 
-	pulseSlider1->setup(getProcessor(), WaveSynth::SpecialParameters::PulseWidth1, "Pulse Width 1");
-	pulseSlider1->setMode(HiSlider::Mode::NormalizedPercentage);
+	md.setup(*pulseSlider1, getProcessor(), WaveSynth::PulseWidth1);
+	md.setup(*pulseSlider2, getProcessor(), WaveSynth::PulseWidth2);
 
-	pulseSlider2->setup(getProcessor(), WaveSynth::SpecialParameters::PulseWidth2, "Pulse Width 2");
-	pulseSlider2->setMode(HiSlider::Mode::NormalizedPercentage);
-
-    semiToneSlider1->setup(getProcessor(), WaveSynth::SpecialParameters::SemiTones1, "SemiTones 1");
-    semiToneSlider1->setMode(HiSlider::Discrete, {-12.0, 12.0, 1.0});
-
-    semiToneSlider2->setup(getProcessor(), WaveSynth::SpecialParameters::SemiTones2, "SemiTones 2");
-    semiToneSlider2->setMode(HiSlider::Discrete, {-12.0, 12.0, 1.0});
+	md.setup(*semiToneSlider1, getProcessor(), WaveSynth::SemiTones1);
+	md.setup(*semiToneSlider2, getProcessor(), WaveSynth::SemiTones2);
 
     voiceAmountEditor->setFont(GLOBAL_FONT());
     voiceAmountLabel->setFont(GLOBAL_FONT());

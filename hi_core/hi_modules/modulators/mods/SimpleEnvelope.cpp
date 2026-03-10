@@ -32,6 +32,37 @@
 
 namespace hise { using namespace juce;
 
+hise::ProcessorMetadata SimpleEnvelope::createMetadata()
+{
+	using Par = ProcessorMetadata::ParameterMetadata;
+	using Mod = ProcessorMetadata::ModulationMetadata;
+
+	return EnvelopeModulator::createBaseMetadata()
+		.withId(getClassType())
+		.withPrettyName("Simple Envelope")
+		.withDescription("The most simple envelope (only attack and release).")
+		.withType<hise::EnvelopeModulator>()
+		.withParameter(Par(Attack)
+			.withId("Attack")
+			.withDescription("The attack time in milliseconds")
+			.withSliderMode(HiSlider::Time)
+			.withDefault(5.0f))
+		.withParameter(Par(Release)
+			.withId("Release")
+			.withDescription("The release time in milliseconds")
+			.withSliderMode(HiSlider::Time)
+			.withDefault(10.0f))
+		.withParameter(Par(LinearMode)
+			.withId("LinearMode")
+			.withDescription("Toggles between linear and exponential envelope curves")
+			.asToggle()
+			.withDefault(1.0f))
+		.withModulation(Mod(AttackChain)
+			.withId("AttackTimeModulation")
+			.withDescription("Modulates the attack time per voice")
+			.withMode(scriptnode::modulation::ParameterMode::ScaleOnly));
+}
+
 void SimpleEnvelope::restoreFromValueTree(const ValueTree &v)
 {
 	EnvelopeModulator::restoreFromValueTree(v);
@@ -67,16 +98,12 @@ ValueTree SimpleEnvelope::exportAsValueTree() const
 SimpleEnvelope::SimpleEnvelope(MainController *mc, const String &id, int voiceAmount, Modulation::Mode m):
 		EnvelopeModulator(mc, id, voiceAmount, m),
 		Modulation(m),
+		metadataInitialised(updateParameterSlots()),
 		attack(getDefaultValue(Attack)),
 		release(getDefaultValue(Release)),
 		release_delta(-1.0f),
 		linearMode(getDefaultValue(LinearMode) == 1.0f ? true : false)
 {
-	parameterNames.add("Attack");
-	parameterNames.add("Release");
-	parameterNames.add("LinearMode");
-
-	updateParameterSlots();
 
 	editorStateIdentifiers.add("AttackChainShown");
 	//editorStateIdentifiers.add("ReleaseChainShown");
@@ -124,26 +151,7 @@ void SimpleEnvelope::setInternalAttribute(int parameterIndex, float newValue)
 	}
 }
 
-float SimpleEnvelope::getDefaultValue(int parameterIndex) const
-{
-	if (parameterIndex < EnvelopeModulator::Parameters::numParameters)
-	{
-		return EnvelopeModulator::getDefaultValue(parameterIndex);
-	}
 
-	switch (parameterIndex)
-	{
-	case Attack:
-		return 5.0f;
-	case Release:
-		return 10.0f;
-	case LinearMode:
-		return 1.0f;
-	default:
-		jassertfalse;
-		return -1;
-	}
-}
 
 float SimpleEnvelope::getAttribute(int parameterIndex) const
 {
