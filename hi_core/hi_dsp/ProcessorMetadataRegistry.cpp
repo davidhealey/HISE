@@ -99,29 +99,29 @@ var ProcessorMetadataRegistry::toJSON() const
 
 void ProcessorMetadataRegistry::registerAllMetadata()
 {
-	// --- VoiceStartModulators (fallback) ---
+	// --- VoiceStartModulators ---
 
-	add(ProcessorMetadata::createFallback<ConstantModulator>());
-	add(ProcessorMetadata::createFallback<VelocityModulator>());
-	add(ProcessorMetadata::createFallback<KeyModulator>());
-	add(ProcessorMetadata::createFallback<RandomModulator>());
-	add(ProcessorMetadata::createFallback<GlobalVoiceStartModulator>());
-	add(ProcessorMetadata::createFallback<GlobalStaticTimeVariantModulator>());
-	add(ProcessorMetadata::createFallback<ArrayModulator>());
+	add(ConstantModulator::createMetadata());
+	add(VelocityModulator::createMetadata());
+	add(KeyModulator::createMetadata());
+	add(RandomModulator::createMetadata());
+	add(GlobalVoiceStartModulator::createMetadata());
+	add(GlobalStaticTimeVariantModulator::createMetadata());
+	add(ArrayModulator::createMetadata());
 	add(ProcessorMetadata::createFallback<JavascriptVoiceStartModulator>());
-	add(ProcessorMetadata::createFallback<EventDataModulator>());
+	add(EventDataModulator::createMetadata());
 
-	// --- TimeVariantModulators (fallback, except LfoModulator above) ---
+	// --- TimeVariantModulators ---
 
 	add(ProcessorMetadata::createFallback<ControlModulator>());
 	add(LfoModulator::createMetadata());
 	add(ProcessorMetadata::createFallback<PitchwheelModulator>());
 	add(ProcessorMetadata::createFallback<MacroModulator>());
-	add(ProcessorMetadata::createFallback<GlobalTimeVariantModulator>());
+	add(GlobalTimeVariantModulator::createMetadata());
 	add(ProcessorMetadata::createFallback<JavascriptTimeVariantModulator>());
 	add(ProcessorMetadata::createFallback<HardcodedTimeVariantModulator>());
 
-	// --- EnvelopeModulators (fallback) ---
+	// --- EnvelopeModulators ---
 
 	add(SimpleEnvelope::createMetadata());
 	add(ProcessorMetadata::createFallback<AhdsrEnvelope>());
@@ -129,8 +129,8 @@ void ProcessorMetadataRegistry::registerAllMetadata()
 	add(ProcessorMetadata::createFallback<JavascriptEnvelopeModulator>());
 	add(ProcessorMetadata::createFallback<MPEModulator>());
 	add(ProcessorMetadata::createFallback<ScriptnodeVoiceKiller>());
-	add(ProcessorMetadata::createFallback<GlobalEnvelopeModulator>());
-	add(ProcessorMetadata::createFallback<EventDataEnvelope>());
+	add(GlobalEnvelopeModulator::createMetadata());
+	add(EventDataEnvelope::createMetadata());
 	add(ProcessorMetadata::createFallback<HardcodedEnvelopeModulator>());
 	add(ProcessorMetadata::createFallback<MatrixModulator>());
 	add(ProcessorMetadata::createFallback<FlexAhdsrEnvelope>());

@@ -148,7 +148,9 @@ class GlobalVoiceStartModulator : public VoiceStartModulator,
 {
 public:
 
-	SET_PROCESSOR_NAME("GlobalVoiceStartModulator", "Global Voice Start Modulator", "A modulator that connects to a global VoiceStartModulator (eg. Velocity).");
+	SET_PROCESSOR_NAME("GlobalVoiceStartModulator", "Global Voice Start Modulator", "")
+
+	static ProcessorMetadata createMetadata();
 
 	GlobalModulator::ModulatorType getModulatorType() const override { return GlobalModulator::VoiceStart; };
 
@@ -187,7 +189,9 @@ class GlobalStaticTimeVariantModulator : public VoiceStartModulator,
 {
 public:
 
-	SET_PROCESSOR_NAME("GlobalStaticTimeVariantModulator", "Global Static Time Variant Modulator", "A voice start modulator that connects to a global TimeVariantModulator (eg. LFO).");
+	SET_PROCESSOR_NAME("GlobalStaticTimeVariantModulator", "Global Static Time Variant Modulator", "")
+
+	static ProcessorMetadata createMetadata();
 
 	GlobalModulator::ModulatorType getModulatorType() const override { return GlobalModulator::StaticTimeVariant; };
 
@@ -223,7 +227,9 @@ class GlobalTimeVariantModulator : public TimeVariantModulator,
 {
 public:
 
-	SET_PROCESSOR_NAME("GlobalTimeVariantModulator", "Global Time Variant Modulator", "A modulator that connects to a global TimeVariantModulator (eg. LFO).");
+	SET_PROCESSOR_NAME("GlobalTimeVariantModulator", "Global Time Variant Modulator", "")
+
+	static ProcessorMetadata createMetadata();
 
 	GlobalModulator::ModulatorType getModulatorType() const override { return GlobalModulator::TimeVariant; };
 
@@ -273,7 +279,9 @@ class GlobalEnvelopeModulator : public EnvelopeModulator,
 {
 public:
 
-	SET_PROCESSOR_NAME("GlobalEnvelopeModulator", "Global Envelope Modulator", "A modulator that connects to a global EnvelopeModulator (eg. AHDSR).");
+	SET_PROCESSOR_NAME("GlobalEnvelopeModulator", "Global Envelope Modulator", "")
+
+	static ProcessorMetadata createMetadata();
 
 	GlobalModulator::ModulatorType getModulatorType() const override { return GlobalModulator::Envelope; };
 
