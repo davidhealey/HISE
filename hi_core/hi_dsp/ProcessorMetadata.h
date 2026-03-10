@@ -350,17 +350,36 @@ struct ProcessorMetadata
 	{
 		auto copy = *this;
 
+		if constexpr (std::is_same<ModulatorSampler, T>())
+			copy.interfaceClasses.add("Sampler");
+		if constexpr (std::is_same<MidiPlayer, T>())
+			copy.interfaceClasses.add("MidiPlayer");
+		if constexpr (std::is_same<WavetableSynth, T>())
+			copy.interfaceClasses.add("WavetableController");
+		if constexpr (std::is_base_of<HotswappableProcessor, T>())
+			copy.interfaceClasses.add("SlotFX");
 		if constexpr (std::is_base_of<RoutableProcessor, T>())
-			copy.interfaceClasses.add("RoutableProcessor");
-		if constexpr (std::is_base_of<AudioSampleProcessor, T>())
-			copy.interfaceClasses.add("AudioSampleProcessor");
-		if constexpr (std::is_base_of<LookupTableProcessor, T>())
-			copy.interfaceClasses.add("LookupTableProcessor");
-		if constexpr (std::is_base_of<SliderPackProcessor, T>())
+			copy.interfaceClasses.add("RoutingMatrix");
+		
+		return copy;
+	}
+
+	ProcessorMetadata withComplexDataInterface(ExternalData::DataType dt) const
+	{
+		auto copy = *this;
+
+		if (dt == ExternalData::DataType::Table)
+			copy.interfaceClasses.add("TableProcessor");
+		if (dt == ExternalData::DataType::SliderPack)
 			copy.interfaceClasses.add("SliderPackProcessor");
+		if (dt == ExternalData::DataType::AudioFile)
+			copy.interfaceClasses.add("AudioSampleProcessor");
+		if (dt == ExternalData::DataType::DisplayBuffer)
+			copy.interfaceClasses.add("DisplayBufferSource");
 
 		return copy;
 	}
+
 
 	/** Creates a minimal fallback metadata from SET_PROCESSOR_NAME statics.
 	*	Used for unmigrated processors in the registry.
