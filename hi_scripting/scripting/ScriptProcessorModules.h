@@ -391,7 +391,7 @@ public:
 
 	SET_PROCESSOR_NAME("ScriptnodeVoiceKiller", "Scriptnode Voice Killer", "")
 
-		ScriptnodeVoiceKiller(MainController* mc, const String& id, int numVoices);;
+	ScriptnodeVoiceKiller(MainController* mc, const String& id, int numVoices);;
 
 	static void initialiseNetworks(ScriptnodeVoiceKiller& v);
 
