@@ -427,6 +427,15 @@ struct ProcessorMetadata
 	/** Checks if the metadata is defined properly. */
 	bool isValidAndNoFallback() const { return dataType > DataType::Fallback; }
 
+	String getBuilderPath() const
+	{
+		String b;
+		b << "b.";
+		b << type.toString() << "s.";
+		b << id.toString();
+		return b;
+	}
+
 	ParameterMetadata operator[](int index) const
 	{
 		if(isPositiveAndBelow(index, parameters.size()))

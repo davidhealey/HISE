@@ -57,8 +57,13 @@ var ProcessorMetadata::ParameterMetadata::toJSON() const
 
 	var o(obj.get());
 
-	scriptnode::RangeHelpers::storeDoubleRange(o, range, scriptnode::RangeHelpers::IdSet::ScriptComponents);
+	var r(new DynamicObject());
 
+	scriptnode::RangeHelpers::storeDoubleRange(r, range, scriptnode::RangeHelpers::IdSet::ScriptComponents);
+	r.getDynamicObject()->removeProperty(scriptnode::PropertyIds::Inverted);
+
+	obj->setProperty("range", r);
+	
 	obj->setProperty("defaultValue", defaultValue);
 
 	// Value names (for List type, stored in vtc.itemList)
@@ -80,6 +85,28 @@ var ProcessorMetadata::ParameterMetadata::toJSON() const
 
 		if (isPositiveAndBelow(sliderMode, (int)HiSlider::numModes))
 			obj->setProperty("mode", modeNames[sliderMode]);
+
+		switch (sliderMode)
+		{
+		case HiSlider::Frequency:
+			obj->setProperty("unit", "Hz");
+			break;
+		case HiSlider::Decibel:
+			obj->setProperty("unit", "dB");
+			break;
+		case HiSlider::Time:
+			obj->setProperty("unit", "ms");
+			break;
+		case HiSlider::NormalizedPercentage:
+			obj->setProperty("unit", "%");
+		case HiSlider::TempoSync:
+		case HiSlider::Linear:
+		case HiSlider::Discrete:
+		case HiSlider::Pan:
+		case HiSlider::numModes:
+		default:
+			break;
+		}
 	}
 
 	// Tempo sync dual-mode info (range/names are constant, derived from TempoSyncer)
@@ -106,19 +133,19 @@ var ProcessorMetadata::ModulationMetadata::toJSON() const
 	switch (modulationMode)
 	{
 	case scriptnode::modulation::ParameterMode::AddOnly:
-		obj->setProperty("modulationMode", "Offset");
+		obj->setProperty("modulationMode", "offset");
 		break;
 	case scriptnode::modulation::ParameterMode::ScaleAdd:
-		obj->setProperty("modulationMode", "Combined");
+		obj->setProperty("modulationMode", "combined");
 		break;
 	case scriptnode::modulation::ParameterMode::ScaleOnly:
-		obj->setProperty("modulationMode", "Gain");
+		obj->setProperty("modulationMode", "gain");
 		break;
 	case scriptnode::modulation::ParameterMode::Pan:
-		obj->setProperty("modulationMode", "Offset");
+		obj->setProperty("modulationMode", "pan");
 		break;
 	case scriptnode::modulation::ParameterMode::Pitch:
-		obj->setProperty("modulationMode", "Pitch");
+		obj->setProperty("modulationMode", "pitch");
 		break;
 	case scriptnode::modulation::ParameterMode::Disabled:
 	case scriptnode::modulation::ParameterMode::numModulationModes:
@@ -145,6 +172,7 @@ var ProcessorMetadata::toJSON() const
 	obj->setProperty("description", description);
 	obj->setProperty("type", type.toString());
 	obj->setProperty("subtype", subtype.toString());
+	obj->setProperty("builderPath", getBuilderPath());
 
 	switch (dataType)
 	{
