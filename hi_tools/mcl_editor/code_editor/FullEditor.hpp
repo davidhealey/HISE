@@ -52,6 +52,7 @@ namespace TextEditorShortcuts
 	DECLARE_ID(beautify);
     DECLARE_ID(goto_undo);
     DECLARE_ID(goto_redo);
+	DECLARE_ID(shadow_parse);
 }
 
 #undef DECLARE_ID

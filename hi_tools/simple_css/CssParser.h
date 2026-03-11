@@ -339,6 +339,16 @@ public:
 		return false;
 	}
 
+	static bool isPixelValueProperty(const String& propertyName)
+	{
+		auto propType = simple_css::Parser::getPropertyType(propertyName);
+		bool isPixelResolvable = (propType == simple_css::PropertyType::Layout ||
+			propType == simple_css::PropertyType::Positioning ||
+			propType == simple_css::PropertyType::BorderRadius);
+
+		return isPixelResolvable;
+	}
+
 private:
 
 	String getLocation(String::CharPointerType p=String::CharPointerType(nullptr)) const;

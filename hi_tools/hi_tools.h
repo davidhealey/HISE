@@ -95,6 +95,16 @@ END_JUCE_MODULE_DECLARATION
 #define HISE_INCLUDE_PITCH_DETECTION 1
 #endif
 
+/** Config: HISE_INCLUDE_XSIMD
+
+Includes the XSIMD header library in the hi_tools header. Use this only if you use the XSIMD library
+in your code, otherwise this helps bring down the compile / link time of HISE / projects.
+
+*/
+#ifndef HISE_INCLUDE_XSIMD
+#define HISE_INCLUDE_XSIMD 0
+#endif
+
 
 /** Config: HISE_INCLUDE_RT_NEURAL
  
@@ -336,7 +346,10 @@ using ComponentWithMiddleMouseDrag = juce::Component;
 #include "hi_standalone_components/eq_plot/FilterInfo.h"
 #include "hi_standalone_components/eq_plot/FilterGraph.h"
 
+
+#if !HISE_INCLUDE_XSIMD
 #include "hi_neural/RTNeural/modules/xsimd/xsimd.hpp"
+#endif
 
 #if HISE_INCLUDE_RT_NEURAL
 #include "hi_neural/hi_neural.h"

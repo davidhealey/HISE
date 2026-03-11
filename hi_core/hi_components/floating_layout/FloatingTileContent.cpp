@@ -616,17 +616,22 @@ void ObjectWithDefaultProperties::resetObject(DynamicObject* objectToClear) cons
 
 void ObjectWithDefaultProperties::storePropertyInObject(var obj, int id, var value, var defaultValue) const
 {
-	jassert(obj.isObject());
+	auto object = obj.getDynamicObject();
+
+	jassert(object != nullptr);
+
+	if(object == nullptr)
+		return;
 
 	auto key = getDefaultablePropertyId(id);
 
 	if(value.isUndefined() || value.isVoid())
 	{
-		obj.getDynamicObject()->setProperty(key, getDefaultProperty(id));
+		object->setProperty(key, getDefaultProperty(id));
 	}
 	else if ((defaultValue.isUndefined() || defaultValue.isVoid()) || value != defaultValue)
 	{
-		obj.getDynamicObject()->setProperty(key, value);
+		object->setProperty(key, value);
 	}
 }
 

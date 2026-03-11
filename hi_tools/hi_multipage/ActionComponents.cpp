@@ -679,7 +679,7 @@ Result FileAction::onAction()
 
 		switch(ft)
 		{
-		case CheckIfExists:
+		case CheckIfExists2:
 		{
 			File f(source);
 
@@ -690,7 +690,7 @@ Result FileAction::onAction()
 			
 			break;
 		}
-		case DeleteFile:
+		case ASDDeleteFile222:
 		{
 			File f(target);
 
@@ -704,7 +704,7 @@ Result FileAction::onAction()
 
 			break;
 		}
-		case CopyFile:
+		case CopyFile2:
 		{
 			File sf(source);
 			File tf(target);
@@ -716,7 +716,7 @@ Result FileAction::onAction()
 			}
 			break;
 		}
-		case MoveFile:
+		case MoveFile2:
 		{
 			File sf(source);
 			File tf(target);
@@ -728,7 +728,7 @@ Result FileAction::onAction()
 			}
 			break;
 		};
-		case LoadAsString:
+		case LoadAsString2:
 		{
 			File sf(source);
 
@@ -741,7 +741,7 @@ Result FileAction::onAction()
 
 			break;
 		};
-		case LoadAsObject:
+		case LoadAsObject2:
 		{
 			File sf(source);
 
@@ -754,7 +754,7 @@ Result FileAction::onAction()
 
 			break;
 		};
-		case WriteString:
+		case WriteString2:
 		{
 			File tf(target);
 			
@@ -766,7 +766,7 @@ Result FileAction::onAction()
 
 			break;
 		};
-		case WriteObject:
+		case WriteObject2:
 		{
 			File tf(target);
 			

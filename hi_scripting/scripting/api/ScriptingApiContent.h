@@ -477,6 +477,11 @@ public:
 
 		virtual bool isShowing(bool checkParentComponentVisibility = true) const;
 
+		/** Returns true if the control callback is pending execution. 
+		    Used by REST API to wait for callbacks to complete before returning.
+		*/
+		bool isControlCallbackPending() const { return controlSender.isChangePending(); }
+
 		template <class ChildType> class ChildIterator
 		{
 		public:
@@ -540,9 +545,6 @@ public:
 
 		/** Returns the normalized value. */
 		virtual double getValueNormalized() const { return getValue(); };
-
-		/** sets the colour of the component (BG, IT1, IT2, TXT). */
-		void setColour(int colourId, int colourAs32bitHex);
 
         /** Returns the absolute x-position relative to the interface. */
         int getGlobalPositionX();
@@ -674,6 +676,7 @@ public:
 		Array<MouseListenerData> mouseListeners;
 
 		struct Wrapper;
+		struct Validators;
 
 		bool isConnectedToProcessor() const;;
 
@@ -859,6 +862,9 @@ public:
 			void sendControlCallbackMessage();
 
 			void cancelMessage();
+
+			/** Returns true if a callback is pending (posted but not yet executed). */
+			bool isChangePending() const { return changePending; }
 
 		private:
 
@@ -2988,6 +2994,9 @@ public:
 	/** Adds a dynamic container component. */
 	ScriptDynamicContainer* addDynamicContainer(Identifier containerId, int x, int y);
 
+	/** Whether to update the component position at addXXX() calls with existing components. */
+	void setUpdateExistingPosition(bool shouldUpdateExistingComponents);
+
 	/** Returns the reference to the given component. */
 	var getComponent(var name);
 	
@@ -3006,8 +3015,8 @@ public:
 	/** sets the data for the value popups. */
 	void setValuePopupData(var jsonData);
 
-	/** Creates a Path that can be drawn to a ScriptPanel. */
-	var createPath();
+	/** Creates a Path that can be drawn to a ScriptPanel. If data (base64 string or Array) is provided it will load it. */
+	var createPath(var data);
 
 	/** Creates an OpenGL framgent shader. */
 	var createShader(const String& fileName);
@@ -3017,9 +3026,6 @@ public:
     
 	/** Creates a MarkdownRenderer. */
 	var createMarkdownRenderer();
-
-	/** Sets the colour for the panel. */
-	void setColour(int red, int green, int blue) { colour = Colour((uint8)red, (uint8)green, (uint8)blue); };
 
 	/** Sets the height of the content. */
 	void setHeight(int newHeight) noexcept;
@@ -3354,7 +3360,115 @@ public:
 
 	ProfileCollection contentProfile;
 
+	class LafRegistry: public ReferenceCountedObject
+	{
+	public:
+	
+		using Ptr = ReferenceCountedObjectPtr<LafRegistry>;
+
+		LafRegistry() = default;
+
+		struct LafInfo: public ReferenceCountedObject 
+		{
+			using List = ReferenceCountedArray<LafInfo>;
+			using Ptr = ReferenceCountedObjectPtr<LafInfo>;
+
+			enum class RenderStyle 
+			{
+				Unassigned,    // not found / registered
+				Script,        // registerFunction() only
+				Css,           // External CSS file only
+				CssInline,     // setInlineStyleSheet() only
+				Mixed          // Script functions + CSS (inline or file)
+			};
+
+			LafInfo() = default;
+
+			bool isUsingScriptFunctions() const
+			{
+				return renderStyle == RenderStyle::Script || renderStyle == RenderStyle::Mixed;
+			}
+
+			operator bool() const { return renderStyle != RenderStyle::Unassigned; }
+
+		struct RegisteredComponent
+			{
+				bool operator==(const RegisteredComponent& other) const { return name == other.name; }
+
+				Identifier name;
+				Atomic<int> rendered = 0;
+				bool isShowing = true;  // Captured at registerLaf() time
+			};
+
+		Array<RegisteredComponent> assignedComponents;
+			String variableName;     // "LafNamespace.buttonLaf"
+			RenderStyle renderStyle = RenderStyle::Unassigned; // Script, Css, CssInline, Mixed
+			DebugableObjectBase::Location location;  // Raw location, encoded lazily by REST API
+			String cssLocation;      // CSS file full path - empty for inline/script style
+		};
+
+		// --- Called by REST API ---
+
+		// Returns true if any components have LAF assigned (any style)
+		bool hasRecipients() const;
+
+		// Returns true if any recipients use Script or Mixed style (need render wait)
+		bool hasScriptBasedRecipients() const;
+
+		// Returns true when all visible script-based recipients have rendered at least once
+		bool allRecipientsRendered() const;
+
+		// Info about an unrendered component
+		struct UnrenderedInfo
+		{
+			Identifier id;
+			bool isInvisible;
+		};
+
+		// Returns info about script-based components that haven't rendered yet
+		Array<UnrenderedInfo> getUnrenderedComponents() const;
+
+		// Returns LAF info for a component (any style), or nullopt if no LAF
+		LafInfo::Ptr getLafInfoForComponent(const Identifier& componentId) const;
+
+		// --- Called by HISE internals ---
+
+		// Called by debug info listener when LAF object is discovered
+		void registerLaf(DebugableObjectBase* laf, const String& variableName, const DebugableObjectBase::Location& location);
+
+		// Called by setLocalLookAndFeel()
+		void registerRecipient(DebugableObjectBase* laf, ScriptComponent* component);
+
+		// Called by callWithGraphics() on successful execution
+		bool markAsRendered(const Identifier& componentId);
+
+	private:
+
+		struct PendingComponent
+		{
+			WeakReference<ScriptComponent> component;
+			WeakReference<DebugableObjectBase> laf;
+		};
+
+		std::map<Identifier, PendingComponent> pendingRegisterComponents;
+
+		LafInfo::List list;
+
+		JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(LafRegistry);
+	};
+
+	LafRegistry::Ptr getLafRegistry() { return lafRegistry; }
+
+	void resetLafRegistry()
+	{
+#if USE_BACKEND
+		lafRegistry = new LafRegistry();
+#endif
+	}
+
 private:
+
+	LafRegistry::Ptr lafRegistry;
 
 	WeakCallbackHolder dragCallback;
 	WeakCallbackHolder suspendCallback;
@@ -3389,6 +3503,7 @@ private:
 	ReferenceCountedArray<ScriptPanel> popupPanels;
 
 	bool allowAsyncFunctions = false;
+	bool updateExistingPositions = true;
 
 	void sendRebuildMessage();
 
@@ -3409,7 +3524,7 @@ private:
 
 		if (auto sc = getComponentWithName(name))
 		{
-			if (x != -1 && y != -1)
+			if ((x != -1 && y != -1) && updateExistingPositions)
 			{
 				sc->handleScriptPropertyChange("x");
 				sc->handleScriptPropertyChange("y");

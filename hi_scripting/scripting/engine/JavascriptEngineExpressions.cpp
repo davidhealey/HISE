@@ -7,6 +7,8 @@ struct HiseJavascriptEngine::RootObject::LiteralValue : public Expression
 
 	bool isConstant() const override { return true; }
 
+	String getProfileName() const override { return value.toString(); }
+
 	Statement* getChildStatement(int) override { return nullptr; };
 
 	var value;
@@ -113,7 +115,7 @@ struct HiseJavascriptEngine::RootObject::ConstReference : public Expression
 
 	void assign(const Scope& /*s*/, const var& /*newValue*/) const override
 	{
-		location.throwError("Can't assign to this expression!");
+		location.throwError("Cannot assign to a const variable.");
 	}
 
 	Identifier getVariableName() const override { return ns->constObjects.getName(index); }
@@ -230,6 +232,8 @@ struct HiseJavascriptEngine::RootObject::ArraySubscript : public Expression
 		Expression::assign(s, newValue);
 	}
 
+	String getProfileName() const override { return object->getProfileName() + "[" + index->getProfileName() + "]"; }
+
 	Statement* getChildStatement(int idx) override 
 	{
 		if (idx == 0) return object.get();
@@ -299,7 +303,7 @@ struct HiseJavascriptEngine::RootObject::DotOperator : public Expression
             if(auto member = (*lb)[child])
                 return (var)*member;
             else
-                location.throwError("can't find property " + child.toString());
+                location.throwError("Cannot find property '" + child.toString() + "' on this object.");
         }
 
 		if (auto ad = dynamic_cast<AssignableDotObject*>(p.getObject()))
@@ -329,7 +333,7 @@ struct HiseJavascriptEngine::RootObject::DotOperator : public Expression
             if(auto member = (*lb)[child])
                 *member = newValue;
             else
-                location.throwError("Can't find property " + child.toString());
+                location.throwError("Cannot find property '" + child.toString() + "' on this object.");
         }
 		else if (auto aObj = dynamic_cast<AssignableDotObject*>(v.getObject()))
 		{
@@ -342,7 +346,7 @@ struct HiseJavascriptEngine::RootObject::DotOperator : public Expression
 #endif
             
 			if (!aObj->assign(child, newValue))
-				location.throwError("Cannot assign to " + child + " property");
+				location.throwError("Cannot assign to property '" + child + "'. It may be read-only.");
 		}
         else
 			Expression::assign(s, newValue);
@@ -499,7 +503,7 @@ struct HiseJavascriptEngine::RootObject::NewOperator : public FunctionCall
 
 	var getResult(const Scope& s) const override
 	{
-		location.throwError("the new operator is not supported anymore");
+		location.throwError("The 'new' operator is not supported in HiseScript.");
 
 		var classOrFunc = object->getResult(s);
 
@@ -532,6 +536,17 @@ struct HiseJavascriptEngine::RootObject::ObjectDeclaration : public Expression
 			newObject->setProperty(names.getUnchecked(i), initialisers.getUnchecked(i)->getResult(s));
 
 		return newObject.get();
+	}
+
+	bool isConstant() const override
+	{
+		for (auto& s : initialisers)
+		{
+			if (!s->isConstant())
+				return false;
+		}
+
+		return true;
 	}
 
 	Statement* getChildStatement(int index) override
@@ -595,6 +610,8 @@ struct HiseJavascriptEngine::RootObject::FunctionObject : public DynamicObject,
 	FunctionObject(const FunctionObject& other);
 
 	DynamicObject::Ptr clone() const override    { return new FunctionObject(*this); }
+
+	int getNumArguments() const override { return parameters.size(); }
 
 	void writeAsJSON(OutputStream& out, int /*indentLevel*/, bool /*allOnOneLine*/, int /*maximumDecimalPlaces*/) override
 	{

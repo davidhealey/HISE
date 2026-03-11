@@ -81,7 +81,16 @@ public:
 
     void restoreFromValueTree(const ValueTree &v) override;
 
+	
+
 protected:
+
+	/** Call this in the constructor of your subclass to update the parameter slots. */
+	void callOnInitAndInitialiseParameters()
+	{
+		onInit();
+		flushContentParameters();
+	}
 
 	void flushContentParameters()
 	{
@@ -363,7 +372,6 @@ public:
 		}
 
 		Content.setHeight(100);
-		Content.setColour(140, 120, 200);
 		Content.setName("Release Trigger");
 
 		enableButton = Content.addButton("TimeAttenuate", 0, 0);

@@ -130,7 +130,7 @@ public:
 
 	Result getResult() const;
 
-	bool reloadIfChanged()
+	bool reloadIfChanged(bool force=false)
 	{
 #if USE_BACKEND
 		if(resourceType == ResourceType::EmbeddedInSnippet)
@@ -138,7 +138,7 @@ public:
 
 		auto thisLast = getFile().getLastModificationTime();
 
-		if(thisLast > lastEditTime)
+		if(thisLast > lastEditTime || force)
 		{
 			getFileDocument().replaceAllContent(getFile().loadFileAsString());
             getFileDocument().setSavePoint();
@@ -251,6 +251,17 @@ public:
 
 	void clearIncludedFiles();
 	void removeIncludedFile(int index);
+
+	void refreshExternalFiles(bool force)
+	{
+		for (int i = 0; i < getNumExternalScriptFiles(); i++)
+		{
+			if (auto ef = getExternalScriptFile(i))
+			{
+				ef->reloadIfChanged(force);
+			}
+		}
+	}
 
 	void restoreIncludedScriptFilesFromSnippet(const ValueTree& snippetTree);
 

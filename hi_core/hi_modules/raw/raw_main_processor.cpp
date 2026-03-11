@@ -148,8 +148,7 @@ MainProcessor::ParameterBase::ParameterBase(MainProcessor* p, const Identifier& 
 	loadFunction = [this](float newValue)
 	{
 		this->update(newValue);
-		jassertfalse;
-		this->p->sendOtherChangeMessage(dispatch::library::ProcessorChangeEvent::Attribute);
+		this->p->sendOtherChangeMessage(dispatch::library::ProcessorChangeEvent::Any);
 	};
 }
 

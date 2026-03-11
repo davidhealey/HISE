@@ -2334,7 +2334,7 @@ void ComplexGroupManager::clearSampleId(SampleType* s, const Array<Identifier>& 
 {
 	Bitmask m = s->getBitmask();
 
-	for(const auto l_: layerIds)
+	for(const auto& l_: layerIds)
 	{
 		auto idx = getLayerIndex(l_);
 

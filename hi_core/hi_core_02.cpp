@@ -1,4 +1,4 @@
-
+#if 0
 #if JUCE_MAC && USE_VDSP_FFT
 // This deactivates some duplicate classes in the Apple API
 #define Point DummyPoint
@@ -22,4 +22,6 @@
 
 #include "hi_dsp/hi_dsp.cpp"
 #include "hi_components/hi_components.cpp"
-
+#include "hi_sampler/hi_sampler.cpp"
+#include "hi_modules/hi_modules_01.cpp"
+#endif

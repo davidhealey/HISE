@@ -329,7 +329,10 @@ var FloatingTile::LayoutData::toDynamicObject() const
 
 void FloatingTile::LayoutData::fromDynamicObject(const var& objectData)
 {
-	layoutDataObject = objectData.getDynamicObject();
+	if(auto obj = objectData.getDynamicObject())
+		layoutDataObject = obj;
+	else
+		reset();
 }
 
 int FloatingTile::LayoutData::getNumDefaultableProperties() const

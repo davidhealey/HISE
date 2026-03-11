@@ -2233,7 +2233,7 @@ void mcl::TextEditor::mouseDown (const MouseEvent& e)
     {
         return;
     }
-    else if (e.mods.isRightButtonDown() || e.mods.isMiddleButtonDown() && !readOnly)
+    else if ((e.mods.isRightButtonDown() || e.mods.isMiddleButtonDown()) && !readOnly)
     {
 		PopupLookAndFeel pplaf;
 		PopupMenu menu;

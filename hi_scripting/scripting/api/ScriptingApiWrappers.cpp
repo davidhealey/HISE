@@ -75,6 +75,7 @@ struct ScriptingApi::Content::Wrapper
 	static var addDynamicContainer(const var::NativeFunctionArgs& args);
 	static var getComponent(const var::NativeFunctionArgs& args);
 	static var getAllComponents(const var::NativeFunctionArgs& args);
+	static var setUpdateExistingPosition(const var::NativeFunctionArgs& args);
 	static var set(const var::NativeFunctionArgs& args);
 	static var get(const var::NativeFunctionArgs& args);
 	static var addToMacroControl(const var::NativeFunctionArgs& args);
@@ -682,19 +683,6 @@ var ScriptingApi::Content::Wrapper::setValuePopupData(const var::NativeFunctionA
 }
 
 
-var ScriptingApi::Content::Wrapper::setColour (const var::NativeFunctionArgs& args)
-{
-	if (ScriptingApi::Content::ScriptComponent* thisObject = GET_OBJECT(Content::ScriptComponent))
-	{
-		CHECK_ARGUMENTS("setColour()", 2);
-
-		thisObject->setColour((int)args.arguments[0], (int)args.arguments[1]);
-	}
-
-	return var();
-};
-
-
 
 // =================================================================================================== Content Component Wrappers
 
@@ -1043,9 +1031,12 @@ var ScriptingApi::Content::Wrapper::createPath(const var::NativeFunctionArgs& ar
 {
 	if (ScriptingApi::Content* thisObject = GET_OBJECT(Content))
 	{
-		CHECK_ARGUMENTS("createPath()", 0);
+		var data;
 
-		return thisObject->createPath();
+		if (args.numArguments > 0)
+			data = args.arguments[0];
+
+		return thisObject->createPath(data);
 	}
 
 	return var();
@@ -1194,6 +1185,15 @@ juce::var ScriptingApi::Content::Wrapper::getComponentUnderDrag(const var::Nativ
 	return var();
 }
 
+var ScriptingApi::Content::Wrapper::setUpdateExistingPosition(const var::NativeFunctionArgs& args)
+{
+	if (auto thisObject = GET_OBJECT(Content))
+	{
+		thisObject->setUpdateExistingPosition(args.arguments[0]);
+	}
+
+	return var();
+}
 
 #undef GET_OBJECT
 #undef CHECK_ARGUMENTS

@@ -350,6 +350,7 @@ private:
 
 	WaveformComponent::WaveformType waveForm1, waveForm2;
 
+	JUCE_DECLARE_WEAK_REFERENCEABLE(WaveSynth);
 };
 
 } // namespace hise

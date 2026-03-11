@@ -288,7 +288,7 @@ public:
     }
     
     bool isInitialising() const { return initialising; };
-    
+
 	static bool isJavascriptFunction(const var& v);
     
 	static bool isInlineFunction(const var& v);
@@ -537,6 +537,27 @@ public:
 			CodeLocation location;
 		};
 
+#if USE_BACKEND
+		using RealtimeSafetyInfo = WeakCallbackHolder::RealtimeSafetyInfo;
+
+		/** Concrete RealtimeSafetyInfo item that carries a structured call stack.
+		    Defined here (not in ScriptingBaseObjects.h) because it depends on CallStackEntry. */
+		struct RealtimeSafetyWarning : public RealtimeSafetyInfo::ItemBase
+		{
+			Array<CallStackEntry> callStack;
+
+			Ptr clone() const override
+			{
+				auto copy = new RealtimeSafetyWarning();
+				cloneBaseMembers(copy);
+				copy->callStack = callStack;
+				return copy;
+			}
+
+			String toCallStackString(Processor* p = nullptr) const override;
+		};
+#endif
+
 		struct Scope;
 
         HiseJavascriptPreprocessor::Ptr preprocessor;
@@ -611,9 +632,43 @@ public:
 			*/
 			virtual Statement* getOptimizedStatement(Statement* parentStatement, Statement* statementToOptimize) = 0;
 
-			static bool callForEach(Statement* root, const std::function<bool(Statement* child)>& f);
+			
+
+			/** Called before (isBefore=true) and after (isBefore=false) iterating
+				a node's child statements during executePass. */
+			virtual void handleChildIteration(Statement*, bool isBefore) {}
+
+			static bool callForEach(Statement* root, const std::function<bool(Statement* child)>& f, OptimizationPass* p=nullptr);
+
+			
 
 			OptimizationResult executePass(Statement* rootStatementToOptimize);
+
+		private:
+
+			struct ScopedChildIterationHandler
+			{
+				ScopedChildIterationHandler(OptimizationPass* p, Statement* s) :
+					pass(p),
+					st(s)
+				{
+					if (pass != nullptr)
+						pass->handleChildIteration(st, true);
+				}
+
+				~ScopedChildIterationHandler()
+				{
+					if (pass != nullptr)
+						pass->handleChildIteration(st, false);
+				}
+
+			private:
+
+				OptimizationPass* pass;
+				Statement* st;
+
+				JUCE_DECLARE_NON_COPYABLE(ScopedChildIterationHandler);
+			};
 		};
 
 		struct ScriptAudioThreadGuard;
@@ -625,6 +680,11 @@ public:
 			static Error fromPreprocessorResult(const Result& r, const String& externalFile);
             
 			static Error fromLocation(const CodeLocation& location, const String& errorMessage);
+
+			/** Creates an encoded location string from components.
+			    Format: "{{Base64(processorId|path|charIndex|line|col)}}" */
+			static String createEncodedLocation(Processor* p, const String& externalLocation,
+			                                     int charIndex, int lineNumber, int columnNumber);
 
 			String getLocationString() const;
 
@@ -660,6 +720,7 @@ public:
 		struct AdditionOp;				struct SubtractionOp;
 		struct MultiplyOp;				struct DivideOp;			struct ModuloOp;
 		struct BitwiseAndOp;			struct BitwiseOrOp;			struct BitwiseXorOp;
+		struct BitwiseNotOp;
 		struct LeftShiftOp;				struct RightShiftOp;		struct RightShiftUnsignedOp;
 
 		// Branching
@@ -675,7 +736,7 @@ public:
 		struct ScopedPrinter;			struct ScopedBefore;		struct ScopedAfter;
 		struct ScopedDumper;			struct ScopedNoop;			struct ScopedCounter;
 		struct ScopedProfiler;			struct ScopedSuspender;		struct ScopedBypasser;
-        struct ScopedSampling;          struct ScopedCall;
+        struct ScopedSampling;          struct ScopedCall;			struct ScopedSuppress;
 		
 
 		// Variables
@@ -694,6 +755,9 @@ public:
 		struct RegisterVarStatement;	struct RegisterName;		struct RegisterAssignment;
 		struct ApiConstant;				struct ApiCall;				struct InlineFunction;
 		struct ConstVarStatement;		struct ConstReference;		struct ConstObjectApiCall;
+#if USE_BACKEND
+		struct DiagnosticPlaceholder;
+#endif
 		struct GlobalVarStatement;		struct GlobalReference;		struct LocalVarStatement;
 		struct LocalReference;			struct CallbackParameterReference;
 		struct CallbackLocalStatement;  struct CallbackLocalReference;  struct IsDefinedTest;		
@@ -739,6 +803,9 @@ public:
 		class Callback:  public DynamicObject,
 					     public DebugableObject,
                          public LocalScopeCreator
+#if USE_BACKEND
+						 , public RealtimeSafetyInfo::Holder
+#endif
 		{
 		public:
 
@@ -779,6 +846,13 @@ public:
 			void doubleClickCallback(const MouseEvent &/*e*/, Component* /*componentToNotify*/) override;
 
 			void cleanLocalProperties();
+
+#if USE_BACKEND
+			RealtimeSafetyInfo realtimeSafetyInfoData;
+			RealtimeSafetyInfo* getRealtimeSafetyInfo() override { return &realtimeSafetyInfoData; }
+			Identifier getCallScopeId() const override { return getName(); }
+			Identifier getCallScopeType() const override { RETURN_STATIC_IDENTIFIER("Callback"); }
+#endif
 
 			Identifier parameters[4];
 			var parameterValues[4];
@@ -847,7 +921,6 @@ public:
 			int getNumDebugObjects() const
 			{
 				return 0;
-				
 			}
 
 			bool updateCyclicReferenceList(ThreadData& data, const Identifier& id) override;
@@ -947,6 +1020,12 @@ public:
 
 			OwnedArray<ExternalFileData> includedFiles;
 
+#if USE_BACKEND
+			/** When true, the parser uses soft-fail recovery at semantic error sites
+			    instead of throwError(). Set by ScopedDiagnosticParse. */
+			bool diagnosticMode = false;
+#endif
+
 			/** Call this after compiling and a dictionary of all values will be created. */
 			void createDebugInformation(DynamicObject *root);
 
@@ -991,6 +1070,56 @@ public:
 
 			JUCE_DECLARE_WEAK_REFERENCEABLE(HiseSpecialData);
 		};
+
+#if USE_BACKEND
+
+
+		using ApiDiagnostic = ApiClass::DiagnosticResult::Item;
+
+		/** RAII snapshot/restore for shadow-parsing a single external .js file
+		    against live HiseSpecialData without corrupting runtime state.
+		    
+		    The constructor snapshots all mutable fields that the parser writes during
+		    parseStatementList(). The destructor restores them. While active, the
+		    diagnosticMode flag is set on HiseSpecialData, which causes the parser to
+		    use soft-fail recovery at semantic error sites instead of throwError().
+		    
+		    Threading: must run inside killVoicesAndCall on the scripting thread. */
+		struct ScopedDiagnosticParse
+		{
+			ScopedDiagnosticParse(HiseSpecialData& data);
+			~ScopedDiagnosticParse();
+
+			bool isDiagnosticMode() const { return true; }
+
+			struct InlineFunctionSnapshot
+			{
+				DynamicObject* obj;                     // actually InlineFunction::Object*, cast at restore
+				ScopedPointer<BlockStatement> savedBody;
+				NamedValueSet savedLocalProperties;
+			};
+
+			struct NamespaceSnapshot
+			{
+				JavascriptNamespace* ns;
+				NamedValueSet savedConstObjects;
+				Array<DebugableObject::Location> savedConstLocations;
+				Array<InlineFunctionSnapshot> inlineFnSnapshots;
+			};
+
+			Array<NamespaceSnapshot> nsSnapshots;
+			NamedValueSet savedGlobalProperties;
+			int savedIncludedFilesSize;
+
+		private:
+
+			HiseSpecialData& hsd;
+			void snapshotNamespace(JavascriptNamespace* ns);
+			void restoreNamespace(NamespaceSnapshot& snap);
+
+			JUCE_DECLARE_NON_COPYABLE(ScopedDiagnosticParse);
+		};
+#endif
 
 		void setUseCycleReferenceCheckForNextCompilation()
 		{
@@ -1044,8 +1173,18 @@ public:
 
 	static void checkValidParameter(int index, const var& valueToTest, const RootObject::CodeLocation& location, VarTypeChecker::VarTypes expectedType);
 
+	
+
     LambdaBroadcaster<bool> preCompileListeners;
 	std::vector<std::pair<WeakReference<DebugableObjectBase>, std::function<void(DebugInformationBase::Ptr)>>> debugInfoListeners;
+
+#if USE_BACKEND
+	static String toConsoleString(const ApiClass::DiagnosticResult::Item& i, Processor* p);
+
+	/** Shadow-parse code in diagnostic mode without executing.
+	    Returns collected diagnostics (API errors, arg mismatches, etc.). */
+	Array<RootObject::ApiDiagnostic> shadowParse(const String& code, const String& fileName);
+#endif
 
 private:
 

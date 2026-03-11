@@ -986,5 +986,73 @@ bool DynamicScriptingObject::checkValidObject() const
 void DynamicScriptingObject::setName(const String& name_) noexcept
 { name = name_; }
 
+#if USE_BACKEND
+juce::String WeakCallbackHolder::RealtimeSafetyInfo::toString(StrictnessLevel l, Processor* p) const
+{
+	if (l <= StrictnessLevel::Unsafe || items.isEmpty())
+		return {};
+
+	const String nl = "\n";
+	String s;
+
+	for (auto w : items)
+	{
+		String scopeLabel;
+
+		switch (w->scope)
+		{
+		case CallScope::Unsafe:  scopeLabel = "unsafe"; break;
+		case CallScope::Init:    scopeLabel = "init-only"; break;
+		case CallScope::Warning: scopeLabel = "warning"; break;
+		default: scopeLabel = "unknown"; break;
+		}
+
+		s << "[CallScope] " << w->apiCall << " (" << scopeLabel;
+
+		if (w->note.isNotEmpty())
+			s << ": " << w->note;
+
+		s << ")" << nl;
+		s << w->toCallStackString(p);
+	}
+
+	return s;
+}
+
+bool WeakCallbackHolder::RealtimeSafetyInfo::check(WeakCallbackHolder::CallableObject* callable, ScriptingObject* caller, const String& context)
+{
+	if (callable == nullptr)
+		return true;
+
+	if (!callable->isRealtimeSafe())
+		return true;
+
+	auto strictness = dynamic_cast<JavascriptProcessor*>(caller->getScriptProcessor())
+		->getStrictnessLevel();
+
+	if (strictness <= StrictnessLevel::Unsafe)
+		return false;
+
+	auto report = callable->getRealtimeSafetyReport(strictness);
+
+	// Always log if there's a message (both Warn and Error mode)
+	if (report.message.isNotEmpty())
+	{
+		debugToConsole(dynamic_cast<Processor*>(caller->getScriptProcessor()),
+			"[" + context + "] " + report.message);
+	}
+
+	// Only block registration if Strict strictness AND worst scope is Unsafe or Init
+	if (strictness == StrictnessLevel::Strict)
+	{
+		if (report.worstScope == CallScope::Unsafe ||
+			report.worstScope == CallScope::Init)
+			return true;
+	}
+
+	return false;
+}
+#endif
+
 } // namespace hise
 

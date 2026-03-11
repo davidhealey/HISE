@@ -120,7 +120,6 @@ DECLARE_ID(CustomNodePath);
 DECLARE_ID(FaustPath);
 DECLARE_ID(FaustExternalEditor);
 DECLARE_ID(EnableLoris);
-DECLARE_ID(ExportSetup);
 DECLARE_ID(DefaultProjectFolder);
 
 Array<Identifier> getAllIds();
@@ -155,11 +154,14 @@ DECLARE_ID(GlobalScriptPath);
 DECLARE_ID(CompileTimeout);
 DECLARE_ID(CodeFontSize);
 DECLARE_ID(EnableOptimizations);
+DECLARE_ID(CallScopeWarnings);
 DECLARE_ID(EnableDebugMode);
 DECLARE_ID(WarnIfUndefinedParameters);
 DECLARE_ID(SaveConnectedFilesOnCompile);
 DECLARE_ID(RecompileOnFileChange);
 DECLARE_ID(EnableMousePositioning);
+DECLARE_ID(RestApiPort);
+DECLARE_ID(AutoStartRestServer);
 
 Array<Identifier> getAllIds();
 

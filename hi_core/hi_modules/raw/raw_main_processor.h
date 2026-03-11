@@ -228,6 +228,8 @@ public:
 	*/
 	void registerCallback(Processor* p, int parameterIndex, const Callback& f, ExecutionType executionType = Synchronously);
 
+	int getNumAttributes() const override { return parameters.size(); }
+
 	Identifier getIdentifierForParameterIndex(int parameterIndex) const override;
 
 	void setInternalAttribute(int parameterIndex, float newValue) override;

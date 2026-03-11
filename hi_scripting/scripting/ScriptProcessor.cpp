@@ -893,6 +893,24 @@ DebugSession* JavascriptProcessor::getDebugSession()
 HiseJavascriptEngine* JavascriptProcessor::getScriptEngine()
 { return scriptEngine; }
 
+#if USE_BACKEND
+WeakCallbackHolder::CallableObject::StrictnessLevel JavascriptProcessor::getStrictnessLevel() const
+{
+	using SL = WeakCallbackHolder::CallableObject::StrictnessLevel;
+
+	if (callScopeOverride != SL::Unset)
+		return callScopeOverride;
+
+	auto s = GET_HISE_SETTING(dynamic_cast<const Processor*>(this),
+	                          HiseSettings::Scripting::CallScopeWarnings).toString();
+
+	if (s == "Strict") return SL::Strict;
+	if (s == "Warn")   return SL::Warn;
+	if (s == "Unsafe") return SL::Unsafe;
+	return SL::Unset;
+}
+#endif
+
 void JavascriptProcessor::toggleBreakpoint(const Identifier& snippetId, int lineNumber, int charNumber)
 {
 	HiseJavascriptEngine::Breakpoint bp(snippetId, "", lineNumber, charNumber, charNumber, breakpoints.size());
@@ -1393,6 +1411,7 @@ JavascriptProcessor::SnippetResult JavascriptProcessor::compileInternal()
 	{
 		CompileDebugLock compileLock(*this);
 		scriptEngine->clearDebugInformation();
+		content->resetLafRegistry();
 	}
 
 	content->beginInitialization();
@@ -1582,6 +1601,44 @@ void JavascriptProcessor::compileScript(const ResultFunction& rf /*= ResultFunct
 	mainController->getKillStateHandler().killVoicesAndCall(dynamic_cast<Processor*>(this), f, MainController::KillStateHandler::TargetThread::ScriptingThread);
 }
 
+#if USE_BACKEND
+void JavascriptProcessor::shadowParseFile(const String& code, const String& fileName, const DiagnosticCallback& callback,
+										   NotificationType notificationType)
+{
+	if (notificationType == sendNotificationSync)
+	{
+		// HTTP-direct path: run on the calling thread with a read lock to
+		// block until any in-progress compilation finishes.
+		SimpleReadWriteLock::ScopedReadLock sl(
+			mainController->getJavascriptThreadPool().getLookAndFeelRenderLock());
+
+		auto diagnostics = scriptEngine->shadowParse(code, fileName);
+		callback(diagnostics);
+		return;
+	}
+
+	// Async path (IDE F7): defer to scripting thread, callback on message thread.
+	auto f = [code, fileName, callback](Processor* p)
+	{
+		auto jp = dynamic_cast<JavascriptProcessor*>(p);
+		auto diagnostics = jp->scriptEngine->shadowParse(code, fileName);
+
+		auto postParse = [diagnostics, callback](Dispatchable* obj)
+		{
+			callback(diagnostics);
+			return Dispatchable::Status::OK;
+		};
+
+		jp->mainController->getLockFreeDispatcher().callOnMessageThreadAfterSuspension(jp, postParse);
+
+		return SafeFunctionCall::OK;
+	};
+
+	mainController->getKillStateHandler().killVoicesAndCall(
+		dynamic_cast<Processor*>(this), f,
+		MainController::KillStateHandler::TargetThread::ScriptingThread);
+}
+#endif
 
 void JavascriptProcessor::setupApi()
 {
@@ -1646,6 +1703,39 @@ const JavascriptProcessor::SnippetDocument * JavascriptProcessor::getSnippet(con
 	}
 
 	return nullptr;
+}
+
+CodeDocument* JavascriptProcessor::getSnippet(const DebugableObjectBase::Location& loc)
+{
+	auto fileName = loc.fileName;
+
+	if (fileName.isEmpty() || fileName == "onInit")
+	{
+		// onInit callback - empty fileName or "onInit" means onInit
+		return getSnippet(Identifier("onInit"));
+	}
+	else if (fileName.contains("()"))
+	{
+		// Other callback like "onNoteOn()" - strip the "()"
+		auto callbackName = fileName.upToFirstOccurrenceOf("()", false, false);
+		return getSnippet(Identifier(callbackName));
+	}
+	else
+	{
+		auto scriptFolder = GET_PROJECT_HANDLER(dynamic_cast<Processor*>(this)).getSubDirectory(FileHandlerBase::Scripts);
+
+		// External file - fileName is full path
+		auto f = File(scriptFolder).getChildFile(fileName);
+
+		for (int i = 0; i < getNumWatchedFiles(); i++)
+		{
+			
+
+			if (getWatchedFile(i) == f)
+				return &getWatchedFileDocument(i);
+		}
+		return nullptr;
+	}
 }
 
 #if 0
