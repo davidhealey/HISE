@@ -171,14 +171,14 @@ void ProcessorMetadataRegistry::registerAllMetadata()
 	add(JavascriptMasterEffect::createMetadata());
 	add(JavascriptPolyphonicEffect::createMetadata());
 	add(SlotFX::createMetadata());
-	add(ProcessorMetadata::createFallback<EmptyFX>());
-	add(ProcessorMetadata::createFallback<DynamicsEffect>());
-	add(ProcessorMetadata::createFallback<AnalyserEffect>());
+	add(EmptyFX::createMetadata());
+	add(DynamicsEffect::createMetadata());
+	add(AnalyserEffect::createMetadata());
 	add(ProcessorMetadata::createFallback<ShapeFX>());
 	add(ProcessorMetadata::createFallback<PolyshapeFX>());
 	add(HardcodedMasterFX::createMetadata());
 	add(HardcodedPolyphonicFX::createMetadata());
-	add(ProcessorMetadata::createFallback<MidiMetronome>());
+	add(MidiMetronome::createMetadata());
 	add(ProcessorMetadata::createFallback<NoiseGrainPlayer>());
 
 	// --- SoundGenerators (fallback) ---

@@ -35,12 +35,13 @@
 
 namespace hise { using namespace juce;
 
-/** A simple effect that does nothing. */
 class EmptyFX : public MasterEffectProcessor
 {
 public:
 
-	SET_PROCESSOR_NAME("EmptyFX", "Empty", "A simple effect that does nothing.");
+	static ProcessorMetadata createMetadata();
+
+	SET_PROCESSOR_NAME("EmptyFX", "Empty", "");
 
 	EmptyFX(MainController *mc, const String &uid) :
 		MasterEffectProcessor(mc, uid)
@@ -86,10 +87,11 @@ public:
 };
 
 
-/** A simple effect that does nothing. */
 class MidiMetronome : public MasterEffectProcessor
 {
 public:
+
+	static ProcessorMetadata createMetadata();
 
 	enum Parameters
 	{
@@ -99,15 +101,11 @@ public:
 		numParameters
 	};
 
-	SET_PROCESSOR_NAME("MidiMetronome", "MidiMetronome", "A simple metronome that connects to a MIDI player.");
+	SET_PROCESSOR_NAME("MidiMetronome", "MidiMetronome", "");
 
 	MidiMetronome(MainController *mc, const String &uid) :
 		MasterEffectProcessor(mc, uid)
 	{
-		parameterNames.add("Enabled");
-	    parameterNames.add("Volume");
-	    parameterNames.add("NoiseAmount");
-
 		updateParameterSlots();
 
 		finaliseModChains();

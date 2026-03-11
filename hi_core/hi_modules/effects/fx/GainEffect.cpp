@@ -332,6 +332,38 @@ void GainEffect::prepareToPlay(double sampleRate, int samplesPerBlock)
 	}
 }
 
+hise::ProcessorMetadata EmptyFX::createMetadata()
+{
+	return ProcessorMetadata()
+		.withStandardMetadata<EmptyFX>()
+		.withDescription("A placeholder effect that passes audio through unchanged, useful for routing or as a template");
+}
+
+hise::ProcessorMetadata MidiMetronome::createMetadata()
+{
+	using Par = ProcessorMetadata::ParameterMetadata;
+	using Range = scriptnode::InvertableParameterRange;
+
+	return ProcessorMetadata()
+		.withStandardMetadata<MidiMetronome>()
+		.withDescription("A metronome that produces click sounds synchronized to a connected MIDI player's tempo")
+		.withParameter(Par(Enabled)
+			.withId("Enabled")
+			.withDescription("Enables the metronome click output")
+			.asToggle()
+			.withDefault(0.0f))
+		.withParameter(Par(Volume)
+			.withId("Volume")
+			.withDescription("The volume of the metronome click in decibels")
+			.withSliderMode(HiSlider::Decibel, Range(- 100.0, 0.0, 0.0).withCentreSkew(-12.0f))
+			.withDefault(-12.0f))
+		.withParameter(Par(NoiseAmount)
+			.withId("NoiseAmount")
+			.withDescription("Blend between sine wave and noise for the click sound, where 0 is pure sine and 1 is pure noise")
+			.withSliderMode(HiSlider::NormalizedPercentage, {})
+			.withDefault(0.5f));
+}
+
 ProcessorEditorBody * EmptyFX::createEditor(ProcessorEditor *parentEditor)
 {
 #if USE_BACKEND
@@ -361,7 +393,8 @@ public:
 		noiseSlider("Noise")
 	{
 		addAndMakeVisible(enableButton);
-		enableButton.setup(getProcessor(), MidiMetronome::Enabled, "Enabled");
+		auto md = getProcessor()->getMetadata();
+		md.setup(enableButton, getProcessor(), MidiMetronome::Enabled);
 		addAndMakeVisible(midiPlayerSelector);
 		getProcessor()->getMainController()->skin(midiPlayerSelector);
 
@@ -369,10 +402,8 @@ public:
 
 		auto list = ProcessorHelpers::getListOfAllProcessors<MidiPlayer>(getProcessor()->getMainController()->getMainSynthChain());
 
-		gainSlider.setup(getProcessor(), MidiMetronome::Volume, "Volume");
-		gainSlider.setMode(HiSlider::Mode::Decibel);
-		noiseSlider.setup(getProcessor(), MidiMetronome::NoiseAmount, "Noise");
-		noiseSlider.setMode(HiSlider::NormalizedPercentage);
+		md.setup(gainSlider, getProcessor(), MidiMetronome::Volume);
+		md.setup(noiseSlider, getProcessor(), MidiMetronome::NoiseAmount);
 
 		noiseSlider.setSliderStyle(Slider::RotaryHorizontalVerticalDrag);
 		noiseSlider.setTextBoxStyle(Slider::TextBoxRight, false, 80, 20);

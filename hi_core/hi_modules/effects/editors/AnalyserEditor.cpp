@@ -60,8 +60,9 @@ AnalyserEditor::AnalyserEditor (ProcessorEditor *p):
 	typeSelector->addItem("Oscilloscope", 3);
 	typeSelector->addItem("Spectral Analyser", 4);
 
-	typeSelector->setup(getProcessor(), AnalyserEffect::Parameters::PreviewType, "Analyser Type");
-	bufferSize->setup(getProcessor(), AnalyserEffect::Parameters::BufferSize, "Buffer Size");
+	auto md = getProcessor()->getMetadata();
+	md.setup(*typeSelector, getProcessor(), AnalyserEffect::Parameters::PreviewType);
+	md.setup(*bufferSize, getProcessor(), AnalyserEffect::Parameters::BufferSize);
 
     setSize (800, 300);
 
