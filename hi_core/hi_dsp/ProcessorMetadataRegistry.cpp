@@ -160,7 +160,7 @@ void ProcessorMetadataRegistry::registerAllMetadata()
 	add(ProcessorMetadata::createFallback<CurveEq>());
 	add(StereoEffect::createMetadata());
 	add(SimpleReverbEffect::createMetadata());
-	add(ProcessorMetadata::createFallback<GainEffect>());
+	add(GainEffect::createMetadata());
 	add(ProcessorMetadata::createFallback<ConvolutionEffect>());
 	add(ProcessorMetadata::createFallback<DelayEffect>());
 	add(ChorusEffect::createMetadata());

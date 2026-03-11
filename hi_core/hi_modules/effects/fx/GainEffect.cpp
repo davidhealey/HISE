@@ -32,6 +32,58 @@
 
 namespace hise { using namespace juce;
 
+hise::ProcessorMetadata GainEffect::createMetadata()
+{
+	using Par = ProcessorMetadata::ParameterMetadata;
+	using Mod = ProcessorMetadata::ModulationMetadata;
+	using Range = scriptnode::InvertableParameterRange;
+
+	return ProcessorMetadata()
+		.withStandardMetadata<GainEffect>()
+		.withDescription("Utility gain processor with optional delay, stereo width, and balance control, useful for level automation, simple timing offsets, and mid-side shaping")
+		.withParameter(Par(Gain)
+			.withId("Gain")
+			.withDescription("Output gain in decibels, where 0 dB is unity and negative values attenuate the signal")
+			.withSliderMode(HiSlider::Decibel, Range(-100.0, 36.0, 1.0).withCentreSkew(0.0))
+			.withDefault(0.0f))
+		.withParameter(Par(Delay)
+			.withId("Delay")
+			.withDescription("Static delay time in milliseconds applied to both channels")
+			.withSliderMode(HiSlider::Time, Range(0.0, 500.0, 0.0).withCentreSkew(100.0))
+			.withDefault(0.0f))
+		.withParameter(Par(Width)
+			.withId("Width")
+			.withDescription("Stereo width percentage where 0 is mono, 100 is unchanged, and higher values exaggerate the sides")
+			.withSliderMode(HiSlider::Discrete, Range(0.0, 200.0, 1.0))
+			.withDefault(0.0f))
+		.withParameter(Par(Balance)
+			.withId("Balance")
+			.withDescription("Stereo pan position of the output signal")
+			.withSliderMode(HiSlider::Pan, {})
+			.withDefault(0.0f))
+		.withParameter(Par(InvertPolarity)
+			.withId("InvertPolarity")
+			.withDescription("Inverts the signal polarity for phase correction or mid-side processing")
+			.asToggle()
+			.withDefault(0.0f))
+		.withModulation(Mod(GainChain)
+			.withId("Gain Modulation")
+			.withDescription("Modulates the output gain")
+			.withMode(scriptnode::modulation::ParameterMode::ScaleOnly))
+		.withModulation(Mod(DelayChain)
+			.withId("Delay Modulation")
+			.withDescription("Modulates the delay time")
+			.withMode(scriptnode::modulation::ParameterMode::ScaleOnly))
+		.withModulation(Mod(WidthChain)
+			.withId("Width Modulation")
+			.withDescription("Modulates the stereo width")
+			.withMode(scriptnode::modulation::ParameterMode::ScaleOnly))
+		.withModulation(Mod(BalanceChain)
+			.withId("Pan Modulation")
+			.withDescription("Modulates the stereo pan position")
+			.withMode(scriptnode::modulation::ParameterMode::Pan));
+}
+
 GainEffect::GainEffect(MainController *mc, const String &uid) :
 MasterEffectProcessor(mc, uid),
 gain(1.0f),
@@ -55,12 +107,6 @@ smoothedGainR(1.0f)
 	balanceChain = modChains[InternalChains::BalanceChain].getChain();
 
 	smoother.setSmoothingTime(0.2f);
-
-	parameterNames.add("Gain");
-    parameterNames.add("Delay");
-    parameterNames.add("Width");
-	parameterNames.add("Balance");
-	parameterNames.add("InvertPolarity");
 
 	updateParameterSlots();
 
