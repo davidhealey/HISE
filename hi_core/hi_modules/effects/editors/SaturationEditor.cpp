@@ -60,17 +60,11 @@ SaturationEditor::SaturationEditor (ProcessorEditor *p)
 
 
     //[UserPreSize]
-
-	wetSlider->setup(getProcessor(), SaturatorEffect::WetAmount, "Wet Amount");
-	saturationSlider->setup(getProcessor(), SaturatorEffect::Saturation, "Saturation");
-
-	wetSlider->setMode(HiSlider::NormalizedPercentage);
-	saturationSlider->setMode(HiSlider::NormalizedPercentage);
-
-	pregainSlider->setup(getProcessor(), SaturatorEffect::PreGain, "Pre Gain");
-	pregainSlider->setMode(HiSlider::Decibel, NormalisableRange(0.0, 24.0));;
-	postGainSlider->setup(getProcessor(), SaturatorEffect::PostGain, "Post Gain");
-	postGainSlider->setMode(HiSlider::Decibel, NormalisableRange(-24.0, 0.0));
+	auto md = getProcessor()->getMetadata();
+	md.setup(*wetSlider, getProcessor(), SaturatorEffect::WetAmount);
+	md.setup(*saturationSlider, getProcessor(), SaturatorEffect::Saturation);
+	md.setup(*pregainSlider, getProcessor(), SaturatorEffect::PreGain);
+	md.setup(*postGainSlider, getProcessor(), SaturatorEffect::PostGain);
     //[/UserPreSize]
 
     setSize (800, 80);

@@ -62,17 +62,11 @@ ChorusEditor::ChorusEditor (ProcessorEditor *p)
 
 
     //[UserPreSize]
-
-	rateSlider->setup(getProcessor(), ChorusEffect::Parameters::Rate, "Rate");
-	rateSlider->setMode(HiSlider::NormalizedPercentage);
-	widthSlider->setup(getProcessor(), ChorusEffect::Width, "Width");
-	widthSlider->setMode(HiSlider::NormalizedPercentage);
-	feedBackSlider->setup(getProcessor(), ChorusEffect::Feedback, "Feedback");
-	feedBackSlider->setMode(HiSlider::NormalizedPercentage);
-	delaySlider->setup(getProcessor(), ChorusEffect::Delay, "Delay");
-
-    
-    
+	auto md = getProcessor()->getMetadata();
+	md.setup(*rateSlider, getProcessor(), ChorusEffect::Rate);
+	md.setup(*widthSlider, getProcessor(), ChorusEffect::Width);
+	md.setup(*feedBackSlider, getProcessor(), ChorusEffect::Feedback);
+	md.setup(*delaySlider, getProcessor(), ChorusEffect::Delay);
     //[/UserPreSize]
 
     setSize (900, 80);

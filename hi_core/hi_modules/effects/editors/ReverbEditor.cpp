@@ -60,20 +60,11 @@ ReverbEditor::ReverbEditor (ProcessorEditor *p)
 
 
     //[UserPreSize]
-
-	wetSlider->setup(getProcessor(), SimpleReverbEffect::WetLevel, "Wet Level");
-	wetSlider->setMode(HiSlider::NormalizedPercentage);
-
-	roomSlider->setup(getProcessor(), SimpleReverbEffect::RoomSize, "Room Size");
-	roomSlider->setMode(HiSlider::NormalizedPercentage);
-
-	dampingSlider->setup(getProcessor(), SimpleReverbEffect::Damping, "Damping");
-	dampingSlider->setMode(HiSlider::NormalizedPercentage);
-
-	widthSlider->setup(getProcessor(), SimpleReverbEffect::Width, "Stereo Width");
-	widthSlider->setMode(HiSlider::NormalizedPercentage);
-
-
+	auto md = getProcessor()->getMetadata();
+	md.setup(*wetSlider, getProcessor(), SimpleReverbEffect::WetLevel);
+	md.setup(*roomSlider, getProcessor(), SimpleReverbEffect::RoomSize);
+	md.setup(*dampingSlider, getProcessor(), SimpleReverbEffect::Damping);
+	md.setup(*widthSlider, getProcessor(), SimpleReverbEffect::Width);
     //[/UserPreSize]
 
     setSize (900, 80);

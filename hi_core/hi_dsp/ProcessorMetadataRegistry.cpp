@@ -158,16 +158,16 @@ void ProcessorMetadataRegistry::registerAllMetadata()
 	add(ProcessorMetadata::createFallback<HarmonicFilter>());
 	add(ProcessorMetadata::createFallback<HarmonicMonophonicFilter>());
 	add(ProcessorMetadata::createFallback<CurveEq>());
-	add(ProcessorMetadata::createFallback<StereoEffect>());
-	add(ProcessorMetadata::createFallback<SimpleReverbEffect>());
+	add(StereoEffect::createMetadata());
+	add(SimpleReverbEffect::createMetadata());
 	add(ProcessorMetadata::createFallback<GainEffect>());
 	add(ProcessorMetadata::createFallback<ConvolutionEffect>());
 	add(ProcessorMetadata::createFallback<DelayEffect>());
-	add(ProcessorMetadata::createFallback<ChorusEffect>());
-	add(ProcessorMetadata::createFallback<PhaseFX>());
+	add(ChorusEffect::createMetadata());
+	add(PhaseFX::createMetadata());
 	add(ProcessorMetadata::createFallback<RouteEffect>());
 	add(ProcessorMetadata::createFallback<SendEffect>());
-	add(ProcessorMetadata::createFallback<SaturatorEffect>());
+	add(SaturatorEffect::createMetadata());
 	add(JavascriptMasterEffect::createMetadata());
 	add(JavascriptPolyphonicEffect::createMetadata());
 	add(SlotFX::createMetadata());
@@ -198,8 +198,11 @@ void ProcessorMetadataRegistry::registerAllMetadata()
 	add(ProcessorMetadata::createFallback<SilentSynth>());
 	add(HardcodedSynthesiser::createMetadata());
 	
-	auto x = JSON::toString(toJSON());
-	DBG(x);
+	if (auto s = get(SimpleReverbEffect::getClassType()))
+	{
+		auto x = JSON::toString(s->toJSON());
+		DBG(x);
+	}
 }
 
 } // namespace hise

@@ -60,17 +60,11 @@ PhaserEditor::PhaserEditor (ProcessorEditor *p)
 
 
     //[UserPreSize]
-    
-    freq1Slider->setup(getProcessor(), PhaseFX::Attributes::Frequency1, "Frequency1");
-    freq1Slider->setMode(HiSlider::Mode::Frequency);
-    freq2Slider->setup(getProcessor(), PhaseFX::Attributes::Frequency2, "Frequency2");
-    freq2Slider->setMode(HiSlider::Mode::Frequency);
-    feedBackSlider->setup(getProcessor(), PhaseFX::Attributes::Feedback, "Feedback");
-    feedBackSlider->setMode(HiSlider::Mode::NormalizedPercentage);
-    wetSlider->setup(getProcessor(), PhaseFX::Attributes::Mix, "Mix");
-    wetSlider->setMode(HiSlider::Mode::NormalizedPercentage);
-
-    
+	auto md = getProcessor()->getMetadata();
+	md.setup(*freq1Slider, getProcessor(), PhaseFX::Frequency1);
+	md.setup(*freq2Slider, getProcessor(), PhaseFX::Frequency2);
+	md.setup(*feedBackSlider, getProcessor(), PhaseFX::Feedback);
+	md.setup(*wetSlider, getProcessor(), PhaseFX::Mix);
     //[/UserPreSize]
 
     setSize (900, 80);

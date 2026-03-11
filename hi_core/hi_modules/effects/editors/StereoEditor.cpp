@@ -48,12 +48,9 @@ StereoEditor::StereoEditor (ProcessorEditor *p)
 
 
     //[UserPreSize]
-
-	widthSlider->setup(getProcessor(), StereoEffect::Width, "Stereo Width");
-	widthSlider->setMode(HiSlider::Discrete, NormalisableRange(0.0, 200.0, 1.0));
-
-	panSlider->setup(getProcessor(), StereoEffect::Pan, "Max Pan");
-	panSlider->setMode(HiSlider::Pan);
+	auto md = getProcessor()->getMetadata();
+	md.setup(*widthSlider, getProcessor(), StereoEffect::Width);
+	md.setup(*panSlider, getProcessor(), StereoEffect::Pan);
 	panSlider->setEnabled(false);
     //[/UserPreSize]
 
