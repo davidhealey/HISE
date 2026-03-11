@@ -43,7 +43,13 @@ class HardcodedMasterFX: public MasterEffectProcessor,
 {
 public:
 
-	SET_PROCESSOR_NAME("HardcodedMasterFX", "Hardcoded Master FX", "A master effect wrapper around a compiled DSP network");
+	SET_PROCESSOR_NAME("HardcodedMasterFX", "Hardcoded Master FX", "");
+
+	static ProcessorMetadata createMetadata()
+	{
+		return withHardcodedMetadata<HardcodedMasterFX>({})
+			.withDescription("A master effect wrapper around a compiled DSP network");
+	}
 
 	HardcodedMasterFX(MainController* mc, const String& uid);
 	~HardcodedMasterFX() override;
@@ -99,7 +105,13 @@ class HardcodedPolyphonicFX : public VoiceEffectProcessor,
 {
 public:
 
-	SET_PROCESSOR_NAME("HardcodedPolyphonicFX", "Hardcoded Polyphonic FX", "A polyphonic hardcoded FX.");
+	SET_PROCESSOR_NAME("HardcodedPolyphonicFX", "Hardcoded Polyphonic FX", "");
+
+	static ProcessorMetadata createMetadata()
+	{
+		return withHardcodedMetadata<HardcodedPolyphonicFX>({})
+			.withDescription("A polyphonic hardcoded FX");
+	}
 
 	HardcodedPolyphonicFX(MainController *mc, const String &uid, int numVoices);;
 	~HardcodedPolyphonicFX() override;
@@ -159,7 +171,9 @@ class HardcodedTimeVariantModulator: public TimeVariantModulator,
 {
 public:
     
-    SET_PROCESSOR_NAME("HardcodedTimevariantModulator", "Hardcoded Time Variant Modulator", "A time variant modulator wrapper around a compiled DSP network");
+    SET_PROCESSOR_NAME("HardcodedTimevariantModulator", "Hardcoded Time Variant Modulator", "");
+
+	static ProcessorMetadata createMetadata();
 
     HardcodedTimeVariantModulator(MainController* mc, const String& uid, Modulation::Mode m);
     ~HardcodedTimeVariantModulator() override;;
@@ -199,10 +213,12 @@ class HardcodedEnvelopeModulator: public EnvelopeModulator,
 {
 public:
 
-	SET_PROCESSOR_NAME("HardcodedEnvelopeModulator", "Hardcoded Envelope Modulator", "A envelope modulator wrapper around a compiled DLL node");
+	SET_PROCESSOR_NAME("HardcodedEnvelopeModulator", "Hardcoded Envelope Modulator", "");
 
 	HardcodedEnvelopeModulator(MainController* mc, const String& id, int numVoices, Modulation::Mode m);
 	~HardcodedEnvelopeModulator() override;
+
+	static ProcessorMetadata createMetadata();
 
 	// Child processor methods
 	Processor *getChildProcessor(int processorIndex) override { return nullptr; };
@@ -263,7 +279,13 @@ class HardcodedSynthesiser: public ModulatorSynth,
 {
 	public:
 
-	SET_PROCESSOR_NAME("HardcodedSynth", "Hardcoded Synthesiser", "A polyphonic synthesiser that uses a compiled network as sound generator.");
+	SET_PROCESSOR_NAME("HardcodedSynth", "Hardcoded Synthesiser", "");
+
+	static ProcessorMetadata createMetadata()
+	{
+		return withHardcodedMetadata<HardcodedSynthesiser>(ModulatorSynth::createBaseMetadata())
+			  .withDescription("A polyphonic synthesiser that uses a compiled network as sound generator");
+	}
 
 	struct Sound : public ModulatorSynthSound
 	{

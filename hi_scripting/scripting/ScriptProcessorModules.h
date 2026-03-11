@@ -65,7 +65,19 @@ class JavascriptMidiProcessor : public ScriptBaseMidiProcessor,
 {
 public:
 
-	SET_PROCESSOR_NAME("ScriptProcessor", "Script Processor", "MIDI Processor that allows scripting.")
+	SET_PROCESSOR_NAME("ScriptProcessor", "Script Processor", "")
+
+	static ProcessorMetadata createMetadata()
+	{
+		return ProcessorMetadata(getClassType(), ProcessorMetadata::DataType::Dynamic)
+			.withPrettyName(getClassName())
+			.withDescription("MIDI Processor that allows scripting.")
+			.withType<JavascriptMidiProcessor>()
+			.withInterface<JavascriptMidiProcessor>()
+			.withComplexDataInterface(ExternalData::DataType::Table)
+			.withComplexDataInterface(ExternalData::DataType::SliderPack)
+			.withComplexDataInterface(ExternalData::DataType::AudioFile);
+	}
 
 	enum SnippetsOpen
 	{
@@ -217,8 +229,19 @@ public:
 		numScriptEditorStates
 	};
 
-	SET_PROCESSOR_NAME("ScriptVoiceStartModulator", "Script Voice Start Modulator", "Creates a scriptable modulation value at the start of the voice.")
+	SET_PROCESSOR_NAME("ScriptVoiceStartModulator", "Script Voice Start Modulator", "")
 
+	static ProcessorMetadata createMetadata()
+	{
+		return ProcessorMetadata(getClassType(), ProcessorMetadata::DataType::Dynamic)
+			.withPrettyName(getClassName())
+			.withDescription("Creates a scriptable modulation value at the start of the voice.")
+			.withType<JavascriptVoiceStartModulator>()
+			.withInterface<JavascriptVoiceStartModulator>()
+			.withComplexDataInterface(ExternalData::DataType::Table)
+			.withComplexDataInterface(ExternalData::DataType::SliderPack)
+			.withComplexDataInterface(ExternalData::DataType::AudioFile);
+	}
 
 	JavascriptVoiceStartModulator(MainController *mc, const String &id, int voiceAmount, Modulation::Mode m);;
 	~JavascriptVoiceStartModulator();
@@ -286,7 +309,13 @@ class JavascriptTimeVariantModulator : public JavascriptProcessor,
 {
 public:
 
-	SET_PROCESSOR_NAME("ScriptTimeVariantModulator", "Script Time Variant Modulator", "Creates a scriptable monophonic modulation signal.")
+	SET_PROCESSOR_NAME("ScriptTimeVariantModulator", "Script Time Variant Modulator", "")
+
+	static ProcessorMetadata createMetadata()
+	{
+		return withScriptnodeMetadata<JavascriptTimeVariantModulator>({})
+			.withDescription("Creates a scriptable monophonic modulation signal.");
+	}
 
 	enum Callback
 	{
@@ -451,7 +480,7 @@ class JavascriptEnvelopeModulator : public JavascriptProcessor,
 {
 public:
 
-	SET_PROCESSOR_NAME("ScriptEnvelopeModulator", "Script Envelope Modulator", "Creates a scriptable polyphonic modulation signal.")
+	SET_PROCESSOR_NAME("ScriptEnvelopeModulator", "Script Envelope Modulator", "")
 
 	enum Callback
 	{
@@ -467,6 +496,12 @@ public:
 		externalPopupShown,
 		numScriptEditorStates
 	};
+
+	static ProcessorMetadata createMetadata()
+	{
+		return withScriptnodeMetadata<JavascriptEnvelopeModulator>(EnvelopeModulator::createBaseMetadata())
+			.withDescription("A scriptable envelope modulator using a DSP network");
+	}
 
 	JavascriptEnvelopeModulator(MainController *mc, const String &id, int numVoices, Modulation::Mode m);
 	~JavascriptEnvelopeModulator();
@@ -575,7 +610,13 @@ class JavascriptMasterEffect : public JavascriptProcessor,
 {
 public:
 
-	SET_PROCESSOR_NAME("ScriptFX", "Script FX", "A scriptable audio effect.");
+	SET_PROCESSOR_NAME("ScriptFX", "Script FX", "");
+
+	static ProcessorMetadata createMetadata()
+	{
+		return withScriptnodeMetadata<JavascriptMasterEffect>({})
+			.withDescription("A scriptable audio effect.");
+	}
 
 	enum class Callback
 	{
@@ -695,7 +736,13 @@ class JavascriptPolyphonicEffect : public JavascriptProcessor,
 {
 public:
 
-	SET_PROCESSOR_NAME("PolyScriptFX", "Polyphonic Script FX", "A polyphonic scriptable audio effect.");
+	SET_PROCESSOR_NAME("PolyScriptFX", "Polyphonic Script FX", "");
+
+	static ProcessorMetadata createMetadata()
+	{
+		return withScriptnodeMetadata<JavascriptPolyphonicEffect>({})
+			.withDescription("A polyphonic scriptable audio effect.");
+	}
 
 	enum class Callback
 	{
@@ -839,7 +886,13 @@ class JavascriptSynthesiser : public JavascriptProcessor,
 {
 public:
 
-	SET_PROCESSOR_NAME("ScriptSynth", "Scriptnode Synthesiser", "A polyphonic scriptable synthesiser.");
+	SET_PROCESSOR_NAME("ScriptSynth", "Scriptnode Synthesiser", "");
+
+	static ProcessorMetadata createMetadata()
+	{
+		return withScriptnodeMetadata<JavascriptSynthesiser>(ModulatorSynth::createBaseMetadata())
+			.withDescription("A polyphonic scriptable synthesiser.");
+	}
 
 	struct Sound : public ModulatorSynthSound
 	{

@@ -154,7 +154,7 @@ var ProcessorMetadata::toJSON() const
 	case DataType::Fallback:
 		obj->setProperty("metadataType", "fallback");
 		break;
-	case DataType::StaticInitialised:
+	case DataType::Static:
 		obj->setProperty("metadataType", "static");
 		break;
 	case DataType::Dynamic:

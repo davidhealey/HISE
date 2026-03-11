@@ -56,8 +56,8 @@ struct ProcessorMetadata
 	{
 		Undefined = 0,
 		Fallback,
-		StaticInitialised,
-		Dynamic
+		Static,
+		Dynamic,
 	};
 
 	/** Metadata for a single processor parameter. */
@@ -237,7 +237,7 @@ struct ProcessorMetadata
 	};
 
 	ProcessorMetadata() = default;
-	ProcessorMetadata(const Identifier& id_, DataType dt=DataType::StaticInitialised):
+	ProcessorMetadata(const Identifier& id_, DataType dt=DataType::Static):
 		id(id_),
 		dataType(dt)
 	{};
@@ -248,6 +248,13 @@ struct ProcessorMetadata
 	{
 		auto copy = *this;
 		copy.id = typeId;
+		return copy;
+	}
+
+	ProcessorMetadata asDynamic() const
+	{
+		auto copy = *this;
+		copy.dataType = DataType::Dynamic;
 		return copy;
 	}
 
@@ -346,10 +353,10 @@ struct ProcessorMetadata
 			copy.interfaceClasses.add("MidiPlayer");
 		if constexpr (std::is_same<WavetableSynth, T>())
 			copy.interfaceClasses.add("WavetableController");
-		if constexpr (std::is_base_of<HotswappableProcessor, T>())
-			copy.interfaceClasses.add("SlotFX");
-		if constexpr (std::is_base_of<RoutableProcessor, T>())
-			copy.interfaceClasses.add("RoutingMatrix");
+		if constexpr (std::is_base_of<HotswappableProcessor, T>() || std::is_same<HotswappableProcessor, T>())
+			copy.interfaceClasses.addIfNotAlreadyThere("SlotFX");
+		if constexpr (std::is_base_of<RoutableProcessor, T>() || std::is_same<RoutableProcessor, T>())
+			copy.interfaceClasses.addIfNotAlreadyThere("RoutingMatrix");
 		
 		return copy;
 	}

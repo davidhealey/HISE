@@ -507,6 +507,20 @@ public:
 		static CodeDocument* gotoAndReturnDocumentWithDefinition(Processor* p, DebugableObjectBase* object);
 	};
 
+	template <typename T> static ProcessorMetadata withScriptnodeMetadata(const ProcessorMetadata& md)
+	{
+		return md.asDynamic()
+			.withId(T::getClassType())
+			.withPrettyName(T::getClassName())
+			.withType<T>()
+			.withInterface<T>()
+			.withInterface<HotswappableProcessor>()
+			.withComplexDataInterface(ExternalData::DataType::Table)
+			.withComplexDataInterface(ExternalData::DataType::SliderPack)
+			.withComplexDataInterface(ExternalData::DataType::AudioFile)
+			.withComplexDataInterface(ExternalData::DataType::DisplayBuffer);
+	}
+
 	ValueTree createApiTree() override;
 
 	void addPopupMenuItems(PopupMenu &m, Component* c, const MouseEvent &e) override;

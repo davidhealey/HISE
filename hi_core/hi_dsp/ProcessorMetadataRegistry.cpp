@@ -108,7 +108,7 @@ void ProcessorMetadataRegistry::registerAllMetadata()
 	add(GlobalVoiceStartModulator::createMetadata());
 	add(GlobalStaticTimeVariantModulator::createMetadata());
 	add(ArrayModulator::createMetadata());
-	add(ProcessorMetadata::createFallback<JavascriptVoiceStartModulator>());
+	add(JavascriptVoiceStartModulator::createMetadata());
 	add(EventDataModulator::createMetadata());
 
 	// --- TimeVariantModulators ---
@@ -118,26 +118,26 @@ void ProcessorMetadataRegistry::registerAllMetadata()
 	add(PitchwheelModulator::createMetadata());
 	add(MacroModulator::createMetadata());
 	add(GlobalTimeVariantModulator::createMetadata());
-	add(ProcessorMetadata::createFallback<JavascriptTimeVariantModulator>());
-	add(ProcessorMetadata::createFallback<HardcodedTimeVariantModulator>());
+	add(JavascriptTimeVariantModulator::createMetadata());
+	add(HardcodedTimeVariantModulator::createMetadata());
 
 	// --- EnvelopeModulators ---
 
 	add(SimpleEnvelope::createMetadata());
 	add(AhdsrEnvelope::createMetadata());
 	add(TableEnvelope::createMetadata());
-	add(ProcessorMetadata::createFallback<JavascriptEnvelopeModulator>());
+	add(JavascriptEnvelopeModulator::createMetadata());
 	add(MPEModulator::createMetadata());
 	add(ScriptnodeVoiceKiller::createMetadata());
 	add(GlobalEnvelopeModulator::createMetadata());
 	add(EventDataEnvelope::createMetadata());
-	add(ProcessorMetadata::createFallback<HardcodedEnvelopeModulator>());
+	add(HardcodedEnvelopeModulator::createMetadata());
 	add(MatrixModulator::createMetadata());
 	add(FlexAhdsrEnvelope::createMetadata());
 
 	// --- MidiProcessors (fallback) ---
 
-	add(ProcessorMetadata::createFallback<JavascriptMidiProcessor>());
+	add(JavascriptMidiProcessor::createMetadata());
 	add(ProcessorMetadata::createFallback<Transposer>());
 	add(ProcessorMetadata::createFallback<MidiPlayer>());
 	add(ProcessorMetadata::createFallback<ChokeGroupProcessor>());
@@ -168,16 +168,16 @@ void ProcessorMetadataRegistry::registerAllMetadata()
 	add(ProcessorMetadata::createFallback<RouteEffect>());
 	add(ProcessorMetadata::createFallback<SendEffect>());
 	add(ProcessorMetadata::createFallback<SaturatorEffect>());
-	add(ProcessorMetadata::createFallback<JavascriptMasterEffect>());
-	add(ProcessorMetadata::createFallback<JavascriptPolyphonicEffect>());
+	add(JavascriptMasterEffect::createMetadata());
+	add(JavascriptPolyphonicEffect::createMetadata());
 	add(ProcessorMetadata::createFallback<SlotFX>());
 	add(ProcessorMetadata::createFallback<EmptyFX>());
 	add(ProcessorMetadata::createFallback<DynamicsEffect>());
 	add(ProcessorMetadata::createFallback<AnalyserEffect>());
 	add(ProcessorMetadata::createFallback<ShapeFX>());
 	add(ProcessorMetadata::createFallback<PolyshapeFX>());
-	add(ProcessorMetadata::createFallback<HardcodedMasterFX>());
-	add(ProcessorMetadata::createFallback<HardcodedPolyphonicFX>());
+	add(HardcodedMasterFX::createMetadata());
+	add(HardcodedPolyphonicFX::createMetadata());
 	add(ProcessorMetadata::createFallback<MidiMetronome>());
 	add(ProcessorMetadata::createFallback<NoiseGrainPlayer>());
 
@@ -192,12 +192,12 @@ void ProcessorMetadataRegistry::registerAllMetadata()
 	add(ProcessorMetadata::createFallback<WavetableSynth>());
 	add(ProcessorMetadata::createFallback<AudioLooper>());
 	add(ProcessorMetadata::createFallback<ModulatorSynthGroup>());
-	add(ProcessorMetadata::createFallback<JavascriptSynthesiser>());
+	add(JavascriptSynthesiser::createMetadata());
 	add(ProcessorMetadata::createFallback<MacroModulationSource>());
 	add(ProcessorMetadata::createFallback<SendContainer>());
 	add(ProcessorMetadata::createFallback<SilentSynth>());
-	add(ProcessorMetadata::createFallback<HardcodedSynthesiser>());
-
+	add(HardcodedSynthesiser::createMetadata());
+	
 	auto x = JSON::toString(toJSON());
 	DBG(x);
 }

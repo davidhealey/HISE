@@ -349,6 +349,19 @@ public:
 
 	~HardcodedSwappableEffect() override;
 
+	template <typename T> static ProcessorMetadata withHardcodedMetadata(const ProcessorMetadata& b)
+	{
+		return b.asDynamic()
+			.withId(T::getClassType())
+			.withPrettyName(T::getClassName())
+			.withType<T>()
+			.withInterface<T>()
+			.withComplexDataInterface(ExternalData::DataType::Table)
+			.withComplexDataInterface(ExternalData::DataType::SliderPack)
+			.withComplexDataInterface(ExternalData::DataType::AudioFile)
+			.withComplexDataInterface(ExternalData::DataType::DisplayBuffer);
+	}
+
 	// ===================================================================================== Complex Data API calls
 
 	int getNumDataObjects(ExternalData::DataType t) const override;
