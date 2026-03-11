@@ -2,24 +2,18 @@
 
 This guide describes how to migrate HISE processors from scattered parameter metadata (parameterNames, getDefaultValue, editor setup code) to the unified `ProcessorMetadata` system. It is designed to be followed mechanically for each processor.
 
-Three processors have already been migrated and serve as templates:
-
-- **LfoModulator** (TimeVariantModulator) - full example with tempo sync, value list, modulation chains
-- **SimpleEnvelope** (EnvelopeModulator) - envelope with base class chaining
-- **WaveSynth** (ModulatorSynth) - sound generator with base class chaining
-
 ## 1. Base Class Chaining Reference
 
 Each processor's `createMetadata()` starts from a different base depending on its type:
 
 | Processor base class | Chain from | Base parameters provided | Base modulation chains |
 |---|---|---|---|
-| VoiceStartModulator | `ProcessorMetadata(getClassType())` | None | None |
-| TimeVariantModulator | `ProcessorMetadata(getClassType())` | None | None |
+| VoiceStartModulator | `ProcessorMetadata()` | None | None |
+| TimeVariantModulator | `ProcessorMetadata()` | None | None |
 | EnvelopeModulator | `EnvelopeModulator::createBaseMetadata()` | Monophonic (toggle, default 0.0), Retrigger (toggle, default 1.0) | None |
-| MidiProcessor | `ProcessorMetadata(getClassType())` | None | None |
-| EffectProcessor (all subtypes) | `ProcessorMetadata(getClassType())` | None | None |
-| ModulatorSynth | `ModulatorSynth::createBaseMetadata()` | Gain (Decibel, default 1.0), Balance (Pan, default 0.0), VoiceLimit (Discrete {1,256,1}, default 64.0), KillFadeTime (Time {0,20000,1}, default 20.0) | GainModulation (ScaleOnly), PitchModulation (Pitch) |
+| MidiProcessor | `ProcessorMetadata()` | None | None |
+| EffectProcessor (all subtypes) | `ProcessorMetadata()` | None | None |
+| ModulatorSynth | `ModulatorSynth::createBaseMetadata()` | Gain (NormalizedPercentage, default 1.0), Balance (Pan, default 0.0), VoiceLimit (Discrete {1,256,1}, default 64.0), KillFadeTime (Time {0,20000,1}, default 20.0) | GainModulation (ScaleOnly), PitchModulation (Pitch) |
 
 ## 2. The Recipe (Standard Processors)
 
@@ -35,27 +29,7 @@ SET_PROCESSOR_NAME("SimpleEnvelope", "Simple Envelope", "The most simple envelop
 SET_PROCESSOR_NAME("SimpleEnvelope", "Simple Envelope", "")
 ```
 
-**b) Strip doxygen comments from parameter enum members.** Metadata owns descriptions now:
-
-```cpp
-// Before
-enum SpecialParameters
-{
-    Attack = EnvelopeModulator::Parameters::numParameters, ///< the attack time in milliseconds
-    Release, ///< the release time in milliseconds
-    LinearMode, ///< toggles between linear and exponential mode
-    numTotalParameters
-};
-
-// After
-enum SpecialParameters
-{
-    Attack = EnvelopeModulator::Parameters::numParameters,
-    Release,
-    LinearMode,
-    numTotalParameters
-};
-```
+**b) Strip doxygen comments from parameter enum members.** Metadata owns descriptions now.
 
 Also remove any parameter table from the class doxygen comment (the `ID | Parameter | Description` markdown tables).
 
@@ -74,7 +48,7 @@ const bool metadataInitialised;
 
 ### Step 2: Source (.cpp)
 
-**a) Write `createMetadata()` at the top of the file** (before the constructor). Chain from the appropriate base (see Section 1):
+**a) Write `createMetadata()` at the top of the file** (before the constructor). Use `withStandardMetadata<T>()` to set the id, pretty name, type, and interfaces in one call, then chain from the appropriate base (see Section 1):
 
 ```cpp
 hise::ProcessorMetadata SimpleEnvelope::createMetadata()
@@ -83,19 +57,17 @@ hise::ProcessorMetadata SimpleEnvelope::createMetadata()
     using Mod = ProcessorMetadata::ModulationMetadata;
 
     return EnvelopeModulator::createBaseMetadata()
-        .withId(getClassType())
-        .withPrettyName("Simple Envelope")
-        .withDescription("The most simple envelope (only attack and release).")
-        .withType<hise::EnvelopeModulator>()
+        .withStandardMetadata<SimpleEnvelope>()
+        .withDescription("A lightweight two-stage envelope with attack and release, supporting linear or exponential curves.")
         .withParameter(Par(Attack)
             .withId("Attack")
             .withDescription("The attack time in milliseconds")
-            .withSliderMode(HiSlider::Time)
+            .withSliderMode(HiSlider::Time, Range(0.0, 20000.0).withCentreSkew(1000.0))
             .withDefault(5.0f))
         .withParameter(Par(Release)
             .withId("Release")
             .withDescription("The release time in milliseconds")
-            .withSliderMode(HiSlider::Time)
+            .withSliderMode(HiSlider::Time, Range(0.0, 20000.0).withCentreSkew(1000.0))
             .withDefault(10.0f))
         .withParameter(Par(LinearMode)
             .withId("LinearMode")
@@ -105,6 +77,7 @@ hise::ProcessorMetadata SimpleEnvelope::createMetadata()
         .withModulation(Mod(AttackChain)
             .withId("AttackTimeModulation")
             .withDescription("Modulates the attack time per voice")
+            .withConstrainer<VoiceStartModulator>()
             .withMode(scriptnode::modulation::ParameterMode::ScaleOnly));
 }
 ```
@@ -118,32 +91,16 @@ hise::ProcessorMetadata LfoModulator::createMetadata()
     using Mod = ProcessorMetadata::ModulationMetadata;
     using Range = scriptnode::InvertableParameterRange;
 
-    return ProcessorMetadata(getClassType())
-        .withPrettyName("LFO Modulator")
-        .withDescription("A LFO Modulator modulates the signal with a low frequency")
-        .withType<hise::TimeVariantModulator>()
+    return ProcessorMetadata()
+        .withStandardMetadata<LfoModulator>()
+        .withDescription("Generates a periodic modulation signal with multiple waveform types, tempo sync, and an optional step sequencer mode.")
         // ... parameters and modulations
 }
 ```
 
-**b) Add `metadataInitialised(updateParameterSlots())` to the initializer list.** It must appear before any member that calls `getDefaultValue()`:
+**`withStandardMetadata<T>()`** is a convenience that chains `.withId(T::getClassType())`, `.withPrettyName(T::getClassName())`, `.withType<T>()`, and `.withInterface<T>()` in one call. Use it instead of writing those four calls manually. If you need to set a different pretty name, call `.withPrettyName()` after `withStandardMetadata` to override it.
 
-```cpp
-// Before
-SimpleEnvelope::SimpleEnvelope(MainController *mc, const String &id, int voiceAmount, Modulation::Mode m):
-    EnvelopeModulator(mc, id, voiceAmount, m),
-    Modulation(m),
-    attack(getDefaultValue(Attack)),
-    ...
-
-// After
-SimpleEnvelope::SimpleEnvelope(MainController *mc, const String &id, int voiceAmount, Modulation::Mode m):
-    EnvelopeModulator(mc, id, voiceAmount, m),
-    Modulation(m),
-    metadataInitialised(updateParameterSlots()),
-    attack(getDefaultValue(Attack)),
-    ...
-```
+**b) Add `metadataInitialised(updateParameterSlots())` to the initializer list.** It must appear before any member that calls `getDefaultValue()`.
 
 If the constructor does NOT call `getDefaultValue()` in the initializer list, place `metadataInitialised(updateParameterSlots())` at the end of the initializer list (it still needs to run before the constructor body).
 
@@ -229,49 +186,270 @@ add(ProcessorMetadata::createFallback<SimpleEnvelope>());
 add(SimpleEnvelope::createMetadata());
 ```
 
-## 3. Variant: Hardcoded Script Processors
+## 3. Variant: Hardcoded and Scripted Processors
 
-Hardcoded script processors (Arpeggiator, LegatoProcessor, CCSwapper, etc.) define parameters through the scripting Content API in their `onInit()` override, which is called from the constructor. The `flushContentParameters()` helper then auto-populates `parameterNames` from Content component names and calls `updateParameterSlots()`.
+### Hardcoded DLL Processors
 
-Their migration is different because:
-- Parameters are defined via `Content.addKnob()`, `Content.addButton()`, etc. - not C++ enums
-- There is no `getDefaultValue()` override
-- There is no separate editor file (the Content IS the editor)
-- The `onInit()` code must be preserved (it creates the UI widgets)
-
-### What to do
-
-**a) Header:** Add `static ProcessorMetadata createMetadata();` declaration. Clear the `SET_PROCESSOR_NAME` description to `""`. No `metadataInitialised` member needed (these processors don't call `getDefaultValue()` in the initializer list).
-
-**b) Source:** Write a `createMetadata()` that extracts parameter names, types, and defaults from the `onInit()` code. The parameter IDs come from the `parameterNames.add()` calls (Arpeggiator pattern) or from the Content component names (flushContentParameters pattern). The parameter types come from the widget type (addKnob = Float/Discrete, addButton = Toggle, addComboBox = List). Defaults come from `setValue()` calls.
-
-For example, for a processor that does:
+Hardcoded processors (`HardcodedMasterFX`, `HardcodedPolyphonicFX`, `HardcodedTimeVariantModulator`, `HardcodedEnvelopeModulator`, `HardcodedSynthesiser`) have parameters defined at runtime by the compiled DSP network. They use `DataType::Dynamic` metadata and the `withHardcodedMetadata<T>()` helper on `HardcodedSwappableEffect`:
 
 ```cpp
-void onInit() override
+static ProcessorMetadata createMetadata()
 {
-    channelNumber = Content.addKnob("channelNumber", 0, 0);
-    channelNumber->set("text", "MIDI Channel");
-    channelNumber->setRange(1, 16, 1);
+    return withHardcodedMetadata<HardcodedMasterFX>({})
+        .withDescription("Runs a compiled C++ DSP network as a master effect.");
 }
 ```
 
-The metadata parameter would be:
+`withHardcodedMetadata<T>(base)` chains: `.asDynamic()`, `.withId()`, `.withPrettyName()`, `.withType<T>()`, `.withInterface<T>()`, plus all 4 complex data interfaces (Table, SliderPack, AudioFile, DisplayBuffer).
+
+For types that chain from a base (envelopes, synths), pass the base metadata instead of `{}`:
 
 ```cpp
-.withParameter(Par(0)  // index by position in Content
-    .withId("channelNumber")
-    .withDescription("MIDI Channel")
-    .withSliderMode(HiSlider::Discrete, Range(1.0, 16.0, 1.0)))
+return withHardcodedMetadata<HardcodedEnvelopeModulator>(EnvelopeModulator::createBaseMetadata())
+    .withDescription("...");
+
+return withHardcodedMetadata<HardcodedSynthesiser>(ModulatorSynth::createBaseMetadata())
+    .withDescription("...");
 ```
 
-Note: hardcoded script processor parameters don't have C++ enum indices. Use sequential integers starting from 0.
+### Scripted Processors (Javascript*)
+
+Scripted processors (`JavascriptMasterEffect`, `JavascriptPolyphonicEffect`, `JavascriptTimeVariantModulator`, `JavascriptEnvelopeModulator`, `JavascriptSynthesiser`) use the `withScriptnodeMetadata<T>()` helper on `JavascriptProcessor`, which is identical to the hardcoded helper but also adds `withInterface<HotswappableProcessor>()`.
+
+```cpp
+static ProcessorMetadata createMetadata()
+{
+    return withScriptnodeMetadata<JavascriptMasterEffect>({})
+        .withDescription("Processes audio through a scriptnode DSP network as a master effect.");
+}
+```
+
+**Exceptions:** `JavascriptMidiProcessor` and `JavascriptVoiceStartModulator` don't use the helper because they lack `DisplayBuffer` support and `HotswappableProcessor` interface. They construct metadata manually with only 3 complex data types (Table, SliderPack, AudioFile).
+
+### Hardcoded Script Processors (Arpeggiator, etc.)
+
+Hardcoded script processors define parameters through the scripting Content API in their `onInit()` override. Their migration is different because:
+- Parameters are defined via `Content.addKnob()`, `Content.addButton()`, etc. - not C++ enums
+- There is no `getDefaultValue()` override
+- The `onInit()` code must be preserved (it creates the UI widgets)
+
+**a) Header:** Add `static ProcessorMetadata createMetadata();` declaration. Clear the `SET_PROCESSOR_NAME` description to `""`. No `metadataInitialised` member needed.
+
+**b) Source:** Write a `createMetadata()` that extracts parameter names, types, and defaults from the `onInit()` code. Parameter indices are sequential integers starting from 0.
 
 **c) Registry:** Replace `createFallback<T>()` with `T::createMetadata()`.
 
-**d) `onInit()` stays unchanged.** The Content widget creation code is preserved. The `parameterNames.add()` / `flushContentParameters()` / `updateParameterSlots()` calls also stay - these are needed for the scripting content system to function. The metadata exists alongside them for the registry/documentation/factory consumers.
+**d) `onInit()` stays unchanged.** The Content widget creation code is preserved. The `parameterNames.add()` / `flushContentParameters()` / `updateParameterSlots()` calls also stay.
 
-## 4. Parameter Extraction Checklist
+## 4. Modulation Chain Constrainers
+
+Modulation chains can declare which modulator types are allowed inside them via constrainer wildcards. This replaces the runtime `FactoryType::Constrainer` system with static metadata that can be queried without instantiating processors.
+
+### Per-chain constrainer (on ModulationMetadata)
+
+Use `.withConstrainer<T>()` on a `ModulationMetadata` entry. The template argument `T` must have a static `getWildcard()` method returning a `ProcessorMetadata::WildcardFilterList` (which is `std::vector<std::pair<Identifier, String>>`). The method extracts the `Modulator` domain wildcard from that list.
+
+```cpp
+.withModulation(Mod(AttackChain)
+    .withId("AttackTimeModulation")
+    .withDescription("Modulates the attack time per voice")
+    .withConstrainer<VoiceStartModulator>()
+    .withMode(scriptnode::modulation::ParameterMode::ScaleOnly))
+```
+
+**When to use:** Envelope internal chains that only accept VoiceStartModulators, or any chain with restricted modulator types.
+
+### Constrainer-after-the-fact (on ProcessorMetadata)
+
+Use `.withModConstrainer<CT>(chainIndex)` to apply a constrainer to an already-declared modulation chain (e.g., one inherited from a base class):
+
+```cpp
+return ModulatorSynth::createBaseMetadata()
+    .withStandardMetadata<ModulatorSynthChain>()
+    .withModConstrainer<NoMidiInputConstrainer>(ModulatorSynth::BasicChains::GainChain);
+```
+
+### Disabled chains
+
+Use `.withDisabledChain(chainIndex)` to mark a modulation chain as structurally disabled (not just bypassed - the chain is never processed):
+
+```cpp
+.withDisabledChain(ModulatorSynth::BasicChains::PitchChain)
+```
+
+Use `.asDisabled()` on a `ModulationMetadata` entry when constructing one from scratch:
+
+```cpp
+md.modulation.set(index, 
+    ProcessorMetadata::ModulationMetadata(chainIndex)
+        .withId("...")
+        .asDisabled());
+```
+
+### Wildcard syntax
+
+Constrainer wildcards are simple filter expressions:
+
+| Pattern | Meaning | Example |
+|---|---|---|
+| `*` | Allow everything (default) | No constraint |
+| `SubtypeName` | Allow only this subtype | `TimeVariantModulator` - only TVMs allowed |
+| `VoiceStartModulator` | Allow only voice-start modulators | Used on envelope internal chains |
+| `!TypeName` | Exclude this specific type | `!SlotFX` |
+| `!A\|!B\|!C` | Exclude multiple types | `!ModulatorSynthChain\|!GlobalModulatorContainer` |
+| `!Name*` | Exclude by glob pattern | `!Global*Modulator` - excludes GlobalVoiceStartModulator, GlobalTimeVariantModulator, etc. |
+
+### Where constrainer wildcards are stored
+
+| Level | Field | Builder method |
+|---|---|---|
+| Modulation chain (which modulators fit in this chain) | `ModulationMetadata::constrainerWildcard` | `.withConstrainer<T>()` on the Mod entry |
+| FX chain (which effects fit in this processor's FX chain) | `ProcessorMetadata::fxConstrainerWildcard` | `.withFXConstrainer<CT>()` |
+| Child container (which sound generators can be added) | `ProcessorMetadata::constrainerWildcard` | `.withChildConstrainer<CT>()` |
+| Propagated FX (which effects are allowed in children's FX chains) | `ProcessorMetadata::childFXConstrainerWildcard` | `.withChildFXConstrainer<CT>()` |
+
+### How to define a constrainer source
+
+Any class can serve as a constrainer source for `withConstrainer<T>()` by providing a static `getWildcard()` method:
+
+```cpp
+// On a Constrainer subclass (traditional pattern)
+class NoMidiInputConstrainer : public FactoryType::Constrainer
+{
+public:
+    static ProcessorMetadata::WildcardFilterList getWildcard() 
+    { 
+        return {
+            { ProcessorMetadataIds::Modulator, ProcessorMetadataIds::TimeVariantModulator.toString() },
+            { ProcessorMetadataIds::Effect, ProcessorMetadataIds::MasterEffect.toString() }
+        };
+    }
+    // ... allowType() override for runtime compatibility
+};
+
+// On a modulator base class (lightweight pattern for simple cases)
+class VoiceStartModulator : public Modulator
+{
+public:
+    static ProcessorMetadata::WildcardFilterList getWildcard() 
+    { 
+        return {
+            { ProcessorMetadataIds::Modulator, ProcessorMetadataIds::VoiceStartModulator.toString() }
+        };
+    }
+};
+```
+
+Each pair in the list maps a domain (`ProcessorMetadataIds::Modulator`, `::Effect`, `::SoundGenerator`) to a wildcard string. The `withConstrainer<T>()` / `withFXConstrainer<CT>()` / etc. methods extract the relevant domain entry.
+
+### Existing constrainer classes
+
+| Class | Domains | Wildcard | Used by |
+|---|---|---|---|
+| `NoMidiInputConstrainer` | Modulator -> `TimeVariantModulator`, Effect -> `MasterEffect` | SynthChain gain/FX chains, SendContainer FX chain |
+| `SynthGroupFXConstrainer` | Effect -> `VoiceEffect` | SynthGroup child FX chains (propagated) |
+| `SynthGroupConstrainer` | SoundGenerator -> `!ModulatorSynthChain\|!GlobalModulatorContainer\|!ModulatorSynthGroup\|!MacroModulationSource` | SynthGroup child container |
+| `NoGlobalsConstrainer` | Modulator -> `!Global*Modulator` | GlobalModulatorContainer gain chain |
+| `SlotFX::Constrainer` | Effect -> `!PolyFilterEffect\|!PolyshapeFX\|!HarmonicFilter\|!HarmonicMonophonicFilter\|!StereoEffect\|!RouteEffect\|!SlotFX` | SlotFX hosted effect list |
+| `VoiceStartModulator` (base class) | Modulator -> `VoiceStartModulator` | Envelope internal chains (AHDSR, TableEnvelope, SimpleEnvelope, FlexAHDSR) |
+
+## 5. Container and Chain Metadata
+
+Processors that contain other processors (sound generators, effects, modulators) have additional metadata fields describing what can be added to them.
+
+### Auto-detected fields
+
+`withType<T>()` automatically sets:
+- `hasChildren = true` when `T` inherits from `Chain`
+- `hasFX = true` when `T` inherits from `ModulatorSynth`
+
+### FX chain constrainer
+
+Use `.withFXConstrainer<CT>()` to declare which effects are allowed in this processor's own FX chain:
+
+```cpp
+return ModulatorSynth::createBaseMetadata()
+    .withStandardMetadata<ModulatorSynthChain>()
+    .withFXConstrainer<NoMidiInputConstrainer>();
+```
+
+Use `.withDisabledFX()` if the processor type never renders its FX chain:
+
+```cpp
+return ModulatorSynth::createBaseMetadata()
+    .withStandardMetadata<GlobalModulatorContainer>()
+    .withDisabledFX();
+```
+
+### Child sound generator constrainer
+
+Use `.withChildConstrainer<CT>()` for containers that host child sound generators:
+
+```cpp
+return ModulatorSynth::createBaseMetadata()
+    .withStandardMetadata<ModulatorSynthGroup>()
+    .withChildConstrainer<SynthGroupConstrainer>();
+```
+
+### Propagated FX constrainer
+
+Use `.withChildFXConstrainer<CT>()` when a container propagates FX constraints to its children's effect chains at runtime. This is purely informational metadata - the actual propagation still happens via the runtime `Constrainer` system, but the metadata tells consumers (LLM, popup menu, ScriptBuilder) what constraints will be in effect:
+
+```cpp
+.withChildFXConstrainer<SynthGroupFXConstrainer>()
+```
+
+### Complete container example (ModulatorSynthGroup)
+
+```cpp
+static ProcessorMetadata createMetadata()
+{
+    using Par = ProcessorMetadata::ParameterMetadata;
+    using Mod = ProcessorMetadata::ModulationMetadata;
+
+    return ModulatorSynth::createBaseMetadata()
+        .withStandardMetadata<ModulatorSynthGroup>()
+        .withDescription("A container for synthesisers that share common modulation, with optional FM synthesis and unison detune/spread.")
+        .withChildConstrainer<SynthGroupConstrainer>()
+        .withChildFXConstrainer<SynthGroupFXConstrainer>()
+        .withParameter(Par(EnableFM)
+            .withId("EnableFM")
+            .withDescription("Enables FM synthesis between two child synths")
+            .asToggle()
+            .withDefault(0.0f))
+        // ... more parameters ...
+        .withModulation(Mod(InternalChains::DetuneModulation)
+            .withId("Detune Modulation")
+            .withDescription("Modulates the unison detune amount")
+            .withMode(scriptnode::modulation::ParameterMode::ScaleOnly))
+        .withModulation(Mod(InternalChains::SpreadModulation)
+            .withId("Spread Modulation")
+            .withDescription("Modulates the unison stereo spread")
+            .withMode(scriptnode::modulation::ParameterMode::ScaleOnly));
+}
+```
+
+### Rewriting inherited modulation chains
+
+When a derived class needs to completely replace a base class modulation chain (e.g., GlobalModulatorContainer renames the gain chain to "Global Modulators"), set the entry directly:
+
+```cpp
+auto md = ModulatorSynth::createBaseMetadata()
+    .withStandardMetadata<GlobalModulatorContainer>()
+    .withDisabledChain(ModulatorSynth::BasicChains::PitchChain)
+    .withDisabledFX();
+
+// Replace the gain chain entry entirely
+md.modulation.set(ModulatorSynth::BasicChains::GainChain,
+    ProcessorMetadata::ModulationMetadata(ModulatorSynth::InternalChains::GainModulation)
+        .withId("Global Modulators")
+        .withDescription("The modulation sources that can be picked up using GlobalModulators")
+        .withConstrainer<NoGlobalsConstrainer>());
+
+return md;
+```
+
+## 6. Parameter Extraction Checklist
 
 For each processor, gather data from these sources:
 
@@ -287,6 +465,7 @@ For each processor, gather data from these sources:
 | Tempo sync | Editor tempo-sync switching logic in `updateGui()` |
 | Modulation chains | `InternalChains` enum + `new ModulatorChain(...)` calls in constructor |
 | Modulation modes | The mode argument to `ModulatorChain` constructor (GainMode, PitchMode, etc.) |
+| Chain constrainers | `setConstrainer()` calls in constructor or `setGroup()`, or factory type overrides (e.g., `TimeVariantModulatorFactoryType`) |
 | Description | Doxygen comments on enum members, `SET_PROCESSOR_NAME` third argument |
 | Type/subtype | The C++ base class (passed to `withType<T>()`) |
 | Identity interfaces | Concrete type checks: `ModulatorSampler`, `MidiPlayer`, `WavetableSynth`, `HotswappableProcessor`, `RoutableProcessor` |
@@ -303,7 +482,28 @@ Descriptions should be concise but informative - explain *what the parameter doe
 | "The most simple envelope (only attack and release)." | "A minimal envelope with attack and release stages, using linear or exponential curves." |
 | "Smoothing factor for the oscillator" | "Applies low-pass smoothing to the LFO output to reduce discontinuities at waveform edges" |
 
-If the existing doxygen comment or `SET_PROCESSOR_NAME` description is already clear, use it directly. If it merely restates the parameter name (e.g., "the frequency"), rewrite it. If improving a description requires domain knowledge you are uncertain about, keep the existing text and mark it with a `TODO_MODULE:` comment for manual review later.
+If the existing doxygen comment or `SET_PROCESSOR_NAME` description is already clear, use it directly. If it merely restates the parameter name (e.g., "the frequency"), rewrite it.
+
+For module descriptions, explain what the module does (not just what it is), mention key features or distinguishing capabilities, and keep it to a single sentence of 15-30 words. For LLM-facing descriptions, note non-obvious domain details (e.g., gain being linear 0-1 not dB).
+
+### ProcessorMetadata builder methods reference
+
+| Method | When to use |
+|---|---|
+| `.withStandardMetadata<T>()` | Always - sets id, prettyName, type, and interfaces from the class |
+| `.withDescription("...")` | Always - brief description of the processor |
+| `.withPrettyName("...")` | Only to override the name set by `withStandardMetadata` |
+| `.withId(id)` | Only when not using `withStandardMetadata` |
+| `.withType<T>()` | Only when not using `withStandardMetadata` |
+| `.withInterface<T>()` | Only when not using `withStandardMetadata` (it calls this automatically) |
+| `.asDynamic()` | For dynamic/scripted processors whose parameters come from networks/scripts |
+| `.withComplexDataInterface(ExternalData::DataType)` | For each data type the processor holds (Table, SliderPack, AudioFile, DisplayBuffer) |
+| `.withFXConstrainer<CT>()` | For processors with a constrained FX chain |
+| `.withChildConstrainer<CT>()` | For containers with a constrained child list |
+| `.withChildFXConstrainer<CT>()` | For containers that propagate FX constraints to children |
+| `.withModConstrainer<CT>(index)` | To apply a constrainer to an inherited modulation chain |
+| `.withDisabledChain(index)` | To mark a modulation chain as structurally disabled |
+| `.withDisabledFX()` | To mark a processor as having no FX chain |
 
 ### ParameterMetadata builder methods reference
 
@@ -312,7 +512,6 @@ If the existing doxygen comment or `SET_PROCESSOR_NAME` description is already c
 | `.withId("Name")` | Always - the parameter's string identifier |
 | `.withDescription("...")` | Always - brief description |
 | `.withDefault(value)` | Always - the default value as float |
-| `.withSliderMode(HiSlider::Mode)` | For slider parameters |
 | `.withSliderMode(HiSlider::Mode, Range(...))` | For slider parameters with explicit range |
 | `.asToggle()` | For on/off parameters (sets range to {0,1,1}) |
 | `.withValueList({"item1", "item2", ...})` | For combo box / list parameters (1-indexed by default) |
@@ -327,6 +526,8 @@ If the existing doxygen comment or `SET_PROCESSOR_NAME` description is already c
 | `.withId("Name")` | Always - the chain's string identifier |
 | `.withDescription("...")` | Always - what the chain modulates |
 | `.withMode(scriptnode::modulation::ParameterMode::X)` | Always - ScaleOnly, ScaleAdd, or Pitch |
+| `.withConstrainer<T>()` | When the chain restricts which modulator types are allowed |
+| `.asDisabled()` | When the chain is structurally disabled (never processed) |
 
 ### Modulation mode mapping
 
@@ -341,18 +542,21 @@ Chains constructed with a `scaleFunction` that maps 0..1 to -1..1 (like WaveSynt
 
 ### withType mapping
 
-| C++ base class | `withType<T>()` argument |
-|---|---|
-| VoiceStartModulator subclass | `hise::VoiceStartModulator` |
-| TimeVariantModulator subclass | `hise::TimeVariantModulator` |
-| EnvelopeModulator subclass | `hise::EnvelopeModulator` |
-| MasterEffectProcessor subclass | `hise::MasterEffectProcessor` |
-| MonophonicEffectProcessor subclass | `hise::MonophonicEffectProcessor` |
-| VoiceEffectProcessor subclass | `hise::VoiceEffectProcessor` |
-| MidiProcessor subclass | `hise::MidiProcessor` |
-| ModulatorSynth subclass | `hise::ModulatorSynth` |
+| C++ base class | `withType<T>()` argument | Auto-sets |
+|---|---|---|
+| VoiceStartModulator subclass | `hise::VoiceStartModulator` | type=Modulator, subtype=VoiceStartModulator |
+| TimeVariantModulator subclass | `hise::TimeVariantModulator` | type=Modulator, subtype=TimeVariantModulator |
+| EnvelopeModulator subclass | `hise::EnvelopeModulator` | type=Modulator, subtype=EnvelopeModulator |
+| MasterEffectProcessor subclass | `hise::MasterEffectProcessor` | type=Effect, subtype=MasterEffect |
+| MonophonicEffectProcessor subclass | `hise::MonophonicEffectProcessor` | type=Effect, subtype=MonophonicEffect |
+| VoiceEffectProcessor subclass | `hise::VoiceEffectProcessor` | type=Effect, subtype=VoiceEffect |
+| MidiProcessor subclass | `hise::MidiProcessor` | type=MidiProcessor |
+| ModulatorSynth subclass | `hise::ModulatorSynth` | type=SoundGenerator, hasFX=true |
+| Chain subclass (any) | (detected via `std::is_base_of`) | hasChildren=true |
 
-## 5. Special Cases
+Note: type/subtype strings are now `Identifier` constants in the `ProcessorMetadataIds` namespace, not raw strings. This prevents typos and enables efficient comparison.
+
+## 7. Special Cases
 
 ### Runtime-dependent defaults
 
@@ -394,10 +598,9 @@ Processors with no own parameters still benefit from metadata for type/descripti
 ```cpp
 static ProcessorMetadata createMetadata()
 {
-    return ProcessorMetadata(getClassType())
-        .withPrettyName("Route Effect")
-        .withDescription("Routes audio to other channels.")
-        .withType<hise::MasterEffectProcessor>();
+    return ProcessorMetadata()
+        .withStandardMetadata<RouteEffect>()
+        .withDescription("Routes audio to other channels.");
 }
 ```
 
@@ -411,30 +614,24 @@ There are two methods for declaring interfaces, corresponding to different categ
 
 **`withInterface<T>()`** - for identity-based interfaces (the processor IS this type):
 
-| `withInterface<T>()` argument | Scripting API method | String stored |
+| `withInterface<T>()` argument | Scripting API method | Identifier stored |
 |---|---|---|
-| `ModulatorSampler` | `Synth.getSampler()` | `"Sampler"` |
-| `MidiPlayer` | `Synth.getMidiPlayer()` | `"MidiPlayer"` |
-| `WavetableSynth` | `Synth.getWavetableController()` | `"WavetableController"` |
-| `HotswappableProcessor` (or subclass) | `Synth.getSlotFX()` | `"SlotFX"` |
-| `RoutableProcessor` (or subclass) | `Synth.getRoutingMatrix()` | `"RoutingMatrix"` |
+| `ModulatorSampler` | `Synth.getSampler()` | `ProcessorMetadataIds::Sampler` |
+| `MidiPlayer` | `Synth.getMidiPlayer()` | `ProcessorMetadataIds::MidiPlayer` |
+| `WavetableSynth` | `Synth.getWavetableController()` | `ProcessorMetadataIds::WavetableController` |
+| `HotswappableProcessor` (or subclass) | `Synth.getSlotFX()` | `ProcessorMetadataIds::SlotFX` |
+| `RoutableProcessor` (or subclass) | `Synth.getRoutingMatrix()` | `ProcessorMetadataIds::RoutingMatrix` |
 
-Usage: call on the processor's own class or a base it inherits from:
-
-```cpp
-.withType<hise::ModulatorSynth>()
-.withInterface<ModulatorSampler>()     // this IS a sampler
-.withInterface<RoutableProcessor>()    // this HAS a routing matrix
-```
+Note: `withStandardMetadata<T>()` calls `withInterface<T>()` automatically, so you don't need to repeat it for the processor's own class. You only need explicit `withInterface<>()` calls for additional interfaces not detectable from the processor type itself.
 
 **`withComplexDataInterface(ExternalData::DataType)`** - for data-based interfaces (the processor HOLDS this data type):
 
-| `ExternalData::DataType` | Scripting API method | String stored |
+| `ExternalData::DataType` | Scripting API method | Identifier stored |
 |---|---|---|
-| `Table` | `Synth.getTableProcessor()` | `"TableProcessor"` |
-| `SliderPack` | `Synth.getSliderPackProcessor()` | `"SliderPackProcessor"` |
-| `AudioFile` | `Synth.getAudioSampleProcessor()` | `"AudioSampleProcessor"` |
-| `DisplayBuffer` | `Synth.getDisplayBufferSource()` | `"DisplayBufferSource"` |
+| `Table` | `Synth.getTableProcessor()` | `ProcessorMetadataIds::TableProcessor` |
+| `SliderPack` | `Synth.getSliderPackProcessor()` | `ProcessorMetadataIds::SliderPackProcessor` |
+| `AudioFile` | `Synth.getAudioSampleProcessor()` | `ProcessorMetadataIds::AudioSampleProcessor` |
+| `DisplayBuffer` | `Synth.getDisplayBufferSource()` | `ProcessorMetadataIds::DisplayBufferSource` |
 
 Usage: call once per data type the processor holds. The counts come from the `ProcessorWithStaticExternalData` constructor arguments or the `ExternalDataHolder` implementation:
 
@@ -444,10 +641,6 @@ Usage: call once per data type the processor holds. The counts come from the `Pr
 .withComplexDataInterface(ExternalData::DataType::SliderPack)
 .withComplexDataInterface(ExternalData::DataType::DisplayBuffer)
 ```
-
-To determine which data types a processor holds, check:
-- The `ProcessorWithStaticExternalData(mc, numTables, numSliderPacks, numAudioFiles, numDisplayBuffers)` constructor call
-- Or `getNumDataObjects()` overrides for dynamic data holders
 
 ### Range construction
 
@@ -466,60 +659,68 @@ Range(-5.0, 5.0, 1.0)
 Range(0.01, 40.0, 0.0).withCentreSkew(10.0)
 ```
 
-## 6. Processor Inventory
+## 8. Processor Inventory
 
-### Already migrated
+### Already migrated (full metadata)
 
-| Processor | Base class | Params |
-|---|---|---|
-| LfoModulator | TimeVariantModulator | 11 |
-| SimpleEnvelope | EnvelopeModulator | 5 (2 base + 3 own) |
-| WaveSynth | ModulatorSynth | 19 (4 base + 15 own) |
+| Processor | Base class | Params | Constrainer metadata |
+|---|---|---|---|
+| ConstantModulator | VoiceStartModulator | 0 | - |
+| VelocityModulator | VoiceStartModulator | 3 | - |
+| KeyModulator | VoiceStartModulator | 0 | - |
+| RandomModulator | VoiceStartModulator | 1 | - |
+| GlobalVoiceStartModulator | VoiceStartModulator | 2 | - |
+| GlobalStaticTimeVariantModulator | VoiceStartModulator | 2 | - |
+| ArrayModulator | VoiceStartModulator | 0 | - |
+| EventDataModulator | VoiceStartModulator | 2 | - |
+| ControlModulator | TimeVariantModulator | 5 | - |
+| PitchwheelModulator | TimeVariantModulator | 3 | - |
+| MacroModulator | TimeVariantModulator | 4 | - |
+| GlobalTimeVariantModulator | TimeVariantModulator | 2 | - |
+| LfoModulator | TimeVariantModulator | 11 | - |
+| SimpleEnvelope | EnvelopeModulator | 5 (2 base + 3) | AttackChain: VoiceStartModulator |
+| AhdsrEnvelope | EnvelopeModulator | 11 (2 base + 9) | All 5 chains: VoiceStartModulator |
+| TableEnvelope | EnvelopeModulator | 4 (2 base + 2) | AttackChain, ReleaseChain: VoiceStartModulator |
+| FlexAhdsrEnvelope | EnvelopeModulator | varies | All 5 chains: VoiceStartModulator |
+| MPEModulator | EnvelopeModulator | 6 (2 base + 4) | - |
+| MatrixModulator | EnvelopeModulator | 4 (2 base + 2) | - |
+| ScriptnodeVoiceKiller | EnvelopeModulator | 2 (2 base) | - |
+| GlobalEnvelopeModulator | EnvelopeModulator | 4 (2 base + 2) | - |
+| EventDataEnvelope | EnvelopeModulator | 5 (2 base + 3) | - |
+| WaveSynth | ModulatorSynth | 19 (4 base + 15) | - |
+| ModulatorSynthChain | ModulatorSynth + Chain | 4 (4 base) | GainChain: NoMidiInputConstrainer, PitchChain: disabled, FX: NoMidiInputConstrainer |
+| GlobalModulatorContainer | ModulatorSynth | 4 (4 base) | GainChain rewritten as "Global Modulators" with NoGlobalsConstrainer, PitchChain: disabled, FX: disabled |
+| ModulatorSynthGroup | ModulatorSynth + Chain | 12 (4 base + 8) | Child: SynthGroupConstrainer, ChildFX: SynthGroupFXConstrainer |
+| SendContainer | ModulatorSynth | 4 (4 base) | FX: NoMidiInputConstrainer |
 
-### VoiceStartModulators
+### Already migrated (dynamic metadata - hardcoded/scripted processors)
 
-| Processor | Params | Has getDefaultValue | InitList calls getDefaultValue | Has editor | Notes |
-|---|---|---|---|---|---|
-| ConstantModulator | 0 | No | No | Yes | Zero params |
-| VelocityModulator | 3 | No | No | Yes | Inverted, UseTable, DecibelMode |
-| KeyModulator | 0 | No | No | Yes | Table-only |
-| RandomModulator | 1 | No | No | Yes | UseTable |
-| GlobalVoiceStartModulator | 2 | No | No | Yes | UseTable, Inverted (from GlobalModulator) |
-| GlobalStaticTimeVariantModulator | 2 | No | No | Yes | UseTable, Inverted (from GlobalModulator) |
-| ArrayModulator | 0 | No | No | Yes | SliderPack-based |
-| EventDataModulator | 2 | No | No | Yes | SlotIndex, DefaultValue |
+| Processor | Base class | DataType | Notes |
+|---|---|---|---|
+| HardcodedMasterFX | MasterEffectProcessor | Dynamic | Uses `withHardcodedMetadata` |
+| HardcodedPolyphonicFX | VoiceEffectProcessor | Dynamic | Uses `withHardcodedMetadata` |
+| HardcodedTimeVariantModulator | TimeVariantModulator | Dynamic | Uses `withHardcodedMetadata` |
+| HardcodedEnvelopeModulator | EnvelopeModulator | Dynamic | Uses `withHardcodedMetadata` |
+| HardcodedSynthesiser | ModulatorSynth | Dynamic | Uses `withHardcodedMetadata` |
+| JavascriptMidiProcessor | MidiProcessor | Dynamic | Manual construction (no DisplayBuffer/HotswappableProcessor) |
+| JavascriptVoiceStartModulator | VoiceStartModulator | Dynamic | Manual construction (no DisplayBuffer/HotswappableProcessor) |
+| JavascriptTimeVariantModulator | TimeVariantModulator | Dynamic | Uses `withScriptnodeMetadata` |
+| JavascriptEnvelopeModulator | EnvelopeModulator | Dynamic | Uses `withScriptnodeMetadata` |
+| JavascriptMasterEffect | MasterEffectProcessor | Dynamic | Uses `withScriptnodeMetadata` |
+| JavascriptPolyphonicEffect | VoiceEffectProcessor | Dynamic | Uses `withScriptnodeMetadata` |
+| JavascriptSynthesiser | ModulatorSynth | Dynamic | Uses `withScriptnodeMetadata` |
 
-### TimeVariantModulators
+### Remaining (still using createFallback)
 
-| Processor | Params | Has getDefaultValue | InitList calls getDefaultValue | Has editor | Notes |
-|---|---|---|---|---|---|
-| ControlModulator | 5 | No | No | Yes | Inverted, UseTable, ControllerNumber, SmoothTime, DefaultValue |
-| PitchwheelModulator | 3 | No | No | Yes | Inverted, UseTable, SmoothTime |
-| MacroModulator | 4 | No | No | Yes | MacroIndex, SmoothTime, UseTable, MacroValue |
-| GlobalTimeVariantModulator | 2 | No | No | Yes | UseTable, Inverted (from GlobalModulator) |
+#### MidiProcessors
 
-### EnvelopeModulators
+| Processor | Params | Has getDefaultValue | Has editor | Notes |
+|---|---|---|---|---|
+| Transposer | 1 | No | Yes | TransposeAmount |
+| MidiPlayer | 7 | No | Yes | |
+| ChokeGroupProcessor | 4 | Yes | No | |
 
-| Processor | Params | Has getDefaultValue | InitList calls getDefaultValue | Has editor | Notes |
-|---|---|---|---|---|---|
-| AhdsrEnvelope | 11 (2 base + 9 own) | Yes | No | Yes | Has internal chains |
-| TableEnvelope | 4 (2 base + 2 own) | Yes | No | Yes | Has internal chains |
-| MPEModulator | 6 (2 base + 4 own) | Yes | Yes | Yes | Needs metadataInitialised pattern |
-| ScriptnodeVoiceKiller | 2 (2 base + 0 own) | Yes | No | No | Base params only |
-| GlobalEnvelopeModulator | 4 (2 base + 2 own) | No | No | Yes | Uses GlobalModulator mix-in |
-| EventDataEnvelope | 5 (2 base + 3 own) | Yes | No | Yes | |
-| MatrixModulator | 4 (2 base + 2 own) | Yes | No | Yes | |
-| FlexAhdsrEnvelope | varies | Yes | No | No | Params from scriptnode base |
-
-### MidiProcessors
-
-| Processor | Params | Has getDefaultValue | InitList calls getDefaultValue | Has editor | Notes |
-|---|---|---|---|---|---|
-| Transposer | 1 | No | No | Yes | TransposeAmount |
-| MidiPlayer | 7 | No | No | Yes | |
-| ChokeGroupProcessor | 4 | Yes | No | No | |
-
-### Effects
+#### Effects
 
 | Processor | Base | Params | Has getDefaultValue | InitList calls getDefaultValue | Has editor | Notes |
 |---|---|---|---|---|---|---|
@@ -536,8 +737,8 @@ Range(0.01, 40.0, 0.0).withCentreSkew(10.0)
 | PhaseFX | MasterEffect | 4 | No | No | Yes | 1 internal chain |
 | RouteEffect | MasterEffect | 0 | No | No | Yes | Zero params |
 | SendEffect | MasterEffect | 4 | Yes | No | Yes | 1 internal chain |
-| SaturatorEffect | MasterEffect | 4 | Yes | No | Yes | 1 internal chain |
-| SlotFX | MasterEffect | 0 | No | No | Yes | Container |
+| SaturatorEffect | MasterEffect | 4 | Yes | No | Yes | 1 internal chain (TimeVariantModulator only) |
+| SlotFX | MasterEffect | 0 | No | No | Yes | Container with hosted effect constrainer |
 | EmptyFX | MasterEffect | 0 | No | No | Yes | Does nothing |
 | DynamicsEffect | MasterEffect | 18 | Yes | No | Yes | Gate/Compressor/Limiter |
 | AnalyserEffect | MasterEffect | 2 | No | No | Yes | |
@@ -546,23 +747,19 @@ Range(0.01, 40.0, 0.0).withCentreSkew(10.0)
 | MidiMetronome | MasterEffect | 3 | Yes | No | Yes | |
 | NoiseGrainPlayer | VoiceEffect | 4 | Yes | No | Yes | AudioSampleProcessor |
 
-### SoundGenerators
+#### SoundGenerators
 
 | Processor | Params | Has getDefaultValue | InitList calls getDefaultValue | Has editor | Notes |
 |---|---|---|---|---|---|
-| ModulatorSampler | 16 (4 base + 12 own) | No | No | Yes | Complex sampler |
-| SineSynth | 10 (4 base + 6 own) | Yes | Yes | Yes | Needs metadataInitialised |
-| ModulatorSynthChain | 4 (4 base + 0 own) | No | No | Yes | Container, base params only |
-| GlobalModulatorContainer | 4 (4 base + 0 own) | No | No | No | Container |
-| NoiseSynth | 4 (4 base + 0 own) | No | No | Yes | Base params only |
-| WavetableSynth | 8 (4 base + 4 own) | Yes | No | Yes | Extra internal chains |
-| AudioLooper | 10 (4 base + 6 own) | Yes | No | Yes | |
-| ModulatorSynthGroup | 12 (4 base + 8 own) | No | No | Yes | FM synthesis |
-| MacroModulationSource | 4 (4 base + 0 own) | No | No | No | Container |
-| SendContainer | 4 (4 base + 0 own) | No | No | No | Container |
-| SilentSynth | 4 (4 base + 0 own) | No | No | Yes | Produces silence |
+| ModulatorSampler | 16 (4 base + 12) | No | No | Yes | Complex sampler |
+| SineSynth | 10 (4 base + 6) | Yes | Yes | Yes | Needs metadataInitialised |
+| NoiseSynth | 4 (4 base + 0) | No | No | Yes | Base params only |
+| WavetableSynth | 8 (4 base + 4) | Yes | No | Yes | Extra internal chains |
+| AudioLooper | 10 (4 base + 6) | Yes | No | Yes | |
+| MacroModulationSource | 4 (4 base + 0) | No | No | No | Container |
+| SilentSynth | 4 (4 base + 0) | No | No | Yes | Produces silence |
 
-### Hardcoded Script Processors
+#### Hardcoded Script Processors
 
 These use the variant pattern described in Section 3. Parameters come from `onInit()` Content widget creation.
 
@@ -577,26 +774,7 @@ These use the variant pattern described in Section 3. Parameters come from `onIn
 | ChannelSetterScriptProcessor | 1 | channelNumber |
 | MuteAllScriptProcessor | 2 | ignoreButton, fixStuckNotes |
 
-### Excluded from migration (dynamic parameters)
-
-These processors have parameters defined at runtime by scripts or opaque nodes. They remain as fallback entries in the registry.
-
-| Processor | Reason |
-|---|---|
-| JavascriptVoiceStartModulator | Scripting processor |
-| JavascriptTimeVariantModulator | Scripting processor |
-| JavascriptEnvelopeModulator | Scripting processor |
-| JavascriptMidiProcessor | Scripting processor |
-| JavascriptMasterEffect | Scripting processor |
-| JavascriptPolyphonicEffect | Scripting processor |
-| JavascriptSynthesiser | Scripting processor |
-| HardcodedTimeVariantModulator | DLL wrapper, params from opaque node |
-| HardcodedEnvelopeModulator | DLL wrapper, params from opaque node |
-| HardcodedMasterFX | DLL wrapper, params from opaque node |
-| HardcodedPolyphonicFX | DLL wrapper, params from opaque node |
-| HardcodedSynthesiser | DLL wrapper, params from opaque node |
-
-## 7. Validation
+## 9. Validation
 
 After migrating a processor, verify:
 
@@ -605,8 +783,9 @@ After migrating a processor, verify:
 3. **Default values match** - each parameter's `.withDefault()` matches the old `getDefaultValue()` return
 4. **Ranges match** - compare against editor `.setMode()` / `.setRange()` calls
 5. **Modulation chains match** - count and order match the `InternalChains` enum
-6. **No leftover parameterNames.add()** - the constructor body should not add parameter names (metadata handles this via `updateParameterSlots()`)
-7. **No leftover updateParameterSlots()** in constructor body - it runs via `metadataInitialised` in the initializer list
-8. **Editor compiles** - `md.setup()` calls compile and reference the correct enum values
-9. **Build succeeds** - full build with no errors
-10. **Unit tests pass** - run the ProcessorMetadata tests in CI configuration
+6. **Chain constrainers match** - compare against `setConstrainer()` calls in constructor, `setGroup()`, and factory type overrides
+7. **No leftover parameterNames.add()** - the constructor body should not add parameter names (metadata handles this via `updateParameterSlots()`)
+8. **No leftover updateParameterSlots()** in constructor body - it runs via `metadataInitialised` in the initializer list
+9. **Editor compiles** - `md.setup()` calls compile and reference the correct enum values
+10. **Build succeeds** - full build with no errors
+11. **Unit tests pass** - run the ProcessorMetadata tests in CI configuration

@@ -101,7 +101,15 @@ private:
 
 struct SendContainer : public ModulatorSynth
 {
-	SET_PROCESSOR_NAME("SendContainer", "Send Container", "A signal chain tool that allows to receive the signal from a Send FX");
+	SET_PROCESSOR_NAME("SendContainer", "Send Container", "");
+
+	static ProcessorMetadata createMetadata()
+	{
+		return ModulatorSynth::createBaseMetadata()
+			.withStandardMetadata<SendContainer>()
+			.withDescription("A signal chain tool that receives the signal from a Send FX and applies its own effect chain.")
+			.withFXConstrainer<NoMidiInputConstrainer>();
+	}
 
 	SendContainer(MainController* mc, const String& id) :
 		ModulatorSynth(mc, id, 1)

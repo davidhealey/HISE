@@ -45,6 +45,20 @@ public:
 
 	NoMidiInputConstrainer();
 
+	static ProcessorMetadata::WildcardFilterList getWildcard() 
+	{ 
+		return {
+			{ 
+				ProcessorMetadataIds::Modulator, 
+				ProcessorMetadataIds::TimeVariantModulator.toString()
+			},
+			{ 
+				ProcessorMetadataIds::Effect, 
+				ProcessorMetadataIds::MasterEffect.toString()
+			}
+		};
+	}
+
 	String getDescription() const override;
 
 	bool allowType(const Identifier &typeName) override;
@@ -62,6 +76,16 @@ public:
 
     String getDescription() const override;
 
+	static ProcessorMetadata::WildcardFilterList getWildcard() 
+	{
+		return {
+			{
+				ProcessorMetadataIds::Effect, 
+				ProcessorMetadataIds::VoiceEffect.toString()
+			}
+		};
+	}
+
     bool allowType(const Identifier &typeName) override;
 };
 
@@ -70,6 +94,16 @@ class SynthGroupConstrainer : public FactoryType::Constrainer
 public:
 
 	SynthGroupConstrainer();
+
+	static ProcessorMetadata::WildcardFilterList getWildcard()
+	{
+		return {
+			{ 
+				ProcessorMetadataIds::SoundGenerator, 
+			    "!ModulatorSynthChain|!GlobalModulatorContainer|!ModulatorSynthGroup|!MacroModulationSource" 
+			}
+		};
+	}
 
 	String getDescription() const override;
 
@@ -100,7 +134,17 @@ class ModulatorSynthChain: public ModulatorSynth,
 {
 public:
 
-	SET_PROCESSOR_NAME("SynthChain", "Container", "A container for other Sound generators.");
+	SET_PROCESSOR_NAME("SynthChain", "Container", "");
+
+	static ProcessorMetadata createMetadata()
+	{
+		return ModulatorSynth::createBaseMetadata()
+			.withStandardMetadata<ModulatorSynthChain>()
+			.withDescription("A container for other Sound generators.")
+			.withFXConstrainer<NoMidiInputConstrainer>()
+			.withDisabledChain(ModulatorSynth::BasicChains::PitchChain)
+		    .withModConstrainer<NoMidiInputConstrainer>(ModulatorSynth::BasicChains::GainChain);
+	}
 
 	enum EditorStates
 	{

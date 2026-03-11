@@ -1180,8 +1180,6 @@ void ModulatorSynth::finaliseModChains()
 	modChains[BasicChains::GainChain].setExpandToAudioRate(true);
 	modChains[BasicChains::PitchChain].setExpandToAudioRate(true);
 
-	//pitchChain->getFactoryType()->setConstrainer(new NoGlobalEnvelopeConstrainer());
-
 	gainChain->setTableValueConverter(Modulation::getValueAsDecibel);
 	pitchChain->setTableValueConverter(Modulation::getValueAsSemitone);
 

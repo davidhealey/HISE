@@ -49,13 +49,29 @@ class SlotFX : public MasterEffectProcessor,
 {
 public:
 
-	SET_PROCESSOR_NAME("SlotFX", "Effect Slot", "A placeholder for another effect that can be swapped dynamically.")
+	SET_PROCESSOR_NAME("SlotFX", "Effect Slot", "")
+
+	static ProcessorMetadata createMetadata()
+	{
+		return ProcessorMetadata(getClassType())
+			.withDescription("A placeholder for another effect that can be swapped dynamically.")
+			.withStandardMetadata<SlotFX>()
+			.withChildFXConstrainer<SlotFX>();
+	}
+
+	static ProcessorMetadata::WildcardFilterList getWildcard()
+	{
+		return {
+			{
+				ProcessorMetadataIds::Effect,
+				"MasterEffect|!RouteEffect|!SlotFX"
+			}
+		};
+	};
 
 	SlotFX(MainController *mc, const String &uid);
 
 	~SlotFX() {};
-
-	
 
 	bool hasTail() const override 
 	{ 
@@ -214,6 +230,10 @@ private:
 
 	class Constrainer : public FactoryType::Constrainer
 	{
+	public:
+
+	private:
+
 		String getDescription() const override { return "No poly FX"; }
 
 #define DEACTIVATE(x) if (typeName == x::getClassType()) return false;

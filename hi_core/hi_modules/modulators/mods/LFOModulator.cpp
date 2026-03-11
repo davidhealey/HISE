@@ -38,10 +38,9 @@ hise::ProcessorMetadata LfoModulator::createMetadata()
 	using Mod = ProcessorMetadata::ModulationMetadata;
 	using Range = scriptnode::InvertableParameterRange;
 
-	return ProcessorMetadata(getClassType())
-		.withPrettyName("LFO Modulator")
+	return ProcessorMetadata()
+		.withStandardMetadata<LfoModulator>()
 		.withDescription("Generates a periodic modulation signal with multiple waveform types, tempo sync, and an optional step sequencer mode.")
-		.withType<hise::TimeVariantModulator>()
 		.withComplexDataInterface(ExternalData::DataType::Table)
 		.withComplexDataInterface(ExternalData::DataType::SliderPack)
 		.withComplexDataInterface(ExternalData::DataType::DisplayBuffer)
@@ -169,9 +168,6 @@ LfoModulator::LfoModulator(MainController *mc, const String &id, Modulation::Mod
 	randomGenerator.setSeedRandomly();
 
 	getMainController()->addTempoListener(this);
-
-	frequencyChain->getFactoryType()->setConstrainer(new NoGlobalEnvelopeConstrainer());
-	intensityChain->getFactoryType()->setConstrainer(new NoGlobalEnvelopeConstrainer());
 
 	WeakReference<LfoModulator> safeThis(this);
 

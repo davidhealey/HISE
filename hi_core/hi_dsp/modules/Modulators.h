@@ -480,6 +480,13 @@ public:
     /** Only used in Global Modulator Containers. */
     void setResetUnsavedValue(bool shouldReset);
 
+	static ProcessorMetadata::WildcardFilterList getWildcard() 
+	{ 
+		return {
+			{ ProcessorMetadataIds::Modulator, ProcessorMetadataIds::VoiceStartModulator.toString() }
+		};
+	};
+
 	static Path getSymbolPath();
 
 	Path getSpecialSymbol() const override;

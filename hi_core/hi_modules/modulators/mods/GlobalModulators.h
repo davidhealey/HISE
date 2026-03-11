@@ -121,24 +121,30 @@ private:
 /** Deactivates Globals (this is used in Global Containers. */
 class NoGlobalsConstrainer : public FactoryType::Constrainer
 {
+public:
+
+	static ProcessorMetadata::WildcardFilterList getWildcard()
+	{
+		return { 
+			{
+				ProcessorMetadataIds::Modulator,
+				"!Global*Modulator"
+			}
+		};
+	}
+
+private:
+
 	String getDescription() const override { return "No global modulators"; }
 
+	// Runtime filtering disabled - the wildcard metadata (!Global*Modulator) is the operative filter.
+	// This allowType override is kept for API compatibility until the Constrainer system is fully retired.
 	bool allowType(const Identifier &typeName) override
 	{
-        return true;//!typeName.toString().startsWith("Global");
+        return true;
 	}
 };
 
-/** Deactivates Global Envelopes (this is used in Global Containers. */
-class NoGlobalEnvelopeConstrainer : public FactoryType::Constrainer
-{
-	bool allowType(const Identifier &typeName) override
-	{
-		return !typeName.toString().startsWith("GlobalEnvelope");
-	}
-
-	String getDescription() const override { return "No global modulators"; }
-};
 
 /** A modulator that connects to a global VoiceStartModulator (eg. Velocity).
 	@ingroup modulatorTypes	

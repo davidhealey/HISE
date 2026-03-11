@@ -39,10 +39,8 @@ hise::ProcessorMetadata TableEnvelope::createMetadata()
 	using Range = scriptnode::InvertableParameterRange;
 
 	return EnvelopeModulator::createBaseMetadata()
-		.withId(getClassType())
-		.withPrettyName("Table Envelope")
+		.withStandardMetadata<TableEnvelope>()
 		.withDescription("An envelope with fully customizable attack and release shapes drawn as lookup tables.")
-		.withType<hise::EnvelopeModulator>()
 		.withComplexDataInterface(ExternalData::DataType::Table)
 		.withParameter(Par(Attack)
 			.withId("Attack")
@@ -57,10 +55,12 @@ hise::ProcessorMetadata TableEnvelope::createMetadata()
 		.withModulation(Mod(AttackChain)
 			.withId("AttackTimeModulation")
 			.withDescription("Modulates the attack time per voice")
+			.withConstrainer<VoiceStartModulator>()
 			.withMode(scriptnode::modulation::ParameterMode::ScaleOnly))
 		.withModulation(Mod(ReleaseChain)
 			.withId("ReleaseTimeModulation")
 			.withDescription("Modulates the release time per voice")
+			.withConstrainer<VoiceStartModulator>()
 			.withMode(scriptnode::modulation::ParameterMode::ScaleOnly));
 }
 

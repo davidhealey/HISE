@@ -39,10 +39,8 @@ hise::ProcessorMetadata SimpleEnvelope::createMetadata()
 	using Range = scriptnode::InvertableParameterRange;
 
 	return EnvelopeModulator::createBaseMetadata()
-		.withId(getClassType())
-		.withPrettyName("Simple Envelope")
+		.withStandardMetadata<SimpleEnvelope>()
 		.withDescription("A lightweight two-stage envelope with attack and release, supporting linear or exponential curves.")
-		.withType<hise::EnvelopeModulator>()
 		.withParameter(Par(Attack)
 			.withId("Attack")
 			.withDescription("The attack time in milliseconds")
@@ -61,6 +59,7 @@ hise::ProcessorMetadata SimpleEnvelope::createMetadata()
 		.withModulation(Mod(AttackChain)
 			.withId("AttackTimeModulation")
 			.withDescription("Modulates the attack time per voice")
+			.withConstrainer<VoiceStartModulator>()
 			.withMode(scriptnode::modulation::ParameterMode::ScaleOnly));
 }
 

@@ -170,7 +170,7 @@ void ProcessorMetadataRegistry::registerAllMetadata()
 	add(ProcessorMetadata::createFallback<SaturatorEffect>());
 	add(JavascriptMasterEffect::createMetadata());
 	add(JavascriptPolyphonicEffect::createMetadata());
-	add(ProcessorMetadata::createFallback<SlotFX>());
+	add(SlotFX::createMetadata());
 	add(ProcessorMetadata::createFallback<EmptyFX>());
 	add(ProcessorMetadata::createFallback<DynamicsEffect>());
 	add(ProcessorMetadata::createFallback<AnalyserEffect>());
@@ -185,16 +185,16 @@ void ProcessorMetadataRegistry::registerAllMetadata()
 
 	add(ProcessorMetadata::createFallback<ModulatorSampler>());
 	add(ProcessorMetadata::createFallback<SineSynth>());
-	add(ProcessorMetadata::createFallback<ModulatorSynthChain>());
-	add(ProcessorMetadata::createFallback<GlobalModulatorContainer>());
+	add(ModulatorSynthChain::createMetadata());
+	add(GlobalModulatorContainer::createMetadata());
 	add(WaveSynth::createMetadata());
 	add(ProcessorMetadata::createFallback<NoiseSynth>());
 	add(ProcessorMetadata::createFallback<WavetableSynth>());
 	add(ProcessorMetadata::createFallback<AudioLooper>());
-	add(ProcessorMetadata::createFallback<ModulatorSynthGroup>());
+	add(ModulatorSynthGroup::createMetadata());
 	add(JavascriptSynthesiser::createMetadata());
 	add(ProcessorMetadata::createFallback<MacroModulationSource>());
-	add(ProcessorMetadata::createFallback<SendContainer>());
+	add(SendContainer::createMetadata());
 	add(ProcessorMetadata::createFallback<SilentSynth>());
 	add(HardcodedSynthesiser::createMetadata());
 	

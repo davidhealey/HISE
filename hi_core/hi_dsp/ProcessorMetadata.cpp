@@ -128,7 +128,11 @@ var ProcessorMetadata::ModulationMetadata::toJSON() const
 
 	obj->setProperty("chainIndex", chainIndex);
 	obj->setProperty("id", id.toString());
+
+	obj->setProperty("disabled", disabled);
 	obj->setProperty("description", description);
+	
+	obj->setProperty("constrainer", constrainerWildcard);
 
 	switch (modulationMode)
 	{
@@ -174,6 +178,18 @@ var ProcessorMetadata::toJSON() const
 	obj->setProperty("subtype", subtype.toString());
 	obj->setProperty("builderPath", getBuilderPath());
 
+	obj->setProperty("hasChildren", hasChildren);
+	obj->setProperty("hasFX", hasFX);
+
+	if (hasChildren)
+		obj->setProperty("constrainer", constrainerWildcard);
+
+	if(hasFX)
+		obj->setProperty("fx_constrainer", fxConstrainerWildcard);
+
+	if (hasChildren && childFXConstrainerWildcard != "*")
+		obj->setProperty("child_fx_constrainer", childFXConstrainerWildcard);
+
 	switch (dataType)
 	{
 	case DataType::Undefined:
@@ -196,7 +212,7 @@ var ProcessorMetadata::toJSON() const
 	{
 		Array<var> interfaces;
 		for (auto& i : interfaceClasses)
-			interfaces.add(i);
+			interfaces.add(i.toString());
 		obj->setProperty("interfaces", var(interfaces));
 	}
 

@@ -38,6 +38,40 @@ using namespace juce;
 
 class Processor;
 
+#define DECLARE_ID(x) static const Identifier x(#x);
+
+namespace ProcessorMetadataIds
+{
+
+DECLARE_ID(Modulator);
+DECLARE_ID(Effect);
+DECLARE_ID(MidiProcessor);
+DECLARE_ID(SoundGenerator);
+DECLARE_ID(TimeVariantModulator);
+DECLARE_ID(VoiceStartModulator);
+DECLARE_ID(EnvelopeModulator);
+
+DECLARE_ID(MasterEffect);
+DECLARE_ID(MonophonicEffect);
+DECLARE_ID(VoiceEffect);
+
+DECLARE_ID(Sampler);
+DECLARE_ID(MidiPlayer);
+DECLARE_ID(WavetableController);
+DECLARE_ID(SlotFX);
+DECLARE_ID(RoutingMatrix);
+
+DECLARE_ID(TableProcessor);
+DECLARE_ID(SliderPackProcessor); 
+DECLARE_ID(AudioSampleProcessor);
+DECLARE_ID(DisplayBufferSource);
+
+
+
+}
+
+#undef DECLARE_ID
+
 /** Unified parameter and module metadata for HISE processors.
 *
 *	Replaces the scattered metadata across editor constructors, parameterNames,
@@ -52,6 +86,8 @@ class Processor;
 */
 struct ProcessorMetadata
 {
+	using WildcardFilterList = std::vector<std::pair<Identifier, String>>;
+
 	enum class DataType
 	{
 		Undefined = 0,
@@ -224,6 +260,34 @@ struct ProcessorMetadata
 			return copy;
 		}
 
+		template <typename CT> ModulationMetadata withConstrainer() const
+		{
+			auto copy = *this;
+			auto wt = CT::getWildcard();
+			bool found = false;
+
+			for (const auto& w : wt)
+			{
+				if (w.first == ProcessorMetadataIds::Modulator)
+				{
+					copy.constrainerWildcard = w.second;
+					found = true;
+					break;
+				}
+			}
+			
+			jassert(found);
+			
+			return copy;
+		}
+
+		ModulationMetadata asDisabled() const
+		{
+			auto copy = *this;
+			copy.disabled = true;
+			return copy;
+		}
+
 		/** Convert to JSON for serialisation. */
 		var toJSON() const;
 
@@ -232,6 +296,8 @@ struct ProcessorMetadata
 		int chainIndex = -1;
 		Identifier id;
 		String description;
+		bool disabled = false;
+		String constrainerWildcard = "*";
 		HiseModulationColours::ColourId colour = HiseModulationColours::ColourId::Gain;
 		scriptnode::modulation::ParameterMode modulationMode = scriptnode::modulation::ParameterMode::ScaleOnly;
 	};
@@ -258,10 +324,47 @@ struct ProcessorMetadata
 		return copy;
 	}
 
+	template <typename ProcessorType> ProcessorMetadata withStandardMetadata() const
+	{
+		return (*this).withId(ProcessorType::getClassType())
+			.withPrettyName(ProcessorType::getClassName())
+			.withType<ProcessorType>()
+			.withInterface<ProcessorType>();
+	}
+
 	ProcessorMetadata withPrettyName(const String& name) const
 	{
 		auto copy = *this;
 		copy.prettyName = name;
+		return copy;
+	}
+
+	template <typename ConstrainerType> ProcessorMetadata withModConstrainer(int modChainIndex) const
+	{
+		auto copy = *this;
+
+		jassert(isPositiveAndBelow(modChainIndex, copy.modulation.size()));
+
+		auto m = copy.modulation[modChainIndex];
+		copy.modulation.set(modChainIndex, m.withConstrainer<ConstrainerType>());
+		return copy;
+	}
+
+	ProcessorMetadata withDisabledChain(int modChainIndex) const
+	{
+		auto copy = *this;
+
+		jassert(isPositiveAndBelow(modChainIndex, copy.modulation.size()));
+
+		auto m = copy.modulation[modChainIndex];
+		copy.modulation.set(modChainIndex, m.asDisabled());
+		return copy;
+	}
+
+	ProcessorMetadata withDisabledFX() const
+	{
+		auto copy = *this;
+		copy.hasFX = false;
 		return copy;
 	}
 
@@ -286,6 +389,77 @@ struct ProcessorMetadata
 		return copy;
 	}
 
+	template <typename CT> ProcessorMetadata withFXConstrainer() const
+	{
+		auto copy = *this;
+		auto wt = CT::getWildcard();
+		bool found = false;
+		copy.hasFX = true;
+
+		for (const auto& w : wt)
+		{
+			if (w.first == ProcessorMetadataIds::Effect)
+			{
+				copy.fxConstrainerWildcard = w.second;
+				found = true;
+				break;
+			}
+		}
+
+		jassert(found);
+
+		return copy;
+	}
+
+	template <typename CT> ProcessorMetadata withChildConstrainer() const
+	{
+		auto copy = *this;
+		auto wt = CT::getWildcard();
+
+		jassert(hasChildren);
+		bool found = false;
+
+		for (const auto& w : wt)
+		{
+			if (w.first == ProcessorMetadataIds::SoundGenerator)
+			{
+				copy.constrainerWildcard = w.second;
+				found = true;
+				break;
+			}
+		}
+
+		jassert(found);
+
+		return copy;
+	}
+
+	/** Set the FX constrainer wildcard that will be propagated to children's effect chains.
+	*	Used by containers like ModulatorSynthGroup that restrict what effects their children can use.
+	*/
+	template <typename CT> ProcessorMetadata withChildFXConstrainer() const
+	{
+		auto copy = *this;
+		auto wt = CT::getWildcard();
+
+		copy.hasChildren = true;
+		bool found = false;
+
+		for (const auto& w : wt)
+		{
+			if (w.first == ProcessorMetadataIds::Effect)
+			{
+				copy.childFXConstrainerWildcard = w.second;
+				found = true;
+				break;
+			}
+		}
+
+		jassert(found);
+
+		return copy;
+	}
+
 	/** Set the processor type category from the C++ base class.
 	*	Uses if-constexpr branching to resolve the type and subtype strings.
 	*/
@@ -293,50 +467,54 @@ struct ProcessorMetadata
 	{
 		auto copy = *this;
 
+		if constexpr (std::is_base_of<Chain, T>())
+			copy.hasChildren = true;
+
 		if constexpr (std::is_base_of<VoiceStartModulator, T>())
 		{
-			copy.type = "Modulator";
-			copy.subtype = "VoiceStartModulator";
+			copy.type = ProcessorMetadataIds::Modulator;
+			copy.subtype = ProcessorMetadataIds::VoiceStartModulator;
 		}
 		else if constexpr (std::is_base_of<TimeVariantModulator, T>())
 		{
-			copy.type = "Modulator";
-			copy.subtype = "TimeVariantModulator";
+			copy.type = ProcessorMetadataIds::Modulator;
+			copy.subtype = ProcessorMetadataIds::TimeVariantModulator;
 		}
 		else if constexpr (std::is_base_of<EnvelopeModulator, T>())
 		{
-			copy.type = "Modulator";
-			copy.subtype = "EnvelopeModulator";
+			copy.type = ProcessorMetadataIds::Modulator;
+			copy.subtype = ProcessorMetadataIds::EnvelopeModulator;
 		}
 		else if constexpr (std::is_base_of<MasterEffectProcessor, T>())
 		{
-			copy.type = "Effect";
-			copy.subtype = "MasterEffect";
+			copy.type = ProcessorMetadataIds::Effect;
+			copy.subtype = ProcessorMetadataIds::MasterEffect;
 		}
 		else if constexpr (std::is_base_of<MonophonicEffectProcessor, T>())
 		{
-			copy.type = "Effect";
-			copy.subtype = "MonophonicEffect";
+			copy.type = ProcessorMetadataIds::Effect;
+			copy.subtype = ProcessorMetadataIds::MonophonicEffect;
 		}
 		else if constexpr (std::is_base_of<VoiceEffectProcessor, T>())
 		{
-			copy.type = "Effect";
-			copy.subtype = "VoiceEffect";
+			copy.type = ProcessorMetadataIds::Effect;
+			copy.subtype = ProcessorMetadataIds::VoiceEffect;
 		}
 		else if constexpr (std::is_base_of<EffectProcessor, T>())
 		{
-			copy.type = "Effect";
-			copy.subtype = "Effect";
+			copy.type = ProcessorMetadataIds::Effect;
+			copy.subtype = ProcessorMetadataIds::Effect;
 		}
 		else if constexpr (std::is_base_of<MidiProcessor, T>())
 		{
-			copy.type = "MidiProcessor";
-			copy.subtype = "MidiProcessor";
+			copy.type = ProcessorMetadataIds::MidiProcessor;
+			copy.subtype = ProcessorMetadataIds::MidiProcessor;
 		}
 		else if constexpr (std::is_base_of<ModulatorSynth, T>())
 		{
-			copy.type = "SoundGenerator";
-			copy.subtype = "SoundGenerator";
+			copy.type = ProcessorMetadataIds::SoundGenerator;
+			copy.subtype = ProcessorMetadataIds::SoundGenerator;
+			copy.hasFX = true;
 		}
 
 		return copy;
@@ -348,15 +526,15 @@ struct ProcessorMetadata
 		auto copy = *this;
 
 		if constexpr (std::is_same<ModulatorSampler, T>())
-			copy.interfaceClasses.add("Sampler");
+			copy.interfaceClasses.add(ProcessorMetadataIds::Sampler);
 		if constexpr (std::is_same<MidiPlayer, T>())
-			copy.interfaceClasses.add("MidiPlayer");
+			copy.interfaceClasses.add(ProcessorMetadataIds::MidiPlayer);
 		if constexpr (std::is_same<WavetableSynth, T>())
-			copy.interfaceClasses.add("WavetableController");
+			copy.interfaceClasses.add(ProcessorMetadataIds::WavetableController);
 		if constexpr (std::is_base_of<HotswappableProcessor, T>() || std::is_same<HotswappableProcessor, T>())
-			copy.interfaceClasses.addIfNotAlreadyThere("SlotFX");
+			copy.interfaceClasses.addIfNotAlreadyThere(ProcessorMetadataIds::SlotFX);
 		if constexpr (std::is_base_of<RoutableProcessor, T>() || std::is_same<RoutableProcessor, T>())
-			copy.interfaceClasses.addIfNotAlreadyThere("RoutingMatrix");
+			copy.interfaceClasses.addIfNotAlreadyThere(ProcessorMetadataIds::RoutingMatrix);
 		
 		return copy;
 	}
@@ -366,13 +544,13 @@ struct ProcessorMetadata
 		auto copy = *this;
 
 		if (dt == ExternalData::DataType::Table)
-			copy.interfaceClasses.add("TableProcessor");
+			copy.interfaceClasses.add(ProcessorMetadataIds::TableProcessor);
 		if (dt == ExternalData::DataType::SliderPack)
-			copy.interfaceClasses.add("SliderPackProcessor");
+			copy.interfaceClasses.add(ProcessorMetadataIds::SliderPackProcessor);
 		if (dt == ExternalData::DataType::AudioFile)
-			copy.interfaceClasses.add("AudioSampleProcessor");
+			copy.interfaceClasses.add(ProcessorMetadataIds::AudioSampleProcessor);
 		if (dt == ExternalData::DataType::DisplayBuffer)
-			copy.interfaceClasses.add("DisplayBufferSource");
+			copy.interfaceClasses.add(ProcessorMetadataIds::DisplayBufferSource);
 
 		return copy;
 	}
@@ -383,11 +561,7 @@ struct ProcessorMetadata
 	*/
 	template <typename P> static ProcessorMetadata createFallback()
 	{
-		ProcessorMetadata md;
-		md.id = P::getClassType();
-		md.dataType = DataType::Fallback;
-		md.prettyName = P::getClassName();
-		return md;
+		return ProcessorMetadata("temp", DataType::Fallback).withStandardMetadata<P>();
 	}
 
 	// --- Editor setup methods ---
@@ -452,7 +626,13 @@ struct ProcessorMetadata
 	Identifier type;                      // "Modulator", "Effect", "SoundGenerator", "MidiProcessor"
 	Identifier subtype;                   // "TimeVariantModulator", "MasterEffect", etc.
 
-	StringArray interfaceClasses;         // ["RoutableProcessor", "AudioSampleProcessor"]
+	Array<Identifier> interfaceClasses;         // ["RoutableProcessor", "AudioSampleProcessor"]
+
+	bool hasFX = false;
+	bool hasChildren = false;
+	String constrainerWildcard = "*";
+	String fxConstrainerWildcard = "*";
+	String childFXConstrainerWildcard = "*";
 
 	Array<ParameterMetadata> parameters;
 	Array<ModulationMetadata> modulation;
