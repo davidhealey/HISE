@@ -5388,6 +5388,12 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawWhiteNote(CustomKeyboardSta
 		obj->setProperty("down", isDown);
 		obj->setProperty("keyColour", state->getColourForSingleKey(midiNoteNumber).getARGB());
 
+		if (auto kp = c->findParentComponentOfClass<MidiKeyboardPanel>())
+		{
+			obj->setProperty("font", kp->getFontName());
+			obj->setProperty("fontSize", kp->getFont().getHeight());
+		}
+
 		if (get()->callWithGraphics(g_, "drawWhiteNote", var(obj), c))
 			return;
 	}
@@ -5408,6 +5414,12 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawBlackNote(CustomKeyboardSta
 		obj->setProperty("hover", isOver);
 		obj->setProperty("down", isDown);
 		obj->setProperty("keyColour", state->getColourForSingleKey(midiNoteNumber).getARGB());
+
+		if (auto kp = c->findParentComponentOfClass<MidiKeyboardPanel>())
+		{
+			obj->setProperty("font", kp->getFontName());
+			obj->setProperty("fontSize", kp->getFont().getHeight());
+		}
 
 		if (get()->callWithGraphics(g_, "drawBlackNote", var(obj), c))
 			return;
