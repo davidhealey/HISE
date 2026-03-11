@@ -135,31 +135,18 @@ AhdsrEnvelopeEditor::AhdsrEnvelopeEditor (ProcessorEditor *p)
 
     //[UserPreSize]
 
-	attackSlider->setup(getProcessor(), AhdsrEnvelope::Attack, "Attack Time");
-	attackSlider->setMode(HiSlider::Time);
+	auto md = getProcessor()->getMetadata();
 
-	attackLevelSlider->setup(getProcessor(), AhdsrEnvelope::AttackLevel, "Attack Level");
-	attackLevelSlider->setMode(HiSlider::Decibel, NormalisableRange(-100.0, 0.0).withCentreSkew(-12.0));
-
-	sustainSlider->setup(getProcessor(), AhdsrEnvelope::Sustain, "Sustain Level");
-	sustainSlider->setMode(HiSlider::Decibel, NormalisableRange(-100.0, 0.0).withCentreSkew(-12.0));
-
-	holdSlider->setup(getProcessor(), AhdsrEnvelope::Hold, "Hold Time");
-	holdSlider->setMode(HiSlider::Time);
-
-	decaySlider->setup(getProcessor(), AhdsrEnvelope::Decay, "Decay Time");
-	decaySlider->setMode(HiSlider::Time);
-
-	releaseSlider->setup(getProcessor(), AhdsrEnvelope::Release, "Release Time");
-	releaseSlider->setMode(HiSlider::Time);
+	md.setup(*attackSlider, getProcessor(), AhdsrEnvelope::Attack);
+	md.setup(*attackLevelSlider, getProcessor(), AhdsrEnvelope::AttackLevel);
+	md.setup(*sustainSlider, getProcessor(), AhdsrEnvelope::Sustain);
+	md.setup(*holdSlider, getProcessor(), AhdsrEnvelope::Hold);
+	md.setup(*decaySlider, getProcessor(), AhdsrEnvelope::Decay);
+	md.setup(*releaseSlider, getProcessor(), AhdsrEnvelope::Release);
+	md.setup(*attackCurveSlider, getProcessor(), AhdsrEnvelope::AttackCurve);
+	md.setup(*decayCurveSlider, getProcessor(), AhdsrEnvelope::DecayCurve);
 
     label->setFont (GLOBAL_BOLD_FONT().withHeight(26.0f));
-
-	attackCurveSlider->setup(getProcessor(), AhdsrEnvelope::AttackCurve, "Attack Curve");
-	attackCurveSlider->setMode(HiSlider::NormalizedPercentage);
-
-	decayCurveSlider->setup(getProcessor(), AhdsrEnvelope::DecayCurve, "Decay Curve");
-	decayCurveSlider->setMode(HiSlider::NormalizedPercentage);
 
 
 

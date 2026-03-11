@@ -35,12 +35,45 @@
 namespace hise {
 using namespace juce;
 
+hise::ProcessorMetadata MPEModulator::createMetadata()
+{
+	using Par = ProcessorMetadata::ParameterMetadata;
+	using Range = scriptnode::InvertableParameterRange;
+
+	return EnvelopeModulator::createBaseMetadata()
+		.withId(getClassType())
+		.withPrettyName("MPE Modulator")
+		.withDescription("A modulator that uses MPE messages to create a polyphonic modulation signal")
+		.withType<hise::EnvelopeModulator>()
+		.withComplexDataInterface(ExternalData::DataType::Table)
+		.withParameter(Par(GestureCC)
+			.withId("GestureCC")
+			.withDescription("The MPE gesture type to use for this modulator")
+			.withValueList({ "Press", "Slide", "Glide", "Stroke", "Lift" }, 1)
+			.withDefault(1.0f))
+		.withParameter(Par(SmoothingTime)
+			.withId("SmoothingTime")
+			.withDescription("The smoothing time for the modulation value")
+			.withSliderMode(HiSlider::Time, Range(0.0, 2000.0, 0.1).withCentreSkew(100.0))
+			.withDefault(200.0f))
+		.withParameter(Par(DefaultValue)
+			.withId("DefaultValue")
+			.withDescription("The default value when no MPE data is available")
+			.withSliderMode(HiSlider::NormalizedPercentage, {})
+			.withDefault(0.0f))
+		.withParameter(Par(SmoothedIntensity)
+			.withId("SmoothedIntensity")
+			.withDescription("The intensity of the modulation with smoothing applied")
+			.withSliderMode(HiSlider::NormalizedPercentage, {})
+			.withDefault(1.0f));
+}
 
 MPEModulator::MPEModulator(MainController *mc, const String &id, int voiceAmount, Modulation::Mode m) :
 	EnvelopeModulator(mc, id, voiceAmount, m),
 	Modulation(m),
 	LookupTableProcessor(mc, 1),
 	monoState(-1),
+	metadataInitialised(updateParameterSlots()),
 	g((Gesture)(int)getDefaultValue(GestureCC)),
 	smoothedIntensity(getIntensity())
 {
@@ -48,13 +81,6 @@ MPEModulator::MPEModulator(MainController *mc, const String &id, int voiceAmount
 	
 
     setAttribute(DefaultValue, getDefaultValue(DefaultValue), dontSendNotification);
-    
-	parameterNames.add("GestureCC");
-	parameterNames.add("SmoothingTime");
-	parameterNames.add("DefaultValue");
-	parameterNames.add("SmoothedIntensity");
-
-	updateParameterSlots();
 
 	getMainController()->getMacroManager().getMidiControlAutomationHandler()->getMPEData().sendAmountChangeMessage();
 

@@ -39,32 +39,27 @@ using namespace juce;
 
 var ProcessorMetadata::ParameterMetadata::toJSON() const
 {
-	auto obj = new DynamicObject();
+	DynamicObject::Ptr obj = new DynamicObject();
 
 	obj->setProperty("parameterIndex", parameterIndex);
 	obj->setProperty("id", id.toString());
 	obj->setProperty("description", description);
-	obj->setProperty("defaultValue", defaultValue);
+	
 
 	// Type
 	switch (type)
 	{
-	case Type::Toggle: obj->setProperty("type", "Toggle"); break;
-	case Type::List:   obj->setProperty("type", "List"); break;
-	case Type::Float:  obj->setProperty("type", "Float"); break;
+	case Type::Toggle: obj->setProperty("type", "Button"); break;
+	case Type::List:   obj->setProperty("type", "ComboBox"); break;
+	case Type::Float:  obj->setProperty("type", "Slider"); break;
 	default:           obj->setProperty("type", "Unspecified"); break;
 	}
 
-	// Range
-	{
-		auto rangeObj = new DynamicObject();
-		rangeObj->setProperty("min", range.rng.start);
-		rangeObj->setProperty("max", range.rng.end);
-		rangeObj->setProperty("interval", range.rng.interval);
-		rangeObj->setProperty("skew", range.rng.skew);
-		rangeObj->setProperty("inverted", range.inv);
-		obj->setProperty("range", var(rangeObj));
-	}
+	var o(obj.get());
+
+	scriptnode::RangeHelpers::storeDoubleRange(o, range, scriptnode::RangeHelpers::IdSet::ScriptComponents);
+
+	obj->setProperty("defaultValue", defaultValue);
 
 	// Value names (for List type, stored in vtc.itemList)
 	if (!vtc.itemList.isEmpty())
@@ -72,7 +67,7 @@ var ProcessorMetadata::ParameterMetadata::toJSON() const
 		Array<var> names;
 		for (auto& n : vtc.itemList)
 			names.add(n);
-		obj->setProperty("valueNames", var(names));
+		obj->setProperty("items", var(names));
 	}
 
 	// Slider mode (if set)
@@ -84,30 +79,16 @@ var ProcessorMetadata::ParameterMetadata::toJSON() const
 		};
 
 		if (isPositiveAndBelow(sliderMode, (int)HiSlider::numModes))
-			obj->setProperty("sliderMode", modeNames[sliderMode]);
+			obj->setProperty("mode", modeNames[sliderMode]);
 	}
 
 	// Tempo sync dual-mode info (range/names are constant, derived from TempoSyncer)
 	if (tempoSyncControllerIndex >= 0)
 	{
-		auto tsObj = new DynamicObject();
-		tsObj->setProperty("controllerIndex", tempoSyncControllerIndex);
-
-		Array<var> tsNames;
-		for (auto& n : TempoSyncer::getTempoNames())
-			tsNames.add(n);
-		tsObj->setProperty("valueNames", var(tsNames));
-
-		auto tsRange = new DynamicObject();
-		tsRange->setProperty("min", 0.0);
-		tsRange->setProperty("max", (double)(TempoSyncer::numTempos - 1));
-		tsRange->setProperty("interval", 1.0);
-		tsObj->setProperty("range", var(tsRange));
-
-		obj->setProperty("tempoSync", var(tsObj));
+		obj->setProperty("tempoSyncIndex", tempoSyncControllerIndex);
 	}
 
-	return var(obj);
+	return o;
 }
 
 // ============================================================================
@@ -116,19 +97,39 @@ var ProcessorMetadata::ParameterMetadata::toJSON() const
 
 var ProcessorMetadata::ModulationMetadata::toJSON() const
 {
-	auto obj = new DynamicObject();
+	DynamicObject::Ptr obj = new DynamicObject();
 
 	obj->setProperty("chainIndex", chainIndex);
 	obj->setProperty("id", id.toString());
 	obj->setProperty("description", description);
 
-	static const char* modeNames[] = { "Disabled", "ScaleAdd", "ScaleOnly", "AddOnly", "Pan", "Pitch" };
-	if (isPositiveAndBelow((int)modulationMode, (int)scriptnode::modulation::ParameterMode::numModulationModes))
-		obj->setProperty("modulationMode", modeNames[(int)modulationMode]);
+	switch (modulationMode)
+	{
+	case scriptnode::modulation::ParameterMode::AddOnly:
+		obj->setProperty("modulationMode", "Offset");
+		break;
+	case scriptnode::modulation::ParameterMode::ScaleAdd:
+		obj->setProperty("modulationMode", "Combined");
+		break;
+	case scriptnode::modulation::ParameterMode::ScaleOnly:
+		obj->setProperty("modulationMode", "Gain");
+		break;
+	case scriptnode::modulation::ParameterMode::Pan:
+		obj->setProperty("modulationMode", "Offset");
+		break;
+	case scriptnode::modulation::ParameterMode::Pitch:
+		obj->setProperty("modulationMode", "Pitch");
+		break;
+	case scriptnode::modulation::ParameterMode::Disabled:
+	case scriptnode::modulation::ParameterMode::numModulationModes:
+	default:
+		break;
+
+	}
 
 	obj->setProperty("colour", (int)colour);
 
-	return var(obj);
+	return var(obj.get());
 }
 
 // ============================================================================
@@ -137,14 +138,31 @@ var ProcessorMetadata::ModulationMetadata::toJSON() const
 
 var ProcessorMetadata::toJSON() const
 {
-	auto obj = new DynamicObject();
+	DynamicObject::Ptr obj = new DynamicObject();
 
 	obj->setProperty("id", id.toString());
 	obj->setProperty("prettyName", prettyName);
 	obj->setProperty("description", description);
 	obj->setProperty("type", type.toString());
 	obj->setProperty("subtype", subtype.toString());
-	obj->setProperty("dataType", (int)dataType);
+
+	switch (dataType)
+	{
+	case DataType::Undefined:
+		obj->setProperty("metadataType", "undefined");
+		break;
+	case DataType::Fallback:
+		obj->setProperty("metadataType", "fallback");
+		break;
+	case DataType::StaticInitialised:
+		obj->setProperty("metadataType", "static");
+		break;
+	case DataType::Dynamic:
+		obj->setProperty("metadataType", "dynamic");
+		break;
+	default:
+		break;
+	}
 
 	if (!interfaceClasses.isEmpty())
 	{
@@ -170,7 +188,7 @@ var ProcessorMetadata::toJSON() const
 		obj->setProperty("modulation", var(mods));
 	}
 
-	return var(obj);
+	return var(obj.get());
 }
 
 // ============================================================================

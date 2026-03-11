@@ -124,16 +124,16 @@ void ProcessorMetadataRegistry::registerAllMetadata()
 	// --- EnvelopeModulators ---
 
 	add(SimpleEnvelope::createMetadata());
-	add(ProcessorMetadata::createFallback<AhdsrEnvelope>());
-	add(ProcessorMetadata::createFallback<TableEnvelope>());
+	add(AhdsrEnvelope::createMetadata());
+	add(TableEnvelope::createMetadata());
 	add(ProcessorMetadata::createFallback<JavascriptEnvelopeModulator>());
-	add(ProcessorMetadata::createFallback<MPEModulator>());
-	add(ProcessorMetadata::createFallback<ScriptnodeVoiceKiller>());
+	add(MPEModulator::createMetadata());
+	add(ScriptnodeVoiceKiller::createMetadata());
 	add(GlobalEnvelopeModulator::createMetadata());
 	add(EventDataEnvelope::createMetadata());
 	add(ProcessorMetadata::createFallback<HardcodedEnvelopeModulator>());
-	add(ProcessorMetadata::createFallback<MatrixModulator>());
-	add(ProcessorMetadata::createFallback<FlexAhdsrEnvelope>());
+	add(MatrixModulator::createMetadata());
+	add(FlexAhdsrEnvelope::createMetadata());
 
 	// --- MidiProcessors (fallback) ---
 
@@ -197,6 +197,9 @@ void ProcessorMetadataRegistry::registerAllMetadata()
 	add(ProcessorMetadata::createFallback<SendContainer>());
 	add(ProcessorMetadata::createFallback<SilentSynth>());
 	add(ProcessorMetadata::createFallback<HardcodedSynthesiser>());
+
+	auto x = JSON::toString(toJSON());
+	DBG(x);
 }
 
 } // namespace hise

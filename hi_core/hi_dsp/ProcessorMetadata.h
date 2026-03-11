@@ -105,16 +105,6 @@ struct ProcessorMetadata
 			return copy;
 		}
 
-		/** Set the HiSlider display mode for editor setup. */
-		ParameterMetadata withSliderMode(HiSlider::Mode m) const
-		{
-			auto copy = *this;
-			copy.sliderMode = m;
-			if (copy.type == Type::Unspecified)
-				copy.type = Type::Float;
-			return copy;
-		}
-
 		/** Convenience: set slider mode and custom range in one call.
 		*	This mirrors the common editor pattern: setMode(Mode, NormalisableRange).
 		*/

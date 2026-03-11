@@ -49,7 +49,7 @@ hise::ProcessorMetadata EventDataModulator::createMetadata()
 		.withParameter(ProcessorMetadata::ParameterMetadata(DefaultValue)
 			.withId("DefaultValue")
 			.withDescription("The value to use when the event data slot hasn't been written")
-			.withSliderMode(HiSlider::NormalizedPercentage)
+			.withSliderMode(HiSlider::NormalizedPercentage, {})
 			.withDefault(0.0f));
 }
 
@@ -68,7 +68,7 @@ hise::ProcessorMetadata EventDataEnvelope::createMetadata()
 		.withParameter(ProcessorMetadata::ParameterMetadata(DefaultValue)
 			.withId("DefaultValue")
 			.withDescription("The value to use when the event data slot hasn't been written")
-			.withSliderMode(HiSlider::NormalizedPercentage)
+			.withSliderMode(HiSlider::NormalizedPercentage, {})
 			.withDefault(0.0f))
 		.withParameter(ProcessorMetadata::ParameterMetadata(SmoothingTime)
 			.withId("SmoothingTime")

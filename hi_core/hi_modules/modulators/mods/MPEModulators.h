@@ -55,7 +55,7 @@ class MPEModulator : public EnvelopeModulator,
 {
 public:
 
-	SET_PROCESSOR_NAME("MPEModulator", "MPE Modulator", "A modulator that uses MPE messages to create a polyphonic modulation signal.");
+	SET_PROCESSOR_NAME("MPEModulator", "MPE Modulator", "");
 
 	enum Gesture
 	{
@@ -78,6 +78,10 @@ public:
 
 	MPEModulator(MainController *mc, const String &id, int voiceAmount, Modulation::Mode m);
 	~MPEModulator();
+
+	const bool metadataInitialised;
+
+	static ProcessorMetadata createMetadata();
 
     void referenceShared(ExternalData::DataType, int) override
     {

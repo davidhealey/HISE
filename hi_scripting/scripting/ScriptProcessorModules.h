@@ -389,14 +389,15 @@ class ScriptnodeVoiceKiller : public EnvelopeModulator,
 public:
 
 
-	SET_PROCESSOR_NAME("ScriptnodeVoiceKiller", "Scriptnode Voice Killer", "kills the voices from a scriptnode envelope's gate output")
+	SET_PROCESSOR_NAME("ScriptnodeVoiceKiller", "Scriptnode Voice Killer", "")
 
 		ScriptnodeVoiceKiller(MainController* mc, const String& id, int numVoices);;
 
 	static void initialiseNetworks(ScriptnodeVoiceKiller& v);
 
+	static ProcessorMetadata createMetadata();
+
 	void setInternalAttribute(int parameter_index, float newValue) override;
-	float getDefaultValue(int parameterIndex) const override;
 	float getAttribute(int parameter_index) const;
 
 	int getNumInternalChains() const override;;

@@ -186,6 +186,7 @@ void RangeHelpers::storeDoubleRange(ValueTree& d, InvertableParameterRange r, Un
 		if(r.rng.skew != 1.0)
 		{
 			auto midPosition = r.convertFrom0to1(0.5, false);
+			midPosition = std::round(midPosition * 100.0) / 100.0;
 			d.setProperty(ri(rangeIdSet, RangeIdentifier::SkewFactor), midPosition, um);
 		}
 	}

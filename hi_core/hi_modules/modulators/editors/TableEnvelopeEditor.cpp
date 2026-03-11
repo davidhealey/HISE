@@ -62,14 +62,10 @@ TableEnvelopeEditorBody::TableEnvelopeEditorBody (ProcessorEditor *p)
 
     //[UserPreSize]
 
-	attackSlider->setup(getProcessor(), SimpleEnvelope::Attack, "Attack Time");
-	attackSlider->setMode(HiSlider::Time, NormalisableRange(1.0, 20000.0).withCentreSkew(2000.0));
-
-	releaseSlider->setup(getProcessor(), SimpleEnvelope::Release, "Release Time");
-	releaseSlider->setMode(HiSlider::Time, NormalisableRange(1.0, 20000.0).withCentreSkew(2000.0));
-
-	
-
+	auto md = getProcessor()->getMetadata();
+	md.setup(*attackSlider, getProcessor(), TableEnvelope::Attack);
+	md.setup(*releaseSlider, getProcessor(), TableEnvelope::Release);
+    
     ProcessorHelpers::connectTableEditor(*attackTable, getProcessor(), 0);
     ProcessorHelpers::connectTableEditor(*releaseTable, getProcessor(), 1);
     

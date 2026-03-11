@@ -32,6 +32,28 @@
 
 namespace hise { using namespace juce;
 
+hise::ProcessorMetadata MatrixModulator::createMetadata()
+{
+	using Par = ProcessorMetadata::ParameterMetadata;
+	using Range = scriptnode::InvertableParameterRange;
+
+	return EnvelopeModulator::createBaseMetadata()
+		.withId(getClassType())
+		.withPrettyName("Matrix Modulator")
+		.withDescription("A modulator that combines multiple global modulators with intensity modulation")
+		.withType<hise::EnvelopeModulator>()
+		.withParameter(Par(Value)
+			.withId("Value")
+			.withDescription("The base value of the modulation output")
+			.withSliderMode(HiSlider::NormalizedPercentage, {})
+			.withDefault(0.5f))
+		.withParameter(Par(SmoothingTime)
+			.withId("SmoothingTime")
+			.withDescription("The smoothing time for the value parameter")
+			.withSliderMode(HiSlider::Time, Range(0.0, 2000.0, 0.1).withCentreSkew(200.0))
+			.withDefault(200.0f));
+}
+
 Array<Identifier> MatrixModulator::getRangeIds(bool isInput)
 {
 
@@ -352,9 +374,6 @@ MatrixModulator::MatrixModulator(MainController* mc, const String& id, int voice
 	ModulatorSynthChain *chain = mc->getMainSynthChain();
 
 	chain->getHandler()->addListener(this);
-
-	parameterNames.add("Value");
-	parameterNames.add("SmoothingTime");
 
 	updateParameterSlots();
 

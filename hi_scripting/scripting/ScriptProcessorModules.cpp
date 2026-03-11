@@ -2270,11 +2270,17 @@ ScriptnodeVoiceKiller::ScriptnodeVoiceKiller(MainController* mc, const String& i
 	SafeAsyncCall::callWithDelay<ScriptnodeVoiceKiller>(*this, initialiseNetworks, 300);
 }
 
+hise::ProcessorMetadata ScriptnodeVoiceKiller::createMetadata()
+{
+	return EnvelopeModulator::createBaseMetadata()
+		.withId(getClassType())
+		.withPrettyName("Scriptnode Voice Killer")
+		.withDescription("Kills voices from a scriptnode envelope's gate output")
+		.withType<hise::EnvelopeModulator>();
+}
+
 void ScriptnodeVoiceKiller::setInternalAttribute(int parameter_index, float newValue)
 {}
-
-float ScriptnodeVoiceKiller::getDefaultValue(int parameterIndex) const
-{ return 0.0f; }
 
 float ScriptnodeVoiceKiller::getAttribute(int parameter_index) const
 { return 0.0f; }

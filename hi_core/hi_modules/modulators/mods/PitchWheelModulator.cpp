@@ -34,6 +34,8 @@ namespace hise { using namespace juce;
 
 hise::ProcessorMetadata PitchwheelModulator::createMetadata()
 {
+	using Range = scriptnode::InvertableParameterRange;
+
 	return ProcessorMetadata(getClassType())
 		.withPrettyName("Pitch Wheel Modulator")
 		.withDescription("Creates a monophonic modulation signal from the pitch wheel, with smoothing to reduce stepping artifacts.")
@@ -52,7 +54,7 @@ hise::ProcessorMetadata PitchwheelModulator::createMetadata()
 		.withParameter(ProcessorMetadata::ParameterMetadata(Parameters::SmoothTime)
 			.withId("SmoothTime")
 			.withDescription("Smoothing time in milliseconds to reduce stepping on fast pitch wheel movements")
-			.withSliderMode(HiSlider::Time)
+			.withSliderMode(HiSlider::Time, Range(0.0, 1000.0, 0.0).withCentreSkew(100.0))
 			.withDefault(200.0f));
 }
 

@@ -34,6 +34,8 @@ namespace hise { using namespace juce;
 
 hise::ProcessorMetadata MacroModulator::createMetadata()
 {
+	using Range = scriptnode::InvertableParameterRange;
+
 	return ProcessorMetadata(getClassType())
 		.withPrettyName("Macro Modulator")
 		.withDescription("A modulator controlled by a macro controller slot, allowing real-time automation and MIDI learn functionality.")
@@ -47,7 +49,7 @@ hise::ProcessorMetadata MacroModulator::createMetadata()
 		.withParameter(ProcessorMetadata::ParameterMetadata(SmoothTime)
 			.withId("SmoothTime")
 			.withDescription("Smoothing time in milliseconds for value transitions")
-			.withSliderMode(HiSlider::Time)
+			.withSliderMode(HiSlider::Time, Range(0.0, 1000.0, 0.0).withCentreSkew(100.0))
 			.withDefault(200.0f))
 		.withParameter(ProcessorMetadata::ParameterMetadata(UseTable)
 			.withId("UseTable")
@@ -57,7 +59,7 @@ hise::ProcessorMetadata MacroModulator::createMetadata()
 		.withParameter(ProcessorMetadata::ParameterMetadata(MacroValue)
 			.withId("MacroValue")
 			.withDescription("The current macro value (automated by macro controller)")
-			.withSliderMode(HiSlider::NormalizedPercentage)
+			.withSliderMode(HiSlider::NormalizedPercentage, {})
 			.withDefault(1.0f));
 }
 

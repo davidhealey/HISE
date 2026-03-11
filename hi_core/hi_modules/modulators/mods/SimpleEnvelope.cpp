@@ -36,6 +36,7 @@ hise::ProcessorMetadata SimpleEnvelope::createMetadata()
 {
 	using Par = ProcessorMetadata::ParameterMetadata;
 	using Mod = ProcessorMetadata::ModulationMetadata;
+	using Range = scriptnode::InvertableParameterRange;
 
 	return EnvelopeModulator::createBaseMetadata()
 		.withId(getClassType())
@@ -45,12 +46,12 @@ hise::ProcessorMetadata SimpleEnvelope::createMetadata()
 		.withParameter(Par(Attack)
 			.withId("Attack")
 			.withDescription("The attack time in milliseconds")
-			.withSliderMode(HiSlider::Time)
+			.withSliderMode(HiSlider::Time, Range(0.0, 20000.0, 0.0).withCentreSkew(1000.0))
 			.withDefault(5.0f))
 		.withParameter(Par(Release)
 			.withId("Release")
 			.withDescription("The release time in milliseconds")
-			.withSliderMode(HiSlider::Time)
+			.withSliderMode(HiSlider::Time, Range(0.0, 20000.0, 0.0).withCentreSkew(1000.0))
 			.withDefault(10.0f))
 		.withParameter(Par(LinearMode)
 			.withId("LinearMode")
@@ -82,17 +83,6 @@ ValueTree SimpleEnvelope::exportAsValueTree() const
 
 	return v;
 }
-
-/*
-  ==============================================================================
-
-    SimpleEnvelope.cpp
-    Created: 15 Jun 2014 2:08:15pm
-    Author:  Chrisboy
-
-  ==============================================================================
-*/
-
 
 
 SimpleEnvelope::SimpleEnvelope(MainController *mc, const String &id, int voiceAmount, Modulation::Mode m):

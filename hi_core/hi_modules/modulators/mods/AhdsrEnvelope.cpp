@@ -33,6 +33,84 @@
 
 namespace hise { using namespace juce;
 
+hise::ProcessorMetadata AhdsrEnvelope::createMetadata()
+{
+	using Par = ProcessorMetadata::ParameterMetadata;
+	using Mod = ProcessorMetadata::ModulationMetadata;
+	using Range = scriptnode::InvertableParameterRange;
+
+	return EnvelopeModulator::createBaseMetadata()
+		.withId(getClassType())
+		.withPrettyName("AHDSR Envelope")
+		.withDescription("A envelope modulator with five states: Attack, Hold, Decay, Sustain, and Release")
+		.withType<hise::EnvelopeModulator>()
+		.withParameter(Par(Attack)
+			.withId("Attack")
+			.withDescription("Controls how long the envelope takes to reach full level after a note-on")
+			.withSliderMode(HiSlider::Time, Range(0.0, 20000.0).withCentreSkew(100.0))
+			.withDefault(20.0f))
+		.withParameter(Par(AttackLevel)
+			.withId("AttackLevel")
+			.withDescription("The peak level reached at the end of the attack phase")
+			.withSliderMode(HiSlider::Decibel, Range(-100.0, 0.0).withCentreSkew(-12.0))
+			.withDefault(Decibels::gainToDecibels(1.0f)))
+		.withParameter(Par(Hold)
+			.withId("Hold")
+			.withDescription("The time the envelope stays at the attack level before decaying")
+			.withSliderMode(HiSlider::Time, Range(0.0, 20000.0, 0.0).withCentreSkew(300.0))
+			.withDefault(10.0f))
+		.withParameter(Par(Decay)
+			.withId("Decay")
+			.withDescription("The time the envelope takes to fall from the attack level to the sustain level")
+			.withSliderMode(HiSlider::Time, Range(0.0, 20000.0, 0.0).withCentreSkew(300.0))
+			.withDefault(300.0f))
+		.withParameter(Par(Sustain)
+			.withId("Sustain")
+			.withDescription("The level maintained while the note is held")
+			.withSliderMode(HiSlider::Decibel, Range(-100.0, 0.0).withCentreSkew(-12.0))
+			.withDefault(Decibels::gainToDecibels(1.0f)))
+		.withParameter(Par(Release)
+			.withId("Release")
+			.withDescription("The time the envelope takes to fall from the sustain level to zero after note-off")
+			.withSliderMode(HiSlider::Time, Range(0.0, 20000.0, 0.0).withCentreSkew(300.0))
+			.withDefault(20.0f))
+		.withParameter(Par(AttackCurve)
+			.withId("AttackCurve")
+			.withDescription("Controls the curvature of the attack phase (0.0 = concave, 1.0 = convex)")
+			.withSliderMode(HiSlider::NormalizedPercentage, {})
+			.withDefault(1.0f))
+		.withParameter(Par(DecayCurve)
+			.withId("DecayCurve")
+			.withDescription("Controls the curvature of the decay and release phases")
+			.withSliderMode(HiSlider::NormalizedPercentage, {})
+			.withDefault(1.0f))
+		.withParameter(Par(EcoMode)
+			.withId("EcoMode")
+			.withDescription("Enables 16x downsampling for reduced CPU usage")
+			.asToggle()
+			.withDefault(1.0f))
+		.withModulation(Mod(AttackTimeChain)
+			.withId("AttackTimeModulation")
+			.withDescription("Modulates the attack time per voice")
+			.withMode(scriptnode::modulation::ParameterMode::ScaleOnly))
+		.withModulation(Mod(AttackLevelChain)
+			.withId("AttackLevelModulation")
+			.withDescription("Modulates the attack level per voice")
+			.withMode(scriptnode::modulation::ParameterMode::ScaleOnly))
+		.withModulation(Mod(DecayTimeChain)
+			.withId("DecayTimeModulation")
+			.withDescription("Modulates the decay time per voice")
+			.withMode(scriptnode::modulation::ParameterMode::ScaleOnly))
+		.withModulation(Mod(SustainLevelChain)
+			.withId("SustainLevelModulation")
+			.withDescription("Modulates the sustain level per voice")
+			.withMode(scriptnode::modulation::ParameterMode::ScaleOnly))
+		.withModulation(Mod(ReleaseTimeChain)
+			.withId("ReleaseTimeModulation")
+			.withDescription("Modulates the release time per voice")
+			.withMode(scriptnode::modulation::ParameterMode::ScaleOnly));
+}
+
 Processor * AhdsrEnvelope::getChildProcessor(int processorIndex)
 {
 	jassert(processorIndex < internalChains.size());
@@ -46,20 +124,10 @@ const Processor * AhdsrEnvelope::getChildProcessor(int processorIndex) const
 }
 
 AhdsrEnvelope::AhdsrEnvelope(MainController *mc, const String &id, int voiceAmount, Modulation::Mode m) :
-	EnvelopeModulator(mc, id, voiceAmount, m),
-	Modulation(m)
+    EnvelopeModulator(mc, id, voiceAmount, m),
+    Modulation(m),
+    metadataInitialised(updateParameterSlots())
 {
-	parameterNames.add("Attack");
-	parameterNames.add("AttackLevel");
-	parameterNames.add("Hold");
-	parameterNames.add("Decay");
-	parameterNames.add("Sustain");
-	parameterNames.add("Release");
-	parameterNames.add("AttackCurve");
-	parameterNames.add("DecayCurve");
-	parameterNames.add("EcoMode");
-
-	updateParameterSlots();
 
 	displayBuffer = new SimpleRingBuffer();
 	displayBuffer->setGlobalUIUpdater(mc->getGlobalUIUpdater());
@@ -335,28 +403,6 @@ void AhdsrEnvelope::handleHiseEvent(const HiseEvent &e)
 	for (auto& mb : internalChains)
 		mb.handleHiseEvent(e);
 };
-
-float AhdsrEnvelope::getDefaultValue(int parameterIndex) const
-{
-	if (parameterIndex < EnvelopeModulator::Parameters::numParameters)
-	{
-		return EnvelopeModulator::getDefaultValue(parameterIndex);
-	}
-
-	switch (parameterIndex)
-	{
-	case Attack:		return 20.0f;
-	case AttackLevel:	return Decibels::gainToDecibels(1.0f);
-	case Hold:			return 10.0f;
-	case Decay:			return 300.0f;
-	case Sustain:		return Decibels::gainToDecibels(1.0f);
-	case Release:		return 20.0f;
-	case AttackCurve:	return 1.0f;
-	case DecayCurve:	return 1.0f;
-	case EcoMode:		return 1.0f;
-	default:		jassertfalse; return -1;
-	}
-}
 
 void AhdsrEnvelope::setInternalAttribute(int parameterIndex, float newValue)
 {
