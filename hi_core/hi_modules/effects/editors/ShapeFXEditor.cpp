@@ -184,31 +184,20 @@ ShapeFXEditor::ShapeFXEditor (ProcessorEditor* p)
 
 	START_TIMER();
 
-	oversampling->setup(getProcessor(), ShapeFX::SpecialParameters::Oversampling, "Oversampling");
-
-    mixSlider->setMode(HiSlider::NormalizedPercentage);
-	mixSlider->setup(getProcessor(), ShapeFX::SpecialParameters::Mix, "Mix");
-	
-
-	autoGain->setup(getProcessor(), ShapeFX::SpecialParameters::Autogain, "Autogain");
-
-
+	auto md = getProcessor()->getMetadata();
+	md.setup(*oversampling, getProcessor(), ShapeFX::SpecialParameters::Oversampling);
+	md.setup(*mixSlider, getProcessor(), ShapeFX::SpecialParameters::Mix);
+	md.setup(*autoGain, getProcessor(), ShapeFX::SpecialParameters::Autogain);
 
 	//driveSlider->setup(getProcessor(), ShapeFX::SpecialParameters::Drive, "Drive");
 	//driveSlider->setMode(HiSlider::NormalizedPercentage);
 
-	reduceSlider->setup(getProcessor(), ShapeFX::SpecialParameters::Reduce, "Reduce");
-	reduceSlider->setMode(HiSlider::Discrete, NormalisableRange(0.0, 14.0, 1.0));
+	md.setup(*reduceSlider, getProcessor(), ShapeFX::SpecialParameters::Reduce);
 	reduceSlider->setTextValueSuffix(" bits");
 
-	gainSlider->setup(getProcessor(), ShapeFX::SpecialParameters::Gain, "Gain");
-	gainSlider->setMode(HiSlider::Decibel, NormalisableRange(0.0, 60.0, 0.1).withCentreSkew(24.0));
-
-	highPass->setup(getProcessor(), ShapeFX::SpecialParameters::HighPass, "High Pass");
-	highPass->setMode(HiSlider::Frequency,NormalisableRange(20.0, 8000.0, 1.0).withCentreSkew(200.0));
-
-	lowPass->setup(getProcessor(), ShapeFX::SpecialParameters::LowPass, "Low Pass");
-	lowPass->setMode(HiSlider::Frequency, NormalisableRange(200.0, 20000.0, 1.0).withCentreSkew(1500.0));
+	md.setup(*gainSlider, getProcessor(), ShapeFX::SpecialParameters::Gain);
+	md.setup(*highPass, getProcessor(), ShapeFX::SpecialParameters::HighPass);
+	md.setup(*lowPass, getProcessor(), ShapeFX::SpecialParameters::LowPass);
 
     modeSelector->clear(dontSendNotification);
 
@@ -222,15 +211,10 @@ ShapeFXEditor::ShapeFXEditor (ProcessorEditor* p)
 		}
 	}
 
-	modeSelector->setup(getProcessor(), ShapeFX::SpecialParameters::Mode , "Mode");
-
-	biasLeft->setup(getProcessor(), ShapeFX::SpecialParameters::BiasLeft, "Bias Left");
-	biasLeft->setMode(HiSlider::Linear, NormalisableRange(-1.0, 1.0, 0.01));
-
-	biasRight->setup(getProcessor(), ShapeFX::SpecialParameters::BiasRight, "Bias Right");
-	biasRight->setMode(HiSlider::Linear, NormalisableRange(-1.0, 1.0, 0.01));
-
-	limitButton->setup(getProcessor(), ShapeFX::SpecialParameters::LimitInput, "Limit Input");
+	md.setup(*modeSelector, getProcessor(), ShapeFX::SpecialParameters::Mode);
+	md.setup(*biasLeft, getProcessor(), ShapeFX::SpecialParameters::BiasLeft);
+	md.setup(*biasRight, getProcessor(), ShapeFX::SpecialParameters::BiasRight);
+	md.setup(*limitButton, getProcessor(), ShapeFX::SpecialParameters::LimitInput);
 
 	inMeter->setType(VuMeter::Type::StereoVertical);
 	outMeter->setType(VuMeter::Type::StereoVertical);

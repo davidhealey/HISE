@@ -32,6 +32,58 @@
 
 namespace hise { using namespace juce;
 
+hise::ProcessorMetadata DelayEffect::createMetadata()
+{
+	using Par = ProcessorMetadata::ParameterMetadata;
+	using Range = scriptnode::InvertableParameterRange;
+
+	return ProcessorMetadata()
+		.withStandardMetadata<DelayEffect>()
+		.withDescription("Stereo delay with independent left and right times, feedback, and filtering, with optional tempo sync for rhythmic echo effects")
+		.withParameter(Par(DelayTimeLeft)
+			.withId("DelayTimeLeft")
+			.withDescription("Left channel delay time in milliseconds or tempo-synced note value when sync is enabled")
+			.withSliderMode(HiSlider::Time, Range(0.0, 3000.0, 1.0))
+			.withDefault((float)TempoSyncer::QuarterTriplet)
+			.withTempoSyncMode(TempoSync))
+		.withParameter(Par(DelayTimeRight)
+			.withId("DelayTimeRight")
+			.withDescription("Right channel delay time in milliseconds or tempo-synced note value when sync is enabled")
+			.withSliderMode(HiSlider::Time, Range(0.0, 3000.0, 1.0))
+			.withDefault((float)TempoSyncer::Quarter)
+			.withTempoSyncMode(TempoSync))
+		.withParameter(Par(FeedbackLeft)
+			.withId("FeedbackLeft")
+			.withDescription("Left channel feedback amount where 0.0 is no repeats and 1.0 is infinite")
+			.withSliderMode(HiSlider::NormalizedPercentage, Range(0.0, 1.0, 0.0))
+			.withDefault(0.3f))
+		.withParameter(Par(FeedbackRight)
+			.withId("FeedbackRight")
+			.withDescription("Right channel feedback amount where 0.0 is no repeats and 1.0 is infinite")
+			.withSliderMode(HiSlider::NormalizedPercentage, Range(0.0, 1.0, 0.0))
+			.withDefault(0.3f))
+		.withParameter(Par(LowPassFreq)
+			.withId("LowPassFreq")
+			.withDescription("Low-pass cutoff frequency applied to the delay feedback")
+			.withSliderMode(HiSlider::Frequency, Range(20.0, 20000.0, 0.0))
+			.withDefault(20000.0f))
+		.withParameter(Par(HiPassFreq)
+			.withId("HiPassFreq")
+			.withDescription("High-pass cutoff frequency applied to the delay feedback")
+			.withSliderMode(HiSlider::Frequency, Range(20.0, 20000.0, 0.0))
+			.withDefault(40.0f))
+		.withParameter(Par(Mix)
+			.withId("Mix")
+			.withDescription("Dry and wet balance where 0.0 is fully dry and 1.0 is fully wet")
+			.withSliderMode(HiSlider::NormalizedPercentage, Range(0.0, 1.0, 0.0))
+			.withDefault(0.5f))
+		.withParameter(Par(TempoSync)
+			.withId("TempoSync")
+			.withDescription("Enables tempo-synced delay times instead of milliseconds")
+			.asToggle()
+			.withDefault(1.0f));
+}
+
 DelayEffect::DelayEffect(MainController *mc, const String &id) :
 	MasterEffectProcessor(mc, id),
 	delayTimeLeft(300.0f),
@@ -47,20 +99,8 @@ DelayEffect::DelayEffect(MainController *mc, const String &id) :
 	skipFirstBuffer(true)
 {
 	finaliseModChains();
-
-	parameterNames.add("DelayTimeLeft");
-	parameterNames.add("DelayTimeRight");
-	parameterNames.add("FeedbackLeft");
-	parameterNames.add("FeedbackRight");
-	parameterNames.add("LowPassFreq");
-	parameterNames.add("HiPassFreq");
-	parameterNames.add("Mix");
-	parameterNames.add("TempoSync");
-
 	updateParameterSlots();
-
 	mc->addTempoListener(this);
-
 	enableConsoleOutput(true);
 }
 
@@ -118,13 +158,6 @@ float DelayEffect::getDefaultValue(int parameterIndex) const
 	{
 	case DelayTimeLeft:		return tempoSync ? (float)syncTimeLeft : delayTimeLeft;
 	case DelayTimeRight:	return tempoSync ? (float)syncTimeRight : delayTimeRight;
-	case FeedbackLeft:		return feedbackLeft;
-	case FeedbackRight:		return feedbackRight;
-	case LowPassFreq:		return lowPassFreq;
-	case HiPassFreq:		return hiPassFreq;
-	case Mix:				return 0.5f;
-	case TempoSync:			return true;
-	default:				jassertfalse; return 0.0f;
 	}
 }
 

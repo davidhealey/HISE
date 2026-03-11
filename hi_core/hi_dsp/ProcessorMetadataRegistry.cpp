@@ -161,12 +161,12 @@ void ProcessorMetadataRegistry::registerAllMetadata()
 	add(StereoEffect::createMetadata());
 	add(SimpleReverbEffect::createMetadata());
 	add(GainEffect::createMetadata());
-	add(ProcessorMetadata::createFallback<ConvolutionEffect>());
-	add(ProcessorMetadata::createFallback<DelayEffect>());
+	add(ConvolutionEffect::createMetadata());
+	add(DelayEffect::createMetadata());
 	add(ChorusEffect::createMetadata());
 	add(PhaseFX::createMetadata());
-	add(ProcessorMetadata::createFallback<RouteEffect>());
-	add(ProcessorMetadata::createFallback<SendEffect>());
+	add(RouteEffect::createMetadata());
+	add(SendEffect::createMetadata());
 	add(SaturatorEffect::createMetadata());
 	add(JavascriptMasterEffect::createMetadata());
 	add(JavascriptPolyphonicEffect::createMetadata());
@@ -174,7 +174,7 @@ void ProcessorMetadataRegistry::registerAllMetadata()
 	add(EmptyFX::createMetadata());
 	add(DynamicsEffect::createMetadata());
 	add(AnalyserEffect::createMetadata());
-	add(ProcessorMetadata::createFallback<ShapeFX>());
+	add(ShapeFX::createMetadata());
 	add(ProcessorMetadata::createFallback<PolyshapeFX>());
 	add(HardcodedMasterFX::createMetadata());
 	add(HardcodedPolyphonicFX::createMetadata());
@@ -198,11 +198,8 @@ void ProcessorMetadataRegistry::registerAllMetadata()
 	add(ProcessorMetadata::createFallback<SilentSynth>());
 	add(HardcodedSynthesiser::createMetadata());
 	
-	if (auto s = get(SimpleReverbEffect::getClassType()))
-	{
-		auto x = JSON::toString(s->toJSON());
-		DBG(x);
-	}
+	auto x = JSON::toString(toJSON());
+	DBG(x);
 }
 
 } // namespace hise

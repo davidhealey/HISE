@@ -51,12 +51,10 @@ public:
 	{
 		const bool shouldBeSynced = tempoSyncButton->getToggleState();
 
-        
-        leftSyncTimeSlider->setVisible(shouldBeSynced);
-        rightSyncTimeSlider->setVisible(shouldBeSynced);
+        auto md = getProcessor()->getMetadata();
 
-        leftTimeSlider->setVisible(!shouldBeSynced);
-        rightTimeSlider->setVisible(!shouldBeSynced);
+        md.updateTempoSync(*leftTimeSlider);
+        md.updateTempoSync(*rightTimeSlider);
 	}
 
 	int getBodyHeight() const
@@ -83,8 +81,6 @@ private:
     //==============================================================================
     ScopedPointer<HiSlider> leftTimeSlider;
     ScopedPointer<HiSlider> rightTimeSlider;
-    ScopedPointer<HiSlider> leftSyncTimeSlider;
-    ScopedPointer<HiSlider> rightSyncTimeSlider;
     ScopedPointer<HiSlider> leftFeedbackSlider;
     ScopedPointer<HiSlider> rightFeedbackSlider;
     ScopedPointer<HiSlider> mixSlider;

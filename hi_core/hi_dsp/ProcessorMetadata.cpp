@@ -266,9 +266,17 @@ bool ProcessorMetadata::setup(HiSlider& slider, Processor* p, int parameterIndex
 	// Set mode with custom range if we have both
 	if (pd->sliderMode != HiSlider::numModes)
 	{
-		auto nr = NormalisableRange<double>(pd->range.rng.start, pd->range.rng.end, pd->range.rng.interval);
-		nr.skew = pd->range.rng.skew;
-		slider.setMode(pd->sliderMode, nr);
+		if (pd->tempoSyncControllerIndex != -1)
+		{
+			updateTempoSync(slider);
+			slider.updateValue();
+		}
+		else
+		{
+			auto nr = NormalisableRange<double>(pd->range.rng.start, pd->range.rng.end, pd->range.rng.interval);
+			nr.skew = pd->range.rng.skew;
+			slider.setMode(pd->sliderMode, nr);
+		}
 	}
 
 	if (!pd->description.isEmpty())
@@ -339,6 +347,7 @@ bool ProcessorMetadata::updateTempoSync(HiSlider& slider) const
 
 		if (p->getAttribute(ts) > 0.5f)
 		{
+			slider.setValue(p->getAttribute(parameterIndex));
 			slider.setMode(HiSlider::Mode::TempoSync);
 		}
 		else

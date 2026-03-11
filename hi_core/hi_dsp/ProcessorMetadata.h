@@ -317,16 +317,22 @@ struct ProcessorMetadata
 		return copy;
 	}
 
-	ProcessorMetadata asDynamic() const
+	ProcessorMetadata withMetadataType(DataType t) const
 	{
 		auto copy = *this;
-		copy.dataType = DataType::Dynamic;
+		copy.dataType = t;
 		return copy;
+	}
+
+	ProcessorMetadata asDynamic() const
+	{
+		return withMetadataType(DataType::Dynamic);
 	}
 
 	template <typename ProcessorType> ProcessorMetadata withStandardMetadata() const
 	{
 		return (*this).withId(ProcessorType::getClassType())
+			.withMetadataType(DataType::Static)
 			.withPrettyName(ProcessorType::getClassName())
 			.withType<ProcessorType>()
 			.withInterface<ProcessorType>();
