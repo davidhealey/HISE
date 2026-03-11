@@ -2275,7 +2275,7 @@ hise::ProcessorMetadata ScriptnodeVoiceKiller::createMetadata()
 	return EnvelopeModulator::createBaseMetadata()
 		.withId(getClassType())
 		.withPrettyName("Scriptnode Voice Killer")
-		.withDescription("Kills voices from a scriptnode envelope's gate output")
+		.withDescription("Monitors a scriptnode envelope's gate signal and terminates voices when the gate closes, required for voice management in scriptnode-based envelopes.")
 		.withType<hise::EnvelopeModulator>();
 }
 

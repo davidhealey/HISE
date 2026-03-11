@@ -71,7 +71,7 @@ public:
 	{
 		return ProcessorMetadata(getClassType(), ProcessorMetadata::DataType::Dynamic)
 			.withPrettyName(getClassName())
-			.withDescription("MIDI Processor that allows scripting.")
+			.withDescription("The main scripting interface for MIDI processing, UI creation, and plugin control via the HiseScript API.")
 			.withType<JavascriptMidiProcessor>()
 			.withInterface<JavascriptMidiProcessor>()
 			.withComplexDataInterface(ExternalData::DataType::Table)
@@ -235,7 +235,7 @@ public:
 	{
 		return ProcessorMetadata(getClassType(), ProcessorMetadata::DataType::Dynamic)
 			.withPrettyName(getClassName())
-			.withDescription("Creates a scriptable modulation value at the start of the voice.")
+			.withDescription("Computes a per-voice modulation value at note-on using a HiseScript callback, for custom velocity curves or scripted voice logic.")
 			.withType<JavascriptVoiceStartModulator>()
 			.withInterface<JavascriptVoiceStartModulator>()
 			.withComplexDataInterface(ExternalData::DataType::Table)
@@ -314,7 +314,7 @@ public:
 	static ProcessorMetadata createMetadata()
 	{
 		return withScriptnodeMetadata<JavascriptTimeVariantModulator>({})
-			.withDescription("Creates a scriptable monophonic modulation signal.");
+			.withDescription("Generates a continuous monophonic modulation signal from a scriptnode DSP network or HiseScript timer callback.");
 	}
 
 	enum Callback
@@ -500,7 +500,7 @@ public:
 	static ProcessorMetadata createMetadata()
 	{
 		return withScriptnodeMetadata<JavascriptEnvelopeModulator>(EnvelopeModulator::createBaseMetadata())
-			.withDescription("A scriptable envelope modulator using a DSP network");
+			.withDescription("Generates a polyphonic envelope signal from a scriptnode DSP network, with per-voice state and voice kill detection.");
 	}
 
 	JavascriptEnvelopeModulator(MainController *mc, const String &id, int numVoices, Modulation::Mode m);
@@ -615,7 +615,7 @@ public:
 	static ProcessorMetadata createMetadata()
 	{
 		return withScriptnodeMetadata<JavascriptMasterEffect>({})
-			.withDescription("A scriptable audio effect.");
+			.withDescription("Processes audio through a scriptnode DSP network as a master effect, with scriptable parameters and complex data routing.");
 	}
 
 	enum class Callback
@@ -741,7 +741,7 @@ public:
 	static ProcessorMetadata createMetadata()
 	{
 		return withScriptnodeMetadata<JavascriptPolyphonicEffect>({})
-			.withDescription("A polyphonic scriptable audio effect.");
+			.withDescription("Processes each voice independently through a scriptnode DSP network, with per-voice state and polyphonic modulation support.");
 	}
 
 	enum class Callback
@@ -891,7 +891,7 @@ public:
 	static ProcessorMetadata createMetadata()
 	{
 		return withScriptnodeMetadata<JavascriptSynthesiser>(ModulatorSynth::createBaseMetadata())
-			.withDescription("A polyphonic scriptable synthesiser.");
+			.withDescription("Generates polyphonic audio from a scriptnode DSP network, with per-voice processing and full modulator chain support.");
 	}
 
 	struct Sound : public ModulatorSynthSound

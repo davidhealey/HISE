@@ -585,7 +585,7 @@ ModulationDisplayValue::QueryFunction::Ptr HardcodedPolyphonicFX::getModulationQ
 hise::ProcessorMetadata HardcodedTimeVariantModulator::createMetadata()
 {
 	return withHardcodedMetadata<HardcodedTimeVariantModulator>({})
-		.withDescription("A time variant modulator wrapper around a compiled DSP network");
+		.withDescription("Runs a compiled C++ DSP network as a monophonic time-variant modulator with dynamic parameters.");
 }
 
 HardcodedTimeVariantModulator::HardcodedTimeVariantModulator(hise::MainController *mc, const String &uid, Modulation::Mode m):
@@ -705,7 +705,7 @@ Result HardcodedTimeVariantModulator::prepareOpaqueNode(scriptnode::OpaqueNode *
 hise::ProcessorMetadata HardcodedEnvelopeModulator::createMetadata()
 {
 	return withHardcodedMetadata<HardcodedEnvelopeModulator>(EnvelopeModulator::createBaseMetadata())
-		.withDescription("A envelope modulator wrapper around a compiled DLL node");
+		.withDescription("Runs a compiled C++ DSP network as a polyphonic envelope modulator with per-voice state and voice management.");
 }
 
 HardcodedEnvelopeModulator::HardcodedEnvelopeModulator(MainController* mc, const String& id, int numVoices,

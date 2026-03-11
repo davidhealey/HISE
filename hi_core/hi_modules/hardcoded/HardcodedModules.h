@@ -48,7 +48,7 @@ public:
 	static ProcessorMetadata createMetadata()
 	{
 		return withHardcodedMetadata<HardcodedMasterFX>({})
-			.withDescription("A master effect wrapper around a compiled DSP network");
+			.withDescription("Runs a compiled C++ DSP network as a master effect, with dynamic parameter and complex data exposure from the network.");
 	}
 
 	HardcodedMasterFX(MainController* mc, const String& uid);
@@ -110,7 +110,7 @@ public:
 	static ProcessorMetadata createMetadata()
 	{
 		return withHardcodedMetadata<HardcodedPolyphonicFX>({})
-			.withDescription("A polyphonic hardcoded FX");
+			.withDescription("Runs a compiled C++ DSP network as a polyphonic effect, processing each voice independently with per-voice state.");
 	}
 
 	HardcodedPolyphonicFX(MainController *mc, const String &uid, int numVoices);;
@@ -284,7 +284,7 @@ class HardcodedSynthesiser: public ModulatorSynth,
 	static ProcessorMetadata createMetadata()
 	{
 		return withHardcodedMetadata<HardcodedSynthesiser>(ModulatorSynth::createBaseMetadata())
-			  .withDescription("A polyphonic synthesiser that uses a compiled network as sound generator");
+			  .withDescription("Runs a compiled C++ DSP network as a polyphonic sound generator with per-voice processing and full modulator chain support.");
 	}
 
 	struct Sound : public ModulatorSynthSound
