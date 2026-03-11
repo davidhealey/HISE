@@ -1246,6 +1246,14 @@
                 "keyColour": {
                   "type": "int (ARGB)",
                   "description": "Custom colour for the key"
+                },
+                "font": {
+                  "type": "String",
+                  "description": "The typeface name from the keyboard panel's Font property"
+                },
+                "fontSize": {
+                  "type": "float",
+                  "description": "The font size from the keyboard panel's FontSize property"
                 }
               }
             },
@@ -1271,6 +1279,14 @@
                 "keyColour": {
                   "type": "int (ARGB)",
                   "description": "Custom colour for the key"
+                },
+                "font": {
+                  "type": "String",
+                  "description": "The typeface name from the keyboard panel's Font property"
+                },
+                "fontSize": {
+                  "type": "float",
+                  "description": "The font size from the keyboard panel's FontSize property"
                 }
               }
             }
