@@ -836,7 +836,8 @@ namespace ScriptingObjects
             public MatrixPeakMeter::LookAndFeelMethods,
 			public TableFloatingTileBase::LookAndFeelMethods,
 			public WaterfallComponent::LookAndFeelMethods,
-			public HiSlider::HoverPopupLookandFeel
+			public HiSlider::HoverPopupLookandFeel,
+			public PerformanceLabelPanel::LookAndFeelMethods
 		{
 			Laf(MainController* mc);
 
@@ -977,6 +978,9 @@ namespace ScriptingObjects
 			void drawFlexAhdsrPosition(Graphics& g, flex_ahdsr_base::FlexAhdsrGraph& graph, flex_ahdsr_base::State s, Point<float> pointOnPath) override;
 			void drawFlexAhdsrSegment(Graphics& g, flex_ahdsr_base::FlexAhdsrGraph& graph, flex_ahdsr_base::State s, const Path& segment, bool hover, bool active) override;
 			void drawFlexAhdsrText(Graphics& g, flex_ahdsr_base::FlexAhdsrGraph& graph, const String& text) override;
+
+			void drawPerformanceLabel(Graphics& g, PerformanceLabelPanel& panel,
+			                         double cpu, double ram, int voices) override;
 
 			Image createIcon(PresetHandler::IconType type) override;
 
