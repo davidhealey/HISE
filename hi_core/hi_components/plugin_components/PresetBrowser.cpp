@@ -1291,6 +1291,7 @@ void PresetBrowser::setOptions(const Options& newOptions)
 
 	setHighlightColourAndFont(newOptions.highlightColour, newOptions.backgroundColour, newOptions.font);
 
+	getPresetBrowserLookAndFeel().fontName = newOptions.fontName;
 	getPresetBrowserLookAndFeel().textColour = newOptions.textColour;
 	setNumColumns(newOptions.numColumns);
 	columnWidthRatios.clear();

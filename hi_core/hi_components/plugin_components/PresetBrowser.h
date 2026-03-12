@@ -70,6 +70,7 @@ public:
 		Colour backgroundColour;
 		Colour textColour;
 		Font font;
+		String fontName;
 
 		int numColumns = 3;
 		Array<var> columnWidthRatios;

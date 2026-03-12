@@ -1093,7 +1093,8 @@ void PresetBrowserPanel::fromDynamicObject(const var& object)
 	options.highlightColour = findPanelColour(PanelColourId::itemColour1);
 	options.textColour = findPanelColour(PanelColourId::textColour);
 	options.font = getFont();
-	
+	options.fontName = getFontName();
+
 	presetBrowser->setOptions(options);
 }
 
