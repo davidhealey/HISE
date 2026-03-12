@@ -4469,7 +4469,7 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawToggleButton(Graphics &g_, 
 			obj->setProperty("textColour", d.textColour.getARGB());
 			obj->setProperty("parentType", d.parentType);
 			obj->setProperty("fontSize", d.f.getHeight());
-			obj->setProperty("font", d.fontName);
+			obj->setProperty("font", d.f.getTypefaceName());
 		}
 		else
 		{
@@ -4607,7 +4607,7 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawLinearSlider(Graphics &g, i
 			obj->setProperty("textColour", d.textColour.getARGB());
 			obj->setProperty("parentType", d.parentType);
 			obj->setProperty("fontSize", d.f.getHeight());
-			obj->setProperty("font", d.fontName);
+			obj->setProperty("font", d.f.getTypefaceName());
 
 			slider.setColour(Slider::textBoxOutlineColourId, Colours::transparentBlack);
 			slider.setTextBoxStyle(Slider::NoTextBox, true, 0, 0);
@@ -5032,7 +5032,7 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawScrollbar(Graphics& g_, Scr
 		{
 			auto d = ft->getLookAndFeelData();
 			obj->setProperty("itemColour3", ft->findPanelColour(FloatingTileContent::PanelColourId::itemColour3).getARGB());
-			obj->setProperty("font", d.fontName);
+			obj->setProperty("font", d.f.getTypefaceName());
 			obj->setProperty("fontSize", d.f.getHeight());
 		}
 
@@ -5493,7 +5493,7 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawTableRowBackground(Graphics
 		obj->setProperty("itemColour2", d.itemColour2.getARGB());
 		obj->setProperty("itemColour3", d.itemColour3.getARGB());
 		obj->setProperty("textColour", d.textColour.getARGB());
-		obj->setProperty("font", d.fontName);
+		obj->setProperty("font", d.f.getTypefaceName());
 		obj->setProperty("fontSize", d.f.getHeight());
 
 		obj->setProperty("rowIndex", rowNumber);
@@ -5522,7 +5522,7 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawTableCell(Graphics& g_, con
 		obj->setProperty("itemColour2", d.itemColour2.getARGB());
 		obj->setProperty("itemColour3", d.itemColour3.getARGB());
 		obj->setProperty("textColour", d.textColour.getARGB());
-		obj->setProperty("font", d.fontName);
+		obj->setProperty("font", d.f.getTypefaceName());
 		obj->setProperty("fontSize", d.f.getHeight());
 
 		obj->setProperty("text", text);
@@ -5556,7 +5556,7 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawTableHeaderBackground(Graph
 		obj->setProperty("itemColour2", d.itemColour2.getARGB());
 		obj->setProperty("itemColour3", d.itemColour3.getARGB());
 		obj->setProperty("textColour", d.textColour.getARGB());
-		obj->setProperty("font", d.fontName);
+		obj->setProperty("font", d.f.getTypefaceName());
 		obj->setProperty("fontSize", d.f.getHeight());
 
 		auto a = h.getLocalBounds();
@@ -5584,7 +5584,7 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawTableHeaderColumn(Graphics&
 		obj->setProperty("itemColour2", d.itemColour2.getARGB());
 		obj->setProperty("itemColour3", d.itemColour3.getARGB());
 		obj->setProperty("textColour", d.textColour.getARGB());
-		obj->setProperty("font", d.fontName);
+		obj->setProperty("font", d.f.getTypefaceName());
 		obj->setProperty("fontSize", d.f.getHeight());
 
 		obj->setProperty("text", columnName);
@@ -5619,7 +5619,7 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawTableRowBackground(Graphics
 		obj->setProperty("itemColour2", d.itemColour2.getARGB());
 		obj->setProperty("itemColour3", d.itemColour3.getARGB());
 		obj->setProperty("textColour", d.textColour.getARGB());
-		obj->setProperty("font", d.fontName);
+		obj->setProperty("font", d.f.getTypefaceName());
 		obj->setProperty("fontSize", d.f.getHeight());
 
 		obj->setProperty("rowIndex", rowNumber);
@@ -5649,7 +5649,7 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawTableCell(Graphics& g_, con
 		obj->setProperty("itemColour2", d.itemColour2.getARGB());
 		obj->setProperty("itemColour3", d.itemColour3.getARGB());
 		obj->setProperty("textColour", d.textColour.getARGB());
-		obj->setProperty("font", d.fontName);
+		obj->setProperty("font", d.f.getTypefaceName());
 		obj->setProperty("fontSize", d.f.getHeight());
 
 		obj->setProperty("text", text);
