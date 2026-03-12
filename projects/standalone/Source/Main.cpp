@@ -1733,15 +1733,31 @@ public:
 			mainWindow = new MainWindow(commandLine);
 			mainWindow->setUsingNativeTitleBar(true);
 			mainWindow->toFront(true);
+
+			if (commandLine.startsWith("start_server"))
+			{
+				BackendRootWindow* brw = nullptr;
+
+				Component::callRecursive<BackendRootWindow>(mainWindow, [&](BackendRootWindow* brw_)
+				{
+					brw = brw_;
+					return true;
+				});
+
+				jassert(brw != nullptr);
+
+				brw->getBackendProcessor()->getReplServer().start(false);
+			}
 		}
     }
 
-    void shutdown() override
-    {
-        // Add your application's shutdown code here..
-
-        mainWindow = nullptr; // (deletes our window)
-    }
+	void shutdown() override
+	{
+		// ReplServer::stop() is called automatically by the BackendProcessor
+		// destructor when mainWindow is deleted, but we could also stop it
+		// explicitly here if needed for ordering guarantees.
+		mainWindow = nullptr; // (deletes our window)
+	}
 
     //==============================================================================
     void systemRequestedQuit() override

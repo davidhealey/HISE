@@ -376,6 +376,7 @@ BackendProcessor::BackendProcessor(AudioDeviceManager *deviceManager_/*=nullptr*
   AudioProcessorDriver(deviceManager_, callback_),
   scriptUnlocker(this),
   autosaver(this),
+  replServer(*this),
   pluginParameterRamp(this)
 {
 	// Register all REST API routes from the centralized metadata
