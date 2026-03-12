@@ -720,6 +720,7 @@ public:
 	struct LookAndFeelData
 	{
 		Font f = GLOBAL_BOLD_FONT();
+		String fontName;
 		Colour textColour, bgColour, itemColour1, itemColour2, itemColour3;
 		String parentType;
 	};

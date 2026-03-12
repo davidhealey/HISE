@@ -75,6 +75,7 @@ struct ScriptTableListModel : public juce::TableListBoxModel,
 		bool sortForward = true;
 
 		Font f = GLOBAL_BOLD_FONT();
+		String fontName;
 		Justification c = Justification::centredLeft;
 		Colour textColour, bgColour, itemColour1, itemColour2, itemColour3;
 	};
