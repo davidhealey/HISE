@@ -5500,9 +5500,8 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawWhiteNote(CustomKeyboardSta
 
 		if (auto kp = c->findParentComponentOfClass<MidiKeyboardPanel>())
 		{
-			auto f = kp->getFont();
-			obj->setProperty("font", f.getTypefaceName());
-			obj->setProperty("fontSize", f.getHeight());
+			obj->setProperty("font", kp->getFontName());
+			obj->setProperty("fontSize", kp->getFont().getHeight());
 		}
 
 		if (get()->callWithGraphics(g_, "drawWhiteNote", var(obj), c))
@@ -5528,9 +5527,8 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawBlackNote(CustomKeyboardSta
 
 		if (auto kp = c->findParentComponentOfClass<MidiKeyboardPanel>())
 		{
-			auto f = kp->getFont();
-			obj->setProperty("font", f.getTypefaceName());
-			obj->setProperty("fontSize", f.getHeight());
+			obj->setProperty("font", kp->getFontName());
+			obj->setProperty("fontSize", kp->getFont().getHeight());
 		}
 
 		if (get()->callWithGraphics(g_, "drawBlackNote", var(obj), c))
