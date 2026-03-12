@@ -4891,7 +4891,7 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawPresetBrowserBackground(Gra
 		obj->setProperty("itemColour2", modalBackgroundColour.getARGB());
 		obj->setProperty("itemColour3", itemColour3.getARGB());
 		obj->setProperty("textColour", textColour.getARGB());
-		obj->setProperty("font", font.getTypefaceName());
+		obj->setProperty("font", fontName);
 		obj->setProperty("fontSize", font.getHeight());
 
 		if (get()->callWithGraphics(g_, "drawPresetBrowserBackground", var(obj), p))
@@ -4914,7 +4914,7 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawColumnBackground(Graphics& 
 		obj->setProperty("itemColour2", modalBackgroundColour.getARGB());
 		obj->setProperty("itemColour3", itemColour3.getARGB());
 		obj->setProperty("textColour", textColour.getARGB());
-		obj->setProperty("font", font.getTypefaceName());
+		obj->setProperty("font", fontName);
 		obj->setProperty("fontSize", font.getHeight());
 
 		if (get()->callWithGraphics(g_, "drawPresetBrowserColumnBackground", var(obj), nullptr))
@@ -4940,7 +4940,7 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawListItem(Graphics& g_, Comp
 		obj->setProperty("itemColour2", modalBackgroundColour.getARGB());
 		obj->setProperty("itemColour3", itemColour3.getARGB());
 		obj->setProperty("textColour", textColour.getARGB());
-		obj->setProperty("font", font.getTypefaceName());
+		obj->setProperty("font", fontName);
 		obj->setProperty("fontSize", font.getHeight());
 
 		if (get()->callWithGraphics(g_, "drawPresetBrowserListItem", var(obj), nullptr))
@@ -4961,7 +4961,7 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawSearchBar(Graphics& g_, Com
 		obj->setProperty("itemColour2", modalBackgroundColour.getARGB());
 		obj->setProperty("itemColour3", itemColour3.getARGB());
 		obj->setProperty("textColour", textColour.getARGB());
-		obj->setProperty("font", font.getTypefaceName());
+		obj->setProperty("font", fontName);
 		obj->setProperty("fontSize", font.getHeight());
 
 		auto p = new ScriptingObjects::PathObject(get()->getScriptProcessor());
@@ -6306,7 +6306,7 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawTag(Graphics& g_, Component
 		obj->setProperty("itemColour2", modalBackgroundColour.getARGB());
 		obj->setProperty("itemColour3", itemColour3.getARGB());
 		obj->setProperty("textColour", textColour.getARGB());
-		obj->setProperty("font", font.getTypefaceName());
+		obj->setProperty("font", fontName);
 		obj->setProperty("fontSize", font.getHeight());
 
 		if (get()->callWithGraphics(g_, "drawPresetBrowserTag", var(obj), nullptr))
@@ -6330,7 +6330,7 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawModalOverlay(Graphics& g_, 
 		obj->setProperty("itemColour2", modalBackgroundColour.getARGB());
 		obj->setProperty("itemColour3", itemColour3.getARGB());
 		obj->setProperty("textColour", textColour.getARGB());
-		obj->setProperty("font", font.getTypefaceName());
+		obj->setProperty("font", fontName);
 		obj->setProperty("fontSize", font.getHeight());
 
 		if (l->callWithGraphics(g_, "drawPresetBrowserDialog", var(obj), nullptr))
