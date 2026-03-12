@@ -288,6 +288,8 @@ public:
 
 	String getDynamicTitle() const { return dynamicTitle; }
 
+	String getFontName() const { return fontName; }
+
 	Font getFont() const
 	{
 		if (fontName.isEmpty())

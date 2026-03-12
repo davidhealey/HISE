@@ -720,6 +720,7 @@ ScriptTableListModel::LookAndFeelData ScriptTableListModel::LookAndFeelMethods::
 			auto ftd = ft->getLookAndFeelData();
 			LookAndFeelData d;
 			d.f = ftd.f;
+			d.fontName = ftd.fontName;
 			d.textColour = ftd.textColour;
 			d.bgColour = ftd.bgColour;
 			d.itemColour1 = ftd.itemColour1;
