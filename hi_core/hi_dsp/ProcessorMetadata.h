@@ -66,7 +66,21 @@ DECLARE_ID(SliderPackProcessor);
 DECLARE_ID(AudioSampleProcessor);
 DECLARE_ID(DisplayBufferSource);
 
-
+DECLARE_ID(oscillator);
+DECLARE_ID(sample_playback);
+DECLARE_ID(container);
+DECLARE_ID(sequencing);
+DECLARE_ID(note_processing);
+DECLARE_ID(dynamics);
+DECLARE_ID(filter);
+DECLARE_ID(delay);
+DECLARE_ID(reverb);
+DECLARE_ID(mixing);
+DECLARE_ID(input);
+DECLARE_ID(generator);
+DECLARE_ID(routing);
+DECLARE_ID(utility);
+DECLARE_ID(custom);
 
 }
 
@@ -631,6 +645,7 @@ struct ProcessorMetadata
 	String description;                   // brief description
 	Identifier type;                      // "Modulator", "Effect", "SoundGenerator", "MidiProcessor"
 	Identifier subtype;                   // "TimeVariantModulator", "MasterEffect", etc.
+	Array<Identifier> categories;		  // ["oscillator", "routing"]
 
 	Array<Identifier> interfaceClasses;         // ["RoutableProcessor", "AudioSampleProcessor"]
 

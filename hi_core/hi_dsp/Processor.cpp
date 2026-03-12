@@ -566,9 +566,16 @@ Identifier Processor::getIdentifierForParameterIndex(int parameterIndex) const
 	jassert(dynamic_cast<const ProcessorWithScriptingContent*>(this) == nullptr);
 
 	if (hasInitialisedMetadata())
-		return getMetadata()[parameterIndex].id;
-
-	if (parameterIndex > parameterNames.size()) return Identifier();
+	{
+		for (const auto& pd : metadata.second.parameters)
+		{
+			if (pd.parameterIndex == parameterIndex)
+				return pd.id;
+		}
+	}
+	
+	if (parameterIndex > parameterNames.size()) 
+		return Identifier();
 
 	return parameterNames[parameterIndex];
 }
@@ -1662,9 +1669,9 @@ ProcessorMetadata Processor::getMetadata() const
 	if (hasInitialisedMetadata())
 		return metadata.second;
 
-	SharedResourcePointer<ProcessorMetadataRegistry> registry;
+	ProcessorMetadataRegistry registry;
 
-	if (auto md = registry->get(getType()))
+	if (auto md = registry.get(getType()))
 	{
 		return *md;
 	}

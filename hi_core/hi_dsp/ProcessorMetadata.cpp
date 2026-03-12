@@ -176,6 +176,13 @@ var ProcessorMetadata::toJSON() const
 	obj->setProperty("description", description);
 	obj->setProperty("type", type.toString());
 	obj->setProperty("subtype", subtype.toString());
+
+	Array<var> c;
+
+	for (auto& cat : categories)
+		c.add(cat.toString());
+
+	obj->setProperty("category", var(c));
 	obj->setProperty("builderPath", getBuilderPath());
 
 	obj->setProperty("hasChildren", hasChildren);

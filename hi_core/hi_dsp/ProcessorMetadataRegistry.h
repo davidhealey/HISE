@@ -46,8 +46,8 @@ using namespace juce;
 *	(from ProcessorMetadata::createFallback<T>()).
 *
 *	Usage:
-*	  SharedResourcePointer<ProcessorMetadataRegistry> registry;
-*	  auto md = registry->get(processor->getType());
+*	  ProcessorMetadataRegistry registry;
+*	  auto md = registry.get(processor->getType());
 */
 class ProcessorMetadataRegistry
 {
@@ -83,7 +83,16 @@ private:
 	*/
 	void registerAllMetadata();
 
-	std::map<Identifier, ProcessorMetadata> entries;
+	struct Data
+	{
+		void init();
+
+		bool initialised = false;
+		std::map<Identifier, ProcessorMetadata> entries;
+		DynamicObject::Ptr categories;
+	};
+
+	SharedResourcePointer<Data> data;
 
 	JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(ProcessorMetadataRegistry)
 };
