@@ -968,7 +968,7 @@ namespace ScriptingObjects
 			void drawFlexAhdsrText(Graphics& g, flex_ahdsr_base::FlexAhdsrGraph& graph, const String& text) override;
 
 			void drawPerformanceLabel(Graphics& g, PerformanceLabelPanel& panel,
-			                         double cpu, double ram, int voices) override;
+			                         float cpu, int64 ram, int voices) override;
 
 			Image createIcon(PresetHandler::IconType type) override;
 
