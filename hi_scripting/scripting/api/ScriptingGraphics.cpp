@@ -6033,7 +6033,7 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawPerformanceLabel(
 		obj->setProperty("itemColour2",  (int64)panel.findPanelColour(FloatingTileContent::PanelColourId::itemColour2).getARGB());
 		obj->setProperty("itemColour3",  (int64)panel.findPanelColour(FloatingTileContent::PanelColourId::itemColour3).getARGB());
 
-		obj->setProperty("font",     panel.getFont().getTypefaceName());
+		obj->setProperty("font",     panel.getFontName());
 		obj->setProperty("fontSize", panel.getFont().getHeight());
 
 		obj->setProperty("cpu",    cpu);
