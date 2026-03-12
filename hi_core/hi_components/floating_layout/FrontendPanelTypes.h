@@ -429,7 +429,7 @@ public:
 	{
 		virtual ~LookAndFeelMethods() {};
 		virtual void drawPerformanceLabel(Graphics& g, PerformanceLabelPanel& panel,
-		                                  float cpu, double ram, int voices);
+		                                  float cpu, int64 ram, int voices);
 	};
 
 	PerformanceLabelPanel(FloatingTile* parent);
@@ -446,7 +446,7 @@ private:
 
 	float cpuUsage = 0.0f;
 	int voiceAmount = 0;
-	double ramUsage = 0.0;
+	int64 ramUsage = 0;
 };
 
 

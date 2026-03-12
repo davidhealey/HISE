@@ -2742,8 +2742,8 @@
                   "description": "Current CPU usage as a percentage (0.0-100.0)"
                 },
                 "ram": {
-                  "type": "double",
-                  "description": "Current RAM usage in megabytes"
+                  "type": "int64",
+                  "description": "Current RAM usage in bytes"
                 },
                 "voices": {
                   "type": "int",

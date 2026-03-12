@@ -849,7 +849,7 @@ void PerformanceLabelPanel::timerCallback()
 		bytes += handler.getExpansion(i)->pool->getSamplePool()->getMemoryUsageForAllSamples();
 	}
 
-	ramUsage = (double)bytes / 1024.0 / 1024.0;
+	ramUsage = (int64)bytes;
 
 	repaint();
 }
@@ -857,11 +857,11 @@ void PerformanceLabelPanel::timerCallback()
 
 
 void PerformanceLabelPanel::LookAndFeelMethods::drawPerformanceLabel(
-	Graphics& g, PerformanceLabelPanel& panel, float cpu, double ram, int voices)
+	Graphics& g, PerformanceLabelPanel& panel, float cpu, int64 ram, int voices)
 {
 	g.setColour(panel.findPanelColour(FloatingTileContent::PanelColourId::textColour));
 	g.setFont(panel.getFont());
-	String stats = "CPU: " + String(cpu, 1) + "%, RAM: " + String(ram, 1) + "MB , Voices: " + String(voices);
+	String stats = "CPU: " + String(cpu, 1) + "%, RAM: " + String((double)ram / 1024.0 / 1024.0, 1) + "MB , Voices: " + String(voices);
 	g.drawText(stats, panel.getLocalBounds(), Justification::centredLeft);
 }
 
@@ -875,7 +875,7 @@ void PerformanceLabelPanel::paint(Graphics& g)
 	{
 		g.setColour(findPanelColour(FloatingTileContent::PanelColourId::textColour));
 		g.setFont(getFont());
-		String stats = "CPU: " + String(cpuUsage, 1) + "%, RAM: " + String(ramUsage, 1) + "MB , Voices: " + String(voiceAmount);
+		String stats = "CPU: " + String(cpuUsage, 1) + "%, RAM: " + String((double)ramUsage / 1024.0 / 1024.0, 1) + "MB , Voices: " + String(voiceAmount);
 		g.drawText(stats, getLocalBounds(), Justification::centredLeft);
 	}
 }
