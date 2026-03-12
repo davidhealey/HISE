@@ -45,9 +45,8 @@ TransposerEditor::TransposerEditor (ProcessorEditor *p)
 
     //[UserPreSize]
 
-	intensitySlider->setup(getProcessor(), Transposer::TransposeAmount, "Transpose");
-
-	intensitySlider->setMode(HiSlider::Discrete, NormalisableRange(-24.0, 24.0, 1.0));
+	auto md = getProcessor()->getMetadata();
+	md.setup(*intensitySlider, getProcessor(), Transposer::TransposeAmount);
 	intensitySlider->setTextValueSuffix(" st");	
 
     //[/UserPreSize]

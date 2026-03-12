@@ -158,8 +158,9 @@ private:
 class Transposer: public MidiProcessor
 {
 public:
+	static ProcessorMetadata createMetadata();
 
-	SET_PROCESSOR_NAME("Transposer", "Transposer", "Transposes all midi note messages by the specified amount.");
+	SET_PROCESSOR_NAME("Transposer", "Transposer", "");
 
 	Transposer(MainController *mc, const String &id):
 		MidiProcessor(mc, id),

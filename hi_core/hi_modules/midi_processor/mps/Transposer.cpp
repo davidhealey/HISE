@@ -32,6 +32,21 @@
 
 namespace hise { using namespace juce;
 
+hise::ProcessorMetadata Transposer::createMetadata()
+{
+	using Par = ProcessorMetadata::ParameterMetadata;
+	using Range = scriptnode::InvertableParameterRange;
+
+	return ProcessorMetadata()
+		.withStandardMetadata<Transposer>()
+		.withDescription("Transposes incoming MIDI note-on events by a fixed number of semitones for quick key changes or interval shifts")
+		.withParameter(Par(TransposeAmount)
+			.withId("TransposeAmount")
+			.withDescription("Semitone offset applied to incoming note-on events")
+			.withSliderMode(HiSlider::Discrete, Range(-24.0, 24.0, 1.0))
+			.withDefault(0.0f));
+}
+
 ProcessorEditorBody *Transposer::createEditor(ProcessorEditor *parentEditor)
 {
 #if USE_BACKEND
