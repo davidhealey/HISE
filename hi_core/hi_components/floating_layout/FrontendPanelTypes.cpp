@@ -1738,6 +1738,7 @@ TableFloatingTileBase::LookAndFeelData TableFloatingTileBase::getLookAndFeelData
 {
 	LookAndFeelData d;
 	d.f = font;
+	d.fontName = getFontName();
 	d.textColour = textColour;
 	d.bgColour = findPanelColour(FloatingTileContent::PanelColourId::bgColour);
 	d.itemColour1 = itemColour1;
