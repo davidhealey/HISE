@@ -6221,7 +6221,7 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawFlexAhdsrText(Graphics& g_,
 }
 
 void ScriptingObjects::ScriptedLookAndFeel::Laf::drawPerformanceLabel(
-	Graphics& g, PerformanceLabelPanel& panel, double cpu, double ram, int voices)
+	Graphics& g, PerformanceLabelPanel& panel, float cpu, int64 ram, int voices)
 {
 	if (functionDefined("drawPerformanceLabel"))
 	{
@@ -6236,7 +6236,7 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawPerformanceLabel(
 		obj->setProperty("itemColour2",  (int64)panel.findPanelColour(FloatingTileContent::PanelColourId::itemColour2).getARGB());
 		obj->setProperty("itemColour3",  (int64)panel.findPanelColour(FloatingTileContent::PanelColourId::itemColour3).getARGB());
 
-		obj->setProperty("font",     panel.getFont().getTypefaceName());
+		obj->setProperty("font",     panel.getFontName());
 		obj->setProperty("fontSize", panel.getFont().getHeight());
 
 		obj->setProperty("cpu",    cpu);
@@ -6250,7 +6250,7 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawPerformanceLabel(
 	// Default fallback
 	g.setColour(panel.findPanelColour(FloatingTileContent::PanelColourId::textColour));
 	g.setFont(panel.getFont());
-	String stats = "CPU: " + String(cpu, 1) + "%, RAM: " + String(ram, 1) + "MB , Voices: " + String(voices);
+	String stats = "CPU: " + String(cpu, 1) + "%, RAM: " + String((double)ram / 1024.0 / 1024.0, 1) + "MB , Voices: " + String(voices);
 	g.drawText(stats, panel.getLocalBounds(), Justification::centredLeft);
 }
 
