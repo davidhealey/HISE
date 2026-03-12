@@ -979,6 +979,8 @@ PresetBrowserPanel::PresetBrowserPanel(FloatingTile* parent) :
 	setDefaultPanelColour(PanelColourId::bgColour, Colours::black.withAlpha(0.97f));
     setDefaultPanelColour(PanelColourId::textColour, Colours::white);
 	setDefaultPanelColour(PanelColourId::itemColour1, Colour(SIGNAL_COLOUR));
+	setDefaultPanelColour(PanelColourId::itemColour2, Colours::black.withAlpha(0.7f));
+	setDefaultPanelColour(PanelColourId::itemColour3, Colours::white.withAlpha(0.6f));
 
 	addAndMakeVisible(presetBrowser = new PresetBrowser(getMainController()));
 	
@@ -1098,9 +1100,12 @@ void PresetBrowserPanel::fromDynamicObject(const var& object)
 	options.showFavoriteIcons = getPropertyWithDefault(object, SpecialPanelIds::ShowFavoriteIcon);
 	options.backgroundColour = findPanelColour(PanelColourId::bgColour);
 	options.highlightColour = findPanelColour(PanelColourId::itemColour1);
+	options.modalBackgroundColour = findPanelColour(PanelColourId::itemColour2);
+	options.itemColour3 = findPanelColour(PanelColourId::itemColour3);
 	options.textColour = findPanelColour(PanelColourId::textColour);
 	options.font = getFont();
-	
+	options.fontName = getFontName();
+
 	presetBrowser->setOptions(options);
 }
 

@@ -4878,8 +4878,9 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawPresetBrowserBackground(Gra
 		obj->setProperty("bgColour", backgroundColour.getARGB());
 		obj->setProperty("itemColour", highlightColour.getARGB());
 		obj->setProperty("itemColour2", modalBackgroundColour.getARGB());
+		obj->setProperty("itemColour3", itemColour3.getARGB());
 		obj->setProperty("textColour", textColour.getARGB());
-		obj->setProperty("font", font.getTypefaceName());
+		obj->setProperty("font", fontName);
 		obj->setProperty("fontSize", font.getHeight());
 
 		if (get()->callWithGraphics(g_, "drawPresetBrowserBackground", var(obj), p))
@@ -4900,8 +4901,9 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawColumnBackground(Graphics& 
 		obj->setProperty("bgColour", backgroundColour.getARGB());
 		obj->setProperty("itemColour", highlightColour.getARGB());
 		obj->setProperty("itemColour2", modalBackgroundColour.getARGB());
+		obj->setProperty("itemColour3", itemColour3.getARGB());
 		obj->setProperty("textColour", textColour.getARGB());
-		obj->setProperty("font", font.getTypefaceName());
+		obj->setProperty("font", fontName);
 		obj->setProperty("fontSize", font.getHeight());
 
 		if (get()->callWithGraphics(g_, "drawPresetBrowserColumnBackground", var(obj), nullptr))
@@ -4925,8 +4927,9 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawListItem(Graphics& g_, Comp
 		obj->setProperty("bgColour", backgroundColour.getARGB());
 		obj->setProperty("itemColour", highlightColour.getARGB());
 		obj->setProperty("itemColour2", modalBackgroundColour.getARGB());
+		obj->setProperty("itemColour3", itemColour3.getARGB());
 		obj->setProperty("textColour", textColour.getARGB());
-		obj->setProperty("font", font.getTypefaceName());
+		obj->setProperty("font", fontName);
 		obj->setProperty("fontSize", font.getHeight());
 
 		if (get()->callWithGraphics(g_, "drawPresetBrowserListItem", var(obj), nullptr))
@@ -4945,8 +4948,9 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawSearchBar(Graphics& g_, Com
 		obj->setProperty("bgColour", backgroundColour.getARGB());
 		obj->setProperty("itemColour", highlightColour.getARGB());
 		obj->setProperty("itemColour2", modalBackgroundColour.getARGB());
+		obj->setProperty("itemColour3", itemColour3.getARGB());
 		obj->setProperty("textColour", textColour.getARGB());
-		obj->setProperty("font", font.getTypefaceName());
+		obj->setProperty("font", fontName);
 		obj->setProperty("fontSize", font.getHeight());
 
 		auto p = new ScriptingObjects::PathObject(get()->getScriptProcessor());
@@ -5128,19 +5132,39 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawScrollbar(Graphics& g_, Scr
 		obj->setProperty("vertical", isScrollbarVertical);
 		obj->setProperty("over", isMouseOver);
 		obj->setProperty("down", isMouseDown);
-		setColourOrBlack(obj, "bgColour",    scrollbar, ScrollBar::ColourIds::backgroundColourId);
-		setColourOrBlack(obj, "itemColour",  scrollbar, ScrollBar::ColourIds::thumbColourId);
-		setColourOrBlack(obj, "itemColour2", scrollbar, ScrollBar::ColourIds::trackColourId);
-
 		if (auto ft = scrollbar.findParentComponentOfClass<TableFloatingTileBase>())
 		{
 			auto d = ft->getLookAndFeelData();
+			obj->setProperty("bgColour", d.bgColour.getARGB());
+			obj->setProperty("itemColour1", d.itemColour1.getARGB());
+			obj->setProperty("itemColour2", d.itemColour2.getARGB());
 			obj->setProperty("itemColour3", ft->findPanelColour(FloatingTileContent::PanelColourId::itemColour3).getARGB());
-			obj->setProperty("font", d.fontName);
+			obj->setProperty("textColour", d.textColour.getARGB());
+			obj->setProperty("parentType", d.parentType);
+			obj->setProperty("font", d.f.getTypefaceName());
 			obj->setProperty("fontSize", d.f.getHeight());
 		}
+		else
+		{
+			static const Identifier pb("PresetBrowser");
 
-		addParentFloatingTile(scrollbar, obj);
+			if (getIdOfParentFloatingTile(scrollbar) == pb)
+			{
+				obj->setProperty("bgColour", backgroundColour.getARGB());
+				obj->setProperty("itemColour1", highlightColour.getARGB());
+				obj->setProperty("itemColour2", modalBackgroundColour.getARGB());
+				obj->setProperty("itemColour3", itemColour3.getARGB());
+				obj->setProperty("textColour", textColour.getARGB());
+				obj->setProperty("parentType", pb.toString());
+			}
+			else
+			{
+				setColourOrBlack(obj, "bgColour",    scrollbar, ScrollBar::ColourIds::backgroundColourId);
+				setColourOrBlack(obj, "itemColour",  scrollbar, ScrollBar::ColourIds::thumbColourId);
+				setColourOrBlack(obj, "itemColour2", scrollbar, ScrollBar::ColourIds::trackColourId);
+				addParentFloatingTile(scrollbar, obj);
+			}
+		}
 
 		if (get()->callWithGraphics(g_, "drawScrollbar", var(obj), &scrollbar))
 			return;
@@ -6252,8 +6276,9 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawTag(Graphics& g_, Component
 		obj->setProperty("bgColour", backgroundColour.getARGB());
 		obj->setProperty("itemColour", highlightColour.getARGB());
 		obj->setProperty("itemColour2", modalBackgroundColour.getARGB());
+		obj->setProperty("itemColour3", itemColour3.getARGB());
 		obj->setProperty("textColour", textColour.getARGB());
-		obj->setProperty("font", font.getTypefaceName());
+		obj->setProperty("font", fontName);
 		obj->setProperty("fontSize", font.getHeight());
 
 		if (get()->callWithGraphics(g_, "drawPresetBrowserTag", var(obj), nullptr))
@@ -6275,8 +6300,9 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawModalOverlay(Graphics& g_, 
 		obj->setProperty("bgColour", backgroundColour.getARGB());
 		obj->setProperty("itemColour", highlightColour.getARGB());
 		obj->setProperty("itemColour2", modalBackgroundColour.getARGB());
+		obj->setProperty("itemColour3", itemColour3.getARGB());
 		obj->setProperty("textColour", textColour.getARGB());
-		obj->setProperty("font", font.getTypefaceName());
+		obj->setProperty("font", fontName);
 		obj->setProperty("fontSize", font.getHeight());
 
 		if (l->callWithGraphics(g_, "drawPresetBrowserDialog", var(obj), nullptr))
