@@ -646,6 +646,8 @@ private:
 	
 	std::unique_ptr<InteractionTester> interactionTester;
 
+	hise::ProcessorMetadataRegistry processorDatabase;
+
 	static int commandLineServerPort;
 
 	JUCE_DECLARE_WEAK_REFERENCEABLE(BackendProcessor);
