@@ -364,7 +364,9 @@ public:
 	class PolytableShaper;
 	class PolytableAsymetricalShaper;
 
-	SET_PROCESSOR_NAME("PolyshapeFX", "Polyshape FX", "A polyphonic wave shaper.");
+	SET_PROCESSOR_NAME("PolyshapeFX", "Polyshape FX", "");
+
+	static ProcessorMetadata createMetadata();
 
 	enum InternalChains
 	{
@@ -372,7 +374,6 @@ public:
 		numInternalChains
 	};
 
-	/** The parameters */
 	enum SpecialParameters
 	{
 		Drive = VoiceEffectProcessor::numParameters,
@@ -394,7 +395,6 @@ public:
 
 	float getAttribute(int parameterIndex) const override;
 	void setInternalAttribute(int parameterIndex, float newValue) override;;
-	float getDefaultValue(int parameterIndex) const override;;
 
 	void restoreFromValueTree(const ValueTree &v) override;;
 	ValueTree exportAsValueTree() const override;

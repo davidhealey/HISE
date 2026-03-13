@@ -92,8 +92,9 @@ PolyShapeFXEditor::PolyShapeFXEditor (ProcessorEditor* p)
 
     //[UserPreSize]
 
-	driveSlider->setup(getProcessor(), PolyshapeFX::SpecialParameters::Drive, "Drive");
-	driveSlider->setMode(HiSlider::Decibel, NormalisableRange(0.0, 60.0, 0.1).withCentreSkew(24.0));
+	auto md = PolyshapeFX::createMetadata();
+
+	md.setup(*driveSlider, getProcessor(), PolyshapeFX::SpecialParameters::Drive);
 	
 
     modeSelector->clear(dontSendNotification);
@@ -110,10 +111,9 @@ PolyShapeFXEditor::PolyShapeFXEditor (ProcessorEditor* p)
 	modeSelector->setup(getProcessor(), PolyshapeFX::SpecialParameters::Mode, "Mode");
 	
 
-	overSampling->setup(getProcessor(), PolyshapeFX::SpecialParameters::Oversampling, "Oversampling");
+	md.setup(*overSampling, getProcessor(), PolyshapeFX::SpecialParameters::Oversampling);
 
-    bias->setMode(HiSlider::NormalizedPercentage);
-	bias->setup(getProcessor(), PolyshapeFX::SpecialParameters::Bias, "Bias");
+	md.setup(*bias, getProcessor(), PolyshapeFX::SpecialParameters::Bias);
 
     //[/UserPreSize]
 

@@ -128,11 +128,13 @@ HarmonicFilterEditor::HarmonicFilterEditor (ProcessorEditor *p)
     label4->setFont(GLOBAL_BOLD_FONT());
     
     
-	filterNumbers->setup(getProcessor(), HarmonicFilter::NumFilterBands, "Filterband Amount");
+	auto md = getProcessor()->getMetadata();
 
-	qSlider->setup(getProcessor(), HarmonicFilter::QFactor, "Q Factor");
+	md.setup(*filterNumbers, getProcessor(), HarmonicFilter::NumFilterBands);
 
-	semiToneTranspose->setup(getProcessor(), HarmonicFilter::SemiToneTranspose, "Transpose");
+	md.setup(*qSlider, getProcessor(), HarmonicFilter::QFactor);
+
+	md.setup(*semiToneTranspose, getProcessor(), HarmonicFilter::SemiToneTranspose);
 
 	semiToneTranspose->setTextValueSuffix(" st");
 

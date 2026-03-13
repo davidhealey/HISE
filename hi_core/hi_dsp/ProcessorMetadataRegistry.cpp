@@ -157,12 +157,11 @@ void ProcessorMetadataRegistry::registerAllMetadata()
 	add(MuteAllScriptProcessor::createMetadata());
 	add(hise::Arpeggiator::createMetadata());
 
-	// --- Effects (fallback) ---
+	// --- Effects ---
 
-	add(ProcessorMetadata::createFallback<PolyFilterEffect>());
-	add(ProcessorMetadata::createFallback<HarmonicFilter>());
-	add(ProcessorMetadata::createFallback<HarmonicMonophonicFilter>());
-	add(ProcessorMetadata::createFallback<CurveEq>());
+	add(PolyFilterEffect::createMetadata());
+	add(HarmonicFilter::createMetadata());
+	add(HarmonicMonophonicFilter::createMetadata());
 	add(CurveEq::createMetadata());
 	add(StereoEffect::createMetadata());
 	add(SimpleReverbEffect::createMetadata());
@@ -181,11 +180,11 @@ void ProcessorMetadataRegistry::registerAllMetadata()
 	add(DynamicsEffect::createMetadata());
 	add(AnalyserEffect::createMetadata());
 	add(ShapeFX::createMetadata());
-	add(ProcessorMetadata::createFallback<PolyshapeFX>());
+	add(PolyshapeFX::createMetadata());
 	add(HardcodedMasterFX::createMetadata());
 	add(HardcodedPolyphonicFX::createMetadata());
 	add(MidiMetronome::createMetadata());
-	add(ProcessorMetadata::createFallback<NoiseGrainPlayer>());
+	add(NoiseGrainPlayer::createMetadata());
 
 	// --- SoundGenerators (fallback) ---
 

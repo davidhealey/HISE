@@ -674,6 +674,44 @@ void ShapeFX::updateMix()
 	mixSmoother_invR.setValue(1.0f - mix);
 }
 
+hise::ProcessorMetadata PolyshapeFX::createMetadata()
+{
+	using Par = ProcessorMetadata::ParameterMetadata;
+	using Mod = ProcessorMetadata::ModulationMetadata;
+	using Range = scriptnode::InvertableParameterRange;
+
+	return ProcessorMetadata()
+		.withStandardMetadata<PolyshapeFX>()
+		.withDescription("A polyphonic waveshaper with multiple shaping modes, table-based curves, and optional oversampling.")
+		.withComplexDataInterface(ExternalData::DataType::Table)
+		.withComplexDataInterface(ExternalData::DataType::DisplayBuffer)
+		.withParameter(Par(Drive)
+			.withId("Drive")
+			.withDescription("The distortion drive amount in decibels")
+			.withSliderMode(HiSlider::Decibel, Range(0.0, 60.0).withCentreSkew(24.0))
+			.withDefault(1.0f))
+		.withParameter(Par(Mode)
+			.withId("Mode")
+			.withDescription("Selects the waveshaping function (populated dynamically from available shapers)")
+			.withSliderMode(HiSlider::Discrete, Range(0.0, 33.0, 1.0))
+			.withDefault((float)ShapeFX::ShapeMode::Linear))
+		.withParameter(Par(Oversampling)
+			.withId("Oversampling")
+			.withDescription("Enables 4x oversampling to reduce aliasing from the shaping function")
+			.asToggle()
+			.withDefault(0.0f))
+		.withParameter(Par(Bias)
+			.withId("Bias")
+			.withDescription("Adds a DC offset before the shaping function for asymmetric distortion")
+			.withSliderMode(HiSlider::NormalizedPercentage, {})
+			.withDefault(0.0f))
+		.withModulation(Mod(DriveModulation)
+			.withId("Drive Modulation")
+			.withDescription("Audio-rate modulation of the drive amount")
+			.withMode(scriptnode::modulation::ParameterMode::ScaleOnly)
+			.withModulatedParameter(Drive));
+}
+
 PolyshapeFX::PolyshapeFX(MainController *mc, const String &uid, int numVoices):
 	VoiceEffectProcessor(mc, uid, numVoices),
 	ProcessorWithStaticExternalData(mc, 2, 0, 0, 1),
@@ -705,11 +743,6 @@ PolyshapeFX::PolyshapeFX(MainController *mc, const String &uid, int numVoices):
     memset(unusedTable, 0, sizeof(float)*SAMPLE_LOOKUP_TABLE_SIZE);
     
 	tableUpdater = new TableUpdater(*this);
-
-	parameterNames.add("Drive");
-	parameterNames.add("Mode");
-	parameterNames.add("Oversampling");
-	parameterNames.add("Bias");
 
 	updateParameterSlots();
 
