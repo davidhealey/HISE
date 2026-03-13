@@ -329,11 +329,13 @@ public:
 			.withModulation(Mod(InternalChains::DetuneModulation)
 				.withId("Detune Modulation")
 				.withDescription("Modulates the unison detune amount")
-				.withMode(scriptnode::modulation::ParameterMode::ScaleOnly))
+				.withMode(scriptnode::modulation::ParameterMode::ScaleOnly)
+				.withModulatedParameter(UnisonoDetune))
 			.withModulation(Mod(InternalChains::SpreadModulation)
 				.withId("Spread Modulation")
 				.withDescription("Modulates the unison stereo spread")
-				.withMode(scriptnode::modulation::ParameterMode::ScaleOnly));
+				.withMode(scriptnode::modulation::ParameterMode::ScaleOnly)
+				.withModulatedParameter(UnisonoSpread));
 	}
 
 		enum InternalChains

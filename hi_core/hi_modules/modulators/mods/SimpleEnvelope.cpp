@@ -60,7 +60,8 @@ hise::ProcessorMetadata SimpleEnvelope::createMetadata()
 			.withId("AttackTimeModulation")
 			.withDescription("Modulates the attack time per voice")
 			.withConstrainer<VoiceStartModulator>()
-			.withMode(scriptnode::modulation::ParameterMode::ScaleOnly));
+			.withMode(scriptnode::modulation::ParameterMode::ScaleOnly)
+			.withModulatedParameter(Attack));
 }
 
 void SimpleEnvelope::restoreFromValueTree(const ValueTree &v)

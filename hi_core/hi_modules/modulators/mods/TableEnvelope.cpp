@@ -56,12 +56,14 @@ hise::ProcessorMetadata TableEnvelope::createMetadata()
 			.withId("AttackTimeModulation")
 			.withDescription("Modulates the attack time per voice")
 			.withConstrainer<VoiceStartModulator>()
-			.withMode(scriptnode::modulation::ParameterMode::ScaleOnly))
+			.withMode(scriptnode::modulation::ParameterMode::ScaleOnly)
+			.withModulatedParameter(Attack))
 		.withModulation(Mod(ReleaseChain)
 			.withId("ReleaseTimeModulation")
 			.withDescription("Modulates the release time per voice")
 			.withConstrainer<VoiceStartModulator>()
-			.withMode(scriptnode::modulation::ParameterMode::ScaleOnly));
+			.withMode(scriptnode::modulation::ParameterMode::ScaleOnly)
+			.withModulatedParameter(Release));
 }
 
 TableEnvelope::TableEnvelope(MainController *mc, const String &id, int voiceAmount, Modulation::Mode m, float attackTimeMs, float releaseTimeMs):

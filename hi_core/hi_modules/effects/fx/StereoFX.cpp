@@ -54,7 +54,8 @@ hise::ProcessorMetadata StereoEffect::createMetadata()
 		.withModulation(Mod(BalanceChain)
 			.withId("Pan Modulation")
 			.withDescription("Modulates the stereo pan position")
-			.withMode(scriptnode::modulation::ParameterMode::Pan));
+			.withMode(scriptnode::modulation::ParameterMode::Pan)
+			.withModulatedParameter(Pan));
 }
 
 void MidSideDecoder::calculateStereoValues(float &left, float &right)

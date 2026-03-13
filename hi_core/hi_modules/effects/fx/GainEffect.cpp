@@ -69,19 +69,23 @@ hise::ProcessorMetadata GainEffect::createMetadata()
 		.withModulation(Mod(GainChain)
 			.withId("Gain Modulation")
 			.withDescription("Modulates the output gain")
-			.withMode(scriptnode::modulation::ParameterMode::ScaleOnly))
+			.withMode(scriptnode::modulation::ParameterMode::ScaleOnly)
+			.withModulatedParameter(Gain))
 		.withModulation(Mod(DelayChain)
 			.withId("Delay Modulation")
 			.withDescription("Modulates the delay time")
-			.withMode(scriptnode::modulation::ParameterMode::ScaleOnly))
+			.withMode(scriptnode::modulation::ParameterMode::ScaleOnly)
+			.withModulatedParameter(Delay))
 		.withModulation(Mod(WidthChain)
 			.withId("Width Modulation")
 			.withDescription("Modulates the stereo width")
-			.withMode(scriptnode::modulation::ParameterMode::ScaleOnly))
+			.withMode(scriptnode::modulation::ParameterMode::ScaleOnly)
+			.withModulatedParameter(Width))
 		.withModulation(Mod(BalanceChain)
 			.withId("Pan Modulation")
 			.withDescription("Modulates the stereo pan position")
-			.withMode(scriptnode::modulation::ParameterMode::Pan));
+			.withMode(scriptnode::modulation::ParameterMode::Pan)
+			.withModulatedParameter(Balance));
 }
 
 GainEffect::GainEffect(MainController *mc, const String &uid) :
