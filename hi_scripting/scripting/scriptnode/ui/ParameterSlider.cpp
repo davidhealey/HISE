@@ -1410,6 +1410,16 @@ void ParameterSlider::mouseDown(const MouseEvent& e)
 
 	if (e.mods.isRightButtonDown())
 	{
+		bool unused = false;
+		bool* flag = &unused;
+
+		if (auto ps = findParentComponentOfClass<ContainerComponent::ParameterComponent>())
+			flag = &ps->skipRebuild;
+
+		// This is required because the macro editor might add missing properties which
+		// cause a parameter rebuild so this would destroy this slider
+		ScopedValueSetter<bool> svs(*flag, true);
+
 		auto pe = new MacroPropertyEditor(node, pTree);
 
 		pe->setName("Edit Parameter");
