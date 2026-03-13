@@ -48,7 +48,9 @@ public:
 		KillVoice
 	};
 
-	SET_PROCESSOR_NAME("ChokeGroupProcessor", "Choke Group Processor", "Kills notes when another choke group processor receives a note on.");
+	SET_PROCESSOR_NAME("ChokeGroupProcessor", "Choke Group Processor", "");
+
+	static ProcessorMetadata createMetadata();
 
 	ChokeGroupProcessor(MainController *mc, const String &id) :
 		MidiProcessor(mc, id)

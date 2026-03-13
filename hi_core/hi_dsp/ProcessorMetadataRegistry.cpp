@@ -144,8 +144,8 @@ void ProcessorMetadataRegistry::registerAllMetadata()
 
 	add(JavascriptMidiProcessor::createMetadata());
 	add(Transposer::createMetadata());
-	add(ProcessorMetadata::createFallback<MidiPlayer>());
-	add(ProcessorMetadata::createFallback<ChokeGroupProcessor>());
+	add(MidiPlayer::createMetadata());
+	add(ChokeGroupProcessor::createMetadata());
 
 	// Hardcoded script processors
 	add(LegatoProcessor::createMetadata());

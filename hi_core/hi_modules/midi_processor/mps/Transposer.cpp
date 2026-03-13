@@ -63,6 +63,36 @@ ProcessorEditorBody *Transposer::createEditor(ProcessorEditor *parentEditor)
 #endif
 }
 
+hise::ProcessorMetadata ChokeGroupProcessor::createMetadata()
+{
+	using Par = ProcessorMetadata::ParameterMetadata;
+	using Range = scriptnode::InvertableParameterRange;
+
+	return ProcessorMetadata()
+		.withStandardMetadata<ChokeGroupProcessor>()
+		.withDescription("Kills active notes when another choke group processor in the same group receives a note-on, useful for hi-hat and mute group behavior.")
+		.withParameter(Par(ChokeGroup)
+			.withId("ChokeGroup")
+			.withDescription("The choke group index (0 = disabled, 1-16 = active group)")
+			.withSliderMode(HiSlider::Discrete, Range(0.0, 16.0, 1.0))
+			.withDefault(0.0f))
+		.withParameter(Par(LoKey)
+			.withId("LoKey")
+			.withDescription("The lowest MIDI note number that triggers this choke group")
+			.withSliderMode(HiSlider::Discrete, Range(0.0, 127.0, 1.0))
+			.withDefault(0.0f))
+		.withParameter(Par(HiKey)
+			.withId("HiKey")
+			.withDescription("The highest MIDI note number that triggers this choke group")
+			.withSliderMode(HiSlider::Discrete, Range(0.0, 127.0, 1.0))
+			.withDefault(127.0f))
+		.withParameter(Par(KillVoice)
+			.withId("KillVoice")
+			.withDescription("When enabled, kills voices instantly; when disabled, sends note-off for a natural release")
+			.asToggle()
+			.withDefault(1.0f));
+}
+
 hise::ProcessorEditorBody * ChokeGroupProcessor::createEditor(ProcessorEditor *parentEditor)
 {
 #if USE_BACKEND
