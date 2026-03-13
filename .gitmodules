@@ -11,3 +11,6 @@
 [submodule "tools/hise_lsp_server"]
 	path = tools/hise_lsp_server
 	url = https://github.com/christoph-hart/hise_lsp_server.git
+[submodule "tools/hise-cli"]
+	path = tools/hise-cli
+	url = https://github.com/christoph-hart/hise-cli.git
