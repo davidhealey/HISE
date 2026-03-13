@@ -527,7 +527,58 @@ For module descriptions, explain what the module does (not just what it is), men
 | `.withDescription("...")` | Always - what the chain modulates |
 | `.withMode(scriptnode::modulation::ParameterMode::X)` | Always - ScaleOnly, ScaleAdd, or Pitch |
 | `.withConstrainer<T>()` | When the chain restricts which modulator types are allowed |
+| `.withModulatedParameter(paramEnum)` | When the chain modulates a specific parameter (see below) |
 | `.asDisabled()` | When the chain is structurally disabled (never processed) |
+
+### Modulation-to-parameter cross-references
+
+Use `.withModulatedParameter(paramEnum)` on a `ModulationMetadata` entry to declare which parameter the modulation chain affects. This stores a `parameterIndex` on the modulation entry and a corresponding `modulationIndex` on the parameter entry, creating a bidirectional cross-link.
+
+**When to add it:** If the processor's `getModulationQueryFunction()` override maps a `parameterIndex` to a specific modulation chain, that same mapping should be declared in metadata via `.withModulatedParameter()`. The heuristic is deterministic - every `case Parameter: return new GetModulationOutput<Chain>()` in `getModulationQueryFunction()` maps to a `.withModulatedParameter(Parameter)` on the corresponding `.withModulation()` entry.
+
+**When NOT to add it:** Some modulation chains modulate the overall processor output rather than a specific parameter (e.g., LFO IntensityChain, ModulatorSynth GainModulation). These have no entry in `getModulationQueryFunction()` and should not get `.withModulatedParameter()`. Custom query functions that exist only for display purposes (e.g., MatrixModulator's Value parameter) are also excluded.
+
+**Ordering requirement:** `.withModulation()` calls that use `.withModulatedParameter()` must appear AFTER the `.withParameter()` calls they reference, because the cross-link resolves the parameter by index at construction time.
+
+**Example:**
+
+```cpp
+// getModulationQueryFunction maps Frequency -> FrequencyChain
+// so metadata declares the same cross-link:
+.withParameter(Par(Frequency)
+    .withId("Frequency")
+    .withDescription("The modulation frequency")
+    .withSliderMode(HiSlider::Frequency, Range(0.01, 40.0, 0.0).withCentreSkew(10.0))
+    .withDefault(3.0f)
+    .withTempoSyncMode(TempoSync))
+// ... more parameters ...
+.withModulation(Mod(FrequencyChain)
+    .withId("LFO Frequency Mod")
+    .withDescription("Modulates the frequency of the LFO")
+    .withMode(scriptnode::modulation::ParameterMode::ScaleOnly)
+    .withModulatedParameter(Parameters::Frequency))  // <-- cross-link
+```
+
+**Already cross-linked processors:**
+
+| Processor | Modulation chain | Modulated parameter |
+|---|---|---|
+| LfoModulator | FrequencyChain | Frequency |
+| AhdsrEnvelope | AttackTimeChain | Attack |
+| AhdsrEnvelope | AttackLevelChain | AttackLevel |
+| AhdsrEnvelope | DecayTimeChain | Decay |
+| AhdsrEnvelope | SustainLevelChain | Sustain |
+| AhdsrEnvelope | ReleaseTimeChain | Release |
+| SimpleEnvelope | AttackChain | Attack |
+| TableEnvelope | AttackChain | Attack |
+| TableEnvelope | ReleaseChain | Release |
+| GainEffect | GainChain | Gain |
+| GainEffect | DelayChain | Delay |
+| GainEffect | WidthChain | Width |
+| GainEffect | BalanceChain | Balance |
+| StereoEffect | BalanceChain | Pan |
+| ModulatorSynthGroup | DetuneModulation | UnisonoDetune |
+| ModulatorSynthGroup | SpreadModulation | UnisonoSpread |
 
 ### Modulation mode mapping
 
