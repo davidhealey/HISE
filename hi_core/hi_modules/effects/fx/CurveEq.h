@@ -302,11 +302,10 @@ public:
 			filterBands.insert(insertIndex, f);
 		}
 		
-		sendBroadcasterMessage("BandAdded", insertIndex == -1 ? filterBands.size() - 1 : insertIndex);
-
-		sendOtherChangeMessage(dispatch::library::ProcessorChangeEvent::Custom);
-
 		updateParameterSlots();
+
+		sendBroadcasterMessage("BandAdded", insertIndex == -1 ? filterBands.size() - 1 : insertIndex);
+		sendOtherChangeMessage(dispatch::library::ProcessorChangeEvent::Custom);
 	}
 
 	void removeFilterBand(int filterIndex)
@@ -318,11 +317,10 @@ public:
 			filterBands.remove(filterIndex);
 		}
 		
-		sendBroadcasterMessage("BandRemoved", filterIndex == -1 ? filterBands.size() - 1 : filterIndex);
-
-		sendOtherChangeMessage(dispatch::library::ProcessorChangeEvent::Custom);
-
 		updateParameterSlots();
+
+		sendBroadcasterMessage("BandRemoved", filterIndex == -1 ? filterBands.size() - 1 : filterIndex);
+		sendOtherChangeMessage(dispatch::library::ProcessorChangeEvent::Custom);
 	}
 
 	void prepareToPlay(double sampleRate, int samplesPerBlock) override
@@ -407,8 +405,6 @@ public:
 	bool hasTail() const override {return false;};
 
 	int getNumChildProcessors() const override { return 0; };
-
-	int getNumAttributes() const override { return BandParameter::numBandParameters * filterBands.size(); }
 
 	Processor *getChildProcessor(int /*processorIndex*/) override { return nullptr; };
 

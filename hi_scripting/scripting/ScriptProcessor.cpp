@@ -2446,13 +2446,6 @@ String JavascriptProcessor::SnippetDocument::getSnippetAsFunction() const
 	else				  return getAllContent();
 }
 
-float ScriptBaseMidiProcessor::getDefaultValue(int index) const
-{
-	if(auto c = getScriptingContent()->getComponent(index))
-		return c->getScriptObjectProperty(ScriptingApi::Content::ScriptComponent::defaultValue);
-
-	return 0.0f;
-}
 
 JavascriptThreadPool::JavascriptThreadPool(MainController* mc) :
 	Thread("Javascript Thread", HISE_DEFAULT_STACK_SIZE),

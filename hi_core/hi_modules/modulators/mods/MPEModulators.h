@@ -94,7 +94,6 @@ public:
 	void mpeDataReloaded() override;
 
 	void setInternalAttribute(int parameter_index, float newValue) override;
-	float getDefaultValue(int parameterIndex) const override;
 	float getAttribute(int parameter_index) const;
 
 	void resetToDefault();

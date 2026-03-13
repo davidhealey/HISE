@@ -147,8 +147,7 @@ public:
 
 	virtual float getAttribute(int parameterIndex) const override;
 	virtual void setInternalAttribute(int parameterIndex, float newValue) override;;
-    virtual float getDefaultValue(int parameterIndex) const override;
-
+    
 	// ===================================================================================================================
 
 	Processor *getChildProcessor(int processorIndex) override;

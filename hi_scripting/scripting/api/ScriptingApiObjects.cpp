@@ -9674,7 +9674,7 @@ struct ProcessorParameterTarget : public scriptnode::routing::GlobalRoutingManag
 
         id << processor->getId();
         id << "::";
-        id << processor->parameterNames[index].toString();
+		id << processor->getIdentifierForParameterIndex(index);
     };
 
     void selectCallback(Component* rootEditor)
@@ -9742,7 +9742,7 @@ void ScriptingObjects::GlobalCableReference::connectToModuleParameter(const Stri
         if(parameterIndex.isString())
         {
             Identifier pId(parameterIndex.toString());
-            indexToUse = p->parameterNames.indexOf(pId);
+			indexToUse = p->getParameterIndexForIdentifier(pId);
             
             if(indexToUse == -1)
                 reportScriptError("Can't find parameter ID " + pId.toString());

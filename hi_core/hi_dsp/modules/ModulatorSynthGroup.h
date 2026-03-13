@@ -347,6 +347,8 @@ public:
 	ModulatorSynthGroup(MainController *mc, const String &id, int numVoices);
 	~ModulatorSynthGroup();
 
+	const bool metadataInitialised;
+
 	ProcessorEditorBody *createEditor(ProcessorEditor *parentEditor) override;
 
 	Chain::Handler *getHandler() override;;
@@ -360,7 +362,7 @@ public:
 	int getNumInternalChains() const override;;
 	void setInternalAttribute(int index, float newValue) override;
 	float getAttribute(int index) const override;
-	float getDefaultValue(int parameterIndex) const override;
+	
 	ModulationDisplayValue::QueryFunction::Ptr getModulationQueryFunction(int parameterIndex) const override;
 
 	ModulatorSynth* getFMModulator();

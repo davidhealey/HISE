@@ -561,16 +561,7 @@ void HardcodedSwappableEffect::preallocateUnloadedParameters(Array<Identifier> u
 		unloadedParameters = unloadedParameters_;
 		numParameters = unloadedParameters.size();
 		lastParameters.setSize(numParameters, false);
-
-		if(getParameterOffset() == 0)
-			asProcessor().parameterNames.clear();
-		else
-			asProcessor().parameterNames.removeRange(getParameterOffset(), asProcessor().parameterNames.size() - getParameterOffset());
-
-		for(auto p: unloadedParameters)
-			asProcessor().parameterNames.add(p);
-
-		asProcessor().updateParameterSlots();
+		asProcessor().updateParameterSlots(getParameterOffset() + numParameters);
 	}
 }
 #endif
@@ -755,7 +746,6 @@ bool HardcodedSwappableEffect::swap(HotswappableProcessor* other)
 		unloadedParameters.swapWith(otherFX->unloadedParameters);
 		std::swap(numParameters, otherFX->numParameters);
 
-		ap.parameterNames.swapWith(op.parameterNames);
 		tables.swapWith(otherFX->tables);
 		sliderPacks.swapWith(otherFX->sliderPacks);
 		audioFiles.swapWith(otherFX->audioFiles);
@@ -772,6 +762,9 @@ bool HardcodedSwappableEffect::swap(HotswappableProcessor* other)
 			std::swap(opaqueNode, otherFX->opaqueNode);
 		}
 		
+		ap.updateParameterSlots();
+		op.updateParameterSlots();
+
 		{
 			SimpleReadWriteLock::ScopedWriteLock sl(lock);
 			SimpleReadWriteLock::ScopedWriteLock sl2(otherFX->lock);
@@ -779,7 +772,7 @@ bool HardcodedSwappableEffect::swap(HotswappableProcessor* other)
 			ap.prepareToPlay(ap.getSampleRate(), ap.getLargestBlockSize());
 			op.prepareToPlay(op.getSampleRate(), op.getLargestBlockSize());
 		}
-		
+
 		effectUpdater.sendMessage(sendNotificationAsync, 
 								  currentEffect, 
 								  true, 

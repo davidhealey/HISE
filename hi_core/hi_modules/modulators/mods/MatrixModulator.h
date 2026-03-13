@@ -57,7 +57,6 @@ public:
 	static ProcessorMetadata createMetadata();
 
 	void setInternalAttribute(int parameterInde, float newValue) override;
-	float getDefaultValue(int parameterIndex) const override;
 	float getAttribute(int parameterIndex) const;
 	ModulationDisplayValue::QueryFunction::Ptr getModulationQueryFunction(int parameterIndex) const override;
 

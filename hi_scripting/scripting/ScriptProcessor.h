@@ -238,8 +238,7 @@ public:
 
 	float getAttribute(int index) const override { return getControlValue(index); }
 	void setInternalAttribute(int index, float newValue) override { setControlValue(index, newValue); }
-	float getDefaultValue(int index) const override;
-
+	
 	ValueTree exportAsValueTree() const override { ValueTree v = MidiProcessor::exportAsValueTree(); saveContent(v); return v; }
 	void restoreFromValueTree(const ValueTree &v) override { MidiProcessor::restoreFromValueTree(v); restoreContent(v); }
 
@@ -250,11 +249,6 @@ public:
 
 
 	int getControlCallbackIndex() const override { return onControl; };
-
-	Identifier getIdentifierForParameterIndex(int parameterIndex) const override
-	{
-		return getContentParameterIdentifier(parameterIndex);
-	}
 
 protected:
 

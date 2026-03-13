@@ -934,10 +934,6 @@ void JavascriptMasterEffect::setInternalAttribute(int index, float newValue)
 	handleFilterStatisticUpdate();
 }
 
-Identifier JavascriptMasterEffect::getIdentifierForParameterIndex(int parameterIndex) const
-{
-	return getCurrentNetworkParameterHandler(&contentParameterHandler)->getParameterId(parameterIndex);
-}
 
 ValueTree JavascriptMasterEffect::exportAsValueTree() const
 { ValueTree v = MasterEffectProcessor::exportAsValueTree(); saveContent(v); saveScript(v); return v; }
@@ -1382,14 +1378,6 @@ void JavascriptTimeVariantModulator::setInternalAttribute(int index, float newVa
 		contentParameterHandler.setParameter(index, newValue);
 }
 
-Identifier JavascriptTimeVariantModulator::getIdentifierForParameterIndex(int parameterIndex) const
-{
-	if (auto n = getActiveOrDebuggedNetwork())
-		return n->networkParameterHandler.getParameterId(parameterIndex);
-	else
-		return contentParameterHandler.getParameterId(parameterIndex);
-}
-
 ValueTree JavascriptTimeVariantModulator::exportAsValueTree() const
 { ValueTree v = TimeVariantModulator::exportAsValueTree(); saveContent(v); saveScript(v); return v; }
 
@@ -1632,10 +1620,6 @@ void JavascriptEnvelopeModulator::onVoiceReset(bool allVoices, int voiceIndex)
 		reset(voiceIndex);
 }
 
-int JavascriptEnvelopeModulator::getNumParameters() const
-{
-	return getCurrentNetworkParameterHandler(&contentParameterHandler)->getNumParameters() + (int)hise::EnvelopeModulator::Parameters::numParameters;
-}
 
 void JavascriptEnvelopeModulator::setInternalAttribute(int index, float newValue)
 {
@@ -1667,21 +1651,7 @@ float JavascriptEnvelopeModulator::getAttribute(int index) const
 	}
 }
 
-Identifier JavascriptEnvelopeModulator::getIdentifierForParameterIndex(int index) const
-{
-	if (index < hise::EnvelopeModulator::Parameters::numParameters)
-		return parameterNames[index];
-	else
-	{
-		index -= (int)hise::EnvelopeModulator::Parameters::numParameters;
 
-		if (auto n = getActiveOrDebuggedNetwork())
-			return n->networkParameterHandler.getParameterId(index);
-		else
-			return contentParameterHandler.getParameterId(index);
-	}
-		
-}
 
 Processor* JavascriptEnvelopeModulator::getChildProcessor(int)
 { return nullptr; }
@@ -2153,10 +2123,6 @@ int JavascriptSynthesiser::getNumChildProcessors() const
 ValueTree JavascriptSynthesiser::exportAsValueTree() const
 { ValueTree v = ModulatorSynth::exportAsValueTree(); saveContent(v); saveScript(v); return v; }
 
-int JavascriptSynthesiser::getNumParameters() const
-{
-	return getCurrentNetworkParameterHandler(&contentParameterHandler)->getNumParameters() + (int)ModulatorSynth::Parameters::numModulatorSynthParameters;
-}
 
 float JavascriptSynthesiser::getAttribute(int index) const
 {
@@ -2181,34 +2147,6 @@ void JavascriptSynthesiser::setInternalAttribute(int index, float newValue)
 	index -= ModulatorSynth::Parameters::numModulatorSynthParameters;
 
 	getCurrentNetworkParameterHandler(&contentParameterHandler)->setParameter(index, newValue);
-}
-
-Identifier JavascriptSynthesiser::getIdentifierForParameterIndex(int parameterIndex) const
-{
-	if (parameterIndex < ModulatorSynth::Parameters::numModulatorSynthParameters)
-	{
-		return ModulatorSynth::getIdentifierForParameterIndex(parameterIndex);
-	}
-
-	parameterIndex -= ModulatorSynth::Parameters::numModulatorSynthParameters;
-
-	return getCurrentNetworkParameterHandler(&contentParameterHandler)->getParameterId(parameterIndex);
-}
-
-int JavascriptSynthesiser::getParameterIndexForIdentifier(const Identifier& id) const
-{
-	if (auto n = getActiveOrDebuggedNetwork())
-		return n->networkParameterHandler.getParameterIndexForIdentifier(id);
-	else
-		return contentParameterHandler.getParameterIndexForIdentifier(id);
-}
-
-int JavascriptSynthesiser::getNumAttributes() const
-{
-	if (auto n = getActiveOrDebuggedNetwork())
-		return n->networkParameterHandler.getNumParameters();
-	else
-		return contentParameterHandler.getNumParameters();
 }
 
 int JavascriptSynthesiser::getControlCallbackIndex() const

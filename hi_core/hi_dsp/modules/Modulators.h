@@ -606,7 +606,9 @@ public:
 				.withId("Monophonic")
 				.withDescription("Enables monophonic mode where only one voice is rendered")
 				.asToggle()
-				.withDefault(0.0f))
+				.withDynamicDefault([](const Processor* p) {
+					return dynamic_cast<const EnvelopeModulator*>(p)->getVoiceAmount() == 1 ? 1.0f : 0.0f;
+				}))
 			.withParameter(Par(Retrigger)
 				.withId("Retrigger")
 				.withDescription("Restarts the envelope when a new note is triggered in monophonic mode")
@@ -628,8 +630,6 @@ public:
 	virtual bool isPlaying(int voiceIndex) const = 0;
 
 	float getAttribute(int parameterIndex) const override;
-
-	float getDefaultValue(int parameterIndex) const override;
 
 	void setInternalAttribute(int parameterIndex, float newValue) override;
 

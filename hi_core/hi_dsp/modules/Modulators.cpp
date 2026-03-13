@@ -862,10 +862,7 @@ EnvelopeModulator::EnvelopeModulator(MainController *mc, const String &id, int v
 	TimeModulation(m),
 	Modulation(m),
 	VoiceModulation(voiceAmount_, m)
-{
-	parameterNames.add("Monophonic");
-	parameterNames.add("Retrigger");
-};
+{};
 
 #pragma warning( pop )
 
@@ -1040,22 +1037,6 @@ float EnvelopeModulator::getAttribute(int parameterIndex) const
 	case Parameters::Monophonic: return isInMonophonicMode();
 	case Parameters::Retrigger:  return shouldRetrigger;
 	default:					 jassertfalse; return 0.0f;
-	}
-}
-
-float EnvelopeModulator::getDefaultValue(int parameterIndex) const
-{
-	switch (parameterIndex)
-	{
-	case Parameters::Monophonic: return getVoiceAmount() == 1 ? 1.0f : 0.0f;
-	case Parameters::Retrigger:  return 1.0f;
-	default:					 
-
-		if (hasInitialisedMetadata())
-			return getMetadata()[parameterIndex].defaultValue;
-
-		jassertfalse; 
-		return 0.0f;
 	}
 }
 

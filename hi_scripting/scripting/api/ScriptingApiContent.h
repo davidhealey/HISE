@@ -3386,13 +3386,10 @@ public:
 		
 		SubType* newComponent = new SubType(getScriptProcessor(), this, id, x, y, 0, 0);
 
-
-
 		components.add(newComponent);
+		updateParameterSlots();
 
 		asyncRebuildBroadcaster.notify();
-
-		updateParameterSlots();
 
 		return newComponent;
 	}

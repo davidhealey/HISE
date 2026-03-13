@@ -462,8 +462,7 @@ void ModulatorSynthChain::reset()
     
     clearAllMacroControls();
     
-    
-    for(int i = 0; i < parameterNames.size(); i++)
+    for(int i = 0; i < getNumParameters(); i++)
         setAttribute(i, getDefaultValue(i), dontSendNotification);
     
     sendOtherChangeMessage(dispatch::library::ProcessorChangeEvent::Preset);

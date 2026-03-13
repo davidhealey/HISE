@@ -176,6 +176,13 @@ struct ProcessorMetadata
 			return copy;
 		}
 
+		ParameterMetadata withDynamicDefault(const std::function<float(const Processor*)>& rf) const
+		{
+			auto copy = *this;
+			copy.runtimeDefaultQueryFunction = rf;
+			return copy;
+		}
+
 		ParameterMetadata withDefault(float value) const
 		{
 			auto copy = *this;
@@ -249,6 +256,7 @@ struct ProcessorMetadata
 		float defaultValue = 0.0f;
 		ValueToTextConverter vtc;
 		HiSlider::Mode sliderMode = HiSlider::numModes;
+		std::function<float(const Processor*)> runtimeDefaultQueryFunction;
 
 		// Index of the toggle parameter controlling tempo-sync mode (-1 = not syncable)
 		int tempoSyncControllerIndex = -1;
@@ -727,6 +735,11 @@ struct ProcessorMetadata
 	*	Asserts if called on a parameter without tempoSyncControllerIndex.
 	*/
 	bool updateTempoSync(HiSlider& slider) const;
+
+	/** Returns the default value for the given parameter. The processor reference is used to find the
+		tempo sync value if applicable.
+	*/
+	float getDefaultValue(const Processor* p, int parameterIndex) const;
 
 	/** Configure a HiComboBox from the metadata for the given parameter index.
 	*	Calls setup() and populates the item list from valueNames.

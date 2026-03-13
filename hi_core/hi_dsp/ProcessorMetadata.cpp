@@ -386,4 +386,26 @@ bool ProcessorMetadata::updateTempoSync(HiSlider& slider) const
 	return false;
 }
 
+float ProcessorMetadata::getDefaultValue(const Processor* p, int parameterIndex) const
+{
+	if (isPositiveAndBelow(parameterIndex, parameters.size()))
+	{
+		const auto& pd = parameters.getReference(parameterIndex);
+		
+		if (pd.runtimeDefaultQueryFunction)
+			return pd.runtimeDefaultQueryFunction(p);
+
+		if (pd.tempoSyncControllerIndex != -1)
+		{
+			if (p->getAttribute(pd.tempoSyncControllerIndex) > 0.5)
+				return (float)TempoSyncer::Tempo::Eighth;
+		}
+
+		return pd.defaultValue;
+	}
+
+	jassertfalse;
+	return 0.0f;
+}
+
 } // namespace hise

@@ -46,7 +46,10 @@ hise::ProcessorMetadata MatrixModulator::createMetadata()
 			.withId("Value")
 			.withDescription("The base value of the modulation output")
 			.withSliderMode(HiSlider::NormalizedPercentage, {})
-			.withDefault(0.5f))
+			.withDefault(0.5f)
+			.withDynamicDefault([](const Processor* p){
+				return dynamic_cast<const MatrixModulator*>(p)->getInitialValue();
+			}))
 		.withParameter(Par(SmoothingTime)
 			.withId("SmoothingTime")
 			.withDescription("The smoothing time for the value parameter")
@@ -410,25 +413,6 @@ void MatrixModulator::setInternalAttribute(int parameterIndex, float newValue)
 		baseValue.prepare(getSampleRate() / HISE_CONTROL_RATE_DOWNSAMPLING_FACTOR, newValue);
 		smoothingTime = newValue;
 		break;
-	}
-}
-
-float MatrixModulator::getDefaultValue(int parameterIndex) const
-{
-	if(parameterIndex < EnvelopeModulator::numParameters)
-	{
-		return EnvelopeModulator::getDefaultValue(parameterIndex);
-	}
-
-	switch(parameterIndex)
-	{
-	case SpecialParameters::Value:
-		return getInitialValue();
-	case SpecialParameters::SmoothingTime:
-		return 200.0f;
-	default:
-		jassertfalse;
-		return 0.0f;
 	}
 }
 

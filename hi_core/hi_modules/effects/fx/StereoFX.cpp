@@ -90,9 +90,6 @@ StereoEffect::StereoEffect(MainController *mc, const String &uid, int numVoices)
 	modChains[InternalChains::BalanceChain].setIncludeMonophonicValuesInVoiceRendering(true);
 	modChains[InternalChains::BalanceChain].setAllowModificationOfVoiceValues(true);
 
-	parameterNames.add("Pan");
-	parameterNames.add("Width");
-
 	updateParameterSlots();
 
 	auto tmp = WeakReference<Processor>(this);

@@ -88,18 +88,6 @@ public:
 
 	ProcessorEditorBody *createEditor(ProcessorEditor *parentEditor)  override;
 
-	float getDefaultValue(int parameterIndex) const override
-	{
-		switch (parameterIndex)
-		{
-		case SpecialParameters::ChokeGroup: return 0.0f;
-		case SpecialParameters::HiKey: return 127.0f;
-		case SpecialParameters::LoKey: return 0.0f;
-		case SpecialParameters::KillVoice: return 1.0f;
-        default: jassertfalse; return 0.0f;
-		}
-	};
-
 	float getAttribute(int parameterIndex) const override
 	{
 		switch (parameterIndex)
@@ -162,7 +150,6 @@ public:
 		MidiProcessor(mc, id),
 		transposeAmount(0)
 	{
-		parameterNames.add("TransposeAmount");
 		updateParameterSlots();
 	};
 

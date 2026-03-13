@@ -124,11 +124,6 @@ bypassState(false)
 
 	getMatrix().init();
 
-	parameterNames.add("Gain");
-	parameterNames.add("Balance");
-	parameterNames.add("VoiceLimit");
-	parameterNames.add("KillFadeTime");
-
 	editorStateIdentifiers.add("OverviewFolded");
 	editorStateIdentifiers.add("MidiProcessorShown");
 	editorStateIdentifiers.add("GainModulationShown");
@@ -205,21 +200,6 @@ void ModulatorSynth::setInternalAttribute(int parameterIndex, float newValue)
 	case VoiceLimit:	setVoiceLimit((int)newValue); break;
 	case KillFadeTime:	setKillFadeOutTime((double)newValue); break;
 	default:			jassertfalse; return;
-	}
-}
-
-float ModulatorSynth::getDefaultValue(int parameterIndex) const
-{
-	if (hasInitialisedMetadata())
-		return getMetadata()[parameterIndex].defaultValue;
-
-	switch (parameterIndex)
-	{
-	case Gain:			return 1.0;
-	case Balance:		return 0.0;
-	case VoiceLimit:	return (float)64;
-	case KillFadeTime:	return 20;
-	default:			jassertfalse; return 0.0f;
 	}
 }
 

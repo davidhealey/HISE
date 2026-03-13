@@ -161,7 +161,6 @@ public:
 	/** Returns a new ControlEditor */
 	ProcessorEditorBody *createEditor(ProcessorEditor *parentEditor)  override;
 
-	float getDefaultValue(int parameterIndex) const override; 
 	float getAttribute (int parameter_index) const override;
 	void setInternalAttribute (int parameter_index, float newValue) override;
 

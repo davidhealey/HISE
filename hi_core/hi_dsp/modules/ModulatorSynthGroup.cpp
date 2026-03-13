@@ -809,6 +809,7 @@ void ModulatorSynthGroupVoice::resetInternal(ModulatorSynth * childSynth, int ch
 
 ModulatorSynthGroup::ModulatorSynthGroup(MainController *mc, const String &id, int numVoices) :
 	ModulatorSynth(mc, id, numVoices),
+	metadataInitialised(updateParameterSlots()),
 	numVoices(numVoices),
 	handler(this),
 	vuValue(0.0f),
@@ -836,17 +837,6 @@ ModulatorSynthGroup::ModulatorSynthGroup(MainController *mc, const String &id, i
 	spreadChain->setColour(Colour(0xFF22AA88));
 
 	setGain(1.0);
-
-	parameterNames.add("EnableFM");
-	parameterNames.add("CarrierIndex");
-	parameterNames.add("ModulatorIndex");
-	parameterNames.add("UnisonoVoiceAmount");
-	parameterNames.add("UnisonoDetune");
-	parameterNames.add("UnisonoSpread");
-	parameterNames.add("ForceMono");
-	parameterNames.add("KillSecondVoices");
-
-	updateParameterSlots();
 
 	allowStates.clear();
 
@@ -1019,27 +1009,6 @@ float ModulatorSynthGroup::getAttribute(int index) const
 	}
 }
 
-
-float ModulatorSynthGroup::getDefaultValue(int parameterIndex) const
-{
-	if (parameterIndex < ModulatorSynth::numModulatorSynthParameters)
-	{
-		return ModulatorSynth::getDefaultValue(parameterIndex);
-	}
-
-	switch (parameterIndex)
-	{
-	case EnableFM:		 return 0.0f;
-	case ModulatorIndex: return (float)-1;
-	case CarrierIndex:	 return (float)-1;
-	case UnisonoVoiceAmount: return 1.0f;
-	case UnisonoDetune:		 return 0.0f;
-	case UnisonoSpread:		 return 1.0f;
-	case ForceMono:		 return 0.0f;
-	case KillSecondVoices:	return 0.0f;
-	default:			 jassertfalse; return -1.0f;
-	}
-}
 
 ModulationDisplayValue::QueryFunction::Ptr ModulatorSynthGroup::getModulationQueryFunction(int parameterIndex) const
 {

@@ -212,16 +212,13 @@ void Processor::setAttribute(int parameterIndex, float newValue, dispatch::Dispa
 #if HISE_NEW_PROCESSOR_DISPATCH
 	dispatcher.setAttribute(parameterIndex, newValue, notifyEditor);
 #endif
-
-	
 }
 
 float Processor::getDefaultValue(int parameterIndex) const
 { 
-	if (hasInitialisedMetadata())
-		return getMetadata()[parameterIndex].defaultValue;
-
-	return 1.0f; 
+	jassert(hasInitialisedMetadata());
+	jassert(isPositiveAndBelow(parameterIndex, metadata.second.parameters.size()));
+	return metadata.second.getDefaultValue(this, parameterIndex);
 }
 
 int Processor::getNumInternalChains() const
@@ -548,57 +545,37 @@ void Processor::setConstrainerForAllInternalChains(BaseConstrainer *constrainer)
 
 Identifier Processor::getIdentifierForParameterIndex(int parameterIndex) const
 {
-	// Use ProcessorWithScriptingContent
-	jassert(dynamic_cast<const ProcessorWithScriptingContent*>(this) == nullptr);
+	jassert(hasInitialisedMetadata());
 
-	if (hasInitialisedMetadata())
+	for (const auto& pd : metadata.second.parameters)
 	{
-		for (const auto& pd : metadata.second.parameters)
-		{
-			if (pd.parameterIndex == parameterIndex)
-				return pd.id;
-		}
+		if (pd.parameterIndex == parameterIndex)
+			return pd.id;
 	}
-	
-	if (parameterIndex > parameterNames.size()) 
-		return Identifier();
 
-	return parameterNames[parameterIndex];
+	jassertfalse;
+	return {};
 }
 
 int Processor::getParameterIndexForIdentifier(const Identifier& id) const
 {
-	// Use ProcessorWithScriptingContent
-	jassert(dynamic_cast<const ProcessorWithScriptingContent*>(this) == nullptr);
+	jassert(hasInitialisedMetadata());
 
-	if (hasInitialisedMetadata())
+	for (const auto& p : metadata.second.parameters)
 	{
-		for (const auto& p : metadata.second.parameters)
-		{
-			if (p.id == id)
-				return p.parameterIndex;
-		}
+		if (p.id == id)
+			return p.parameterIndex;
 	}
 
-	return parameterNames.indexOf(id);
+	jassertfalse;
+	return -1;
 }
 
 
 int Processor::getNumParameters() const
 {
-	if (hasInitialisedMetadata())
-		return metadata.second.parameters.size();
-
-	if (auto jp = dynamic_cast<const JavascriptProcessor*>(this))
-	{
-		if (auto n = jp->getActiveOrDebuggedNetwork())
-			return n->networkParameterHandler.getNumParameters();
-	}
-
-	if (auto pwsc = dynamic_cast<const ProcessorWithScriptingContent*>(this))
-		return pwsc->getNumScriptParameters();
-	else
-		return parameterNames.size();
+	jassert(hasInitialisedMetadata());
+	return jmax(metadata.second.parameters.size(), (int)dispatcher.getNumAttributes());
 }
 
 void Processor::setIsOnAir(bool shouldBeOnAir)

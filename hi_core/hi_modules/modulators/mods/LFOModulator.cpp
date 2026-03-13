@@ -48,7 +48,9 @@ hise::ProcessorMetadata LfoModulator::createMetadata()
 			.withId("Frequency")
 			.withDescription("The modulation frequency")
 			.withSliderMode(HiSlider::Frequency, Range(0.01, 40.0, 0.0).withCentreSkew(10.0))
-			.withDefault(3.0f)
+			.withDynamicDefault([](const Processor* p){
+				return dynamic_cast<const LfoModulator*>(p)->tempoSync ? (float)TempoSyncer::Eighth : 3.0f;
+			 })
 			.withTempoSyncMode(TempoSync))
 		.withParameter(Par(FadeIn)
 			.withId("FadeIn")
@@ -298,17 +300,6 @@ ProcessorEditorBody *LfoModulator::createEditor(ProcessorEditor *parentEditor)
 
 #endif
 };
-
-
-float LfoModulator::getDefaultValue(int parameterIndex) const
-{
-	// Frequency has a dynamic default depending on tempoSync state
-	if (parameterIndex == Parameters::Frequency)
-		return tempoSync ? (float)TempoSyncer::Eighth : 3.0f;
-
-	// All other parameters use the static default from metadata
-	return Processor::getDefaultValue(parameterIndex);
-}
 
 float LfoModulator::getAttribute(int parameter_index) const
 {

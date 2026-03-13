@@ -180,6 +180,8 @@ void Processor::setColour(const Colour&)
 
 void Processor::setNumAttributes(uint16 numAttributes)
 {
+	numTotalAttributes = numAttributes;
+
 	if(isPositiveAndBelow(numAttributes, SlotBitmap::getNumBits()))
 	{
 		attributes.setNumSlots(numAttributes);

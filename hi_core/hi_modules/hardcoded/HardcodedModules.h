@@ -66,8 +66,6 @@ public:
 
     bool isFadeOutPending() const noexcept override;
 
-	
-
 	Processor *getChildProcessor(int processorIndex) override;;
     const Processor *getChildProcessor(int processorIndex) const override;;
 
@@ -267,7 +265,6 @@ public:
 	int getParameterOffset() const override;
 	void setInternalAttribute(int index, float newValue) override;
 	float getAttribute(int index) const override;
-	float getDefaultValue(int index) const override;
 
 	bool checkHardcodedChannelCount() override;
 
@@ -374,8 +371,7 @@ class HardcodedSynthesiser: public ModulatorSynth,
 	// parameter methods
 	float getAttribute(int parameterIndex) const override;
 	void setInternalAttribute(int parameterIndex, float newValue) override;
-	float getDefaultValue(int parameterIndex) const override;
-
+	
 	int getParameterOffset() const override { return ModulatorSynth::Parameters::numModulatorSynthParameters; }
 
 	// extra mod methods

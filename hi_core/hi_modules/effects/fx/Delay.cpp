@@ -44,13 +44,19 @@ hise::ProcessorMetadata DelayEffect::createMetadata()
 			.withId("DelayTimeLeft")
 			.withDescription("Left channel delay time in milliseconds or tempo-synced note value when sync is enabled")
 			.withSliderMode(HiSlider::Time, Range(0.0, 3000.0, 1.0))
-			.withDefault((float)TempoSyncer::QuarterTriplet)
+			.withDynamicDefault([](const Processor* p){
+				auto d = dynamic_cast<const DelayEffect*>(p);
+				return (float)(int)(d->tempoSync ? d->syncTimeLeft : d->delayTimeLeft);
+				})
 			.withTempoSyncMode(TempoSync))
 		.withParameter(Par(DelayTimeRight)
 			.withId("DelayTimeRight")
 			.withDescription("Right channel delay time in milliseconds or tempo-synced note value when sync is enabled")
 			.withSliderMode(HiSlider::Time, Range(0.0, 3000.0, 1.0))
-			.withDefault((float)TempoSyncer::Quarter)
+			.withDynamicDefault([](const Processor* p) {
+				auto d = dynamic_cast<const DelayEffect*>(p);
+				return (float)(int)(d->tempoSync ? d->syncTimeRight : d->delayTimeRight);
+				})
 			.withTempoSyncMode(TempoSync))
 		.withParameter(Par(FeedbackLeft)
 			.withId("FeedbackLeft")
@@ -149,15 +155,6 @@ void DelayEffect::setInternalAttribute(int parameterIndex, float newValue)
 	case TempoSync:			tempoSync = (newValue == 1.0f); 
 							calcDelayTimes(); break;
 	default:				jassertfalse;
-	}
-}
-
-float DelayEffect::getDefaultValue(int parameterIndex) const
-{
-	switch (parameterIndex)
-	{
-	case DelayTimeLeft:		return tempoSync ? (float)syncTimeLeft : delayTimeLeft;
-	case DelayTimeRight:	return tempoSync ? (float)syncTimeRight : delayTimeRight;
 	}
 }
 

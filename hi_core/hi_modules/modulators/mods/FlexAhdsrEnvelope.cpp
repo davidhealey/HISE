@@ -141,18 +141,7 @@ FlexAhdsrEnvelope::FlexAhdsrEnvelope(MainController *mc, const String &id, int v
 	getDisplayBuffer(0)->setGlobalUIUpdater(mc->getGlobalUIUpdater());
 	getDisplayBuffer(0)->setRingBufferSize(1, 9);
 	
-
-	parameterNames.add(Identifier("Attack"));
-	parameterNames.add(Identifier("Hold"));
-	parameterNames.add(Identifier("Decay"));
-	parameterNames.add(Identifier("Sustain"));
-	parameterNames.add(Identifier("Release"));
-	parameterNames.add(Identifier("Mode"));
-	parameterNames.add(Identifier("AttackLevel"));
-	parameterNames.add(Identifier("AttackCurve"));
-	parameterNames.add(Identifier("DecayCurve"));
-	parameterNames.add(Identifier("ReleaseCurve"));
-	updateParameterSlots();
+updateParameterSlots();
 
 	internalChains.reserve(numInternalChains);
 

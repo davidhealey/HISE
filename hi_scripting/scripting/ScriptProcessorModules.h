@@ -111,23 +111,6 @@ public:
 	int getNumSnippets() const override;
 	void registerApiClasses() override;
 
-	Identifier getIdentifierForParameterIndex(int parameterIndex) const override
-	{
-		return getContentParameterIdentifier(parameterIndex);
-	}
-
-	int getParameterIndexForIdentifier(const Identifier& id) const override
-	{
-		return getContentParameterIdentifierIndex(id);
-	}
-
-	int getNumAttributes() const override
-	{
-		return getContentParameterAmount();
-	}
-
-	
-
 	void addToFront(bool addToFront_) noexcept;;
 	bool isFront() const;;
 
@@ -272,21 +255,6 @@ public:
 	/** When the startNote function is called, a previously calculated value (by the handleMidiMessage function) is stored using the supplied voice index. */
 	virtual float startVoice(int voiceIndex) override;;
 
-	int getNumAttributes() const override
-	{
-		return getContentParameterAmount();
-	}
-
-	Identifier getIdentifierForParameterIndex(int parameterIndex) const override
-	{
-		return getContentParameterIdentifier(parameterIndex);
-	}
-
-	int getParameterIndexForIdentifier(const Identifier& id) const override
-	{
-		return getContentParameterIdentifierIndex(id);
-	}
-
 	SnippetDocument *getSnippet(int c) override;
 	const SnippetDocument *getSnippet(int c) const override;
 	int getNumSnippets() const override { return numCallbacks; }
@@ -364,24 +332,6 @@ public:
 	float getAttribute(int index) const override;
 
 	void setInternalAttribute(int index, float newValue) override;
-
-	Identifier getIdentifierForParameterIndex(int parameterIndex) const override;
-
-	int getParameterIndexForIdentifier(const Identifier& id) const override
-	{
-		if (auto n = getActiveOrDebuggedNetwork())
-			return n->networkParameterHandler.getParameterIndexForIdentifier(id);
-		else
-			return contentParameterHandler.getParameterIndexForIdentifier(id);
-	}
-
-	int getNumAttributes() const override
-	{
-		if (auto n = getActiveOrDebuggedNetwork())
-			return n->networkParameterHandler.getNumParameters();
-		else
-			return contentParameterHandler.getNumParameters();
-	}
 
 	ValueTree exportAsValueTree() const override;
 	void restoreFromValueTree(const ValueTree &v) override;
@@ -543,29 +493,9 @@ public:
 		return true;
 	}
 
-	int getNumParameters() const override;
-
 	void setInternalAttribute(int index, float newValue) override;
 
 	float getAttribute(int index) const override;
-
-	Identifier getIdentifierForParameterIndex(int index) const override;
-
-	int getParameterIndexForIdentifier(const Identifier& id) const override
-	{
-		if (auto n = getActiveOrDebuggedNetwork())
-			return n->networkParameterHandler.getParameterIndexForIdentifier(id);
-		else
-			return contentParameterHandler.getParameterIndexForIdentifier(id);
-	}
-
-	int getNumAttributes() const override
-	{
-		if (auto n = getActiveOrDebuggedNetwork())
-			return n->networkParameterHandler.getNumParameters();
-		else
-			return contentParameterHandler.getNumParameters();
-	}
 
 	ProcessorEditorBody *createEditor(ProcessorEditor *parentEditor)  override;
 
@@ -710,24 +640,6 @@ public:
 
 	void setBypassed(bool shouldBeBypassed, NotificationType notifyChangeHandler) noexcept override;
 
-	Identifier getIdentifierForParameterIndex(int parameterIndex) const override;
-
-	int getParameterIndexForIdentifier(const Identifier& id) const override
-	{
-		if (auto n = getActiveOrDebuggedNetwork())
-			return n->networkParameterHandler.getParameterIndexForIdentifier(id);
-		else
-			return contentParameterHandler.getParameterIndexForIdentifier(id);
-	}
-
-	int getNumAttributes() const override
-	{
-		if (auto n = getActiveOrDebuggedNetwork())
-			return n->networkParameterHandler.getNumParameters();
-		else
-			return contentParameterHandler.getNumParameters();
-	}
-
 	ValueTree exportAsValueTree() const override;
 	void restoreFromValueTree(const ValueTree &v) override;
 
@@ -828,27 +740,6 @@ public:
 	void setInternalAttribute(int index, float newValue) override
 	{
 		getCurrentNetworkParameterHandler(&contentParameterHandler)->setParameter(index, newValue);
-	}
-
-	Identifier getIdentifierForParameterIndex(int parameterIndex) const override
-	{
-		return getCurrentNetworkParameterHandler(&contentParameterHandler)->getParameterId(parameterIndex);
-	}
-
-	int getParameterIndexForIdentifier(const Identifier& id) const override
-	{
-		if (auto n = getActiveOrDebuggedNetwork())
-			return n->networkParameterHandler.getParameterIndexForIdentifier(id);
-		else
-			return contentParameterHandler.getParameterIndexForIdentifier(id);
-	}
-
-	int getNumAttributes() const override
-	{
-		if (auto n = getActiveOrDebuggedNetwork())
-			return n->networkParameterHandler.getNumParameters();
-		else
-			return contentParameterHandler.getNumParameters();
 	}
 
 	int getControlCallbackIndex() const override { return (int)Callback::onControl; };
@@ -1007,13 +898,9 @@ public:
 	ValueTree exportAsValueTree() const override;
 	void restoreFromValueTree(const ValueTree &v) override;
 
-	int getNumParameters() const override;
-	float getAttribute(int index) const override;
 	void setInternalAttribute(int index, float newValue) override;
-	Identifier getIdentifierForParameterIndex(int parameterIndex) const override;
-	int getParameterIndexForIdentifier(const Identifier& id) const override;
-	int getNumAttributes() const override;
-
+	float getAttribute(int index) const override;
+	
 	ModulatorChain::ExtraModulatorRuntimeTargetSource* getExtraModulationHandler() override { return &extraModSources; }
 	void connectToRuntimeTargets(scriptnode::OpaqueNode& opaqueNode, bool shouldAdd) override;
 	ModulationDisplayValue::QueryFunction::Ptr getModulationQueryFunction(int parameterIndex) const override;

@@ -224,7 +224,7 @@ public:
     virtual float getAttribute(int parameterIndex) const = 0;
     
     /** Overwrite this and return the default value. */
-    virtual float getDefaultValue(int /*parameterIndex*/) const;
+    float getDefaultValue(int /*parameterIndex*/) const;
 
     /** Overwrite this method and return a function that calculates the modulation value for the given parameterIndex. */
     virtual ModulationDisplayValue::QueryFunction::Ptr getModulationQueryFunction(int parameterIndex) const { return nullptr; }
@@ -641,10 +641,10 @@ public:
      *
      *	If you want to use this feature (this lets you access Parameters with the script, you should add the parameter name
      *	for each parameter in your subtype constructor. */
-    virtual Identifier getIdentifierForParameterIndex(int parameterIndex) const;
-    virtual int getParameterIndexForIdentifier(const Identifier& id) const;
+    Identifier getIdentifierForParameterIndex(int parameterIndex) const;
+    int getParameterIndexForIdentifier(const Identifier& id) const;
 
-    virtual int getNumAttributes() const { jassertfalse; return parameterNames.size(); }
+    int getNumAttributes() const { return getNumParameters(); }
 
 	/** Returns the metadata for this processor type.
 	*
@@ -655,7 +655,7 @@ public:
 	virtual ProcessorMetadata getMetadata() const;
 
     /** This returns the number of (named) parameters. */
-    virtual int getNumParameters() const;;
+    int getNumParameters() const;;
     
     /** Call this method after inserting the processor in the signal chain.
      *
@@ -745,27 +745,11 @@ public:
 
 	void setParentProcessor(Processor* newParent);
 
-    // Fold into ParameterMetadata
-	Array<Identifier> parameterNames;
-
     bool updateParameterSlots(int numForced = -1)
 	{
         // Cache metadata from registry (virtual dispatch is safe here - called from derived constructors)
         metadata.first = false;
         metadata = { true, getMetadata() };
-
-        // For migrated processors: populate parameterNames from metadata
-        // (replaces the manual parameterNames.add() boilerplate).
-        // Uses clearQuick() rather than isEmpty() guard because base classes
-        // (e.g. ModulatorSynth) may have already added their own parameter
-        // names before the derived constructor calls updateParameterSlots().
-        if (hasInitialisedMetadata())
-        {
-            parameterNames.clearQuick();
-
-            for (auto& p : metadata.second.parameters)
-                parameterNames.add(p.id);
-        }
 
         if(numForced == -1)
             numForced = getNumAttributes();
@@ -833,15 +817,11 @@ protected:
 
 	DisplayValues currentValues;
 
-	
-
 	/** Call this from the baseclass whenever you want its editor to display a input value change. 
 	*
 	*	For most stuff a 0.0 ... 1.0 range is assumed.
 	*/
 	void setInputValue(float newValue, NotificationType notify=sendNotification);;
-
-	
 
 	/** Changes a Processor parameter. 
 	*
@@ -853,10 +833,6 @@ protected:
 	virtual void setInternalAttribute(int parameterIndex, float newValue) = 0;
 	
 	bool consoleEnabled;
-
-	
-    // Fold into ParameterMetadata
-	StringArray parameterDescriptions;          
 
 	Array<Identifier> editorStateIdentifiers;
 

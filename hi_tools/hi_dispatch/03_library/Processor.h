@@ -283,9 +283,13 @@ public:
 	
 	int getNumSlotSenders() const override;
 
+	int getNumAttributes() const { return numTotalAttributes; }
+
 	SlotSender* getSlotSender(uint8 slotSenderIndex) override;
 
 private:
+
+	uint16 numTotalAttributes = 0;
 
 	SlotSender* getAttributeSender(uint16 attributeIndex)
 	{

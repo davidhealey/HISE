@@ -760,17 +760,6 @@ float HardcodedEnvelopeModulator::getAttribute(int index) const
 	}
 }
 
-float HardcodedEnvelopeModulator::getDefaultValue(int index) const
-{
-	if (index < getParameterOffset())
-		return EnvelopeModulator::getDefaultValue(index);
-	else
-	{
-		index -= getParameterOffset();
-		return getHardcodedAttribute(index);
-	}
-}
-
 bool HardcodedEnvelopeModulator::checkHardcodedChannelCount()
 {
 	if (opaqueNode != nullptr)
@@ -1122,16 +1111,6 @@ void HardcodedSynthesiser::setInternalAttribute(int parameterIndex, float newVal
 		ModulatorSynth::setInternalAttribute(parameterIndex, newValue);
 	else
 		setHardcodedAttribute(parameterIndex - offset, newValue);
-}
-
-float HardcodedSynthesiser::getDefaultValue(int parameterIndex) const
-{
-	auto offset = getParameterOffset();
-
-	if(parameterIndex < offset)
-		return ModulatorSynth::getDefaultValue(parameterIndex);
-
-	return getAttribute(parameterIndex - offset);
 }
 
 void HardcodedSynthesiser::connectToRuntimeTargets(scriptnode::OpaqueNode& opaqueNode, bool shouldAdd)
