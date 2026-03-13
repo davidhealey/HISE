@@ -148,7 +148,6 @@ public:
 #define saveAttribute(name, nameAsString) (v.setProperty(nameAsString, getAttribute(name), nullptr))
 #define saveID(name) v.setProperty(#name, getAttribute(name), nullptr);
 #define loadID(name) setAttribute(name, (float)v.getProperty(#name, false), dontSendNotification);
-#define addAttributeID(name) parameterNames.add(Identifier(#name));
 
 #define loadAttributeWithDefault(parameterId) setAttribute(parameterId, v.getProperty(getIdentifierForParameterIndex(parameterId), getDefaultValue(parameterId)), dontSendNotification);
 

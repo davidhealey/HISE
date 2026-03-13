@@ -1119,14 +1119,6 @@ MidiPlayer::MidiPlayer(MainController *mc, const String &id, ModulatorSynth*) :
 	updater(*this),
 	overdubUpdater(*this)
 {
-	addAttributeID(CurrentPosition);
-	addAttributeID(CurrentSequence);
-	addAttributeID(CurrentTrack);
-	addAttributeID(LoopEnabled);
-	addAttributeID(LoopStart);
-	addAttributeID(LoopEnd);
-	addAttributeID(PlaybackSpeed);
-
 	updateParameterSlots();
 
 	mc->addTempoListener(this);

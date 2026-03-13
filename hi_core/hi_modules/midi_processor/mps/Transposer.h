@@ -56,12 +56,6 @@ public:
 		MidiProcessor(mc, id)
 	{
 		mc->getEventHandler().addChokeListener(this);
-
-		parameterNames.add("ChokeGroup");
-		parameterNames.add("LoKey");
-		parameterNames.add("HiKey");
-		parameterNames.add("KillVoice");
-
 		updateParameterSlots();
 	};
 

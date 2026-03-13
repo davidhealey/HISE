@@ -755,6 +755,11 @@ void ProcessorEditor::showContextMenu(Component* c, Processor* p)
 	}
     else if (result == DumpParameters)
     {
+		String s;
+
+		s = JSON::toString(p->getMetadata().toJSON());;
+
+#if 0
         String s;
         
         s << "(" << p->getType() << ") - Parameter dump: \n";
@@ -763,6 +768,7 @@ void ProcessorEditor::showContextMenu(Component* c, Processor* p)
         {
             s << "\t[" << String(i) << "]: " << p->getIdentifierForParameterIndex(i).toString().quoted() << " | " << String(p->getAttribute(i), 2) << "\n";
         }
+#endif
         
         debugToConsole(p, s);
         

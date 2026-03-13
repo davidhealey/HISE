@@ -79,6 +79,8 @@ var ProcessorMetadata::ParameterMetadata::toJSON() const
 	scriptnode::RangeHelpers::storeDoubleRange(r, range, scriptnode::RangeHelpers::IdSet::ScriptComponents);
 	r.getDynamicObject()->removeProperty(scriptnode::PropertyIds::Inverted);
 
+	obj->setProperty("disabled", disabled);
+
 	obj->setProperty("range", r);
 	
 	obj->setProperty("defaultValue", defaultValue);
