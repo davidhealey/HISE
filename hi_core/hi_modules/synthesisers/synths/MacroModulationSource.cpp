@@ -38,7 +38,10 @@ hise::ProcessorMetadata MacroModulationSource::createMetadata()
 
 	auto md = ModulatorSynth::createBaseMetadata()
 		.withStandardMetadata<MacroModulationSource>()
-		.withDescription("A container that hosts modulator chains whose output drives the macro control system.");
+		.withDescription("A container that hosts modulator chains whose output drives the macro control system.")
+		.withDisabledFX()
+		.withDisabledChain(ModulatorSynth::BasicChains::GainChain)
+		.withDisabledChain(ModulatorSynth::BasicChains::PitchChain);
 
 	for (int i = 0; i < HISE_NUM_MACROS; i++)
 	{
@@ -77,14 +80,14 @@ ModulatorSynth(mc, id, numVoices)
 	for (auto mChain : macroChains)
 	{
 		auto c = Colour(SIGNAL_COLOUR).withSaturation(JUCE_LIVE_CONSTANT_OFF(0.4f));
-
 		mChain->setColour(c.withMultipliedBrightness(JUCE_LIVE_CONSTANT_OFF(0.9f)));
-		
 		mChain->getHandler()->addListener(this);
 	}
 		
 
-	for (int i = 0; i < numVoices; i++) addVoice(new MacroModulationSourceVoice(this));
+	for (int i = 0; i < numVoices; i++) 
+		addVoice(new MacroModulationSourceVoice(this));
+
 	addSound(new MacroModulationSourceSound());
 
 	disableChain(GainModulation, true);

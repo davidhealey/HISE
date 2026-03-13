@@ -188,7 +188,7 @@ void ProcessorMetadataRegistry::registerAllMetadata()
 
 	// --- SoundGenerators ---
 
-	add(ProcessorMetadata::createFallback<ModulatorSampler>());
+	add(ModulatorSampler::createMetadata());
 	add(SineSynth::createMetadata());
 	add(ModulatorSynthChain::createMetadata());
 	add(GlobalModulatorContainer::createMetadata());
