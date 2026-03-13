@@ -1420,20 +1420,15 @@ ProcessorMetadata Processor::getMetadata() const
 	if (hasInitialisedMetadata())
 		return metadata.second;
 
+	// All processors must call updateParameterSlots() during construction.
+	// If this fires, a processor subclass is missing its initialisation.
 	ProcessorMetadataRegistry registry;
 
 	if (auto md = registry.get(getType()))
-	{
 		return *md;
-	}
-	
-	// No registry entry - return a minimal metadata with just the name and type
+
 	jassertfalse;
-	ProcessorMetadata fallback;
-	fallback.id = getType();
-	fallback.dataType = ProcessorMetadata::DataType::Fallback;
-	fallback.prettyName = getName();
-	return fallback;
+	return {};
 }
 
 } // namespace hise

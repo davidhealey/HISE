@@ -47,7 +47,6 @@ ShapeFXEditor::ShapeFXEditor (ProcessorEditor* p)
 
     addAndMakeVisible (biasLeft = new HiSlider ("Bias Left"));
     biasLeft->setTooltip (TRANS("The DC offset for the left channel"));
-    biasLeft->setRange (1, 20000, 1);
     biasLeft->setSliderStyle (Slider::RotaryHorizontalVerticalDrag);
     biasLeft->setTextBoxStyle (Slider::TextBoxRight, true, 80, 20);
     biasLeft->setColour (Slider::backgroundColourId, Colour (0x00000000));
@@ -68,22 +67,10 @@ ShapeFXEditor::ShapeFXEditor (ProcessorEditor* p)
     modeSelector->setJustificationType (Justification::centredLeft);
     modeSelector->setTextWhenNothingSelected (TRANS("Function"));
     modeSelector->setTextWhenNoChoicesAvailable (TRANS("(no choices)"));
-    modeSelector->addItem (TRANS("Linear"), 1);
-    modeSelector->addItem (TRANS("Atan"), 2);
-    modeSelector->addItem (TRANS("Tanh"), 3);
-    modeSelector->addItem (TRANS("Saturate"), 4);
-    modeSelector->addItem (TRANS("Square"), 5);
-    modeSelector->addItem (TRANS("Square Root"), 6);
-    modeSelector->addItem (TRANS("Curve"), 7);
-#if HI_USE_SHAPE_FX_SCRIPTING
-    modeSelector->addItem (TRANS("Script"), 8);
-    modeSelector->addItem (TRANS("Cached Script"), 9);
-#endif
     modeSelector->addListener (this);
 
     addAndMakeVisible (biasRight = new HiSlider ("Bias Right"));
     biasRight->setTooltip (TRANS("The DC offset for the right channel"));
-    biasRight->setRange (1, 20000, 1);
     biasRight->setSliderStyle (Slider::RotaryHorizontalVerticalDrag);
     biasRight->setTextBoxStyle (Slider::TextBoxRight, true, 80, 20);
     biasRight->setColour (Slider::backgroundColourId, Colour (0x00000000));
@@ -94,7 +81,6 @@ ShapeFXEditor::ShapeFXEditor (ProcessorEditor* p)
 
     addAndMakeVisible (highPass = new HiSlider ("High Pass"));
     highPass->setTooltip (TRANS("Applies a high pass before the shaper"));
-    highPass->setRange (1, 20000, 1);
     highPass->setSliderStyle (Slider::RotaryHorizontalVerticalDrag);
     highPass->setTextBoxStyle (Slider::TextBoxRight, true, 80, 20);
     highPass->setColour (Slider::backgroundColourId, Colour (0x00000000));
@@ -104,7 +90,6 @@ ShapeFXEditor::ShapeFXEditor (ProcessorEditor* p)
     highPass->setSkewFactor (0.3);
 
     addAndMakeVisible (gainSlider = new HiSlider ("Gain"));
-    gainSlider->setRange (1, 20000, 1);
     gainSlider->setSliderStyle (Slider::RotaryHorizontalVerticalDrag);
     gainSlider->setTextBoxStyle (Slider::TextBoxRight, true, 80, 20);
     gainSlider->setColour (Slider::backgroundColourId, Colour (0x00000000));
@@ -115,7 +100,6 @@ ShapeFXEditor::ShapeFXEditor (ProcessorEditor* p)
 
     addAndMakeVisible (reduceSlider = new HiSlider ("Reduce"));
     reduceSlider->setTooltip (TRANS("Applies a bit reduction effect"));
-    reduceSlider->setRange (1, 20000, 1);
     reduceSlider->setSliderStyle (Slider::RotaryHorizontalVerticalDrag);
     reduceSlider->setTextBoxStyle (Slider::TextBoxRight, true, 80, 20);
     reduceSlider->setColour (Slider::backgroundColourId, Colour (0x00000000));
@@ -125,7 +109,6 @@ ShapeFXEditor::ShapeFXEditor (ProcessorEditor* p)
     reduceSlider->setSkewFactor (0.3);
 
     addAndMakeVisible (mixSlider = new HiSlider ("Mix"));
-    mixSlider->setRange (1, 20000, 1);
     mixSlider->setSliderStyle (Slider::RotaryHorizontalVerticalDrag);
     mixSlider->setTextBoxStyle (Slider::TextBoxRight, true, 80, 20);
     mixSlider->setColour (Slider::backgroundColourId, Colour (0x00000000));
@@ -140,11 +123,6 @@ ShapeFXEditor::ShapeFXEditor (ProcessorEditor* p)
     oversampling->setJustificationType (Justification::centredLeft);
     oversampling->setTextWhenNothingSelected (TRANS("Oversampling"));
     oversampling->setTextWhenNoChoicesAvailable (TRANS("(no choices)"));
-    oversampling->addItem (TRANS("1x"), 1);
-    oversampling->addItem (TRANS("2x"), 2);
-    oversampling->addItem (TRANS("4x"), 3);
-    oversampling->addItem (TRANS("8x"), 4);
-    oversampling->addItem (TRANS("16x"), 5);
     oversampling->addListener (this);
 
     addAndMakeVisible (autoGain = new HiToggleButton ("Auto Gain"));
@@ -155,7 +133,6 @@ ShapeFXEditor::ShapeFXEditor (ProcessorEditor* p)
 
     addAndMakeVisible (lowPass = new HiSlider ("High Pass"));
     lowPass->setTooltip (TRANS("Applies a Low Pass before the shaper"));
-    lowPass->setRange (1, 20000, 1);
     lowPass->setSliderStyle (Slider::RotaryHorizontalVerticalDrag);
     lowPass->setTextBoxStyle (Slider::TextBoxRight, true, 80, 20);
     lowPass->setColour (Slider::backgroundColourId, Colour (0x00000000));

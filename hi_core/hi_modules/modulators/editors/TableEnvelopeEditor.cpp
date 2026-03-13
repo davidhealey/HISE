@@ -35,7 +35,6 @@ TableEnvelopeEditorBody::TableEnvelopeEditorBody (ProcessorEditor *p)
     //[/Constructor_pre]
 
     addAndMakeVisible (attackSlider = new HiSlider ("Attack Time"));
-    attackSlider->setRange (1, 20000, 1);
     attackSlider->setSliderStyle (Slider::RotaryHorizontalVerticalDrag);
     attackSlider->setTextBoxStyle (Slider::TextBoxRight, true, 80, 20);
     attackSlider->setColour (Slider::backgroundColourId, Colour (0x00000000));
@@ -45,7 +44,6 @@ TableEnvelopeEditorBody::TableEnvelopeEditorBody (ProcessorEditor *p)
     attackSlider->setSkewFactor (0.3);
 
     addAndMakeVisible (releaseSlider = new HiSlider ("Release Time"));
-    releaseSlider->setRange (3, 20000, 1);
     releaseSlider->setSliderStyle (Slider::RotaryHorizontalVerticalDrag);
     releaseSlider->setTextBoxStyle (Slider::TextBoxRight, true, 80, 20);
     releaseSlider->setColour (Slider::thumbColourId, Colour (0x80666666));

@@ -805,7 +805,7 @@ public:
 	/** Call this from the baseclass whenever you want its editor to display a value change. */
 	void setOutputValue(float newValue);;
 
-    bool hasInitialisedMetadata() const { return metadata.first && metadata.second.isValidAndNoFallback(); }
+    bool hasInitialisedMetadata() const { return metadata.first && metadata.second.isValid(); }
 
 protected:
 

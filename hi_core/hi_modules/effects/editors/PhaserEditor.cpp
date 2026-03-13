@@ -35,25 +35,21 @@ PhaserEditor::PhaserEditor (ProcessorEditor *p)
     //[/Constructor_pre]
 
     addAndMakeVisible (freq1Slider = new HiSlider ("Speed"));
-    freq1Slider->setRange (0, 1, 0.01);
     freq1Slider->setSliderStyle (Slider::RotaryHorizontalVerticalDrag);
     freq1Slider->setTextBoxStyle (Slider::TextBoxRight, false, 80, 20);
     freq1Slider->addListener (this);
 
     addAndMakeVisible (freq2Slider = new HiSlider ("Range"));
-    freq2Slider->setRange (0, 1, 0.01);
     freq2Slider->setSliderStyle (Slider::RotaryHorizontalVerticalDrag);
     freq2Slider->setTextBoxStyle (Slider::TextBoxRight, false, 80, 20);
     freq2Slider->addListener (this);
 
     addAndMakeVisible (feedBackSlider = new HiSlider ("Feedback"));
-    feedBackSlider->setRange (0, 1, 0.01);
     feedBackSlider->setSliderStyle (Slider::RotaryHorizontalVerticalDrag);
     feedBackSlider->setTextBoxStyle (Slider::TextBoxRight, false, 80, 20);
     feedBackSlider->addListener (this);
 
     addAndMakeVisible (wetSlider = new HiSlider ("Wet"));
-    wetSlider->setRange (0, 1, 0.1);
     wetSlider->setSliderStyle (Slider::RotaryHorizontalVerticalDrag);
     wetSlider->setTextBoxStyle (Slider::TextBoxRight, false, 80, 20);
     wetSlider->addListener (this);

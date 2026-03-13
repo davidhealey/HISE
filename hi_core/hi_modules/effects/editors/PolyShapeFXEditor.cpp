@@ -46,19 +46,9 @@ PolyShapeFXEditor::PolyShapeFXEditor (ProcessorEditor* p)
     modeSelector->setJustificationType (Justification::centredLeft);
     modeSelector->setTextWhenNothingSelected (TRANS("Function"));
     modeSelector->setTextWhenNoChoicesAvailable (TRANS("(no choices)"));
-    modeSelector->addItem (TRANS("Linear"), 1);
-    modeSelector->addItem (TRANS("Atan"), 2);
-    modeSelector->addItem (TRANS("Tanh"), 3);
-    modeSelector->addItem (TRANS("Saturate"), 4);
-    modeSelector->addItem (TRANS("Square"), 5);
-    modeSelector->addItem (TRANS("Square Root"), 6);
-    modeSelector->addItem (TRANS("Curve"), 7);
-    modeSelector->addItem (TRANS("Script"), 8);
-    modeSelector->addItem (TRANS("Cached Script"), 9);
     modeSelector->addListener (this);
 
     addAndMakeVisible (driveSlider = new HiSlider ("Drive"));
-    driveSlider->setRange (1, 20000, 1);
     driveSlider->setSliderStyle (Slider::RotaryHorizontalVerticalDrag);
     driveSlider->setTextBoxStyle (Slider::TextBoxRight, true, 80, 20);
     driveSlider->setColour (Slider::backgroundColourId, Colour (0x00000000));
@@ -77,7 +67,6 @@ PolyShapeFXEditor::PolyShapeFXEditor (ProcessorEditor* p)
     table->setName ("new component");
 
     addAndMakeVisible (bias = new HiSlider ("Bias"));
-    bias->setRange (1, 20000, 1);
     bias->setSliderStyle (Slider::RotaryHorizontalVerticalDrag);
     bias->setTextBoxStyle (Slider::TextBoxRight, true, 80, 20);
     bias->setColour (Slider::backgroundColourId, Colour (0x00000000));

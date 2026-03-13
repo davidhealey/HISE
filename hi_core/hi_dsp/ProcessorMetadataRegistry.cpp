@@ -140,7 +140,7 @@ void ProcessorMetadataRegistry::registerAllMetadata()
 	add(MatrixModulator::createMetadata());
 	add(FlexAhdsrEnvelope::createMetadata());
 
-	// --- MidiProcessors (fallback) ---
+	// --- MidiProcessors ---
 
 	add(JavascriptMidiProcessor::createMetadata());
 	add(Transposer::createMetadata());

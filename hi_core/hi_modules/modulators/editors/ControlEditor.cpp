@@ -59,14 +59,12 @@ ControlEditorBody::ControlEditorBody (ProcessorEditor *p)
 
     addAndMakeVisible (controllerNumberSlider = new HiSlider ("CC Nr."));
     controllerNumberSlider->setTooltip (TRANS("The CC number"));
-    controllerNumberSlider->setRange (1, 128, 1);
     controllerNumberSlider->setSliderStyle (Slider::RotaryHorizontalVerticalDrag);
     controllerNumberSlider->setTextBoxStyle (Slider::TextBoxRight, false, 30, 20);
     controllerNumberSlider->addListener (this);
 
     addAndMakeVisible (smoothingSlider = new HiSlider ("Smoothing"));
     smoothingSlider->setTooltip (TRANS("Smoothing Value"));
-    smoothingSlider->setRange (0, 2000, 0);
     smoothingSlider->setSliderStyle (Slider::RotaryHorizontalVerticalDrag);
     smoothingSlider->setTextBoxStyle (Slider::TextBoxRight, false, 60, 20);
     smoothingSlider->addListener (this);
@@ -78,7 +76,6 @@ ControlEditorBody::ControlEditorBody (ProcessorEditor *p)
 
     addAndMakeVisible (defaultSlider = new HiSlider ("Default"));
     defaultSlider->setTooltip (TRANS("Smoothing Value"));
-    defaultSlider->setRange (0, 127, 0);
     defaultSlider->setSliderStyle (Slider::RotaryHorizontalVerticalDrag);
     defaultSlider->setTextBoxStyle (Slider::TextBoxRight, false, 60, 20);
     defaultSlider->addListener (this);

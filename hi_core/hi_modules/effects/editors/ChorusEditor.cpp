@@ -37,25 +37,21 @@ ChorusEditor::ChorusEditor (ProcessorEditor *p)
     //[/Constructor_pre]
 
     addAndMakeVisible (rateSlider = new HiSlider ("Rate"));
-    rateSlider->setRange (0, 1, 0.01);
     rateSlider->setSliderStyle (Slider::RotaryHorizontalVerticalDrag);
     rateSlider->setTextBoxStyle (Slider::TextBoxRight, false, 80, 20);
     rateSlider->addListener (this);
 
     addAndMakeVisible (widthSlider = new HiSlider ("Width"));
-    widthSlider->setRange (0, 1, 0.01);
     widthSlider->setSliderStyle (Slider::RotaryHorizontalVerticalDrag);
     widthSlider->setTextBoxStyle (Slider::TextBoxRight, false, 80, 20);
     widthSlider->addListener (this);
 
     addAndMakeVisible (feedBackSlider = new HiSlider ("Feedback"));
-    feedBackSlider->setRange (0, 1, 0.01);
     feedBackSlider->setSliderStyle (Slider::RotaryHorizontalVerticalDrag);
     feedBackSlider->setTextBoxStyle (Slider::TextBoxRight, false, 80, 20);
     feedBackSlider->addListener (this);
 
     addAndMakeVisible (delaySlider = new HiSlider ("Delay"));
-    delaySlider->setRange (0, 1, 0.1);
     delaySlider->setSliderStyle (Slider::RotaryHorizontalVerticalDrag);
     delaySlider->setTextBoxStyle (Slider::TextBoxRight, false, 80, 20);
     delaySlider->addListener (this);

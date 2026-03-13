@@ -105,7 +105,6 @@ struct ProcessorMetadata
 	enum class DataType
 	{
 		Undefined = 0,
-		Fallback,
 		Static,
 		Dynamic,
 	};
@@ -714,13 +713,7 @@ struct ProcessorMetadata
 	}
 
 
-	/** Creates a minimal fallback metadata from SET_PROCESSOR_NAME statics.
-	*	Used for unmigrated processors in the registry.
-	*/
-	template <typename P> static ProcessorMetadata createFallback()
-	{
-		return ProcessorMetadata("temp", DataType::Fallback).withStandardMetadata<P>();
-	}
+
 
 	// --- Editor setup methods ---
 
@@ -761,8 +754,8 @@ struct ProcessorMetadata
 	*/
 	const ParameterMetadata* getParameterById(int parameterIndex) const;
 
-	/** Checks if the metadata is defined properly. */
-	bool isValidAndNoFallback() const { return dataType > DataType::Fallback; }
+	/** Checks if the metadata has been properly initialised. */
+	bool isValid() const { return dataType != DataType::Undefined; }
 
 	String getBuilderPath() const
 	{

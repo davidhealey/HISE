@@ -48,7 +48,6 @@ LfoEditorBody::LfoEditorBody (ProcessorEditor *p)
     fadeInSlider.reset (new HiSlider ("Fadein"));
     addAndMakeVisible (fadeInSlider.get());
     fadeInSlider->setTooltip (TRANS("The Fade in time after each key press"));
-    fadeInSlider->setRange (0, 5000, 1);
     fadeInSlider->setSliderStyle (Slider::RotaryHorizontalVerticalDrag);
     fadeInSlider->setTextBoxStyle (Slider::TextBoxRight, true, 80, 20);
     fadeInSlider->setColour (Slider::thumbColourId, Colour (0x80666666));
@@ -72,13 +71,6 @@ LfoEditorBody::LfoEditorBody (ProcessorEditor *p)
     waveFormSelector->setJustificationType (Justification::centredLeft);
     waveFormSelector->setTextWhenNothingSelected (TRANS("Select Waveform"));
     waveFormSelector->setTextWhenNoChoicesAvailable (TRANS("(no choices)"));
-    waveFormSelector->addItem (TRANS("Sine"), 1);
-    waveFormSelector->addItem (TRANS("Triangle"), 2);
-    waveFormSelector->addItem (TRANS("Saw"), 3);
-    waveFormSelector->addItem (TRANS("Square"), 4);
-    waveFormSelector->addItem (TRANS("Random"), 5);
-    waveFormSelector->addItem (TRANS("Custom"), 6);
-	waveFormSelector->addItem(TRANS("Steps"), 7);
     waveFormSelector->addListener (this);
 
     waveFormSelector->setBounds (59, 68, 128, 28);
@@ -114,7 +106,6 @@ LfoEditorBody::LfoEditorBody (ProcessorEditor *p)
     smoothTimeSlider.reset (new HiSlider ("Smooth Time"));
     addAndMakeVisible (smoothTimeSlider.get());
     smoothTimeSlider->setTooltip (TRANS("The smoothing factor for the oscillator"));
-    smoothTimeSlider->setRange (0, 5000, 1);
     smoothTimeSlider->setSliderStyle (Slider::RotaryHorizontalVerticalDrag);
     smoothTimeSlider->setTextBoxStyle (Slider::TextBoxRight, true, 80, 20);
     smoothTimeSlider->setColour (Slider::thumbColourId, Colour (0x80666666));
@@ -130,7 +121,6 @@ LfoEditorBody::LfoEditorBody (ProcessorEditor *p)
     phaseSlider.reset (new HiSlider ("Phase"));
     addAndMakeVisible (phaseSlider.get());
     phaseSlider->setTooltip (TRANS("The phase offset"));
-    phaseSlider->setRange (0, 5000, 1);
     phaseSlider->setSliderStyle (Slider::RotaryHorizontalVerticalDrag);
     phaseSlider->setTextBoxStyle (Slider::TextBoxRight, true, 80, 20);
     phaseSlider->setColour (Slider::thumbColourId, Colour (0x80666666));

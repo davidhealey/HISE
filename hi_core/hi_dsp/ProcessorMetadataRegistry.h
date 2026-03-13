@@ -42,9 +42,6 @@ using namespace juce;
 *	from SET_PROCESSOR_NAME). Population happens via registerAllMetadata() which
 *	mirrors the existing fillTypeNameList() pattern.
 *
-*	Unmigrated processors get a fallback entry with just the type ID and name
-*	(from ProcessorMetadata::createFallback<T>()).
-*
 *	Usage:
 *	  ProcessorMetadataRegistry registry;
 *	  auto md = registry.get(processor->getType());
@@ -77,9 +74,8 @@ public:
 
 private:
 
-	/** Called from constructor. Registers metadata for all known processor types.
-	*	Migrated processors provide full metadata via their createMetadata() static.
-	*	Unmigrated processors get a fallback entry.
+	/** Called from constructor. Registers metadata for all known processor types
+	*	via their createMetadata() static.
 	*/
 	void registerAllMetadata();
 

@@ -54,7 +54,6 @@ var ProcessorMetadata::ParameterMetadata::toJSON() const
 		obj->setProperty("metadataType", "dynamic");
 		break;
 	case DataType::Undefined:
-	case DataType::Fallback:
 	default:
 		jassertfalse;
 		break;
@@ -83,7 +82,10 @@ var ProcessorMetadata::ParameterMetadata::toJSON() const
 
 	obj->setProperty("range", r);
 	
-	obj->setProperty("defaultValue", defaultValue);
+	if (runtimeDefaultQueryFunction)
+		obj->setProperty("defaultValue", "dynamic");
+	else
+		obj->setProperty("defaultValue", defaultValue);
 
 	if (modulationIndex != -1)
 		obj->setProperty("chainIndex", modulationIndex);
@@ -136,7 +138,6 @@ var ProcessorMetadata::ModulationMetadata::toJSON() const
 		obj->setProperty("metadataType", "dynamic");
 		break;
 	case DataType::Undefined:
-	case DataType::Fallback:
 	default:
 		jassertfalse;
 		break;
@@ -217,9 +218,6 @@ var ProcessorMetadata::toJSON() const
 	{
 	case DataType::Undefined:
 		obj->setProperty("metadataType", "undefined");
-		break;
-	case DataType::Fallback:
-		obj->setProperty("metadataType", "fallback");
 		break;
 	case DataType::Static:
 		obj->setProperty("metadataType", "static");

@@ -36,25 +36,21 @@ GainEditor::GainEditor (ProcessorEditor *p)
     //[/Constructor_pre]
 
     addAndMakeVisible (widthSlider = new HiSlider ("Gain"));
-    widthSlider->setRange (-100, 36, 1);
     widthSlider->setSliderStyle (Slider::RotaryHorizontalVerticalDrag);
     widthSlider->setTextBoxStyle (Slider::TextBoxRight, false, 80, 20);
     widthSlider->addListener (this);
 
     addAndMakeVisible (gainSlider = new HiSlider ("Gain"));
-    gainSlider->setRange (-100, 36, 1);
     gainSlider->setSliderStyle (Slider::RotaryHorizontalVerticalDrag);
     gainSlider->setTextBoxStyle (Slider::TextBoxRight, false, 80, 20);
     gainSlider->addListener (this);
 
     addAndMakeVisible (delaySlider = new HiSlider ("Gain"));
-    delaySlider->setRange (-100, 36, 1);
     delaySlider->setSliderStyle (Slider::RotaryHorizontalVerticalDrag);
     delaySlider->setTextBoxStyle (Slider::TextBoxRight, false, 80, 20);
     delaySlider->addListener (this);
 
     addAndMakeVisible (balanceSlider = new HiSlider ("Balance"));
-    balanceSlider->setRange (-100, 36, 1);
     balanceSlider->setSliderStyle (Slider::RotaryHorizontalVerticalDrag);
     balanceSlider->setTextBoxStyle (Slider::TextBoxRight, false, 80, 20);
     balanceSlider->addListener (this);

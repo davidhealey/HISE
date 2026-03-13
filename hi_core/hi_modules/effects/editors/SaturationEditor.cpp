@@ -35,25 +35,21 @@ SaturationEditor::SaturationEditor (ProcessorEditor *p)
     //[/Constructor_pre]
 
     addAndMakeVisible (saturationSlider = new HiSlider ("Saturation"));
-    saturationSlider->setRange (-24, 24, 0.1);
     saturationSlider->setSliderStyle (Slider::RotaryHorizontalVerticalDrag);
     saturationSlider->setTextBoxStyle (Slider::TextBoxRight, false, 80, 20);
     saturationSlider->addListener (this);
 
     addAndMakeVisible (wetSlider = new HiSlider ("Wet"));
-    wetSlider->setRange (-24, 24, 0.1);
     wetSlider->setSliderStyle (Slider::RotaryHorizontalVerticalDrag);
     wetSlider->setTextBoxStyle (Slider::TextBoxRight, false, 80, 20);
     wetSlider->addListener (this);
 
     addAndMakeVisible (pregainSlider = new HiSlider ("Saturation"));
-    pregainSlider->setRange (-24, 24, 0.1);
     pregainSlider->setSliderStyle (Slider::RotaryHorizontalVerticalDrag);
     pregainSlider->setTextBoxStyle (Slider::TextBoxRight, false, 80, 20);
     pregainSlider->addListener (this);
 
     addAndMakeVisible (postGainSlider = new HiSlider ("Wet"));
-    postGainSlider->setRange (-24, 24, 0.1);
     postGainSlider->setSliderStyle (Slider::RotaryHorizontalVerticalDrag);
     postGainSlider->setTextBoxStyle (Slider::TextBoxRight, false, 80, 20);
     postGainSlider->addListener (this);

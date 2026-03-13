@@ -37,13 +37,11 @@ ConvolutionEditor::ConvolutionEditor (ProcessorEditor *p)
     //[/Constructor_pre]
 
     addAndMakeVisible (drySlider = new HiSlider ("Dry Level"));
-    drySlider->setRange (-100, 0, 0.1);
     drySlider->setSliderStyle (Slider::RotaryHorizontalVerticalDrag);
     drySlider->setTextBoxStyle (Slider::TextBoxRight, false, 80, 20);
     drySlider->addListener (this);
 
     addAndMakeVisible (wetSlider = new HiSlider ("Wet Level"));
-    wetSlider->setRange (-100, 0, 0.1);
     wetSlider->setSliderStyle (Slider::RotaryHorizontalVerticalDrag);
     wetSlider->setTextBoxStyle (Slider::TextBoxRight, false, 80, 20);
     wetSlider->addListener (this);
@@ -77,19 +75,16 @@ ConvolutionEditor::ConvolutionEditor (ProcessorEditor *p)
     backgroundButton->setColour (ToggleButton::textColourId, Colours::white);
 
     addAndMakeVisible (predelaySlider = new HiSlider ("Dry Level"));
-    predelaySlider->setRange (-100, 0, 0.1);
     predelaySlider->setSliderStyle (Slider::RotaryHorizontalVerticalDrag);
     predelaySlider->setTextBoxStyle (Slider::TextBoxRight, false, 80, 20);
     predelaySlider->addListener (this);
 
     addAndMakeVisible (dampingSlider = new HiSlider ("Dry Level"));
-    dampingSlider->setRange (-100, 0, 0.1);
     dampingSlider->setSliderStyle (Slider::RotaryHorizontalVerticalDrag);
     dampingSlider->setTextBoxStyle (Slider::TextBoxRight, false, 80, 20);
     dampingSlider->addListener (this);
 
     addAndMakeVisible (hiCutSlider = new HiSlider ("Dry Level"));
-    hiCutSlider->setRange (-100, 0, 0.1);
     hiCutSlider->setSliderStyle (Slider::RotaryHorizontalVerticalDrag);
     hiCutSlider->setTextBoxStyle (Slider::TextBoxRight, false, 80, 20);
     hiCutSlider->addListener (this);

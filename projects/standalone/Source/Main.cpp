@@ -952,125 +952,6 @@ return 0;
 		print("Current project folder:\n" + getCurrentProjectFolder().getFullPathName());
 	}
 
-	static void fetchParameters(const String& commandLine)
-	{
-		auto args = getCommandLineArgs(commandLine);
-
-		auto typeIds = getArgument(args, "-m:");
-
-		if (typeIds.isEmpty())
-			throwErrorAndQuit("No module ID specified. Call fetch_parameters -m:TypeId1,TypeId2 to get the parameter list for the given module");
-
-		CLIInstance instance;
-
-		raw::Builder b(instance.getBackendProcessor());
-
-		auto sine = b.create<SineSynth>(instance.getMainSynthChain());
-
-		auto soundGenerators = instance.getMainSynthChain()->getFactoryType();
-		auto mps = dynamic_cast<Chain*>(sine->getChildProcessor(0))->getFactoryType();
-		auto mods = dynamic_cast<Chain*>(sine->getChildProcessor(1))->getFactoryType();
-		auto effects = dynamic_cast<Chain*>(sine->getChildProcessor(3))->getFactoryType();
-
-		auto idList = StringArray::fromTokens(typeIds, ",;", "");
-
-		DynamicObject::Ptr modules = new DynamicObject();
-
-		for (auto typeId : idList)
-		{
-			print("Fetching parameters for module type " + typeId);
-
-			WeakReference<Processor> p;
-
-			if (soundGenerators->allowType(typeId))
-				p = b.create(instance.getMainSynthChain(), typeId, -1);
-			if (mps->allowType(typeId))
-				p = b.create(sine, typeId, raw::IDs::Chains::Midi);
-			if (mods->allowType(typeId))
-				p = b.create(sine, typeId, raw::IDs::Chains::Gain);
-			if (effects->allowType(typeId))
-				p = b.create(sine, typeId, raw::IDs::Chains::FX);
-
-			if (p != nullptr)
-			{
-				DynamicObject::Ptr parameters = new DynamicObject();
-
-				for (int i = 0; i < p->getNumAttributes(); i++)
-				{
-					DynamicObject::Ptr pobj = new DynamicObject();
-					pobj->setProperty("defaultValue", p->getAttribute(i));
-					parameters->setProperty(p->getIdentifierForParameterIndex(i), var(pobj.get()));
-				}
-
-				ProcessorEditorContainer pc;
-				ProcessorEditor pe(&pc, 0, p, nullptr);
-
-				Component::callRecursive<MacroControlledObject>(&pe, [&](MacroControlledObject* mco)
-				{
-					auto pIndex = mco->getParameter();
-					auto pId = p->getIdentifierForParameterIndex(pIndex);
-
-					if (auto existing = parameters->getProperty(pId).getDynamicObject())
-					{
-						InvertableParameterRange r;
-						r.rng = mco->getRange();
-						var existingVar(existing);
-						RangeHelpers::storeDoubleRange(existingVar, r, scriptnode::RangeHelpers::IdSet::ScriptComponents);
-
-						if ((int)existing->getProperty("stepSize") == 1)
-						{
-
-							existing->setProperty("min", (int)existing->getProperty("min"));
-							existing->setProperty("max", (int)existing->getProperty("max"));
-							existing->setProperty("defaultValue", (int)existing->getProperty("defaultValue"));
-
-							if ((int)existing->getProperty("min") == 0 && (int)existing->getProperty("max") == 1)
-							{
-								existing->setProperty("min", (bool)existing->getProperty("min"));
-								existing->setProperty("max", (bool)existing->getProperty("max"));
-								existing->setProperty("defaultValue", (bool)existing->getProperty("defaultValue"));
-							}
-						}
-
-
-						existing->removeProperty("middlePosition");
-						existing->removeProperty("stepSize");
-						existing->removeProperty("Inverted");
-
-						if (auto s = dynamic_cast<HiSlider*>(mco))
-						{
-							existing->setProperty("mode", s->getModeId());
-							existing->setProperty("valueAsString", s->getTextFromValue(s->getValue()));
-						}
-
-						if (auto cb = dynamic_cast<HiComboBox*>(mco))
-						{
-							existing->setProperty("min", (int)existing->getProperty("min") - 1);
-							existing->setProperty("max", (int)existing->getProperty("max") - 1);
-							existing->setProperty("defaultValue", (int)existing->getProperty("defaultValue") - 1);
-
-							Array<var> items;
-
-							for (int i = 0; i < cb->getNumItems(); i++)
-								items.add(cb->getItemText(i));
-
-							existing->setProperty("items", var(items));
-						}
-					}
-
-					return false;
-				});
-
-				modules->setProperty(Identifier(typeId), var(parameters.get()));
-			}
-			else
-				throwErrorAndQuit("Can't find module with ID " + typeId);
-		}
-
-		print(JSON::toString(var(modules.get())));
-		
-	}
-
 	static void createBuilderCache(const String& commandLine)
 	{
 		hise::ProcessorMetadataRegistry r;
@@ -1701,12 +1582,6 @@ public:
 		else if (commandLine.startsWith("create_module_list"))
 		{
 			CommandLineActions::createBuilderCache(commandLine);
-			quit();
-			return;
-		}
-		else if (commandLine.startsWith("fetch_parameters"))
-		{
-			CommandLineActions::fetchParameters(commandLine);
 			quit();
 			return;
 		}

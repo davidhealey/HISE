@@ -35,7 +35,6 @@ WaveSynthBody::WaveSynthBody (ProcessorEditor *p)
     //[/Constructor_pre]
 
     addAndMakeVisible (octaveSlider = new HiSlider ("Octave 1"));
-    octaveSlider->setRange (-5, 5, 1);
     octaveSlider->setSliderStyle (Slider::RotaryHorizontalVerticalDrag);
     octaveSlider->setTextBoxStyle (Slider::TextBoxRight, false, 40, 20);
     octaveSlider->addListener (this);
@@ -46,16 +45,7 @@ WaveSynthBody::WaveSynthBody (ProcessorEditor *p)
     waveFormSelector->setJustificationType (Justification::centredLeft);
     waveFormSelector->setTextWhenNothingSelected (TRANS("Select Waveform"));
     waveFormSelector->setTextWhenNoChoicesAvailable (TRANS("(no choices)"));
-    waveFormSelector->addItem (TRANS("Sine"), 1);
-    waveFormSelector->addItem (TRANS("Triangle"), 2);
-    waveFormSelector->addItem (TRANS("Saw"), 3);
-    waveFormSelector->addItem (TRANS("Square"), 4);
-    waveFormSelector->addItem (TRANS("Noise"), 5);
-    waveFormSelector->addItem (TRANS("Triangle 2"), 6);
-    waveFormSelector->addItem (TRANS("Square 2"), 7);
-    waveFormSelector->addItem (TRANS("Trapezoid 1"), 8);
-    waveFormSelector->addItem (TRANS("Trapezoid 2"), 9);
-    waveFormSelector->addSeparator();
+
     waveFormSelector->addListener (this);
 
     addAndMakeVisible (waveformDisplay = new WaveformComponent(getProcessor(), 0));
@@ -104,7 +94,6 @@ WaveSynthBody::WaveSynthBody (ProcessorEditor *p)
     fadeTimeEditor->addListener (this);
 
     addAndMakeVisible (octaveSlider2 = new HiSlider ("Octave 2"));
-    octaveSlider2->setRange (-5, 5, 1);
     octaveSlider2->setSliderStyle (Slider::RotaryHorizontalVerticalDrag);
     octaveSlider2->setTextBoxStyle (Slider::TextBoxRight, false, 40, 20);
     octaveSlider2->addListener (this);
@@ -115,47 +104,33 @@ WaveSynthBody::WaveSynthBody (ProcessorEditor *p)
     waveFormSelector2->setJustificationType (Justification::centredLeft);
     waveFormSelector2->setTextWhenNothingSelected (TRANS("Select Waveform"));
     waveFormSelector2->setTextWhenNoChoicesAvailable (TRANS("(no choices)"));
-    waveFormSelector2->addItem (TRANS("Sine"), 1);
-    waveFormSelector2->addItem (TRANS("Triangle"), 2);
-    waveFormSelector2->addItem (TRANS("Saw"), 3);
-    waveFormSelector2->addItem (TRANS("Square"), 4);
-    waveFormSelector2->addItem (TRANS("Noise"), 5);
-    waveFormSelector2->addItem (TRANS("Triangle 2"), 6);
-    waveFormSelector2->addItem (TRANS("Square 2"), 7);
-    waveFormSelector2->addItem (TRANS("Trapezoid 1"), 8);
-    waveFormSelector2->addItem (TRANS("Trapezoid 2"), 9);
-    waveFormSelector2->addSeparator();
+
     waveFormSelector2->addListener (this);
 
     addAndMakeVisible (waveformDisplay2 = new WaveformComponent(getProcessor(), 1));
     waveformDisplay2->setName ("new component");
 
     addAndMakeVisible (mixSlider = new HiSlider ("Mix"));
-    mixSlider->setRange (0, 100, 1);
     mixSlider->setSliderStyle (Slider::RotaryHorizontalVerticalDrag);
     mixSlider->setTextBoxStyle (Slider::TextBoxRight, false, 40, 20);
     mixSlider->addListener (this);
 
     addAndMakeVisible (panSlider = new HiSlider ("Pan 1"));
-    panSlider->setRange (-100, 100, 1);
     panSlider->setSliderStyle (Slider::RotaryHorizontalVerticalDrag);
     panSlider->setTextBoxStyle (Slider::TextBoxRight, false, 40, 20);
     panSlider->addListener (this);
 
     addAndMakeVisible (panSlider2 = new HiSlider ("Pan 2"));
-    panSlider2->setRange (-100, 100, 1);
     panSlider2->setSliderStyle (Slider::RotaryHorizontalVerticalDrag);
     panSlider2->setTextBoxStyle (Slider::TextBoxRight, false, 40, 20);
     panSlider2->addListener (this);
 
     addAndMakeVisible (detuneSlider2 = new HiSlider ("Detune 2"));
-    detuneSlider2->setRange (-100, 100, 1);
     detuneSlider2->setSliderStyle (Slider::RotaryHorizontalVerticalDrag);
     detuneSlider2->setTextBoxStyle (Slider::TextBoxRight, false, 40, 20);
     detuneSlider2->addListener (this);
 
     addAndMakeVisible (detuneSlider = new HiSlider ("Detune"));
-    detuneSlider->setRange (-100, 100, 1);
     detuneSlider->setSliderStyle (Slider::RotaryHorizontalVerticalDrag);
     detuneSlider->setTextBoxStyle (Slider::TextBoxRight, false, 40, 20);
     detuneSlider->addListener (this);
@@ -170,26 +145,22 @@ WaveSynthBody::WaveSynthBody (ProcessorEditor *p)
 
     addAndMakeVisible (pulseSlider1 = new HiSlider ("Pulse 1"));
     pulseSlider1->setTooltip (TRANS("Select the pulse width if possible"));
-    pulseSlider1->setRange (0, 1, 0.01);
     pulseSlider1->setSliderStyle (Slider::RotaryHorizontalVerticalDrag);
     pulseSlider1->setTextBoxStyle (Slider::TextBoxRight, false, 40, 20);
     pulseSlider1->addListener (this);
 
     addAndMakeVisible (pulseSlider2 = new HiSlider ("Pulse 2"));
     pulseSlider2->setTooltip (TRANS("Select the pulse width if possible"));
-    pulseSlider2->setRange (0, 1, 0.01);
     pulseSlider2->setSliderStyle (Slider::RotaryHorizontalVerticalDrag);
     pulseSlider2->setTextBoxStyle (Slider::TextBoxRight, false, 40, 20);
     pulseSlider2->addListener (this);
 
     addAndMakeVisible (semiToneSlider1 = new HiSlider ("SemiTones 1"));
-    semiToneSlider1->setRange (-12, 12, 1);
     semiToneSlider1->setSliderStyle (Slider::RotaryHorizontalVerticalDrag);
     semiToneSlider1->setTextBoxStyle (Slider::TextBoxRight, false, 40, 20);
     semiToneSlider1->addListener (this);
 
     addAndMakeVisible (semiToneSlider2 = new HiSlider ("SemiTones 2"));
-    semiToneSlider2->setRange (-12, 12, 1);
     semiToneSlider2->setSliderStyle (Slider::RotaryHorizontalVerticalDrag);
     semiToneSlider2->setTextBoxStyle (Slider::TextBoxRight, false, 40, 20);
     semiToneSlider2->addListener (this);

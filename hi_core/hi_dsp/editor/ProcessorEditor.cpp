@@ -759,16 +759,7 @@ void ProcessorEditor::showContextMenu(Component* c, Processor* p)
 
 		s = JSON::toString(p->getMetadata().toJSON());;
 
-#if 0
-        String s;
-        
-        s << "(" << p->getType() << ") - Parameter dump: \n";
-        
-        for(int i = 0; i < p->getNumAttributes(); i++)
-        {
-            s << "\t[" << String(i) << "]: " << p->getIdentifierForParameterIndex(i).toString().quoted() << " | " << String(p->getAttribute(i), 2) << "\n";
-        }
-#endif
+
         
         debugToConsole(p, s);
         

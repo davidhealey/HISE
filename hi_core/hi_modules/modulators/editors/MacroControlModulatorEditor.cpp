@@ -52,7 +52,6 @@ MacroControlModulatorEditorBody::MacroControlModulatorEditorBody (ProcessorEdito
 
     addAndMakeVisible (smoothingSlider = new HiSlider ("Smoothing"));
     smoothingSlider->setTooltip (TRANS("Smoothing Value"));
-    smoothingSlider->setRange (0, 2000, 0);
     smoothingSlider->setSliderStyle (Slider::RotaryHorizontalVerticalDrag);
     smoothingSlider->setTextBoxStyle (Slider::TextBoxRight, false, 60, 20);
     smoothingSlider->addListener (this);

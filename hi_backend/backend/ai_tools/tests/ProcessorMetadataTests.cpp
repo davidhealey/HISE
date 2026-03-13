@@ -77,17 +77,17 @@ public:
         testRegistryPopulation();
         testRegistryLfoEntry();
         testRegistryWaveSynthEntry();
-        testRegistryFallbackEntries();
+        testRegistryAllEntriesValid();
         testRegistryToJSON();
 
         // LFO processor integration tests (require MainController)
-        testLfoConstructorPopulatesParameterNames();
+        testLfoParameterResolution();
         testLfoHasInitialisedMetadata();
         testLfoGetDefaultValueFromMetadata();
         testLfoGetMetadataVirtual();
 
         // WaveSynth processor integration tests
-        testWaveSynthConstructorPopulatesParameterNames();
+        testWaveSynthParameterResolution();
         testWaveSynthHasInitialisedMetadata();
         testWaveSynthGetDefaultValueFromMetadata();
         testWaveSynthGetMetadataVirtual();
@@ -344,7 +344,7 @@ private:
         expect(md.prettyName == "LFO Modulator", "Pretty name");
         expect(md.type == Identifier("Modulator"), "Type should be 'Modulator'");
         expect(md.subtype == Identifier("TimeVariantModulator"), "Subtype should be 'TimeVariantModulator'");
-        expect(md.dataType == ProcessorMetadata::DataType::StaticInitialised, "DataType should be StaticInitialised");
+        expect(md.dataType == ProcessorMetadata::DataType::Static, "DataType should be Static");
     }
 
     //==========================================================================
@@ -552,7 +552,7 @@ private:
         expect(md.prettyName == "Waveform Generator", "Pretty name");
         expect(md.type == Identifier("SoundGenerator"), "Type should be 'SoundGenerator'");
         expect(md.subtype == Identifier("SoundGenerator"), "Subtype should be 'SoundGenerator'");
-        expect(md.dataType == ProcessorMetadata::DataType::StaticInitialised, "DataType should be StaticInitialised");
+        expect(md.dataType == ProcessorMetadata::DataType::Static, "DataType should be Static");
     }
 
     //==========================================================================
@@ -584,9 +584,9 @@ private:
         auto md = registry->get(Identifier("LFO"));
 
         expect(md != nullptr, "LFO should be in registry");
-        expect(md->isValidAndNoFallback(), "LFO should not be a fallback");
-        expect(md->dataType == ProcessorMetadata::DataType::StaticInitialised,
-               "LFO should be StaticInitialised");
+        expect(md->isValid(), "LFO should have valid metadata");
+        expect(md->dataType == ProcessorMetadata::DataType::Static,
+               "LFO should be Static");
         expectEquals(md->parameters.size(), 11, "LFO should have 11 parameters");
     }
 
@@ -598,27 +598,26 @@ private:
 		auto md = registry->get(Identifier("WaveSynth"));
 
 		expect(md != nullptr, "WaveSynth should be in registry");
-		expect(md->isValidAndNoFallback(), "WaveSynth should not be a fallback");
-		expect(md->dataType == ProcessorMetadata::DataType::StaticInitialised,
-		       "WaveSynth should be StaticInitialised");
+		expect(md->isValid(), "WaveSynth should have valid metadata");
+		expect(md->dataType == ProcessorMetadata::DataType::Static,
+		       "WaveSynth should be Static");
 		expectEquals(md->parameters.size(), (int)WaveSynth::numWaveSynthParameters,
 		             "WaveSynth should have " + String(WaveSynth::numWaveSynthParameters) +
 		             " parameters (4 base + 15 own)");
 	}
 
-    void testRegistryFallbackEntries()
+    void testRegistryAllEntriesValid()
     {
-        beginTest("Unmigrated processors have fallback entries");
+        beginTest("All registry entries have valid metadata");
 
         SharedResourcePointer<ProcessorMetadataRegistry> registry;
 
-        // SimpleEnvelope is still a fallback
-        auto md = registry->get(Identifier("SimpleEnvelope"));
-        expect(md != nullptr, "SimpleEnvelope should be in registry");
-        expect(!md->isValidAndNoFallback(), "SimpleEnvelope should be a fallback");
-        expect(md->dataType == ProcessorMetadata::DataType::Fallback,
-               "SimpleEnvelope should be Fallback type");
-        expect(md->parameters.isEmpty(), "Fallback should have no parameters");
+        for (auto& typeId : registry->getRegisteredTypes())
+        {
+            auto md = registry->get(typeId);
+            expect(md != nullptr, typeId.toString() + " should be in registry");
+            expect(md->isValid(), typeId.toString() + " should have valid metadata");
+        }
     }
 
     void testRegistryToJSON()
@@ -657,28 +656,26 @@ private:
     // Processor integration tests (require a live MainController)
     //==========================================================================
 
-    void testLfoConstructorPopulatesParameterNames()
+    void testLfoParameterResolution()
     {
         /** Setup: Construct LfoModulator via MainController
          *  Scenario: Constructor calls updateParameterSlots() which caches metadata
-         *            and populates parameterNames from it
-         *  Expected: parameterNames has 11 entries matching metadata IDs
+         *  Expected: getNumParameters() returns 11, getIdentifierForParameterIndex()
+         *            resolves each parameter to the correct metadata ID
          */
-        beginTest("LFO constructor populates parameterNames from metadata");
+        beginTest("LFO parameter resolution matches metadata");
 
         ScopedPointer<LfoModulator> lfo = ctx->createLfo();
 
-        expectEquals(lfo->parameterNames.size(), (int)LfoModulator::numParameters,
-                     "parameterNames should have " + String(LfoModulator::numParameters) + " entries");
+        expectEquals(lfo->getNumParameters(), (int)LfoModulator::numParameters,
+                     "getNumParameters() should return " + String(LfoModulator::numParameters));
 
-        // Verify each entry matches the metadata
         auto md = LfoModulator::createMetadata();
         for (int i = 0; i < md.parameters.size(); i++)
         {
-            expect(lfo->parameterNames[i] == md.parameters[i].id,
-                   "parameterNames[" + String(i) + "] should be '" +
-                   md.parameters[i].id.toString() + "' but is '" +
-                   lfo->parameterNames[i].toString() + "'");
+            expect(lfo->getIdentifierForParameterIndex(md.parameters[i].parameterIndex) == md.parameters[i].id,
+                   "Parameter " + String(i) + " should resolve to '" +
+                   md.parameters[i].id.toString() + "'");
         }
     }
 
@@ -693,11 +690,11 @@ private:
     void testLfoGetDefaultValueFromMetadata()
     {
         /** Setup: Construct LfoModulator, query getDefaultValue for each parameter
-         *  Scenario: Base class reads from cached metadata for non-overridden params
+         *  Scenario: Base class reads from cached metadata; Frequency uses a
+         *            runtimeDefaultQueryFunction based on tempoSync state
          *  Expected: Non-dynamic defaults match metadata declarations.
-         *            Frequency is skipped - its getDefaultValue() override returns a
-         *            runtime-dependent value based on the tempoSync state, which is
-         *            not meaningful to test against the static metadata default.
+         *            Frequency is skipped - its dynamic default depends on tempoSync
+         *            state, which is not meaningful to test against the static default.
          */
         beginTest("LFO getDefaultValue reads from metadata");
 
@@ -722,7 +719,7 @@ private:
         Processor* p = lfo.get();
         auto md = p->getMetadata();
 
-        expect(md.isValidAndNoFallback(), "Should return valid metadata");
+        expect(md.isValid(), "Should return valid metadata");
         expect(md.id == Identifier("LFO"), "Should be LFO metadata");
         expectEquals(md.parameters.size(), 11, "Should have 11 parameters");
     }
@@ -731,28 +728,27 @@ private:
     // WaveSynth processor integration tests
     //==========================================================================
 
-	void testWaveSynthConstructorPopulatesParameterNames()
+	void testWaveSynthParameterResolution()
 	{
 		/** Setup: Construct WaveSynth via MainController
 		 *  Scenario: metadataInitialised calls updateParameterSlots() in the initializer
-		 *            list, which clears and rebuilds parameterNames from metadata
-		 *            (including 4 base ModulatorSynth params + 15 own WaveSynth params)
-		 *  Expected: parameterNames has 19 entries matching metadata IDs
+		 *            list, which caches metadata
+		 *  Expected: getNumParameters() returns 19, getIdentifierForParameterIndex()
+		 *            resolves each parameter to the correct metadata ID
 		 */
-		beginTest("WaveSynth constructor populates parameterNames from metadata");
+		beginTest("WaveSynth parameter resolution matches metadata");
 
 		ScopedPointer<WaveSynth> ws = ctx->createWaveSynth();
 
-		expectEquals(ws->parameterNames.size(), (int)WaveSynth::numWaveSynthParameters,
-		             "parameterNames should have " + String(WaveSynth::numWaveSynthParameters) + " entries");
+		expectEquals(ws->getNumParameters(), (int)WaveSynth::numWaveSynthParameters,
+		             "getNumParameters() should return " + String(WaveSynth::numWaveSynthParameters));
 
 		auto md = WaveSynth::createMetadata();
 		for (int i = 0; i < md.parameters.size(); i++)
 		{
-			expect(ws->parameterNames[i] == md.parameters[i].id,
-			       "parameterNames[" + String(i) + "] should be '" +
-			       md.parameters[i].id.toString() + "' but is '" +
-			       ws->parameterNames[i].toString() + "'");
+			expect(ws->getIdentifierForParameterIndex(md.parameters[i].parameterIndex) == md.parameters[i].id,
+			       "Parameter " + String(i) + " should resolve to '" +
+			       md.parameters[i].id.toString() + "'");
 		}
 	}
 
@@ -793,7 +789,7 @@ private:
         Processor* p = ws.get();
         auto md = p->getMetadata();
 
-        expect(md.isValidAndNoFallback(), "Should return valid metadata");
+        expect(md.isValid(), "Should return valid metadata");
         expect(md.id == Identifier("WaveSynth"), "Should be WaveSynth metadata");
         expectEquals(md.parameters.size(), (int)WaveSynth::numWaveSynthParameters,
                      "Should have " + String(WaveSynth::numWaveSynthParameters) +

@@ -35,7 +35,6 @@ SineSynthBody::SineSynthBody (ProcessorEditor *p)
     //[/Constructor_pre]
 
     addAndMakeVisible (octaveSlider = new HiSlider ("Octave"));
-    octaveSlider->setRange (-5, 5, 1);
     octaveSlider->setSliderStyle (Slider::RotaryHorizontalVerticalDrag);
     octaveSlider->setTextBoxStyle (Slider::TextBoxRight, false, 40, 20);
     octaveSlider->addListener (this);
@@ -84,7 +83,6 @@ SineSynthBody::SineSynthBody (ProcessorEditor *p)
 
     addAndMakeVisible (semiToneSlider = new HiSlider ("Semitones"));
     semiToneSlider->setTooltip (TRANS("The semitone detune"));
-    semiToneSlider->setRange (-12, 12, 1);
     semiToneSlider->setSliderStyle (Slider::RotaryHorizontalVerticalDrag);
     semiToneSlider->setTextBoxStyle (Slider::TextBoxRight, false, 40, 20);
     semiToneSlider->addListener (this);
@@ -96,7 +94,6 @@ SineSynthBody::SineSynthBody (ProcessorEditor *p)
 
     addAndMakeVisible (saturationSlider = new HiSlider ("Semitones"));
     saturationSlider->setTooltip (TRANS("The Saturation of the Waveshaper"));
-    saturationSlider->setRange (0, 1, 0.01);
     saturationSlider->setSliderStyle (Slider::RotaryHorizontalVerticalDrag);
     saturationSlider->setTextBoxStyle (Slider::TextBoxRight, false, 40, 20);
     saturationSlider->addListener (this);

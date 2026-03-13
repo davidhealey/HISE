@@ -38,31 +38,26 @@ DelayEditor::DelayEditor (ProcessorEditor *p)
     //[/Constructor_pre]
 
     addAndMakeVisible (leftTimeSlider = new HiSlider ("Left Time"));
-    leftTimeSlider->setRange (0, 3000, 1);
     leftTimeSlider->setSliderStyle (Slider::RotaryHorizontalVerticalDrag);
     leftTimeSlider->setTextBoxStyle (Slider::TextBoxRight, false, 80, 20);
     leftTimeSlider->addListener (this);
 
     addAndMakeVisible (rightTimeSlider = new HiSlider ("Right Time"));
-    rightTimeSlider->setRange (0, 3000, 1);
     rightTimeSlider->setSliderStyle (Slider::RotaryHorizontalVerticalDrag);
     rightTimeSlider->setTextBoxStyle (Slider::TextBoxRight, false, 80, 20);
     rightTimeSlider->addListener (this);
 
     addAndMakeVisible (leftFeedbackSlider = new HiSlider ("Left Feedback"));
-    leftFeedbackSlider->setRange (0, 100, 1);
     leftFeedbackSlider->setSliderStyle (Slider::RotaryHorizontalVerticalDrag);
     leftFeedbackSlider->setTextBoxStyle (Slider::TextBoxRight, false, 80, 20);
     leftFeedbackSlider->addListener (this);
 
     addAndMakeVisible (rightFeedbackSlider = new HiSlider ("Right Feedback"));
-    rightFeedbackSlider->setRange (0, 100, 1);
     rightFeedbackSlider->setSliderStyle (Slider::RotaryHorizontalVerticalDrag);
     rightFeedbackSlider->setTextBoxStyle (Slider::TextBoxRight, false, 80, 20);
     rightFeedbackSlider->addListener (this);
 
     addAndMakeVisible (mixSlider = new HiSlider ("Mix"));
-    mixSlider->setRange (0, 100, 1);
     mixSlider->setSliderStyle (Slider::RotaryHorizontalVerticalDrag);
     mixSlider->setTextBoxStyle (Slider::TextBoxRight, false, 80, 20);
     mixSlider->addListener (this);

@@ -38,25 +38,21 @@ FilterEditor::FilterEditor (ProcessorEditor *p)
     //[/Constructor_pre]
 
     addAndMakeVisible (freqSlider = new HiSlider ("Frequency"));
-    freqSlider->setRange (20, 20000, 1);
     freqSlider->setSliderStyle (Slider::RotaryHorizontalVerticalDrag);
     freqSlider->setTextBoxStyle (Slider::TextBoxRight, false, 80, 20);
     freqSlider->addListener (this);
 
     addAndMakeVisible (qSlider = new HiSlider ("Q"));
-    qSlider->setRange (0.3, 8, 0.1);
     qSlider->setSliderStyle (Slider::RotaryHorizontalVerticalDrag);
     qSlider->setTextBoxStyle (Slider::TextBoxRight, false, 80, 20);
     qSlider->addListener (this);
 
     addAndMakeVisible (gainSlider = new HiSlider ("Gain"));
-    gainSlider->setRange (-24, 24, 0.1);
     gainSlider->setSliderStyle (Slider::RotaryHorizontalVerticalDrag);
     gainSlider->setTextBoxStyle (Slider::TextBoxRight, false, 80, 20);
     gainSlider->addListener (this);
 
 	addAndMakeVisible(bipolarFreqSlider = new HiSlider("Bipolar Intensity"));
-	bipolarFreqSlider->setRange(-1.0, 1.0, 0.01);
 	bipolarFreqSlider->setSliderStyle(Slider::RotaryHorizontalVerticalDrag);
 	bipolarFreqSlider->setTextBoxStyle(Slider::TextBoxRight, false, 80, 20);
 	bipolarFreqSlider->addListener(this);

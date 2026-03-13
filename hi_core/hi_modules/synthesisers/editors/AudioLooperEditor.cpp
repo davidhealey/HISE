@@ -53,16 +53,7 @@ AudioLooperEditor::AudioLooperEditor (ProcessorEditor *p)
     syncToHost->setJustificationType (Justification::centredLeft);
     syncToHost->setTextWhenNothingSelected (TRANS("Sync to Tempo"));
     syncToHost->setTextWhenNoChoicesAvailable (TRANS("(no choices)"));
-    syncToHost->addItem (TRANS("Free running"), 1);
-    syncToHost->addItem (TRANS("1 Beat"), 2);
-    syncToHost->addItem (TRANS("2 Beats"), 3);
-    syncToHost->addItem (TRANS("1 Bar"), 4);
-    syncToHost->addItem (TRANS("2 Bars"), 5);
-    syncToHost->addItem (TRANS("4 Bars"), 6);
-    syncToHost->addItem (TRANS("8 Bars"), 7);
-    syncToHost->addItem (TRANS("12 Bars"), 8);
-    syncToHost->addItem (TRANS("16 Bars"), 9);
-    syncToHost->addSeparator();
+
     syncToHost->addListener (this);
 
     addAndMakeVisible (pitchButton = new HiToggleButton ("FM Synthesiser"));
@@ -78,13 +69,11 @@ AudioLooperEditor::AudioLooperEditor (ProcessorEditor *p)
     loopButton->setColour (ToggleButton::textColourId, Colours::white);
 
     addAndMakeVisible (rootNote = new HiSlider ("Root Note"));
-    rootNote->setRange (0, 127, 1);
     rootNote->setSliderStyle (Slider::RotaryHorizontalVerticalDrag);
     rootNote->setTextBoxStyle (Slider::TextBoxRight, false, 40, 20);
     rootNote->addListener (this);
 
     addAndMakeVisible (startModSlider = new HiSlider ("StartMod"));
-    startModSlider->setRange (0, 127, 1);
     startModSlider->setSliderStyle (Slider::RotaryHorizontalVerticalDrag);
     startModSlider->setTextBoxStyle (Slider::TextBoxRight, false, 40, 20);
     startModSlider->addListener (this);
