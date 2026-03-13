@@ -43,6 +43,23 @@ var ProcessorMetadata::ParameterMetadata::toJSON() const
 
 	obj->setProperty("parameterIndex", parameterIndex);
 	obj->setProperty("id", id.toString());
+
+	switch (dataType)
+	{
+	
+	case DataType::Static:
+		obj->setProperty("metadataType", "static");
+		break;
+	case DataType::Dynamic:
+		obj->setProperty("metadataType", "dynamic");
+		break;
+	case DataType::Undefined:
+	case DataType::Fallback:
+	default:
+		jassertfalse;
+		break;
+	}
+
 	obj->setProperty("description", description);
 	
 
@@ -66,6 +83,9 @@ var ProcessorMetadata::ParameterMetadata::toJSON() const
 	
 	obj->setProperty("defaultValue", defaultValue);
 
+	if (modulationIndex != -1)
+		obj->setProperty("chainIndex", modulationIndex);
+
 	// Value names (for List type, stored in vtc.itemList)
 	if (!vtc.itemList.isEmpty())
 	{
@@ -78,35 +98,10 @@ var ProcessorMetadata::ParameterMetadata::toJSON() const
 	// Slider mode (if set)
 	if (sliderMode != HiSlider::numModes)
 	{
-		static const char* modeNames[] = {
-			"Frequency", "Decibel", "Time", "TempoSync",
-			"Linear", "Discrete", "Pan", "NormalizedPercentage"
-		};
-
 		if (isPositiveAndBelow(sliderMode, (int)HiSlider::numModes))
-			obj->setProperty("mode", modeNames[sliderMode]);
+			obj->setProperty("mode", HiSlider::getModeList()[sliderMode]);
 
-		switch (sliderMode)
-		{
-		case HiSlider::Frequency:
-			obj->setProperty("unit", "Hz");
-			break;
-		case HiSlider::Decibel:
-			obj->setProperty("unit", "dB");
-			break;
-		case HiSlider::Time:
-			obj->setProperty("unit", "ms");
-			break;
-		case HiSlider::NormalizedPercentage:
-			obj->setProperty("unit", "%");
-		case HiSlider::TempoSync:
-		case HiSlider::Linear:
-		case HiSlider::Discrete:
-		case HiSlider::Pan:
-		case HiSlider::numModes:
-		default:
-			break;
-		}
+		obj->setProperty("unit", HiSlider::getSuffixForMode(sliderMode, 0.0).trim());
 	}
 
 	// Tempo sync dual-mode info (range/names are constant, derived from TempoSyncer)
@@ -128,6 +123,25 @@ var ProcessorMetadata::ModulationMetadata::toJSON() const
 
 	obj->setProperty("chainIndex", chainIndex);
 	obj->setProperty("id", id.toString());
+
+	switch (dataType)
+	{
+
+	case DataType::Static:
+		obj->setProperty("metadataType", "static");
+		break;
+	case DataType::Dynamic:
+		obj->setProperty("metadataType", "dynamic");
+		break;
+	case DataType::Undefined:
+	case DataType::Fallback:
+	default:
+		jassertfalse;
+		break;
+	}
+
+	if (parameterIndex != -1)
+		obj->setProperty("parameterIndex", parameterIndex);
 
 	obj->setProperty("disabled", disabled);
 	obj->setProperty("description", description);

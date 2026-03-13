@@ -51,6 +51,12 @@ public:
 			.withDescription("Runs a compiled C++ DSP network as a master effect, with dynamic parameter and complex data exposure from the network.");
 	}
 
+	ProcessorMetadata getMetadata() const override
+	{
+		auto numHardcodedFXSlots = HISE_GET_PREPROCESSOR(getMainController(), NUM_HARDCODED_FX_MODS);
+		return withDynamicMetadata(createMetadata(), numHardcodedFXSlots, 0);
+	}
+
 	HardcodedMasterFX(MainController* mc, const String& uid);
 	~HardcodedMasterFX() override;
 
@@ -59,6 +65,8 @@ public:
 	bool isSuspendedOnSilence() const override;
 
     bool isFadeOutPending() const noexcept override;
+
+	
 
 	Processor *getChildProcessor(int processorIndex) override;;
     const Processor *getChildProcessor(int processorIndex) const override;;
@@ -111,6 +119,12 @@ public:
 	{
 		return withHardcodedMetadata<HardcodedPolyphonicFX>({})
 			.withDescription("Runs a compiled C++ DSP network as a polyphonic effect, processing each voice independently with per-voice state.");
+	}
+
+	ProcessorMetadata getMetadata() const override
+	{
+		auto numHardcodedPolyFXSlots = HISE_GET_PREPROCESSOR(getMainController(), NUM_HARDCODED_POLY_FX_MODS);
+		return withDynamicMetadata(createMetadata(), numHardcodedPolyFXSlots, 0);
 	}
 
 	HardcodedPolyphonicFX(MainController *mc, const String &uid, int numVoices);;
@@ -175,6 +189,11 @@ public:
 
 	static ProcessorMetadata createMetadata();
 
+	ProcessorMetadata getMetadata() const override
+	{
+		return withDynamicMetadata(createMetadata(), -1, 0);
+	}
+
     HardcodedTimeVariantModulator(MainController* mc, const String& uid, Modulation::Mode m);
     ~HardcodedTimeVariantModulator() override;;
 
@@ -219,6 +238,11 @@ public:
 	~HardcodedEnvelopeModulator() override;
 
 	static ProcessorMetadata createMetadata();
+
+	ProcessorMetadata getMetadata() const override
+	{
+		return withDynamicMetadata(createMetadata(), -1, 0);
+	}
 
 	// Child processor methods
 	Processor *getChildProcessor(int processorIndex) override { return nullptr; };
@@ -287,6 +311,12 @@ class HardcodedSynthesiser: public ModulatorSynth,
 			  .withDescription("Runs a compiled C++ DSP network as a polyphonic sound generator with per-voice processing and full modulator chain support.");
 	}
 
+	ProcessorMetadata getMetadata() const override
+	{
+		auto numMods = HISE_GET_PREPROCESSOR(getMainController(), NUM_HARDCODED_SYNTH_MODS);
+		return withDynamicMetadata(createMetadata(), numMods, ModulatorSynth::numInternalChains);
+	}
+
 	struct Sound : public ModulatorSynthSound
 	{
 		bool appliesToNote(int ) final;
@@ -320,6 +350,8 @@ class HardcodedSynthesiser: public ModulatorSynth,
 		sa.add("IconColour");
 		return sa;
 	}
+
+	
 
 	ProcessorEditorBody *createEditor(ProcessorEditor *parentEditor)  override;
 

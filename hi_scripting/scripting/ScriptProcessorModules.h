@@ -79,6 +79,11 @@ public:
 			.withComplexDataInterface(ExternalData::DataType::AudioFile);
 	}
 
+	ProcessorMetadata getMetadata() const override
+	{
+		return withDynamicScriptParameters(createMetadata());
+	}
+
 	enum SnippetsOpen
 	{
 		onNoteOnOpen = ProcessorWithScriptingContent::EditorStates::numEditorStates,
@@ -243,6 +248,11 @@ public:
 			.withComplexDataInterface(ExternalData::DataType::AudioFile);
 	}
 
+	ProcessorMetadata getMetadata() const override
+	{
+		return withDynamicScriptParameters(createMetadata());
+	}
+
 	JavascriptVoiceStartModulator(MainController *mc, const String &id, int voiceAmount, Modulation::Mode m);;
 	~JavascriptVoiceStartModulator();
 
@@ -315,6 +325,11 @@ public:
 	{
 		return withScriptnodeMetadata<JavascriptTimeVariantModulator>({})
 			.withDescription("Generates a continuous monophonic modulation signal from a scriptnode DSP network or HiseScript timer callback.");
+	}
+
+	ProcessorMetadata getMetadata() const override
+	{
+		return withDynamicParametersFromNetwork(createMetadata(), -1, 0);
 	}
 
 	enum Callback
@@ -503,6 +518,11 @@ public:
 			.withDescription("Generates a polyphonic envelope signal from a scriptnode DSP network, with per-voice state and voice kill detection.");
 	}
 
+	ProcessorMetadata getMetadata() const override
+	{
+		return withDynamicParametersFromNetwork(createMetadata(), -1, 0);
+	}
+
 	JavascriptEnvelopeModulator(MainController *mc, const String &id, int numVoices, Modulation::Mode m);
 	~JavascriptEnvelopeModulator();
 
@@ -616,6 +636,12 @@ public:
 	{
 		return withScriptnodeMetadata<JavascriptMasterEffect>({})
 			.withDescription("Processes audio through a scriptnode DSP network as a master effect, with scriptable parameters and complex data routing.");
+	}
+
+	ProcessorMetadata getMetadata() const override
+	{
+		auto numMods = HISE_GET_PREPROCESSOR(getMainController(), HISE_NUM_SCRIPTNODE_FX_MODS);
+		return withDynamicParametersFromNetwork(createMetadata(), numMods, 0);
 	}
 
 	enum class Callback
@@ -742,6 +768,12 @@ public:
 	{
 		return withScriptnodeMetadata<JavascriptPolyphonicEffect>({})
 			.withDescription("Processes each voice independently through a scriptnode DSP network, with per-voice state and polyphonic modulation support.");
+	}
+
+	ProcessorMetadata getMetadata() const override
+	{
+		auto numMods = HISE_GET_PREPROCESSOR(getMainController(), HISE_NUM_POLYPHONIC_SCRIPTNODE_FX_MODS);
+		return withDynamicParametersFromNetwork(createMetadata(), numMods, 0);
 	}
 
 	enum class Callback
@@ -892,6 +924,12 @@ public:
 	{
 		return withScriptnodeMetadata<JavascriptSynthesiser>(ModulatorSynth::createBaseMetadata())
 			.withDescription("Generates polyphonic audio from a scriptnode DSP network, with per-voice processing and full modulator chain support.");
+	}
+
+	ProcessorMetadata getMetadata() const override
+	{
+		auto numMods = HISE_GET_PREPROCESSOR(getMainController(), HISE_NUM_SCRIPTNODE_SYNTH_MODS);
+		return withDynamicParametersFromNetwork(createMetadata(), numMods, ModulatorSynth::numInternalChains);
 	}
 
 	struct Sound : public ModulatorSynthSound

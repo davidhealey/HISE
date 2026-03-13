@@ -5517,6 +5517,28 @@ bool ScriptingApi::Content::ScriptPanel::startInternalDrag(var dragData)
 	return true;
 }
 
+hise::ProcessorMetadata::ParameterMetadata ScriptingApi::Content::ScriptPanel::createParameterMetadata(int indexInContent) const
+{
+	auto pd = ScriptComponent::createParameterMetadata(indexInContent);
+
+	auto clickable = getScriptObjectProperty(allowCallbacks).toString() != "No Callbacks";
+
+	if (!clickable)
+		return pd.asDisabled();
+
+	auto items = getItemList();
+
+	if (!items.isEmpty() && getScriptObjectProperty(saveInPreset))
+		return pd.withValueList(items);
+
+	auto rng = scriptnode::RangeHelpers::getDoubleRange(getPropertyValueTree(), scriptnode::RangeHelpers::IdSet::ScriptComponents);
+
+	if ((int)rng.getRange().getLength() == 1 && (int)rng.rng.interval == 1)
+		return pd.asToggle();
+
+	return pd.withRange(rng);
+}
+
 ScriptCreatedComponentWrapper * ScriptingApi::Content::ScriptedViewport::createComponentWrapper(ScriptContentComponent *content, int index)
 {
 	return new ScriptCreatedComponentWrappers::ViewportWrapper(content, this, index);

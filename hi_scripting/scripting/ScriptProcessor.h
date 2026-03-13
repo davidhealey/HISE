@@ -106,6 +106,8 @@ public:
 		return {};
 	}
 
+	ProcessorMetadata withDynamicScriptParameters(const ProcessorMetadata& pd) const;
+
 	void setAllowObjectConstruction(bool shouldBeAllowed);
 
 	bool objectsCanBeCreated() const;

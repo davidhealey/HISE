@@ -350,8 +350,6 @@ void HardcodedPolyphonicFX::restoreFromValueTree(const ValueTree &v)
 {
 	VoiceEffectProcessor::restoreFromValueTree(v);
 
-	DBG(v.createXml()->createDocument(""));
-
 	ValueTree r = v.getChildWithName("RoutingMatrix");
 
 	if (r.isValid())

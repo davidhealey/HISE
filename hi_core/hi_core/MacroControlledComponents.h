@@ -757,6 +757,20 @@ public:
 		numModes
 	};
 
+	static StringArray getModeList()
+	{
+		return {
+			"Frequency", 
+			"Decibel", 
+			"Time", 
+			"TempoSync", 
+			"Linear", 
+			"Discrete", 
+			"Pan", 
+			"NormalizedPercentage"
+		};
+	}
+
 	struct HoverPopupLookandFeel
 	{
 		virtual ~HoverPopupLookandFeel() = default;

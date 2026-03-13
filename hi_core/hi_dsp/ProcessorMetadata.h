@@ -126,8 +126,9 @@ struct ProcessorMetadata
 		{ }
 
 		/** Construct with the parameter's enum index. */
-		ParameterMetadata(int parameterIndex_)
-			: parameterIndex(parameterIndex_)
+		ParameterMetadata(int parameterIndex_):
+		  parameterIndex(parameterIndex_),
+		  dataType(DataType::Static)
 		{}
 
 		// --- Fluent builder methods (return by value for chaining) ---
@@ -136,6 +137,13 @@ struct ProcessorMetadata
 		{
 			auto copy = *this;
 			copy.id = Identifier(name);
+			return copy;
+		}
+
+		ParameterMetadata asDynamic() const
+		{
+			auto copy = *this;
+			copy.dataType = DataType::Dynamic;
 			return copy;
 		}
 
@@ -204,6 +212,13 @@ struct ProcessorMetadata
 			return copy;
 		}
 
+		ParameterMetadata asDisabled() const
+		{
+			auto copy = *this;
+			copy.disabled = true;
+			return copy;
+		}
+
 		/** Marks this parameter as tempo-syncable.
 		*
 		*	Stores the index of the toggle parameter that controls whether this
@@ -225,8 +240,11 @@ struct ProcessorMetadata
 
 		int parameterIndex = -1;
 		Type type = Type::Unspecified;
+		DataType dataType = DataType::Undefined;
 		Identifier id;
 		String description;
+		int modulationIndex = -1;
+		bool disabled = false;
 		scriptnode::InvertableParameterRange range;
 		float defaultValue = 0.0f;
 		ValueToTextConverter vtc;
@@ -242,14 +260,22 @@ struct ProcessorMetadata
 		ModulationMetadata() = default;
 
 		/** Construct with the chain's enum index. */
-		ModulationMetadata(int chainIndex_)
-			: chainIndex(chainIndex_)
+		ModulationMetadata(int chainIndex_):
+		  chainIndex(chainIndex_),
+		  dataType(DataType::Static)
 		{}
 
 		ModulationMetadata withId(const String& name) const
 		{
 			auto copy = *this;
 			copy.id = Identifier(name);
+			return copy;
+		}
+
+		ModulationMetadata asDynamic() const
+		{
+			auto copy = *this;
+			copy.dataType = DataType::Dynamic;
 			return copy;
 		}
 
@@ -264,6 +290,13 @@ struct ProcessorMetadata
 		{
 			auto copy = *this;
 			copy.colour = colourId;
+			return copy;
+		}
+
+		ModulationMetadata withModulatedParameter(int parameterIndex) const
+		{
+			auto copy = *this;
+			copy.parameterIndex = parameterIndex;
 			return copy;
 		}
 
@@ -308,8 +341,10 @@ struct ProcessorMetadata
 		// --- Fields ---
 
 		int chainIndex = -1;
+		DataType dataType = DataType::Undefined;
 		Identifier id;
 		String description;
+		int parameterIndex = -1;
 		bool disabled = false;
 		String constrainerWildcard = "*";
 		HiseModulationColours::ColourId colour = HiseModulationColours::ColourId::Gain;
@@ -395,6 +430,93 @@ struct ProcessorMetadata
 		return copy;
 	}
 
+	/** Creates a metadata with a dynamic modulation slot. 
+	*   - numMax should be the limit from the preprocessor
+	*   - dynamicChainOffset should be the number of static child chains
+	*/
+	ProcessorMetadata withDynamicModulation(const scriptnode::OpaqueNode::ModulationProperties& mod, int numMax, int dynamicChainOffset) const
+	{
+		auto copy = *this;
+
+		for (int mi = 0; mi < mod.getNumUsed(INT_MAX); mi++)
+		{
+			ModulationMetadata md;
+			md.dataType = DataType::Dynamic;
+
+			auto pi = mod.getParameterIndex(mi);
+
+			auto piWithOffset = pi + copy.getNumParameters(DataType::Static);
+
+			if (isPositiveAndBelow(piWithOffset, copy.parameters.size()))
+			{
+				md.id = copy.parameters[piWithOffset].id + "Modulation";
+			}
+
+			if (mod.isUsed(mi))
+			{
+				md.chainIndex = mod.getModulationChainIndex(pi) + dynamicChainOffset;
+				md.colour = mod.getModulationColourRaw(pi);
+				md.parameterIndex = piWithOffset;
+				md.modulationMode = mod.getParameterMode(pi);
+				md.disabled = mi >= numMax;
+
+				if (isPositiveAndBelow(md.parameterIndex, copy.parameters.size()))
+					copy.parameters.getReference(md.parameterIndex).modulationIndex = md.chainIndex;
+			}
+			else
+			{
+				md = md.asDisabled();
+			}
+
+			copy.modulation.add(md);
+		}
+
+		return copy;
+	}
+
+	ProcessorMetadata withDynamicParameter(const scriptnode::parameter::data& p, const String& customDescription = {}) const
+	{
+		ParameterMetadata pd;
+		pd.id = p.info.getId();
+		pd.parameterIndex = p.info.index + getNumParameters(DataType::Static);
+		pd.range = p.toRange();
+		pd.vtc = p.getValueToTextConverter();
+		pd.description = customDescription;
+		pd.defaultValue = p.info.defaultValue;
+		pd.dataType = DataType::Dynamic;
+
+		if (pd.range.rng.interval == 1.0)
+		{
+			if ((int)pd.range.getRange().getLength() == 1)
+				pd.type = ParameterMetadata::Type::Toggle;
+			else
+				pd.type = ParameterMetadata::Type::List;
+		}
+		else
+		{
+			pd.type = ParameterMetadata::Type::Float;
+
+			String n = pd.vtc((double)pd.defaultValue);
+
+			if (n.contains("Hz"))
+				pd.sliderMode = HiSlider::Mode::Frequency;
+			else if (n.contains("ms"))
+				pd.sliderMode = HiSlider::Time;
+			else if (n.contains("%"))
+				pd.sliderMode = HiSlider::NormalizedPercentage;
+			else if (n.contains("/"))
+				pd.sliderMode = HiSlider::TempoSync;
+			else if (n.contains("dB"))
+				pd.sliderMode = HiSlider::Decibel;
+			else if (n.endsWithChar('L') || n.endsWithChar('R') || n.endsWithChar('C'))
+				pd.sliderMode = HiSlider::Pan;
+			else
+				pd.sliderMode = HiSlider::Mode::Linear;
+		}
+
+		return withParameter(pd);
+	}
+
 	ProcessorMetadata withParameter(const ParameterMetadata& pd) const
 	{
 		auto copy = *this;
@@ -406,6 +528,14 @@ struct ProcessorMetadata
 	{
 		auto copy = *this;
 		copy.modulation.add(mod);
+
+		if (isPositiveAndBelow(mod.parameterIndex, copy.parameters.size()))
+		{
+			auto& pd = copy.parameters.getReference(mod.parameterIndex);
+			jassert(pd.dataType == mod.dataType);
+			pd.modulationIndex = mod.chainIndex;
+		}
+
 		return copy;
 	}
 
@@ -636,6 +766,38 @@ struct ProcessorMetadata
 			return parameters[index];
 
 		return {};
+	}
+
+	/** Returns the number of modulation slots with the defined type. Undefined returns all.*/
+	int getNumModulationSlots(DataType dt = DataType::Undefined, bool includeDisabledChains = false) const
+	{
+		int num = 0;
+
+		for (const auto& m : modulation)
+		{
+			if (!includeDisabledChains && m.disabled)
+				continue;
+
+
+			if (m.dataType == dt || dt == DataType::Undefined)
+				num++;
+		}
+
+		return num;
+	}
+
+	/** Returns the number of parameters with the defined type. Undefined returns all. */
+	int getNumParameters(DataType dt = DataType::Undefined) const
+	{
+		int num = 0;
+
+		for (const auto& p : parameters)
+		{
+			if (p.dataType == dt || dt == DataType::Undefined)
+				num++;
+		}
+
+		return num;
 	}
 
 	// --- Fields ---

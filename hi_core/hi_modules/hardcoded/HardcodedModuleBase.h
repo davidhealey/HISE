@@ -439,6 +439,22 @@ public:
 	bool hasHardcodedTail() const;
     var getParameterProperties() const override;
 
+	ProcessorMetadata withDynamicMetadata(const ProcessorMetadata& pd, int numMods, int modOffset) const
+	{
+		auto mb = pd;
+
+		if (opaqueNode != nullptr)
+		{
+			for (parameter::data& p : OpaqueNode::ParameterIterator(*opaqueNode))
+				mb = mb.withDynamicParameter(p);
+		}
+
+		if(numMods != -1)
+			return mb.withDynamicModulation(modProperties, numMods, modOffset);
+		return
+			mb;
+	}
+
 	virtual int getExtraModulationIndex(int modulationSlotIndexWithoutOffset) const
 	{
 		return modulationSlotIndexWithoutOffset;

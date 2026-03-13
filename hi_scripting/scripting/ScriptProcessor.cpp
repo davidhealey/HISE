@@ -38,6 +38,22 @@ namespace hise { using namespace juce;
 		contentParameterHandler(*this)
 	{}
 
+	hise::ProcessorMetadata ProcessorWithScriptingContent::withDynamicScriptParameters(const ProcessorMetadata& pd) const
+	{
+		auto md = pd;
+
+		auto content = getScriptingContent();
+
+		for (int i = 0; i < content->getNumComponents(); i++)
+		{
+			auto sc = content->getComponent(i);
+
+			md = md.withParameter(sc->createParameterMetadata(i));
+		}
+
+		return md;
+	}
+
 	void ProcessorWithScriptingContent::setAllowObjectConstruction(bool shouldBeAllowed)
 	{
 		allowObjectConstructors = shouldBeAllowed;

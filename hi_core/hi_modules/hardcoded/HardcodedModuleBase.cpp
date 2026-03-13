@@ -685,19 +685,7 @@ bool HardcodedSwappableEffect::setEffect(const String& factoryId, bool /*unused*
             channelCountMatches = checkHardcodedChannelCount();
 		}		
 
-        Array<Identifier> offsetParameters;
-        
-        for(int i = 0; i < getParameterOffset(); i++)
-        {
-            offsetParameters.add(asProcessor().parameterNames[i]);
-        }
-        
-        asProcessor().parameterNames.clear();
-        
-        if(!offsetParameters.isEmpty())
-            asProcessor().parameterNames.addArray(offsetParameters);
-
-		auto illegalIds = getIllegalParameterIds();
+        auto illegalIds = getIllegalParameterIds();
 
 		for (const auto& p : OpaqueNode::ParameterIterator(*opaqueNode))
 		{
@@ -712,8 +700,6 @@ bool HardcodedSwappableEffect::setEffect(const String& factoryId, bool /*unused*
 				errorBroadcaster.sendMessage(sendNotificationAsync, em);
 				channelCountMatches = false;
 			}
-
-			asProcessor().parameterNames.add(nid);
 		}
 
 		asProcessor().updateParameterSlots();

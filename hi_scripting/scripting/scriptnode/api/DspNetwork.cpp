@@ -1857,6 +1857,30 @@ void DspNetwork::Holder::restoreNetworks(const ValueTree& d)
 	}
 }
 
+hise::ProcessorMetadata DspNetwork::Holder::withDynamicParametersFromNetwork(const ProcessorMetadata& pn, int numMods, int offset) const
+{
+	auto md = pn;
+
+	if (auto an = getActiveNetwork())
+	{
+		auto rn = an->getRootNode();
+
+		for (int i = 0; i < rn->getNumParameters(); i++)
+		{
+			NodeBase::Parameter* p = rn->getParameterFromIndex(i);
+
+			parameter::data pd;
+			pd.info = parameter::pod(p->data);
+			md = md.withDynamicParameter(pd);
+		}
+
+		auto modProperties = an->getParameterProperties();
+		md = md.withDynamicModulation(modProperties, numMods, offset);
+	}
+
+	return md;
+}
+
 scriptnode::NodeBase* NodeFactory::createNode(ValueTree data, bool createPolyIfAvailable) const
 {
 	auto path = data[PropertyIds::FactoryPath].toString();
