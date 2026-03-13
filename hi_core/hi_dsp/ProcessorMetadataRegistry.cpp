@@ -163,6 +163,7 @@ void ProcessorMetadataRegistry::registerAllMetadata()
 	add(ProcessorMetadata::createFallback<HarmonicFilter>());
 	add(ProcessorMetadata::createFallback<HarmonicMonophonicFilter>());
 	add(ProcessorMetadata::createFallback<CurveEq>());
+	add(CurveEq::createMetadata());
 	add(StereoEffect::createMetadata());
 	add(SimpleReverbEffect::createMetadata());
 	add(GainEffect::createMetadata());

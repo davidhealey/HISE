@@ -3370,8 +3370,49 @@ struct ScriptingObjects::ScriptingEffect::Wrapper
 	API_METHOD_WRAPPER_0(ScriptingEffect, getDraggableFilterData);
 };
 
+// Special rule for CurveEQ: do not use the actual parameter names
+// but the hardcoded general parameter names + the band offset
+struct CurveEqHelpers
+{
+	static int getNumConstants(EffectProcessor* fx)
+	{
+		if (dynamic_cast<CurveEq*>(fx) != nullptr)
+		{
+			return ProcessorFilterStatistics::BandParameter::numBandParameters + 2;
+		}
+		else if (fx != nullptr)
+		{
+			return fx->getNumParameters() + 1;
+		}
+
+		return 1;
+	}
+
+	static String getConstantId(EffectProcessor* fx, int index)
+	{
+		if (dynamic_cast<CurveEq*>(fx) != nullptr)
+		{
+			static const StringArray parameterNames({
+			"Gain",
+			"Freq",
+			"Q",
+			"Enabled",
+			"Type",
+			"BandOffset"
+			});
+
+			jassert(isPositiveAndBelow(index, parameterNames.size()));
+			return parameterNames[index];
+		}
+		else
+		{
+			return fx->getIdentifierForParameterIndex(index).toString();
+		}
+	}
+};
+
 ScriptingObjects::ScriptingEffect::ScriptingEffect(ProcessorWithScriptingContent *p, EffectProcessor *fx) :
-ConstScriptingObject(p, fx != nullptr ? fx->getNumParameters()+1 : 1),
+ConstScriptingObject(p, CurveEqHelpers::getNumConstants(fx)),
 effect(fx),
 moduleHandler(fx, dynamic_cast<JavascriptProcessor*>(p))
 {
@@ -3380,10 +3421,11 @@ moduleHandler(fx, dynamic_cast<JavascriptProcessor*>(p))
 		setName(fx->getId());
 
 		addScriptParameters(this, effect.get());
+		auto numToAdd = CurveEqHelpers::getNumConstants(fx) - 1;
 
-		for (int i = 0; i < fx->getNumParameters(); i++)
+		for (int i = 0; i < numToAdd; i++)
 		{
-			addConstant(fx->getIdentifierForParameterIndex(i).toString(), var(i));
+			addConstant(CurveEqHelpers::getConstantId(fx, i), var(i));
 		}
 	}
 	else
