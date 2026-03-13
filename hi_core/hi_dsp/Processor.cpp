@@ -184,9 +184,6 @@ void Processor::restoreFromValueTree(const ValueTree &previouslyExportedProcesso
     }
 }
 
-ProcessorDocumentation* Processor::createDocumentation() const
-{ return nullptr; }
-
 const Path Processor::getSymbol() const
 {
 	if(symbol.isEmpty())
@@ -439,17 +436,6 @@ Processor::BypassListener::~BypassListener()
 void Processor::BypassListener::onBypassUpdate(dispatch::library::Processor* p, bool state)
 {
     NEW_PROCESSOR_DISPATCH(bypassStateChanged(&p->getOwner<hise::Processor>(), state));
-}
-
-String Processor::getDescriptionForParameters(int parameterIndex)
-{
-	if (hasInitialisedMetadata())
-		return getMetadata()[parameterIndex].description;
-
-	if (parameterNames.size() == parameterDescriptions.size())
-		return parameterDescriptions[parameterIndex];
-
-	return "-";
 }
 
 bool Processor::isOnAir() const noexcept
@@ -1452,218 +1438,6 @@ void ProcessorHelpers::connectTableEditor(TableEditor& t, Processor* p, int inde
 	}
 }
 
-hise::MarkdownHelpButton* ProcessorDocumentation::createHelpButtonForParameter(int index, Component* componentToAttachTo)
-{
-	if (index < parameters.size())
-	{
-		auto doc = parameters[index].createHelpText(2);
-
-		auto b = new MarkdownHelpButton();
-		b->setHelpText(doc);
-
-		if (componentToAttachTo != nullptr)
-		{
-			b->attachTo(componentToAttachTo, MarkdownHelpButton::TopRight);
-		}
-
-		return b;
-	}
-
-	return nullptr;
-}
-
-hise::MarkdownHelpButton* ProcessorDocumentation::createHelpButton()
-{
-	String t;
-
-	t << "# " << name << "\n";
-	t << description << "\n";
-	
-	t << createHelpText();
-
-	auto b = new MarkdownHelpButton();
-	b->setHelpText<PathProvider<ChainBarPathFactory>>(t);
-
-	return b;
-}
-
-juce::String ProcessorDocumentation::createHelpText()
-{
-	String t;
-
-	
-
-	if (parameterOffset < parameters.size())
-	{
-		t << "## Parameters \n";
-
-		t << "| `#` | ID | Description |\n";
-		t << "| - | --- | ----------- |\n";
-
-		int p = 0;
-
-		for (auto& e : parameters)
-		{
-			if (p++ < parameterOffset)
-				continue;
-
-			t << e.getMarkdownLine(false) << "\n";
-		}
-			
-	}
-
-	if (chainOffset < chains.size())
-	{
-		t << "## Chains \n";
-
-		t << "| `#` | ID | Restriction | Description |\n";
-		t << "| - | --- | ----- | ----------- |\n";
-
-		int c = 0;
-
-		for (auto& e : chains)
-		{
-			if (c++ < chainOffset)
-				continue;
-
-			t << e.getMarkdownLine(true) << "\n";
-		}
-			
-	}
-
-	return t;
-}
-
-void ProcessorDocumentation::fillMissingParameters(Processor* p)
-{
-	for (int i = parameterOffset; i < p->getNumParameters(); i++)
-	{
-		auto id = p->getIdentifierForParameterIndex(i);
-
-		Entry e;
-		e.id = id;
-		e.helpText = p->getDescriptionForParameters(i);
-		e.index = i;
-		e.name = id.toString();
-
-		if (!parameters.contains(e))
-			parameters.add(e);
-	}
-
-	for (int i = chainOffset; i < p->getNumInternalChains(); i++)
-	{
-		Entry e;
-
-		e.name = p->getChildProcessor(i)->getId();
-		e.helpText = "-";
-		e.index = i;
-		
-		auto c = dynamic_cast<Chain*>(p->getChildProcessor(i));
-		auto constrainer = c->getFactoryType()->getConstrainer();
-
-		if (constrainer == nullptr)
-			e.constrainer = "All types";
-		else
-			e.constrainer = constrainer->getDescription();
-
-		if (!chains.contains(e))
-			chains.add(e);
-	}
-
-    Entry::Sorter s;
-	parameters.sort(s);
-}
-
-int ProcessorDocumentation::Entry::Sorter::compareElements(Entry& first, Entry& second)
-{
-	if (first.index > second.index)
-		return 1;
-	else if (first.index < second.index)
-		return -1;
-	else
-		return 0;
-}
-
-bool ProcessorDocumentation::Entry::operator==(const Entry& other) const
-{ return id == other.id; }
-
-ProcessorDocumentation::~ProcessorDocumentation()
-{}
-
-int ProcessorDocumentation::getNumAttributes() const
-{ return parameters.size(); }
-
-Identifier ProcessorDocumentation::getAttributeId(int index) const
-{ return parameters[index].id; }
-
-void ProcessorDocumentation::setOffset(int pOffset, int cOffset)
-{
-	parameterOffset = pOffset;
-	chainOffset = cOffset;
-}
-
-ProcessorDocumentation::ProcessorDocumentation()
-{}
-
-void ProcessorDocumentation::addParameter(Entry newParameter)
-{
-	parameters.add(newParameter);
-}
-
-void ProcessorDocumentation::addChain(Entry newChain)
-{
-	chains.add(newChain);
-}
-
-void ProcessorDocumentation::addLine(const String& l)
-{
-	description << l << "\n";
-}
-
-void ProcessorDocumentation::setName(const String& name_)
-{
-	name = name_;
-}
-
-juce::String ProcessorDocumentation::Entry::getMarkdownLine(bool getChain) const
-{
-	String s;
-
-	s << "| " << String(index) << " | ";
-	
-	if (getChain)
-	{
-		s << name << " | " << constrainer << " |";
-	}
-	else
-	{
-		s << "`" << id.toString() << "`";
-	}
-	
-	s << " | " << helpText << " |";
-	return s;
-}
-
-juce::String ProcessorDocumentation::Entry::createHelpText(int headLineLevel) const
-{
-	String s;
-
-	switch (headLineLevel)
-	{
-	case 1: s << "# "; break;
-	case 2: s << "## "; break;
-	case 3: s << "### "; break;
-	default:
-		break;
-	}
-
-	s << " " << name << "\n";
-	s << "Scripting ID: `" << id.toString() << "`  \n";
-	s << "  \n";
-	s << helpText;
-	return s;
-}
-
 ProcessorMetadata Processor::getMetadata() const
 {
 	if (hasInitialisedMetadata())
@@ -1677,11 +1451,11 @@ ProcessorMetadata Processor::getMetadata() const
 	}
 	
 	// No registry entry - return a minimal metadata with just the name and type
+	jassertfalse;
 	ProcessorMetadata fallback;
 	fallback.id = getType();
 	fallback.dataType = ProcessorMetadata::DataType::Fallback;
 	fallback.prettyName = getName();
-	fallback.description = getDescription();
 	return fallback;
 }
 

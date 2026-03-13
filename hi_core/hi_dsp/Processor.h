@@ -47,102 +47,9 @@ class BaseConstrainer
 
 };
 
-
-
-#define ADD_PARAMETER_DOC(parameter, description) addParameter({ parameter, #parameter, #parameter, description})
-#define ADD_PARAMETER_DOC_WITH_NAME(parameter, name, description) addParameter({ parameter, #parameter, name, description})
-#define ADD_CHAIN_DOC(chain, name, description) addChain({chain, #chain, name, description})
-
-#define SET_DOC_NAME(classType) setName(classType::getClassName());
-
-#define ADD_DOCUMENTATION_WITH_BASECLASS(baseClass) struct Documentation : public baseClass::Documentation { Documentation(); }; \
-													ProcessorDocumentation* createDocumentation() const override { return new Documentation(); };
-													
-
-#define ADD_DOCUMENTATION() struct Documentation : public ProcessorDocumentation { Documentation(); }; \
-							ProcessorDocumentation* createDocumentation() const override { return new Documentation(); };
-
-#define SET_DOCUMENTATION(className) className::Documentation::Documentation()
-
 class MarkdownHelpButton;
 
-/** A object that holds all the documentation available for a certain processor.
-*
-*	In order to use it, subclass it as a inner class of your processor called ProcessorType::Documentation
-*	and use the preprocessor macros `ADD_PARAMETER_DOC` and `ADD_CHAIN_DOC` and the addLine() method.
-*
-*	If you call the immediate base class constructor, it will make sure that all common parameters will be documented correctly.
-*
-*
-*/
-class ProcessorDocumentation
-{
-public:
 
-	struct Entry
-	{
-		struct Sorter
-		{
-			int compareElements(Entry& first, Entry& second);
-		};
-
-		bool operator==(const Entry& other) const;;
-
-		int index;
-		Identifier id;
-		String name;
-		String helpText;
-		String constrainer;
-
-		String getMarkdownLine(bool usePrettyName) const;
-
-		String createHelpText(int headLineLevel = 1) const;
-	};
-
-public:
-
-	virtual ~ProcessorDocumentation();;
-
-	int getNumAttributes() const;
-
-	Identifier getAttributeId(int index) const;
-
-	/** This creates and attaches a markdown help button to the given component.
-	*
-	*
-	*/
-	MarkdownHelpButton* createHelpButtonForParameter(int index, Component* componentToAttachTo);
-
-	MarkdownHelpButton* createHelpButton();
-
-	String createHelpText();
-
-	void fillMissingParameters(Processor* p);
-
-	void setOffset(int pOffset, int cOffset);
-
-	ProcessorDocumentation();;
-
-	void addParameter(Entry newParameter);
-
-	void addChain(Entry newChain);
-
-	void addLine(const String &l);
-
-	void setName(const String& name_);
-
-	String description;
-	int parameterOffset = 0;
-	int chainOffset = 0;
-
-	String name;
-
-	Array<Entry> parameters;
-
-	Array<Entry> chains;
-
-	JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(ProcessorDocumentation)
-};
 
 #define loadAttribute(name, nameAsString) (setAttribute(name, (float)v.getProperty(nameAsString, false), dontSendNotification))
 #define saveAttribute(name, nameAsString) (v.setProperty(nameAsString, getAttribute(name), nullptr))
@@ -152,11 +59,10 @@ public:
 #define loadAttributeWithDefault(parameterId) setAttribute(parameterId, v.getProperty(getIdentifierForParameterIndex(parameterId), getDefaultValue(parameterId)), dontSendNotification);
 
 // Handy macro to set the name of the processor (type = Identifier, name = Displayed processor name)
-#define SET_PROCESSOR_NAME(type, name, description) static String getClassName() {return name;}; \
+#define SET_PROCESSOR_NAME(type, name, unused) static String getClassName() {return name;}; \
 						  const String getName() const override {	return getClassName();}; \
 						  static Identifier getClassType() {return Identifier(type);} \
-						  const Identifier getType() const override {return getClassType();} \
-						  String getDescription() const override { return description; }
+						  const Identifier getType() const override {return getClassType();} 
 
 /** The base class for all HISE modules in the signal path.
 *	@ingroup core
@@ -283,8 +189,6 @@ public:
      */
     virtual const Identifier getType() const = 0;
     
-    virtual ProcessorDocumentation* createDocumentation() const;
-    
     /** Returns the symbol of the Processor.
      *
      *	It either checks if a special symbol is set for this particular Processor, or returns the default one defined in getSpecialSymbol()
@@ -341,12 +245,6 @@ public:
      *	If this Processor is a Chain, you can use it's getHandler()->getNumProcessor() method.
      */
     virtual int getNumChildProcessors() const = 0;
-    
-    /** Return a one-line description of the processor. 
-    
-    TODO_MODULE: Fold into getMetadata().description
-    */
-    virtual String getDescription() const = 0;
     
     /** If your processor uses internal chains, you can return the number here.
      *
@@ -746,7 +644,7 @@ public:
     virtual Identifier getIdentifierForParameterIndex(int parameterIndex) const;
     virtual int getParameterIndexForIdentifier(const Identifier& id) const;
 
-    virtual int getNumAttributes() const { return parameterNames.size(); }
+    virtual int getNumAttributes() const { jassertfalse; return parameterNames.size(); }
 
 	/** Returns the metadata for this processor type.
 	*
@@ -756,8 +654,6 @@ public:
 	*/
 	virtual ProcessorMetadata getMetadata() const;
 
-    String getDescriptionForParameters(int parameterIndex);
-    
     /** This returns the number of (named) parameters. */
     virtual int getNumParameters() const;;
     

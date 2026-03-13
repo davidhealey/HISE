@@ -67,8 +67,6 @@ class ModulatorSynth: public Synthesiser,
 {
 public:
 
-	ADD_DOCUMENTATION();
-
 	// ===================================================================================================================
 
 	enum class ProfileEnumIds
@@ -133,41 +131,7 @@ public:
 	 *  via ModulatorSynth::createBaseMetadata() to inherit the 4 base parameters
 	 *  and 2 standard modulation chains.
 	 */
-	static ProcessorMetadata createBaseMetadata()
-	{
-		using Par = ProcessorMetadata::ParameterMetadata;
-		using Mod = ProcessorMetadata::ModulationMetadata;
-
-		return ProcessorMetadata("ModulatorSynth")
-			.withParameter(Par(Gain)
-				.withId("Gain")
-				.withDescription("The output volume as normalised linear gain (0.0 to 1.0), not decibels. Use a SimpleGain effect in the FX chain for decibel-scaled volume control.")
-				.withSliderMode(HiSlider::NormalizedPercentage, {})
-				.withDefault(1.0f))
-			.withParameter(Par(Balance)
-				.withId("Balance")
-				.withDescription("The stereo balance")
-				.withSliderMode(HiSlider::Pan, {-1.0, 1.0})
-				.withDefault(0.0f))
-			.withParameter(Par(VoiceLimit)
-				.withId("VoiceLimit")
-				.withDescription("The maximum number of voices")
-				.withSliderMode(HiSlider::Discrete, {1.0, 256.0, 1.0})
-				.withDefault(64.0f))
-			.withParameter(Par(KillFadeTime)
-				.withId("KillFadeTime")
-				.withDescription("The fade out time in milliseconds when voices are killed by exceeding the voice limit or by a voice killer")
-				.withSliderMode(HiSlider::Time, {0.0, 20000.0, 1.0})
-				.withDefault(20.0f))
-			.withModulation(Mod(GainModulation)
-				.withId("Gain Modulation")
-				.withDescription("Modulates the output volume")
-				.withMode(scriptnode::modulation::ParameterMode::ScaleOnly))
-			.withModulation(Mod(PitchModulation)
-				.withId("Pitch Modulation")
-				.withDescription("Modulates the pitch of all voices")
-				.withMode(scriptnode::modulation::ParameterMode::Pitch));
-	}
+	static ProcessorMetadata createBaseMetadata();
 
 	// ===================================================================================================================
 

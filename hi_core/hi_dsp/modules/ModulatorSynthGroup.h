@@ -253,8 +253,6 @@ class ModulatorSynthGroup : public ModulatorSynth,
 {
 public:
 
-	ADD_DOCUMENTATION_WITH_BASECLASS(ModulatorSynth);
-	
 	enum ModChains
 	{
 		Detune = 2,
