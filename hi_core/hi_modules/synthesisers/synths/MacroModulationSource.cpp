@@ -32,6 +32,25 @@
 
 namespace hise { using namespace juce;
 
+hise::ProcessorMetadata MacroModulationSource::createMetadata()
+{
+	using Mod = ProcessorMetadata::ModulationMetadata;
+
+	auto md = ModulatorSynth::createBaseMetadata()
+		.withStandardMetadata<MacroModulationSource>()
+		.withDescription("A container that hosts modulator chains whose output drives the macro control system.");
+
+	for (int i = 0; i < HISE_NUM_MACROS; i++)
+	{
+		md = std::move(md).withModulation(Mod(ModulatorSynth::numInternalChains + i)
+			.withId("Macro " + String(i + 1))
+			.withDescription("Modulation source for macro control " + String(i + 1))
+			.withMode(scriptnode::modulation::ParameterMode::ScaleOnly));
+	}
+
+	return md;
+}
+
 MacroModulationSource::MacroModulationSource(MainController *mc, const String &id, int numVoices) :
 ModulatorSynth(mc, id, numVoices)
 {

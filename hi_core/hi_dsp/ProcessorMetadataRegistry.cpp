@@ -186,21 +186,21 @@ void ProcessorMetadataRegistry::registerAllMetadata()
 	add(MidiMetronome::createMetadata());
 	add(NoiseGrainPlayer::createMetadata());
 
-	// --- SoundGenerators (fallback) ---
+	// --- SoundGenerators ---
 
 	add(ProcessorMetadata::createFallback<ModulatorSampler>());
-	add(ProcessorMetadata::createFallback<SineSynth>());
+	add(SineSynth::createMetadata());
 	add(ModulatorSynthChain::createMetadata());
 	add(GlobalModulatorContainer::createMetadata());
 	add(WaveSynth::createMetadata());
-	add(ProcessorMetadata::createFallback<NoiseSynth>());
-	add(ProcessorMetadata::createFallback<WavetableSynth>());
-	add(ProcessorMetadata::createFallback<AudioLooper>());
+	add(NoiseSynth::createMetadata());
+	add(WavetableSynth::createMetadata());
+	add(AudioLooper::createMetadata());
 	add(ModulatorSynthGroup::createMetadata());
 	add(JavascriptSynthesiser::createMetadata());
-	add(ProcessorMetadata::createFallback<MacroModulationSource>());
+	add(MacroModulationSource::createMetadata());
 	add(SendContainer::createMetadata());
-	add(ProcessorMetadata::createFallback<SilentSynth>());
+	add(SilentSynth::createMetadata());
 	add(HardcodedSynthesiser::createMetadata());
 	
 	static std::map<Identifier, std::vector<Identifier>> categoryMap = {

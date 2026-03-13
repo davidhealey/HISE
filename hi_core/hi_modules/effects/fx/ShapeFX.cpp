@@ -782,20 +782,6 @@ void PolyshapeFX::setInternalAttribute(int parameterIndex, float newValue)
 	}
 }
 
-float PolyshapeFX::getDefaultValue(int parameterIndex) const
-{
-	switch (parameterIndex)
-	{
-	case Drive: return 1.0f;
-	case Mode: return (float)ShapeFX::ShapeMode::Linear;
-	case Oversampling: return false;
-	case Bias: return 0.0f;
-	default: break;
-	}
-
-	return 0.0f;
-}
-
 void PolyshapeFX::restoreFromValueTree(const ValueTree &v)
 {
 	VoiceEffectProcessor::restoreFromValueTree(v);

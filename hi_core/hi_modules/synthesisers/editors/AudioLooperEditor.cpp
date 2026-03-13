@@ -102,16 +102,14 @@ AudioLooperEditor::AudioLooperEditor (ProcessorEditor *p)
 
 	sampleBufferContent->setAudioFile(&asp->getBuffer());
 
-	startModSlider->setup(getProcessor(), AudioLooper::SampleStartMod, "Random Start");
-    startModSlider->setMode(HiSlider::Discrete, NormalisableRange(0.0, 20000.0, 1.0).withCentreSkew(1000.0));
+	auto md = getProcessor()->getMetadata();
 
-
-	syncToHost->setup(getProcessor(), AudioLooper::SyncMode, "Sync to host");
-	loopButton->setup(getProcessor(), AudioLooper::LoopEnabled, "Loop Enabled");
-	pitchButton->setup(getProcessor(), AudioLooper::PitchTracking, "Pitch Tracking");
-	rootNote->setup(getProcessor(), AudioLooper::RootNote, "Root Note");
-
-	reverseButton->setup(getProcessor(), AudioLooper::Reversed, "Reversed");
+	md.setup(*startModSlider, getProcessor(), AudioLooper::SampleStartMod);
+	md.setup(*syncToHost, getProcessor(), AudioLooper::SyncMode);
+	md.setup(*loopButton, getProcessor(), AudioLooper::LoopEnabled);
+	md.setup(*pitchButton, getProcessor(), AudioLooper::PitchTracking);
+	md.setup(*rootNote, getProcessor(), AudioLooper::RootNote);
+	md.setup(*reverseButton, getProcessor(), AudioLooper::Reversed);
 
 #if JUCE_DEBUG
 	startTimer(30);

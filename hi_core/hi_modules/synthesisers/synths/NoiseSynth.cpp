@@ -32,6 +32,14 @@
 
 namespace hise { using namespace juce;
 
+hise::ProcessorMetadata NoiseSynth::createMetadata()
+{
+	return ModulatorSynth::createBaseMetadata()
+		.withStandardMetadata<NoiseSynth>()
+		.withDescription("A white noise generator useful for layering, testing signal flow, or as a modulation source.")
+		;
+}
+
 NoiseSynth::NoiseSynth(MainController *mc, const String &id, int numVoices) :
 	ModulatorSynth(mc, id, numVoices)
 {
@@ -90,6 +98,14 @@ void NoiseVoice::calculateBlock(int startSample, int numSamples)
 	FloatVectorOperations::copy(voiceBuffer.getWritePointer(1, startIndex), voiceBuffer.getReadPointer(0, startIndex), samplesToCopy);
 	
 	getOwnerSynth()->effectChain->renderVoice(voiceIndex, voiceBuffer, startIndex, samplesToCopy);
+}
+
+hise::ProcessorMetadata SilentSynth::createMetadata()
+{
+	return ModulatorSynth::createBaseMetadata()
+		.withStandardMetadata<SilentSynth>()
+		.withDescription("A silent sound generator that routes signals through its effect chain without producing audio of its own.")
+		;
 }
 
 SilentSynth::SilentSynth(MainController *mc, const String &id, int numVoices) :
