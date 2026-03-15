@@ -732,6 +732,26 @@ Array<File> PresetBrowser::getAllSearchRoots() const
 		return roots;
 	}
 
+	if (showExpansionPresetsOnly)
+	{
+		// No specific expansion selected, but factory presets must be excluded:
+		// return all installed expansion roots.
+		Array<File> roots;
+		auto& handler = getMainController()->getExpansionHandler();
+
+		for (int i = 0; i < handler.getNumExpansions(); ++i)
+		{
+			if (auto e = handler.getExpansion(i))
+			{
+				auto d = e->getSubDirectory(FileHandlerBase::UserPresets);
+				if (d.isDirectory())
+					roots.add(d);
+			}
+		}
+
+		return roots;
+	}
+
 	return getAllUserPresetRoots();
 }
 
@@ -777,16 +797,24 @@ Array<File> PresetBrowser::getAllFavoritePresets()
 	if (favoritesCacheDirty)
 		rebuildFavoritesCache();
 
-	if (currentlySelectedExpansion == nullptr)
+	// No filtering needed when all roots are eligible.
+	if (currentlySelectedExpansion == nullptr && !showExpansionPresetsOnly)
 		return cachedFavorites;
 
-	// Return only the favourites belonging to the selected expansion.
-	auto expansionRoot = currentlySelectedExpansion->getSubDirectory(FileHandlerBase::UserPresets);
+	// Filter to whichever roots getAllSearchRoots() considers relevant.
+	// When an expansion is selected that is the single expansion root;
+	// when showExpansionPresetsOnly is set (and no expansion is selected)
+	// it is every installed expansion root.
+	auto roots = getAllSearchRoots();
 	Array<File> filtered;
 
 	for (auto& f : cachedFavorites)
-		if (f.isAChildOf(expansionRoot))
-			filtered.add(f);
+		for (auto& root : roots)
+			if (f.isAChildOf(root))
+			{
+				filtered.add(f);
+				break;
+			}
 
 	return filtered;
 }
@@ -1466,6 +1494,7 @@ void PresetBrowser::setOptions(const Options& newOptions)
 	setFavoriteIconOffset(newOptions.favoriteIconOffset);
 	setShowFullPathFavorites(newOptions.fullPathFavorites);
 	setShowFullPathSearch(newOptions.fullPathSearch);
+	showExpansionPresetsOnly = newOptions.showExpansionPresetsOnly;
 
 	if (expansionColumn != nullptr)
 		expansionColumn->update();
@@ -1502,10 +1531,12 @@ void PresetBrowser::selectionChanged(int columnIndex, int /*rowIndex*/, const Fi
 
 		if (file == File())
 		{
-			if (FullInstrumentExpansion::isEnabled(getMainController()))
-				rootFile = File();
-			else
-				rootFile = defaultRoot;
+			// Always restore the root that was active when the browser was constructed.
+			// defaultRoot already captures the right directory regardless of whether
+			// FullInstrumentExpansion is enabled, so no special-casing is needed.
+			// When showExpansionPresetsOnly is set we intentionally leave rootFile
+			// empty so that the bank/category columns show nothing (expansion-only mode).
+			rootFile = showExpansionPresetsOnly ? File() : defaultRoot;
 
 			currentlySelectedExpansion = nullptr;
 		}
