@@ -223,6 +223,11 @@ public:
 		/** Load db.json from rootDir, or return an empty object if it doesn't exist or is invalid. */
 		static var loadDatabase(const File& rootDir);
 		static Identifier getIdForFile(const File& presetFile);
+		/** Remap all database entries whose keys were derived from paths under
+		    oldDir so that they use the equivalent path under newDir instead.
+		    Call this *before* the filesystem move so the old files still exist
+		    and getIdForFile() can resolve them correctly. */
+		static void migrateEntries(var& database, const File& oldDir, const File& newDir);
 	};
 
 	void setOptions(const Options& newOptions);

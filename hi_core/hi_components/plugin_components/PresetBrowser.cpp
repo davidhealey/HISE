@@ -1641,6 +1641,9 @@ void PresetBrowser::renameEntry(int columnIndex, int rowIndex, const String& new
 			if (newBank.isDirectory())
 				return;
 
+			DataBaseHelpers::migrateEntries(presetDatabase, currentBankFile, newBank);
+			savePresetDatabase(rootFile);
+			invalidateFavoritesCache();
             currentBankFile.moveFileTo(newBank);
 
             categoryColumn->setNewRootDirectory(File());
@@ -1660,6 +1663,9 @@ void PresetBrowser::renameEntry(int columnIndex, int rowIndex, const String& new
             if(newCategory.isDirectory())
 				return;
 
+			DataBaseHelpers::migrateEntries(presetDatabase, currentCategoryFile, newCategory);
+			savePresetDatabase(rootFile);
+			invalidateFavoritesCache();
             currentCategoryFile.moveFileTo(newCategory);
 
             categoryColumn->setNewRootDirectory(currentBankFile);
@@ -1692,6 +1698,24 @@ void PresetBrowser::renameEntry(int columnIndex, int rowIndex, const String& new
 				modalInputWindow->confirmReplacement(presetFile, newFile);
 			else
 			{
+				if (auto* data = presetDatabase.getDynamicObject())
+				{
+					auto oldId = DataBaseHelpers::getIdForFile(presetFile);
+					var oldEntry = data->getProperty(oldId);
+
+					if (!oldId.isNull() && !oldEntry.isVoid())
+					{
+						auto newId = DataBaseHelpers::getIdForFile(newFile);
+						if (!newId.isNull())
+						{
+							data->setProperty(newId, oldEntry);
+							data->removeProperty(oldId);
+							savePresetDatabase(rootFile);
+							invalidateFavoritesCache();
+						}
+					}
+				}
+
 				presetFile.moveFileTo(newFile);
 				presetColumn->setNewRootDirectory(current);
 				rebuildAllPresets();
@@ -2067,6 +2091,38 @@ var PresetBrowser::DataBaseHelpers::loadDatabase(const File& rootDir)
 	}
 
 	return new DynamicObject();
+}
+
+void PresetBrowser::DataBaseHelpers::migrateEntries(var& database, const File& oldDir, const File& newDir)
+{
+	Array<File> presets;
+	oldDir.findChildFiles(presets, File::findFiles, true, "*.preset");
+
+	if (auto* data = database.getDynamicObject())
+	{
+		for (auto& oldFile : presets)
+		{
+			auto oldId = getIdForFile(oldFile);
+
+			if (oldId.isNull())
+				continue;
+
+			var oldEntry = data->getProperty(oldId);
+
+			if (oldEntry.isVoid())
+				continue;
+
+			auto relative = oldFile.getRelativePathFrom(oldDir);
+			auto newFile  = newDir.getChildFile(relative);
+			auto newId    = getIdForFile(newFile);
+
+			if (newId.isNull())
+				continue;
+
+			data->setProperty(newId, oldEntry);
+			data->removeProperty(oldId);
+		}
+	}
 }
 
 juce::Identifier PresetBrowser::DataBaseHelpers::getIdForFile(const File& presetFile)
