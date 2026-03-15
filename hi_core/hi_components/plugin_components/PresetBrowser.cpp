@@ -1523,28 +1523,28 @@ void PresetBrowser::setOptions(const Options& newOptions)
 	if (currentlySelectedExpansion == nullptr)
 	{
 		auto newRoot = showExpansionContentOnly ? File() : defaultRoot;
+		const bool rootChanged = (newRoot != rootFile);
 
-		if (newRoot != rootFile)
+		if (rootChanged)
 		{
 			rootFile = newRoot;
 			bankColumn->setModel(new PresetBrowserColumn::ColumnListModel(this, 0, this), rootFile);
-			bankColumn->setNewRootDirectory(rootFile);
-			categoryColumn->setNewRootDirectory(File());
-			presetColumn->setNewRootDirectory(File());
 			loadPresetDatabase(rootFile);
 			rebuildAllPresets();
 			invalidateFavoritesCache();
 		}
-		else if (showExpansionContentOnly)
+
+		// When showExpansionContentOnly is active, always reset column roots even
+		// if rootFile didn't change.  showLoadedPreset() called above may have
+		// repopulated category/preset with factory dirs, and bankColumn may carry
+		// a stale selection from a previous call.  This is cheap (no DB reload).
+		if (showExpansionContentOnly || rootChanged)
 		{
-			// rootFile is already File() but showLoadedPreset() called earlier
-			// in setOptions() may have populated these columns with factory dirs.
+			bankColumn->setNewRootDirectory(rootFile);
 			categoryColumn->setNewRootDirectory(File());
 			presetColumn->setNewRootDirectory(File());
 		}
 	}
-
-	updateColumnEditability();
 
 	if (expansionColumn != nullptr)
 		expansionColumn->update();
@@ -1559,6 +1559,11 @@ void PresetBrowser::setOptions(const Options& newOptions)
 	modalInputWindow->update();
 
 	resized();
+
+	// Run editability check last so nothing triggered by resized() can re-enable
+	// buttons that should be hidden (e.g. updateButtonVisibility calls inside
+	// PresetBrowserColumn::resized()).
+	updateColumnEditability();
 }
 
 void PresetBrowser::selectionChanged(int columnIndex, int /*rowIndex*/, const File& file, bool /*doubleClick*/)
