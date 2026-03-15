@@ -787,7 +787,7 @@ void PresetBrowserColumn::updateButtonVisibility(bool isReadOnly)
 	const bool buttonsVisible = showButtonsAtBottom && !isResultBar && currentRoot.isDirectory() && !isReadOnly;
 	const bool fileIsSelected = listbox->getNumSelectedRows() > 0;
 
-	addButton->setVisible(buttonsVisible && shouldShowAddButton);
+	addButton->setVisible(buttonsVisible && shouldShowAddButton && !expansionAddButtonHidden);
 	deleteButton->setVisible(buttonsVisible && fileIsSelected && shouldShowDeleteButton);
 	renameButton->setVisible(buttonsVisible && fileIsSelected && shouldShowRenameButton);
 }

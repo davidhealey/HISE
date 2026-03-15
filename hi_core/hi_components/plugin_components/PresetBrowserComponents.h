@@ -526,6 +526,14 @@ public:
 		addButton->setVisible(true && shouldShowAddButton);
 	}
 
+	/** When showExpansionContentOnly is active, hides the add button in the preset
+	    column unless the selected expansion is the currently loaded expansion. */
+	void setExpansionAddButtonHidden(bool hidden)
+	{
+		expansionAddButtonHidden = hidden;
+		updateButtonVisibility(false);
+	}
+
 	Component* getListbox() { return listbox.get(); }
 
 private:
@@ -539,6 +547,7 @@ private:
 	bool shouldShowRenameButton = true;
 	bool shouldShowDeleteButton = true;
 	bool buttonsInsideBorder = false;
+	bool expansionAddButtonHidden = false;
 	int editButtonOffset = 10;
 	int favoriteIconOffset = 0;
 	double rowPadding = 0;

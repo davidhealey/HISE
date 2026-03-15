@@ -504,8 +504,10 @@ public:
 		SaveButtonBounds,
 		MoreButtonBounds,
 		FavoriteButtonBounds,
-    FullPathFavorites,
-    FavoriteIconOffset,
+		FullPathFavorites,
+		FavoriteIconOffset,
+		ShowExpansionEditButtons,
+		ShowExpansionContentOnly,
 		numSpecialProperties
 	};
 

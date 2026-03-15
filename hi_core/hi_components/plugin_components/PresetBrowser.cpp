@@ -640,6 +640,10 @@ void PresetBrowser::expansionPackLoaded(Expansion* currentExpansion)
 		selectionChanged(-1, -1, currentExpansion->getRootFolder(), false);
 	else
 		selectionChanged(-1, -1, File(), false);
+
+	// selectionChanged may have returned early (expansion already selected), so
+	// explicitly refresh the add button state in case only the loaded expansion changed.
+	updateExpansionContentOnlyState();
 }
 
 void PresetBrowser::expansionPackCreated(Expansion* newExpansion)
@@ -892,9 +896,15 @@ void PresetBrowser::resized()
 	
 	
 
-	bankColumn->setVisible(!showOnlyPresets && numColumns > 1);
-	categoryColumn->setVisible(!showOnlyPresets && numColumns > 2);
+	// In showExpansionContentOnly mode, hide the bank/category/preset columns when
+	// no expansion is selected (unless the user is using search or favourite filters,
+	// which should still show results across all expansions).
+	const bool noExpansionInContentOnlyMode = expansionContentOnly && currentlySelectedExpansion == nullptr;
+
+	bankColumn->setVisible(!showOnlyPresets && numColumns > 1 && !noExpansionInContentOnlyMode);
+	categoryColumn->setVisible(!showOnlyPresets && numColumns > 2 && !noExpansionInContentOnlyMode);
 	presetColumn->setIsResultBar(showOnlyPresets);
+	presetColumn->setVisible(showOnlyPresets || !noExpansionInContentOnlyMode);
 
 	auto listArea = Rectangle<int>(x, y, getWidth() - 6, getHeight() - y - 3);
 
@@ -1091,6 +1101,20 @@ void PresetBrowser::setShowSearchBar(bool shouldBeShown)
 void PresetBrowser::setShowFullPathFavorites(bool shouldShowFullPathFavorites)
 {
 	fullPathFavorites = shouldShowFullPathFavorites;
+}
+
+void PresetBrowser::updateExpansionContentOnlyState()
+{
+	if (!expansionContentOnly)
+		return;
+
+	const auto* loadedExpansion = getMainController()->getExpansionHandler().getCurrentExpansion();
+	Expansion* selectedExpansion = currentlySelectedExpansion;
+	const bool isLoadedExpansion = (selectedExpansion != nullptr) && (selectedExpansion == loadedExpansion);
+
+	// Only show the add button in the preset column when the selected expansion
+	// is also the currently loaded (active) expansion.
+	presetColumn->setExpansionAddButtonHidden(!isLoadedExpansion);
 }
 
 void PresetBrowser::setHighlightColourAndFont(Colour c, Colour bgColour, Font f)
@@ -1313,6 +1337,23 @@ void PresetBrowser::setOptions(const Options& newOptions)
 	setShowEditButtons(1, newOptions.showAddButton);
 	setShowEditButtons(2, newOptions.showRenameButton);
 	setShowEditButtons(3, newOptions.showDeleteButton);
+
+	expansionContentOnly = newOptions.showExpansionContentOnly;
+
+	// Reset the expansion add-button override so it can be re-evaluated below.
+	presetColumn->setExpansionAddButtonHidden(false);
+	updateExpansionContentOnlyState();
+
+	// Override expansion column buttons independently of the other columns.
+	// We hide individual buttons rather than disabling showButtonsAtBottom so that
+	// the 28px button area is still reserved, keeping the column height consistent
+	// with the bank/category/preset columns.
+	if (expansionColumn != nullptr && !newOptions.showExpansionEditButtons)
+	{
+		expansionColumn->setShowButtons(PresetBrowserColumn::AddButton, false);
+		expansionColumn->setShowButtons(PresetBrowserColumn::RenameButton, false);
+		expansionColumn->setShowButtons(PresetBrowserColumn::DeleteButton, false);
+	}
 	setShowSearchBar(newOptions.showSearchBar);
 	setButtonsInsideBorder(newOptions.buttonsInsideBorder);
 	setEditButtonOffset(newOptions.editButtonOffset);
@@ -1385,6 +1426,10 @@ void PresetBrowser::selectionChanged(int columnIndex, int /*rowIndex*/, const Fi
 		loadPresetDatabase(rootFile);
 		presetColumn->setDatabase(getDataBase());
 		rebuildAllPresets();
+
+		// Update the add button and column visibility for showExpansionContentOnly mode.
+		updateExpansionContentOnlyState();
+		resized();
 	}
 
 	if (columnIndex == 0)
