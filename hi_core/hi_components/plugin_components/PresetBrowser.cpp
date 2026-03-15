@@ -734,21 +734,10 @@ Array<File> PresetBrowser::getAllSearchRoots() const
 
 	if (showExpansionContentOnly)
 	{
-		// No specific expansion selected, but factory presets must be excluded:
-		// return all installed expansion roots.
-		Array<File> roots;
-		auto& handler = getMainController()->getExpansionHandler();
-
-		for (int i = 0; i < handler.getNumExpansions(); ++i)
-		{
-			if (auto e = handler.getExpansion(i))
-			{
-				auto d = e->getSubDirectory(FileHandlerBase::UserPresets);
-				if (d.isDirectory())
-					roots.add(d);
-			}
-		}
-
+		// No specific expansion selected but factory presets must be excluded:
+		// return all installed expansion roots (all roots except defaultRoot).
+		auto roots = getAllUserPresetRoots();
+		roots.removeAllInstancesOf(defaultRoot);
 		return roots;
 	}
 
@@ -1178,6 +1167,12 @@ void PresetBrowser::lookAndFeelChanged()
 
 void PresetBrowser::loadPresetDatabase(const File& rootDirectory)
 {
+	if (!rootDirectory.isDirectory())
+	{
+		presetDatabase = new DynamicObject();
+		return;
+	}
+
 	auto dbFile = rootDirectory.getChildFile("db.json");
 
 	var d = JSON::parse(dbFile.loadFileAsString());
@@ -1512,6 +1507,13 @@ void PresetBrowser::setOptions(const Options& newOptions)
 			loadPresetDatabase(rootFile);
 			rebuildAllPresets();
 			invalidateFavoritesCache();
+		}
+		else if (showExpansionContentOnly)
+		{
+			// rootFile is already File() but showLoadedPreset() called earlier
+			// in setOptions() may have populated these columns with factory dirs.
+			categoryColumn->setNewRootDirectory(File());
+			presetColumn->setNewRootDirectory(File());
 		}
 	}
 
