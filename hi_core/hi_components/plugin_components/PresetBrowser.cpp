@@ -1520,14 +1520,44 @@ void PresetBrowser::setOptions(const Options& newOptions)
 	setShowFullPathSearch(newOptions.fullPathSearch);
 	showExpansionContentOnly = newOptions.showExpansionContentOnly;
 
-	if (currentlySelectedExpansion == nullptr)
 	{
-		auto newRoot = showExpansionContentOnly ? File() : defaultRoot;
-		const bool rootChanged = (newRoot != rootFile);
+		// Determine the desired root for the current browser state.
+		//
+		// If an expansion is actively browsed (i.e. the user selected one in the
+		// expansion column and rootFile already points to its UserPresets dir),
+		// keep its content unchanged.
+		//
+		// Otherwise — including the FullInstrumentExpansion case where
+		// currentlySelectedExpansion is non-null but rootFile still equals
+		// defaultRoot — apply showExpansionContentOnly: show nothing (File())
+		// when true, or restore factory root when false.
+		//
+		// We use "rootFile != defaultRoot" as the proxy for "user has actively
+		// browsed an expansion in the column", since selectionChanged() always
+		// sets rootFile to the expansion's UserPresets subdirectory in that case.
+		File desiredRoot;
+
+		if (currentlySelectedExpansion != nullptr && rootFile != defaultRoot)
+		{
+			// Expansion is actively browsed — keep showing its content.
+			desiredRoot = rootFile;
+		}
+		else if (showExpansionContentOnly)
+		{
+			// No real browser selection; hide all non-expansion content.
+			desiredRoot = File();
+			currentlySelectedExpansion = nullptr;
+		}
+		else
+		{
+			desiredRoot = defaultRoot;
+		}
+
+		const bool rootChanged = (desiredRoot != rootFile);
 
 		if (rootChanged)
 		{
-			rootFile = newRoot;
+			rootFile = desiredRoot;
 			bankColumn->setModel(new PresetBrowserColumn::ColumnListModel(this, 0, this), rootFile);
 			loadPresetDatabase(rootFile);
 			rebuildAllPresets();
