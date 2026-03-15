@@ -1320,9 +1320,9 @@ void PresetBrowser::setOptions(const Options& newOptions)
 	// with the bank/category/preset columns.
 	if (expansionColumn != nullptr && !newOptions.showExpansionEditButtons)
 	{
-		expansionColumn->setShowButtons(1, false); // AddButton
-		expansionColumn->setShowButtons(2, false); // RenameButton
-		expansionColumn->setShowButtons(3, false); // DeleteButton
+		expansionColumn->setShowButtons(PresetBrowserColumn::AddButton, false);
+		expansionColumn->setShowButtons(PresetBrowserColumn::RenameButton, false);
+		expansionColumn->setShowButtons(PresetBrowserColumn::DeleteButton, false);
 	}
 	setShowSearchBar(newOptions.showSearchBar);
 	setButtonsInsideBorder(newOptions.buttonsInsideBorder);
@@ -1382,6 +1382,8 @@ void PresetBrowser::selectionChanged(int columnIndex, int /*rowIndex*/, const Fi
 
 		if(expansionColumn != nullptr)
 		{
+			if (file == File())
+				expansionColumn->setSelectedFile(File());
 			expansionColumn->repaint();
 			expansionColumn->updateButtonVisibility(false);
 		}
