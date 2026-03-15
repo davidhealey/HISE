@@ -1571,6 +1571,20 @@ void PresetBrowser::setOptions(const Options& newOptions)
 			invalidateFavoritesCache();
 		}
 
+		// Explicitly push the hidden state to the columns NOW — after any model
+		// replacements above — so the flag is set on the CURRENT model objects.
+		// This is the primary mechanism for preventing project presets from
+		// leaking into the browser; setContentHidden() sets a flag directly on
+		// the column and model so every subsequent getNumRows(),
+		// setNewRootDirectory(), or updateButtonVisibility() call returns the
+		// correct result regardless of the code path that triggers it.
+		{
+			const bool hideContent = shouldHideAllContent();
+			bankColumn->setContentHidden(hideContent);
+			categoryColumn->setContentHidden(hideContent);
+			presetColumn->setContentHidden(hideContent);
+		}
+
 		// When showExpansionContentOnly is active, always reset column roots even
 		// if rootFile didn't change.  showLoadedPreset() called above may have
 		// repopulated category/preset with factory dirs, and bankColumn may carry
@@ -1684,6 +1698,17 @@ void PresetBrowser::selectionChanged(int columnIndex, int /*rowIndex*/, const Fi
 			// Set the database after the model has been replaced so the new
 			// model always has a valid database reference.
 			presetColumn->setDatabase(getDataBase());
+		}
+
+		// Update the hidden state on the columns now that model replacements
+		// are complete.  When showExpansionContentOnly is active and the user
+		// deselected the expansion (file == File()), hide bank/category/preset;
+		// when an expansion was selected, reveal them.
+		{
+			const bool hideContent = shouldHideAllContent();
+			bankColumn->setContentHidden(hideContent);
+			categoryColumn->setContentHidden(hideContent);
+			presetColumn->setContentHidden(hideContent);
 		}
 
 		updateColumnEditability();

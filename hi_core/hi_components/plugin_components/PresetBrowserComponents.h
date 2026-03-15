@@ -344,7 +344,10 @@ public:
 
 		bool empty = false;
 		bool showFavoritesOnly = false;
-		
+		/** When true the column must display nothing and allow no edits.
+		    Set explicitly via PresetBrowserColumn::setContentHidden(). */
+		bool contentHidden = false;
+
 		Listener* listener;
 		bool editMode = false;
 		bool displayDirectories = true;
@@ -511,6 +514,12 @@ public:
 		isResultBar = shouldBeResultBar;
 		updateButtonVisibility(false);
 	}
+
+	/** Explicitly hide or show content for bank/category/preset columns.
+	    When hidden the column refuses to display any files or edit buttons,
+	    regardless of what root directory is pushed to it.  Called from
+	    PresetBrowser when showExpansionContentOnly is active. */
+	void setContentHidden(bool shouldHide);
 
 	void timerCallback() override;
 

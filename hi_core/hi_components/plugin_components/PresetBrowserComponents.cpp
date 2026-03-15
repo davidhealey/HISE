@@ -225,13 +225,11 @@ PresetBrowserColumn::ColumnListModel::ColumnListModel(PresetBrowser* p, int inde
 
 int PresetBrowserColumn::ColumnListModel::getNumRows()
 {
-	// When showExpansionContentOnly is active and no expansion has been selected in
-	// the browser column, all bank/category/preset columns must remain empty —
-	// regardless of what root or totalRoot are currently set to.  This handles
-	// timing edge cases (e.g. the constructor populating columns before setOptions
-	// is called) and the search/wildcard fallback path that would otherwise return
-	// project presets when there are no installed expansions.
-	if (index != -1 && parent->shouldHideAllContent())
+	// contentHidden is set explicitly via PresetBrowserColumn::setContentHidden()
+	// when showExpansionContentOnly is active and no expansion is selected.
+	// This is the primary hiding mechanism; the parent query below is kept as
+	// a secondary safety net for timing edge cases.
+	if (index != -1 && (contentHidden || (parent.getComponent() != nullptr && parent->shouldHideAllContent())))
 	{
 		entries.clear();
 		return 0;
@@ -672,24 +670,59 @@ File PresetBrowserColumn::getChildDirectory(File& root, int level, int index)
 
 void PresetBrowserColumn::showAddButton()
 {
-	// Never show the add button when the browser is in content-hidden mode
-	// (showExpansionContentOnly active, no expansion selected in column).
+	// Never show the add button when the column is in hidden mode.
+	if (index != -1 && listModel != nullptr && listModel->contentHidden)
+		return;
+
+	// Secondary check via parent for timing edge cases.
 	if (index != -1 && parent.getComponent() != nullptr && parent->shouldHideAllContent())
 		return;
 
 	addButton->setVisible(true && shouldShowAddButton);
 }
 
+void PresetBrowserColumn::setContentHidden(bool shouldHide)
+{
+	// Only applies to non-expansion columns (index != -1).
+	if (index == -1)
+		return;
+
+	listModel->contentHidden = shouldHide;
+
+	if (shouldHide)
+	{
+		// Force the root to empty so the model can't return any rows even if
+		// getNumRows() is called from a code path that bypasses the flag check.
+		currentRoot = File();
+		listModel->setRootDirectory(File());
+		listbox->deselectAllRows();
+
+		addButton->setVisible(false);
+		deleteButton->setVisible(false);
+		renameButton->setVisible(false);
+	}
+
+	listbox->updateContent();
+	listbox->repaint();
+}
+
 void PresetBrowserColumn::setNewRootDirectory(const File& newRootDirectory)
 {
-	currentRoot = newRootDirectory;
+	// When the column is in hidden mode (showExpansionContentOnly active, no
+	// expansion selected) force File() so that no project content can leak in
+	// regardless of which code path calls this method.
+	const File effectiveRoot = (index != -1 && listModel != nullptr && listModel->contentHidden)
+	                               ? File()
+	                               : newRootDirectory;
 
-	listModel->setRootDirectory(newRootDirectory);
+	currentRoot = effectiveRoot;
+
+	listModel->setRootDirectory(effectiveRoot);
 	listbox->deselectAllRows();
 	listbox->updateContent();
 	listbox->repaint();
 
-	updateButtonVisibility(parent->isReadOnly(newRootDirectory));
+	updateButtonVisibility(parent->isReadOnly(effectiveRoot));
 }
 
 Array<var> PresetBrowserColumn::getListAreaOffset()
@@ -1128,6 +1161,16 @@ void PresetBrowserColumn::resized()
 void PresetBrowserColumn::updateButtonVisibility(bool isReadOnly)
 {
 	editButton->setVisible(false);
+
+	// When the column is explicitly hidden (showExpansionContentOnly active, no
+	// expansion selected), never show any edit buttons regardless of root state.
+	if (index != -1 && listModel != nullptr && listModel->contentHidden)
+	{
+		addButton->setVisible(false);
+		deleteButton->setVisible(false);
+		renameButton->setVisible(false);
+		return;
+	}
 
 	// The expansion column (index == -1) doesn't use setNewRootDirectory so currentRoot
 	// is never set; bypass the directory check for it
