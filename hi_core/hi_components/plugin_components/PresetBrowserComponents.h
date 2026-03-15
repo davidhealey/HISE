@@ -528,15 +528,7 @@ public:
 		listModel->database = db;
 	}
 
-	void showAddButton()
-	{
-		// Never show the add button when the browser is in content-hidden mode
-		// (showExpansionContentOnly active, no expansion selected in column).
-		if (index != -1 && parent.getComponent() != nullptr && parent->shouldHideAllContent())
-			return;
-
-		addButton->setVisible(true && shouldShowAddButton);
-	}
+	void showAddButton();
 
 	Component* getListbox() { return listbox.get(); }
 

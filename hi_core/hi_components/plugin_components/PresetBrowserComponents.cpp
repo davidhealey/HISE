@@ -670,6 +670,16 @@ File PresetBrowserColumn::getChildDirectory(File& root, int level, int index)
 	return childDirectories[index];
 }
 
+void PresetBrowserColumn::showAddButton()
+{
+	// Never show the add button when the browser is in content-hidden mode
+	// (showExpansionContentOnly active, no expansion selected in column).
+	if (index != -1 && parent.getComponent() != nullptr && parent->shouldHideAllContent())
+		return;
+
+	addButton->setVisible(true && shouldShowAddButton);
+}
+
 void PresetBrowserColumn::setNewRootDirectory(const File& newRootDirectory)
 {
 	currentRoot = newRootDirectory;
