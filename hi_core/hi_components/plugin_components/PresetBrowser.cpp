@@ -640,6 +640,11 @@ void PresetBrowser::expansionPackLoaded(Expansion* currentExpansion)
 		selectionChanged(-1, -1, currentExpansion->getRootFolder(), false);
 	else
 		selectionChanged(-1, -1, File(), false);
+
+	// selectionChanged may return early if the expansion column selection
+	// didn't change, so always refresh editability here to catch the case
+	// where the same expansion that was browsing has just been loaded.
+	updateColumnEditability();
 }
 
 void PresetBrowser::expansionPackCreated(Expansion* newExpansion)
@@ -732,6 +737,15 @@ Array<File> PresetBrowser::getAllSearchRoots() const
 		return roots;
 	}
 
+	if (showExpansionContentOnly)
+	{
+		// No specific expansion selected but factory presets must be excluded:
+		// return all installed expansion roots (all roots except defaultRoot).
+		auto roots = getAllUserPresetRoots();
+		roots.removeAllInstancesOf(defaultRoot);
+		return roots;
+	}
+
 	return getAllUserPresetRoots();
 }
 
@@ -777,11 +791,14 @@ Array<File> PresetBrowser::getAllFavoritePresets()
 	if (favoritesCacheDirty)
 		rebuildFavoritesCache();
 
-	// No filtering needed when no expansion is selected.
-	if (currentlySelectedExpansion == nullptr)
+	// No filtering needed when all roots are eligible.
+	if (currentlySelectedExpansion == nullptr && !showExpansionContentOnly)
 		return cachedFavorites;
 
-	// Filter to only the selected expansion's root.
+	// Filter to whichever roots getAllSearchRoots() considers relevant.
+	// When an expansion is selected that is the single expansion root;
+	// when showExpansionContentOnly is set (and no expansion is selected)
+	// it is every installed expansion root.
 	auto roots = getAllSearchRoots();
 	Array<File> filtered;
 
@@ -1303,6 +1320,30 @@ void PresetBrowser::setShowEditButtons(int buttonId, bool show)
 		tagList->setShowEditButton(show);
 }
 
+void PresetBrowser::updateColumnEditability()
+{
+	if (!showExpansionContentOnly)
+		return;
+
+	// Editing is only allowed when the expansion currently selected in the
+	// browser column is also the expansion that is actively loaded.  If no
+	// expansion is loaded, or the user is browsing a different expansion than
+	// the one loaded, all edit buttons on bank/category/preset columns are hidden.
+	auto* loadedExpansion = getMainController()->getExpansionHandler().getCurrentExpansion();
+	const bool canEdit = (currentlySelectedExpansion != nullptr) &&
+	                     (loadedExpansion == currentlySelectedExpansion);
+
+	bankColumn->setShowButtons(PresetBrowserColumn::AddButton, canEdit);
+	bankColumn->setShowButtons(PresetBrowserColumn::RenameButton, canEdit);
+	bankColumn->setShowButtons(PresetBrowserColumn::DeleteButton, canEdit);
+	categoryColumn->setShowButtons(PresetBrowserColumn::AddButton, canEdit);
+	categoryColumn->setShowButtons(PresetBrowserColumn::RenameButton, canEdit);
+	categoryColumn->setShowButtons(PresetBrowserColumn::DeleteButton, canEdit);
+	presetColumn->setShowButtons(PresetBrowserColumn::AddButton, canEdit);
+	presetColumn->setShowButtons(PresetBrowserColumn::RenameButton, canEdit);
+	presetColumn->setShowButtons(PresetBrowserColumn::DeleteButton, canEdit);
+}
+
 void PresetBrowser::setButtonsInsideBorder(bool inside)
 {
 	if (expansionColumn != nullptr)
@@ -1477,6 +1518,33 @@ void PresetBrowser::setOptions(const Options& newOptions)
 	setFavoriteIconOffset(newOptions.favoriteIconOffset);
 	setShowFullPathFavorites(newOptions.fullPathFavorites);
 	setShowFullPathSearch(newOptions.fullPathSearch);
+	showExpansionContentOnly = newOptions.showExpansionContentOnly;
+
+	if (currentlySelectedExpansion == nullptr)
+	{
+		auto newRoot = showExpansionContentOnly ? File() : defaultRoot;
+
+		if (newRoot != rootFile)
+		{
+			rootFile = newRoot;
+			bankColumn->setModel(new PresetBrowserColumn::ColumnListModel(this, 0, this), rootFile);
+			bankColumn->setNewRootDirectory(rootFile);
+			categoryColumn->setNewRootDirectory(File());
+			presetColumn->setNewRootDirectory(File());
+			loadPresetDatabase(rootFile);
+			rebuildAllPresets();
+			invalidateFavoritesCache();
+		}
+		else if (showExpansionContentOnly)
+		{
+			// rootFile is already File() but showLoadedPreset() called earlier
+			// in setOptions() may have populated these columns with factory dirs.
+			categoryColumn->setNewRootDirectory(File());
+			presetColumn->setNewRootDirectory(File());
+		}
+	}
+
+	updateColumnEditability();
 
 	if (expansionColumn != nullptr)
 		expansionColumn->update();
@@ -1513,10 +1581,10 @@ void PresetBrowser::selectionChanged(int columnIndex, int /*rowIndex*/, const Fi
 
 		if (file == File())
 		{
-			// Always restore the root that was active when the browser was constructed.
-			// defaultRoot already captures the right directory regardless of whether
-			// FullInstrumentExpansion is enabled, so no special-casing is needed.
-			rootFile = defaultRoot;
+			// Restore factory root on deselect — unless showExpansionContentOnly
+			// is active, in which case we leave rootFile empty so no factory
+			// content appears in the bank/category columns.
+			rootFile = showExpansionContentOnly ? File() : defaultRoot;
 
 			currentlySelectedExpansion = nullptr;
 		}
@@ -1575,6 +1643,8 @@ void PresetBrowser::selectionChanged(int columnIndex, int /*rowIndex*/, const Fi
 			// model always has a valid database reference.
 			presetColumn->setDatabase(getDataBase());
 		}
+
+		updateColumnEditability();
 	}
 
 	if (columnIndex == 0)

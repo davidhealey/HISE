@@ -98,6 +98,9 @@ public:
 		bool fullPathSearch = false;
 		bool showExpansions = false;
 		bool showExpansionEditButtons = false;
+		/** When true, columns only show expansion content and edit buttons are
+		    gated: only the currently loaded expansion can be modified. */
+		bool showExpansionContentOnly = false;
 	};
 
 	// ============================================================================================
@@ -286,6 +289,7 @@ private:
 	void setShowButton(int buttonId, bool newValue);
 	void setShowNotesLabel(bool shouldBeShown);
 	void setShowEditButtons(int buttonId, bool showEditButtons);
+	void updateColumnEditability();
 	void setShowSearchBar(bool shouldBeShown);
 	void setButtonsInsideBorder(bool inside);
 	void setEditButtonOffset(int offset);
@@ -332,6 +336,7 @@ private:
 	bool fullPathFavorites = false;
 	bool fullPathSearch = false;
 	bool showOnlyPresets = false;
+	bool showExpansionContentOnly = false;
 	String currentWildcard = "*";
 	StringArray currentTagSelection;
 
