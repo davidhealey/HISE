@@ -744,8 +744,6 @@ void PresetBrowser::rebuildFavoritesCache() const
 	// only determines which subset callers receive (see getAllFavoritePresets).
 	for (auto& rootDir : getAllUserPresetRoots())
 	{
-		var db;
-
 		// Use the in-memory database for the currently loaded root so that
 		// changes made since the last save (e.g. a just-toggled favourite)
 		// are reflected immediately without requiring a round-trip to disk.
