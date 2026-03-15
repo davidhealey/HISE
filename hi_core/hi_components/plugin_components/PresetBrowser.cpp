@@ -896,15 +896,9 @@ void PresetBrowser::resized()
 	
 	
 
-	// In showExpansionContentOnly mode, hide the bank/category/preset columns when
-	// no expansion is selected (unless the user is using search or favourite filters,
-	// which should still show results across all expansions).
-	const bool noExpansionInContentOnlyMode = expansionContentOnly && currentlySelectedExpansion == nullptr;
-
-	bankColumn->setVisible(!showOnlyPresets && numColumns > 1 && !noExpansionInContentOnlyMode);
-	categoryColumn->setVisible(!showOnlyPresets && numColumns > 2 && !noExpansionInContentOnlyMode);
+	bankColumn->setVisible(!showOnlyPresets && numColumns > 1);
+	categoryColumn->setVisible(!showOnlyPresets && numColumns > 2);
 	presetColumn->setIsResultBar(showOnlyPresets);
-	presetColumn->setVisible(showOnlyPresets || !noExpansionInContentOnlyMode);
 
 	auto listArea = Rectangle<int>(x, y, getWidth() - 6, getHeight() - y - 3);
 
@@ -1115,6 +1109,18 @@ void PresetBrowser::updateExpansionContentOnlyState()
 	// Only show the add button in the preset column when the selected expansion
 	// is also the currently loaded (active) expansion.
 	presetColumn->setExpansionAddButtonHidden(!isLoadedExpansion);
+
+	// When no expansion is selected, clear the bank/category/preset column contents
+	// so the columns appear empty. Leave the preset column content alone when in
+	// search/favourites mode (showOnlyPresets) so those results are still displayed.
+	if (selectedExpansion == nullptr)
+	{
+		bankColumn->setNewRootDirectory(File());
+		categoryColumn->setNewRootDirectory(File());
+
+		if (!showOnlyPresets)
+			presetColumn->setNewRootDirectory(File());
+	}
 }
 
 void PresetBrowser::setHighlightColourAndFont(Colour c, Colour bgColour, Font f)
