@@ -1399,11 +1399,7 @@ void PresetBrowser::selectionChanged(int columnIndex, int /*rowIndex*/, const Fi
 		
 		if (file == File())
 		{
-			if (FullInstrumentExpansion::isEnabled(getMainController()))
-				rootFile = File();
-			else
-				rootFile = defaultRoot;
-				
+			rootFile = defaultRoot;
 			currentlySelectedExpansion = nullptr;
 		}
 		else
