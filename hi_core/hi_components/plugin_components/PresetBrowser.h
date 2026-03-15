@@ -101,7 +101,7 @@ public:
 		/** When true, bank/category/preset columns and the search/favourites views
 		    only ever display content from installed expansions.  Project-level
 		    (factory) presets are hidden.  Default: false. */
-		bool showExpansionPresetsOnly = false;
+		bool showExpansionContentOnly = false;
 	};
 
 	// ============================================================================================
@@ -336,7 +336,7 @@ private:
 	bool fullPathFavorites = false;
 	bool fullPathSearch = false;
 	bool showOnlyPresets = false;
-	bool showExpansionPresetsOnly = false;
+	bool showExpansionContentOnly = false;
 	String currentWildcard = "*";
 	StringArray currentTagSelection;
 
