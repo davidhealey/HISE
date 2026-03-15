@@ -254,6 +254,11 @@ public:
 	Array<File> getAllFavoritePresets();
 	bool isFavoriteInAnyDatabase(const File& presetFile) const;
 
+	/** Returns true when showExpansionContentOnly is active and no expansion has
+	    been selected in the browser column.  In this state bank/category/preset
+	    columns must show nothing, regardless of what rootFile is set to. */
+	bool shouldHideAllContent() const { return showExpansionContentOnly && currentlySelectedExpansion == nullptr; }
+
 	/** Mark the favourites cache as stale so it is rebuilt on next access.
 	    Call this whenever the favourite state of any preset changes or
 	    whenever the set of visible roots changes (e.g. expansion switch). */

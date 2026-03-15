@@ -225,6 +225,18 @@ PresetBrowserColumn::ColumnListModel::ColumnListModel(PresetBrowser* p, int inde
 
 int PresetBrowserColumn::ColumnListModel::getNumRows()
 {
+	// When showExpansionContentOnly is active and no expansion has been selected in
+	// the browser column, all bank/category/preset columns must remain empty —
+	// regardless of what root or totalRoot are currently set to.  This handles
+	// timing edge cases (e.g. the constructor populating columns before setOptions
+	// is called) and the search/wildcard fallback path that would otherwise return
+	// project presets when there are no installed expansions.
+	if (index != -1 && parent->shouldHideAllContent())
+	{
+		entries.clear();
+		return 0;
+	}
+
 	if (wildcard.isEmpty() && currentlyActiveTags.isEmpty())
 	{
 		if (showFavoritesOnly && index == 2)
@@ -262,10 +274,17 @@ int PresetBrowserColumn::ColumnListModel::getNumRows()
 		auto searchRoots = parent->getAllSearchRoots();
 
 		if (searchRoots.isEmpty())
-			totalRoot.findChildFiles(allFiles, File::findFiles, true);
+		{
+			// When showExpansionContentOnly is active, an empty searchRoots means
+			// "no expansion content available" — do not fall back to totalRoot.
+			if (!parent->shouldHideAllContent())
+				totalRoot.findChildFiles(allFiles, File::findFiles, true);
+		}
 		else
+		{
 			for (auto& r : searchRoots)
 				r.findChildFiles(allFiles, File::findFiles, true);
+		}
 		entries.clear();
 
 		for (int i = 0; i < allFiles.size(); i++)
