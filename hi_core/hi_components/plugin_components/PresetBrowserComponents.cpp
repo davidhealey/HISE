@@ -501,7 +501,7 @@ Component* PresetBrowserColumn::ColumnListModel::refreshComponentForRow(int rowN
 void PresetBrowserColumn::ColumnListModel::sendRowChangeMessage(int row)
 {
 	if (listener != nullptr)
-		listener->selectionChanged(index, row, entries[row], false);
+		listener->selectionChanged(index, row, (row >= 0 && row < entries.size()) ? entries[row] : File(), false);
 }
 
 

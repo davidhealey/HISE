@@ -816,6 +816,13 @@ Array<File> PresetBrowser::getAllFavoritePresets()
 
 void PresetBrowser::presetChanged(const File& newPreset)
 {
+	// When showExpansionContentOnly is active and no expansion is selected in the
+	// browser column, the bank/category/preset content is intentionally hidden.
+	// Skip all column-update logic so no stale selection can re-populate the columns
+	// or make edit buttons visible again.
+	if (shouldHideAllContent())
+		return;
+
 	// After we switched the expansions we need to make sure to run this logic so that it ca
 	// set the correct columns for expansion / bank / category at least once
 	if (!refreshColumnUpdatesAfterExpansionSwitch &&

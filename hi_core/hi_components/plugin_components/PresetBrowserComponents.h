@@ -530,6 +530,11 @@ public:
 
 	void showAddButton()
 	{
+		// Never show the add button when the browser is in content-hidden mode
+		// (showExpansionContentOnly active, no expansion selected in column).
+		if (index != -1 && parent.getComponent() != nullptr && parent->shouldHideAllContent())
+			return;
+
 		addButton->setVisible(true && shouldShowAddButton);
 	}
 
