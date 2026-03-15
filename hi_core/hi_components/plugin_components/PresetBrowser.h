@@ -95,7 +95,10 @@ public:
 		bool showFolderButton = true;
 		bool showFavoriteIcons = true;
 		bool fullPathFavorites = false;
+		bool fullPathSearch = false;
 		bool showExpansions = false;
+		bool showExpansionEditButtons = false;
+		bool showExpansionContentOnly = false;
 	};
 
 	// ============================================================================================
@@ -186,6 +189,7 @@ public:
 	void updateFavoriteButton();
 	bool shouldShowFavoritesButton() { return showFavoritesButton; }
 	bool shouldShowFullPathFavorites() { return fullPathFavorites; }
+	bool shouldShowFullPathSearch() { return fullPathSearch; }
 
 	void lookAndFeelChanged() override;
 
@@ -193,6 +197,10 @@ public:
 	void savePresetDatabase(const File& rootDirectory);
 	var getDataBase() { return presetDatabase; }
 	const var getDataBase() const { return presetDatabase; }
+
+	/** Toggle the favourite state of a preset, writing to whichever root database
+	    the file belongs to (not necessarily the currently loaded rootFile). */
+	void toggleFavorite(const File& f, bool isFavorite);
 
 	void incPreset(bool next, bool stayInSameDirectory=false);
 	void setCurrentPreset(const File& f, NotificationType /*sendNotification*/);
@@ -213,7 +221,14 @@ public:
 		static String getNoteFromXml(const File& currentPreset);
 		static bool matchesAvailableExpansions(MainController* mc, const File& currentPreset);
 		static bool isFavorite(const var& database, const File& presetFile);
+		/** Load db.json from rootDir, or return an empty object if it doesn't exist or is invalid. */
+		static var loadDatabase(const File& rootDir);
 		static Identifier getIdForFile(const File& presetFile);
+		/** Remap all database entries whose keys were derived from paths under
+		    oldDir so that they use the equivalent path under newDir instead.
+		    Call this *before* the filesystem move so the old files still exist
+		    and getIdForFile() can resolve them correctly. */
+		static void migrateEntries(var& database, const File& oldDir, const File& newDir);
 	};
 
 	void setOptions(const Options& newOptions);
@@ -232,6 +247,15 @@ public:
 	}
 
 	Point<int> getMouseHoverInformation() const;
+
+	Array<File> getAllSearchRoots() const;
+	Array<File> getAllFavoritePresets();
+	bool isFavoriteInAnyDatabase(const File& presetFile) const;
+
+	/** Mark the favourites cache as stale so it is rebuilt on next access.
+	    Call this whenever the favourite state of any preset changes or
+	    whenever the set of visible roots changes (e.g. expansion switch). */
+	void invalidateFavoritesCache() { favoritesCacheDirty = true; }
 
 	Component* getColumn(int columnIndex)
 	{
@@ -254,6 +278,7 @@ private:
 	void setShowFavorites(bool shouldShowFavorites);
 	void setFavoriteIconOffset(int xOffset);
 	void setShowFullPathFavorites(bool shouldShowFullPathFavorites);
+	void setShowFullPathSearch(bool shouldShowFullPathSearch);
 	void setHighlightColourAndFont(Colour c, Colour bgColour, Font f);
 	void setNumColumns(int numColumns);
 
@@ -305,13 +330,32 @@ private:
 
 	bool showFavoritesButton = true;
 	bool fullPathFavorites = false;
+	bool fullPathSearch = false;
 	bool showOnlyPresets = false;
+	bool expansionContentOnly = false;
 	String currentWildcard = "*";
 	StringArray currentTagSelection;
 
 	WeakReference<Expansion> currentlySelectedExpansion;
 
 	var presetDatabase;
+
+	// Cached list of favourite files.  Rebuilt lazily whenever
+	// favoritesCacheDirty is true (on first access after a favourite toggle
+	// or expansion switch).  mutable so it can be populated from const
+	// query methods.
+	mutable Array<File> cachedFavorites;
+	mutable bool favoritesCacheDirty = true;
+
+	// Collect all user-preset root directories (project + all expansions).
+	Array<File> getAllUserPresetRoots() const;
+
+	// Rebuild cachedFavorites from disk/in-memory databases.
+	void rebuildFavoritesCache() const;
+
+	/** Updates the add button and column visibility state when showExpansionContentOnly
+	    is active. Call this whenever the selected expansion or the loaded expansion changes. */
+	void updateExpansionContentOnlyState();
 
 	JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(PresetBrowser);
 
