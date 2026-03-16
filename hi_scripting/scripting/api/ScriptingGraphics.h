@@ -844,6 +844,7 @@ namespace ScriptingObjects
 			virtual ~Laf();;
 			
 			Font getFont();
+			String getFontName();
 
 			ScriptedLookAndFeel* get() override;
 
@@ -861,18 +862,17 @@ namespace ScriptingObjects
 			void preparePopupMenuWindow(Component& newWindow) override;
 			int getMenuWindowFlags();
 
-			void drawPopupMenuBackground(Graphics& g_, int width, int height) override;
+			void drawPopupMenuBackgroundWithOptions(Graphics& g_, int width, int height, const PopupMenu::Options& options) override;
 
-			void drawPopupMenuItem(Graphics& g, const Rectangle<int>& area,
-				bool isSeparator, bool isActive,
-				bool isHighlighted, bool isTicked,
-				bool hasSubMenu, const String& text,
-				const String& shortcutKeyText,
-				const Drawable* icon, const Colour* textColourToUse);
+			void drawPopupMenuItemWithOptions(Graphics& g, const Rectangle<int>& area,
+				bool isHighlighted,
+				const PopupMenu::Item& item,
+				const PopupMenu::Options& options) override;
 
-            void drawPopupMenuSectionHeader (Graphics& g,
+            void drawPopupMenuSectionHeaderWithOptions(Graphics& g,
                                              const Rectangle<int>& area,
-                                             const String& sectionName);
+                                             const String& sectionName,
+                                             const PopupMenu::Options& options) override;
             
 			void drawToggleButton(Graphics &g, ToggleButton &b, bool isMouseOverButton, bool /*isButtonDown*/) override;
 
@@ -1483,6 +1483,7 @@ namespace ScriptingObjects
 
         
 		Font f = GLOBAL_BOLD_FONT();
+		String fontName = "Default";
         
         struct GraphicsWithComponent
         {
