@@ -1679,13 +1679,12 @@ RestServer::Response RestHelpers::handleScreenshot(MainController* mc, RestServe
 	 - Find the ScriptContentComponent (the actual UI component on screen)
 	 - Marshal to message thread for capture
 	 - Use Component::createComponentSnapshot(bounds, true, scale)
-	 - If componentId specified, crop to that component's bounds
+	 - If componentId specified, crop to that component bounds
 	 - 1 second timeout - return error if exceeded
 	 - Handle case where UI is mid-compilation gracefully
 	
 	 Suggested structure:
 #endif
-	
 	Image capturedImage;
 	bool captureSuccess = false;
 	WaitableEvent captureComplete;
