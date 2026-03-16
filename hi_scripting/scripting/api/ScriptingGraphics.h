@@ -834,6 +834,7 @@ namespace ScriptingObjects
 			public CustomKeyboardLookAndFeelBase,
 			public ScriptTableListModel::LookAndFeelMethods,
             public MatrixPeakMeter::LookAndFeelMethods,
+			public TableFloatingTileBase::LookAndFeelMethods,
 			public WaterfallComponent::LookAndFeelMethods,
 			public HiSlider::HoverPopupLookandFeel,
 			public PerformanceLabelPanel::LookAndFeelMethods
@@ -938,6 +939,10 @@ namespace ScriptingObjects
 			void drawTableHeaderBackground(Graphics& g, TableHeaderComponent& h) override;
 
 			void drawTableHeaderColumn(Graphics& g, TableHeaderComponent&, const String& columnName, int columnId, int width, int height, bool isMouseOver, bool isMouseDown, int columnFlags) override;
+
+			void drawTableRowBackground(Graphics& g, const TableFloatingTileBase::LookAndFeelData& d, int rowNumber, int width, int height, bool rowIsSelected, bool rowIsHovered) override;
+
+			void drawTableCell(Graphics& g, const TableFloatingTileBase::LookAndFeelData& d, const String& text, int rowNumber, int columnId, int width, int height, bool rowIsSelected, bool cellIsClicked, bool cellIsHovered) override;
 
             void getIdealPopupMenuItemSize(const String &text, bool isSeparator, int standardMenuItemHeight, int &idealWidth, int &idealHeight) override;
             
