@@ -677,7 +677,7 @@ bool PresetHandler::showYesNoWindowIfMessageThread(const String &title, const St
 	return defaultReturnValue;
 }
 
-bool PresetHandler::showMessageWindow(const String &title, const String &message, PresetHandler::IconType type)
+void PresetHandler::showMessageWindow(const String &title, const String &message, PresetHandler::IconType type)
 {
 	if (MessageManager::getInstanceWithoutCreating()->isThisTheMessageThread())
 	{
@@ -685,7 +685,7 @@ bool PresetHandler::showMessageWindow(const String &title, const String &message
 		if (CompileExporter::isExportingFromCommandLine())
 		{
 			std::cout << title << ": " << message << std::endl;
-			return false;
+			return;
 		}
 
 #endif
@@ -707,7 +707,7 @@ bool PresetHandler::showMessageWindow(const String &title, const String &message
 
 		applyAlertWindowMargin(nameWindow, laf);
 
-		return (nameWindow->runModalLoop() == 1);
+		nameWindow->runModalLoop();
 #endif
 	}
 	else
@@ -717,7 +717,6 @@ bool PresetHandler::showMessageWindow(const String &title, const String &message
 			showMessageWindow(title, message, type);
 		});
 	}
-	return false;
 };
 
 struct CountedProcessorId
