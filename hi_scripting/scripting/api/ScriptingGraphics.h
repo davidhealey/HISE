@@ -843,6 +843,7 @@ namespace ScriptingObjects
 			virtual ~Laf();;
 			
 			Font getFont();
+			String getFontName();
 
 			ScriptedLookAndFeel* get() override;
 
@@ -1477,6 +1478,7 @@ namespace ScriptingObjects
 
         
 		Font f = GLOBAL_BOLD_FONT();
+		String fontName = "Default";
         
         struct GraphicsWithComponent
         {

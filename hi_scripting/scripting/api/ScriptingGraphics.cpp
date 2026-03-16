@@ -2480,6 +2480,7 @@ void ScriptingObjects::ScriptedLookAndFeel::registerFunction(var functionName, v
 void ScriptingObjects::ScriptedLookAndFeel::setGlobalFont(const String& fontName, float fontSize)
 {
 	f = getScriptProcessor()->getMainController_()->getFontFromString(fontName, fontSize);
+	this->fontName = fontName;
 }
 
 void ScriptingObjects::ScriptedLookAndFeel::setInlineStyleSheet(const String& cssCode)
@@ -3993,6 +3994,13 @@ Font ScriptingObjects::ScriptedLookAndFeel::Laf::getFont()
 		return GLOBAL_BOLD_FONT();
 }
 
+String ScriptingObjects::ScriptedLookAndFeel::Laf::getFontName()
+{
+	if (auto l = get())
+		return l->fontName;
+	return "Default";
+}
+
 Font ScriptingObjects::ScriptedLookAndFeel::Laf::getAlertWindowMessageFont()
 { return getFont(); }
 
@@ -4462,7 +4470,7 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawPopupMenuItemWithOptions(Gr
 				obj->setProperty("itemColour3", ft->findPanelColour(FloatingTileContent::PanelColourId::itemColour3).getARGB());
 				obj->setProperty("textColour", d.textColour.getARGB());
 				obj->setProperty("parentType", d.parentType);
-				obj->setProperty("font", d.f.getTypefaceName());
+				obj->setProperty("font", ft->getFontName());
 				obj->setProperty("fontSize", d.f.getHeight());
 			}
 			else if (tc->isColourSpecified(HiseColourScheme::ComponentOutlineColourId))
@@ -4475,13 +4483,13 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawPopupMenuItemWithOptions(Gr
 
 				if (auto cb = dynamic_cast<const HiComboBox*>(tc))
 				{
-					obj->setProperty("font", cb->font.getTypefaceName());
+					obj->setProperty("font", cb->fontName);
 					obj->setProperty("fontSize", cb->font.getHeight());
 				}
 				else
 				{
 					auto f = getFont();
-					obj->setProperty("font", f.getTypefaceName());
+					obj->setProperty("font", getFontName());
 					obj->setProperty("fontSize", f.getHeight());
 				}
 			}
@@ -4496,9 +4504,8 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawPopupMenuItemWithOptions(Gr
 					obj->setProperty("textColour", panel->findPanelColour(FloatingTileContent::PanelColourId::textColour).getARGB());
 					obj->setProperty("parentType", panel->getIdentifierForBaseClass().toString());
 
-					auto f = panel->getFont();
-					obj->setProperty("font", f.getTypefaceName());
-					obj->setProperty("fontSize", f.getHeight());
+					obj->setProperty("font", panel->getFontName());
+					obj->setProperty("fontSize", panel->getFont().getHeight());
 				}
 			}
 		}
@@ -4539,7 +4546,7 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawPopupMenuSectionHeaderWithO
                 obj->setProperty("itemColour3", ft->findPanelColour(FloatingTileContent::PanelColourId::itemColour3).getARGB());
                 obj->setProperty("textColour", d.textColour.getARGB());
                 obj->setProperty("parentType", d.parentType);
-                obj->setProperty("font", d.f.getTypefaceName());
+                obj->setProperty("font", ft->getFontName());
                 obj->setProperty("fontSize", d.f.getHeight());
             }
             else if (tc->isColourSpecified(HiseColourScheme::ComponentOutlineColourId))
@@ -4552,13 +4559,13 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawPopupMenuSectionHeaderWithO
 
                 if (auto cb = dynamic_cast<const HiComboBox*>(tc))
                 {
-                    obj->setProperty("font", cb->font.getTypefaceName());
+                    obj->setProperty("font", cb->fontName);
                     obj->setProperty("fontSize", cb->font.getHeight());
                 }
                 else
                 {
                     auto f = getFont();
-                    obj->setProperty("font", f.getTypefaceName());
+                    obj->setProperty("font", getFontName());
                     obj->setProperty("fontSize", f.getHeight());
                 }
             }
@@ -4573,9 +4580,8 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawPopupMenuSectionHeaderWithO
                     obj->setProperty("textColour", panel->findPanelColour(FloatingTileContent::PanelColourId::textColour).getARGB());
                     obj->setProperty("parentType", panel->getIdentifierForBaseClass().toString());
 
-                    auto f = panel->getFont();
-                    obj->setProperty("font", f.getTypefaceName());
-                    obj->setProperty("fontSize", f.getHeight());
+                    obj->setProperty("font", panel->getFontName());
+                    obj->setProperty("fontSize", panel->getFont().getHeight());
                 }
             }
         }

@@ -1211,7 +1211,10 @@ void ScriptCreatedComponentWrappers::ComboBoxWrapper::updateFont(ScriptComponent
 	plaf.setComboBoxFont(f);
 
 	if (auto hcb = dynamic_cast<HiComboBox*>(getComponent()))
+	{
 		hcb->font = f;
+		hcb->fontName = fontName;
+	}
 
 	getComponent()->resized();
 	getComponent()->repaint();

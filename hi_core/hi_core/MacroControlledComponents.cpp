@@ -2192,6 +2192,7 @@ HiComboBox::HiComboBox(const String& name):
 {
 	addChildComponent(numberTag);
 	font = GLOBAL_FONT();
+	fontName = "Default";
 
 	addListener(this);
 
