@@ -4460,7 +4460,7 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawToggleButton(Graphics &g_, 
 		obj->setProperty("value", b.getToggleState());
 
 		setColourOrBlack(obj, "bgColour", b, HiseColourScheme::ComponentOutlineColourId);
-		setColourOrBlack(obj, "itemColour", b, HiseColourScheme::ComponentFillTopColourId);
+		setColourOrBlack(obj, "itemColour1", b, HiseColourScheme::ComponentFillTopColourId);
 		setColourOrBlack(obj, "itemColour2", b, HiseColourScheme::ComponentFillBottomColourId);
 		setColourOrBlack(obj, "textColour", b, HiseColourScheme::ComponentTextColourId);
 
