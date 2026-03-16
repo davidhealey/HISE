@@ -2556,6 +2556,7 @@ void ScriptingObjects::ScriptedLookAndFeel::registerFunction(var functionName, v
 void ScriptingObjects::ScriptedLookAndFeel::setGlobalFont(const String& fontName, float fontSize)
 {
 	f = getScriptProcessor()->getMainController_()->getFontFromString(fontName, fontSize);
+	this->fontName = fontName;
 }
 
 void ScriptingObjects::ScriptedLookAndFeel::setInlineStyleSheet(const String& cssCode)
@@ -4093,6 +4094,13 @@ Font ScriptingObjects::ScriptedLookAndFeel::Laf::getFont()
 		return GLOBAL_BOLD_FONT();
 }
 
+String ScriptingObjects::ScriptedLookAndFeel::Laf::getFontName()
+{
+	if (auto l = get())
+		return l->fontName;
+	return "Default";
+}
+
 Font ScriptingObjects::ScriptedLookAndFeel::Laf::getAlertWindowMessageFont()
 { return getFont(); }
 
@@ -4466,7 +4474,7 @@ int ScriptingObjects::ScriptedLookAndFeel::Laf::getMenuWindowFlags()
            & ~ComponentPeer::windowHasDropShadow;
 }
 
-void ScriptingObjects::ScriptedLookAndFeel::Laf::drawPopupMenuBackground(Graphics& g_, int width, int height)
+void ScriptingObjects::ScriptedLookAndFeel::Laf::drawPopupMenuBackgroundWithOptions(Graphics& g_, int width, int height, const PopupMenu::Options& options)
 {
 	if (functionDefined("drawPopupMenuBackground"))
 	{
@@ -4476,30 +4484,68 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawPopupMenuBackground(Graphic
 		obj->setProperty("width", width);
 		obj->setProperty("height", height);
 
+		auto* tc = options.getTargetComponent();
+
+		if (tc != nullptr)
+		{
+			writeId(obj, tc);
+
+			if (auto ft = tc->findParentComponentOfClass<TableFloatingTileBase>())
+			{
+				auto d = ft->getLookAndFeelData();
+				obj->setProperty("bgColour", d.bgColour.getARGB());
+				obj->setProperty("itemColour1", d.itemColour1.getARGB());
+				obj->setProperty("itemColour2", d.itemColour2.getARGB());
+				obj->setProperty("itemColour3", ft->findPanelColour(FloatingTileContent::PanelColourId::itemColour3).getARGB());
+				obj->setProperty("textColour", d.textColour.getARGB());
+				obj->setProperty("parentType", d.parentType);
+			}
+			else if (tc->isColourSpecified(HiseColourScheme::ComponentOutlineColourId))
+			{
+				setColourOrBlack(obj, "bgColour",    *tc, HiseColourScheme::ComponentOutlineColourId);
+				setColourOrBlack(obj, "itemColour1", *tc, HiseColourScheme::ComponentFillTopColourId);
+				setColourOrBlack(obj, "itemColour2", *tc, HiseColourScheme::ComponentFillBottomColourId);
+				setColourOrBlack(obj, "textColour",  *tc, HiseColourScheme::ComponentTextColourId);
+				addParentFloatingTile(*tc, obj);
+			}
+			else if (auto ft = tc->findParentComponentOfClass<FloatingTile>())
+			{
+				if (auto panel = ft->getCurrentFloatingPanel())
+				{
+					obj->setProperty("bgColour", panel->findPanelColour(FloatingTileContent::PanelColourId::bgColour).getARGB());
+					obj->setProperty("itemColour1", panel->findPanelColour(FloatingTileContent::PanelColourId::itemColour1).getARGB());
+					obj->setProperty("itemColour2", panel->findPanelColour(FloatingTileContent::PanelColourId::itemColour2).getARGB());
+					obj->setProperty("itemColour3", panel->findPanelColour(FloatingTileContent::PanelColourId::itemColour3).getARGB());
+					obj->setProperty("textColour", panel->findPanelColour(FloatingTileContent::PanelColourId::textColour).getARGB());
+					obj->setProperty("parentType", panel->getIdentifierForBaseClass().toString());
+				}
+			}
+		}
+
 		if (get()->callWithGraphics(g_, "drawPopupMenuBackground", var(obj), nullptr))
 			return;
 	}
 
-	GlobalHiseLookAndFeel::drawPopupMenuBackground(g_, width, height);
+	GlobalHiseLookAndFeel::drawPopupMenuBackgroundWithOptions(g_, width, height, options);
 }
 
-void ScriptingObjects::ScriptedLookAndFeel::Laf::drawPopupMenuItem(Graphics& g_, const Rectangle<int>& area, bool isSeparator, bool isActive, bool isHighlighted, bool isTicked, bool hasSubMenu, const String& text, const String& shortcutKeyText, const Drawable* icon, const Colour* textColourToUse)
+void ScriptingObjects::ScriptedLookAndFeel::Laf::drawPopupMenuItemWithOptions(Graphics& g_, const Rectangle<int>& area, bool isHighlighted, const PopupMenu::Item& item, const PopupMenu::Options& options)
 {
 	if (functionDefined("drawPopupMenuItem"))
 	{
 		auto obj = new DynamicObject();
 		obj->setProperty("area", ApiHelpers::getVarRectangle(useRectangleClass, area.toFloat()));
-		obj->setProperty("isSeparator", isSeparator);
-        obj->setProperty("isSectionHeader", false);
-		obj->setProperty("isActive", isActive);
+		obj->setProperty("isSeparator", item.isSeparator);
+        obj->setProperty("isSectionHeader", item.isSectionHeader);
+		obj->setProperty("isActive", item.isEnabled);
 		obj->setProperty("isHighlighted", isHighlighted);
-		obj->setProperty("isTicked", isTicked);
-		obj->setProperty("hasSubMenu", hasSubMenu);
-		obj->setProperty("text", text);
+		obj->setProperty("isTicked", item.isTicked);
+		obj->setProperty("hasSubMenu", item.subMenu != nullptr);
+		obj->setProperty("text", item.text);
 
 		var keeper;
 
-		if (auto p = dynamic_cast<const DrawablePath*>(icon))
+		if (auto p = dynamic_cast<const DrawablePath*>(item.image.get()))
 		{
 			auto sp = new ScriptingObjects::PathObject(get()->getScriptProcessor());
 			sp->getPath() = p->getPath();
@@ -4508,14 +4554,69 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawPopupMenuItem(Graphics& g_,
 
 		obj->setProperty("path", keeper);
 
+		auto* tc = options.getTargetComponent();
+
+		if (tc != nullptr)
+		{
+			writeId(obj, tc);
+
+			if (auto ft = tc->findParentComponentOfClass<TableFloatingTileBase>())
+			{
+				auto d = ft->getLookAndFeelData();
+				obj->setProperty("bgColour", d.bgColour.getARGB());
+				obj->setProperty("itemColour1", d.itemColour1.getARGB());
+				obj->setProperty("itemColour2", d.itemColour2.getARGB());
+				obj->setProperty("itemColour3", ft->findPanelColour(FloatingTileContent::PanelColourId::itemColour3).getARGB());
+				obj->setProperty("textColour", d.textColour.getARGB());
+				obj->setProperty("parentType", d.parentType);
+				obj->setProperty("font", ft->getFontName());
+				obj->setProperty("fontSize", d.f.getHeight());
+			}
+			else if (tc->isColourSpecified(HiseColourScheme::ComponentOutlineColourId))
+			{
+				setColourOrBlack(obj, "bgColour",    *tc, HiseColourScheme::ComponentOutlineColourId);
+				setColourOrBlack(obj, "itemColour1", *tc, HiseColourScheme::ComponentFillTopColourId);
+				setColourOrBlack(obj, "itemColour2", *tc, HiseColourScheme::ComponentFillBottomColourId);
+				setColourOrBlack(obj, "textColour",  *tc, HiseColourScheme::ComponentTextColourId);
+				addParentFloatingTile(*tc, obj);
+
+				if (auto cb = dynamic_cast<const HiComboBox*>(tc))
+				{
+					obj->setProperty("font", cb->fontName);
+					obj->setProperty("fontSize", cb->font.getHeight());
+				}
+				else
+				{
+					auto f = getFont();
+					obj->setProperty("font", getFontName());
+					obj->setProperty("fontSize", f.getHeight());
+				}
+			}
+			else if (auto ft = tc->findParentComponentOfClass<FloatingTile>())
+			{
+				if (auto panel = ft->getCurrentFloatingPanel())
+				{
+					obj->setProperty("bgColour", panel->findPanelColour(FloatingTileContent::PanelColourId::bgColour).getARGB());
+					obj->setProperty("itemColour1", panel->findPanelColour(FloatingTileContent::PanelColourId::itemColour1).getARGB());
+					obj->setProperty("itemColour2", panel->findPanelColour(FloatingTileContent::PanelColourId::itemColour2).getARGB());
+					obj->setProperty("itemColour3", panel->findPanelColour(FloatingTileContent::PanelColourId::itemColour3).getARGB());
+					obj->setProperty("textColour", panel->findPanelColour(FloatingTileContent::PanelColourId::textColour).getARGB());
+					obj->setProperty("parentType", panel->getIdentifierForBaseClass().toString());
+
+					obj->setProperty("font", panel->getFontName());
+					obj->setProperty("fontSize", panel->getFont().getHeight());
+				}
+			}
+		}
+
 		if (get()->callWithGraphics(g_, "drawPopupMenuItem", var(obj), nullptr))
 			return;
 	}
 
-	GlobalHiseLookAndFeel::drawPopupMenuItem(g_, area, isSeparator, isActive, isHighlighted, isTicked, hasSubMenu, text, shortcutKeyText, icon, textColourToUse);
+	GlobalHiseLookAndFeel::drawPopupMenuItemWithOptions(g_, area, isHighlighted, item, options);
 }
 
-void ScriptingObjects::ScriptedLookAndFeel::Laf::drawPopupMenuSectionHeader (Graphics& g_, const Rectangle<int>& area, const String& sectionName)
+void ScriptingObjects::ScriptedLookAndFeel::Laf::drawPopupMenuSectionHeaderWithOptions(Graphics& g_, const Rectangle<int>& area, const String& sectionName, const PopupMenu::Options& options)
 {
     if (functionDefined("drawPopupMenuItem"))
     {
@@ -4529,11 +4630,66 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawPopupMenuSectionHeader (Gra
         obj->setProperty("hasSubMenu", false);
         obj->setProperty("text", sectionName);
 
+        auto* tc = options.getTargetComponent();
+
+        if (tc != nullptr)
+        {
+            writeId(obj, tc);
+
+            if (auto ft = tc->findParentComponentOfClass<TableFloatingTileBase>())
+            {
+                auto d = ft->getLookAndFeelData();
+                obj->setProperty("bgColour", d.bgColour.getARGB());
+                obj->setProperty("itemColour1", d.itemColour1.getARGB());
+                obj->setProperty("itemColour2", d.itemColour2.getARGB());
+                obj->setProperty("itemColour3", ft->findPanelColour(FloatingTileContent::PanelColourId::itemColour3).getARGB());
+                obj->setProperty("textColour", d.textColour.getARGB());
+                obj->setProperty("parentType", d.parentType);
+                obj->setProperty("font", ft->getFontName());
+                obj->setProperty("fontSize", d.f.getHeight());
+            }
+            else if (tc->isColourSpecified(HiseColourScheme::ComponentOutlineColourId))
+            {
+                setColourOrBlack(obj, "bgColour",    *tc, HiseColourScheme::ComponentOutlineColourId);
+                setColourOrBlack(obj, "itemColour1", *tc, HiseColourScheme::ComponentFillTopColourId);
+                setColourOrBlack(obj, "itemColour2", *tc, HiseColourScheme::ComponentFillBottomColourId);
+                setColourOrBlack(obj, "textColour",  *tc, HiseColourScheme::ComponentTextColourId);
+                addParentFloatingTile(*tc, obj);
+
+                if (auto cb = dynamic_cast<const HiComboBox*>(tc))
+                {
+                    obj->setProperty("font", cb->fontName);
+                    obj->setProperty("fontSize", cb->font.getHeight());
+                }
+                else
+                {
+                    auto f = getFont();
+                    obj->setProperty("font", getFontName());
+                    obj->setProperty("fontSize", f.getHeight());
+                }
+            }
+            else if (auto ft = tc->findParentComponentOfClass<FloatingTile>())
+            {
+                if (auto panel = ft->getCurrentFloatingPanel())
+                {
+                    obj->setProperty("bgColour", panel->findPanelColour(FloatingTileContent::PanelColourId::bgColour).getARGB());
+                    obj->setProperty("itemColour1", panel->findPanelColour(FloatingTileContent::PanelColourId::itemColour1).getARGB());
+                    obj->setProperty("itemColour2", panel->findPanelColour(FloatingTileContent::PanelColourId::itemColour2).getARGB());
+                    obj->setProperty("itemColour3", panel->findPanelColour(FloatingTileContent::PanelColourId::itemColour3).getARGB());
+                    obj->setProperty("textColour", panel->findPanelColour(FloatingTileContent::PanelColourId::textColour).getARGB());
+                    obj->setProperty("parentType", panel->getIdentifierForBaseClass().toString());
+
+                    obj->setProperty("font", panel->getFontName());
+                    obj->setProperty("fontSize", panel->getFont().getHeight());
+                }
+            }
+        }
+
         if (get()->callWithGraphics(g_, "drawPopupMenuItem", var(obj), nullptr))
             return;
     }
 
-    GlobalHiseLookAndFeel::drawPopupMenuSectionHeader(g_, area, sectionName);
+    GlobalHiseLookAndFeel::drawPopupMenuSectionHeaderWithOptions(g_, area, sectionName, options);
 }
 
 void setColourOrBlack(DynamicObject* obj, const Identifier& id, Component& c, int colourId)
