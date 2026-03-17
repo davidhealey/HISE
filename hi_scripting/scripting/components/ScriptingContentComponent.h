@@ -243,11 +243,19 @@ public:
 
 	bool keyPressed(const KeyPress &key) override;
 
+	/** Returns the component that matches a script component at the given position. 
+	This will either return the component that represents the ScriptComponent (eg. a HiToggleButton) or nullptr. 
+
+	*/
+	Component* getScriptComponentComponent(Point<int> pos);
+
 	ScriptingApi::Content::ScriptComponent *getScriptComponentFor(Point<int> pos);
 
 	ScriptingApi::Content::ScriptComponent* getScriptComponentFor(Component* component);
 
 	Component* getComponentFor(ScriptingApi::Content::ScriptComponent* sc);
+
+	Component* getComponentForScriptComponentWithId(const Identifier& id);
 
 	void getScriptComponentsFor(Array<ScriptingApi::Content::ScriptComponent*> &arrayToFill, Point<int> pos);
 

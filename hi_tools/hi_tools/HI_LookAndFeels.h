@@ -111,6 +111,8 @@ class PopupLookAndFeel : public LookAndFeel_V3
 {
 public:
     
+	
+
     static void drawFake3D(Graphics& g, Rectangle<int> area);
 
     PopupLookAndFeel();;
@@ -331,7 +333,9 @@ public:
 	Colour highlightColour;
 	Colour textColour;
 	Colour modalBackgroundColour;
+	Colour itemColour3;
 	Font font;
+	String fontName;
 };
 
 class DefaultPresetBrowserLookAndFeel : public LookAndFeel_V3,
@@ -510,6 +514,9 @@ public:
 	void drawProgressBar (Graphics &g, ProgressBar &/*progressBar*/, int width, int height, double progress, const String &textToShow) override;
 
 	void drawAlertBox (Graphics &g, AlertWindow &alert, const Rectangle< int > &textArea, juce::TextLayout &textLayout) override;;
+
+	/** Override this to add extra margin around the alert window for custom drop shadows. */
+	virtual int getAlertWindowMargin() { return 0; }
 
 	Colour dark, bright, special;
 };

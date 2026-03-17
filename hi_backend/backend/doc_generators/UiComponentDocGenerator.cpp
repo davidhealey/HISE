@@ -260,7 +260,8 @@ hise::MarkdownDataBase::Item::Ptr UIComponentDatabase::ItemGenerator::createItem
 
 
 UIComponentDatabase::Resolver::Resolver(File root_, BackendProcessor* bp) :
-	root(root_)
+	root(root_),
+	ragContent(new DynamicObject())
 {
 	d->init(bp);
 }
@@ -287,23 +288,65 @@ juce::String UIComponentDatabase::Resolver::getContent(const MarkdownLink& url)
 
 		auto idDescriptions = header.getKeyList("properties");
 
+		DynamicObject::Ptr propObject = new DynamicObject();
+
+		auto getDataTypeString = [](const var& v)
+		{
+			if (v.isBool())
+				return "bool";
+			if (v.isInt() || v.isInt64())
+				return "int";
+			if (v.isString())
+				return "String";
+			if (v.isArray())
+				return "Array";
+			if (v.isObject())
+				return "Object";
+
+			return "undefined";
+		};
+
+		StringArray skipOptions = {
+			"Font",
+			"fontName"
+		};
+
 		for (int i = ScriptComponent::Properties::numProperties; i < c->getNumIds(); i++)
 		{
 			var value = c->getScriptObjectProperty(i);
 
+			auto propertyId = c->getIdFor(i);
+
 			auto valueString = MarkdownLink::Helpers::getPrettyVarString(value);
 
-			s << "| `" << c->getIdFor(i).toString() << "` | " << valueString << " |";
+			s << "| `" << propertyId.toString() << "` | " << valueString << " |";
 			
+			DynamicObject::Ptr po = new DynamicObject();
+
+			po->setProperty("defaultValue", value);
+			po->setProperty("type", getDataTypeString(value));
+			
+			auto options = c->getOptionsFor(propertyId);
+
+			if (!options.isEmpty() && !skipOptions.contains(propertyId.toString()))
+			{
+				Array<var> ol;
+				for (auto& o : options)
+					ol.add(var(o));
+
+				po->setProperty("options", var(ol));
+			}
+
 			String description;
 
 			for (auto prop : idDescriptions)
 			{
-				auto thisId = c->getIdFor(i).toString();
+				auto thisId = propertyId.toString();
 
 				if (prop.startsWith(thisId))
 				{
 					description = prop.fromFirstOccurrenceOf(":", false, false);
+					po->setProperty("description", var(description));
 					break;
 				}
 			}
@@ -313,10 +356,14 @@ juce::String UIComponentDatabase::Resolver::getContent(const MarkdownLink& url)
 			
 			s << description << " |";
 
+			propObject->setProperty(propertyId, var(po.get()));
+
 			s << nl;
 		}
 
 		s << url.toString(MarkdownLink::ContentWithoutHeader);
+
+		ragContent->setProperty(c->getObjectName(), var(propObject.get()));
 
 		return s;
 	}

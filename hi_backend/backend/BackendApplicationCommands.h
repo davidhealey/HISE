@@ -113,7 +113,6 @@ public:
 		MenuRevertFile = 0x26000,
         
 		// Export Menu
-		MenuExportSetupWizard,
 		MenuExportCompileProject,
 		MenuExportFileAsPlugin,
 		MenuExportFileAsEffectPlugin,
@@ -178,6 +177,8 @@ public:
 		MenuToolsCheckCyclicReferences,
 		MenuToolsConvertSVGToPathData,
 		MenuToolsBroadcasterWizard,
+		MenuToolsToggleRestServer,
+		MenuToolsShowInteractionTestWindow,
 		MenuToolsCreateExternalScriptFile,
 		
 		// ---------------------------------
@@ -395,8 +396,6 @@ public:
 
 		static void showExampleBrowser(BackendRootWindow* bpe);
 
-		static void setupExportWizard(BackendRootWindow* bpe);
-
 		static void exportProject(BackendRootWindow* bpe, int buildOption);
 
 		static void cleanDspNetworkFiles(BackendRootWindow* bpe);
@@ -454,6 +453,10 @@ struct XmlBackupFunctions
 	static File getScriptDirectoryFor(ModulatorSynthChain *masterChain, const String &chainId = String());
 
 	static File getScriptFileFor(ModulatorSynthChain *, File& directory, const String &id);
+
+	/** Writes the currently loaded user-preset path into the ValueTree so it
+	    can be restored when the XML backup is reopened. */
+	static void embedCurrentUserPreset(ValueTree& v, ModulatorSynthChain* chain);
 
 private:
 

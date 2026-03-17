@@ -132,7 +132,9 @@ AudioProcessorEditor(fp)
     }
     
 #if USE_RAW_FRONTEND
-	setSize(getContentComponent()->getWidth(), getContentComponent()->getHeight());
+	originalSizeX = getContentComponent()->getWidth();
+	originalSizeY = getContentComponent()->getHeight();
+	setSize(originalSizeX, originalSizeY);
 #else
 	auto jsp = JavascriptMidiProcessor::getFirstInterfaceScriptProcessor(fp);
     
@@ -153,6 +155,7 @@ AudioProcessorEditor(fp)
 	
 	startTimer(4125);
 
+#if !USE_RAW_FRONTEND
 	WeakReference<ScriptingApi::Content> content = jsp->getScriptingContent();
 
 	scaleFactor = (float)fp->getGlobalScaleFactor();
@@ -163,6 +166,7 @@ AudioProcessorEditor(fp)
 		fp.originalSizeY = h;
 		fp.setGlobalScaleFactor(fp.scaleFactor, true);
 	});
+#endif
 	
 	const int availableHeight = Desktop::getInstance().getDisplays().getMainDisplay().userArea.getHeight();
 	const float displayScaleFactor = (float)Desktop::getInstance().getDisplays().getMainDisplay().scale;

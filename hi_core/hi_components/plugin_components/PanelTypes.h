@@ -75,7 +75,8 @@ const var data = {
 "ClearMidiCC": true,
 "SampleLocation": true,
 "DebugMode": true,
-"ScaleFactorList": [0.5, 1, 2]
+"ScaleFactorList": [0.5, 1, 2],
+"LabelAlignment": "right"
 };
 ```
 
@@ -102,6 +103,7 @@ public:
 		SampleLocation, ///< shows the location of the sample folder and a button to relocate
 		DebugMode, ///< enables Debug mode which creates a useful log file for bug chasing
 		ScaleFactorList, ///< an array containing all available zoom factors (eg. `[0.5, 1.5, 1.25]` for 50%, 100%, 125%)
+		LabelAlignment, ///< the alignment of the text labels ("left" or "right", default is "right")
 		numProperties
 	};
 
@@ -136,7 +138,11 @@ A list with all MIDI channels that can be enabled or disabled.
 
 | ID | Description |
 | --- | --- |
+`ColourData::bgColour`  | the background colour
 `ColourData::textColour`  | the text colour
+`ColourData::itemColour1`  | the first item colour
+`ColourData::itemColour2`  | the second item colour
+`ColourData::itemColour3`  | the third item colour
 
 ### Example JSON
 
@@ -183,7 +189,11 @@ A list with all available MIDI devices that can be enabled / disabled (similar t
 
 | ID | Description |
 | --- | --- |
+`ColourData::bgColour`  | the background colour
 `ColourData::textColour`  | the text colour
+`ColourData::itemColour1`  | the first item colour
+`ColourData::itemColour2`  | the second item colour
+`ColourData::itemColour3`  | the third item colour
 
 ### Example JSON
 

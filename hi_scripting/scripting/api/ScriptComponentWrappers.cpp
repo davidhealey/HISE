@@ -658,7 +658,7 @@ void ScriptCreatedComponentWrappers::SliderWrapper::updateSliderRange(ScriptingA
 	{
 		NormalisableRange<double> nr(min, max, stepsize);
 
-		if(nr.getRange().contains(middlePos))
+		if(nr.getRange().contains(middlePos) && middlePos > nr.start)
 			nr.setSkewForCentre(middlePos);
 
 		s->setMode(sc->m, nr);
@@ -873,6 +873,9 @@ void ScriptCreatedComponentWrapper::updatePopupPosition()
 		auto p = getValuePopupPosition(l);
 
 		p.applyTransform(currentPopup->getTransform().inverted());
+
+		if (currentPopup->drawShadow)
+			p -= Point<int>(ValuePopup::shadowMargin, ValuePopup::shadowMargin);
 
 		currentPopup->setTopLeftPosition(p);
 	}
@@ -1185,33 +1188,35 @@ void ScriptCreatedComponentWrappers::ComboBoxWrapper::updateFont(ScriptComponent
 	const String fontStyle = cb->getScriptObjectProperty(ScriptingApi::Content::ScriptComboBox::FontStyle).toString();
 	const float fontSize = (float)cb->getScriptObjectProperty(ScriptingApi::Content::ScriptComboBox::FontSize);
 
+	Font f;
+
 	if (fontName == "Oxygen" || fontName == "Default")
 	{
 		if (fontStyle == "Bold")
-			plaf.setComboBoxFont(GLOBAL_BOLD_FONT().withHeight(fontSize));
+			f = GLOBAL_BOLD_FONT().withHeight(fontSize);
 		else
-		{
-			plaf.setComboBoxFont(GLOBAL_FONT().withHeight(fontSize));
-		}
+			f = GLOBAL_FONT().withHeight(fontSize);
 	}
 	else if (fontName == "Source Code Pro")
 	{
-		plaf.setComboBoxFont(GLOBAL_MONOSPACE_FONT().withHeight(fontSize));
+		f = GLOBAL_MONOSPACE_FONT().withHeight(fontSize);
 	}
 	else
 	{
 		const juce::Typeface::Ptr typeface = dynamic_cast<const Processor*>(contentComponent->getScriptProcessor())->getMainController()->getFont(fontName);
 
 		if (typeface != nullptr)
-		{
-			Font font = Font(typeface).withHeight(fontSize);
-			plaf.setComboBoxFont(font);
-		}
+			f = Font(typeface).withHeight(fontSize);
 		else
-		{
-			Font font(fontName, fontStyle, fontSize);
-			plaf.setComboBoxFont(font);
-		}
+			f = Font(fontName, fontStyle, fontSize);
+	}
+
+	plaf.setComboBoxFont(f);
+
+	if (auto hcb = dynamic_cast<HiComboBox*>(getComponent()))
+	{
+		hcb->font = f;
+		hcb->fontName = fontName;
 	}
 
 	getComponent()->resized();
@@ -1875,7 +1880,19 @@ void ScriptCreatedComponentWrappers::ViewportWrapper::updateComponent()
 		auto vp = dynamic_cast<Viewport*>(component.get());
 
 		vp->setScrollBarThickness(vpc->getScriptObjectProperty(ScriptingApi::Content::ScriptedViewport::Properties::scrollbarThickness));
-		vp->setColour(ScrollBar::ColourIds::thumbColourId, GET_OBJECT_COLOUR(itemColour));
+
+		auto bgColour = GET_OBJECT_COLOUR(bgColour);
+		auto itemColour1 = GET_OBJECT_COLOUR(itemColour);
+		auto itemColour2 = GET_OBJECT_COLOUR(itemColour2);
+		auto tc = GET_OBJECT_COLOUR(textColour);
+
+		vp->getVerticalScrollBar().setColour(ScrollBar::ColourIds::backgroundColourId, bgColour);
+		vp->getVerticalScrollBar().setColour(ScrollBar::ColourIds::thumbColourId, itemColour1);
+		vp->getVerticalScrollBar().setColour(ScrollBar::ColourIds::trackColourId, itemColour2);
+		vp->getHorizontalScrollBar().setColour(ScrollBar::ColourIds::backgroundColourId, bgColour);
+		vp->getHorizontalScrollBar().setColour(ScrollBar::ColourIds::thumbColourId, itemColour1);
+		vp->getHorizontalScrollBar().setColour(ScrollBar::ColourIds::trackColourId, itemColour2);
+		vp->getProperties().set("textColour", (int64)tc.getARGB());
 	}
 	else
 	{
@@ -1926,7 +1943,35 @@ void ScriptCreatedComponentWrappers::ViewportWrapper::updateComponent(int proper
 		switch (propertyIndex)
 		{
 			PROPERTY_CASE::ScriptedViewport::Properties::scrollbarThickness: vp->setScrollBarThickness(newValue); break;
-			PROPERTY_CASE::ScriptComponent::itemColour: vp->setColour(ScrollBar::ColourIds::thumbColourId, GET_OBJECT_COLOUR(itemColour)); break;
+			PROPERTY_CASE::ScriptComponent::bgColour:
+			{
+				auto c = GET_OBJECT_COLOUR(bgColour);
+				vp->getVerticalScrollBar().setColour(ScrollBar::ColourIds::backgroundColourId, c);
+				vp->getHorizontalScrollBar().setColour(ScrollBar::ColourIds::backgroundColourId, c);
+				break;
+			}
+			PROPERTY_CASE::ScriptComponent::itemColour:
+			{
+				auto c = GET_OBJECT_COLOUR(itemColour);
+				vp->getVerticalScrollBar().setColour(ScrollBar::ColourIds::thumbColourId, c);
+				vp->getHorizontalScrollBar().setColour(ScrollBar::ColourIds::thumbColourId, c);
+				break;
+			}
+			PROPERTY_CASE::ScriptComponent::itemColour2:
+			{
+				auto c = GET_OBJECT_COLOUR(itemColour2);
+				vp->getVerticalScrollBar().setColour(ScrollBar::ColourIds::trackColourId, c);
+				vp->getHorizontalScrollBar().setColour(ScrollBar::ColourIds::trackColourId, c);
+				break;
+			}
+			PROPERTY_CASE::ScriptComponent::textColour:
+			{
+				auto c = GET_OBJECT_COLOUR(textColour);
+				vp->getProperties().set("textColour", (int64)c.getARGB());
+				vp->getVerticalScrollBar().repaint();
+				vp->getHorizontalScrollBar().repaint();
+				break;
+			}
 		}
 	}
 }
@@ -2038,7 +2083,14 @@ void ScriptCreatedComponentWrappers::ViewportWrapper::updateColours()
 			tableModel->setColours(textColour, bgColour, itemColour1, itemColour2);
 		}
 
-		listBox->getViewport()->setColour(ScrollBar::ColourIds::thumbColourId, itemColour1);
+		auto lbvp = listBox->getViewport();
+		lbvp->getVerticalScrollBar().setColour(ScrollBar::ColourIds::backgroundColourId, bgColour);
+		lbvp->getVerticalScrollBar().setColour(ScrollBar::ColourIds::thumbColourId, itemColour1);
+		lbvp->getVerticalScrollBar().setColour(ScrollBar::ColourIds::trackColourId, itemColour2);
+		lbvp->getHorizontalScrollBar().setColour(ScrollBar::ColourIds::backgroundColourId, bgColour);
+		lbvp->getHorizontalScrollBar().setColour(ScrollBar::ColourIds::thumbColourId, itemColour1);
+		lbvp->getHorizontalScrollBar().setColour(ScrollBar::ColourIds::trackColourId, itemColour2);
+		lbvp->getProperties().set("textColour", (int64)textColour.getARGB());
 
 		listBox->setColour(ListBox::ColourIds::backgroundColourId, bgColour);
 		listBox->setColour(ListBox::ColourIds::outlineColourId, itemColour2);
@@ -2298,6 +2350,12 @@ void ScriptCreatedComponentWrappers::PanelWrapper::updateColourAndBorder(BorderP
 	bpc->borderColour = GET_OBJECT_COLOUR(textColour);
 	bpc->borderRadius = getScriptComponent()->getScriptObjectProperty(ScriptingApi::Content::ScriptPanel::borderRadius);
 	bpc->borderSize = getScriptComponent()->getScriptObjectProperty(ScriptingApi::Content::ScriptPanel::borderSize);
+
+	bpc->setColour(HiseColourScheme::ComponentOutlineColourId, GET_OBJECT_COLOUR(bgColour));
+	bpc->setColour(HiseColourScheme::ComponentFillTopColourId, GET_OBJECT_COLOUR(itemColour));
+	bpc->setColour(HiseColourScheme::ComponentFillBottomColourId, GET_OBJECT_COLOUR(itemColour2));
+	bpc->setColour(HiseColourScheme::ComponentTextColourId, GET_OBJECT_COLOUR(textColour));
+
 	bpc->repaint();
 };
 
@@ -3435,7 +3493,7 @@ void ScriptCreatedComponentWrapper::ValuePopup::updateText()
 
 		if(!area.isEmpty())
 		{
-			shadow = nullptr;
+			drawShadow = false;
 			currentText = thisText;
 			setSize(area.getWidth(), area.getHeight());
 			repaint();
@@ -3451,9 +3509,9 @@ void ScriptCreatedComponentWrapper::ValuePopup::updateText()
 
 		int margin = (int)p->getLayoutData().margin;
 
-		int newWidth = p->getFont().getStringWidth(currentText) + 2 * margin + 5;
+		int newWidth = p->getFont().getStringWidth(currentText) + 2 * margin + 5 + 2 * shadowMargin;
 
-		setSize(newWidth, (int)p->getFont().getHeight() + 2*margin);
+		setSize(newWidth, (int)p->getFont().getHeight() + 2*margin + 2 * shadowMargin);
 
 
 		repaint();
@@ -3470,15 +3528,21 @@ void ScriptCreatedComponentWrapper::ValuePopup::paint(Graphics& g)
 
 	Properties::Ptr p = parent.contentComponent->getValuePopupProperties();
 
-	
-
 	if (p != nullptr)
 	{
 		auto l = p->getLayoutData();
 
-		auto ar = getLocalBounds().toFloat().reduced(l.lineThickness * 0.5f);
+		auto contentArea = getLocalBounds().toFloat().reduced((float)shadowMargin);
+		auto ar = contentArea.reduced(l.lineThickness * 0.5f);
 
-		g.setGradientFill(ColourGradient(p->getColour(Properties::itemColour), 0.0f, 0.0f, 
+		if (drawShadow)
+		{
+			Path shadowPath;
+			shadowPath.addRoundedRectangle(ar, l.radius);
+			shadow.drawForPath(g, shadowPath);
+		}
+
+		g.setGradientFill(ColourGradient(p->getColour(Properties::itemColour), 0.0f, 0.0f,
 										 p->getColour(Properties::itemColour2), 0.0f, (float)getHeight(), false));
 
 		g.fillRoundedRectangle(ar, l.radius);
@@ -3488,7 +3552,7 @@ void ScriptCreatedComponentWrapper::ValuePopup::paint(Graphics& g)
 
 		g.setFont(p->getFont());
 		g.setColour(p->getColour(Properties::textColour));
-		g.drawText(currentText, getLocalBounds(), Justification::centred);
+		g.drawText(currentText, contentArea.toNearestInt(), Justification::centred);
 	}
 
 	

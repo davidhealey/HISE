@@ -1,3 +1,13 @@
 [submodule "JUCE"]
 	path = JUCE
 	url = https://github.com/christophhart/JUCE_customized.git
+[submodule "tools/mcp_server"]
+	path = tools/mcp_server
+	url = https://github.com/christoph-hart/hise_mcp_server.git
+	branch = master
+[submodule "tools/api generator"]
+	path = tools/api generator
+	url = https://github.com/christoph-hart/hise_api_generator.git
+[submodule "tools/hise_lsp_server"]
+	path = tools/hise_lsp_server
+	url = https://github.com/christoph-hart/hise_lsp_server.git

@@ -117,6 +117,7 @@ CustomSettingsWindow::CustomSettingsWindow(MainController* mc_, bool buildMenus)
 	ADD(SampleLocation);
 	ADD(DebugMode);
 	ADD(ScaleFactorList);
+	ADD(LabelAlignment);
 	
 	setColour(ColourIds::textColour, Colours::white);
 
@@ -617,9 +618,9 @@ void CustomSettingsWindow::paint(Graphics& g)
 
 	drawLabel = [&](Properties id, const char* text)
 	{
-		if (isOn(id)) 
-		{ 
-			g.drawText(text, 0, y, getWidth() / 2 - 30, 30, Justification::centredLeft); 
+		if (isOn(id))
+		{
+			g.drawText(text, 0, y, getWidth() / 2 - 30, 30, labelRight ? Justification::centredRight : Justification::centredLeft);
 			y += 40;
 		}
 	};
@@ -656,7 +657,7 @@ void CustomSettingsWindow::paint(Graphics& g)
 
 
 
-#define POSITION_COMBOBOX(id, comboBox) if (isOn(id)) {comboBox->setBounds(getWidth() / 2 - 20, y, getWidth() / 2 - 20, 30); y += 40; } else comboBox->setVisible(false);
+#define POSITION_COMBOBOX(id, comboBox) if (isOn(id)) {comboBox->setBounds(getWidth() / 2 - 20, y, getWidth() / 2, 30); y += 40; } else comboBox->setVisible(false);
 #define POSITION_BUTTON(id, button) if (isOn(id)) {button->setBounds(10, y, getWidth() - 20, 30); y += 40; } else button->setVisible(false);
 
 void CustomSettingsWindow::resized()

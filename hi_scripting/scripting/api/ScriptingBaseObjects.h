@@ -152,6 +152,41 @@ private:
 
 	Identifier name;
 
+	using CreateFunction = std::function<ConstScriptingObject*(ProcessorWithScriptingContent*)>;
+	
+	static std::map<Identifier, CreateFunction>& getDiagnosticPrototypeFactory()
+	{
+		static std::map<Identifier, CreateFunction> map;
+		return map;
+	}
+	
+public:
+
+	static ReferenceCountedObjectPtr<ConstScriptingObject> createDiagnosticPrototype(const Identifier& className,
+		ProcessorWithScriptingContent* pwsc)
+	{
+		auto& map = getDiagnosticPrototypeFactory();
+		auto it = map.find(className);
+
+		if (it != map.end())
+			return it->second(pwsc);
+
+		return nullptr;
+	}
+
+protected:
+
+	template <typename T, typename...As> void registerDiagnosticPrototype(T& obj, As... arguments)
+	{
+		auto id = obj.getObjectName();
+
+		getDiagnosticPrototypeFactory()[id] = [arguments...](ProcessorWithScriptingContent* pwsc)
+		{
+			return new T(pwsc, arguments...);
+		};
+	}
+
+private:
 
 	JUCE_DECLARE_WEAK_REFERENCEABLE(ConstScriptingObject);
 };
@@ -227,6 +262,41 @@ struct WeakCallbackHolder : private ScriptingObject
 		virtual Result call(HiseJavascriptEngine* engine, const var::NativeFunctionArgs& args, var* returnValue);
 
         virtual bool isRealtimeSafe() const = 0;
+
+
+		enum class CallScope : uint8
+		{
+			Unknown = 0,   // no enrichment data
+			Init,          // onInit only
+			Unsafe,        // runtime OK, not audio thread
+			Warning,       // audio thread OK with caveats
+			Safe           // anywhere, anytime
+		};
+
+
+		enum class StrictnessLevel { Unset, Unsafe, Warn, Strict };
+
+#if USE_BACKEND
+		/** Returned by getRealtimeSafetyReport(). The call site (which has access
+		 *  to the global StrictnessLevel setting) uses worstScope to decide whether
+		 *  to block registration or just log, and message for console output.
+		 */
+		struct SafetyReport
+		{
+			CallScope worstScope = CallScope::Safe;
+			String message;
+		};
+
+		/** Returns a safety report for this callable at the given strictness.
+		 *  Unset/Unsafe: always returns empty report.
+		 *  Warn/Strict: returns worstScope + formatted message if issues were found.
+		 *  Default: returns empty (no analysis data). Override in InlineFunction::Object (Layer 3).
+		 */
+		virtual SafetyReport getRealtimeSafetyReport(StrictnessLevel) const
+		{
+			return {};
+		}
+#endif
         
 		virtual bool allowRefCount() const { return true; }
 
@@ -239,6 +309,8 @@ struct WeakCallbackHolder : private ScriptingObject
 
 		virtual Identifier getCallId() const = 0;
 
+		virtual int getNumArguments() const = 0;
+
 	protected:
 
 		Result lastResult;
@@ -247,6 +319,103 @@ struct WeakCallbackHolder : private ScriptingObject
 		JUCE_DECLARE_WEAK_REFERENCEABLE(CallableObject);
 	};
 
+#if USE_BACKEND
+	struct RealtimeSafetyInfo
+	{
+		using CallScope = CallableObject::CallScope;
+		using StrictnessLevel = CallableObject::StrictnessLevel;
+		using SafetyReport = CallableObject::SafetyReport;
+
+		struct ItemBase: public ReferenceCountedObject
+		{
+			using Ptr = ReferenceCountedObjectPtr<ItemBase>;
+			using List = ReferenceCountedArray<ItemBase>;
+
+			virtual ~ItemBase() {};
+
+			String apiCall;                    // "Console.print" or "*.push" (greedy)
+			CallScope scope;                   // from the CallScopeInfo lookup
+			String note;                       // callScopeNote, e.g. "allocates MemoryOutputStream"
+			Identifier outerHolderType;        // "Callback" or "InlineFunction" — type of outermost holder
+
+			virtual Ptr clone() const = 0;
+			virtual String toCallStackString(Processor* p = nullptr) const = 0;
+
+		protected:
+
+			/** Copies all base members into target. Call from subclass clone(). */
+			void cloneBaseMembers(ItemBase* target) const
+			{
+				target->apiCall = apiCall;
+				target->scope = scope;
+				target->note = note;
+				target->outerHolderType = outerHolderType;
+			}
+		};
+
+		struct Holder
+		{
+			virtual ~Holder() {}
+			virtual RealtimeSafetyInfo* getRealtimeSafetyInfo() = 0;
+			virtual Identifier getCallScopeId() const { return {}; }
+			virtual Identifier getCallScopeType() const { return {}; }
+		};
+
+		ItemBase::List items;
+		bool analyzed = false;
+
+		bool isEmpty() const { return items.isEmpty(); }
+
+		bool hasUnsafe() const
+		{
+			for (auto w : items)
+				if (w->scope == CallScope::Unsafe || w->scope == CallScope::Init)
+					return true;
+			return false;
+		}
+
+		bool hasWarning() const
+		{
+			for (auto w : items)
+				if (w->scope == CallScope::Warning)
+					return true;
+			return false;
+		}
+
+		/** Returns a formatted report string for the console.
+		 *  Filters based on strictness: Warn includes warning+unsafe, Error same.
+		 *  Relaxed returns empty (caller should not call this with Relaxed).
+		 */
+
+		String toString(StrictnessLevel l, Processor* p) const;
+
+		/** Encapsulates the full enforcement pattern at call sites.
+		 *
+		 *  1. Checks callable->isRealtimeSafe() — if false, returns true (structural rejection)
+		 *  2. Queries StrictnessLevel via JavascriptProcessor::getStrictnessLevel()
+		 *  3. Calls callable->getRealtimeSafetyReport(strictness) → SafetyReport
+		 *  4. Logs message if non-empty (both Warn and Strict mode)
+		 *  5. Returns true (blocks registration) only if Strict + worstScope is Unsafe/Init
+		 */
+
+		static bool check(WeakCallbackHolder::CallableObject* callable, ScriptingObject* caller, const String& context);
+
+	};
+
+	template <int E, int FIndex=0> static ApiClass::DiagnosticResult checkCallbackNumArgs(ApiClass*, const Identifier&, const Array<var>& args)
+	{
+		if (auto f = dynamic_cast<CallableObject*>(args[FIndex].getObject()))
+		{
+			auto numActual = f->getNumArguments();
+
+			if (numActual != E)
+				return ApiClass::DiagnosticResult::fail("wrong argument count for callback").withExpectation(String(numActual) + " params", String(E) + " params");
+		}
+
+		return ApiClass::DiagnosticResult::unknown();
+	}
+
+#endif
 	struct CallableObjectManager
 	{
 		virtual ~CallableObjectManager() {};
@@ -377,6 +546,26 @@ struct WeakCallbackHolder : private ScriptingObject
 	{
 		trackIndex = trackIndexToUse;
 	}
+
+#if USE_BACKEND
+	void addCallbackDiagnostic(ApiClass* c, const Identifier& methodName, int fIndex = 0)
+	{
+		auto numArgs = numExpectedArgs;
+
+		c->addDiagnostic(methodName, [numArgs, fIndex](ApiClass*, const Identifier&, const Array<var>& args)
+		{
+			if (auto f = dynamic_cast<CallableObject*>(args[fIndex].getObject()))
+			{
+				auto numActual = f->getNumArguments();
+
+				if (numActual != numArgs)
+					return ApiClass::DiagnosticResult::fail("wrong argument count for callback").withExpectation(String(numActual) + " params", String(numArgs) + " params");
+			}
+
+			return ApiClass::DiagnosticResult::unknown();
+		});
+	}
+#endif
 
 private:
 

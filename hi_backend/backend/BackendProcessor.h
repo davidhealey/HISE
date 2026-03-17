@@ -38,6 +38,7 @@ namespace hise { using namespace juce;
 
 
 class BackendProcessor;
+class InteractionTester;
 
 struct AnalyserInfo: public ReferenceCountedObject
 {
@@ -370,7 +371,8 @@ class BackendProcessor: public AudioProcessorDriver,
 						public ProjectHandler::Listener,
 						public MarkdownDatabaseHolder,
 						public ExpansionHandler::Listener,
-						public SimpleRingBuffer::WriterBase
+						public SimpleRingBuffer::WriterBase,
+						public RestServer::Listener
 {
 public:
 	BackendProcessor(AudioDeviceManager *deviceManager_=nullptr, AudioProcessorPlayer *callback_=nullptr);
@@ -409,6 +411,14 @@ public:
 	bool acceptsMidi() const {return true;};
 	bool producesMidi() const {return false;};
 	
+	RestServer::Response onAsyncRequest(RestServer::AsyncRequest::Ptr req);
+
+	// RestServer::Listener callbacks
+	void serverStarted(int port) override;
+	void serverStopped() override;
+	void requestReceived(const String& method, const String& path) override;
+	void serverError(const String& message) override;
+
 	double getTailLengthSeconds() const {return 0.0;};
 
 	ModulatorSynthChain *getMainSynthChain() override {return synthChain; };
@@ -436,6 +446,9 @@ public:
 
 	Component* getRootComponent() override;
 
+	static void setUseCommandLineServerMode(int port) { commandLineServerPort = port; }
+	static bool isUsingCommandLineServerMode() { return commandLineServerPort != 0; }
+
 	bool databaseDirectoryInitialised() const override
 	{
 		auto path = getSettingsObject().getSetting(HiseSettings::Documentation::DocRepository).toString();
@@ -452,6 +465,12 @@ public:
 	}
 
 	AutoSaver& getAutoSaver() { return autosaver; }
+	
+	/** Returns the InteractionTester for UI interaction testing via REST API. */
+	InteractionTester* getInteractionTester();
+	
+	/** Shows the Interaction Test Window, creating the tester if needed. */
+	void showInteractionTestWindow();
 
 	/// @brief returns the PluginParameter value of the indexed PluginParameter.
     float getParameter (int index) override
@@ -511,7 +530,7 @@ public:
 #endif
 	}
 
-	JavascriptProcessor* createInterface(int width, int height);;
+	JavascriptProcessor* createInterface(int width, int height, bool compile=true);;
 
 	void setEditorData(var editorState);
 
@@ -519,6 +538,10 @@ public:
 	{
 		return &scriptUnlocker;
 	}
+
+	RestServer& getRestServer() { return restServer; }
+
+	simple_css::Animator& getCssParseAnimator() { return restServerAnimator; }
 
 	LambdaBroadcaster<bool> pluginParameterRefreshBroadcaster;
 
@@ -618,6 +641,14 @@ private:
 
 	AutoSaver autosaver;
 
+	RestServer restServer;
+	simple_css::Animator restServerAnimator;
+	
+	std::unique_ptr<InteractionTester> interactionTester;
+
+	static int commandLineServerPort;
+
+	JUCE_DECLARE_WEAK_REFERENCEABLE(BackendProcessor);
 	JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(BackendProcessor)
 };
 

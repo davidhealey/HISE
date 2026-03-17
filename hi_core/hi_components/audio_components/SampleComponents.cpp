@@ -1696,9 +1696,6 @@ void WaterfallComponent::LookAndFeelMethods::drawWavetablePath(Graphics& g, Wate
 
 	auto fillAlpha = wc.alphaData.fillAlpha;
 
-	if(currentTableIndex != currentTableIndex)
-		fillAlpha *= 0.0f;
-
 	if(fillAlpha > 0.001f && isActivePath && !wc.renderGlow)
 	{
 		auto fp = p;

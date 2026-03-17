@@ -834,18 +834,23 @@ namespace ScriptingObjects
 			public CustomKeyboardLookAndFeelBase,
 			public ScriptTableListModel::LookAndFeelMethods,
             public MatrixPeakMeter::LookAndFeelMethods,
+			public TableFloatingTileBase::LookAndFeelMethods,
 			public WaterfallComponent::LookAndFeelMethods,
-			public HiSlider::HoverPopupLookandFeel
+			public HiSlider::HoverPopupLookandFeel,
+			public PerformanceLabelPanel::LookAndFeelMethods
 		{
 			Laf(MainController* mc);
 
 			virtual ~Laf();;
 			
 			Font getFont();
+			String getFontName();
 
 			ScriptedLookAndFeel* get() override;
 
 			void drawAlertBox(Graphics&, AlertWindow&, const Rectangle<int>& textArea, TextLayout&) override;
+
+			int getAlertWindowMargin() override;
 
 			Font getAlertWindowMessageFont() override;
 			Font getAlertWindowTitleFont() override;
@@ -856,22 +861,20 @@ namespace ScriptingObjects
 
 			MarkdownLayout::StyleData getAlertWindowMarkdownStyleData() override;
 
+			void preparePopupMenuWindow(Component& newWindow) override;
 			int getMenuWindowFlags();
 
-			void preparePopupMenuWindow(Component& newWindow) override;
+			void drawPopupMenuBackgroundWithOptions(Graphics& g_, int width, int height, const PopupMenu::Options& options) override;
 
-			void drawPopupMenuBackground(Graphics& g_, int width, int height) override;
+			void drawPopupMenuItemWithOptions(Graphics& g, const Rectangle<int>& area,
+				bool isHighlighted,
+				const PopupMenu::Item& item,
+				const PopupMenu::Options& options) override;
 
-			void drawPopupMenuItem(Graphics& g, const Rectangle<int>& area,
-				bool isSeparator, bool isActive,
-				bool isHighlighted, bool isTicked,
-				bool hasSubMenu, const String& text,
-				const String& shortcutKeyText,
-				const Drawable* icon, const Colour* textColourToUse);
-
-            void drawPopupMenuSectionHeader (Graphics& g,
+            void drawPopupMenuSectionHeaderWithOptions(Graphics& g,
                                              const Rectangle<int>& area,
-                                             const String& sectionName);
+                                             const String& sectionName,
+                                             const PopupMenu::Options& options) override;
             
 			void drawToggleButton(Graphics &g, ToggleButton &b, bool isMouseOverButton, bool /*isButtonDown*/) override;
 
@@ -942,10 +945,13 @@ namespace ScriptingObjects
 
 			void drawTableHeaderColumn(Graphics& g, TableHeaderComponent&, const String& columnName, int columnId, int width, int height, bool isMouseOver, bool isMouseDown, int columnFlags) override;
 
+			void drawTableRowBackground(Graphics& g, const TableFloatingTileBase::LookAndFeelData& d, int rowNumber, int width, int height, bool rowIsSelected, bool rowIsHovered) override;
+
+			void drawTableCell(Graphics& g, const TableFloatingTileBase::LookAndFeelData& d, const String& text, int rowNumber, int columnId, int width, int height, bool rowIsSelected, bool cellIsClicked, bool cellIsHovered) override;
+
             void getIdealPopupMenuItemSize(const String &text, bool isSeparator, int standardMenuItemHeight, int &idealWidth, int &idealHeight) override;
             
 			void drawFilterDragHandle(Graphics& g, FilterGraph& fg, FilterDragOverlay& o, int index, Rectangle<float> handleBounds, const FilterDragOverlay::DragData& d) override;
-
 			void drawFilterBackground(Graphics &g, FilterGraph& fg) override;
 			void drawFilterPath(Graphics& g, FilterGraph& fg, const Path& p) override;
 			void drawFilterGridLines(Graphics &g, FilterGraph& fg, const Path& gridPath) override;
@@ -970,6 +976,9 @@ namespace ScriptingObjects
 			void drawFlexAhdsrPosition(Graphics& g, flex_ahdsr_base::FlexAhdsrGraph& graph, flex_ahdsr_base::State s, Point<float> pointOnPath) override;
 			void drawFlexAhdsrSegment(Graphics& g, flex_ahdsr_base::FlexAhdsrGraph& graph, flex_ahdsr_base::State s, const Path& segment, bool hover, bool active) override;
 			void drawFlexAhdsrText(Graphics& g, flex_ahdsr_base::FlexAhdsrGraph& graph, const String& text) override;
+
+			void drawPerformanceLabel(Graphics& g, PerformanceLabelPanel& panel,
+			                         float cpu, int64 ram, int voices) override;
 
 			Image createIcon(PresetHandler::IconType type) override;
 
@@ -1444,12 +1453,18 @@ namespace ScriptingObjects
 		/** Checks if the image has been loaded into the look and feel obkect */
 		bool isImageLoaded(String prettyName);
 
+		/** Returns the size of a loaded image as an array [width, height]. */
+		var getImageSize(String imageName);
+
 		// ========================================================================================
 
 		bool isUsingCSS() const { return !currentStyleSheet.isEmpty(); }
 
 		bool isUsingScriptFunctions() const { return hasScriptFunctions; }
 
+		bool isUsingInlineStyleSheet() const { return isUsingCSS() && useInlineStyleSheet; }
+
+		String getExternalCssPath() const;
 
 		void setEnableProfiling(DebugSession::ProfileDataSource::Ptr ptr, ApiProviderBase::Holder* h);
 
@@ -1473,6 +1488,7 @@ namespace ScriptingObjects
 
         
 		Font f = GLOBAL_BOLD_FONT();
+		String fontName = "Default";
         
         struct GraphicsWithComponent
         {
@@ -1509,6 +1525,8 @@ namespace ScriptingObjects
 		ValueTree additionalProperties;
 
 		bool hasScriptFunctions = false;
+
+		bool useInlineStyleSheet = false;
 
 		JUCE_DECLARE_WEAK_REFERENCEABLE(ScriptedLookAndFeel);
 		JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(ScriptedLookAndFeel);

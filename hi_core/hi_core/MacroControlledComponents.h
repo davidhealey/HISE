@@ -367,7 +367,7 @@ public:
 	void setModulationData(ModulationPopupData::Ptr modData);
 
 
-	void onAttributeChange(dispatch::library::Processor* p, uint8 index);
+	void onAttributeChange(dispatch::library::Processor* p, uint16 index);
 
 	juce::AudioProcessorParameter* getConnectedPluginParameter() const;
 
@@ -465,10 +465,11 @@ public:
 
 
 	bool customPopup = false;
-    
+
 	NormalisableRange<double> getRange() const override;;
-	
+
 	Font font;
+	String fontName;
 };
 
 class MomentaryToggleButton: public ToggleButton

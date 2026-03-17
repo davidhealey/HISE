@@ -360,6 +360,22 @@ struct HiseJavascriptEngine::RootObject::RightShiftUnsignedOp : public BinaryOpe
 	var getWithInts(int64 a, int64 b) const override   { return (int)(((uint32)a) >> (int)b); }
 };
 
+struct HiseJavascriptEngine::RootObject::BitwiseNotOp : public Expression
+{
+	BitwiseNotOp(const CodeLocation& l, ExpPtr input) noexcept : Expression(l), operand(input) {}
+
+	var getResult(const Scope& s) const override
+	{
+		return var(~(int)operand->getResult(s));
+	}
+
+	Statement* getChildStatement(int index) override { return index == 0 ? operand.get() : nullptr; }
+
+	bool replaceChildStatement(Ptr& newS, Statement* old) override { return swapIf(newS, old, operand); }
+
+	ExpPtr operand;
+};
+
 struct HiseJavascriptEngine::RootObject::LogicalAndOp : public BinaryOperatorBase
 {
 	LogicalAndOp(const CodeLocation& l, ExpPtr& a, ExpPtr& b) noexcept : BinaryOperatorBase(l, a, b, TokenTypes::logicalAnd) {}

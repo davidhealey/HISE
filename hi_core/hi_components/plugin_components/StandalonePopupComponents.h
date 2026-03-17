@@ -74,6 +74,23 @@ public:
 		btblaf.f = f;
 	}
 
+	enum ColourIds
+	{
+		ItemColour3 = 0x1003500
+	};
+
+	void setColoursForPanel(Colour bgColour, Colour textColour, Colour itemColour1, Colour itemColour2, Colour itemColour3)
+	{
+		for (auto* b : buttons)
+		{
+			b->setColour(HiseColourScheme::ComponentOutlineColourId, bgColour);
+			b->setColour(HiseColourScheme::ComponentTextColourId, textColour);
+			b->setColour(HiseColourScheme::ComponentFillTopColourId, itemColour1);
+			b->setColour(HiseColourScheme::ComponentFillBottomColourId, itemColour2);
+			b->setColour(ItemColour3, itemColour3);
+		}
+	}
+
 private:
 
 	
@@ -125,6 +142,7 @@ public:
 		SampleLocation, /// shows the sample location
 		DebugMode, /// toggles the Debug mode
 		ScaleFactorList, ///< the list of scale factors as Array<var> containing doubles.
+		LabelAlignment, ///< the alignment of the text labels ("left" or "right")
 		numProperties
 	};
 
@@ -172,6 +190,8 @@ private:
 	Array<Identifier> propIds;
 
 	Array<var> scaleFactorList;
+
+	bool labelRight = true;
 
 	BlackTextButtonLookAndFeel blaf;
 

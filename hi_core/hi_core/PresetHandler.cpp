@@ -492,6 +492,24 @@ void PresetHandler::saveProcessorAsPreset(Processor *p, const String &directoryP
         
         v.setProperty("BuildVersion", BUILD_SUB_VERSION, nullptr);
 
+#if USE_BACKEND
+		// Save the currently loaded user preset so it can be restored when this
+		// .hip file is reopened in HISE (mirrors the UserPreset property in the
+		// plugin state produced by BackendProcessor::getStateInformation).
+		{
+			auto& uph = p->getMainController()->getUserPresetHandler();
+			auto currentFile = uph.getCurrentlyLoadedFile();
+			if (currentFile.existsAsFile())
+			{
+				auto up = p->getMainController()->getCurrentFileHandler().getSubDirectory(FileHandlerBase::UserPresets);
+				String presetPath = currentFile.isAChildOf(up) ?
+					currentFile.getRelativePathFrom(up).replaceCharacter('\\', '/') :
+					currentFile.getFullPathName();
+				v.setProperty("UserPreset", presetPath, nullptr);
+			}
+		}
+#endif
+
 		FullInstrumentExpansion::setNewDefault(p->getMainController(), v);
 
 		outputFile.deleteFile();
@@ -544,6 +562,34 @@ void PresetHandler::copyProcessorToClipboard(Processor *p)
 
 void* PresetHandler::currentController = nullptr;
 
+static void applyAlertWindowMargin(AlertWindow* window, LookAndFeel* laf)
+{
+	if (auto alertLaf = dynamic_cast<AlertWindowLookAndFeel*>(laf))
+	{
+		int margin = alertLaf->getAlertWindowMargin();
+
+		if (margin > 0)
+		{
+			// Save current child positions before resize triggers updateLayout
+			struct ChildPos { Component* comp; int x, y; };
+			Array<ChildPos> positions;
+
+			for (int i = 0; i < window->getNumChildComponents(); i++)
+			{
+				auto* child = window->getChildComponent(i);
+				positions.add({ child, child->getX(), child->getY() });
+			}
+
+			window->setSize(window->getWidth() + margin * 2,
+			                window->getHeight() + margin * 2);
+
+			// Restore original positions offset by the margin
+			for (auto& p : positions)
+				p.comp->setTopLeftPosition(p.x + margin, p.y + margin);
+		}
+	}
+}
+
 String PresetHandler::getCustomName(const String &typeName, const String& thisMessage/*=String()*/)
 {
 	String message;
@@ -568,7 +614,7 @@ String PresetHandler::getCustomName(const String &typeName, const String& thisMe
 
     ScopedPointer<AlertWindow> nameWindow = new AlertWindow(useCustomMessage ? ("Enter " + typeName) : ("Enter name for " + typeName), "", AlertWindow::AlertIconType::NoIcon);
 
-
+	nameWindow->setOpaque(false);
 	nameWindow->setLookAndFeel(laf);
 
 	nameWindow->addCustomComponent(comp);
@@ -589,9 +635,11 @@ String PresetHandler::getCustomName(const String &typeName, const String& thisMe
 	nameWindow->getTextEditor("Name")->setSelectAllWhenFocused(true);
 	nameWindow->getTextEditor("Name")->grabKeyboardFocusAsync();
 
+	applyAlertWindowMargin(nameWindow, laf);
+
 	if(nameWindow->runModalLoop()) return nameWindow->getTextEditorContents("Name");
 	else return String();
-    
+
 };
 
 bool PresetHandler::showYesNoWindow(const String &title, const String &message, PresetHandler::IconType type)
@@ -620,14 +668,17 @@ bool PresetHandler::showYesNoWindow(const String &title, const String &message, 
 	
 	ScopedPointer<AlertWindow> nameWindow = new AlertWindow(title, "", AlertWindow::AlertIconType::NoIcon);
 
+	nameWindow->setOpaque(false);
 	nameWindow->setLookAndFeel(laf);
 	nameWindow->addCustomComponent(comp);
-	
+
 	nameWindow->addButton("OK", 1, KeyPress(KeyPress::returnKey));
 	nameWindow->addButton("Cancel", 0, KeyPress(KeyPress::escapeKey));
 
+	applyAlertWindowMargin(nameWindow, laf);
+
 	return (nameWindow->runModalLoop() == 1);
-    
+
 #endif
 };
 
@@ -644,34 +695,35 @@ bool PresetHandler::showYesNoWindowIfMessageThread(const String &title, const St
 	return defaultReturnValue;
 }
 
-bool PresetHandler::showMessageWindow(const String &title, const String &message, PresetHandler::IconType type)
+void PresetHandler::showMessageWindow(const String &title, const String &message, PresetHandler::IconType type)
 {
-	if (MessageManager::getInstanceWithoutCreating()->isThisTheMessageThread())
-	{
-#if USE_BACKEND
-		if (CompileExporter::isExportingFromCommandLine())
-		{
-			std::cout << title << ": " << message << std::endl;
-			return false;
-		}
-
+#if HISE_HEADLESS
+	return;
 #endif
 
+#if USE_BACKEND
+	if (CompileExporter::isExportingFromCommandLine())
+	{
+		std::cout << title << ": " << message << std::endl;
+		return;
+	}
+#endif
+
+	if (MessageManager::getInstanceWithoutCreating()->isThisTheMessageThread())
+	{
 #if HISE_IOS
-
 		NativeMessageBox::showMessageBox(AlertWindow::AlertIconType::NoIcon, title, message);
-
 #else
-
 		ScopedPointer<LookAndFeel> laf = createAlertWindowLookAndFeel();
 		ScopedPointer<MessageWithIcon> comp = new MessageWithIcon(type, laf, message);
 		ScopedPointer<AlertWindow> nameWindow = new AlertWindow(title, "", AlertWindow::AlertIconType::NoIcon);
 
+		nameWindow->setOpaque(false);
 		nameWindow->setLookAndFeel(laf);
 		nameWindow->addCustomComponent(comp);
 		nameWindow->addButton("OK", 1, KeyPress(KeyPress::returnKey));
 
-		return (nameWindow->runModalLoop() == 1);
+		nameWindow->runModalLoop();
 #endif
 	}
 	else
@@ -681,8 +733,7 @@ bool PresetHandler::showMessageWindow(const String &title, const String &message
 			showMessageWindow(title, message, type);
 		});
 	}
-	return false;
-};
+}
 
 struct CountedProcessorId
 {
@@ -2737,15 +2788,10 @@ void FileHandlerBase::createLinkFileInFolder(const File& source, const File& tar
 	{
         if(linkFile.loadFileAsString() == target.getFullPathName())
             return;
-        
+
 		if (!target.isDirectory())
 		{
 			linkFile.deleteFile();
-			return;
-		}
-
-		if (!PresetHandler::showYesNoWindowIfMessageThread("Already there", "Link redirect file exists. Do you want to replace it?", true))
-		{
 			return;
 		}
 	}

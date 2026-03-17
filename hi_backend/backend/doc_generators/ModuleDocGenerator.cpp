@@ -246,7 +246,8 @@ hise::MarkdownDataBase::Item::Ptr HiseModuleDatabase::ItemGenerator::createRootI
 
 HiseModuleDatabase::Resolver::Resolver(File root_) :
 	LinkResolver(),
-	root(root_)
+	root(root_),
+	parameterDump(new DynamicObject())
 {
 	data->createAllProcessors();
 }
@@ -379,23 +380,36 @@ juce::String HiseModuleDatabase::Resolver::getContent(const MarkdownLink& url)
 			}
 		}
 
-		String pdump;
+		DynamicObject::Ptr pObject = new DynamicObject();
 
-		pdump << "\n### " << p->getType().toString() + " Parameter API";
+		pObject->setProperty("id", p->getType().toString());
 
-		pdump << "\n\n```javascript\n";
+		if (auto ms = dynamic_cast<ModulatorSynth*>(p))
+			pObject->setProperty("type", "sound_generator");
+		if (auto mp = dynamic_cast<MidiProcessor*>(p))
+			pObject->setProperty("type", "midi_processor");
+		if (auto mod = dynamic_cast<Modulator*>(p))
+			pObject->setProperty("type", "modulator");
+		if (auto fx = dynamic_cast<EffectProcessor*>(p))
+			pObject->setProperty("type", "fx");
 
-		for(int i = 0; i < doc->parameters.size(); i++)
+		Array<var> interfaceList;
+
+		for (auto i : interfaces)
+			interfaceList.add(var(i));
+
+		pObject->setProperty("sub_types", var(interfaceList));
+
+		DynamicObject::Ptr parameterObject = new DynamicObject();
+
+		for(const auto& d: doc->parameters)
 		{
-			auto id = p->getType().toString();
-			
-			pdump << "/* " << doc->parameters[i].helpText << ". */\n";
-			pdump << id << ".setAttribute(" << id << "." << doc->parameters[i].id << ", value);\n\n";
+			parameterObject->setProperty(d.id, d.helpText);
 		}
 
-		pdump << "```\n";
+		pObject->setProperty("parameters", var(parameterObject.get()));
 
-		parameterDump << pdump;
+		parameterDump->setProperty(p->getType(), var(pObject.get()));
 
 		s << doc->createHelpText();
 

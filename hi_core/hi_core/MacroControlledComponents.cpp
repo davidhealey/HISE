@@ -2192,6 +2192,7 @@ HiComboBox::HiComboBox(const String& name):
 {
 	addChildComponent(numberTag);
 	font = GLOBAL_FONT();
+	fontName = "Default";
 
 	addListener(this);
 
@@ -2529,7 +2530,7 @@ void HiToggleButton::buttonClicked(Button *b)
 		modulationData = modData;
 	}
 
-	void MacroControlledObject::onAttributeChange(dispatch::library::Processor* p, uint8 index)
+	void MacroControlledObject::onAttributeChange(dispatch::library::Processor* p, uint16 index)
 	{
 #if HISE_NEW_PROCESSOR_DISPATCH
 		if(&p->getOwner<hise::Processor>() == getProcessor())

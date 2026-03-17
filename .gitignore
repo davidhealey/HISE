@@ -4,6 +4,10 @@
 !/.gitignore
 !/.travis.yml
 !/.vscode/*
+
+# clangd/LSP tooling config (local development only)
+AppConfig.h
+compile_flags.txt
 api generator/xml
 changelog.md
 changelog.txt
@@ -135,3 +139,5 @@ tools/onnx_lib/Source/lib/
 tools/onnx_lib/onnx_hise_library.dll
 tools/auto_build/installer
 hi_scripting/scripting/api/bx
+# OpenCode project config (contains absolute, platform-specific paths)
+opencode.json

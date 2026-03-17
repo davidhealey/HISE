@@ -251,13 +251,13 @@ public:
 			{
 				switch (id)
 				{
-				case bgColour: return getColourFrom(bg);
-				case itemColour: return getColourFrom(item);
-				case itemColour2: return getColourFrom(item2);
-				case textColour: return getColourFrom(text);
+				case bgColour: return ApiHelpers::getColourFromVar(bg.getValue());
+				case itemColour: return ApiHelpers::getColourFromVar(item.getValue());
+				case itemColour2: return ApiHelpers::getColourFromVar(item2.getValue());
+				case textColour: return ApiHelpers::getColourFromVar(text.getValue());
                 default: break;
 				}
-					
+
 				jassertfalse;
 				return Colours::transparentBlack;
 			}
@@ -276,14 +276,14 @@ public:
 			JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(Properties);
 		};
 
+		static constexpr int shadowMargin = 5;
+
 		ValuePopup(ScriptCreatedComponentWrapper& p):
 			parent(p),
-			shadow(new DropShadower({Colours::black.withAlpha(0.4f), 5,{ 0, 0 }}))
+			shadow({Colours::black.withAlpha(0.4f), 5,{ 0, 0 }})
 		{
 			f = GLOBAL_BOLD_FONT();
 
-			shadow->setOwner(this);
-			
 			updateText();
 			startTimer(30);
 		}
@@ -314,7 +314,8 @@ public:
 
 		ScriptCreatedComponentWrapper& parent;
 
-		ScopedPointer<DropShadower> shadow;
+		DropShadow shadow;
+		bool drawShadow = true;
 	};
 
 	struct AdditionalMouseCallback;

@@ -352,6 +352,202 @@ class ApiClass : public ReferenceCountedObject,
 {
 public:
 
+#if USE_BACKEND
+    struct DiagnosticResult
+    {
+        using QueryFunction = std::function<DiagnosticResult(ApiClass*, const Identifier&, const Array<var>&)>;
+
+		enum class Severity
+		{
+			OK,
+			Unknown,
+			Error,
+			Warning,
+			Info,
+			Hint,
+			numSeverity
+		};
+
+        enum class Classification
+        {
+            Syntax,
+            ApiValidation,
+            TypeCheck,
+            Language,
+            CallScope,
+            Deprecation
+        };
+
+        static String getClassificationString(Classification c)
+        {
+            switch (c)
+            {
+            case Classification::Syntax:
+                return "syntax";
+            case Classification::ApiValidation:
+                return "api-validation";
+            case Classification::TypeCheck:
+                return "type-check";
+            case Classification::Language:
+                return "language";
+            case Classification::CallScope:
+                return "callscope";
+            case Classification::Deprecation:
+                return "deprecation";
+            default:
+                return "unknown";
+            }
+        }
+
+		static String getSeverityString(Severity s)
+		{
+			switch (s)
+			{
+			case Severity::Error:   return "error";
+			case Severity::Warning: return "warning";
+			case Severity::Info:    return "info";
+			case Severity::Hint:    return "hint";
+            case Severity::Unknown: return "unknown";
+            case Severity::OK:      return "ok";
+			default:                return "error";
+			}
+		}
+
+        /** A small helper POD that carries over the data from a diagnostic event. */
+        struct Item
+        {
+            int line = 0;
+            int col = 0;
+            String fileName;
+            String message;
+            StringArray suggestions;
+            Severity severity = Severity::Error;
+
+            ApiClass::DiagnosticResult::Classification classification;
+
+            /** Formats the diagnostic matching F5 compile error output:
+                "locationString: message {{Base64(processorId|path|charIndex|line|col)}}"
+                This makes console output double-clickable and parseable by RestHelpers::parseError(). */
+            String toConsoleString(Processor* p) const;
+
+        };
+
+		DiagnosticResult(Severity s, const String& msg) :
+			severity(s),
+			message(msg)
+		{
+		}
+
+        DiagnosticResult(const String& msg=String()) :
+            severity(Severity::Unknown),
+            message(msg)
+        {}
+
+        DiagnosticResult withSeverity(Severity s) const { auto copy = *this; copy.severity = s; return copy; }
+
+        static DiagnosticResult ok() { return { Severity::OK, "" }; }
+        static DiagnosticResult unknown(const String& msg={}) { return {Severity::Unknown, msg }; }
+        static DiagnosticResult fail(const String& msg) { return { Severity::Error, msg }; }
+
+        bool shouldReport() const { return severity > Severity::Unknown; }
+
+        DiagnosticResult withSuggestion(const String& s) const { auto copy = *this; copy.suggestions.add(s); return copy; }
+
+        DiagnosticResult withFuzzySuggestion(const StringArray& availableTokens) const
+        {
+            auto copy = *this;
+            jassert(wrongToken.isNotEmpty());
+            copy.suggestions.add(FuzzySearcher::suggestCorrection(wrongToken, availableTokens, 0.6));
+            return copy;
+        }
+
+        DiagnosticResult withWrongToken(const String& wrongToken) const
+        {
+            auto copy = *this;
+            copy.wrongToken = wrongToken;
+            return copy;
+        }
+
+        DiagnosticResult withExpectation(const String& expected, const String& actual) const
+        {
+            auto copy = *this;
+            copy.wrongToken = actual;
+            copy.rightToken = expected;
+            return copy;
+        }
+
+        DiagnosticResult withClassification(Classification c) const
+        {
+            auto copy = *this;
+            copy.source = c;
+            return copy;
+        }
+
+        Severity getSeverity() const { return severity; }
+        String getErrorMessage() const 
+        { 
+            String msg;
+
+            msg << message;
+
+            if (wrongToken.isNotEmpty() && rightToken.isNotEmpty())
+                msg << ": expected: " << rightToken << ", actual: " << wrongToken;
+            else if (wrongToken.isNotEmpty())
+                msg << ": " << wrongToken;
+
+            return msg;
+        }
+        StringArray getSuggestions() const { return suggestions; }
+        Classification getClassification() const { return source; }
+
+        /** Numeric priority for coalescing — higher value = more severe. */
+        static int severityPriority(Severity s)
+        {
+            switch (s)
+            {
+            case Severity::OK:      return 0;
+            case Severity::Hint:    return 1;
+            case Severity::Info:    return 2;
+            case Severity::Warning: return 3;
+            case Severity::Error:   return 4;
+            default:                return -1;
+            }
+        }
+
+        /** Return the more severe of two results. */
+        static DiagnosticResult max(const DiagnosticResult& a, const DiagnosticResult& b)
+        {
+            if (severityPriority(a.getSeverity()) >= severityPriority(b.getSeverity()))
+                return a;
+            return b;
+        }
+
+        /** Compose multiple diagnostic check functions into a single QueryFunction.
+        Runs all checks and returns the result with the highest severity.
+        Works with static functions, lambdas, and any callable matching the
+        QueryFunction signature. */
+        template <typename... Fns> static QueryFunction combine(Fns... checks)
+        {
+            return [=](ApiClass* c, const Identifier& id, const Array<var>& args) -> DiagnosticResult
+            {
+                DiagnosticResult best = ok();
+                ((best = DiagnosticResult::max(best, checks(c, id, args))), ...);
+                return best;
+            };
+        }
+
+    private:
+
+        Severity severity;
+        Classification source = Classification::ApiValidation;
+        String message;
+        String wrongToken;
+        String rightToken;
+        StringArray suggestions;
+
+    };
+#endif
+
 	// ================================================================================================================
 
 	typedef var(*call0)(ApiClass*);
@@ -552,10 +748,73 @@ public:
 		currentLocation.charNumber = charNumber;
 	}
 
+#if USE_BACKEND
+    void markMethodTouched(const Identifier& methodName)
+    {
+        int unused;
+        jassert(getIndexAndNumArgsForFunction(methodName, unused, unused));
+        touchedMethods.insert(methodName);
+    }
+
+    bool wasMethodTouched(const Identifier& methodName) const
+    {
+        return touchedMethods.count(methodName) > 0;
+    }
+
+    void clearTouchedMethods()
+    {
+        touchedMethods.clear();
+    }
+
+    /** Registers a diagnostic function that is evaluated at parse time.
+
+        A diagnostic function is a lambda that performs dynamic checks on the validity of a API call.
+        What this check is implementing is completely up to the call site. It is used by the ApiValidationAnalyzer
+        in the shadow parser to collect dynamic diagnostic reports for the LSP server.
+
+        QueryFunction must be a callable object with this signature:
+
+        DiagnosticResult getDiagnostics(ApiClass* c, const Array<var>& arguments>)
+
+        Note that the arguments object might contain undefined values for parameter values that
+        could not be deduced at parse time. If you rely on that check, then just return
+        DiagnosticResult::unknown().
+    */
+    void addDiagnostic(const Identifier& methodName, const DiagnosticResult::QueryFunction& qf)
+    {
+        int unused;
+        auto ok = getIndexAndNumArgsForFunction(methodName, unused, unused);
+
+        // if you hit this you need to add the function first...
+        jassert(ok);
+        ignoreUnused(ok);
+        diagnostics[methodName] = qf;
+    }
+
+    /** Performs the assigned diagnostic check in the parser. */
+    DiagnosticResult performDiagnostic(const Identifier& methodName, const Array<var>& args)
+    {
+        jassert(hasDiagnosticCheck(methodName));
+        return diagnostics.at(methodName)(this, methodName, args);
+    }
+
+    /** Used by the parser to check whether to evaluate the arguments for the check. */
+    bool hasDiagnosticCheck(const Identifier& methodName) const
+    {
+        return diagnostics.find(methodName) != diagnostics.end();
+    }
+
+#endif
+
 private:
 
 	bool wantsLocation = false;
 	DebugableObjectBase::Location currentLocation;
+
+#if USE_BACKEND
+    std::map<Identifier, DiagnosticResult::QueryFunction> diagnostics;
+    std::set<Identifier> touchedMethods;
+#endif
 
 	Array<WeakReference<DebugableObjectBase>> optimizableFunctions;
 

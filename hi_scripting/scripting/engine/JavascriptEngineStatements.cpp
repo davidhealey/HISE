@@ -111,7 +111,7 @@ struct HiseJavascriptEngine::RootObject::ScopedBypasser: public HiseJavascriptEn
 		}
 		else
 		{
-			location.throwError("expression is not a broadcaster");
+			location.throwError("Expected a broadcaster object, but the expression evaluated to a different type.");
 		}
 
 		if(!state)
@@ -181,7 +181,7 @@ struct HiseJavascriptEngine::RootObject::ScopedCall: public HiseJavascriptEngine
         }
         else
         {
-            location.throwError("expression is not a callable object");
+            location.throwError("Expected a callable object (function or Broadcaster), but the expression is not callable.");
         }
 
         return ResultCode::ok;
@@ -487,6 +487,29 @@ struct HiseJavascriptEngine::RootObject::ScopedNoop: public HiseJavascriptEngine
 	}
 };
 
+struct HiseJavascriptEngine::RootObject::ScopedSuppress: public HiseJavascriptEngine::RootObject::ScopedBlockStatement
+{
+	ScopedSuppress(CodeLocation l, ExpPtr c, ApiHelpers::CallScope level):
+	  ScopedBlockStatement(l, c),
+	  suppressLevel(level)
+	{}
+
+	SN_NODE_ID("suppress");
+
+	bool isDebugStatement() const override { return true; }
+
+	ResultCode perform(const Scope& s, var*) const override
+	{
+		return ResultCode::ok;
+	}
+
+	void cleanup(const Scope& s) const override
+	{
+	}
+
+	ApiHelpers::CallScope suppressLevel;
+};
+
 struct HiseJavascriptEngine::RootObject::ScopedCounter: public HiseJavascriptEngine::RootObject::ScopedBlockStatement
 {
 	ScopedCounter(CodeLocation l, ExpPtr c, const String& name_):
@@ -757,6 +780,19 @@ struct HiseJavascriptEngine::RootObject::BlockStatement : public Statement
 		s << "{...} (Line " + String(line) + ")";
 		return s;
 	}
+
+#if USE_BACKEND
+	ApiHelpers::CallScope getSuppressLevel() const
+	{
+		for (auto sb : scopedBlockStatements)
+		{
+			if (auto* sup = dynamic_cast<ScopedSuppress*>(sb))
+				return sup->suppressLevel;
+		}
+
+		return ApiHelpers::CallScope::Safe;
+	}
+#endif
 
 	using ScopedBlockProfiler = DebugSession::ProfileDataSource::ScopedProfiler;
 
@@ -1168,7 +1204,7 @@ struct HiseJavascriptEngine::RootObject::LoopStatement : public Statement
 					return obj->getProperties().getName(loop->index).toString();
 				else if (auto fo = dynamic_cast<fixobj::Array*>(data->getObject()))
 					return fo->getAssignedValue(loop->index);
-				else location.throwError("Illegal iterator target");
+				else location.throwError("Illegal iterator target. for...in loops can only iterate over Arrays, Buffers, and Objects.");
 			}
 			
 			return var();
@@ -1228,7 +1264,7 @@ struct HiseJavascriptEngine::RootObject::LoopStatement : public Statement
 				size = fixArray->getConstantValue(0);
 			else
 			{
-				location.throwError("no iterable type");
+				location.throwError("Cannot iterate over this type. for...in loops support Arrays, Buffers, and Objects.");
 			}
 				
 			while (index < size)

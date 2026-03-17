@@ -926,6 +926,8 @@ private:
 	WeakReference<ApiProviderBase::Holder> recordHolder;
 	double recordingStart= 0.0;
 	double recordingDelta = 0.0;
+
+	JUCE_DECLARE_WEAK_REFERENCEABLE(DebugSession);
 };
 
 

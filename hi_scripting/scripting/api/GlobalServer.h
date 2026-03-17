@@ -69,6 +69,8 @@ struct GlobalServer: public ControlledObject
 
     bool resendLastCallback();
 
+	bool isBaseURLDefined() const { return !baseURL.isEmpty(); };
+
 	void addListener(Listener* l);
 
 	void removeListener(Listener* l);
