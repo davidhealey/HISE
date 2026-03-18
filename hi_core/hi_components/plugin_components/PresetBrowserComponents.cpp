@@ -264,6 +264,19 @@ int PresetBrowserColumn::ColumnListModel::getNumRows()
 				r.findChildFiles(allFiles, File::findFiles, true);
 		entries.clear();
 
+		// When showExpansionContentOnly is active, remove any files that don't
+		// live under the expansion folder so project-level presets never appear
+		// in search results.
+		if (parent && parent->isExpansionContentOnly())
+		{
+			const File expansionFolder = parent->expHandler.getExpansionFolder();
+			for (int i = allFiles.size() - 1; i >= 0; i--)
+			{
+				if (!allFiles[i].isAChildOf(expansionFolder))
+					allFiles.remove(i);
+			}
+		}
+
 		for (int i = 0; i < allFiles.size(); i++)
 		{
 			const bool matchesWildcard = wildcard.isEmpty() || allFiles[i].getFullPathName().containsIgnoreCase(wildcard);
@@ -1080,7 +1093,7 @@ void PresetBrowserColumn::updateButtonVisibility(bool isReadOnly)
 	const bool buttonsVisible = showButtonsAtBottom && !isResultBar && rootOk && !isReadOnly;
 	const bool fileIsSelected = listbox->getNumSelectedRows() > 0;
 
-	addButton->setVisible(buttonsVisible && shouldShowAddButton);
+	addButton->setVisible(buttonsVisible && shouldShowAddButton && !expansionAddButtonHidden);
 	deleteButton->setVisible(buttonsVisible && fileIsSelected && shouldShowDeleteButton);
 	renameButton->setVisible(buttonsVisible && fileIsSelected && shouldShowRenameButton);
 }
