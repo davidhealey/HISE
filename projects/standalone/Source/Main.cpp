@@ -954,6 +954,127 @@ return 0;
 
 	static void createBuilderCache(const String& commandLine)
 	{
+		scriptnode::NodeDatabase db;
+
+		auto processNodes = db.getNodeIds(false);
+		auto signalNodes = db.getNodeIds(true);
+		
+		auto desc = db.getDescriptions();
+		
+
+		DynamicObject::Ptr obj = new DynamicObject();
+
+		auto createMetadata = [&](const ValueTree& n)
+		{
+			auto path = n[PropertyIds::FactoryPath].toString();
+			auto pp = db.getProperties(path);
+
+			ProcessorMetadata md(n[PropertyIds::ID].toString());
+			md.type = pp->getProperty(PropertyIds::IsPolyphonic) ? "polyphonic" : "monophonic";
+			md.description = desc[path];
+			md.hasChildren = n.getChildWithName(PropertyIds::Nodes).isValid();
+			md.hasFX = pp->getProperty(PropertyIds::IsControlNode);
+
+			for (auto cn : n.getChildWithName(PropertyIds::ComplexData))
+			{
+				auto dt = ExternalData::getDataTypeForId(cn.getType(), true);
+
+				for (auto d : cn)
+					md = md.withComplexDataInterface(dt);
+			}
+
+			int idx = 0;
+
+			for (auto p : n.getChildWithName(PropertyIds::Parameters))
+			{
+				ProcessorMetadata::ParameterMetadata pd(idx);
+
+				pd.id = p[PropertyIds::ID].toString();
+
+				pd = pd.withRange(RangeHelpers::getDoubleRange(p));
+				pd.vtc = ValueToTextConverter::fromString(p[PropertyIds::TextToValueConverter].toString());
+				pd.parameterIndex = idx++;
+
+				md = md.withParameter(pd);
+			}
+
+			if (n.getChildWithName(PropertyIds::ModulationTargets).isValid())
+			{
+				ProcessorMetadata::ModulationMetadata mod(0);
+
+				mod.id = "Mod Output";
+
+
+				if (pp->getProperty(PropertyIds::UseUnnormalisedModulation))
+					mod.constrainerWildcard = "Unnormalised";
+				else
+					mod.constrainerWildcard = "Normalised";
+
+				md = md.withModulation(mod);
+			}
+
+			idx = 0;
+
+			for (auto sw : n.getChildWithName(PropertyIds::SwitchTargets))
+			{
+				ProcessorMetadata::ModulationMetadata mod(idx++);
+
+				mod.id = "Mod Output " + String(idx);
+
+				if (pp->getProperty(PropertyIds::UseUnnormalisedModulation))
+					mod.description = "Unnormalised";
+				else
+					mod.description = "Normalised";
+
+				md = md.withModulation(mod);
+			}
+
+			return md;
+		};
+
+		auto cleanupJSON = [&](const ValueTree& n, DynamicObject* f, const String& pn)
+		{
+			auto pp = db.getProperties(pn);
+
+			f->removeProperty("builderPath");
+			f->removeProperty("prettyName");
+			f->removeProperty("subType");
+			f->removeProperty("fxConstrainer");
+
+			DynamicObject::Ptr properties = new DynamicObject();
+
+			for (auto prop : n.getChildWithName(PropertyIds::Properties))
+			{
+				properties->setProperty(prop[PropertyIds::ID].toString(), prop[PropertyIds::Value]);
+			}
+
+			f->setProperty("hasMidi", pp->getProperty(PropertyIds::IsProcessingHiseEvent) ? true : false);
+			f->setProperty("properties", var(properties.get()));
+		};
+
+		for (auto pn : processNodes)
+		{
+			auto n = db.getValueTree(pn);
+			auto md = createMetadata(n);
+			auto f = md.toJSON();
+			cleanupJSON(n, f.getDynamicObject(), pn);
+			
+			obj->setProperty(pn, f);
+		}
+
+		for (auto pn : signalNodes)
+		{
+			auto n = db.getValueTree(pn);
+			auto md = createMetadata(n);
+			auto f = md.toJSON();
+			cleanupJSON(n, f.getDynamicObject(), pn);
+			obj->setProperty(pn, f);
+
+		}
+
+		auto nf = File::getSpecialLocation(File::userDesktopDirectory).getChildFile("scriptnodeList2.json");
+		nf.replaceWithText(JSON::toString(var(obj.get())));
+
 		hise::ProcessorMetadataRegistry r;
 		print("Building module list...");
 		auto tf = File::getSpecialLocation(File::userDesktopDirectory).getChildFile("moduleList.json");

@@ -690,7 +690,7 @@ struct NodeDatabase
 		}
 		else
 		{
-			return getSignalNodes ? data->signalNodeIds : data->cableFactoryIds;
+			return getSignalNodes ? data->signalNodeIds : data->cableNodeIds;
 		}
 	}
 
