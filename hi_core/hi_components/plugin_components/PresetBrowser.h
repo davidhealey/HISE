@@ -96,6 +96,8 @@ public:
 		bool showFavoriteIcons = true;
 		bool fullPathFavorites = false;
 		bool showExpansions = false;
+		bool showExpansionEditButtons = false;
+		bool showExpansionContentOnly = false;
 	};
 
 	// ============================================================================================
@@ -186,6 +188,7 @@ public:
 	void updateFavoriteButton();
 	bool shouldShowFavoritesButton() { return showFavoritesButton; }
 	bool shouldShowFullPathFavorites() { return fullPathFavorites; }
+	bool isExpansionContentOnly() const { return expansionContentOnly && expHandler.getNumExpansions() > 0; }
 
 	void lookAndFeelChanged() override;
 
@@ -306,12 +309,17 @@ private:
 	bool showFavoritesButton = true;
 	bool fullPathFavorites = false;
 	bool showOnlyPresets = false;
+	bool expansionContentOnly = false;
 	String currentWildcard = "*";
 	StringArray currentTagSelection;
 
 	WeakReference<Expansion> currentlySelectedExpansion;
 
 	var presetDatabase;
+
+	/** Updates the add button and column visibility state when showExpansionContentOnly
+	    is active. Call this whenever the selected expansion or the loaded expansion changes. */
+	void updateExpansionContentOnlyState();
 
 	JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(PresetBrowser);
 
