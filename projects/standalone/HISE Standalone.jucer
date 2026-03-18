@@ -176,7 +176,7 @@
     </VS2026>
     <LINUX_MAKE targetFolder="Builds/LinuxMakefile" extraDefs="AUDIOFFT_FFTW3=1&#10;HISE_USE_EXTENDED_TEMPO_VALUES=1&#10;HI_ENABLE_EXPANSION_EDITING=1&#10;HISE_ENABLE_EXPANSIONS=1&#10;HISE_ENABLE_FULL_CONTROL_RATE_PITCH_MOD=1&#10;HISE_USE_OPENGL_FOR_PLUGIN=1&#10;HISE_DEACTIVATE_OVERLAY=1&#10;NUM_HARDCODED_FX_MODS=6&#10;HISE_USE_SCRIPT_RECTANGLE_OBJECT=1&#10;HISE_USE_MOUSE_WHEEL_FOR_TABLE_CURVE=1&#10;PERFETTO=0&#10;HISE_INCLUDE_PROFILING_TOOLKIT=0"
                 smallIcon="bfBEgJ" bigIcon="bfBEgJ" linuxExtraPkgConfig="x11 xinerama xext"
-                extraLinkerFlags="-no-pie&#10;-flto=auto&#10;-fuse-ld=gold&#10;-lfftw3f"
+                extraLinkerFlags="-no-pie&#10;-Wno-stringop-overflow&#10;-flto=auto&#10;-fuse-ld=gold&#10;-lfftw3f"
                 extraCompilerFlags="-fno-strict-aliasing" externalLibraries="faust">
       <CONFIGURATIONS>
         <CONFIGURATION name="Debug" isDebug="1" optimisation="1" targetName="HISE Standalone"
