@@ -1100,7 +1100,10 @@ void PresetBrowser::setShowFullPathFavorites(bool shouldShowFullPathFavorites)
 void PresetBrowser::updateExpansionContentOnlyState()
 {
 	if (!expansionContentOnly)
+	{
+		presetColumn->setExpansionAddButtonHidden(false);
 		return;
+	}
 
 	// When no expansions exist (e.g. expansion type is Disabled), the whole
 	// expansionContentOnly restriction is a no-op: keep the preset browser fully
@@ -1111,7 +1114,7 @@ void PresetBrowser::updateExpansionContentOnlyState()
 		return;
 	}
 
-	const auto* loadedExpansion = getMainController()->getExpansionHandler().getCurrentExpansion();
+	const auto* loadedExpansion = expHandler.getCurrentExpansion();
 	Expansion* selectedExpansion = currentlySelectedExpansion;
 	const bool isLoadedExpansion = (selectedExpansion != nullptr) && (selectedExpansion == loadedExpansion);
 
@@ -1362,9 +1365,6 @@ void PresetBrowser::setOptions(const Options& newOptions)
 	setShowEditButtons(3, newOptions.showDeleteButton);
 
 	expansionContentOnly = newOptions.showExpansionContentOnly;
-
-	// Reset the expansion add-button override so it can be re-evaluated below.
-	presetColumn->setExpansionAddButtonHidden(false);
 	updateExpansionContentOnlyState();
 
 	// Override expansion column buttons independently of the other columns.

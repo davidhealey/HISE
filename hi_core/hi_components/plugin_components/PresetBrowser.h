@@ -96,7 +96,7 @@ public:
 		bool showFavoriteIcons = true;
 		bool fullPathFavorites = false;
 		bool showExpansions = false;
-		bool showExpansionEditButtons = false;
+		bool showExpansionEditButtons = true;
 		bool showExpansionContentOnly = false;
 	};
 
