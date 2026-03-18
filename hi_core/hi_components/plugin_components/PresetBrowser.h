@@ -98,6 +98,7 @@ public:
 		bool fullPathSearch = false;
 		bool showExpansions = false;
 		bool showExpansionEditButtons = false;
+		bool showExpansionContentOnly = false;
 	};
 
 	// ============================================================================================
@@ -189,6 +190,7 @@ public:
 	bool shouldShowFavoritesButton() { return showFavoritesButton; }
 	bool shouldShowFullPathFavorites() { return fullPathFavorites; }
 	bool shouldShowFullPathSearch() { return fullPathSearch; }
+	bool isExpansionContentOnly() const { return expansionContentOnly && expHandler.getNumExpansions() > 0; }
 
 	void lookAndFeelChanged() override;
 
@@ -322,6 +324,7 @@ private:
 	bool fullPathFavorites = false;
 	bool fullPathSearch = false;
 	bool showOnlyPresets = false;
+	bool expansionContentOnly = false;
 	String currentWildcard = "*";
 	StringArray currentTagSelection;
 
@@ -338,6 +341,10 @@ private:
 
 	// Rebuild cachedFavorites from disk/in-memory databases.
 	void rebuildFavoritesCache() const;
+	
+	/** Updates the add button and column visibility state when showExpansionContentOnly
+	    is active. Call this whenever the selected expansion or the loaded expansion changes. */
+	void updateExpansionContentOnlyState();
 
 	JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(PresetBrowser);
 
