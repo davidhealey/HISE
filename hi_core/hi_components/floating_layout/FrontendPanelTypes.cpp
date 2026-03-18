@@ -1173,7 +1173,7 @@ var PresetBrowserPanel::getDefaultProperty(int index) const
 
 	RETURN_DEFAULT_PROPERTY(index, SpecialPanelIds::ColumnWidthRatio, var(defaultRatios));
 	RETURN_DEFAULT_PROPERTY(index, SpecialPanelIds::ShowExpansionsAsColumn, false);
-	RETURN_DEFAULT_PROPERTY(index, SpecialPanelIds::ShowExpansionEditButtons, true);
+	RETURN_DEFAULT_PROPERTY(index, SpecialPanelIds::ShowExpansionEditButtons, false);
 	RETURN_DEFAULT_PROPERTY(index, SpecialPanelIds::ShowExpansionContentOnly, false);
 	RETURN_DEFAULT_PROPERTY(index, SpecialPanelIds::ShowFavoriteIcon, true);
 	
