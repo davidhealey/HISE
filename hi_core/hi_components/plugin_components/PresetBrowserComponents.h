@@ -256,6 +256,7 @@ public:
 		void setRootDirectory(const File& newRootDirectory) { root = newRootDirectory; }
 		void toggleEditMode() { editMode = !editMode; }
 		void setDisplayDirectories(bool shouldDisplayDirectories) { displayDirectories = shouldDisplayDirectories; }
+		void setFlattenOneLevel(bool shouldFlatten) { flattenOneLevel = shouldFlatten; }
 
 		int getNumRows() override;
 		void listBoxItemClicked(int row, const MouseEvent &) override;
@@ -335,6 +336,7 @@ public:
 		void updateTags(const StringArray& newSelection);
 
 		bool allowRecursiveSearch = false;
+		bool flattenOneLevel = false;
 		bool deleteOnClick = false;
 
 		int getColumnIndex() const { return index; }
@@ -408,6 +410,12 @@ public:
 	void setAllowRecursiveFileSearch(bool shouldAllow)
 	{
 		listModel->allowRecursiveSearch = shouldAllow;
+		listbox->updateContent();
+	}
+
+	void setFlattenOneLevel(bool shouldFlatten)
+	{
+		listModel->setFlattenOneLevel(shouldFlatten);
 		listbox->updateContent();
 	}
 
