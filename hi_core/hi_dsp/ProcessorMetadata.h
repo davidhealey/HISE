@@ -170,6 +170,10 @@ struct ProcessorMetadata
 			auto copy = *this;
 			copy.sliderMode = m;
 			copy.range = r;
+
+			auto modeString = HiSlider::getModeList()[(int)m];
+			copy.vtc = ValueToTextConverter::createForMode(modeString);
+
 			if (copy.type == Type::Unspecified)
 				copy.type = Type::Float;
 			return copy;
@@ -215,6 +219,7 @@ struct ProcessorMetadata
 			auto copy = *this;
 			copy.type = Type::Toggle;
 			copy.range = { 0.0, 1.0, 1.0 };
+			copy.vtc = ValueToTextConverter::createForOptions({ "Off", "On" });
 			return copy;
 		}
 

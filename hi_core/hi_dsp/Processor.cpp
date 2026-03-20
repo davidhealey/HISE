@@ -264,7 +264,7 @@ void Processor::setId(const String& newId, NotificationType notifyChangeHandler)
 			MainController::ProcessorChangeHandler::EventType::ProcessorRenamed, false);
 #endif
 #if HISE_NEW_PROCESSOR_DISPATCH
-	dispatcher.setId(dispatch::HashedCharPtr(newId));
+	dispatcher.setId(dispatch::HashedCharPtr(newId), (dispatch::DispatchType)notifyChangeHandler);
 #endif
 
 
@@ -818,7 +818,8 @@ String FactoryType::getUniqueName(Processor *id, String name/*=String()*/)
 	// If this happens, you haven't added the processor yet.
 	jassert(amount != 0);
 
-	name = name + String(amount);
+	if(amount > 1)
+		name = name + String(amount);
 	
 	return name;
 }

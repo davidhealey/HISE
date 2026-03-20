@@ -226,7 +226,7 @@ public:
 	void setBypassed(bool value, DispatchType n);
 
 	/** Call this in the processor if the ID changes. */
-	void setId(HashedCharPtr&& id);
+	void setId(HashedCharPtr&& id, DispatchType n = sendNotificationSync);
 
 	/** Call this in the processor if the colour changes. */
 	void setColour(const Colour& );
