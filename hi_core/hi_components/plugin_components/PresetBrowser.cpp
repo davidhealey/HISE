@@ -1241,16 +1241,11 @@ void PresetBrowser::updateExpansionContentOnlyState()
 	const auto* loadedExpansion = getMainController()->getExpansionHandler().getCurrentExpansion();
 	Expansion* selectedExpansion = currentlySelectedExpansion;
 	const bool isLoadedExpansion = (selectedExpansion != nullptr) && (selectedExpansion == loadedExpansion);
-
-	// Only show the add button in the preset column when the selected expansion
-	// is also the currently loaded (active) expansion.
-	presetColumn->setExpansionAddButtonHidden(!isLoadedExpansion);
-
-	// When no expansion is selected but expansions exist, clear the bank/category/preset
-	// column contents so the columns appear empty. If the project has no expansions at
-	// all, leave the columns showing the project-level presets that selectionChanged()
-	// already populated. Leave the preset column alone in search/favourites mode too.
 	const bool hasExpansions = getMainController()->getExpansionHandler().getNumExpansions() > 0;
+
+	// Show the add button when the selected expansion is the loaded one, or when
+	// there are no expansions at all (project-level presets are shown instead).
+	presetColumn->setExpansionAddButtonHidden(!isLoadedExpansion && hasExpansions);
 
 	if (selectedExpansion == nullptr && hasExpansions)
 	{
