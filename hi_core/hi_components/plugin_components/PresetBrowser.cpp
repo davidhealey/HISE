@@ -1994,7 +1994,38 @@ void PresetBrowser::buttonClicked(Button* b)
 
 void PresetBrowser::addEntry(int columnIndex, const String& name)
 {
-	if (columnIndex == 0)	bankColumn->addEntry(name);
+	if (columnIndex == 0)
+	{
+		if (bankColumn->isFlatteningOneLevel())
+		{
+			// In flatten mode the bank column shows categories (2nd-level dirs), so new
+			// entries must be created inside a bank folder, not at the root level.
+			File parentBank;
+
+			if (currentBankFile.isDirectory())
+			{
+				parentBank = currentBankFile.getParentDirectory();
+			}
+			else
+			{
+				Array<File> banks;
+				rootFile.findChildFiles(banks, File::findDirectories, false);
+				DataBaseHelpers::cleanFileList(getMainController(), banks);
+				banks.sort();
+				if (!banks.isEmpty())
+					parentBank = banks.getFirst();
+			}
+
+			if (parentBank.isDirectory())
+			{
+				parentBank.getChildFile(name).createDirectory();
+				configureBankColumnForDepth();
+				return;
+			}
+		}
+
+		bankColumn->addEntry(name);
+	}
 	if (columnIndex == 1)	categoryColumn->addEntry(name);
 	if (columnIndex == 2)	presetColumn->addEntry(name);
 }
