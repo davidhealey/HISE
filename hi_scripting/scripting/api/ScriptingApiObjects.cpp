@@ -7021,6 +7021,25 @@ juce::Array<juce::Identifier> ApiHelpers::getGlobalApiClasses()
 	return ids;
 }
 
+bool ApiHelpers::getMidPointValue(const var& midPointOrDisabledString, double& midPointValue)
+{
+	auto rv = RangeHelpers::parseMidPointValue(midPointOrDisabledString);
+	midPointValue = rv.second;
+	return rv.first;
+}
+
+bool ApiHelpers::shouldApplyMidPoint(double min, double max, const var& midPointOrDisabledString)
+{
+	double mp;
+
+	if (getMidPointValue(midPointOrDisabledString, mp))
+	{
+		return mp > min && mp < max;
+	}
+
+	return false;
+}
+
 void ApiHelpers::loadPathFromData(Path& p, var data)
 {
 	

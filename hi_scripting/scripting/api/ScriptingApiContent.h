@@ -1092,7 +1092,7 @@ public:
 		void setValuePopupFunction(var newFunction);
 
 		/** Sets the value that is shown in the middle position. */
-		void setMidPoint(double valueForMidPoint);
+		void setMidPoint(var valueForMidPoint);
 
 		/** Sets the style Knob, Horizontal, Vertical. */
 		void setStyle(String style);;

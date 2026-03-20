@@ -2479,10 +2479,10 @@ Result checkPluginParameterComponent(ScriptingApi::Content* c, ScriptComponent* 
         
         if(v.hasProperty("middlePosition"))
         {
-            auto midPoint = (double)v["middlePosition"];
+            auto midPoint = v["middlePosition"];
             
-            if(nr.getRange().contains(midPoint))
-                nr.setSkewForCentre(midPoint);
+            if(ApiHelpers::shouldApplyMidPoint(nr.start, nr.end, midPoint))
+                nr.setSkewForCentre((double)midPoint);
         }
         
         auto newValue = (double)Random::getSystemRandom().nextFloat();
