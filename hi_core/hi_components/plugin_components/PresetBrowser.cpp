@@ -1246,10 +1246,13 @@ void PresetBrowser::updateExpansionContentOnlyState()
 	// is also the currently loaded (active) expansion.
 	presetColumn->setExpansionAddButtonHidden(!isLoadedExpansion);
 
-	// When no expansion is selected, clear the bank/category/preset column contents
-	// so the columns appear empty. Leave the preset column content alone when in
-	// search/favourites mode (showOnlyPresets) so those results are still displayed.
-	if (selectedExpansion == nullptr)
+	// When no expansion is selected but expansions exist, clear the bank/category/preset
+	// column contents so the columns appear empty. If the project has no expansions at
+	// all, leave the columns showing the project-level presets that selectionChanged()
+	// already populated. Leave the preset column alone in search/favourites mode too.
+	const bool hasExpansions = getMainController()->getExpansionHandler().getNumExpansions() > 0;
+
+	if (selectedExpansion == nullptr && hasExpansions)
 	{
 		bankColumn->setNewRootDirectory(File());
 		categoryColumn->setNewRootDirectory(File());
