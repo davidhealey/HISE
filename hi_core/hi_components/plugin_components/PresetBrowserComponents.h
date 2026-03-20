@@ -420,6 +420,8 @@ public:
 		listbox->updateContent();
 	}
 
+	bool isFlatteningOneLevel() const { return listModel->flattenOneLevel; }
+
 	void setFavoriteIconOffset(int xOffset)
 	{
 		favoriteIconOffset = xOffset;
