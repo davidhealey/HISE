@@ -2016,6 +2016,20 @@ void TableFloatingTileBase::resized()
 			auto ma = ss->getArea(getLocalBounds().toFloat(), {"margin", 0});
 			ma = ss->getArea(ma, {"padding", 0} );
 			table.setBounds(ma.toNearestInt());
+			table.getHeader().setStretchToFitActive(true);
+
+			if (auto vp = table.getViewport())
+			{
+				auto rowHeight = jmax(1, table.getRowHeight());
+				auto viewHeight = vp->getMaximumVisibleHeight();
+				auto fitWidth = table.getWidth();
+
+				if (numRows * rowHeight > viewHeight)
+					fitWidth -= vp->getScrollBarThickness();
+
+				table.getHeader().resizeAllColumnsToFit(fitWidth);
+			}
+
 			return;
 		}
 
@@ -2049,7 +2063,21 @@ void TableFloatingTileBase::resized()
 				auto colWidth = roundToInt(w * r);
 				table.getHeader().setColumnWidth(id, colWidth);
 			}
+
+			table.getHeader().setStretchToFitActive(true);
 		}
+	}
+
+	if (auto vp = table.getViewport())
+	{
+		auto rowHeight = jmax(1, table.getRowHeight());
+		auto viewHeight = vp->getMaximumVisibleHeight();
+		auto fitWidth = table.getWidth();
+
+		if (numRows * rowHeight > viewHeight)
+			fitWidth -= vp->getScrollBarThickness();
+
+		table.getHeader().resizeAllColumnsToFit(fitWidth);
 	}
 }
 
