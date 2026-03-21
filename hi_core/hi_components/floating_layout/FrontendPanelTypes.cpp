@@ -1562,6 +1562,43 @@ MidiLearnPanel::~MidiLearnPanel()
 	handler.removeChangeListener(this);
 }
 
+var MidiLearnPanel::toDynamicObject() const
+{
+	auto obj = TableFloatingTileBase::toDynamicObject();
+	storePropertyInObject(obj, SpecialPanelIds::ScrollbarWidth, scrollbarWidth);
+	return obj;
+}
+
+Identifier MidiLearnPanel::getDefaultablePropertyId(int index) const
+{
+	if (index < (int)TableFloatingTileBase::SpecialPanelIds::numSpecialPanelIds)
+		return TableFloatingTileBase::getDefaultablePropertyId(index);
+
+	RETURN_DEFAULT_PROPERTY_ID(index, SpecialPanelIds::ScrollbarWidth, "ScrollbarWidth");
+
+	return {};
+}
+
+var MidiLearnPanel::getDefaultProperty(int index) const
+{
+	if (index < (int)TableFloatingTileBase::SpecialPanelIds::numSpecialPanelIds)
+		return TableFloatingTileBase::getDefaultProperty(index);
+
+	RETURN_DEFAULT_PROPERTY(index, SpecialPanelIds::ScrollbarWidth, 16);
+
+	return {};
+}
+
+void MidiLearnPanel::fromDynamicObject(const var& object)
+{
+	TableFloatingTileBase::fromDynamicObject(object);
+
+	scrollbarWidth = (int)getPropertyWithDefault(object, SpecialPanelIds::ScrollbarWidth);
+
+	if (auto vp = table.getViewport())
+		vp->setScrollBarThickness(scrollbarWidth);
+}
+
 void MidiLearnPanel::changeListenerCallback(SafeChangeBroadcaster*)
 {
 	updateContent();
