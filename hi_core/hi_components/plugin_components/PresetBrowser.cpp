@@ -731,8 +731,6 @@ Array<File> PresetBrowser::getAllSearchRoots() const
 
 var PresetBrowser::loadDatabaseForRoot(const File& rootDir) const
 {
-	// Use the in-memory database for the currently loaded root so that
-	// unsaved changes (e.g. a just-toggled favourite) are reflected.
 	if (rootDir == rootFile)
 		return presetDatabase;
 
