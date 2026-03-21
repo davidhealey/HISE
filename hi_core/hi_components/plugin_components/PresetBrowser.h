@@ -217,6 +217,9 @@ public:
 		static bool matchesAvailableExpansions(MainController* mc, const File& currentPreset);
 		static bool isFavorite(const var& database, const File& presetFile);
 		static Identifier getIdForFile(const File& presetFile);
+		static void renameEntriesInDatabase(const var& database, const File& rootDir,
+		                                    const File& oldDirectory, const File& newDirectory);
+		static void renameFileEntryInDatabase(const var& database, const File& oldFile, const File& newFile);
 	};
 
 	void setOptions(const Options& newOptions);
@@ -331,6 +334,8 @@ private:
 	void rebuildFavoritesCache() const;
 	var loadDatabaseForRoot(const File& rootDir) const;
 	void saveDatabaseForRoot(const var& db, const File& rootDir);
+	void updateDatabaseKeysForRename(const File& oldDirectory, const File& newDirectory);
+	void updateDatabaseKeyForFileRename(const File& oldFile, const File& newFile);
 
 	JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(PresetBrowser);
 
