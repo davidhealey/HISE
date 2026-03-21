@@ -389,6 +389,9 @@ void PresetBrowser::ModalWindow::buttonClicked(Button* b)
 			auto note = DataBaseHelpers::getNoteFromXml(le.newFile);
 			auto tags = DataBaseHelpers::getTagsFromXml(le.newFile);
 
+			if (le.oldFile.getFileName() != "tempFileBeforeMove.preset")
+				p->updateDatabaseKeyForFileRename(le.oldFile, le.newFile);
+
 			le.oldFile.moveFileTo(le.newFile);
 
 			if (note.isNotEmpty())
@@ -729,6 +732,158 @@ Array<File> PresetBrowser::getAllSearchRoots() const
 	return roots;
 }
 
+var PresetBrowser::loadDatabaseForRoot(const File& rootDir) const
+{
+	if (rootDir == rootFile)
+		return presetDatabase;
+
+	var db = JSON::parse(rootDir.getChildFile("db.json").loadFileAsString());
+	return db.isObject() ? db : var(new DynamicObject());
+}
+
+void PresetBrowser::saveDatabaseForRoot(const var& db, const File& rootDir)
+{
+	if (rootDir == rootFile)
+	{
+		presetDatabase = db;
+		savePresetDatabase(rootFile);
+	}
+	else
+	{
+		rootDir.getChildFile("db.json").replaceWithText(JSON::toString(db));
+	}
+}
+
+File PresetBrowser::findRootForFile(const File& f) const
+{
+	if (f.isAChildOf(rootFile))
+		return rootFile;
+
+	auto& handler = getMainController()->getExpansionHandler();
+
+	for (int i = 0; i < handler.getNumExpansions(); ++i)
+	{
+		if (auto e = handler.getExpansion(i))
+		{
+			auto userPresetsDir = e->getSubDirectory(FileHandlerBase::UserPresets);
+
+			if (f.isAChildOf(userPresetsDir))
+				return userPresetsDir;
+		}
+	}
+
+	if (f.isAChildOf(defaultRoot))
+		return defaultRoot;
+
+	return {};
+}
+
+void PresetBrowser::updateDatabaseKeysForRename(const File& oldDirectory, const File& newDirectory)
+{
+	auto root = findRootForFile(oldDirectory);
+
+	if (!root.isDirectory())
+		return;
+
+	var db = loadDatabaseForRoot(root);
+	DataBaseHelpers::renameEntriesInDatabase(db, root, oldDirectory, newDirectory);
+	saveDatabaseForRoot(db, root);
+	invalidateFavoritesCache();
+}
+
+void PresetBrowser::updateDatabaseKeyForFileRename(const File& oldFile, const File& newFile)
+{
+	auto root = findRootForFile(oldFile);
+
+	if (!root.isDirectory())
+		return;
+
+	var db = loadDatabaseForRoot(root);
+	DataBaseHelpers::renameFileEntryInDatabase(db, oldFile, newFile);
+	saveDatabaseForRoot(db, root);
+	invalidateFavoritesCache();
+}
+
+void PresetBrowser::rebuildFavoritesCache() const
+{
+	cachedFavorites.clear();
+
+	// Build the full cache across ALL roots regardless of which expansion is
+	// currently selected.  getAllFavoritePresets() filters by expansion later.
+	Array<File> allRoots;
+
+	if (defaultRoot.isDirectory())
+		allRoots.add(defaultRoot);
+
+	auto& handler = getMainController()->getExpansionHandler();
+
+	for (int i = 0; i < handler.getNumExpansions(); ++i)
+	{
+		if (auto e = handler.getExpansion(i))
+		{
+			auto userPresetsDir = e->getSubDirectory(FileHandlerBase::UserPresets);
+			if (userPresetsDir.isDirectory() && !allRoots.contains(userPresetsDir))
+				allRoots.add(userPresetsDir);
+		}
+	}
+
+	for (auto& rootDir : allRoots)
+	{
+		auto db = loadDatabaseForRoot(rootDir);
+
+		Array<File> presets;
+		rootDir.findChildFiles(presets, File::findFiles, true);
+		DataBaseHelpers::cleanFileList(const_cast<MainController*>(getMainController()), presets);
+
+		for (auto& preset : presets)
+		{
+			if (DataBaseHelpers::isFavorite(db, preset))
+				cachedFavorites.add(preset);
+		}
+	}
+
+	favoritesCacheDirty = false;
+}
+
+bool PresetBrowser::isFavoriteInAnyDatabase(const File& presetFile) const
+{
+	if (favoritesCacheDirty)
+		rebuildFavoritesCache();
+
+	return cachedFavorites.contains(presetFile);
+}
+
+void PresetBrowser::setFavoriteForFile(const File& presetFile, bool isFavorite)
+{
+	auto root = findRootForFile(presetFile);
+
+	if (!root.isDirectory())
+		return;
+
+	var db = loadDatabaseForRoot(root);
+	DataBaseHelpers::setFavorite(db, presetFile, isFavorite);
+	saveDatabaseForRoot(db, root);
+	invalidateFavoritesCache();
+}
+
+Array<File> PresetBrowser::getAllFavoritePresets()
+{
+	if (favoritesCacheDirty)
+		rebuildFavoritesCache();
+
+	if (currentlySelectedExpansion == nullptr)
+		return cachedFavorites;
+
+	auto expansionRoot = currentlySelectedExpansion->getSubDirectory(FileHandlerBase::UserPresets);
+	Array<File> filtered;
+
+	for (auto& f : cachedFavorites)
+		if (f.isAChildOf(expansionRoot))
+			filtered.add(f);
+
+	return filtered;
+}
+
 void PresetBrowser::presetChanged(const File& newPreset)
 {
 	// After we switched the expansions we need to make sure to run this logic so that it ca
@@ -939,6 +1094,28 @@ void PresetBrowser::resized()
 	if (tagList->isActive())
 		tagList->setBounds(listArea.removeFromTop(30));
 
+	const int folderOffset = expansionColumn != nullptr ? 1 : 0;
+	const int numColumnsToShow = jlimit(1, 4, numColumns + folderOffset);
+	int columnWidths[4] = { 0, 0, 0, 0 };
+	auto w = (double)getWidth();
+
+	if (columnWidthRatios.size() == numColumnsToShow)
+	{
+		for (int i = 0; i < numColumnsToShow; i++)
+		{
+			auto r = jlimit(0.0, 1.0, (double)columnWidthRatios[i]);
+			columnWidths[i] = roundToInt(w * r);
+		}
+	}
+	else
+	{
+		// column amount mismatch, use equal spacing...
+		const int columnWidth = roundToInt(w / (double)numColumnsToShow);
+
+		for (int i = 0; i < numColumnsToShow; i++)
+			columnWidths[i] = columnWidth;
+	}
+
 	if (showOnlyPresets)
 	{
 		if (expansionColumn != nullptr)
@@ -948,28 +1125,6 @@ void PresetBrowser::resized()
 	}
 	else
 	{
-		const int folderOffset = expansionColumn != nullptr ? 1 : 0;
-		const int numColumnsToShow = jlimit(1, 4, numColumns + folderOffset);
-		int columnWidths[4] = { 0, 0, 0, 0 };
-		auto w = (double)getWidth();
-
-		if (columnWidthRatios.size() == numColumnsToShow)
-		{
-			for (int i = 0; i < numColumnsToShow; i++)
-			{
-				auto r = jlimit(0.0, 1.0, (double)columnWidthRatios[i]);
-				columnWidths[i] = roundToInt(w * r);
-			}
-		}
-		else
-		{
-			// column amount mismatch, use equal spacing...
-			const int columnWidth = roundToInt(w / (double)numColumnsToShow);
-
-			for (int i = 0; i < numColumnsToShow; i++)
-				columnWidths[i] = columnWidth;
-		}
-
 		if(expansionColumn != nullptr)
 			expansionColumn->setBounds(listArea.removeFromLeft(columnWidths[0]).reduced(2, 2));
 
@@ -1045,7 +1200,7 @@ void PresetBrowser::labelTextChanged(Label* l)
 	{
 		showOnlyPresets = !currentTagSelection.isEmpty() || l->getText().isNotEmpty() || favoriteButton->getToggleState();
 
-		if (showOnlyPresets)
+		if (l->getText().isNotEmpty())
 			currentWildcard = "*" + l->getText() + "*";
 		else
 			currentWildcard = "*";
@@ -1067,6 +1222,9 @@ void PresetBrowser::updateFavoriteButton()
 
 	if (presetColumn == nullptr)
 		return;
+
+	if (on)
+		invalidateFavoritesCache();
 
 	presetColumn->setShowFavoritesOnly(on);
 
@@ -1396,14 +1554,18 @@ void PresetBrowser::selectionChanged(int columnIndex, int /*rowIndex*/, const Fi
 		currentBankFile = File();
 		currentCategoryFile = File();
 		currentlyLoadedPreset = 0;
-		
+
+		// Flush before loadPresetDatabase overwrites the in-memory state.
+		if (rootFile.isDirectory())
+			savePresetDatabase(rootFile);
+
 		if (file == File())
 		{
 			if (FullInstrumentExpansion::isEnabled(getMainController()))
 				rootFile = File();
 			else
 				rootFile = defaultRoot;
-				
+
 			currentlySelectedExpansion = nullptr;
 		}
 		else
@@ -1430,7 +1592,6 @@ void PresetBrowser::selectionChanged(int columnIndex, int /*rowIndex*/, const Fi
 		categoryColumn->setNewRootDirectory(currentCategoryFile);
 
 		loadPresetDatabase(rootFile);
-		presetColumn->setDatabase(getDataBase());
 		rebuildAllPresets();
 
 		if (showOnlyPresets)
@@ -1447,6 +1608,8 @@ void PresetBrowser::selectionChanged(int columnIndex, int /*rowIndex*/, const Fi
 			pc->setDisplayDirectories(false);
 			presetColumn->setModel(pc, rootFile);
 		}
+
+		presetColumn->setDatabase(getDataBase());
 	}
 
 	if (columnIndex == 0)
@@ -1524,6 +1687,7 @@ void PresetBrowser::renameEntry(int columnIndex, int rowIndex, const String& new
 			if (newBank.isDirectory())
 				return;
 
+            updateDatabaseKeysForRename(currentBankFile, newBank);
             currentBankFile.moveFileTo(newBank);
 
             categoryColumn->setNewRootDirectory(File());
@@ -1543,6 +1707,7 @@ void PresetBrowser::renameEntry(int columnIndex, int rowIndex, const String& new
             if(newCategory.isDirectory())
 				return;
 
+            updateDatabaseKeysForRename(currentCategoryFile, newCategory);
             currentCategoryFile.moveFileTo(newCategory);
 
             categoryColumn->setNewRootDirectory(currentBankFile);
@@ -1575,6 +1740,7 @@ void PresetBrowser::renameEntry(int columnIndex, int rowIndex, const String& new
 				modalInputWindow->confirmReplacement(presetFile, newFile);
 			else
 			{
+				updateDatabaseKeyForFileRename(presetFile, newFile);
 				presetFile.moveFileTo(newFile);
 				presetColumn->setNewRootDirectory(current);
 				rebuildAllPresets();
@@ -1964,6 +2130,80 @@ juce::Identifier PresetBrowser::DataBaseHelpers::getIdForFile(const File& preset
 	}
 
 	return Identifier();
+}
+
+void PresetBrowser::DataBaseHelpers::renameEntriesInDatabase(const var& database,
+                                                             const File& rootDir,
+                                                             const File& oldDirectory,
+                                                             const File& newDirectory)
+{
+	auto data = database.getDynamicObject();
+
+	if (data == nullptr)
+		return;
+
+	auto makePrefix = [&](const File& dir)
+	{
+		auto s = dir.getRelativePathFrom(rootDir);
+		s = s.replaceCharacter('/', '_');
+		s = s.replaceCharacter('\\', '_');
+		s = s.replaceCharacter('\'', '_');
+		s = s.removeCharacters(" \t!+&");
+		return s;
+	};
+
+	auto oldPrefix = makePrefix(oldDirectory);
+	auto newPrefix = makePrefix(newDirectory);
+
+	if (oldPrefix == newPrefix)
+		return;
+
+	Array<Identifier> keysToRename;
+	Array<var> valuesToMove;
+
+	for (auto& prop : data->getProperties())
+	{
+		if (prop.name.toString().startsWith(oldPrefix))
+		{
+			keysToRename.add(prop.name);
+			valuesToMove.add(prop.value);
+		}
+	}
+
+	for (int i = 0; i < keysToRename.size(); ++i)
+	{
+		auto oldKey = keysToRename[i].toString();
+		auto newKey = newPrefix + oldKey.substring(oldPrefix.length());
+
+		data->removeProperty(keysToRename[i]);
+
+		if (Identifier::isValidIdentifier(newKey))
+			data->setProperty(Identifier(newKey), valuesToMove[i]);
+	}
+}
+
+void PresetBrowser::DataBaseHelpers::renameFileEntryInDatabase(const var& database,
+                                                               const File& oldFile,
+                                                               const File& newFile)
+{
+	auto data = database.getDynamicObject();
+
+	if (data == nullptr)
+		return;
+
+	auto oldId = getIdForFile(oldFile);
+	auto newId = getIdForFile(newFile);
+
+	if (oldId.isNull() || newId.isNull() || oldId == newId)
+		return;
+
+	auto value = data->getProperty(oldId);
+
+	if (!value.isVoid())
+	{
+		data->removeProperty(oldId);
+		data->setProperty(newId, value);
+	}
 }
 
 } // namespace hise

@@ -310,10 +310,14 @@ public:
 			showFavoritesOnly = shouldShowFavoritesOnly;
 		}
 
+		bool getShowFavoritesOnly() const { return showFavoritesOnly; }
+
 		File getFileForIndex(int fileIndex) const
 		{
 			return entries[fileIndex];
 		};
+
+		bool isFavoriteInAnyDatabase(const File& f) const;
 
 		int getIndexForFile(const File& f) const
 		{
