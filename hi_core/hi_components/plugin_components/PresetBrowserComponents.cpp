@@ -260,7 +260,14 @@ int PresetBrowserColumn::ColumnListModel::getNumRows()
 	{
 		jassert(index == 2);
 		Array<File> allFiles;
-		totalRoot.findChildFiles(allFiles, File::findFiles, true);
+
+		auto searchRoots = parent->getAllSearchRoots();
+
+		if (searchRoots.isEmpty())
+			totalRoot.findChildFiles(allFiles, File::findFiles, true);
+		else
+			for (auto& r : searchRoots)
+				r.findChildFiles(allFiles, File::findFiles, true);
 		entries.clear();
 
 		for (int i = 0; i < allFiles.size(); i++)
@@ -394,9 +401,30 @@ void PresetBrowserColumn::ColumnListModel::paintListBoxItem(int rowNumber, Graph
 		auto column = parent->getColumn(index);
 		jassert(dynamic_cast<ListBox*>(column)->getModel() == this);
 		
-    if (showFavoritesOnly && parent.getComponent()->shouldShowFullPathFavorites())
+		if (showFavoritesOnly && parent.getComponent()->shouldShowFullPathFavorites())
 			itemName = entries[rowNumber].getRelativePathFrom(totalRoot);
-    
+
+		if (!wildcard.isEmpty() && parent.getComponent()->shouldShowFullPathSearch())
+		{
+			const auto& f = entries[rowNumber];
+			const auto searchRoots = parent->getAllSearchRoots();
+
+			// Index 0 is the project root; expansions start at index 1 and are
+			// prefixed with their folder name so the user can tell them apart.
+			itemName = f.getRelativePathFrom(totalRoot);
+
+			for (int i = 0; i < searchRoots.size(); ++i)
+			{
+				if (f.isAChildOf(searchRoots[i]))
+				{
+					auto rel = f.getRelativePathFrom(searchRoots[i]);
+					itemName = (i > 0) ? searchRoots[i].getParentDirectory().getFileName() + File::getSeparatorString() + rel
+					                   : rel;
+					break;
+				}
+			}
+		}
+
 		getPresetBrowserLookAndFeel().drawListItem(g, *column, index, rowNumber, itemName, position, rowIsSelected, deleteOnClick, isMouseHover(rowNumber));
 	}
 }

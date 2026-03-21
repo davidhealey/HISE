@@ -95,6 +95,7 @@ public:
 		bool showFolderButton = true;
 		bool showFavoriteIcons = true;
 		bool fullPathFavorites = false;
+		bool fullPathSearch = false;
 		bool showExpansions = false;
 		bool showExpansionEditButtons = false;
 	};
@@ -187,6 +188,7 @@ public:
 	void updateFavoriteButton();
 	bool shouldShowFavoritesButton() { return showFavoritesButton; }
 	bool shouldShowFullPathFavorites() { return fullPathFavorites; }
+	bool shouldShowFullPathSearch() { return fullPathSearch; }
 
 	void lookAndFeelChanged() override;
 
@@ -234,6 +236,8 @@ public:
 
 	Point<int> getMouseHoverInformation() const;
 
+	Array<File> getAllSearchRoots() const;
+
 	Component* getColumn(int columnIndex)
 	{
 		switch(columnIndex)
@@ -255,6 +259,7 @@ private:
 	void setShowFavorites(bool shouldShowFavorites);
 	void setFavoriteIconOffset(int xOffset);
 	void setShowFullPathFavorites(bool shouldShowFullPathFavorites);
+	void setShowFullPathSearch(bool shouldShowFullPathSearch);
 	void setHighlightColourAndFont(Colour c, Colour bgColour, Font f);
 	void setNumColumns(int numColumns);
 
@@ -306,6 +311,7 @@ private:
 
 	bool showFavoritesButton = true;
 	bool fullPathFavorites = false;
+	bool fullPathSearch = false;
 	bool showOnlyPresets = false;
 	String currentWildcard = "*";
 	StringArray currentTagSelection;
