@@ -48,6 +48,8 @@
 #include <limits.h>
 #include <regex>
 
+#include <juce_product_unlocking/juce_product_unlocking.h>
+
 #include "../hi_dsp_library/hi_dsp_library.h"
 #include "hi_tools.h"
 
@@ -64,6 +66,11 @@
 
 #include "hi_tools/SiTraNoConverter.cpp"
 #include "hi_tools/MiscToolClasses.cpp"
+
+#if HI_RUN_UNIT_TESTS
+#include "hi_tools/FuzzySearcherTests.cpp"
+#endif
+
 #include "hi_dispatch/hi_dispatch.cpp"
 
 #include "hi_tools/PathFactory.cpp"
@@ -139,3 +146,8 @@
 
 #include "hi_neural/onnx_loader.cpp"
 
+
+#if !HISE_NO_GUI_TOOLS
+#include "simple_css/simple_css.cpp"
+#include "hi_multipage/multipage.cpp"
+#endif

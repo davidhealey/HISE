@@ -1,0 +1,134 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 700" width="720" height="700">
+  <defs>
+    <style>
+      .bg { fill: #333333; }
+      .lane-header { fill: #cccccc; font-family: 'Segoe UI', 'Helvetica Neue', sans-serif; font-size: 15px; font-weight: 600; }
+      .lane-sub { fill: #888888; font-family: 'Segoe UI', 'Helvetica Neue', sans-serif; font-size: 11px; }
+      .lane-line { stroke: #555555; stroke-width: 2; }
+      .commit-node { fill: #555555; stroke: #999999; stroke-width: 1.5; }
+      .commit-pkg { fill: #6670c0; stroke: #8890d0; stroke-width: 1.5; }
+      .commit-msg { fill: #bbbbbb; font-family: 'Consolas', 'SF Mono', monospace; font-size: 11px; }
+      .commit-msg-pkg { fill: #8890d0; font-family: 'Consolas', 'SF Mono', monospace; font-size: 11px; }
+      .tag-rect { fill: #3a3a3a; stroke: #6670c0; stroke-width: 1.5; }
+      .tag-text { fill: #8890d0; font-family: 'Consolas', 'SF Mono', monospace; font-size: 11px; font-weight: 600; }
+      .arrow-am { stroke: #6670c0; stroke-width: 2; fill: none; }
+      .arrow-head { fill: #6670c0; }
+      .am-label { fill: #8890d0; font-family: 'Segoe UI', 'Helvetica Neue', sans-serif; font-size: 11px; font-weight: 600; }
+      .am-sublabel { fill: #999999; font-family: 'Segoe UI', 'Helvetica Neue', sans-serif; font-size: 10px; }
+      .legend-text { fill: #999999; font-family: 'Segoe UI', 'Helvetica Neue', sans-serif; font-size: 10px; }
+      .separator { stroke: #444444; stroke-width: 1; stroke-dasharray: 2,4; }
+      .note { fill: #777777; font-family: 'Consolas', 'SF Mono', monospace; font-size: 10px; }
+    </style>
+    <marker id="arrowRight" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <polygon points="0,0 8,3 0,6" class="arrow-head"/>
+    </marker>
+  </defs>
+
+  <!-- Background -->
+  <rect class="bg" width="720" height="700" rx="8" ry="8"/>
+
+  <!-- ==================== Lane Headers ==================== -->
+
+  <text class="lane-header" x="130" y="32" text-anchor="middle">Asset</text>
+  <text class="lane-sub" x="130" y="48" text-anchor="middle">git.hise.dev / local folder</text>
+
+  <text class="lane-header" x="530" y="32" text-anchor="middle">Your HISE Project</text>
+  <text class="lane-sub" x="530" y="48" text-anchor="middle">your git repository</text>
+
+  <!-- Vertical divider -->
+  <line class="separator" x1="330" y1="60" x2="330" y2="640"/>
+
+  <!-- ==================== Lane Lines ==================== -->
+
+  <line class="lane-line" x1="130" y1="70" x2="130" y2="620"/>
+  <line class="lane-line" x1="530" y1="70" x2="530" y2="620"/>
+
+  <!-- ==================== Row 1: y=95 - Initial commits ==================== -->
+
+  <circle class="commit-node" cx="130" cy="95" r="5"/>
+  <text class="commit-msg" x="148" y="92">Add scripts &amp;</text>
+  <text class="commit-msg" x="148" y="106">DSP networks</text>
+
+  <circle class="commit-node" cx="530" cy="95" r="5"/>
+  <text class="commit-msg" x="548" y="99">Initial project setup</text>
+
+  <!-- ==================== Row 2: y=160 - Setup ==================== -->
+
+  <circle class="commit-node" cx="130" cy="160" r="5"/>
+  <text class="commit-msg" x="148" y="157">Add</text>
+  <text class="commit-msg" x="148" y="171">package_install.json</text>
+
+  <circle class="commit-node" cx="530" cy="160" r="5"/>
+  <text class="commit-msg" x="548" y="164">Add UI components</text>
+
+  <!-- ==================== Row 3: y=240 - Tag v1.0.0 + Install ==================== -->
+
+  <!-- Tag badge to the left of the lane line -->
+  <circle class="commit-node" cx="130" cy="240" r="5"/>
+  <rect class="tag-rect" x="30" y="229" width="66" height="22" rx="10" ry="10"/>
+  <text class="tag-text" x="63" y="244" text-anchor="middle">v1.0.0</text>
+
+  <!-- Arrow: curved bezier that goes below the label area -->
+  <path class="arrow-am" d="M 150,244 C 250,280 420,280 510,296" marker-end="url(#arrowRight)"/>
+
+  <!-- Labels positioned above the curve -->
+  <text class="am-label" x="330" y="262" text-anchor="middle">Asset Manager</text>
+  <text class="am-sublabel" x="330" y="276" text-anchor="middle">Install v1.0.0</text>
+
+  <!-- Install commit on right lane -->
+  <circle class="commit-pkg" cx="530" cy="300" r="6"/>
+  <text class="commit-msg-pkg" x="548" y="297">Install MyLib v1.0.0</text>
+  <text class="note" x="548" y="312">+ install_packages_log.json</text>
+
+  <!-- ==================== Row 4: y=365-410 - Normal work ==================== -->
+
+  <circle class="commit-node" cx="530" cy="365" r="5"/>
+  <text class="commit-msg" x="548" y="369">Add custom presets</text>
+
+  <!-- Asset lane: continued development -->
+  <circle class="commit-node" cx="130" cy="390" r="5"/>
+  <text class="commit-msg" x="148" y="394">Fix filter bug</text>
+
+  <circle class="commit-node" cx="530" cy="415" r="5"/>
+  <text class="commit-msg" x="548" y="419">Tweak MyLib/utils.js</text>
+
+  <!-- ==================== Row 5: y=480 - Tag v1.1.0 + Update ==================== -->
+
+  <circle class="commit-node" cx="130" cy="480" r="5"/>
+  <rect class="tag-rect" x="30" y="469" width="66" height="22" rx="10" ry="10"/>
+  <text class="tag-text" x="63" y="484" text-anchor="middle">v1.1.0</text>
+
+  <!-- Arrow: curved bezier -->
+  <path class="arrow-am" d="M 150,484 C 250,520 420,520 510,536" marker-end="url(#arrowRight)"/>
+
+  <!-- Labels positioned above the curve -->
+  <text class="am-label" x="330" y="502" text-anchor="middle">Asset Manager</text>
+  <text class="am-sublabel" x="330" y="516" text-anchor="middle">Update to v1.1.0</text>
+
+  <!-- Update commit on right lane -->
+  <circle class="commit-pkg" cx="530" cy="540" r="6"/>
+  <text class="commit-msg-pkg" x="548" y="537">Update MyLib to v1.1.0</text>
+  <text class="note" x="548" y="552">git diff shows exact changes</text>
+
+  <!-- ==================== Row 6: y=600 - Continues ==================== -->
+
+  <circle class="commit-node" cx="530" cy="605" r="5"/>
+  <text class="commit-msg" x="548" y="609">Continue working...</text>
+
+  <!-- ==================== Legend ==================== -->
+  <rect x="20" y="648" width="680" height="35" rx="4" ry="4" fill="#3a3a3a"/>
+
+  <circle cx="45" cy="666" r="4" class="commit-node"/>
+  <text class="legend-text" x="55" y="670">Commit</text>
+
+  <circle cx="140" cy="666" r="5" class="commit-pkg"/>
+  <text class="legend-text" x="152" y="670">Package install/update</text>
+
+  <rect x="298" y="658" width="50" height="16" rx="8" ry="8" class="tag-rect"/>
+  <text class="tag-text" x="323" y="670" text-anchor="middle" style="font-size:9px">v1.0.0</text>
+  <text class="legend-text" x="355" y="670">Version tag</text>
+
+  <line x1="445" y1="666" x2="475" y2="666" class="arrow-am" marker-end="url(#arrowRight)"/>
+  <text class="legend-text" x="485" y="670">Asset Manager action</text>
+
+</svg>

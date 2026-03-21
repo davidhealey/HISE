@@ -102,406 +102,26 @@ struct HiseAssetManager::ButtonLaf : public LookAndFeel_V4
 };
 
 
-juce::CodeEditorComponent::ColourScheme DiffViewer::FileDiff::DiffTokeniser::getDefaultColourScheme()
+struct HiseAssetManager::LogoutButtonLaf : public LookAndFeel_V4
 {
-	CodeEditorComponent::ColourScheme cs;
-	cs.set("Header", Colours::white);
-	cs.set("Context", Colours::grey);
-	cs.set("Add", Colour(HISE_OK_COLOUR));
-	cs.set("Remove", Colour(HISE_ERROR_COLOUR));
-	return cs;
-}
-
-int DiffViewer::FileDiff::DiffTokeniser::readNextToken(CodeDocument::Iterator& source)
-{
-	auto c = source.nextChar();
-
-	switch (c)
+	void drawButtonBackground(Graphics& g, Button& button, const Colour&, bool shouldDrawButtonAsHighlighted, bool shouldDrawButtonAsDown)
 	{
-	case '@':
-		source.skipToEndOfLine();
-		return (int)LineType::Header;
-	case '+':
-		source.skipToEndOfLine();
-		return (int)LineType::Add;
-	case '-':
-		source.skipToEndOfLine();
-		return (int)LineType::Remove;
-	default:
-		source.skipToEndOfLine();
-		return(int)LineType::Context;
-	}
-}
-
-void DiffViewer::addDiff(const File& f, const LineDiff::HashedDiff::Ptr diffReport)
-{
-	auto nd = new FileDiff(rootDir, f, diffReport);
-	diffs.add(nd);
-	content.addAndMakeVisible(nd);
-
-	updateBounds();
-}
-
-DiffViewer::DiffViewer(const File& rootDir_):
-  applyButton("Save"),
-  cancelButton("Close"),
-  rootDir(rootDir_),
-  laf(new HiseAssetManager::ButtonLaf())
-{
-	jassert(rootDir.isDirectory());
-	addAndMakeVisible(applyButton);
-	addAndMakeVisible(cancelButton);
-
-	applyButton.setLookAndFeel(laf);
-	cancelButton.setLookAndFeel(laf);
-
-	applyButton.setConnectedEdges(Button::ConnectedEdgeFlags::ConnectedOnLeft);
-	cancelButton.setConnectedEdges(Button::ConnectedEdgeFlags::ConnectedOnRight);
-
-	cancelButton.setTooltip("Close the diff viewer");
-	applyButton.setTooltip("Save the changes to the edited file");
-
-	applyButton.setEnabled(false);
-
-	cancelButton.setColour(TextButton::ColourIds::buttonColourId, Colour(0xFF666666));
-	applyButton.setColour(TextButton::ColourIds::buttonColourId, Colour(HiseAssetManager::ProductList::SignalColour));
-
-	addAndMakeVisible(vp);
-	vp.setViewedComponent(&content, false);
-	sf.addScrollBarToAnimate(vp.getVerticalScrollBar());
-	vp.setScrollBarThickness(12);
-
-	applyButton.onClick = [this]()
-	{
-		if(currentCodeDoc != nullptr)
-			updateReport(currentReport, currentCodeDoc->getAllContent());
-	};
-
-	cancelButton.onClick = [this]()
-	{
-		auto am = findParentComponentOfClass<HiseAssetManager>();
-		
-		am->showStatusMessage("");
-		am->setState(HiseAssetManager::ErrorState::OK);
-		am->setModalComponent(nullptr);
-	};
-
-	checkSaveButton();
-}
-
-void DiffViewer::paint(Graphics& g)
-{
-	g.fillAll(Colour(0xFF222222));
-
-	if(editedFile.existsAsFile())
-	{
-		g.fillAll(Colour(0xFF222222));
-		g.setColour(Colours::white.withAlpha(0.5f));
-		auto b = getLocalBounds();
-		
-		auto rb = b.removeFromRight(b.getWidth() / 2);
-		auto tb = rb.removeFromTop(TopHeight).toFloat().reduced(4.0f, 0.0f);
-
- 		g.setFont(GLOBAL_BOLD_FONT());
-		String text;
-		text << editedFile.getRelativePathFrom(rootDir);
-
-		if(isShowingOriginal)
-			text << " (Original Version)";
-
-		g.drawText(text, tb, Justification::left);
+		if (shouldDrawButtonAsHighlighted || shouldDrawButtonAsDown)
+		{
+			auto b = button.getLocalBounds().toFloat().reduced(1.0f);
+			float alpha = shouldDrawButtonAsDown ? 0.15f : 0.08f;
+			g.setColour(Colours::white.withAlpha(alpha));
+			g.fillRoundedRectangle(b, 3.0f);
+		}
 	}
 
+	void drawButtonText(Graphics& g, TextButton& tb, bool, bool)
 	{
-		auto b = getLocalBounds();
-
-		auto lb = b.removeFromLeft(b.getWidth() / 2).toFloat();
-		auto rb = b.toFloat();
-
 		g.setFont(GLOBAL_FONT());
-		g.setColour(Colours::white.withAlpha(0.2f));
-
-		if(diffs.isEmpty())
-		{
-			g.drawText("No changes", lb, Justification::centred);
-		}
-		if(currentEditor == nullptr)
-		{
-			g.drawText("Select a change to edit the file", rb, Justification::centred);
-		}
+		g.setColour(Colours::white.withAlpha(0.6f));
+		g.drawText(tb.getButtonText(), tb.getLocalBounds().toFloat(), Justification::centredRight);
 	}
-
-
-}
-
-void DiffViewer::resized()
-{
-	auto b = getLocalBounds();
-
-	cancelButton.setVisible(true);
-	applyButton.setVisible(true);
-	auto rb = b.removeFromRight(b.getWidth() / 2);
-	auto bottom = rb.removeFromTop(TopHeight);
-
-	applyButton.setBounds(bottom.removeFromRight(100).reduced(0, 2));
-	cancelButton.setBounds(bottom.removeFromRight(100).reduced(0, 2));
-
-	if(currentEditor != nullptr)
-		currentEditor->setBounds(rb);
-	
-	vp.setBounds(b);
-
-
-	auto w = b.getWidth() - vp.getScrollBarThickness();
-	content.setSize(w, content.getHeight());
-	updateBounds();
-}
-
-void DiffViewer::updateBounds()
-{
-	if (content.getWidth() == 0 || diffs.isEmpty())
-		return;
-
-	int h = 0;
-
-	for (auto d : diffs)
-	{
-		auto th = d->getHeight();
-		d->setBounds(0, h, content.getWidth(), th);
-		h += th;
-	}
-
-	content.setSize(content.getWidth(), h);
-}
-
-void DiffViewer::checkSaveButton()
-{
-	if (currentReport != nullptr)
-	{
-		auto currentFileContent = currentReport->getContent(false);
-		auto currentEditorContent = currentCodeDoc->getAllContent();
-
-		auto changes = currentFileContent.hashCode64() != currentEditorContent.hashCode64();
-
-		if (changes)
-		{
-			applyButton.setColour(TextButton::ColourIds::buttonColourId, Colour(HiseAssetManager::ProductList::SignalColour));
-			applyButton.setEnabled(true);
-			return;
-		}
-	}
-
-	applyButton.setColour(TextButton::ColourIds::buttonColourId, Colour(0xFF444444));
-	applyButton.setEnabled(false);
-}
-
-void DiffViewer::setEditedFile(const File& f, const LineDiff::HashedDiff::Ptr p, bool showOld)
-{
-	if(currentCodeDoc != nullptr)
-		currentCodeDoc->removeListener(this);
-
-	isShowingOriginal = showOld;
-	editedFile = f;
-	currentReport = p;
-	currentEditor = nullptr;
-	currentTextDoc = nullptr;
-	currentCodeDoc = nullptr;
-
-	if(p != nullptr)
-	{
-		auto content = p->getContent(showOld);
-
-		currentCodeDoc = new CodeDocument();
-
-		currentCodeDoc->replaceAllContent(content);
-		currentTextDoc = new mcl::TextDocument(*currentCodeDoc);
-		currentEditor = new mcl::TextEditor(*currentTextDoc);
-
-		if(showOld)
-			currentEditor->setReadOnly(true);
-		else
-			setEditorChanges(p->createHunks());
-
-		if (f.getFileExtension() == ".xml")
-			currentEditor->setLanguageManager(new mcl::XmlLanguageManager());
-		if (f.getFileExtension() == ".dsp")
-			currentEditor->setLanguageManager(new mcl::FaustLanguageManager());
-		if (f.getFileExtension() == ".md")
-			currentEditor->setLanguageManager(new mcl::MarkdownLanguageManager());
-
-		currentCodeDoc->addListener(this);
-
-		addAndMakeVisible(currentEditor);
-	}
-
-	checkSaveButton();
-	resized();
-}
-
-
-DiffViewer::FileDiff::FileDiff(const File& rootDir_, const File& file, const LineDiff::HashedDiff::Ptr diff_) :
-	editedFile(file),
-	revertButton("View Original"),
-	editButton("Edit"),
-	moreButton("more"),
-    diff(diff_),
-    rootDir(rootDir_)
-{
-	jassert(rootDir.isDirectory());
-	laf = new HiseAssetManager::ButtonLaf();
-
-	revertButton.setLookAndFeel(laf);
-	editButton.setLookAndFeel(laf);
-	moreButton.setLookAndFeel(laf);
-
-	revertButton.setConnectedEdges(Button::ConnectedOnRight);
-	editButton.setConnectedEdges(Button::ConnectedOnRight | Button::ConnectedOnLeft);
-	moreButton.setConnectedEdges(Button::ConnectedOnLeft);
-
-	revertButton.setColour(TextButton::ColourIds::buttonColourId, Colour(0xFF666666));
-	editButton.setColour(TextButton::ColourIds::buttonColourId, Colour(0xFF666666));
-	moreButton.setColour(TextButton::ColourIds::buttonColourId, Colour(HiseAssetManager::ProductList::SignalColour));
-
-	int h = 0;
-
-	auto report = diff->getPatchReport();
-
-	for(const auto& c: diff->createHunks())
-	{
-		addAndMakeVisible(changes.add(new ChangeEditor(c)));
-		h += changes.getLast()->getHeight();
-	}
-
-	addAndMakeVisible(revertButton);
-	addAndMakeVisible(editButton);
-	addAndMakeVisible(moreButton);
-
-	editButton.onClick = [this]()
-	{
-		findParentComponentOfClass<DiffViewer>()->setEditedFile(this->editedFile, this->diff, false);
-	};
-
-	revertButton.onClick = [this]()
-	{
-		findParentComponentOfClass<DiffViewer>()->setEditedFile(this->editedFile, this->diff, true);
-	};
-
-	moreButton.onClick = [this]()
-	{
-		PopupLookAndFeel plaf;
-		PopupMenu m;
-
-		m.addItem(1, "Show file");
-		m.addItem(2, "Revert file");
-
-		if(auto r = m.show())
-		{
-			// Implement me...
-			jassertfalse;
-		}
-	};
-
-	setSize(400, h);
-}
-
-void DiffViewer::FileDiff::paint(Graphics& g)
-{
-	g.fillAll(Colour(0xFF222222));
-	g.setColour(Colours::white.withAlpha(0.5f));
-	auto b = getLocalBounds().removeFromTop(TopHeight).toFloat().reduced(4.0f, 0.0f);
-
-	g.setFont(GLOBAL_BOLD_FONT());
-	g.drawText(editedFile.getRelativePathFrom(rootDir), b, Justification::left);
-}
-
-void DiffViewer::FileDiff::resized()
-{
-	auto b = getLocalBounds();
-	auto top = b.removeFromTop(TopHeight).reduced(0, 2);
-
-	moreButton.setBounds(top.removeFromRight(top.getHeight()));
-	editButton.setBounds(top.removeFromRight(100));
-	revertButton.setBounds(top.removeFromRight(100));
-
-	for(auto c: changes)
-	{
-		c->setBounds(b.removeFromTop(c->getHeight()));
-	}
-}
-
-
-DiffViewer::FileDiff::ChangeEditor::ChangeEditor(const LineDiff::Change& c) :
-	editor(doc, &tokeniser),
-	change(c),
-	discardButton("Discard"),
-	laf(new HiseAssetManager::ButtonLaf())
-{
-
-	addAndMakeVisible(editor);
-	addAndMakeVisible(discardButton);
-	discardButton.setLookAndFeel(laf);
-	discardButton.setColour(TextButton::ColourIds::buttonColourId, Colour(0xFF555555));
-
-	editor.setReadOnly(true);
-	doc.setDisableUndo(true);
-	doc.replaceAllContent(c.toUnifiedPatchFormat().joinIntoString("\n"));
-	auto f = GLOBAL_MONOSPACE_FONT();
-	editor.setFont(f);
-	editor.setColourScheme(tokeniser.getDefaultColourScheme());
-
-	editor.setColour(CodeEditorComponent::backgroundColourId, Colour(0xff262626));
-	editor.setColour(CodeEditorComponent::ColourIds::defaultTextColourId, Colour(0xFFCCCCCC));
-	editor.setColour(CodeEditorComponent::ColourIds::lineNumberTextId, Colour(0xFFCCCCCC));
-	editor.setColour(CodeEditorComponent::ColourIds::lineNumberBackgroundId, Colour(0xff363636));
-	editor.setColour(CodeEditorComponent::ColourIds::highlightColourId, Colour(0xff666666));
-	editor.setColour(CaretComponent::ColourIds::caretColourId, Colour(0xFFDDDDDD));
-	editor.setColour(ScrollBar::ColourIds::thumbColourId, Colour(0x3dffffff));
-	editor.setLineNumberOffset(c.lines[0].newLine - 1);
-
-	editor.addMouseListener(this, true);
-
-	discardButton.onClick = [this]()
-	{
-		if (PresetHandler::showYesNoWindow("Discard change", "Press OK to discard the hunk"))
-		{
-			auto fd = findParentComponentOfClass<FileDiff>();
-
-			auto newContent = StringArray::fromLines(fd->diff->getContent(false));
-
-			std::vector<LineDiff::Change> invertChange;
-			invertChange.push_back(change.invert());
-
-			LineDiff::HashedDiff::Ptr revertPatch = new LineDiff::HashedDiff(newContent, invertChange);
-
-			auto discardedContent = revertPatch->getContent(false);
-			auto parent = findParentComponentOfClass<DiffViewer>();
-
-			parent->updateReport(fd->diff, discardedContent);
-		}
-	};
-
-	auto h = editor.getLineHeight() * (doc.getNumLines() + 3);
-	setSize(400, h);
-}
-
-void DiffViewer::FileDiff::ChangeEditor::mouseDown(const MouseEvent& e)
-{
-	if (e.eventComponent == &editor)
-	{
-		auto fd = findParentComponentOfClass<FileDiff>();
-		auto dv = findParentComponentOfClass<DiffViewer>();
-
-		if (fd->editedFile == dv->editedFile)
-		{
-			if (auto currentEditor = dv->currentEditor.get())
-			{
-				auto firstLine = change.lines[0];
-				auto lineNumber = dv->isShowingOriginal ? firstLine.oldLine : firstLine.newLine;
-				currentEditor->scrollToLine(lineNumber, true);
-			}
-		}
-	}
-}
+};
 
 struct HiseAssetManager::LoginTask : public ActionBase
 {
@@ -527,21 +147,37 @@ struct HiseAssetManager::LoginTask : public ActionBase
 		if (rd.statusCode == 401)
 		{
 			manager->loginOk = false;
+			manager->logoutButton.setVisible(false);
 			Helpers::getCredentialFile().deleteFile();
 			manager->setState(ErrorState::OK);
 			manager->showStatusMessage("The authentication token was not valid. Please retry...");
 			manager->productList->setProducts({}, manager);
 		}
-
-		if (rd.statusCode == 200)
+		else if (rd.statusCode == 200)
 		{
 			manager->loginOk = true;
+			manager->logoutButton.setButtonText(manager->userName);
+			manager->logoutButton.setVisible(true);
+			manager->resized();
 			manager->repaint();
 
 			if (auto l = rd.returnData.getArray())
 			{
 				manager->productList->setProducts(*l, manager);
 			}
+		}
+		else
+		{
+			manager->loginOk = false;
+			manager->logoutButton.setVisible(false);
+			manager->setState(ErrorState::OK);
+
+			if (rd.statusCode == -1)
+				manager->showStatusMessage("Connection failed. Check your network and try again.");
+			else
+				manager->showStatusMessage("Login failed (status " + String(rd.statusCode) + "). Please retry.");
+
+			manager->productList->setProducts({}, manager);
 		}
 	}
 
@@ -565,11 +201,6 @@ juce::var HiseAssetManager::Helpers::RequestData::operator[](int index) const
 String HiseAssetManager::Helpers::RequestData::operator[](const String& d) const
 {
 	return returnData[Identifier(d)].toString();
-}
-
-void HiseAssetManager::Helpers::RequestData::dump()
-{
-	DBG(JSON::toString(returnData));
 }
 
 void HiseAssetManager::Helpers::RequestData::forEachListElement(const std::function<void(const var&)>& f)
@@ -711,23 +342,6 @@ struct HiseAssetManager::ProductFetchTask : public ActionBase
 			obj = rd.returnData;
 
 		return true;
-
-#if 0
-		URL url("https://store.hise.dev/api/products/");
-		auto x = url.readEntireTextStream(false);
-
-		if (x.isNotEmpty())
-		{
-			auto ok = JSON::parse(x, obj);
-
-			if (ok.wasOk())
-			{
-				return true;
-			}
-		}
-#endif
-
-		return false;
 	}
 
 	var obj;
@@ -757,9 +371,7 @@ HiseAssetManager::ProductList::TagInfo::TagInfo(const var& obj) :
 	date(Time::fromISO8601(obj["commit"]["created"].toString())),
 	commitHash(obj["commit"]["sha"].toString()),
 	downloadLink(obj["zipball_url"].toString())
-{
-	DBG(JSON::toString(obj));
-}
+{}
 
 bool HiseAssetManager::ProductList::TagInfo::operator<(const TagInfo& other) const
 {
@@ -825,9 +437,9 @@ bool HiseAssetManager::ProductList::RowInfo::matches(int at) const
 	else
 	{
 		if (installed)
-			installTypeMatches &= (at & AssetType::Installed) != 0;
+			installTypeMatches &= (at & (AssetType::Installed | AssetType::Online)) != 0;
 		else
-			installTypeMatches &= (at & AssetType::Uninstalled) != 0;
+			installTypeMatches &= (at & (AssetType::Uninstalled | AssetType::Online)) != 0;
 	}
 
 	auto isLocal = installInfo.isLocalFolder();
@@ -869,6 +481,12 @@ void HiseAssetManager::ProductList::RowInfo::updateState()
 	if (state == State::NotOwned)
 		return;
 
+	if (needsCleanup)
+	{
+		state = State::NeedsCleanup;
+		return;
+	}
+
 	if (!installInfo.isInstalled())
 	{
 		state = State::Uninstalled;
@@ -893,6 +511,8 @@ String HiseAssetManager::ProductList::RowInfo::getActionName() const
 		return "Update to " + installInfo.availableVersion;
 	case State::UpToDate:
 		return "Uninstall " + installInfo.installedVersion;
+	case State::NeedsCleanup:
+		return "Cleanup";
 	case State::NotOwned:
 		return "View in HISE store";
 	case State::numStates:
@@ -947,9 +567,7 @@ void HiseAssetManager::ProductList::SpecialRow::mouseUp(const MouseEvent& e)
 
 bool HiseAssetManager::ProductList::SpecialRow::matchesFlag(int filterFlag, const String& searchTerm) const
 {
-	if (filterFlag & AssetType::Online)
-		return false;
-
+	// Hide when viewing only installed packages
 	if (((filterFlag & AssetType::Installed) != 0) &&
 		((filterFlag & AssetType::Uninstalled) == 0))
 		return false;
@@ -987,6 +605,113 @@ void HiseAssetManager::ProductList::SpecialRow::resized()
 	textBounds = b.toFloat();
 }
 
+
+HiseAssetManager::ProductList::LoginRow::LoginRow(HiseAssetManager* manager_) :
+	manager(manager_),
+	loginButton("Login"),
+	getTokenButton("Get Token"),
+	blaf(new ButtonLaf())
+{
+	auto existingToken = Helpers::getCredentialFile().loadFileAsString();
+
+	helpText.append("Paste your auth token to sync with your HISE Store purchases.", GLOBAL_FONT(), Colours::white.withAlpha(0.6f));
+	helpText.setJustification(Justification::centredLeft);
+
+	icon = createSVGfromBase64("1094.nT6K8C1lFTdH.XYOEaBvp791HdIOsrUiWPPbDBwThRP7x0G2EraxVB.vGLtIAAAoDD55A3K.pBPt.HNVhzjwHHoC+EeRjlnmkfghLnqib7a5y3GVxbQXHnW3IKQRQUOvuIy+42rrB6Khq7jgk26ujFACgfg0ZwXmiTUWcEF5nOv+HpJHJy6JrQncfoUcnc060xx5TD3nRNyHVelj0bZMMM0xhQIJ5nJpJKPrrt0KUDNZndr4gkUVtik0hJpLMJN1tP8Y5jBxkOaxX3g.GD.BITQNVg8GIC45F4POop5KTXyVE12HXGonwOUksdqvFIAOM+lnBEgHgCxtpu28091qb+sBnbWW6c7ktZ2a9Vm4wVLkNOWu5qFuqVKti80K+M650U78p48d05uTYeFmytx1Zu68Udtmu1Uu9xW2dNul455Muq69kR1xqd7VA91qW8akJrNpQnbkaqs5u2EJ5W70UMuP66Xb8yx5DUksB6+wIp0v.eyQLn9mkrKJPiupV6dgB8FW4V7BEWqhKAP.ZhxIVgIZR5cNxYhR8c.kAXFfgleTvHV4rTihFFJhThjpa3s8fLaAMVHcFwBIIhvjs4hDyzRoYk9V3i+A28nU3DFLYZLZb4+GYFNXfDB4pSmvIRCHX.BuhmNZN7jEJ6jgOeZjYt83aCxnMMVZP9EYhMMCCN3.pPe8O4BYv2XoECNTttJrNPJvSuemAEPPnOSFfnn2Tt74a9h40KkdMaqdd9h62459duZdkiu9KE1iwYZ+Niw4r+twW7aluaqX7deU4aNtt67dV2lq4qsUq85..fvmoSqCrpvzz9jsmjgANaZBY8xtnozl16Dz75jDSIF4cwh6x+cfiz3iymHYXDwlrD5F1HAdyVmRbe8HV13gNH87vD9jRsKMKHO1t34CHKFKHQSMQRiPyRgKjtjoKQj7Kld5gRsHp3oPkOSb1jgTlDR5P58v2IxQ5Hpr4VYzXlDS3z7HuHxCsCGPYbPmPijSmRw7kcUdcVwywTxxonMwG3TB5ZeRJdwiitExLAhenXluQiDTr.R6SHKM5.g7+.tu88YR4aFC.BIpgSJcJHp.PDAD.PC.PoHSUUUAAVJUlCxHADHDs1.7r.3KKAUnDcHpe4gAUCQBGnnQ50rBfPAs84NQMeSMHN4123YBLIeoWjIkX9LhA4fmhpwdixVIAoONuKIPmyqpzNksarXe.1elGF3LdQTG8xVCRX3sFC9MlbaYilRunhwLRLUPwyaj1AANMNxbiADFkqAKIgdQC.NjQBhnHTLTuJLtXC.6d1QUOXeEMblZgarphEBfv0PhzQs9utzuv0V7hGJGGdjhs3sHX5Wzc2Ty6FhV.NMUmFEUW2R4Zxaq+1bNXJXhOZy8O.AwcWIj8nSX.T.A0JWPk5ldVpFC9lZQ5hL2Dv2xP+bgJXFf4MLNvln6p7I8P2RZE7oqIlEg5EG67JfAjsC");
+
+	addAndMakeVisible(tokenEditor);
+	addAndMakeVisible(loginButton);
+	addAndMakeVisible(getTokenButton);
+
+	tokenEditor.setPasswordCharacter(0x2022);
+	tokenEditor.setTextToShowWhenEmpty("Paste auth token here...", Colours::grey);
+	tokenEditor.setText(existingToken, dontSendNotification);
+	GlobalHiseLookAndFeel::setTextEditorColours(tokenEditor);
+	tokenEditor.setJustification(Justification::centredLeft);
+
+	tokenEditor.onReturnKey = [this]()
+	{
+		buttonClicked(&loginButton);
+	};
+
+	loginButton.setLookAndFeel(blaf);
+	getTokenButton.setLookAndFeel(blaf);
+
+	loginButton.setColour(TextButton::ColourIds::buttonColourId, Colour(ProductList::SignalColour));
+	getTokenButton.setColour(TextButton::ColourIds::buttonColourId, Colour(0xFF666666));
+
+	loginButton.setConnectedEdges(Button::ConnectedOnRight);
+	getTokenButton.setConnectedEdges(Button::ConnectedOnLeft);
+
+	loginButton.addListener(this);
+	getTokenButton.addListener(this);
+}
+
+bool HiseAssetManager::ProductList::LoginRow::matchesFlag(int filterFlag, const String& searchTerm) const
+{
+	if (((filterFlag & AssetType::Installed) != 0) &&
+		((filterFlag & AssetType::Uninstalled) == 0))
+		return false;
+
+	return searchTerm.isEmpty();
+}
+
+void HiseAssetManager::ProductList::LoginRow::buttonClicked(Button* b)
+{
+	if (b == &getTokenButton)
+	{
+		URL("https://store.hise.dev/account/settings/").launchInDefaultBrowser();
+		tokenEditor.grabKeyboardFocus();
+		return;
+	}
+
+	if (b == &loginButton)
+	{
+		auto token = tokenEditor.getText().trim();
+
+		if (token.isEmpty())
+		{
+			manager->showStatusMessage("Please paste a token first.");
+			return;
+		}
+
+		Helpers::getCredentialFile().replaceWithText(token);
+		manager->setState(ErrorState::OK);
+		manager->addJob(new LoginTask());
+	}
+}
+
+void HiseAssetManager::ProductList::LoginRow::paint(Graphics& g)
+{
+	paintBase(g, icon.get(), false);
+	helpText.draw(g, textBounds);
+}
+
+void HiseAssetManager::ProductList::LoginRow::resized()
+{
+	auto b = getLocalBounds();
+	b.removeFromLeft(10);
+	b.removeFromLeft(3);
+	b.removeFromRight(10);
+	b.removeFromRight(5);
+
+	imgBounds = b.removeFromLeft(b.getHeight()).reduced(16);
+	b.removeFromLeft(10);
+
+	auto top = b.removeFromTop(b.getHeight() / 2);
+	textBounds = top.toFloat();
+
+	b.removeFromTop(4);
+	b.removeFromBottom(16);
+
+	auto buttonArea = b.removeFromRight(200);
+	b.removeFromRight(8);
+
+	tokenEditor.setBounds(b);
+
+	getTokenButton.setBounds(buttonArea.removeFromRight(80));
+	loginButton.setBounds(buttonArea);
+}
 
 struct HiseAssetManager::ProductList::Row::FetchVersion : public RowAction
 {
@@ -1026,7 +751,8 @@ struct HiseAssetManager::ProductList::Row::FetchInfo : public RowAction
 
 	void onCompletion(HiseAssetManager* manager) override
 	{
-		manager->showHelpPopup(&rowComponent.getComponent()->infoButton, rd.returnData.toString());
+		if (rowComponent.getComponent() != nullptr)
+			manager->showHelpPopup(&rowComponent->infoButton, rd.returnData.toString());
 	}
 
 	String getMessage() const override { return "Fetch README.md"; }
@@ -1059,6 +785,9 @@ struct HiseAssetManager::ProductList::Row::FetchChangeLog : public RowAction
 
 	void onCompletion(HiseAssetManager* manager) override
 	{
+		if (rowComponent.getComponent() == nullptr)
+			return;
+
 		std::vector<Commit> commits;
 
 		rd.forEachListElement([&](const var& obj)
@@ -1066,11 +795,9 @@ struct HiseAssetManager::ProductList::Row::FetchChangeLog : public RowAction
 				commits.push_back({ obj });
 			});
 
-		auto info = rowComponent->info.installInfo;
-
 		String msg;
 
-		msg << "### Changelog for " << info.packageName << " " << info.availableVersion;
+		msg << "### Changelog for " << installInfo.packageName << " " << installInfo.availableVersion;
 		msg << "\n\n";
 
 		for (const auto& c : commits)
@@ -1078,7 +805,7 @@ struct HiseAssetManager::ProductList::Row::FetchChangeLog : public RowAction
 			msg << "- " << c.message << "\n";
 		}
 
-		manager->showHelpPopup(&rowComponent.getComponent()->infoButton, msg);
+		manager->showHelpPopup(&rowComponent->infoButton, msg);
 	}
 };
 
@@ -1091,21 +818,19 @@ struct HiseAssetManager::ProductList::Row::UninstallAction : public RowAction
 
 	bool perform(HiseAssetManager* manager) override
 	{
-		auto info = rowComponent.getComponent()->info.installInfo;
-
 		try
 		{
-			HiseAssetInstaller installer(manager->getMainController(), info);
+			HiseAssetInstaller installer(manager->getMainController(), installInfo);
+			auto result = installer.uninstall();
 
-			if (manager->currentError.info.packageName == info.packageName)
-			{
-			}
+			if (result.hasSkippedFiles())
+				skippedFiles = result.skippedFiles;
 
-			return installer.uninstall();
+			return result.success;
 		}
 		catch(HiseAssetInstaller::Error& e)
 		{
-			e.info = info;
+			e.info = installInfo;
 			manager->setError(e);
 			return false;
 		}
@@ -1113,15 +838,49 @@ struct HiseAssetManager::ProductList::Row::UninstallAction : public RowAction
 
 	void onCompletion(HiseAssetManager* manager) override
 	{
-		if (!silent)
+		if (skippedFiles.isEmpty())
 		{
-			manager->showStatusMessage("Deinstalled " + getInfo().packageName);
+			if (!silent)
+				manager->showStatusMessage("Deinstalled " + getInfo().packageName);
+		}
+		else
+		{
+			manager->showStatusMessage(String(skippedFiles.size()) + " modified file(s) kept. Click Cleanup when ready.");
 		}
 
 		manager->rebuildProductsAsync();
 	}
 
 	bool silent = false;
+	StringArray skippedFiles;
+};
+
+struct HiseAssetManager::ProductList::Row::CleanupAction : public RowAction
+{
+	CleanupAction(Row* r) :
+		RowAction(r, "Cleanup " + r->info.getPackageName())
+	{};
+
+	bool perform(HiseAssetManager* manager) override
+	{
+		try
+		{
+			HiseAssetInstaller installer(manager->getMainController(), installInfo);
+			return installer.cleanup();
+		}
+		catch (HiseAssetInstaller::Error& e)
+		{
+			e.info = installInfo;
+			manager->setError(e);
+			return false;
+		}
+	}
+
+	void onCompletion(HiseAssetManager* manager) override
+	{
+		manager->showStatusMessage("Cleaned up " + getInfo().packageName);
+		manager->rebuildProductsAsync();
+	}
 };
 
 struct HiseAssetManager::ProductList::Row::UpdateAction : public RowAction,
@@ -1142,7 +901,7 @@ struct HiseAssetManager::ProductList::Row::UpdateAction : public RowAction,
 		tf("hise_store", 0),
 		tag(ti)
 	{
-		if (getInfo().isLocalFolder())
+		if (installInfo.isLocalFolder())
 			tag = TagInfo();
 	};
 
@@ -1150,7 +909,34 @@ struct HiseAssetManager::ProductList::Row::UpdateAction : public RowAction,
 	{
 		currentManager = manager;
 
-		if (!getInfo().isLocalFolder())
+		// Uninstall current version first if installed
+		if (installInfo.isInstalled())
+		{
+			manager->showStatusMessage("Uninstalling " + installInfo.packageName + " " + installInfo.installedVersion + "...");
+
+			try
+			{
+				HiseAssetInstaller installer(manager->getMainController(), installInfo);
+				auto result = installer.uninstall();
+
+				if (result.hasSkippedFiles())
+				{
+					skippedFiles = result.skippedFiles;
+					return false;
+				}
+
+				if (!result.success)
+					return false;
+			}
+			catch (HiseAssetInstaller::Error& e)
+			{
+				e.info = installInfo;
+				manager->setError(e);
+				return false;
+			}
+		}
+
+		if (!installInfo.isLocalFolder())
 		{
 			auto link = tag.downloadLink;
 			URL u(link);
@@ -1172,24 +958,17 @@ struct HiseAssetManager::ProductList::Row::UpdateAction : public RowAction,
 
 				ScopedPointer<ZipFile> zf = new ZipFile(tf.getFile());
 				HiseAssetInstaller installer(currentManager->getMainController(), zf.get());
-				return installer.install(getInfo());
+				return installer.install(installInfo);
 			}
+
+			// Download failed
+			return false;
 		}
 		else
 		{
-			HiseAssetInstaller installer(currentManager->getMainController(), getInfo());
-			auto ok = installer.install(getInfo());
-
-			if(!ok)
-			{
-				manager->setState(ErrorState::Error);
-
-			}
-
-			return ok;
+			HiseAssetInstaller installer(currentManager->getMainController(), installInfo);
+			return installer.install(installInfo);
 		}
-
-		return true;
 	}
 
 	void finished(URL::DownloadTask* task, bool success) override
@@ -1203,14 +982,21 @@ struct HiseAssetManager::ProductList::Row::UpdateAction : public RowAction,
 
 	void onCompletion(HiseAssetManager* manager) override
 	{
-		manager->showStatusMessage("Installed " + getInfo().packageName);
+		if (skippedFiles.isEmpty())
+		{
+			manager->showStatusMessage("Installed " + installInfo.packageName);
+		}
+		else
+		{
+			manager->showStatusMessage(String(skippedFiles.size()) + " modified file(s) kept. Click Cleanup when ready.");
+		}
 
 		manager->rebuildProductsAsync();
 	}
 
-	bool isDone = false;
 	TemporaryFile tf;
 	TagInfo tag;
+	StringArray skippedFiles;
 	HiseAssetManager* currentManager = nullptr;
 	std::unique_ptr<URL::DownloadTask> currentTask;
 };
@@ -1245,6 +1031,17 @@ HiseAssetManager::ProductList::Row::Row(const RowInfo& r, HiseAssetManager* mana
 	actionButton.setLookAndFeel(blaf);
 	moreButton.setLookAndFeel(blaf);
 
+	// Read install state eagerly so the button shows the correct text before
+	// FetchVersion completes asynchronously
+	{
+		HiseAssetInstaller installer(manager->getMainController(), info.installInfo);
+		auto logEntry = installer.getInstallInfoFromLog({});
+		info.installInfo.installedVersion = logEntry[HiseSettings::Project::Version].toString();
+		info.needsCleanup = (bool)logEntry["NeedsCleanup"];
+		info.updateState();
+		actionButton.setButtonText(info.getActionName());
+	}
+
 	manager->addJob(new FetchVersion(this));
 }
 
@@ -1263,7 +1060,18 @@ void HiseAssetManager::ProductList::Row::buttonClicked(Button* b)
 			manager->performAction(SpecialAction::ShowInStore, this, true);
 			return;
 		}
-			
+
+		if (info.state == RowInfo::State::NeedsCleanup)
+		{
+			manager->performAction(SpecialAction::Cleanup, this, false);
+			return;
+		}
+
+		if (info.state == RowInfo::State::UpdateAvailable)
+		{
+			manager->performAction(SpecialAction::Install, this, false);
+			return;
+		}
 
 		if(info.installInfo.isInstalled())
 		{ 
@@ -1283,10 +1091,10 @@ void HiseAssetManager::ProductList::Row::buttonClicked(Button* b)
 		PopupLookAndFeel laf;
 		PopupMenu m;
 		m.setLookAndFeel(&laf);
-		m.addItem(1 + SpecialAction::Install, "Install latest version", info.installInfo.isUpdateAvailable(), false);
-		m.addItem(1 + SpecialAction::Uninstall, "Uninstall from project", info.installInfo.isInstalled(), false);
-		m.addItem(1 + SpecialAction::CheckLocalChanges, "Check local changes", hasLocalChanges, false);
-
+		auto isCleanup = info.state == RowInfo::State::NeedsCleanup;
+		m.addItem(1 + SpecialAction::Install, "Install latest version", info.installInfo.isUpdateAvailable() && !isCleanup, false);
+		m.addItem(1 + SpecialAction::Uninstall, "Uninstall from project", info.installInfo.isInstalled() && !isCleanup, false);
+		m.addItem(1 + SpecialAction::Cleanup, "Cleanup modified files", isCleanup, false);
 		m.addItem(1 + SpecialAction::ShowInStore, localFolder ? "Show folder" : "Show in store", true, false);
 		m.addItem(1 + SpecialAction::RemoveLocalFolder, "Remove local asset folder", localFolder, false);
 
@@ -1294,7 +1102,7 @@ void HiseAssetManager::ProductList::Row::buttonClicked(Button* b)
 		int idx = 0;
 		for(const auto& t: tags)
 		{
-			subMenu.addItem(1000 + idx++, t.name, t.name != info.installInfo.installedVersion, false);
+			subMenu.addItem(1000 + idx++, t.name, !isCleanup && t.name != info.installInfo.installedVersion, false);
 		}
 
 		m.addSubMenu("Revert to version", subMenu);
@@ -1308,8 +1116,14 @@ void HiseAssetManager::ProductList::Row::buttonClicked(Button* b)
 		{
 			auto idx = result - 1000;
 
-			if (info.installInfo.isInstalled())
-				manager->addJob(new UninstallAction(this, true));
+			if (!isPositiveAndBelow(idx, (int)tags.size()))
+				return;
+
+			String msg;
+			msg << "Do you want to install " << info.getPackageName() << " " << tags[idx].name;
+
+			if (!PresetHandler::showYesNoWindow("Confirm", msg))
+				return;
 
 			manager->addJob(new UpdateAction(this, tags[idx]));
 		}
@@ -1329,9 +1143,9 @@ void HiseAssetManager::ProductList::Row::updateAfterTag(HiseAssetManager* m)
 {
 	HiseAssetInstaller installer(m->getMainController(), info.installInfo);
 
-	hasLocalChanges = installer.hasLocalChanges();
-
-	info.installInfo.installedVersion = installer.getInstallInfoFromLog({})[HiseSettings::Project::Version].toString();
+	auto logEntry = installer.getInstallInfoFromLog({});
+	info.installInfo.installedVersion = logEntry[HiseSettings::Project::Version].toString();
+	info.needsCleanup = (bool)logEntry["NeedsCleanup"];
 
 	if (!tags.empty())
 		info.setFromTagData(tags.back());
@@ -1396,23 +1210,15 @@ void HiseAssetManager::ProductList::Row::paint(Graphics& g)
 		g.drawRoundedRectangle(imgBounds.toFloat(), 3.0f, 2.0f);
 	}
 
-	bool updateDrawn = false;
-
-	if (info.installInfo.isInstalled() && info.installInfo.isUpdateAvailable())
+	if (info.state == RowInfo::State::NeedsCleanup)
+	{
+		g.setColour(Colour(HISE_WARNING_COLOUR));
+		g.fillEllipse(circleArea.toFloat().translated(10.0f, 10.0f));
+	}
+	else if (info.installInfo.isInstalled() && info.installInfo.isUpdateAvailable())
 	{
 		g.setColour(Colour(SignalColour));
 		g.fillEllipse(circleArea.toFloat().translated(10.0f, 10.0f));
-		updateDrawn = true;
-	}
-	if(hasLocalChanges)
-	{
-		auto thisCircle = circleArea.toFloat().translated(10.0f, 10.0f);
-
-		if(updateDrawn)
-			thisCircle = thisCircle.translated(0.0, 20.0f);
-
-		g.setColour(Colour(HISE_WARNING_COLOUR));
-		g.fillEllipse(thisCircle);
 	}
 
 	if (!info.installInfo.isInstalled() && info.state != RowInfo::State::NotOwned)
@@ -1538,6 +1344,25 @@ HiseAssetManager::HiseAssetManager(BackendRootWindow* brw) :
 		this->stopThread(1000);
 		this->destroy();
 	};
+
+	logoutLaf = new LogoutButtonLaf();
+	addChildComponent(logoutButton);
+	logoutButton.setLookAndFeel(logoutLaf);
+	logoutButton.setMouseCursor(MouseCursor::PointingHandCursor);
+	logoutButton.setTooltip("Click to log out");
+
+	logoutButton.onClick = [this]()
+	{
+		if (PresetHandler::showYesNoWindow("Confirm Logout", "Do you want to log out from the HISE Store?"))
+		{
+			Helpers::getCredentialFile().deleteFile();
+			loginOk = false;
+			userName = "Not logged in";
+			logoutButton.setVisible(false);
+			rebuildProductsAsync();
+			repaint();
+		}
+	};
 }
 
 HiseAssetManager::~HiseAssetManager()
@@ -1601,64 +1426,7 @@ void HiseAssetManager::tryToLogin()
 		addJob(new LoginTask());
 }
 
-void HiseAssetManager::showLoginPrompt()
-{
-	auto token = Helpers::getCredentialFile().loadFileAsString();
 
-	String message;
-	message << "Please enter the Auth Token that you can find in the Settings of your HISE store account.";
-	message << "\n> Click Open HISE Store to open the account in your web browser.";
-
-	ScopedPointer<MessageWithIcon> comp = new MessageWithIcon(PresetHandler::IconType::Question, &getLookAndFeel(), message);
-	ScopedPointer<AlertWindow> nameWindow = new AlertWindow("Enter HISE Store Auth Token", "", AlertWindow::AlertIconType::NoIcon);
-
-	ScopedPointer<ToggleButton> saveButton = new ToggleButton("");
-
-	saveButton->setSize(128, 32);
-	saveButton->setToggleState(true, dontSendNotification);
-
-	nameWindow->setLookAndFeel(&getLookAndFeel());
-	nameWindow->addCustomComponent(comp);
-	nameWindow->addTextEditor("Name", token);
-	nameWindow->addCustomComponent(saveButton);
-
-	nameWindow->getTextEditor("Name")->setPasswordCharacter('*');
-
-	GlobalHiseLookAndFeel::setDefaultColours(*saveButton);
-
-	saveButton->setButtonText("Save credentials");
-
-	nameWindow->addButton("OK", 1, KeyPress(KeyPress::returnKey));
-	nameWindow->addButton("Cancel", 0, KeyPress(KeyPress::escapeKey));
-	nameWindow->addButton("Open HISE Store", 2);
-
-	nameWindow->getTextEditor("Name")->setSelectAllWhenFocused(true);
-	nameWindow->getTextEditor("Name")->grabKeyboardFocusAsync();
-
-	auto result = nameWindow->runModalLoop();
-
-	if (result == 2)
-	{
-		URL("https://store.hise.dev/account/settings/").launchInDefaultBrowser();
-		return;
-	}
-
-	if (result == 1)
-	{
-		token = nameWindow->getTextEditorContents("Name");
-
-		if (saveButton->getToggleState())
-		{
-			Helpers::getCredentialFile().replaceWithText(token.trim());
-		}
-	}
-
-	if (token.isNotEmpty())
-	{
-		setState(ErrorState::OK);
-		addJob(new LoginTask());
-	}
-}
 
 void HiseAssetManager::addNewAssetFolder()
 {
@@ -1685,6 +1453,25 @@ void HiseAssetManager::performAction(SpecialAction a, ProductList::Row* r, bool 
 	{
 		silent = false;
 		msg << "Remove the folder\n> `" + r->info.installInfo.localFolder.getFullPathName() << "`";
+	}
+	else if (a == SpecialAction::Cleanup)
+	{
+		msg << "Delete remaining modified files from the project?\n\n";
+		msg << "These files were kept during uninstall because they had local modifications:\n\n";
+
+		HiseAssetInstaller installer(getMainController(), r->info.installInfo);
+		auto logEntry = installer.getInstallInfoFromLog({});
+
+		if (auto skippedArray = logEntry["SkippedFiles"].getArray())
+		{
+			auto rootFolder = getMainController()->getCurrentFileHandler().getRootFolder();
+
+			for (const auto& sf : *skippedArray)
+			{
+				auto relative = File(sf.toString()).getRelativePathFrom(rootFolder);
+				msg << "- `" << relative.replaceCharacter('\\', '/') << "`\n";
+			}
+		}
 	}
 	else
 	{
@@ -1729,46 +1516,20 @@ void HiseAssetManager::performAction(SpecialAction a, ProductList::Row* r, bool 
 		rebuildProductsAsync();
 		break;
 	}
-	case CheckLocalChanges:
-	{
-		HiseAssetInstaller installer(getMainController(), r->info.installInfo);
-
-		auto list = installer.checkLocalChanges();
-
-		if(!list.isEmpty())
-		{
-			auto rf = getMainController()->getCurrentFileHandler().getRootFolder();
-			auto df = new DiffViewer(rf);
-			
-			showStatusMessage("Editing local changes for package " + r->info.getPackageName());
-			setState(ErrorState::Pending);
-
-			for(const auto& l: list)
-			{
-				df->addDiff(l.first, l.second);
-			}
-
-			df->setEditedFile(list[0].first, list[0].second, false);
-
-			setModalComponent(df);
-		}
-
-		break;
-	}
 	case Install:
 	{
-		if (r->info.installInfo.isInstalled())
-			addJob(new ProductList::Row::UninstallAction(r, true));
-
 		if (r->info.installInfo.isLocalFolder())
 			addJob(new ProductList::Row::UpdateAction(r, {}));
-		else
+		else if (!r->tags.empty())
 			addJob(new ProductList::Row::UpdateAction(r, r->tags.back()));
 
 		break;
 	}
 	case Uninstall:
 		addJob(new ProductList::Row::UninstallAction(r, false));
+		break;
+	case Cleanup:
+		addJob(new ProductList::Row::CleanupAction(r));
 		break;
 	default:
 		break;
@@ -1788,9 +1549,6 @@ void HiseAssetManager::addJob(ActionBase::Ptr newJob)
 
 void HiseAssetManager::run()
 {
-	if (state == ErrorState::Error)
-		return;
-
 	ScopedValueSetter<bool> svs(running, true);
 
 	setState(ErrorState::Pending);
@@ -1809,13 +1567,11 @@ void HiseAssetManager::run()
 		if (msg.isNotEmpty())
 			showStatusMessage(msg);
 
-		if (t->perform(this))
-			completedTasks.add(t);
+		t->succeeded = t->perform(this);
+		completedTasks.add(t);
 	}
 
-	if (state != ErrorState::Error)
-		setState(ErrorState::OK);
-
+	setState(ErrorState::OK);
 	triggerAsyncUpdate();
 }
 
@@ -1825,6 +1581,31 @@ void HiseAssetManager::handleAsyncUpdate()
 		t->onCompletion(this);
 
 	completedTasks.clear();
+
+	// Show error dialog if an error was reported during the run
+	if (currentError.what != HiseAssetInstaller::Error::OK)
+	{
+		String errorMsg;
+		errorMsg << "There was an issue with the Asset Manager.\n\n";
+
+		switch (currentError.what)
+		{
+		case HiseAssetInstaller::Error::HashMismatch:
+			errorMsg << "> Hash mismatch for `" << currentError.file.getFileName() << "`\n\n";
+			break;
+		case HiseAssetInstaller::Error::FileWriteError:
+			errorMsg << "> Could not write file `" << currentError.file.getFileName() << "`\n\n";
+			break;
+		default: break;
+		}
+
+		errorMsg << "Please check the console for details.";
+
+		PresetHandler::showMessageWindow("Asset Manager Error", errorMsg, PresetHandler::IconType::Error);
+
+		currentError = {};
+		setState(ErrorState::OK);
+	}
 
 	if (!pendingTasks.isEmpty() && !running)
 		this->startThread();
@@ -1910,10 +1691,12 @@ void HiseAssetManager::paint(Graphics& g)
 	g.setColour(Colour(0xFF444444));
 	g.drawRect(getLocalBounds(), 1);
 
-	g.setFont(GLOBAL_FONT());
-
-	g.setColour(Colours::white.withAlpha(0.6f));
-	g.drawText(userName, projectFolderBounds.reduced(20.0, 0.0f), Justification::centredRight);
+	if (!loginOk)
+	{
+		g.setFont(GLOBAL_FONT());
+		g.setColour(Colours::white.withAlpha(0.6f));
+		g.drawText(userName, logoutButton.getBounds().toFloat(), Justification::centredRight);
+	}
 }
 
 void HiseAssetManager::resized()
@@ -1941,17 +1724,15 @@ void HiseAssetManager::resized()
 
 	stateIcon = projectFolderBounds.removeFromLeft(projectFolderBounds.getHeight()).reduced(4.0f);
 
+	// Keep text clear of the resize handle
+	projectFolderBounds.removeFromRight(15.0f);
+
+	auto logoutArea = projectFolderBounds.removeFromRight(GLOBAL_FONT().getStringWidthFloat(userName) + 40.0f);
+	logoutButton.setBounds(logoutArea.toNearestInt());
+
 	if (getParentComponent() != nullptr)
 	{
 		centreWithSize(getWidth(), getHeight());
-	}
-
-	if(modalComponent != nullptr)
-	{
-		auto mb = getLocalBounds();
-		mb.removeFromTop(24);
-		mb.removeFromBottom(22);
-		modalComponent->setBounds(mb);
 	}
 }
 
@@ -2014,20 +1795,11 @@ void HiseAssetManager::ProductList::setProducts(const Array<var>& data, HiseAsse
 		content->addRow(RowInfo(la), manager);
 	}
 
-	auto token = Helpers::getCredentialFile().loadFileAsString();
-
 	if (!manager->loginOk)
 	{
-		auto connectRow = new SpecialRow();
-
-		connectRow->setText("Login with your HISE Store account to sync this list with your purchased assets.");
-		connectRow->setIcon("1094.nT6K8C1lFTdH.XYOEaBvp791HdIOsrUiWPPbDBwThRP7x0G2EraxVB.vGLtIAAAoDD55A3K.pBPt.HNVhzjwHHoC+EeRjlnmkfghLnqib7a5y3GVxbQXHnW3IKQRQUOvuIy+42rrB6Khq7jgk26ujFACgfg0ZwXmiTUWcEF5nOv+HpJHJy6JrQncfoUcnc060xx5TD3nRNyHVelj0bZMMM0xhQIJ5nJpJKPrrt0KUDNZndr4gkUVtik0hJpLMJN1tP8Y5jBxkOaxX3g.GD.BITQNVg8GIC45F4POop5KTXyVE12HXGonwOUksdqvFIAOM+lnBEgHgCxtpu28091qb+sBnbWW6c7ktZ2a9Vm4wVLkNOWu5qFuqVKti80K+M650U78p48d05uTYeFmytx1Zu68Udtmu1Uu9xW2dNul455Muq69kR1xqd7VA91qW8akJrNpQnbkaqs5u2EJ5W70UMuP66Xb8yx5DUksB6+wIp0v.eyQLn9mkrKJPiupV6dgB8FW4V7BEWqhKAP.ZhxIVgIZR5cNxYhR8c.kAXFfgleTvHV4rTihFFJhThjpa3s8fLaAMVHcFwBIIhvjs4hDyzRoYk9V3i+A28nU3DFLYZLZb4+GYFNXfDB4pSmvIRCHX.BuhmNZN7jEJ6jgOeZjYt83aCxnMMVZP9EYhMMCCN3.pPe8O4BYv2XoECNTttJrNPJvSuemAEPPnOSFfnn2Tt74a9h40KkdMaqdd9h62459duZdkiu9KE1iwYZ+Niw4r+twW7aluaqX7deU4aNtt67dV2lq4qsUq85..fvmoSqCrpvzz9jsmjgANaZBY8xtnozl16Dz75jDSIF4cwh6x+cfiz3iymHYXDwlrD5F1HAdyVmRbe8HV13gNH87vD9jRsKMKHO1t34CHKFKHQSMQRiPyRgKjtjoKQj7Kld5gRsHp3oPkOSb1jgTlDR5P58v2IxQ5Hpr4VYzXlDS3z7HuHxCsCGPYbPmPijSmRw7kcUdcVwywTxxonMwG3TB5ZeRJdwiitExLAhenXluQiDTr.R6SHKM5.g7+.tu88YR4aFC.BIpgSJcJHp.PDAD.PC.PoHSUUUAAVJUlCxHADHDs1.7r.3KKAUnDcHpe4gAUCQBGnnQ50rBfPAs84NQMeSMHN4123YBLIeoWjIkX9LhA4fmhpwdixVIAoONuKIPmyqpzNksarXe.1elGF3LdQTG8xVCRX3sFC9MlbaYilRunhwLRLUPwyaj1AANMNxbiADFkqAKIgdQC.NjQBhnHTLTuJLtXC.6d1QUOXeEMblZgarphEBfv0PhzQs9utzuv0V7hGJGGdjhs3sHX5Wzc2Ty6FhV.NMUmFEUW2R4Zxaq+1bNXJXhOZy8O.AwcWIj8nSX.T.A0JWPk5ldVpFC9lZQ5hL2Dv2xP+bgJXFf4MLNvln6p7I8P2RZE7oqIlEg5EG67JfAjsC");
-
-		connectRow->onClick = std::bind(&HiseAssetManager::showLoginPrompt, manager);
-
-		content->rows.add(connectRow);
-		content->addAndMakeVisible(connectRow);
-
+		auto loginRow = new LoginRow(manager);
+		content->rows.add(loginRow);
+		content->addAndMakeVisible(loginRow);
 	}
 	{
 		auto localManager = new SpecialRow();
@@ -2065,7 +1837,6 @@ HiseAssetManager::TopBar::TopBar(ProductList* list_) :
 	installedButton("Installed"),
 	uninstalledButton("Uninstalled"),
 	onlineButton("Browse Store"),
-	sortButton("Sort by"),
 	blaf(new ButtonLaf())
 {
 	/* TODO:
@@ -2087,20 +1858,14 @@ HiseAssetManager::TopBar::TopBar(ProductList* list_) :
 	addAndMakeVisible(installedButton);
 	addAndMakeVisible(uninstalledButton);
 	addAndMakeVisible(onlineButton);
-	addAndMakeVisible(sortButton);
-
 	allButton.setLookAndFeel(blaf);
 	installedButton.setLookAndFeel(blaf);
 	uninstalledButton.setLookAndFeel(blaf);
-	sortButton.setLookAndFeel(blaf);
 	onlineButton.setLookAndFeel(blaf);
-
-	sortButton.setConnectedEdges(Button::ConnectedOnLeft);
 
 	allButton.addListener(this);
 	installedButton.addListener(this);
 	uninstalledButton.addListener(this);
-	sortButton.addListener(this);
 	onlineButton.addListener(this);
 
 	allButton.setClickingTogglesState(true);
@@ -2115,7 +1880,6 @@ HiseAssetManager::TopBar::TopBar(ProductList* list_) :
 
 	allButton.setToggleState(true, dontSendNotification);
 
-	sortButton.setColour(TextButton::ColourIds::buttonColourId, Colour(0xFF555555));
 	allButton.setColour(TextButton::ColourIds::buttonColourId, Colour(0xFF555555));
 	allButton.setColour(TextButton::ColourIds::buttonOnColourId, Colour(ProductList::SignalColour));
 	installedButton.setColour(TextButton::ColourIds::buttonColourId, Colour(0xFF555555));
@@ -2195,9 +1959,6 @@ void HiseAssetManager::TopBar::resized()
 	auto searchIconArea = b.removeFromLeft(b.getHeight()).toFloat().reduced(3.0f);
 
 	b = b.removeFromLeft(jmin(b.getWidth(), 350));
-
-	b.removeFromRight(30);
-	sortButton.setBounds(b.removeFromRight(60));
 
 	searchBar.setBounds(b);
 

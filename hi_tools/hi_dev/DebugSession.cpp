@@ -138,19 +138,21 @@ bool DebugSession::addDataItem(DataItem::Ptr newItem)
 
 void DebugSession::clearData(ApiProviderBase::Holder* p)
 {
-	MessageManagerLock m;
-	for(int i = 0; i < sessions.size(); i++)
+	SafeAsyncCall::callAsyncAndWait<DebugSession>(*this, [p](DebugSession& s)
 	{
-		if(sessions[i]->p == p)
-			sessions.remove(i--);
-	}
+		for(int i = 0; i < s.sessions.size(); i++)
+		{
+			if(s.sessions[i]->p == p)
+				s.sessions.remove(i--);
+		}
 
-	if(p == this)
-	{
-		flushedRoots.clear();
-		currentMultithreadSession = nullptr;
-		combinedRuns.clear();
-	}
+		if(p == &s)
+		{
+			s.flushedRoots.clear();
+			s.currentMultithreadSession = nullptr;
+			s.combinedRuns.clear();
+		}
+	});
 }
 
 DebugInformationBase* DebugSession::startSession(ApiProviderBase::Holder* p, const String& sessionId)

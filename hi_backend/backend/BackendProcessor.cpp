@@ -267,6 +267,110 @@ void PluginParameterRamp::bump(PluginParameterSimulatorInfo& info, double milliS
 	info.performChange();
 }
 
+int BackendProcessor::commandLineServerPort = 0;
+
+RestServer::Response BackendProcessor::onAsyncRequest(RestServer::AsyncRequest::Ptr req)
+{
+	debugToConsole(getMainSynthChain(), "\tincoming HTTP request: " + req->getRequest().url.toString(true));
+
+	// Attach console handler to request (lifetime tied to request, not stack frame)
+	req->setConsoleCapture(std::make_unique<RestHelpers::ScopedConsoleHandler>(this, req));
+
+	auto subURL = req->getRequest().url.getSubPath(false);
+	auto route = RestHelpers::findRoute(subURL);
+
+	switch (route)
+	{
+		case RestHelpers::ApiRoute::ListMethods:
+			return RestHelpers::handleListMethods(this, req);
+			
+		case RestHelpers::ApiRoute::Status:
+			return RestHelpers::handleStatus(this, req);
+			
+		case RestHelpers::ApiRoute::GetScript:
+			return RestHelpers::handleGetScript(this, req);
+			
+		case RestHelpers::ApiRoute::SetScript:
+			return RestHelpers::handleSetScript(this, req);
+			
+		case RestHelpers::ApiRoute::Recompile:
+			return RestHelpers::handleRecompile(this, req);
+			
+		case RestHelpers::ApiRoute::ListComponents:
+			return RestHelpers::handleListComponents(this, req);
+
+		case RestHelpers::ApiRoute::EvaluateREPL:
+			return RestHelpers::handleEvaluateREPL(this, req);
+			
+		case RestHelpers::ApiRoute::GetComponentProperties:
+			return RestHelpers::handleGetComponentProperties(this, req);
+			
+		case RestHelpers::ApiRoute::GetComponentValue:
+			return RestHelpers::handleGetComponentValue(this, req);
+			
+		case RestHelpers::ApiRoute::SetComponentValue:
+			return RestHelpers::handleSetComponentValue(this, req);
+			
+		case RestHelpers::ApiRoute::SetComponentProperties:
+			return RestHelpers::handleSetComponentProperties(this, req);
+			
+		case RestHelpers::ApiRoute::Screenshot:
+			return RestHelpers::handleScreenshot(this, req);
+			
+		case RestHelpers::ApiRoute::GetSelectedComponents:
+			return RestHelpers::handleGetSelectedComponents(this, req);
+			
+		case RestHelpers::ApiRoute::SimulateInteractions:
+			return RestHelpers::handleSimulateInteractions(this, req);
+			
+		case RestHelpers::ApiRoute::DiagnoseScript:
+			return RestHelpers::handleDiagnoseScript(this, req);
+			
+		case RestHelpers::ApiRoute::GetIncludedFiles:
+			return RestHelpers::handleGetIncludedFiles(this, req);
+			
+		case RestHelpers::ApiRoute::StartProfiling:
+			return RestHelpers::handleStartProfiling(this, req);
+			
+		case RestHelpers::ApiRoute::ParseCSS:
+			return RestHelpers::handleParseCSS(this, req);
+			
+		case RestHelpers::ApiRoute::Shutdown:
+			return RestHelpers::handleShutdown(this, req);
+			
+		default:
+			return req->fail(404, "Unknown API endpoint: " + subURL);
+	}
+}
+
+void BackendProcessor::serverStarted(int port)
+{
+	debugToConsole(getMainSynthChain(), "REST API Server started on port " + String(port));
+	
+	// Create interaction tester when server starts
+	interactionTester = std::make_unique<InteractionTester>(this);
+}
+
+void BackendProcessor::serverStopped()
+{
+	debugToConsole(getMainSynthChain(), "REST API Server stopped");
+	
+	// Destroy interaction tester when server stops
+	interactionTester = nullptr;
+}
+
+void BackendProcessor::requestReceived(const String& method, const String& path)
+{
+	// Request details are already logged in onAsyncRequest via debugToConsole
+	ignoreUnused(method, path);
+}
+
+void BackendProcessor::serverError(const String& message)
+{
+	debugToConsole(getMainSynthChain(), "REST API Server error: " + message);
+}
+
+
 BackendProcessor::BackendProcessor(AudioDeviceManager *deviceManager_/*=nullptr*/, AudioProcessorPlayer *callback_/*=nullptr*/) :
   MainController(),
   AudioProcessorDriver(deviceManager_, callback_),
@@ -274,8 +378,22 @@ BackendProcessor::BackendProcessor(AudioDeviceManager *deviceManager_/*=nullptr*
   autosaver(this),
   pluginParameterRamp(this)
 {
-	//printData();
-    
+	// Register all REST API routes from the centralized metadata
+	const auto& routes = RestHelpers::getRouteMetadata();
+	for (const auto& route : routes)
+	{
+		auto routeUrl = restServer.getBaseURL().getChildURL(route.path);
+		
+		// Add query parameters with their default values
+		for (const auto& param : route.queryParameters)
+			routeUrl = routeUrl.withParameter(param.name.toString(), param.defaultValue);
+		
+		restServer.addAsyncRoute(route.method, routeUrl,
+			BIND_MEMBER_FUNCTION_1(BackendProcessor::onAsyncRequest));
+	}
+
+	restServer.addListener(this);
+
 	ExtendedApiDocumentation::init();
 
     synthChain = new ModulatorSynthChain(this, "Master Chain", NUM_POLYPHONIC_VOICES);
@@ -333,10 +451,20 @@ BackendProcessor::BackendProcessor(AudioDeviceManager *deviceManager_/*=nullptr*
 	//getExpansionHandler().createAvailableExpansions();
 
 
-	if (!inUnitTestMode())
+if (!inUnitTestMode())
 	{
 		getAutoSaver().initialise();
-		
+
+		if (BackendProcessor::isUsingCommandLineServerMode())
+		{
+			restServer.start(commandLineServerPort);
+		}
+		else if (getSettingsObject().getSetting(HiseSettings::Scripting::AutoStartRestServer).toString() == "Yes")
+		{
+			// Auto-start REST API server if enabled in settings
+			int port = (int)getSettingsObject().getSetting(HiseSettings::Scripting::RestApiPort);
+			restServer.start(port);
+		}
 	}
 	
 	clearPreset(dontSendNotification);
@@ -409,6 +537,11 @@ BackendProcessor::BackendProcessor(AudioDeviceManager *deviceManager_/*=nullptr*
 
 BackendProcessor::~BackendProcessor()
 {
+	restServer.removeListener(this);
+	restServer.stop();
+
+	interactionTester = nullptr;
+
 #if IS_STANDALONE_APP
 	for(auto p: getParameters())
     {
@@ -451,7 +584,19 @@ BackendProcessor::~BackendProcessor()
 	handleEditorData(true);
 }
 
+InteractionTester* BackendProcessor::getInteractionTester()
+{
+	return interactionTester.get();
+}
 
+void BackendProcessor::showInteractionTestWindow()
+{
+	// Create tester if it doesn't exist (independent of REST server)
+	if (interactionTester == nullptr)
+		interactionTester = std::make_unique<InteractionTester>(this);
+	
+	interactionTester->ensureWindowOpen();
+}
 
 void BackendProcessor::projectChanged(const File& /*newRootDirectory*/)
 {
@@ -908,6 +1053,8 @@ AudioProcessorEditor* BackendProcessor::createEditor()
 
 
 
+
+
 juce::File BackendProcessor::getDatabaseRootDirectory() const
 {
 	if (databaseRoot.isDirectory())
@@ -944,7 +1091,7 @@ juce::Component* BackendProcessor::getRootComponent()
 	return dynamic_cast<Component*>(getDocWindow());
 }
 
-hise::JavascriptProcessor* BackendProcessor::createInterface(int width, int height)
+hise::JavascriptProcessor* BackendProcessor::createInterface(int width, int height, bool compile)
 {
 	auto midiChain = dynamic_cast<MidiProcessorChain*>(getMainSynthChain()->getChildProcessor(ModulatorSynthChain::MidiProcessor));
 	auto s = getMainSynthChain()->getMainController()->createProcessor(midiChain->getFactoryType(), "ScriptProcessor", "Interface");
@@ -953,7 +1100,12 @@ hise::JavascriptProcessor* BackendProcessor::createInterface(int width, int heig
 	String code = "Content.makeFrontInterface(" + String(width) + ", " + String(width) + ");";
 
 	jsp->getSnippet(0)->replaceContentAsync(code, false);
-	jsp->compileScript();
+
+	if (compile)
+	{
+		jsp->compileScript();
+	}
+	
 
 	midiChain->getHandler()->add(s, nullptr);
 

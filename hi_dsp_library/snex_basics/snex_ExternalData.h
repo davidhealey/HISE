@@ -779,12 +779,15 @@ struct base
 
 template <typename T> struct updater
 {
-	static constexpr bool active = std::is_base_of<base, T>::value;
+	// Note: We inline std::is_base_of<base, T>::value directly in the if constexpr
+	// statements rather than using a static constexpr member. This defers the type
+	// trait evaluation to function body instantiation time, when T is guaranteed
+	// to be complete.
 
 	updater(T& obj_) :
 		obj(obj_)
 	{
-		if constexpr (active)
+		if constexpr (std::is_base_of<base, T>::value)
 		{
 			prevValue = obj.deferUpdate.first;
 			obj.deferUpdate.first = true;
@@ -793,7 +796,7 @@ template <typename T> struct updater
 
 	~updater()
 	{
-		if constexpr (active)
+		if constexpr (std::is_base_of<base, T>::value)
 		{
 			double v;
 

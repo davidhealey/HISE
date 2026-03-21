@@ -1,6 +1,7 @@
 #define RTNEURAL_DEFAULT_ALIGNMENT 16
 #define RTNEURAL_USE_XSIMD 1
 
+#include "RTNeural/modules/xsimd/xsimd.hpp"
 #include "RTNeural/RTNeural/RTNeural.h"
 #include "RTNeural/modules/math_approx/math_approx.hpp"
 #include "RTNeural/RTNeural/wavenet/wavenet_model.hpp"

@@ -2162,9 +2162,9 @@ void CompileExporter::ProjectTemplateHelpers::handleVisualStudioVersion(const Hi
 {
 	const bool isUsingVisualStudio2026 = HelperClasses::isUsingVisualStudio2026(dataObject);
 
-	auto shouldUseVS2026 = !(bool)HISE_USE_VS2022;
-
 #if JUCE_WINDOWS
+    auto shouldUseVS2026 = !(bool)HISE_USE_VS2022;
+    
 	if (isUsingVisualStudio2026 != shouldUseVS2026)
 	{
 		auto buildVersion = shouldUseVS2026 ? "VS2026" : "VS2022";

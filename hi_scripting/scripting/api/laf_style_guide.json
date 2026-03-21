@@ -1,0 +1,2702 @@
+{
+  "version": "1.0",
+  "generated": "2026-02-06",
+  "categories": {
+    "ScriptComponents": {
+      "description": "UI components created via Content.addXxx() methods",
+      "components": {
+        "ScriptSlider": {
+          "lafFunctions": {
+            "drawRotarySlider": {
+              "description": "Draws a rotary (knob) style slider",
+              "callbackProperties": {
+                "id": {
+                  "type": "String",
+                  "description": "The component's ID from getComponentID()"
+                },
+                "enabled": {
+                  "type": "bool",
+                  "description": "Whether the slider is enabled"
+                },
+                "text": {
+                  "type": "String",
+                  "description": "The slider's name"
+                },
+                "area": {
+                  "type": "Array[x, y, w, h]",
+                  "description": "The local bounds of the slider"
+                },
+                "valueAsText": {
+                  "type": "String",
+                  "description": "The current value formatted as text"
+                },
+                "value": {
+                  "type": "double",
+                  "description": "The current raw value"
+                },
+                "valueNormalized": {
+                  "type": "double",
+                  "description": "Value normalized to 0.0-1.0 range"
+                },
+                "scaledValue": {
+                  "type": "double",
+                  "description": "Modulation scale factor"
+                },
+                "addValue": {
+                  "type": "double",
+                  "description": "Modulation additive offset"
+                },
+                "modulationActive": {
+                  "type": "bool",
+                  "description": "Whether modulation is active"
+                },
+                "modMinValue": {
+                  "type": "double",
+                  "description": "Minimum of modulation range (0.0-1.0)"
+                },
+                "modMaxValue": {
+                  "type": "double",
+                  "description": "Maximum of modulation range (0.0-1.0)"
+                },
+                "lastModValue": {
+                  "type": "double",
+                  "description": "Last modulation value"
+                },
+                "valueSuffixString": {
+                  "type": "String",
+                  "description": "The value with suffix formatted as text"
+                },
+                "suffix": {
+                  "type": "String",
+                  "description": "The suffix string (e.g., 'Hz', 'dB')"
+                },
+                "skew": {
+                  "type": "double",
+                  "description": "The skew factor for non-linear scaling"
+                },
+                "min": {
+                  "type": "double",
+                  "description": "The minimum slider value"
+                },
+                "max": {
+                  "type": "double",
+                  "description": "The maximum slider value"
+                },
+                "clicked": {
+                  "type": "bool",
+                  "description": "Whether the mouse button is down"
+                },
+                "hover": {
+                  "type": "bool",
+                  "description": "Whether the mouse is over the slider"
+                },
+                "bgColour": {
+                  "type": "int (ARGB)",
+                  "description": "Background colour as 32-bit ARGB integer"
+                },
+                "itemColour1": {
+                  "type": "int (ARGB)",
+                  "description": "First item colour (fill top)"
+                },
+                "itemColour2": {
+                  "type": "int (ARGB)",
+                  "description": "Second item colour (fill bottom)"
+                },
+                "textColour": {
+                  "type": "int (ARGB)",
+                  "description": "Text colour"
+                },
+                "parentType": {
+                  "type": "String",
+                  "description": "ContentType of parent FloatingTile (if any)"
+                }
+              }
+            },
+            "drawLinearSlider": {
+              "description": "Draws a linear (horizontal, vertical, or range) style slider",
+              "callbackProperties": {
+                "id": {
+                  "type": "String",
+                  "description": "The component's ID from getComponentID()"
+                },
+                "enabled": {
+                  "type": "bool",
+                  "description": "Whether the slider is enabled"
+                },
+                "text": {
+                  "type": "String",
+                  "description": "The slider's name"
+                },
+                "valueNormalized": {
+                  "type": "double",
+                  "description": "Value normalized to 0.0-1.0 range"
+                },
+                "scaledValue": {
+                  "type": "double",
+                  "description": "Modulation scale factor"
+                },
+                "addValue": {
+                  "type": "double",
+                  "description": "Modulation additive offset"
+                },
+                "modulationActive": {
+                  "type": "bool",
+                  "description": "Whether modulation is active"
+                },
+                "modMinValue": {
+                  "type": "double",
+                  "description": "Minimum of modulation range (0.0-1.0)"
+                },
+                "modMaxValue": {
+                  "type": "double",
+                  "description": "Maximum of modulation range (0.0-1.0)"
+                },
+                "lastModValue": {
+                  "type": "double",
+                  "description": "Last modulation value"
+                },
+                "area": {
+                  "type": "Array[x, y, w, h]",
+                  "description": "The local bounds of the slider"
+                },
+                "valueAsText": {
+                  "type": "String",
+                  "description": "The current value formatted as text"
+                },
+                "valueSuffixString": {
+                  "type": "String",
+                  "description": "The value with suffix formatted as text"
+                },
+                "suffix": {
+                  "type": "String",
+                  "description": "The suffix string (e.g., 'Hz', 'dB')"
+                },
+                "skew": {
+                  "type": "double",
+                  "description": "The skew factor for non-linear scaling"
+                },
+                "style": {
+                  "type": "int",
+                  "description": "Slider style: Horizontal=2, Vertical=3, Range=9"
+                },
+                "min": {
+                  "type": "double",
+                  "description": "The minimum slider value"
+                },
+                "max": {
+                  "type": "double",
+                  "description": "The maximum slider value"
+                },
+                "value": {
+                  "type": "double",
+                  "description": "The current raw value"
+                },
+                "valueRangeStyleMin": {
+                  "type": "double",
+                  "description": "Minimum value for range-style sliders"
+                },
+                "valueRangeStyleMax": {
+                  "type": "double",
+                  "description": "Maximum value for range-style sliders"
+                },
+                "valueRangeStyleMinNormalized": {
+                  "type": "double",
+                  "description": "Normalized min value for range-style sliders"
+                },
+                "valueRangeStyleMaxNormalized": {
+                  "type": "double",
+                  "description": "Normalized max value for range-style sliders"
+                },
+                "clicked": {
+                  "type": "bool",
+                  "description": "Whether the mouse button is down"
+                },
+                "hover": {
+                  "type": "bool",
+                  "description": "Whether the mouse is over the slider"
+                },
+                "bgColour": {
+                  "type": "int (ARGB)",
+                  "description": "Background colour as 32-bit ARGB integer"
+                },
+                "itemColour1": {
+                  "type": "int (ARGB)",
+                  "description": "First item colour (fill top)"
+                },
+                "itemColour2": {
+                  "type": "int (ARGB)",
+                  "description": "Second item colour (fill bottom)"
+                },
+                "textColour": {
+                  "type": "int (ARGB)",
+                  "description": "Text colour"
+                },
+                "parentType": {
+                  "type": "String",
+                  "description": "ContentType of parent FloatingTile (if any)"
+                }
+              }
+            }
+          }
+        },
+        "ScriptButton": {
+          "lafFunctions": {
+            "drawToggleButton": {
+              "description": "Draws a toggle button",
+              "callbackProperties": {
+                "id": {
+                  "type": "String",
+                  "description": "The component's ID from getComponentID()"
+                },
+                "area": {
+                  "type": "Array[x, y, w, h]",
+                  "description": "The local bounds of the button"
+                },
+                "enabled": {
+                  "type": "bool",
+                  "description": "Whether the button is enabled"
+                },
+                "text": {
+                  "type": "String",
+                  "description": "The button text"
+                },
+                "over": {
+                  "type": "bool",
+                  "description": "Whether the mouse is over the button"
+                },
+                "down": {
+                  "type": "bool",
+                  "description": "Whether the mouse button is down"
+                },
+                "value": {
+                  "type": "bool",
+                  "description": "The toggle state (on/off)"
+                },
+                "bgColour": {
+                  "type": "int (ARGB)",
+                  "description": "Background colour as 32-bit ARGB integer"
+                },
+                "itemColour1": {
+                  "type": "int (ARGB)",
+                  "description": "First item colour (fill top)"
+                },
+                "itemColour2": {
+                  "type": "int (ARGB)",
+                  "description": "Second item colour (fill bottom)"
+                },
+                "textColour": {
+                  "type": "int (ARGB)",
+                  "description": "Text colour"
+                },
+                "parentType": {
+                  "type": "String",
+                  "description": "ContentType of parent FloatingTile (if any)"
+                }
+              }
+            }
+          }
+        },
+        "ScriptComboBox": {
+          "lafFunctions": {
+            "drawComboBox": {
+              "description": "Draws a combo box (dropdown selector)",
+              "callbackProperties": {
+                "id": {
+                  "type": "String",
+                  "description": "The component's ID from getComponentID()"
+                },
+                "area": {
+                  "type": "Array[x, y, w, h]",
+                  "description": "The local bounds of the combo box"
+                },
+                "text": {
+                  "type": "String",
+                  "description": "The currently displayed text"
+                },
+                "active": {
+                  "type": "bool",
+                  "description": "Whether an item is selected"
+                },
+                "enabled": {
+                  "type": "bool",
+                  "description": "Whether the combo box is enabled and has items"
+                },
+                "hover": {
+                  "type": "bool",
+                  "description": "Whether the mouse is over or popup is active"
+                },
+                "down": {
+                  "type": "bool",
+                  "description": "Whether the mouse button is down"
+                },
+                "bgColour": {
+                  "type": "int (ARGB)",
+                  "description": "Background colour as 32-bit ARGB integer"
+                },
+                "itemColour1": {
+                  "type": "int (ARGB)",
+                  "description": "First item colour (fill top)"
+                },
+                "itemColour2": {
+                  "type": "int (ARGB)",
+                  "description": "Second item colour (fill bottom)"
+                },
+                "textColour": {
+                  "type": "int (ARGB)",
+                  "description": "Text colour"
+                },
+                "parentType": {
+                  "type": "String",
+                  "description": "ContentType of parent FloatingTile (if any)"
+                }
+              }
+            }
+          }
+        },
+        "ScriptTable": {
+          "lafFunctions": {
+            "drawTableBackground": {
+              "description": "Draws the background of a table editor",
+              "callbackProperties": {
+                "id": {
+                  "type": "String",
+                  "description": "The component's ID from getComponentID()"
+                },
+                "area": {
+                  "type": "Array[x, y, w, h]",
+                  "description": "The table area"
+                },
+                "position": {
+                  "type": "double",
+                  "description": "The ruler position (0.0-1.0)"
+                },
+                "enabled": {
+                  "type": "bool",
+                  "description": "Whether the table is enabled"
+                },
+                "bgColour": {
+                  "type": "int (ARGB)",
+                  "description": "Background colour"
+                },
+                "itemColour": {
+                  "type": "int (ARGB)",
+                  "description": "Fill colour"
+                },
+                "itemColour2": {
+                  "type": "int (ARGB)",
+                  "description": "Line colour"
+                },
+                "textColour": {
+                  "type": "int (ARGB)",
+                  "description": "Ruler colour"
+                },
+                "parentType": {
+                  "type": "String",
+                  "description": "ContentType of parent FloatingTile (if any)"
+                }
+              }
+            },
+            "drawTablePath": {
+              "description": "Draws the curve path of a table editor",
+              "callbackProperties": {
+                "id": {
+                  "type": "String",
+                  "description": "The component's ID from getComponentID()"
+                },
+                "path": {
+                  "type": "Path",
+                  "description": "The curve path object"
+                },
+                "area": {
+                  "type": "Array[x, y, w, h]",
+                  "description": "The table area"
+                },
+                "lineThickness": {
+                  "type": "double",
+                  "description": "The line thickness for drawing"
+                },
+                "enabled": {
+                  "type": "bool",
+                  "description": "Whether the table is enabled"
+                },
+                "bgColour": {
+                  "type": "int (ARGB)",
+                  "description": "Background colour"
+                },
+                "itemColour": {
+                  "type": "int (ARGB)",
+                  "description": "Fill colour"
+                },
+                "itemColour2": {
+                  "type": "int (ARGB)",
+                  "description": "Line colour"
+                },
+                "textColour": {
+                  "type": "int (ARGB)",
+                  "description": "Ruler colour"
+                },
+                "parentType": {
+                  "type": "String",
+                  "description": "ContentType of parent FloatingTile (if any)"
+                }
+              }
+            },
+            "drawTablePoint": {
+              "description": "Draws a control point on the table curve",
+              "callbackProperties": {
+                "id": {
+                  "type": "String",
+                  "description": "The component's ID from getComponentID()"
+                },
+                "tablePoint": {
+                  "type": "Array[x, y, w, h]",
+                  "description": "The point bounds"
+                },
+                "isEdge": {
+                  "type": "bool",
+                  "description": "Whether this is an edge point"
+                },
+                "hover": {
+                  "type": "bool",
+                  "description": "Whether the mouse is over the point"
+                },
+                "clicked": {
+                  "type": "bool",
+                  "description": "Whether the point is being dragged"
+                },
+                "enabled": {
+                  "type": "bool",
+                  "description": "Whether the table is enabled"
+                },
+                "bgColour": {
+                  "type": "int (ARGB)",
+                  "description": "Background colour"
+                },
+                "itemColour": {
+                  "type": "int (ARGB)",
+                  "description": "Fill colour"
+                },
+                "itemColour2": {
+                  "type": "int (ARGB)",
+                  "description": "Line colour"
+                },
+                "textColour": {
+                  "type": "int (ARGB)",
+                  "description": "Ruler colour"
+                },
+                "parentType": {
+                  "type": "String",
+                  "description": "ContentType of parent FloatingTile (if any)"
+                }
+              }
+            },
+            "drawTableMidPoint": {
+              "description": "Draws a mid-point (curve control) on the table",
+              "callbackProperties": {
+                "id": {
+                  "type": "String",
+                  "description": "The component's ID from getComponentID()"
+                },
+                "midPoint": {
+                  "type": "Array[x, y, w, h]",
+                  "description": "The mid-point bounds"
+                },
+                "hover": {
+                  "type": "bool",
+                  "description": "Whether the mouse is over the point"
+                },
+                "clicked": {
+                  "type": "bool",
+                  "description": "Whether the point is being dragged"
+                },
+                "enabled": {
+                  "type": "bool",
+                  "description": "Whether the table is enabled"
+                },
+                "bgColour": {
+                  "type": "int (ARGB)",
+                  "description": "Background colour"
+                },
+                "itemColour": {
+                  "type": "int (ARGB)",
+                  "description": "Fill colour"
+                },
+                "itemColour2": {
+                  "type": "int (ARGB)",
+                  "description": "Line colour"
+                },
+                "textColour": {
+                  "type": "int (ARGB)",
+                  "description": "Ruler colour"
+                },
+                "parentType": {
+                  "type": "String",
+                  "description": "ContentType of parent FloatingTile (if any)"
+                }
+              }
+            },
+            "drawTableRuler": {
+              "description": "Draws the position ruler on the table",
+              "callbackProperties": {
+                "id": {
+                  "type": "String",
+                  "description": "The component's ID from getComponentID()"
+                },
+                "area": {
+                  "type": "Array[x, y, w, h]",
+                  "description": "The table area"
+                },
+                "position": {
+                  "type": "double",
+                  "description": "The ruler position (0.0-1.0)"
+                },
+                "lineThickness": {
+                  "type": "double",
+                  "description": "The line thickness for drawing"
+                },
+                "enabled": {
+                  "type": "bool",
+                  "description": "Whether the table is enabled"
+                },
+                "bgColour": {
+                  "type": "int (ARGB)",
+                  "description": "Background colour"
+                },
+                "itemColour": {
+                  "type": "int (ARGB)",
+                  "description": "Fill colour"
+                },
+                "itemColour2": {
+                  "type": "int (ARGB)",
+                  "description": "Line colour"
+                },
+                "textColour": {
+                  "type": "int (ARGB)",
+                  "description": "Ruler colour"
+                },
+                "parentType": {
+                  "type": "String",
+                  "description": "ContentType of parent FloatingTile (if any)"
+                }
+              }
+            }
+          }
+        },
+        "ScriptSliderPack": {
+          "lafFunctions": {
+            "drawSliderPackBackground": {
+              "description": "Draws the background of a slider pack",
+              "callbackProperties": {
+                "id": {
+                  "type": "String",
+                  "description": "The slider pack name"
+                },
+                "bgColour": {
+                  "type": "int (ARGB)",
+                  "description": "Background colour"
+                },
+                "itemColour": {
+                  "type": "int (ARGB)",
+                  "description": "Thumb colour"
+                },
+                "itemColour2": {
+                  "type": "int (ARGB)",
+                  "description": "Text box outline colour"
+                },
+                "textColour": {
+                  "type": "int (ARGB)",
+                  "description": "Track colour"
+                },
+                "numSliders": {
+                  "type": "int",
+                  "description": "Number of sliders in the pack"
+                },
+                "displayIndex": {
+                  "type": "int",
+                  "description": "Index of next slider to display"
+                },
+                "area": {
+                  "type": "Array[x, y, w, h]",
+                  "description": "The local bounds"
+                }
+              }
+            },
+            "drawSliderPackFlashOverlay": {
+              "description": "Draws the flash overlay for a slider in the pack",
+              "callbackProperties": {
+                "id": {
+                  "type": "String",
+                  "description": "The slider pack name"
+                },
+                "bgColour": {
+                  "type": "int (ARGB)",
+                  "description": "Background colour"
+                },
+                "itemColour": {
+                  "type": "int (ARGB)",
+                  "description": "Thumb colour"
+                },
+                "itemColour2": {
+                  "type": "int (ARGB)",
+                  "description": "Text box outline colour"
+                },
+                "textColour": {
+                  "type": "int (ARGB)",
+                  "description": "Track colour"
+                },
+                "numSliders": {
+                  "type": "int",
+                  "description": "Number of sliders in the pack"
+                },
+                "displayIndex": {
+                  "type": "int",
+                  "description": "Index of the slider being displayed"
+                },
+                "value": {
+                  "type": "double",
+                  "description": "The slider value"
+                },
+                "intensity": {
+                  "type": "double",
+                  "description": "Flash intensity (0.0-1.0)"
+                },
+                "area": {
+                  "type": "Array[x, y, w, h]",
+                  "description": "The slider bounds"
+                }
+              }
+            },
+            "drawSliderPackRightClickLine": {
+              "description": "Draws the line when right-click dragging",
+              "callbackProperties": {
+                "id": {
+                  "type": "String",
+                  "description": "The slider pack name"
+                },
+                "bgColour": {
+                  "type": "int (ARGB)",
+                  "description": "Background colour"
+                },
+                "itemColour": {
+                  "type": "int (ARGB)",
+                  "description": "Thumb colour"
+                },
+                "itemColour2": {
+                  "type": "int (ARGB)",
+                  "description": "Text box outline colour"
+                },
+                "textColour": {
+                  "type": "int (ARGB)",
+                  "description": "Track colour"
+                },
+                "x1": {
+                  "type": "double",
+                  "description": "Line start X position"
+                },
+                "x2": {
+                  "type": "double",
+                  "description": "Line end X position"
+                },
+                "y1": {
+                  "type": "double",
+                  "description": "Line start Y position"
+                },
+                "y2": {
+                  "type": "double",
+                  "description": "Line end Y position"
+                }
+              }
+            },
+            "drawSliderPackTextPopup": {
+              "description": "Draws the text popup when dragging a slider",
+              "callbackProperties": {
+                "id": {
+                  "type": "String",
+                  "description": "The slider pack name"
+                },
+                "bgColour": {
+                  "type": "int (ARGB)",
+                  "description": "Background colour"
+                },
+                "itemColour": {
+                  "type": "int (ARGB)",
+                  "description": "Thumb colour"
+                },
+                "itemColour2": {
+                  "type": "int (ARGB)",
+                  "description": "Text box outline colour"
+                },
+                "textColour": {
+                  "type": "int (ARGB)",
+                  "description": "Track colour"
+                },
+                "index": {
+                  "type": "int",
+                  "description": "Index of currently dragged slider"
+                },
+                "value": {
+                  "type": "double",
+                  "description": "Value of currently dragged slider"
+                },
+                "area": {
+                  "type": "Array[x, y, w, h]",
+                  "description": "The local bounds"
+                },
+                "text": {
+                  "type": "String",
+                  "description": "The text to display"
+                }
+              }
+            }
+          }
+        },
+        "ScriptAudioWaveform": {
+          "lafFunctions": {
+            "drawThumbnailBackground": {
+              "description": "Draws the background of an audio waveform thumbnail",
+              "callbackProperties": {
+                "id": {
+                  "type": "String",
+                  "description": "The component's ID from getComponentID()"
+                },
+                "area": {
+                  "type": "Array[x, y, w, h]",
+                  "description": "The thumbnail area"
+                },
+                "enabled": {
+                  "type": "bool",
+                  "description": "Whether the area is enabled"
+                },
+                "bgColour": {
+                  "type": "int (ARGB)",
+                  "description": "Background colour"
+                },
+                "itemColour": {
+                  "type": "int (ARGB)",
+                  "description": "Fill colour"
+                },
+                "textColour": {
+                  "type": "int (ARGB)",
+                  "description": "Outline colour"
+                }
+              }
+            },
+            "drawThumbnailText": {
+              "description": "Draws text overlay on the thumbnail",
+              "callbackProperties": {
+                "id": {
+                  "type": "String",
+                  "description": "The component's ID from getComponentID()"
+                },
+                "area": {
+                  "type": "Array[x, y, w, h]",
+                  "description": "The text area"
+                },
+                "text": {
+                  "type": "String",
+                  "description": "The text to display"
+                }
+              }
+            },
+            "drawThumbnailPath": {
+              "description": "Draws the waveform path",
+              "callbackProperties": {
+                "id": {
+                  "type": "String",
+                  "description": "The component's ID from getComponentID()"
+                },
+                "area": {
+                  "type": "Array[x, y, w, h]",
+                  "description": "The path bounds"
+                },
+                "enabled": {
+                  "type": "bool",
+                  "description": "Whether the area is enabled"
+                },
+                "path": {
+                  "type": "Path",
+                  "description": "The waveform path object"
+                },
+                "bgColour": {
+                  "type": "int (ARGB)",
+                  "description": "Background colour"
+                },
+                "itemColour": {
+                  "type": "int (ARGB)",
+                  "description": "Fill colour"
+                },
+                "textColour": {
+                  "type": "int (ARGB)",
+                  "description": "Outline colour"
+                }
+              }
+            },
+            "drawThumbnailRange": {
+              "description": "Draws a range selection on the thumbnail",
+              "callbackProperties": {
+                "id": {
+                  "type": "String",
+                  "description": "The component's ID from getComponentID()"
+                },
+                "area": {
+                  "type": "Array[x, y, w, h]",
+                  "description": "The range area"
+                },
+                "rangeIndex": {
+                  "type": "int",
+                  "description": "Index of the range"
+                },
+                "rangeColour": {
+                  "type": "int (ARGB)",
+                  "description": "The range colour"
+                },
+                "enabled": {
+                  "type": "bool",
+                  "description": "Whether the range is enabled"
+                },
+                "bgColour": {
+                  "type": "int (ARGB)",
+                  "description": "Background colour"
+                },
+                "itemColour": {
+                  "type": "int (ARGB)",
+                  "description": "Fill colour"
+                },
+                "textColour": {
+                  "type": "int (ARGB)",
+                  "description": "Outline colour"
+                }
+              }
+            },
+            "drawThumbnailRuler": {
+              "description": "Draws the playback position ruler",
+              "callbackProperties": {
+                "id": {
+                  "type": "String",
+                  "description": "The component's ID from getComponentID()"
+                },
+                "area": {
+                  "type": "Array[x, y, w, h]",
+                  "description": "The thumbnail area"
+                },
+                "xPosition": {
+                  "type": "int",
+                  "description": "The X position of the ruler"
+                },
+                "bgColour": {
+                  "type": "int (ARGB)",
+                  "description": "Background colour"
+                },
+                "itemColour": {
+                  "type": "int (ARGB)",
+                  "description": "Fill colour"
+                },
+                "textColour": {
+                  "type": "int (ARGB)",
+                  "description": "Outline colour"
+                }
+              }
+            },
+            "getThumbnailRenderOptions": {
+              "description": "Returns render options for the thumbnail (non-drawing callback)",
+              "callbackProperties": {
+                "displayMode": {
+                  "type": "int",
+                  "description": "Display mode enum value"
+                },
+                "manualDownSampleFactor": {
+                  "type": "double",
+                  "description": "Manual downsample factor"
+                },
+                "drawHorizontalLines": {
+                  "type": "bool",
+                  "description": "Whether to draw horizontal lines"
+                },
+                "scaleVertically": {
+                  "type": "bool",
+                  "description": "Whether to scale vertically"
+                },
+                "displayGain": {
+                  "type": "double",
+                  "description": "Display gain multiplier"
+                },
+                "useRectList": {
+                  "type": "bool",
+                  "description": "Whether to use rectangle list"
+                },
+                "forceSymmetry": {
+                  "type": "bool",
+                  "description": "Whether to force symmetry"
+                },
+                "multithreadThreshold": {
+                  "type": "int",
+                  "description": "Threshold for multithreading"
+                },
+                "dynamicOptions": {
+                  "type": "bool",
+                  "description": "Whether options are dynamic"
+                }
+              }
+            },
+            "drawMidiDropper": {
+              "description": "Draws a MIDI file drag and drop component",
+              "callbackProperties": {
+                "id": {
+                  "type": "String",
+                  "description": "The component's ID from getComponentID()"
+                },
+                "area": {
+                  "type": "Array[x, y, w, h]",
+                  "description": "The component area"
+                },
+                "hover": {
+                  "type": "bool",
+                  "description": "Whether mouse is hovering"
+                },
+                "active": {
+                  "type": "bool",
+                  "description": "Whether MIDI data is loaded"
+                },
+                "externalDrag": {
+                  "type": "bool",
+                  "description": "Whether external drag is in progress"
+                },
+                "bgColour": {
+                  "type": "int (ARGB)",
+                  "description": "Background colour"
+                },
+                "itemColour": {
+                  "type": "int (ARGB)",
+                  "description": "Outline colour"
+                },
+                "textColour": {
+                  "type": "int (ARGB)",
+                  "description": "Text colour"
+                },
+                "text": {
+                  "type": "String",
+                  "description": "The display text"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "FloatingTileContentTypes": {
+      "description": "ContentType values for ScriptFloatingTile components",
+      "contentTypes": {
+        "PresetBrowser": {
+          "lafFunctions": {
+            "createPresetBrowserIcons": {
+              "description": "Creates custom icons for the preset browser (returns Path)",
+              "callbackProperties": {
+                "id": {
+                  "type": "String",
+                  "description": "The icon identifier to create"
+                }
+              }
+            },
+            "drawPresetBrowserBackground": {
+              "description": "Draws the main background of the preset browser",
+              "callbackProperties": {
+                "area": {
+                  "type": "Array[x, y, w, h]",
+                  "description": "The preset browser area"
+                },
+                "bgColour": {
+                  "type": "int (ARGB)",
+                  "description": "Background colour"
+                },
+                "itemColour": {
+                  "type": "int (ARGB)",
+                  "description": "Highlight colour"
+                },
+                "itemColour2": {
+                  "type": "int (ARGB)",
+                  "description": "Modal background colour"
+                },
+                "textColour": {
+                  "type": "int (ARGB)",
+                  "description": "Text colour"
+                }
+              }
+            },
+            "drawPresetBrowserDialog": {
+              "description": "Draws modal dialogs in the preset browser",
+              "callbackProperties": {
+                "area": {
+                  "type": "Array[x, y, w, h]",
+                  "description": "The dialog area"
+                },
+                "labelArea": {
+                  "type": "Array[x, y, w, h]",
+                  "description": "The label area"
+                },
+                "title": {
+                  "type": "String",
+                  "description": "The dialog title"
+                },
+                "text": {
+                  "type": "String",
+                  "description": "The command/text"
+                },
+                "bgColour": {
+                  "type": "int (ARGB)",
+                  "description": "Background colour"
+                },
+                "itemColour": {
+                  "type": "int (ARGB)",
+                  "description": "Highlight colour"
+                },
+                "itemColour2": {
+                  "type": "int (ARGB)",
+                  "description": "Modal background colour"
+                },
+                "textColour": {
+                  "type": "int (ARGB)",
+                  "description": "Text colour"
+                }
+              }
+            },
+            "drawPresetBrowserColumnBackground": {
+              "description": "Draws the background of a column in the preset browser",
+              "callbackProperties": {
+                "area": {
+                  "type": "Array[x, y, w, h]",
+                  "description": "The list area"
+                },
+                "columnIndex": {
+                  "type": "int",
+                  "description": "Index of the column (0=banks, 1=categories, 2=presets)"
+                },
+                "text": {
+                  "type": "String",
+                  "description": "Empty text to display when no items"
+                },
+                "bgColour": {
+                  "type": "int (ARGB)",
+                  "description": "Background colour"
+                },
+                "itemColour": {
+                  "type": "int (ARGB)",
+                  "description": "Highlight colour"
+                },
+                "itemColour2": {
+                  "type": "int (ARGB)",
+                  "description": "Modal background colour"
+                },
+                "textColour": {
+                  "type": "int (ARGB)",
+                  "description": "Text colour"
+                }
+              }
+            },
+            "drawPresetBrowserListItem": {
+              "description": "Draws an item in the preset browser list",
+              "callbackProperties": {
+                "area": {
+                  "type": "Array[x, y, w, h]",
+                  "description": "The item position"
+                },
+                "columnIndex": {
+                  "type": "int",
+                  "description": "Index of the column"
+                },
+                "rowIndex": {
+                  "type": "int",
+                  "description": "Index of the row"
+                },
+                "text": {
+                  "type": "String",
+                  "description": "The item name"
+                },
+                "selected": {
+                  "type": "bool",
+                  "description": "Whether the row is selected"
+                },
+                "hover": {
+                  "type": "bool",
+                  "description": "Whether mouse is hovering"
+                },
+                "bgColour": {
+                  "type": "int (ARGB)",
+                  "description": "Background colour"
+                },
+                "itemColour": {
+                  "type": "int (ARGB)",
+                  "description": "Highlight colour"
+                },
+                "itemColour2": {
+                  "type": "int (ARGB)",
+                  "description": "Modal background colour"
+                },
+                "textColour": {
+                  "type": "int (ARGB)",
+                  "description": "Text colour"
+                }
+              }
+            },
+            "drawPresetBrowserSearchBar": {
+              "description": "Draws the search bar in the preset browser",
+              "callbackProperties": {
+                "area": {
+                  "type": "Array[x, y, w, h]",
+                  "description": "The search bar area"
+                },
+                "bgColour": {
+                  "type": "int (ARGB)",
+                  "description": "Background colour"
+                },
+                "itemColour": {
+                  "type": "int (ARGB)",
+                  "description": "Highlight colour"
+                },
+                "itemColour2": {
+                  "type": "int (ARGB)",
+                  "description": "Modal background colour"
+                },
+                "textColour": {
+                  "type": "int (ARGB)",
+                  "description": "Text colour"
+                },
+                "icon": {
+                  "type": "Path",
+                  "description": "The search icon path"
+                }
+              }
+            },
+            "drawPresetBrowserTag": {
+              "description": "Draws a tag in the preset browser",
+              "callbackProperties": {
+                "area": {
+                  "type": "Array[x, y, w, h]",
+                  "description": "The tag position"
+                },
+                "text": {
+                  "type": "String",
+                  "description": "The tag name"
+                },
+                "hover": {
+                  "type": "bool",
+                  "description": "Whether mouse is hovering"
+                },
+                "blinking": {
+                  "type": "bool",
+                  "description": "Whether the tag is blinking"
+                },
+                "value": {
+                  "type": "bool",
+                  "description": "Whether the tag is active"
+                },
+                "selected": {
+                  "type": "bool",
+                  "description": "Whether the tag is selected"
+                },
+                "bgColour": {
+                  "type": "int (ARGB)",
+                  "description": "Background colour"
+                },
+                "itemColour": {
+                  "type": "int (ARGB)",
+                  "description": "Highlight colour"
+                },
+                "itemColour2": {
+                  "type": "int (ARGB)",
+                  "description": "Modal background colour"
+                },
+                "textColour": {
+                  "type": "int (ARGB)",
+                  "description": "Text colour"
+                }
+              }
+            }
+          }
+        },
+        "Keyboard": {
+          "lafFunctions": {
+            "drawKeyboardBackground": {
+              "description": "Draws the background of the MIDI keyboard",
+              "callbackProperties": {
+                "area": {
+                  "type": "Array[x, y, w, h]",
+                  "description": "The keyboard area"
+                }
+              }
+            },
+            "drawWhiteNote": {
+              "description": "Draws a white key on the MIDI keyboard",
+              "callbackProperties": {
+                "area": {
+                  "type": "Array[x, y, w, h]",
+                  "description": "The key bounds"
+                },
+                "noteNumber": {
+                  "type": "int",
+                  "description": "MIDI note number (0-127)"
+                },
+                "hover": {
+                  "type": "bool",
+                  "description": "Whether mouse is over the key"
+                },
+                "down": {
+                  "type": "bool",
+                  "description": "Whether the key is pressed"
+                },
+                "keyColour": {
+                  "type": "int (ARGB)",
+                  "description": "Custom colour for the key"
+                }
+              }
+            },
+            "drawBlackNote": {
+              "description": "Draws a black key on the MIDI keyboard",
+              "callbackProperties": {
+                "area": {
+                  "type": "Array[x, y, w, h]",
+                  "description": "The key bounds"
+                },
+                "noteNumber": {
+                  "type": "int",
+                  "description": "MIDI note number (0-127)"
+                },
+                "hover": {
+                  "type": "bool",
+                  "description": "Whether mouse is over the key"
+                },
+                "down": {
+                  "type": "bool",
+                  "description": "Whether the key is pressed"
+                },
+                "keyColour": {
+                  "type": "int (ARGB)",
+                  "description": "Custom colour for the key"
+                }
+              }
+            }
+          }
+        },
+        "AHDSRGraph": {
+          "lafFunctions": {
+            "drawAhdsrBackground": {
+              "description": "Draws the background of an AHDSR envelope graph",
+              "callbackProperties": {
+                "id": {
+                  "type": "String",
+                  "description": "The component's ID from getComponentID()"
+                },
+                "enabled": {
+                  "type": "bool",
+                  "description": "Whether the graph is enabled"
+                },
+                "area": {
+                  "type": "Array[x, y, w, h]",
+                  "description": "The graph bounds"
+                },
+                "bgColour": {
+                  "type": "int (ARGB)",
+                  "description": "Background colour"
+                },
+                "itemColour": {
+                  "type": "int (ARGB)",
+                  "description": "Fill colour"
+                },
+                "itemColour2": {
+                  "type": "int (ARGB)",
+                  "description": "Line colour"
+                },
+                "itemColour3": {
+                  "type": "int (ARGB)",
+                  "description": "Outline colour"
+                },
+                "parentType": {
+                  "type": "String",
+                  "description": "ContentType of parent FloatingTile (if any)"
+                }
+              }
+            },
+            "drawAhdsrBall": {
+              "description": "Draws the ball indicating current envelope position",
+              "callbackProperties": {
+                "id": {
+                  "type": "String",
+                  "description": "The component's ID from getComponentID()"
+                },
+                "area": {
+                  "type": "Array[x, y, w, h]",
+                  "description": "The graph bounds"
+                },
+                "position": {
+                  "type": "Array[x, y]",
+                  "description": "The ball position"
+                },
+                "currentState": {
+                  "type": "int",
+                  "description": "Current envelope state index"
+                },
+                "enabled": {
+                  "type": "bool",
+                  "description": "Whether the graph is enabled"
+                },
+                "bgColour": {
+                  "type": "int (ARGB)",
+                  "description": "Background colour"
+                },
+                "itemColour": {
+                  "type": "int (ARGB)",
+                  "description": "Fill colour"
+                },
+                "itemColour2": {
+                  "type": "int (ARGB)",
+                  "description": "Line colour"
+                },
+                "itemColour3": {
+                  "type": "int (ARGB)",
+                  "description": "Outline colour"
+                },
+                "parentType": {
+                  "type": "String",
+                  "description": "ContentType of parent FloatingTile (if any)"
+                }
+              }
+            },
+            "drawAhdsrPath": {
+              "description": "Draws the envelope path curve",
+              "callbackProperties": {
+                "id": {
+                  "type": "String",
+                  "description": "The component's ID from getComponentID()"
+                },
+                "enabled": {
+                  "type": "bool",
+                  "description": "Whether the graph is enabled"
+                },
+                "isActive": {
+                  "type": "bool",
+                  "description": "Whether the section is active"
+                },
+                "path": {
+                  "type": "Path",
+                  "description": "The envelope path"
+                },
+                "currentState": {
+                  "type": "int",
+                  "description": "Current envelope state index"
+                },
+                "area": {
+                  "type": "Array[x, y, w, h]",
+                  "description": "The path bounds"
+                },
+                "bgColour": {
+                  "type": "int (ARGB)",
+                  "description": "Background colour"
+                },
+                "itemColour": {
+                  "type": "int (ARGB)",
+                  "description": "Fill colour"
+                },
+                "itemColour2": {
+                  "type": "int (ARGB)",
+                  "description": "Line colour"
+                },
+                "itemColour3": {
+                  "type": "int (ARGB)",
+                  "description": "Outline colour"
+                },
+                "parentType": {
+                  "type": "String",
+                  "description": "ContentType of parent FloatingTile (if any)"
+                }
+              }
+            }
+          }
+        },
+        "FlexAHDSRGraph": {
+          "lafFunctions": {
+            "drawFlexAhdsrBackground": {
+              "description": "Draws the background of a Flex AHDSR envelope graph",
+              "callbackProperties": {
+                "id": {
+                  "type": "String",
+                  "description": "The component's ID from getComponentID()"
+                },
+                "area": {
+                  "type": "Array[x, y, w, h]",
+                  "description": "The graph bounds"
+                },
+                "bgColour": {
+                  "type": "int (ARGB)",
+                  "description": "Background colour"
+                },
+                "itemColour": {
+                  "type": "int (ARGB)",
+                  "description": "Fill colour"
+                },
+                "itemColour2": {
+                  "type": "int (ARGB)",
+                  "description": "Line colour"
+                },
+                "textColour": {
+                  "type": "int (ARGB)",
+                  "description": "Text colour"
+                }
+              }
+            },
+            "drawFlexAhdsrCurvePoint": {
+              "description": "Draws a curve control point",
+              "callbackProperties": {
+                "id": {
+                  "type": "String",
+                  "description": "The component's ID from getComponentID()"
+                },
+                "area": {
+                  "type": "Array[x, y, w, h]",
+                  "description": "The graph bounds"
+                },
+                "bgColour": {
+                  "type": "int (ARGB)",
+                  "description": "Background colour"
+                },
+                "itemColour": {
+                  "type": "int (ARGB)",
+                  "description": "Fill colour"
+                },
+                "itemColour2": {
+                  "type": "int (ARGB)",
+                  "description": "Line colour"
+                },
+                "textColour": {
+                  "type": "int (ARGB)",
+                  "description": "Text colour"
+                },
+                "state": {
+                  "type": "int",
+                  "description": "Envelope state index"
+                },
+                "curvePoint": {
+                  "type": "Array[x, y]",
+                  "description": "The curve point position"
+                },
+                "hover": {
+                  "type": "bool",
+                  "description": "Whether mouse is hovering"
+                },
+                "down": {
+                  "type": "bool",
+                  "description": "Whether mouse is down"
+                }
+              }
+            },
+            "drawFlexAhdsrFullPath": {
+              "description": "Draws the full envelope path",
+              "callbackProperties": {
+                "id": {
+                  "type": "String",
+                  "description": "The component's ID from getComponentID()"
+                },
+                "area": {
+                  "type": "Array[x, y, w, h]",
+                  "description": "The graph bounds"
+                },
+                "pathArea": {
+                  "type": "Array[x, y, w, h]",
+                  "description": "The path area (reduced by margins)"
+                },
+                "bgColour": {
+                  "type": "int (ARGB)",
+                  "description": "Background colour"
+                },
+                "itemColour": {
+                  "type": "int (ARGB)",
+                  "description": "Fill colour"
+                },
+                "itemColour2": {
+                  "type": "int (ARGB)",
+                  "description": "Line colour"
+                },
+                "textColour": {
+                  "type": "int (ARGB)",
+                  "description": "Text colour"
+                },
+                "path": {
+                  "type": "Path",
+                  "description": "The full envelope path"
+                }
+              }
+            },
+            "drawFlexAhdsrPosition": {
+              "description": "Draws the current position indicator",
+              "callbackProperties": {
+                "id": {
+                  "type": "String",
+                  "description": "The component's ID from getComponentID()"
+                },
+                "area": {
+                  "type": "Array[x, y, w, h]",
+                  "description": "The graph bounds"
+                },
+                "bgColour": {
+                  "type": "int (ARGB)",
+                  "description": "Background colour"
+                },
+                "itemColour": {
+                  "type": "int (ARGB)",
+                  "description": "Fill colour"
+                },
+                "itemColour2": {
+                  "type": "int (ARGB)",
+                  "description": "Line colour"
+                },
+                "textColour": {
+                  "type": "int (ARGB)",
+                  "description": "Text colour"
+                },
+                "state": {
+                  "type": "int",
+                  "description": "Envelope state index"
+                },
+                "pointOnPath": {
+                  "type": "Array[x, y]",
+                  "description": "Point position on the path"
+                },
+                "path": {
+                  "type": "Path",
+                  "description": "The full envelope path"
+                }
+              }
+            },
+            "drawFlexAhdsrSegment": {
+              "description": "Draws a single envelope segment",
+              "callbackProperties": {
+                "id": {
+                  "type": "String",
+                  "description": "The component's ID from getComponentID()"
+                },
+                "area": {
+                  "type": "Array[x, y, w, h]",
+                  "description": "The graph bounds"
+                },
+                "bgColour": {
+                  "type": "int (ARGB)",
+                  "description": "Background colour"
+                },
+                "itemColour": {
+                  "type": "int (ARGB)",
+                  "description": "Fill colour"
+                },
+                "itemColour2": {
+                  "type": "int (ARGB)",
+                  "description": "Line colour"
+                },
+                "textColour": {
+                  "type": "int (ARGB)",
+                  "description": "Text colour"
+                },
+                "state": {
+                  "type": "int",
+                  "description": "Envelope state index"
+                },
+                "hover": {
+                  "type": "bool",
+                  "description": "Whether mouse is hovering"
+                },
+                "active": {
+                  "type": "bool",
+                  "description": "Whether the segment is active"
+                },
+                "path": {
+                  "type": "Path",
+                  "description": "The segment path"
+                }
+              }
+            },
+            "drawFlexAhdsrText": {
+              "description": "Draws text information on the envelope",
+              "callbackProperties": {
+                "id": {
+                  "type": "String",
+                  "description": "The component's ID from getComponentID()"
+                },
+                "area": {
+                  "type": "Array[x, y, w, h]",
+                  "description": "The graph bounds"
+                },
+                "bgColour": {
+                  "type": "int (ARGB)",
+                  "description": "Background colour"
+                },
+                "itemColour": {
+                  "type": "int (ARGB)",
+                  "description": "Fill colour"
+                },
+                "itemColour2": {
+                  "type": "int (ARGB)",
+                  "description": "Line colour"
+                },
+                "textColour": {
+                  "type": "int (ARGB)",
+                  "description": "Text colour"
+                },
+                "text": {
+                  "type": "String",
+                  "description": "The text to display"
+                }
+              }
+            }
+          }
+        },
+        "FilterDisplay": {
+          "lafFunctions": {
+            "drawFilterBackground": {
+              "description": "Draws the background of a filter graph",
+              "callbackProperties": {
+                "id": {
+                  "type": "String",
+                  "description": "The component's ID from getComponentID()"
+                },
+                "area": {
+                  "type": "Array[x, y, w, h]",
+                  "description": "The graph bounds"
+                },
+                "bgColour": {
+                  "type": "int (ARGB)",
+                  "description": "Background colour"
+                },
+                "itemColour1": {
+                  "type": "int (ARGB)",
+                  "description": "Line colour"
+                },
+                "itemColour2": {
+                  "type": "int (ARGB)",
+                  "description": "Fill colour"
+                },
+                "itemColour3": {
+                  "type": "int (ARGB)",
+                  "description": "Grid colour"
+                },
+                "textColour": {
+                  "type": "int (ARGB)",
+                  "description": "Text colour"
+                }
+              }
+            },
+            "drawFilterPath": {
+              "description": "Draws the filter frequency response curve",
+              "callbackProperties": {
+                "id": {
+                  "type": "String",
+                  "description": "The component's ID from getComponentID()"
+                },
+                "area": {
+                  "type": "Array[x, y, w, h]",
+                  "description": "The graph bounds"
+                },
+                "path": {
+                  "type": "Path",
+                  "description": "The filter response path"
+                },
+                "pathArea": {
+                  "type": "Array[x, y, w, h]",
+                  "description": "The path bounds"
+                },
+                "bgColour": {
+                  "type": "int (ARGB)",
+                  "description": "Background colour"
+                },
+                "itemColour1": {
+                  "type": "int (ARGB)",
+                  "description": "Line colour"
+                },
+                "itemColour2": {
+                  "type": "int (ARGB)",
+                  "description": "Fill colour"
+                },
+                "itemColour3": {
+                  "type": "int (ARGB)",
+                  "description": "Grid colour"
+                },
+                "textColour": {
+                  "type": "int (ARGB)",
+                  "description": "Text colour"
+                }
+              }
+            },
+            "drawFilterGridLines": {
+              "description": "Draws the grid lines on the filter graph",
+              "callbackProperties": {
+                "id": {
+                  "type": "String",
+                  "description": "The component's ID from getComponentID()"
+                },
+                "area": {
+                  "type": "Array[x, y, w, h]",
+                  "description": "The graph bounds"
+                },
+                "grid": {
+                  "type": "Path",
+                  "description": "The grid path"
+                },
+                "bgColour": {
+                  "type": "int (ARGB)",
+                  "description": "Background colour"
+                },
+                "itemColour1": {
+                  "type": "int (ARGB)",
+                  "description": "Line colour"
+                },
+                "itemColour2": {
+                  "type": "int (ARGB)",
+                  "description": "Fill colour"
+                },
+                "itemColour3": {
+                  "type": "int (ARGB)",
+                  "description": "Grid colour"
+                },
+                "textColour": {
+                  "type": "int (ARGB)",
+                  "description": "Text colour"
+                }
+              }
+            }
+          }
+        },
+        "DraggableFilterPanel": {
+          "lafFunctions": {
+            "drawFilterDragHandle": {
+              "description": "Draws a draggable filter handle",
+              "callbackProperties": {
+                "id": {
+                  "type": "String",
+                  "description": "The component's ID from getComponentID()"
+                },
+                "area": {
+                  "type": "Array[x, y, w, h]",
+                  "description": "The overlay bounds"
+                },
+                "index": {
+                  "type": "int",
+                  "description": "Index of the filter handle"
+                },
+                "handle": {
+                  "type": "Array[x, y, w, h]",
+                  "description": "The handle bounds"
+                },
+                "selected": {
+                  "type": "bool",
+                  "description": "Whether the handle is selected"
+                },
+                "enabled": {
+                  "type": "bool",
+                  "description": "Whether the filter is enabled"
+                },
+                "drag": {
+                  "type": "bool",
+                  "description": "Whether the handle is being dragged"
+                },
+                "hover": {
+                  "type": "bool",
+                  "description": "Whether mouse is hovering"
+                },
+                "frequency": {
+                  "type": "double",
+                  "description": "Filter frequency"
+                },
+                "Q": {
+                  "type": "double",
+                  "description": "Filter Q value"
+                },
+                "gain": {
+                  "type": "double",
+                  "description": "Filter gain"
+                },
+                "type": {
+                  "type": "int",
+                  "description": "Filter type"
+                },
+                "bgColour": {
+                  "type": "int (ARGB)",
+                  "description": "Background colour"
+                },
+                "itemColour1": {
+                  "type": "int (ARGB)",
+                  "description": "Line colour"
+                },
+                "itemColour2": {
+                  "type": "int (ARGB)",
+                  "description": "Fill colour"
+                },
+                "itemColour3": {
+                  "type": "int (ARGB)",
+                  "description": "Grid colour"
+                },
+                "textColour": {
+                  "type": "int (ARGB)",
+                  "description": "Text colour"
+                }
+              }
+            }
+          }
+        },
+        "AudioAnalyser": {
+          "lafFunctions": {
+            "drawAnalyserBackground": {
+              "description": "Draws the background of an audio analyser",
+              "callbackProperties": {
+                "id": {
+                  "type": "String",
+                  "description": "The component's ID from getComponentID()"
+                },
+                "area": {
+                  "type": "Array[x, y, w, h]",
+                  "description": "The area to fill"
+                },
+                "bgColour": {
+                  "type": "int (ARGB)",
+                  "description": "Background colour"
+                },
+                "itemColour1": {
+                  "type": "int (ARGB)",
+                  "description": "Fill colour"
+                },
+                "itemColour2": {
+                  "type": "int (ARGB)",
+                  "description": "Line colour"
+                }
+              }
+            },
+            "drawAnalyserPath": {
+              "description": "Draws the analyser path (FFT, oscilloscope, etc.)",
+              "callbackProperties": {
+                "id": {
+                  "type": "String",
+                  "description": "The component's ID from getComponentID()"
+                },
+                "area": {
+                  "type": "Array[x, y, w, h]",
+                  "description": "The component bounds"
+                },
+                "path": {
+                  "type": "Path",
+                  "description": "The analyser path"
+                },
+                "pathArea": {
+                  "type": "Array[x, y, w, h]",
+                  "description": "The path bounds"
+                },
+                "bgColour": {
+                  "type": "int (ARGB)",
+                  "description": "Background colour"
+                },
+                "itemColour1": {
+                  "type": "int (ARGB)",
+                  "description": "Fill colour"
+                },
+                "itemColour2": {
+                  "type": "int (ARGB)",
+                  "description": "Line colour"
+                }
+              }
+            },
+            "drawAnalyserGrid": {
+              "description": "Draws the grid lines on the analyser",
+              "callbackProperties": {
+                "id": {
+                  "type": "String",
+                  "description": "The component's ID from getComponentID()"
+                },
+                "area": {
+                  "type": "Array[x, y, w, h]",
+                  "description": "The component bounds"
+                },
+                "grid": {
+                  "type": "Path",
+                  "description": "The grid path"
+                },
+                "bgColour": {
+                  "type": "int (ARGB)",
+                  "description": "Background colour"
+                },
+                "itemColour1": {
+                  "type": "int (ARGB)",
+                  "description": "Fill colour"
+                },
+                "itemColour2": {
+                  "type": "int (ARGB)",
+                  "description": "Line colour"
+                }
+              }
+            }
+          }
+        },
+        "Waveform": {
+          "lafFunctions": {
+            "drawWavetableBackground": {
+              "description": "Draws the background of a wavetable display",
+              "callbackProperties": {
+                "id": {
+                  "type": "String",
+                  "description": "The component's ID from getComponentID()"
+                },
+                "area": {
+                  "type": "Array[x, y, w, h]",
+                  "description": "The component bounds"
+                },
+                "isEmpty": {
+                  "type": "bool",
+                  "description": "Whether no wavetable is loaded"
+                },
+                "processorId": {
+                  "type": "String",
+                  "description": "ID of connected processor (if any)"
+                },
+                "parentType": {
+                  "type": "String",
+                  "description": "ContentType of parent FloatingTile (if any)"
+                },
+                "bgColour": {
+                  "type": "int (ARGB)",
+                  "description": "Background colour"
+                },
+                "itemColour": {
+                  "type": "int (ARGB)",
+                  "description": "Fill top colour"
+                },
+                "itemColour2": {
+                  "type": "int (ARGB)",
+                  "description": "Outline colour"
+                },
+                "textColour": {
+                  "type": "int (ARGB)",
+                  "description": "Text colour"
+                }
+              }
+            },
+            "drawWavetablePath": {
+              "description": "Draws a single waveform path in the wavetable",
+              "callbackProperties": {
+                "id": {
+                  "type": "String",
+                  "description": "The component's ID from getComponentID()"
+                },
+                "area": {
+                  "type": "Array[x, y, w, h]",
+                  "description": "The path bounds"
+                },
+                "path": {
+                  "type": "Path",
+                  "description": "The waveform path"
+                },
+                "tableIndex": {
+                  "type": "int",
+                  "description": "Index of this table in the wavetable"
+                },
+                "isStereo": {
+                  "type": "bool",
+                  "description": "Whether this is stereo"
+                },
+                "currentTableIndex": {
+                  "type": "int",
+                  "description": "Currently playing table index"
+                },
+                "numTables": {
+                  "type": "int",
+                  "description": "Total number of tables"
+                },
+                "processorId": {
+                  "type": "String",
+                  "description": "ID of connected processor (if any)"
+                },
+                "parentType": {
+                  "type": "String",
+                  "description": "ContentType of parent FloatingTile (if any)"
+                },
+                "bgColour": {
+                  "type": "int (ARGB)",
+                  "description": "Background colour"
+                },
+                "itemColour": {
+                  "type": "int (ARGB)",
+                  "description": "Fill top colour"
+                },
+                "itemColour2": {
+                  "type": "int (ARGB)",
+                  "description": "Outline colour"
+                },
+                "textColour": {
+                  "type": "int (ARGB)",
+                  "description": "Text colour"
+                }
+              }
+            }
+          }
+        },
+        "MatrixPeakMeter": {
+          "lafFunctions": {
+            "drawMatrixPeakMeter": {
+              "description": "Draws a multi-channel peak meter",
+              "callbackProperties": {
+                "id": {
+                  "type": "String",
+                  "description": "The component's ID from getComponentID()"
+                },
+                "area": {
+                  "type": "Array[x, y, w, h]",
+                  "description": "The component bounds"
+                },
+                "numChannels": {
+                  "type": "int",
+                  "description": "Number of channels"
+                },
+                "peaks": {
+                  "type": "Array[double]",
+                  "description": "Current peak values for each channel"
+                },
+                "maxPeaks": {
+                  "type": "Array[double]",
+                  "description": "Maximum peak values for each channel"
+                },
+                "isVertical": {
+                  "type": "bool",
+                  "description": "Whether meters are vertical"
+                },
+                "segmentSize": {
+                  "type": "double",
+                  "description": "Size of each segment"
+                },
+                "paddingSize": {
+                  "type": "double",
+                  "description": "Padding between channels"
+                },
+                "processorId": {
+                  "type": "String",
+                  "description": "ID of connected processor (if any)"
+                },
+                "bgColour": {
+                  "type": "int (ARGB)",
+                  "description": "Background colour"
+                },
+                "itemColour": {
+                  "type": "int (ARGB)",
+                  "description": "Peak colour"
+                },
+                "itemColour2": {
+                  "type": "int (ARGB)",
+                  "description": "Track colour"
+                },
+                "textColour": {
+                  "type": "int (ARGB)",
+                  "description": "Max peak colour"
+                },
+                "itemColour3": {
+                  "type": "int (ARGB)",
+                  "description": "Over peak colour"
+                }
+              }
+            }
+          }
+        },
+        "ModulationMatrix": {
+          "lafFunctions": {
+            "getModulatorDragData": {
+              "description": "Returns position data for modulation drag UI (non-drawing callback)",
+              "callbackProperties": {
+                "sliderBounds": {
+                  "type": "Array[x, y, w, h]",
+                  "description": "Bounds of the slider in parent"
+                },
+                "parentBounds": {
+                  "type": "Array[x, y, w, h]",
+                  "description": "Parent component bounds"
+                },
+                "connections": {
+                  "type": "Array[String]",
+                  "description": "List of connected source names"
+                }
+              }
+            },
+            "drawModulationDragBackground": {
+              "description": "Draws the background of a modulation drag popup",
+              "callbackProperties": {
+                "id": {
+                  "type": "String",
+                  "description": "The component's ID from getComponentID()"
+                },
+                "area": {
+                  "type": "Array[x, y, w, h]",
+                  "description": "The popup bounds"
+                },
+                "labelArea": {
+                  "type": "Array[x, y, w, h]",
+                  "description": "The label bounds"
+                },
+                "bgColour": {
+                  "type": "int (ARGB)",
+                  "description": "Outline colour"
+                },
+                "itemColour": {
+                  "type": "int (ARGB)",
+                  "description": "Fill top colour"
+                },
+                "itemColour2": {
+                  "type": "int (ARGB)",
+                  "description": "Fill bottom colour"
+                },
+                "textColour": {
+                  "type": "int (ARGB)",
+                  "description": "Text colour"
+                },
+                "min": {
+                  "type": "double",
+                  "description": "Intensity range minimum"
+                },
+                "max": {
+                  "type": "double",
+                  "description": "Intensity range maximum"
+                },
+                "clicked": {
+                  "type": "bool",
+                  "description": "Whether mouse is down"
+                },
+                "hover": {
+                  "type": "bool",
+                  "description": "Whether mouse is hovering"
+                },
+                "targetName": {
+                  "type": "String",
+                  "description": "Name of the target parameter"
+                },
+                "hoverSourceName": {
+                  "type": "String",
+                  "description": "Name of hovered source (if hovering)"
+                },
+                "hoverSourceIndex": {
+                  "type": "int",
+                  "description": "Index of hovered source (if hovering)"
+                },
+                "hoverMode": {
+                  "type": "int",
+                  "description": "Modulation mode of hovered source"
+                },
+                "hoverValueIntensity": {
+                  "type": "double",
+                  "description": "Intensity value of hovered connection"
+                },
+                "hoverText": {
+                  "type": "String",
+                  "description": "Label text for hovered connection"
+                }
+              }
+            },
+            "drawModulationDragger": {
+              "description": "Draws a single modulation source dragger",
+              "callbackProperties": {
+                "id": {
+                  "type": "String",
+                  "description": "The component's ID from getComponentID()"
+                },
+                "area": {
+                  "type": "Array[x, y, w, h]",
+                  "description": "The dragger bounds"
+                },
+                "bgColour": {
+                  "type": "int (ARGB)",
+                  "description": "Outline colour"
+                },
+                "itemColour": {
+                  "type": "int (ARGB)",
+                  "description": "Fill top colour"
+                },
+                "itemColour2": {
+                  "type": "int (ARGB)",
+                  "description": "Fill bottom colour"
+                },
+                "textColour": {
+                  "type": "int (ARGB)",
+                  "description": "Text colour"
+                },
+                "min": {
+                  "type": "double",
+                  "description": "Intensity range minimum"
+                },
+                "max": {
+                  "type": "double",
+                  "description": "Intensity range maximum"
+                },
+                "value": {
+                  "type": "double",
+                  "description": "Current intensity value"
+                },
+                "clicked": {
+                  "type": "bool",
+                  "description": "Whether mouse is down"
+                },
+                "hover": {
+                  "type": "bool",
+                  "description": "Whether mouse is hovering"
+                },
+                "targetName": {
+                  "type": "String",
+                  "description": "Name of the target parameter"
+                },
+                "sourceName": {
+                  "type": "String",
+                  "description": "Name of the modulation source"
+                },
+                "sourceIndex": {
+                  "type": "int",
+                  "description": "Index of the source"
+                },
+                "mode": {
+                  "type": "int",
+                  "description": "Modulation mode"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "Global": {
+      "description": "LAF functions that apply globally or to system UI elements",
+      "categories": {
+        "AlertWindow": {
+          "lafFunctions": {
+            "drawAlertWindow": {
+              "description": "Draws the background of an alert/dialog window",
+              "callbackProperties": {
+                "area": {
+                  "type": "Array[x, y, w, h]",
+                  "description": "The window bounds"
+                },
+                "title": {
+                  "type": "String",
+                  "description": "The window title"
+                },
+                "parentType": {
+                  "type": "String",
+                  "description": "ContentType of parent FloatingTile (if any)"
+                }
+              }
+            },
+            "getAlertWindowMarkdownStyleData": {
+              "description": "Returns style data for markdown text in alert windows (non-drawing callback)",
+              "callbackProperties": {
+                "textColour": {
+                  "type": "int (ARGB)",
+                  "description": "Main text colour"
+                },
+                "codeColour": {
+                  "type": "int (ARGB)",
+                  "description": "Code text colour"
+                },
+                "linkColour": {
+                  "type": "int (ARGB)",
+                  "description": "Link text colour"
+                },
+                "headlineColour": {
+                  "type": "int (ARGB)",
+                  "description": "Headline text colour"
+                },
+                "headlineFont": {
+                  "type": "String",
+                  "description": "Headline font name"
+                },
+                "font": {
+                  "type": "String",
+                  "description": "Body font name"
+                },
+                "fontSize": {
+                  "type": "double",
+                  "description": "Font size"
+                }
+              }
+            },
+            "drawAlertWindowIcon": {
+              "description": "Draws the icon for an alert window",
+              "callbackProperties": {
+                "type": {
+                  "type": "String",
+                  "description": "Icon type: 'Error', 'Info', 'Question', or 'Warning'"
+                },
+                "area": {
+                  "type": "Array[x, y, w, h]",
+                  "description": "The icon bounds"
+                }
+              }
+            }
+          }
+        },
+        "PopupMenu": {
+          "lafFunctions": {
+            "drawPopupMenuBackground": {
+              "description": "Draws the background of a popup menu",
+              "callbackProperties": {
+                "area": {
+                  "type": "Array[x, y, w, h]",
+                  "description": "The menu bounds"
+                },
+                "width": {
+                  "type": "int",
+                  "description": "Menu width"
+                },
+                "height": {
+                  "type": "int",
+                  "description": "Menu height"
+                }
+              }
+            },
+            "drawPopupMenuItem": {
+              "description": "Draws a single popup menu item",
+              "callbackProperties": {
+                "area": {
+                  "type": "Array[x, y, w, h]",
+                  "description": "The item bounds"
+                },
+                "isSeparator": {
+                  "type": "bool",
+                  "description": "Whether this is a separator"
+                },
+                "isSectionHeader": {
+                  "type": "bool",
+                  "description": "Whether this is a section header"
+                },
+                "isActive": {
+                  "type": "bool",
+                  "description": "Whether the item is active/enabled"
+                },
+                "isHighlighted": {
+                  "type": "bool",
+                  "description": "Whether the item is highlighted"
+                },
+                "isTicked": {
+                  "type": "bool",
+                  "description": "Whether the item is ticked/checked"
+                },
+                "hasSubMenu": {
+                  "type": "bool",
+                  "description": "Whether the item has a submenu"
+                },
+                "text": {
+                  "type": "String",
+                  "description": "The item text"
+                },
+                "path": {
+                  "type": "Path",
+                  "description": "Optional icon path"
+                }
+              }
+            },
+            "getIdealPopupMenuItemSize": {
+              "description": "Returns ideal size for a popup menu item (non-drawing callback)",
+              "callbackProperties": {
+                "text": {
+                  "type": "String",
+                  "description": "The item text"
+                },
+                "isSeparator": {
+                  "type": "bool",
+                  "description": "Whether this is a separator"
+                },
+                "standardMenuHeight": {
+                  "type": "int",
+                  "description": "Standard menu item height"
+                }
+              }
+            }
+          }
+        },
+        "Scrollbar": {
+          "lafFunctions": {
+            "drawScrollbar": {
+              "description": "Draws a scrollbar",
+              "callbackProperties": {
+                "area": {
+                  "type": "Array[x, y, w, h]",
+                  "description": "The full scrollbar bounds"
+                },
+                "handle": {
+                  "type": "Array[x, y, w, h]",
+                  "description": "The thumb/handle bounds"
+                },
+                "vertical": {
+                  "type": "bool",
+                  "description": "Whether the scrollbar is vertical"
+                },
+                "over": {
+                  "type": "bool",
+                  "description": "Whether mouse is over"
+                },
+                "down": {
+                  "type": "bool",
+                  "description": "Whether mouse is down"
+                },
+                "bgColour": {
+                  "type": "int (ARGB)",
+                  "description": "Background colour"
+                },
+                "itemColour": {
+                  "type": "int (ARGB)",
+                  "description": "Thumb colour"
+                },
+                "itemColour2": {
+                  "type": "int (ARGB)",
+                  "description": "Track colour"
+                },
+                "parentType": {
+                  "type": "String",
+                  "description": "ContentType of parent FloatingTile (if any)"
+                }
+              }
+            }
+          }
+        },
+        "Dialog": {
+          "lafFunctions": {
+            "drawDialogButton": {
+              "description": "Draws a button in a dialog window",
+              "callbackProperties": {
+                "id": {
+                  "type": "String",
+                  "description": "The component's ID from getComponentID()"
+                },
+                "area": {
+                  "type": "Array[x, y, w, h]",
+                  "description": "The button bounds"
+                },
+                "text": {
+                  "type": "String",
+                  "description": "The button text"
+                },
+                "enabled": {
+                  "type": "bool",
+                  "description": "Whether the button is enabled"
+                },
+                "over": {
+                  "type": "bool",
+                  "description": "Whether mouse is over"
+                },
+                "down": {
+                  "type": "bool",
+                  "description": "Whether mouse is down"
+                },
+                "value": {
+                  "type": "bool",
+                  "description": "Toggle state"
+                },
+                "bgColour": {
+                  "type": "int (ARGB)",
+                  "description": "Background colour"
+                },
+                "textColour": {
+                  "type": "int (ARGB)",
+                  "description": "Text colour"
+                },
+                "parentType": {
+                  "type": "String",
+                  "description": "ContentType of parent FloatingTile (if any)"
+                }
+              }
+            }
+          }
+        },
+        "NumberTag": {
+          "lafFunctions": {
+            "drawNumberTag": {
+              "description": "Draws a macro control number tag",
+              "callbackProperties": {
+                "area": {
+                  "type": "Array[x, y, w, h]",
+                  "description": "The tag bounds"
+                },
+                "macroIndex": {
+                  "type": "int",
+                  "description": "Zero-based macro index"
+                },
+                "bgColour": {
+                  "type": "int (ARGB)",
+                  "description": "Outline colour"
+                },
+                "itemColour1": {
+                  "type": "int (ARGB)",
+                  "description": "Fill top colour"
+                },
+                "itemColour2": {
+                  "type": "int (ARGB)",
+                  "description": "Fill bottom colour"
+                },
+                "textColour": {
+                  "type": "int (ARGB)",
+                  "description": "Text colour"
+                }
+              }
+            }
+          }
+        },
+        "TableListBox": {
+          "lafFunctions": {
+            "drawTableRowBackground": {
+              "description": "Draws the background of a table row",
+              "callbackProperties": {
+                "bgColour": {
+                  "type": "int (ARGB)",
+                  "description": "Background colour"
+                },
+                "itemColour": {
+                  "type": "int (ARGB)",
+                  "description": "Item colour 1"
+                },
+                "itemColour2": {
+                  "type": "int (ARGB)",
+                  "description": "Item colour 2"
+                },
+                "textColour": {
+                  "type": "int (ARGB)",
+                  "description": "Text colour"
+                },
+                "rowIndex": {
+                  "type": "int",
+                  "description": "Row number"
+                },
+                "selected": {
+                  "type": "bool",
+                  "description": "Whether the row is selected"
+                },
+                "hover": {
+                  "type": "bool",
+                  "description": "Whether mouse is hovering"
+                },
+                "area": {
+                  "type": "Array[x, y, w, h]",
+                  "description": "The row bounds"
+                }
+              }
+            },
+            "drawTableCell": {
+              "description": "Draws a single cell in a table",
+              "callbackProperties": {
+                "bgColour": {
+                  "type": "int (ARGB)",
+                  "description": "Background colour"
+                },
+                "itemColour": {
+                  "type": "int (ARGB)",
+                  "description": "Item colour 1"
+                },
+                "itemColour2": {
+                  "type": "int (ARGB)",
+                  "description": "Item colour 2"
+                },
+                "textColour": {
+                  "type": "int (ARGB)",
+                  "description": "Text colour"
+                },
+                "text": {
+                  "type": "String",
+                  "description": "Cell text content"
+                },
+                "rowIndex": {
+                  "type": "int",
+                  "description": "Row number"
+                },
+                "columnIndex": {
+                  "type": "int",
+                  "description": "Column ID"
+                },
+                "selected": {
+                  "type": "bool",
+                  "description": "Whether the row is selected"
+                },
+                "clicked": {
+                  "type": "bool",
+                  "description": "Whether the cell is clicked"
+                },
+                "hover": {
+                  "type": "bool",
+                  "description": "Whether mouse is hovering"
+                },
+                "area": {
+                  "type": "Array[x, y, w, h]",
+                  "description": "The cell bounds"
+                }
+              }
+            },
+            "drawTableHeaderBackground": {
+              "description": "Draws the background of a table header",
+              "callbackProperties": {
+                "bgColour": {
+                  "type": "int (ARGB)",
+                  "description": "Background colour"
+                },
+                "itemColour": {
+                  "type": "int (ARGB)",
+                  "description": "Item colour 1"
+                },
+                "itemColour2": {
+                  "type": "int (ARGB)",
+                  "description": "Item colour 2"
+                },
+                "textColour": {
+                  "type": "int (ARGB)",
+                  "description": "Text colour"
+                },
+                "area": {
+                  "type": "Array[x, y, w, h]",
+                  "description": "The header bounds"
+                }
+              }
+            },
+            "drawTableHeaderColumn": {
+              "description": "Draws a single column header",
+              "callbackProperties": {
+                "bgColour": {
+                  "type": "int (ARGB)",
+                  "description": "Background colour"
+                },
+                "itemColour": {
+                  "type": "int (ARGB)",
+                  "description": "Item colour 1"
+                },
+                "itemColour2": {
+                  "type": "int (ARGB)",
+                  "description": "Item colour 2"
+                },
+                "textColour": {
+                  "type": "int (ARGB)",
+                  "description": "Text colour"
+                },
+                "text": {
+                  "type": "String",
+                  "description": "Column name"
+                },
+                "columnIndex": {
+                  "type": "int",
+                  "description": "Column ID"
+                },
+                "hover": {
+                  "type": "bool",
+                  "description": "Whether mouse is over"
+                },
+                "down": {
+                  "type": "bool",
+                  "description": "Whether mouse is down"
+                },
+                "sortColumnId": {
+                  "type": "int",
+                  "description": "ID of currently sorted column"
+                },
+                "sortForwards": {
+                  "type": "bool",
+                  "description": "Sort direction"
+                },
+                "area": {
+                  "type": "Array[x, y, w, h]",
+                  "description": "The column header bounds"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

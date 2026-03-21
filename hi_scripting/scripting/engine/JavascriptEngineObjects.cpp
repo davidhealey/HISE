@@ -9,29 +9,34 @@ struct HiseJavascriptEngine::RootObject::ObjectClass : public DynamicObject
 		setMethod("dump", dump);
 		setMethod("clone", cloneFn);
 		setMethod("keys", keys);
+		setMethod("toString", toStringMethod);
 	}
 
 	static Identifier getClassName()   { static const Identifier i("Object"); return i; }
 	static var dump(Args a)          { DBG(JSON::toString(a.thisObject)); ignoreUnused(a); return var::undefined(); }
 	static var cloneFn(Args a)        { return a.thisObject.clone(); }
-	
-	static var keys(Args a)  
-	{ 
-		DynamicObject* obj = a.thisObject.getDynamicObject();
 
-		Array<var> keys;
+	static var keys(Args a)
+	{
+		var result;
 
-		if (!obj)
-				return keys;
+		if (auto* obj = get(a, 0).getDynamicObject())
+			for (auto& prop : obj->getProperties())
+				result.append(prop.name.toString());
 
-    const NamedValueSet& properties = obj->getProperties();
+		return result;
+	}
 
-    for (int i = 0; i < properties.size(); ++i)
-        keys.add(properties.getName(i).toString());
+	static var toStringMethod(Args a)
+	{
+		if (a.thisObject.getDynamicObject())
+			return JSON::toString(a.thisObject);
 
-    return var(keys);
-	}	
+		return a.thisObject.toString();
+	}
 };
+
+
 
 //==============================================================================
 struct HiseJavascriptEngine::RootObject::ArrayClass : public DynamicObject
@@ -130,7 +135,13 @@ public:
 		setMethod("reverse", reverse);
         setMethod("reserve", reserve);
 		setMethod("clear", clear);
-		
+
+		// JS-compatible aliases and additions
+		setMethod("includes", contains);       // alias for contains
+		setMethod("lastIndexOf", lastIndexOf);
+		setMethod("isEmpty", isEmpty);
+		setMethod("slice", slice);
+		setMethod("toString", toStringMethod);
 	}
 
 	static Identifier getClassName()   { static const Identifier i("Array"); return i; }
@@ -521,6 +532,74 @@ public:
         return get(a, 0).isArray();
     }
 
+	static var lastIndexOf(Args a)
+	{
+		if (const Array<var>* array = a.thisObject.getArray())
+		{
+			const var target(get(a, 0));
+
+			for (int i = array->size() - 1; i >= 0; --i)
+			{
+				if (array->getReference(i) == target)
+					return i;
+			}
+		}
+
+		return -1;
+	}
+
+	static var isEmpty(Args a)
+	{
+		if (const Array<var>* array = a.thisObject.getArray())
+			return array->isEmpty();
+
+		return true;
+	}
+
+	static var slice(Args a)
+	{
+		if (const Array<var>* array = a.thisObject.getArray())
+		{
+			int size = array->size();
+			int start = getInt(a, 0);
+			int end = a.numArguments > 1 ? getInt(a, 1) : size;
+
+			// Handle negative indices (JS spec)
+			if (start < 0) start = jmax(0, size + start);
+			if (end < 0) end = jmax(0, size + end);
+
+			start = jmin(start, size);
+			end = jmin(end, size);
+
+			var result;
+
+			for (int i = start; i < end; ++i)
+				result.append(array->getReference(i));
+
+			return result;
+		}
+
+		return var();
+	}
+
+	static var toStringMethod(Args a)
+	{
+		if (const Array<var>* array = a.thisObject.getArray())
+		{
+			String result;
+
+			for (int i = 0; i < array->size(); ++i)
+			{
+				if (i > 0) result << ",";
+				result << array->getReference(i).toString();
+			}
+
+			return result;
+		}
+
+		return a.thisObject.toString();
+	}
+
 private:
 
 	using ReturnFunction = std::function<bool(int index, const var& functionReturnValue, const var& elementValue, var* totalReturnValue)>;
@@ -672,6 +751,18 @@ public:
 	
 	/** Removes and returns the first element. */
 	var shift() { return var(); }
+
+	/** Checks if the array contains the given element (JS-compatible alias for contains). */
+	bool includes(var elementToLookFor) { return false; }
+
+	/** Returns the last index of the element in the array, searching from the end. */
+	int lastIndexOf(var elementToLookFor) { return -1; }
+
+	/** Returns true if the array has no elements. */
+	bool isEmpty() { return false; }
+
+	/** Returns a shallow copy of a portion of the array from start to end (end not included). Supports negative indices. */
+	var slice(int startIndex, int endIndex) { return var(); }
 };
 
 
@@ -700,6 +791,14 @@ struct HiseJavascriptEngine::RootObject::StringClass : public DynamicObject
 		setMethod("decrypt", decrypt);
 		setMethod("contains", contains);
 
+		// JS-compatible aliases and additions
+		setMethod("startsWith", startsWith);
+		setMethod("endsWith", endsWith);
+		setMethod("includes", contains);       // alias for contains
+		setMethod("slice", substring);          // alias for substring
+		setMethod("replaceAll", replace);       // alias for replace (HISE replace already replaces all)
+		setMethod("match", match);
+
 		setMethod("getTrailingIntValue", getTrailingIntValue);
 		setMethod("getIntValue", getIntValue);
 		setMethod("hash", hash);
@@ -712,8 +811,10 @@ struct HiseJavascriptEngine::RootObject::StringClass : public DynamicObject
 	static Identifier getClassName()  { static const Identifier i("String"); return i; }
 
 	static var contains(Args a)		 { return a.thisObject.toString().contains(getString(a, 0)); }
+	static var startsWith(Args a)    { return a.thisObject.toString().startsWith(getString(a, 0)); }
+	static var endsWith(Args a)      { return a.thisObject.toString().endsWith(getString(a, 0)); }
 	static var fromCharCode(Args a)  { return String::charToString(getInt(a, 0)); }
-	static var substring(Args a)     { return a.thisObject.toString().substring(getInt(a, 0), getInt(a, 1)); }
+	static var substring(Args a)     { return a.thisObject.toString().substring(getInt(a, 0), a.numArguments > 1 ? getInt(a, 1) : 0x7fffffff); }
 	static var indexOf(Args a)       { return a.thisObject.toString().indexOf(getString(a, 0)); }
 	static var lastIndexOf(Args a)		 { return a.thisObject.toString().lastIndexOf(getString(a, 0)); }
 	static var charCodeAt(Args a)    { return (int)a.thisObject.toString()[getInt(a, 0)]; }
@@ -731,6 +832,32 @@ struct HiseJavascriptEngine::RootObject::StringClass : public DynamicObject
 	static var fromLastOccurrenceOf(Args a) { return a.thisObject.toString().fromLastOccurrenceOf(getString(a, 0), false, false); }
 	static var upToFirstOccurrenceOf(Args a) { return a.thisObject.toString().upToFirstOccurrenceOf(getString(a, 0), false, false); }
 	static var upToLastOccurrenceOf(Args a) { return a.thisObject.toString().upToLastOccurrenceOf(getString(a, 0), false, false); }
+
+	static var match(Args a)
+	{
+		try
+		{
+			std::string s = a.thisObject.toString().toStdString();
+			std::regex reg(getString(a, 0).toStdString());
+			std::smatch m;
+			var returnArray;
+			int safeCount = 0;
+
+			while (std::regex_search(s, m, reg) && ++safeCount < 100000)
+			{
+				for (auto x : m)
+					returnArray.insert(-1, String(x));
+
+				s = m.suffix();
+			}
+
+			return returnArray;
+		}
+		catch (std::regex_error e)
+		{
+			return var::undefined();
+		}
+	}
 
 	static var concat(Args a)
 	{
@@ -906,6 +1033,24 @@ public:
 	/** Checks if the string contains the given substring. */
 	bool contains(String otherString) { return false; }
 
+	/** Checks if the string starts with the given prefix. */
+	bool startsWith(String prefix) { return false; }
+
+	/** Checks if the string ends with the given suffix. */
+	bool endsWith(String suffix) { return false; }
+
+	/** Checks if the string contains the given substring (JS-compatible alias for contains). */
+	bool includes(String substring) { return false; }
+
+	/** Returns a section of the string (alias for substring). */
+	String slice(int startIndex, int endIndex) { return String(); }
+
+	/** Returns a copy of the string with all occurrences replaced (alias for replace). */
+	String replaceAll(var substringToLookFor, var replacement) { return String(); }
+
+	/** Returns an array of regex matches from the string. */
+	Array match(String regex) { return Array(); }
+
 	/** Converts a string to uppercase letters. */
 	String toUpperCase() { return String(); }
 	
@@ -956,9 +1101,10 @@ public:
 //==============================================================================
 struct HiseJavascriptEngine::RootObject::JSONClass : public DynamicObject
 {
-	JSONClass()                        { setMethod("stringify", stringify); }
+	JSONClass()                        { setMethod("stringify", stringify); setMethod("parse", parse); }
 	static Identifier getClassName()   { static const Identifier i("JSON"); return i; }
 	static var stringify(Args a)      { return JSON::toString(get(a, 0)); }
+	static var parse(Args a)          { return JSON::parse(getString(a, 0)); }
 };
 
 //==============================================================================
@@ -990,8 +1136,32 @@ struct HiseJavascriptEngine::RootObject::IntegerClass : public DynamicObject
 
 		const String s(getString(a, 0).trim());
 
+		if (a.numArguments > 1)
+		{
+			int radix = getInt(a, 1);
+
+			if (radix == 16)
+				return s.getHexValue64();
+			if (radix == 8)
+				return getOctalValue(s);
+			if (radix == 10)
+				return s.getLargeIntValue();
+
+			return (int64)strtoll(s.toRawUTF8(), nullptr, radix);
+		}
+
 		return s[0] == '0' ? (s[1] == 'x' ? s.substring(2).getHexValue64() : getOctalValue(s))
 			: s.getLargeIntValue();
+	}
+
+	static var isNaN_(Args a)
+	{
+		return std::isnan((double)get(a, 0));
+	}
+
+	static var isFinite_(Args a)
+	{
+		return std::isfinite((double)get(a, 0));
 	}
 };
 

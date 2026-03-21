@@ -78,13 +78,17 @@ ScriptUserPresetHandler::ScriptUserPresetHandler(ProcessorWithScriptingContent* 
 	ADD_API_METHOD_1(isOldVersion);
     ADD_API_METHOD_0(isInternalPresetLoad);
 	ADD_API_METHOD_0(isCurrentlyLoadingPreset);
-	ADD_API_METHOD_1(setPostCallback);
-	ADD_API_METHOD_1(setPostSaveCallback);
-	ADD_API_METHOD_1(setPreCallback);
+	ADD_TYPED_API_METHOD_1(setPostCallback, VarTypeChecker::Function);
+	ADD_CALLBACK_DIAGNOSTIC(postCallback, setPostCallback, 0);
+	ADD_TYPED_API_METHOD_1(setPostSaveCallback, VarTypeChecker::Function);
+	ADD_CALLBACK_DIAGNOSTIC(postSaveCallback, setPostSaveCallback, 0);
+	ADD_TYPED_API_METHOD_1(setPreCallback, VarTypeChecker::Function);
+	ADD_CALLBACK_DIAGNOSTIC(preCallback, setPreCallback, 0);
 	ADD_API_METHOD_2(setEnableUserPresetPreprocessing);
 	ADD_API_METHOD_1(setCustomAutomation);
 	ADD_API_METHOD_3(setUseCustomUserPresetModel);
-	ADD_API_METHOD_3(attachAutomationCallback);
+	ADD_TYPED_API_METHOD_3(attachAutomationCallback, VarTypeChecker::String, VarTypeChecker::Function, VarTypeChecker::Number);
+	ADD_CALLBACK_DIAGNOSTIC_RAW(attachAutomationCallback, WeakCallbackHolder::checkCallbackNumArgs<2, 1>);
 	ADD_API_METHOD_0(clearAttachedCallbacks);
 	ADD_API_METHOD_1(getAutomationIndex);
 	ADD_API_METHOD_2(setAutomationValue);
@@ -97,7 +101,8 @@ ScriptUserPresetHandler::ScriptUserPresetHandler(ProcessorWithScriptingContent* 
 	ADD_API_METHOD_0(getSecondsSinceLastPresetLoad);
 	ADD_API_METHOD_0(resetToDefaultUserPreset);
 	ADD_API_METHOD_0(runTest);
-	ADD_API_METHOD_1(setParameterGestureCallback);
+	ADD_TYPED_API_METHOD_1(setParameterGestureCallback, VarTypeChecker::Function);
+	ADD_CALLBACK_DIAGNOSTIC(parameterGestureCallback, setParameterGestureCallback, 0);
 	ADD_API_METHOD_1(setPluginParameterGroupNames);
 	ADD_API_METHOD_3(sendParameterGesture);
 	ADD_API_METHOD_1(setPluginParameterSortFunction);
@@ -400,6 +405,16 @@ void ScriptUserPresetHandler::attachAutomationCallback(String automationId, var 
 			}
 		}
 
+#if USE_BACKEND
+		if (n == dispatch::DispatchType::sendNotificationSync)
+		{
+			if (auto co = dynamic_cast<WeakCallbackHolder::CallableObject*>(updateCallback.getObject()))
+			{
+				if (HiseJavascriptEngine::RootObject::RealtimeSafetyInfo::check(co, this, "UserPresetHandler.attachAutomationCallback"))
+					reportScriptError("Callback is not safe for synchronous audio-thread execution");
+			}
+		}
+#endif
 		if (HiseJavascriptEngine::isJavascriptFunction(updateCallback))
 		{
 			attachedCallbacks.add(new AttachedCallback(this, cData, updateCallback, n));
@@ -1136,13 +1151,15 @@ ScriptExpansionHandler::ScriptExpansionHandler(JavascriptProcessor* jp_) :
 {
 	getMainController()->getExpansionHandler().addListener(this);
 
-	ADD_API_METHOD_1(setErrorFunction);
+	ADD_TYPED_API_METHOD_1(setErrorFunction, VarTypeChecker::Function);
+	ADD_CALLBACK_DIAGNOSTIC(errorFunction, setErrorFunction, 0);
 	ADD_API_METHOD_1(setErrorMessage);
 	ADD_API_METHOD_1(setCredentials);
 	ADD_API_METHOD_1(setEncryptionKey);
 	ADD_API_METHOD_0(getExpansionList);
 	ADD_API_METHOD_1(getExpansion);
-	ADD_API_METHOD_1(setExpansionCallback);
+	ADD_TYPED_API_METHOD_1(setExpansionCallback, VarTypeChecker::Function);
+	ADD_CALLBACK_DIAGNOSTIC(expansionCallback, setExpansionCallback, 0);
 	ADD_API_METHOD_1(setCurrentExpansion);
 	ADD_API_METHOD_1(setInstallFullDynamics);
 	ADD_API_METHOD_1(encodeWithCredentials);
@@ -1151,7 +1168,8 @@ ScriptExpansionHandler::ScriptExpansionHandler(JavascriptProcessor* jp_) :
 	ADD_API_METHOD_2(installExpansionFromPackage);
 	ADD_API_METHOD_1(setAllowedExpansionTypes);
 	ADD_API_METHOD_0(getCurrentExpansion);
-	ADD_API_METHOD_1(setInstallCallback);
+	ADD_TYPED_API_METHOD_1(setInstallCallback, VarTypeChecker::Function);
+	ADD_CALLBACK_DIAGNOSTIC(installCallback, setInstallCallback, 0);
 	ADD_API_METHOD_1(getMetaDataFromPackage);
 	ADD_API_METHOD_1(getExpansionForInstallPackage);
 	ADD_API_METHOD_0(getUninitialisedExpansions);

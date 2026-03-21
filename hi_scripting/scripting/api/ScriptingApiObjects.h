@@ -115,12 +115,35 @@ public:
 
 	static PathStrokeType createPathStrokeType(var strokeType);
 
+	using CallScope = WeakCallbackHolder::CallableObject::CallScope;
+
 #if USE_BACKEND
 
 	static String getValueType(const var& v);
 
 	static ValueTree getApiTree();
+
 	
+
+	struct CallScopeInfo
+	{
+		CallScope scope = CallScope::Unknown;
+		String note;
+	};
+
+	/** Look up the callScope for a given class + method.
+	 *
+	 *  Exact mode (className = specific class name):
+	 *    Finds the class child in the API ValueTree, finds the method by name,
+	 *    reads callScope string and converts to enum.
+	 *
+	 *  Greedy mode (className = "*"):
+	 *    Iterates all classes, collects every callScope for matching methodName.
+	 *    - If ANY are Safe: return Safe (don't warn — ambiguous)
+	 *    - If ALL are not-safe: return worst-case scope
+	 *    - If NO matches: return Unsafe (non-API dynamic dispatch)
+	 */
+	static CallScopeInfo getCallScope(const String& className, const String& methodName);
 
 #endif
 };

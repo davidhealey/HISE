@@ -1425,6 +1425,9 @@ public:
 		/** Throws an error message if the value is a string. */
 		void assertNoString(var value);
 
+		/** Throws the given error message if the condition isn't met. */
+		void assertWithMessage(bool condition, String errorMessage);
+
 		/** Throws an error message if the value is not a legal number (eg. string or array or infinity or NaN). */
 		void assertLegalNumber(var value);
 
@@ -1731,6 +1734,22 @@ private:
 		{
 			return globalServer.getWithParameters(subURL, parameters);
 		}
+
+#if USE_BACKEND
+		// Compose base URL check + callback arg count validation for callWithGET/callWithPOST/downloadFile
+		template <int E, int I> static ApiClass::DiagnosticResult checkBaseURLAndCallbackArgs(ApiClass* c, const Identifier& fName,  const Array<var>& args)
+		{
+			if (auto s = dynamic_cast<Server*>(c))
+			{
+				if (!s->globalServer.isBaseURLDefined())
+					return DiagnosticResult::fail("setBaseURL not called");
+
+				return WeakCallbackHolder::checkCallbackNumArgs<E, I>(c, fName, args);
+			}
+
+			return DiagnosticResult::fail("not a Server object");
+		};
+#endif
 
 	private:
 

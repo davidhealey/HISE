@@ -322,7 +322,7 @@ void SampleEditHandler::SampleEditingActions::selectAllSamples(SampleEditHandler
 
 	while (auto sound = sIter.getNextSound())
 	{
-		auto matchesDisplay = thisIndex[sound->getBitmask() - 1];
+		auto matchesDisplay = thisIndex[(int)(sound->getBitmask() - 1)];
 
 		
 

@@ -60,6 +60,9 @@ DECLARE_HNODE_JIT_TOKEN(identifier, "$identifier")
 DECLARE_HNODE_JIT_TOKEN(error_, "#error")
 DECLARE_HNODE_JIT_TOKEN(code_, "code")
 DECLARE_HNODE_JIT_TOKEN(on_, "#on");
+DECLARE_HNODE_JIT_TOKEN(strict_, "#strict");
+DECLARE_HNODE_JIT_TOKEN(warn_, "#warn");
+DECLARE_HNODE_JIT_TOKEN(unsafe_, "#unsafe");
 }
 
 struct Preprocessor

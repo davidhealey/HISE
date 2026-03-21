@@ -402,7 +402,7 @@ juce::StringArray HiseAssetInstaller::getIllegalFilenames()
 		"user_info.xml",
 		"RSA.xml",
 		"package_install.json",
-		"package_install_log.json",
+		"install_packages_log.json",
 		"Readme.md"
 	};
 }
@@ -570,7 +570,8 @@ bool HiseAssetInstaller::install(const UninstallInfo& infoToUse)
 		}
 		else
 		{
-			
+			// JSON parse failure - start with empty log
+			obj = var(Array<var>());
 		}
 	}
 	else
@@ -613,8 +614,10 @@ bool HiseAssetInstaller::install(const UninstallInfo& infoToUse)
 	return false;
 }
 
-bool HiseAssetInstaller::uninstall(const Error& seekToError)
+HiseAssetInstaller::UninstallResult HiseAssetInstaller::uninstall(const Error& seekToError)
 {
+	UninstallResult result;
+
 	auto logInfo = getInstallInfoFromLog({});
 
 	auto uninstallSteps = fromInstallLog(logInfo);
@@ -640,23 +643,57 @@ bool HiseAssetInstaller::uninstall(const Error& seekToError)
 			}
 
 			writeToLog(msg);
+
 			if(!uninstallSteps[i]->undo())
-				return false;
+			{
+				// undo() returning false on a FileInstallAction means the file
+				// was modified by the user - collect it and continue
+				if(auto f = dynamic_cast<FileInstallAction*>(uninstallSteps[i].get()))
+				{
+					result.skippedFiles.add(f->targetFile.getFullPathName());
+					writeToLog("! Skipped (modified): " + f->targetFile.getFullPathName());
+					continue;
+				}
+
+				// Non-file action failure is a real error
+				result.success = false;
+				return result;
+			}
 		}
 	}
-
-	writeToLog("> Remove package info ...");
 
 	var obj;
 	auto ok = JSON::parse(getLogFile().loadFileAsString(), obj);
 
 	if (auto ar = obj.getArray())
 	{
-		for (auto& package : *ar)
+		for (int i = 0; i < ar->size(); i++)
 		{
-			if (package[HiseSettings::Project::Name].toString() == uninstallInfo.packageName)
+			if ((*ar)[i][HiseSettings::Project::Name].toString() == uninstallInfo.packageName)
 			{
-				ar->remove(package);
+				if (result.hasSkippedFiles())
+				{
+					// Leave a residual log entry with NeedsCleanup flag
+					writeToLog("! " + String(result.skippedFiles.size()) + " modified file(s) skipped. Entering NeedsCleanup state.");
+
+					auto entry = (*ar)[i].getDynamicObject();
+					entry->setProperty("NeedsCleanup", true);
+
+					Array<var> skippedList;
+					for (const auto& sf : result.skippedFiles)
+						skippedList.add(sf);
+
+					entry->setProperty("SkippedFiles", var(skippedList));
+
+					// Remove the Steps array since we've already undone what we could
+					entry->removeProperty("Steps");
+				}
+				else
+				{
+					writeToLog("> Remove package info ...");
+					ar->remove(i);
+				}
+
 				break;
 			}
 		}
@@ -667,13 +704,84 @@ bool HiseAssetInstaller::uninstall(const Error& seekToError)
 	if(ok2)
 		writeToLog("... done.");
 
-	return ok;
+	result.success = true;
+	return result;
 }
 
-bool HiseAssetInstaller::hasLocalChanges()
+bool HiseAssetInstaller::cleanup()
 {
-	auto log = getInstallInfoFromLog(uninstallInfo);
-	auto list = fromInstallLog(log);
+	auto logInfo = getInstallInfoFromLog({});
+
+	if (!logInfo.getDynamicObject())
+		return false;
+
+	if (!(bool)logInfo["NeedsCleanup"])
+		return false;
+
+	StringArray remainingFiles;
+
+	if (auto skippedArray = logInfo["SkippedFiles"].getArray())
+	{
+		writeToLog(getHeader(getMainController(), uninstallInfo, "Cleaning up"));
+
+		for (const auto& sf : *skippedArray)
+		{
+			File f(sf.toString());
+
+			if (f.existsAsFile())
+			{
+				if (f.deleteFile())
+					writeToLog("> Deleted: " + f.getFullPathName());
+				else
+				{
+					writeToLog("! Failed to delete: " + f.getFullPathName());
+					remainingFiles.add(f.getFullPathName());
+				}
+			}
+		}
+	}
+
+	var obj;
+	auto ok = JSON::parse(getLogFile().loadFileAsString(), obj);
+
+	if (auto ar = obj.getArray())
+	{
+		for (int i = 0; i < ar->size(); i++)
+		{
+			if ((*ar)[i][HiseSettings::Project::Name].toString() == uninstallInfo.packageName)
+			{
+				if (remainingFiles.isEmpty())
+				{
+					// All files deleted - remove the log entry entirely
+					ar->remove(i);
+				}
+				else
+				{
+					// Some files couldn't be deleted - update the skipped list
+					auto entry = (*ar)[i].getDynamicObject();
+					Array<var> remaining;
+					for (const auto& rf : remainingFiles)
+						remaining.add(rf);
+					entry->setProperty("SkippedFiles", var(remaining));
+				}
+
+				break;
+			}
+		}
+	}
+
+	auto ok2 = getLogFile().replaceWithText(JSON::toString(obj));
+
+	if (ok2 && remainingFiles.isEmpty())
+		writeToLog("... cleanup done.");
+	else if (!remainingFiles.isEmpty())
+		writeToLog("! " + String(remainingFiles.size()) + " file(s) could not be deleted.");
+
+	return ok2 && remainingFiles.isEmpty();
+}
+
+// hasLocalChanges and checkLocalChanges removed (poor man's git cleanup)
+#if 0
 
 	Array<std::pair<File, LineDiff::HashedDiff::Ptr>> reports;
 
@@ -707,6 +815,7 @@ Array<std::pair<juce::File, LineDiff::HashedDiff::Ptr>> HiseAssetInstaller::chec
 
 	return reports;
 }
+#endif
 
 HiseAssetInstaller::PreprocessorInstallAction::PreprocessorInstallAction(MainController* mc, const StringArray& keys, PreprocessorMap& o, const PreprocessorMap& n) :
 	UndoableInstallAction(mc),
@@ -792,8 +901,7 @@ HiseAssetInstaller::FileInstallAction::FileInstallAction(MainController* mc, con
 	is(nullptr),
 	targetFile(getRootFolder().getChildFile(data["Target"].toString())),
 	modificationTime(Time::fromISO8601(data["Modified"].toString())),
-	hash((int64)data["Hash"]),
-	b64Content(data["Content"].toString())
+	hash((int64)data["Hash"])
 {
 	jassert(data["Type"].toString() == getStaticId().toString());
 }
@@ -809,42 +917,14 @@ bool HiseAssetInstaller::FileInstallAction::perform()
 
 		{
 			FileOutputStream fos(targetFile);
-			numWritten = fos.writeFromInputStream(*is, is->getTotalLength());
+			numWritten = fos.writeFromInputStream(*is, (int)is->getTotalLength());
 			fos.flush();
 		}
 		
 		auto ok = numWritten == is->getTotalLength();
 
 		if(ok && LineDiff::isTextFile(targetFile))
-		{
-			zstd::ZDefaultCompressor comp;
-			juce::MemoryBlock mb;
-			comp.compress(targetFile, mb);
-			b64Content = mb.toBase64Encoding();
-
-			auto patchFile = LineDiff::getPatchFile(targetFile);
-
-			if(patchFile.existsAsFile())
-			{
-				hash = targetFile.loadFileAsString().hashCode64();
-				auto lines = StringArray::fromLines(targetFile.loadFileAsString());
-
-				LineDiff::HashedDiff::Ptr patch = new LineDiff::HashedDiff(patchFile.loadFileAsString());
-
-				try
-				{
-					patch->merge(lines);
-					ok = targetFile.replaceWithText(lines.joinIntoString("\n"));
-
-					if(ok)
-						patchFile.deleteFile();
-				}
-				catch(LineDiff::MergeError&)
-				{
-					return false;
-				}
-			}
-		}
+			hash = targetFile.loadFileAsString().hashCode64();
 
 		return ok;
 	}
@@ -878,79 +958,30 @@ juce::var HiseAssetInstaller::FileInstallAction::toJSON() const
 			hashToUse = targetFile.loadFileAsString().hashCode64();
 
 		obj->setProperty("Hash", hashToUse);
-		obj->setProperty("Content", b64Content);
 	}
 	
 	obj->setProperty("Modified", targetFile.getLastModificationTime().toISO8601(false));
 	return var(obj.get());
 }
 
-bool HiseAssetInstaller::FileInstallAction::isChanged() const
-{
-	if (LineDiff::isTextFile(targetFile))
-	{
-		auto nowContent = targetFile.loadFileAsString();
-		auto hashNow = nowContent.hashCode64();
-
-		return hash != 0 && hash != hashNow;
-	}
-
-	return false;
-}
-
-LineDiff::HashedDiff::Ptr HiseAssetInstaller::FileInstallAction::getDiffReport()
-{
-	if(isChanged())
-	{
-		zstd::ZDefaultCompressor comp;
-
-		juce::MemoryBlock mb;
-		mb.fromBase64Encoding(b64Content);
-
-		String content;
-
-		if (comp.expand(mb, content))
-		{
-			auto prevLines = StringArray::fromLines(content);
-
-			auto nowContent = targetFile.loadFileAsString();
-			auto nowLines = StringArray::fromLines(nowContent);
-			return new LineDiff::HashedDiff(prevLines, nowLines);
-		}
-	}
-
-	return nullptr;
-}
-
 bool HiseAssetInstaller::FileInstallAction::undo()
 {
 	if(targetFile.existsAsFile())
 	{
-		if(auto diff = getDiffReport())
+		// Check if the file was modified since install (hash-based detection)
+		if(hash != 0 && LineDiff::isTextFile(targetFile))
 		{
-			String msg;
-			msg << "!file content mismatch. Changes:\n\n";
+			auto currentHash = targetFile.loadFileAsString().hashCode64();
 
-			for (const auto& r : diff->getPatchReport())
-				msg << "\t" << r << "\n";
-
-			auto patchFile = LineDiff::getPatchFile(targetFile);
-
-			debugToConsole(getMainController()->getMainSynthChain(), msg);
-			patchFile.replaceWithText(diff->getPatchReport().joinIntoString("\n"));
-
-			/*
-			Error e;
-			e.what = Error::HashMismatch;
-			e.file = targetFile;
-
-			throw e;
-			*/
+			if(currentHash != hash)
+			{
+				// File was modified - signal skip by returning false
+				return false;
+			}
 		}
 
 		return targetFile.deleteFile();
 	}
-		
 
 	return true;
 }

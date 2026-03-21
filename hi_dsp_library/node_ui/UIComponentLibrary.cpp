@@ -749,8 +749,6 @@ void compare_editor::onLayoutChange()
 
 void compare_editor::paint(Graphics& g)
 {
-	auto b = getLocalBounds();
-
 	auto circles = getCircles(3, 16.0f);
 
 	auto l = circles.getRectangle(getParameterIndexForPreferredLayout(0));
@@ -826,8 +824,6 @@ Array<int> logic_op_editor::getParameterOrder() const
 
 void logic_op_editor::paint(Graphics& g)
 {
-	auto b = getLocalBounds().toFloat();
-
 	auto circles = getCircles(3, 16.0f);
 
 	auto l = circles.getRectangle(getParameterIndexForPreferredLayout(0));

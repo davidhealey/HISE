@@ -168,6 +168,7 @@ template <int parameterIndex>
 hise::raw::UIConnection::Slider<parameterIndex>::Slider(juce::Slider* s, MainController* mc, const String& processorID) :
 	SliderBase(s, mc, processorID)
 {
+	this->registerParameterIndex(parameterIndex);
 	setData<Data::Attribute<parameterIndex>>();
 }
 

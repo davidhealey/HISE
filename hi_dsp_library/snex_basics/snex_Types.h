@@ -550,6 +550,8 @@ struct DllBoundaryTempoSyncer: public hise::TempoListener
 	{
 		if(uuidManager != nullptr)
 			return uuidManager->deregisterUUID(obj);
+        
+        return false;
 	}
 
 	/** @internal This can be used to temporarily change the pointer to the mod value.
@@ -627,8 +629,7 @@ struct PolyHandler
 	};
 
 	/** @internal Create an instance of this class with the given voice index and it will return this voice
-	    index for each call that happens on this thread as long as this object exists.
-	*/
+	    index for each call that happens on this thread as long as this object exists. */
 	struct ScopedVoiceSetter
 	{
 		ScopedVoiceSetter(PolyHandler& p_, int voiceIndex) :
@@ -644,7 +645,9 @@ struct PolyHandler
 		~ScopedVoiceSetter()
 		{
 			if (p.enabled != 0)
+			{
 				p.voiceIndex = -1;
+			}
 		}
 
 	private:
@@ -680,12 +683,19 @@ struct PolyHandler
 		(or if the voice index has not been set). */
 	int getVoiceIndex() const
 	{
-		if (currentAllThread != nullptr && Thread::getCurrentThreadId() == currentAllThread)
-			return -1 * enabled;
-
+		if (currentAllThread != nullptr)
+		{
+			if (Thread::getCurrentThreadId() == currentAllThread)
+				return -1 * enabled;
+			else
+			{
+				// performance hit on hot path here...
+				//jassertfalse;
+			}
+		}
+		
 		return voiceIndex.load() * enabled;
 	}
-
 	bool isAllThread() const { return enabled && currentAllThread != nullptr && Thread::getCurrentThreadId() == currentAllThread; };
 
 	bool isEnabled() const { return enabled; }
@@ -1038,7 +1048,7 @@ template <typename T, int NumVoices> struct PolyData
 {
 	PolyData(T initValue)
 	{
-		setAll(std::move(initValue));
+		setAll(initValue);
 	}
 
 	PolyData& operator=(const PolyData& other)
@@ -1082,90 +1092,60 @@ template <typename T, int NumVoices> struct PolyData
 		voicePtr = sp.voiceIndex;
 	}
 
-	void setAll(T&& value)
+	void setAll(const T& value)
 	{
-		if (!isPolyphonic() || voicePtr == nullptr)
+		if (!isPolyphonic())
 		{
-			*data = std::move(value);
+			data[0] = value;
+		}
+		else if (voicePtr == nullptr)
+		{
+			// Before prepare() - initialize all slots
+			for (int i = 0; i < NumVoices; i++)
+				data[i] = value;
 		}
 		else
 		{
+			// After prepare() - set based on current voice context
 			for (auto& d : *this)
-				d = std::move(value);
+				d = value;
 		}
 	}
 
-	struct ScopedVoiceSetter
-	{
-		ScopedVoiceSetter(PolyData& p_, bool forceAll):
-		  p(p_)
-		{
-			if constexpr (PolyData::isPolyphonic())
-			{
-				p.currentRenderVoice = p.begin();
-				prevForceAll = p.forceAll;
-				p.forceAll = forceAll;
-			}
-		};
-
-		~ScopedVoiceSetter()
-		{
-			if constexpr (PolyData::isPolyphonic())
-			{
-				p.currentRenderVoice = nullptr;
-				p.forceAll = prevForceAll;
-			}
-		}
-
-		PolyData& p;
-		bool prevForceAll;
-	};
-
-	/** If you know that you're inside a rendering context, you can
-	    use this function instead of the for-loop syntax. Be aware that
-		the performance will be the same, it's just a bit less to type. 
-	*/
-	T& get(bool allowSlowFetch=false) const
+	/** Returns a reference to the current voice's data.
+	 *
+	 *  Uses begin() which calls getVoiceIndex(). The fast-path in getVoiceIndex()
+	 *  skips the Thread::getCurrentThreadId() check when no ScopedAllVoiceSetter
+	 *  is active (99.9% of the time on the audio thread), costing only a single
+	 *  atomic load (~1-3 cycles on x86).
+	 */
+	T& get() const
 	{
 		if constexpr (isPolyphonic())
-		{
-			if(currentRenderVoice == nullptr)
-			{
-				//jassert(allowSlowFetch);
-				return *begin();
-			}
-
-			return *currentRenderVoice;
-		}
+			return *begin();
 		else
-		{
 			return *const_cast<T*>(data);
-		}
-		
-#if 0
-		jassert(isMonophonicOrInsideVoiceRendering());
-		return *begin();
-#endif
 	}
 
-	template <typename F> void forEachCurrentVoice(F&& f)
+	/** A lightweight range that always covers all voices, ignoring the current voice context.
+	 *  Use for operations that must affect all voices unconditionally
+	 *  (e.g., clearing filter state, resetting all voice data).
+	 *
+	 *  Usage: for(auto& d : polyData.all()) d.clear();
+	 */
+	struct AllVoiceRange
 	{
-		if(!isPolyphonic() || voicePtr == nullptr)
-		{
-			f(data[0]);
-		}
-		else
-		{
-			if(forceAll || voicePtr->isAllThread())
-			{
-				for(int i = 0; i < NumVoices; i++)
-					f(data[i]);
-			}
-			else
-			{
-				f(get());
-			}
-		}
+		AllVoiceRange(T* d, int n) : ptr(d), num(n) {}
+		T* begin() const { return ptr; }
+		T* end() const { return ptr + num; }
+		T* ptr;
+		int num;
+	};
+
+	/** Returns an iterator that always covers all voices, ignoring the current voice context. */
+	AllVoiceRange all() const
+	{
+		return AllVoiceRange(const_cast<T*>(data), NumVoices);
 	}
 
 	/** Allows range-based for loops to work inside the voice context. */
@@ -1283,9 +1263,6 @@ private:
 	PolyHandler* voicePtr = nullptr;
 	mutable int lastVoiceIndex = -1;
 	int unused = 0;
-
-	T* currentRenderVoice = nullptr;
-	bool forceAll = false;
 
 	T data[NumVoices];
 

@@ -1624,6 +1624,11 @@ Rectangle<int> PopupLookAndFeel::getPropertyComponentContentPosition(PropertyCom
 
 Component* PopupLookAndFeel::getParentComponentForMenuOptions(const PopupMenu::Options& options)
 {
+#if USE_BACKEND
+	if (auto tc = DocumentWindowWithEmbeddedPopupMenu::getParentOf(options.getTargetComponent()))
+		return tc;
+#endif
+
 	if (HiseDeviceSimulator::isAUv3())
 	{
 		if (options.getParentComponent() == nullptr && options.getTargetComponent() != nullptr)
@@ -1814,7 +1819,7 @@ PopupMenu::Options PopupLookAndFeel::getOptionsForComboBoxPopupMenu (ComboBox& b
         
         return options.withTargetScreenArea(area.toNearestInt());
     }
-    
+	
     return options;
 }
 

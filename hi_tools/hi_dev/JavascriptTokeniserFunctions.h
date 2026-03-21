@@ -69,8 +69,13 @@ struct JavascriptTokeniserFunctions
         static const char* const keywords6Char[] =
             { "before", "bypass", "sample", nullptr };
 
+
         static const char* const keywords7Char[] =
-            { "profile", nullptr };
+            { "profile", nullptr};
+
+		static const char* const keywords8Char[] =
+		    { "suppress", nullptr };
+
 
         const char* const* k;
 
@@ -82,6 +87,7 @@ struct JavascriptTokeniserFunctions
             case 5:     k = keywords5Char; break;
             case 6:     k = keywords6Char; break;
             case 7:     k = keywords7Char; break;
+            case 8:     k = keywords8Char; break;
             default:
                 return false;
         }

@@ -666,8 +666,6 @@ template <int NV, typename ParameterType> struct simple_ar: public pimpl::envelo
 		}
 	}
 
-	
-	
 	PolyData<State, NumVoices> states;
 };
 
@@ -1890,6 +1888,9 @@ template <int NV, typename IndexClass, runtime_target::RuntimeTarget TargetType>
 		check();
 	}
 
+	// note: never use this directly outside of the usual HISE callback system
+	// use the isPlaying() function instead, this gets you the state for the currently
+	// rendered voice
 	bool handleModulation(double& v)
 	{
 		return mv.getChangedValue(v);
@@ -1900,10 +1901,14 @@ template <int NV, typename IndexClass, runtime_target::RuntimeTarget TargetType>
 		check();
 	}
 
-	void check()
+	bool check()
 	{
-		if(!state.get().isPlaying())
+		auto isPlaying = state.get().isPlaying();
+
+		if(!isPlaying)
 			mv.setModValue(0.0);
+
+		return isPlaying;
 	}
 
 	virtual void prepare(PrepareSpecs ps)
@@ -1959,7 +1964,6 @@ template <int NV, typename IndexClass, runtime_target::RuntimeTarget TargetType>
 
 public:
 
-	SN_VOICE_SETTER(mod_voice_checker_base, state);
 };
 
 template <int NV, typename IndexClass=runtime_target::indexers::fix_hash<1>> struct global_mod_gate : 
