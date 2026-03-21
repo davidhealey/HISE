@@ -242,7 +242,22 @@ int PresetBrowserColumn::ColumnListModel::getNumRows()
 		}
 
 		entries.clear();
-		root.findChildFiles(entries, displayDirectories ? File::findDirectories : File::findFiles, allowRecursiveSearch);
+
+		if (flattenOneLevel && displayDirectories)
+		{
+			// When the folder structure is deeper than the number of columns, skip
+			// the top level (bank) and collect all second-level directories instead,
+			// so categories are shown directly in the first visible column.
+			Array<File> level1;
+			root.findChildFiles(level1, File::findDirectories, false);
+			PresetBrowser::DataBaseHelpers::cleanFileList(parent->getMainController(), level1);
+			for (auto& l1 : level1)
+				l1.findChildFiles(entries, File::findDirectories, false);
+		}
+		else
+		{
+			root.findChildFiles(entries, displayDirectories ? File::findDirectories : File::findFiles, allowRecursiveSearch);
+		}
 
 		PresetBrowser::DataBaseHelpers::cleanFileList(parent->getMainController(), entries);
 

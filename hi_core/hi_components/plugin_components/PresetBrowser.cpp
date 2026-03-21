@@ -582,7 +582,7 @@ expHandler(mc->getExpansionHandler())
 		currentlySelectedExpansion = e;
 	}
 	
-	bankColumn->setNewRootDirectory(rootFile);
+	configureBankColumnForDepth();
 
 	rebuildAllPresets();
 
@@ -1344,6 +1344,38 @@ void PresetBrowser::setHighlightColourAndFont(Colour c, Colour bgColour, Font f)
 	setOpaque(bgColour.isOpaque());
 }
 
+int PresetBrowser::getActualFolderDepth() const
+{
+	if (!rootFile.isDirectory()) return 1;
+
+	auto mc = const_cast<MainController*>(getMainController());
+
+	Array<File> level1;
+	rootFile.findChildFiles(level1, File::findDirectories, false);
+	DataBaseHelpers::cleanFileList(mc, level1);
+
+	if (level1.isEmpty()) return 1;
+
+	// If any first-level directory contains preset files directly, depth is 2
+	for (auto& bankDir : level1)
+	{
+		Array<File> presets;
+		bankDir.findChildFiles(presets, File::findFiles, false, "*.preset");
+		DataBaseHelpers::cleanFileList(mc, presets);
+		if (!presets.isEmpty()) return 2;
+	}
+
+	// No presets found at level 2, assume a 3-level structure (bank/category/preset)
+	return 3;
+}
+
+void PresetBrowser::configureBankColumnForDepth()
+{
+	const bool flattenBank = (numColumns == 2 && getActualFolderDepth() > 2);
+	bankColumn->setFlattenOneLevel(flattenBank);
+	bankColumn->setNewRootDirectory(rootFile);
+}
+
 void PresetBrowser::setNumColumns(int newNumColumns)
 {
 	newNumColumns = jlimit<int>(1, 3, newNumColumns);
@@ -1355,6 +1387,8 @@ void PresetBrowser::setNumColumns(int newNumColumns)
 
 		if (numColumns == 1)
 			rebuildAllPresets();
+		else
+			configureBankColumnForDepth();
 	}
 }
 
@@ -1638,7 +1672,7 @@ void PresetBrowser::selectionChanged(int columnIndex, int /*rowIndex*/, const Fi
 		}
 
 		bankColumn->setModel(new PresetBrowserColumn::ColumnListModel(this, 0, this), rootFile);
-		bankColumn->setNewRootDirectory(rootFile);
+		configureBankColumnForDepth();
 		categoryColumn->setModel(new PresetBrowserColumn::ColumnListModel(this, 1, this), rootFile);
 		categoryColumn->setNewRootDirectory(currentCategoryFile);
 
@@ -1658,8 +1692,16 @@ void PresetBrowser::selectionChanged(int columnIndex, int /*rowIndex*/, const Fi
 			auto pc = new PresetBrowserColumn::ColumnListModel(this, 2, this);
 			pc->setDisplayDirectories(false);
 			presetColumn->setModel(pc, rootFile);
+			presetColumn->setAllowRecursiveFileSearch(true);
 		}
 
+		// In single-column mode the preset column must be pointed at the new
+		// expansion root directly — no bank selection will do it later.
+		if (numColumns == 1)
+			presetColumn->setNewRootDirectory(rootFile);
+
+		// Set the database after the model may have been replaced above so the
+		// active model always has a valid database reference.
 		presetColumn->setDatabase(getDataBase());
 
 		// Update the add button and column visibility for showExpansionContentOnly mode.
@@ -1745,6 +1787,7 @@ void PresetBrowser::renameEntry(int columnIndex, int rowIndex, const String& new
             updateDatabaseKeysForRename(currentBankFile, newBank);
             currentBankFile.moveFileTo(newBank);
 
+            configureBankColumnForDepth();
             categoryColumn->setNewRootDirectory(File());
             presetColumn->setNewRootDirectory(File());
         }
@@ -1813,7 +1856,7 @@ void PresetBrowser::deleteEntry(int columnIndex, const File& f)
 
 		bankToDelete.deleteRecursively();
 
-		bankColumn->setNewRootDirectory(rootFile);
+		configureBankColumnForDepth();
 		categoryColumn->setNewRootDirectory(File());
 		presetColumn->setNewRootDirectory(File());
 	}
@@ -1953,7 +1996,38 @@ void PresetBrowser::buttonClicked(Button* b)
 
 void PresetBrowser::addEntry(int columnIndex, const String& name)
 {
-	if (columnIndex == 0)	bankColumn->addEntry(name);
+	if (columnIndex == 0)
+	{
+		if (bankColumn->isFlatteningOneLevel())
+		{
+			// In flatten mode the bank column shows categories (2nd-level dirs), so new
+			// entries must be created inside a bank folder, not at the root level.
+			File parentBank;
+
+			if (currentBankFile.isDirectory())
+			{
+				parentBank = currentBankFile.getParentDirectory();
+			}
+			else
+			{
+				Array<File> banks;
+				rootFile.findChildFiles(banks, File::findDirectories, false);
+				DataBaseHelpers::cleanFileList(getMainController(), banks);
+				banks.sort();
+				if (!banks.isEmpty())
+					parentBank = banks.getFirst();
+			}
+
+			if (parentBank.isDirectory())
+			{
+				parentBank.getChildFile(name).createDirectory();
+				configureBankColumnForDepth();
+				return;
+			}
+		}
+
+		bankColumn->addEntry(name);
+	}
 	if (columnIndex == 1)	categoryColumn->addEntry(name);
 	if (columnIndex == 2)	presetColumn->addEntry(name);
 }

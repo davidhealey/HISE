@@ -275,6 +275,14 @@ private:
 	void setHighlightColourAndFont(Colour c, Colour bgColour, Font f);
 	void setNumColumns(int numColumns);
 
+	/** Returns the actual depth of the folder structure under rootFile.
+	    1 = presets directly in root, 2 = bank/preset, 3 = bank/category/preset. */
+	int getActualFolderDepth() const;
+
+	/** Configures the bank column's display mode based on the actual folder depth
+	    relative to numColumns, and refreshes it with the current rootFile. */
+	void configureBankColumnForDepth();
+
 	/** SaveButton = 1, ShowFolderButton = 0 */
 	void setShowButton(int buttonId, bool newValue);
 	void setShowNotesLabel(bool shouldBeShown);
