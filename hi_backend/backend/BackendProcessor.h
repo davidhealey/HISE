@@ -539,6 +539,9 @@ public:
 		return &scriptUnlocker;
 	}
 
+	/** Creates or returns the build undo manager f. */
+	ControlledObject* getOrCreateRestServerBuildUndoManager();
+	
 	RestServer& getRestServer() { return restServer; }
 
 	ReplServer& getReplServer() { return replServer; }
@@ -642,6 +645,8 @@ private:
 	BackendRootWindow* docWindow;
 
 	AutoSaver autosaver;
+
+	ScopedPointer<ControlledObject> buildUndoManager;
 
 	RestServer restServer;
 	ReplServer replServer;

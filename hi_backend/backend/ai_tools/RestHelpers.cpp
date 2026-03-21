@@ -817,6 +817,93 @@ const Array<RestHelpers::RouteMetadata>& RestHelpers::getRouteMetadata()
 			.withDescription("Gracefully quit the HISE application")
 			.withReturns("Success confirmation before shutdown begins"));
 		
+		// ApiRoute::BuilderTree
+		m.add(RouteMetadata(ApiRoute::BuilderTree, "api/builder/tree")
+			.withMethod(RestServer::GET)
+			.withCategory("builder")
+			.withDescription("Returns runtime module tree, or active validation tree when group=current")
+			.withReturns("Nested JSON tree with metadata / modulation / children; 400 when no current group, 501 for unsupported group values")
+			.withQueryParam(RouteParameter(RestApiIds::moduleId,
+				"Optional root module ID to return a subtree").asOptional())
+			.withQueryParam(RouteParameter(RestApiIds::group,
+				"Optional group selector. Only 'current' is supported").asOptional())
+			.withQueryParam(RouteParameter(RestApiIds::queryParameters,
+				"If false, omit parameter lists from the tree").withDefault("true"))
+			.withQueryParam(RouteParameter(RestApiIds::verbose,
+				"If true, include verbose metadata in tree nodes").withDefault("false")));
+		
+		// ApiRoute::BuilderApply
+		m.add(RouteMetadata(ApiRoute::BuilderApply, "api/builder/apply")
+			.withMethod(RestServer::POST)
+			.withCategory("builder")
+			.withDescription("Apply one or more operations to the module tree in a single batch")
+			.withReturns("Success / validation / runtime status with diff result, logs, and errors")
+			.withBodyParam(RouteParameter(RestApiIds::operations,
+				"Array of operations. Each object requires 'op' field: "
+				"add (type, parent, chain, name), "
+				"remove (target), "
+				"clone (source, count, template?), "
+				"set_attributes (target, attributes, mode?[value/normalized/raw]), "
+				"set_id (target, name), "
+				"set_bypassed (target, bypassed), "
+				"set_effect (target, effect), "
+				"set_complex_data (reserved / deferred)")));
+		
+		// ApiRoute::UndoPushGroup
+		m.add(RouteMetadata(ApiRoute::UndoPushGroup, "api/undo/push_group")
+			.withMethod(RestServer::POST)
+			.withCategory("undo")
+			.withDescription("Start a new undo group. Actions are recorded but not executed until pop_group.")
+			.withReturns("Current diff state for the new group")
+			.withBodyParam(RouteParameter(RestApiIds::name, "Label for the group")));
+		
+		// ApiRoute::UndoPopGroup
+		m.add(RouteMetadata(ApiRoute::UndoPopGroup, "api/undo/pop_group")
+			.withMethod(RestServer::POST)
+			.withCategory("undo")
+			.withDescription("End the current undo group. Executes all actions as one undoable batch, or discards them.")
+			.withReturns("Updated diff state after group is applied or discarded")
+			.withBodyParam(RouteParameter(RestApiIds::cancel, "If true, discard the group without executing").withDefault("false")));
+		
+		// ApiRoute::UndoBack
+		m.add(RouteMetadata(ApiRoute::UndoBack, "api/undo/back")
+			.withMethod(RestServer::POST)
+			.withCategory("undo")
+			.withDescription("Undo the last action or group. Stops at group boundaries.")
+			.withReturns("Updated diff state after undo; 400 when nothing to undo"));
+		
+		// ApiRoute::UndoForward
+		m.add(RouteMetadata(ApiRoute::UndoForward, "api/undo/forward")
+			.withMethod(RestServer::POST)
+			.withCategory("undo")
+			.withDescription("Redo the next action or group. Stops at group boundaries.")
+			.withReturns("Updated diff state after redo; 400 when nothing to redo"));
+		
+		// ApiRoute::UndoDiff
+		m.add(RouteMetadata(ApiRoute::UndoDiff, "api/undo/diff")
+			.withCategory("undo")
+			.withDescription("Returns the current diff state showing active changes")
+			.withReturns("Diff array with scope, depth, groupName, and action entries")
+			.withQueryParam(RouteParameter(RestApiIds::scope, "group = current group only, root = full stack").withDefault("group"))
+			.withQueryParam(RouteParameter(RestApiIds::domain, "Filter by domain (e.g., builder, ui)").asOptional())
+			.withQueryParam(RouteParameter(RestApiIds::flatten, "If true, compute net effect merging cancelling actions").withDefault("false")));
+		
+		// ApiRoute::UndoHistory
+		m.add(RouteMetadata(ApiRoute::UndoHistory, "api/undo/history")
+			.withCategory("undo")
+			.withDescription("Returns the full undo history including redo buffer and cursor position")
+			.withReturns("History array with cursor position, group nesting, and action entries")
+			.withQueryParam(RouteParameter(RestApiIds::scope, "group = current group only, root = full stack with nested groups").withDefault("group"))
+			.withQueryParam(RouteParameter(RestApiIds::domain, "Filter by domain (e.g., builder, ui)").asOptional())
+			.withQueryParam(RouteParameter(RestApiIds::flatten, "If true, flatten group nesting to a single list").withDefault("false")));
+		
+		// ApiRoute::UndoClear
+		m.add(RouteMetadata(ApiRoute::UndoClear, "api/undo/clear")
+			.withMethod(RestServer::POST)
+			.withCategory("undo")
+			.withDescription("Clear the entire undo history and exit all groups")
+			.withReturns("Empty diff state"));
+		
 		// Verify count matches enum
 		jassert(m.size() == (int)ApiRoute::numRoutes);
 		
@@ -1669,22 +1756,6 @@ RestServer::Response RestHelpers::handleScreenshot(MainController* mc, RestServe
 	{
 		cropBounds = fullBounds;
 	}
-	
-#if 0
-	 ============================================
-	 TODO: Christoph implements capture logic here
-	 ============================================
-	 
-	 Requirements:
-	 - Find the ScriptContentComponent (the actual UI component on screen)
-	 - Marshal to message thread for capture
-	 - Use Component::createComponentSnapshot(bounds, true, scale)
-	 - If componentId specified, crop to that component's bounds
-	 - 1 second timeout - return error if exceeded
-	 - Handle case where UI is mid-compilation gracefully
-	
-	 Suggested structure:
-#endif
 	
 	Image capturedImage;
 	bool captureSuccess = false;
@@ -3060,6 +3131,574 @@ RestServer::Response RestHelpers::handleShutdown(MainController* mc,
 	});
 
 	return req->waitForResponse();
+}
+
+// ============================================================================
+// Builder Endpoint Handlers
+// ============================================================================
+
+RestServer::Response RestHelpers::handleBuilderTree(MainController* mc, 
+                                                     RestServer::AsyncRequest::Ptr req)
+{
+	auto moduleId = req->getRequest()[RestApiIds::moduleId];
+	
+	Processor* root = mc->getMainSynthChain();
+	
+	
+
+	auto group = req->getRequest()[RestApiIds::group];
+
+	
+	
+
+	TreeOptions o;
+
+	auto includeParams = req->getRequest()[RestApiIds::queryParameters];
+	o.includeParameters = includeParams.isEmpty() ? true : (bool)includeParams.getIntValue();
+	o.verbose = (bool)req->getRequest()[RestApiIds::verbose].getIntValue();
+
+	var tree;
+
+	if (group.isNotEmpty())
+	{
+		if(group != "current")
+			return req->fail(501, "only current group is supported");
+
+		auto um = RestServerUndoManager::Instance::getOrCreate(mc, ApiRoute::BuilderTree);
+		auto v = um->getValidationPlan();
+		auto treeToUse = v;
+
+		if (moduleId.isNotEmpty())
+		{
+			treeToUse = ValueTree();
+
+			valuetree::Helpers::forEach(v, [&](const ValueTree& mv)
+			{
+				if (mv[PropertyIds::ID].toString() == moduleId)
+				{
+					treeToUse = mv;
+					return true;
+				}
+
+				return false;
+			});
+
+			if (!treeToUse.isValid())
+				return req->fail(404, "Module not found: " + moduleId);
+		}
+
+		if (!treeToUse.isValid())
+			return req->fail(400, group == "current" ? "No current group" : "group not found");
+
+		tree = buildModuleTree({ nullptr, treeToUse }, o);
+	}
+	else
+	{
+		if (moduleId.isNotEmpty())
+			root = findProcessorByName(mc, moduleId);
+
+		if (root == nullptr)
+			return req->fail(404, "Module not found: " + moduleId);
+
+		tree = buildModuleTree({ root, ValueTree() }, o);
+	}
+
+	DynamicObject::Ptr result = new DynamicObject();
+	result->setProperty(RestApiIds::success, true);
+	result->setProperty(RestApiIds::result, tree); // TODO: set to buildModuleTree(root)
+	result->setProperty(RestApiIds::logs, Array<var>());
+	result->setProperty(RestApiIds::errors, Array<var>());
+	
+	req->complete(RestServer::Response::ok(var(result.get())));
+	return req->waitForResponse();
+}
+
+
+
+hise::ControlledObject* BackendProcessor::getOrCreateRestServerBuildUndoManager()
+{
+	if (buildUndoManager == nullptr)
+		buildUndoManager = new RestServerUndoManager::Instance(this);
+
+	return buildUndoManager.get();
+}
+
+RestServer::Response RestHelpers::handleBuilderApply(MainController* mc,
+                                                      RestServer::AsyncRequest::Ptr req)
+{
+	static constexpr ApiRoute CurrentEndpoint = ApiRoute::BuilderApply;
+
+	std::vector<RestServerUndoManager::CallStack> errorCallstack;
+
+	req->setUseCustomErrors(true);
+	auto obj = req->getRequest().getJsonBody();
+	
+	// --- Field validation ---
+	
+	auto ops = obj[RestApiIds::operations];
+	if (!ops.isArray())
+		return req->fail(400, "operations must be an array");
+	
+	if (ops.size() == 0)
+		return req->fail(400, "operations array must not be empty");
+	
+	auto p = mc->getMainSynthChain();
+	auto noErrors = true;
+	
+	// Phase 3: Execute via undo manager
+	auto um = RestServerUndoManager::Instance::getOrCreate(mc, CurrentEndpoint);
+	
+	// Phase 1: Validate required fields per operation type
+	for (int i = 0; i < ops.size(); i++)
+	{
+		auto op = ops[i];
+		
+		auto ok = um->prevalidate(RestServerUndoManager::Domain::Builder, ops[i]);
+
+		if (!ok)
+		{
+			noErrors = false;
+
+			errorCallstack.push_back(RestServerUndoManager::CallStack(ok.getErrorMessage())
+				.withGroup(um->getCurrentGroupId())
+				.withPhase(RestServerUndoManager::CallStack::Phase::Prevalidation)
+				.withOperation(i, ops[i]["op"].toString())
+				.withEndpoint(CurrentEndpoint));
+
+			//debugError(p, "operations[" + String(i) + "]: " + ok.getErrorMessage());
+			continue;
+		}
+
+	}
+	
+	if (!noErrors)
+	{
+		//debugError(p, "Rejected batch: some operations failed validation");
+		
+		DynamicObject::Ptr result = new DynamicObject();
+		result->setProperty(RestApiIds::success, false);
+		result->setProperty(RestApiIds::result, var());
+		result->setProperty(RestApiIds::logs, Array<var>());
+		result->setProperty(RestApiIds::errors, RestServerUndoManager::CallStack::toJSONList(errorCallstack));
+		req->complete(RestServer::Response::ok(var(result.get())));
+		return req->waitForResponse();
+	}
+	
+	using ActionBase = RestServerUndoManager::ActionBase;
+	ActionBase::List actions;
+	
+	for (int i = 0; i < ops.size(); i++)
+	{
+		auto op = ops[i];
+
+		auto ad = um->createAction(RestServerUndoManager::Domain::Builder, op);
+		auto ok = ad->validate();
+
+		if (ok)
+			actions.add(ad);
+		else
+		{
+			errorCallstack.push_back(RestServerUndoManager::CallStack(ok.getErrorMessage())
+				.withGroup(um->getCurrentGroupId())
+				.withPhase(RestServerUndoManager::CallStack::Phase::Validation)
+				.withOperation(i, ad->getDescription())
+				.withEndpoint(CurrentEndpoint));
+
+			noErrors = false;
+			//debugError(p, "operations[" + String(i) + "]: " + ok.getErrorMessage());
+		}
+	}
+	
+	if (!noErrors)
+	{
+		//debugError(p, "Rejected batch: some operations failed validation");
+		
+		DynamicObject::Ptr result = new DynamicObject();
+		result->setProperty(RestApiIds::success, false);
+		result->setProperty(RestApiIds::result, var());
+		result->setProperty(RestApiIds::logs, Array<var>());
+		result->setProperty(RestApiIds::errors, RestServerUndoManager::CallStack::toJSONList(errorCallstack));
+		req->complete(RestServer::Response::ok(var(result.get())));
+		return req->waitForResponse();
+	}
+	
+	um->setValidationErrors(errorCallstack);
+
+	um->performAction(req, actions, [](ActionBase::List l, bool undo)
+	{
+		if (!l.isEmpty())
+		{
+			auto mc = l.getFirst()->getMainController();
+			
+			int rl = 0;
+
+			for (auto a : l)
+				rl |= a->getRebuildLevel(RestServerUndoManager::Domain::Builder, undo);
+
+			if(rl & RestServerUndoManager::RebuildLevel::UniqueId)
+				PresetHandler::setUniqueIdsForProcessor(mc->getMainSynthChain());
+
+			for (auto a : l)
+				debugToConsole(mc->getMainSynthChain(), a->getHistoryMessage(undo));
+		}
+	});
+	
+	return req->waitForResponse();
+}
+
+// ============================================================================
+// Undo Endpoint Handlers
+// ============================================================================
+
+RestServer::Response RestHelpers::handleUndoPushGroup(MainController* mc,
+                                                       RestServer::AsyncRequest::Ptr req)
+{
+	auto obj = req->getRequest().getJsonBody();
+	
+	auto groupName = obj[RestApiIds::name].toString();
+	if (groupName.isEmpty())
+		return req->fail(400, "name is required");
+	
+	auto um = RestServerUndoManager::Instance::getOrCreate(mc, ApiRoute::UndoPushGroup);
+	
+	um->pushPlan(groupName);
+	
+	auto result = RestServerUndoManager::Instance::getResponse({}, um->getDiffJSON(true, true));
+	req->complete(result);
+	return req->waitForResponse();
+}
+
+RestServer::Response RestHelpers::handleUndoPopGroup(MainController* mc,
+                                                      RestServer::AsyncRequest::Ptr req)
+{
+	auto um = RestServerUndoManager::Instance::getOrCreate(mc, ApiRoute::UndoPopGroup);
+	
+	req->setUseCustomErrors(true);
+
+	if (!um->popPlan(req))
+		return req->fail(400, "Not inside a group");
+	
+	// popPlan reads cancel from the request body internally.
+	// When cancel=false, popPlan calls performAction which completes the request.
+	// When cancel=true, popPlan just pops without executing, so we complete here.
+	auto obj = req->getRequest().getJsonBody();
+	bool shouldCancel = (bool)obj.getProperty(RestApiIds::cancel, false);
+	
+	if (shouldCancel)
+	{
+		auto result = RestServerUndoManager::Instance::getResponse({}, um->getDiffJSON(true, true));
+		req->complete(result);
+	}
+	
+	return req->waitForResponse();
+}
+
+RestServer::Response RestHelpers::handleUndoBack(MainController* mc,
+                                                  RestServer::AsyncRequest::Ptr req)
+{
+	req->setUseCustomErrors(true);
+
+	auto um = RestServerUndoManager::Instance::getOrCreate(mc, ApiRoute::UndoBack);
+	
+	if (!um->undo(req))
+	{
+		return req->fail(400, "nothing to undo");
+	}
+	
+	return req->waitForResponse();
+}
+
+RestServer::Response RestHelpers::handleUndoForward(MainController* mc,
+                                                     RestServer::AsyncRequest::Ptr req)
+{
+	req->setUseCustomErrors(true);
+
+	auto um = RestServerUndoManager::Instance::getOrCreate(mc, ApiRoute::UndoForward);
+	
+	if (!um->redo(req))
+	{
+		return req->fail(400, "nothing to redo");
+	}
+	
+	return req->waitForResponse();
+}
+
+RestServer::Response RestHelpers::handleUndoDiff(MainController* mc,
+                                                  RestServer::AsyncRequest::Ptr req)
+{
+	auto scopeStr = req->getRequest()[RestApiIds::scope];
+	auto domainFilter = req->getRequest()[RestApiIds::domain];
+	bool shouldFlatten = req->getRequest()[RestApiIds::flatten].getIntValue() != 0;
+	
+	if (scopeStr.isEmpty()) 
+		scopeStr = "group";
+	
+	if (scopeStr != "group" && scopeStr != "root")
+		return req->fail(400, "scope must be 'group' or 'root'");
+	
+	auto um = RestServerUndoManager::Instance::getOrCreate(mc, ApiRoute::UndoDiff);
+	
+	auto group = scopeStr == "group";
+
+	auto domainIndex = RestServerUndoManager::getDomains().indexOf(domainFilter);
+
+	RestServerUndoManager::Domain d = RestServerUndoManager::Domain::Undefined;
+
+	if (domainIndex != -1)
+		d = (RestServerUndoManager::Domain)domainIndex;
+
+	auto result = RestServerUndoManager::Instance::getResponse({}, um->getDiffJSON(shouldFlatten, group, d));
+
+	req->complete(result);
+	return req->waitForResponse();
+}
+
+RestServer::Response RestHelpers::handleUndoHistory(MainController* mc,
+                                                     RestServer::AsyncRequest::Ptr req)
+{
+	auto scopeStr = req->getRequest()[RestApiIds::scope];
+	auto domainFilter = req->getRequest()[RestApiIds::domain];
+	bool shouldFlatten = req->getRequest()[RestApiIds::flatten].getIntValue() != 0;
+	
+	if (scopeStr.isEmpty()) scopeStr = "group";
+	
+	if (scopeStr != "group" && scopeStr != "root")
+		return req->fail(400, "scope must be 'group' or 'root'");
+	
+	auto um = RestServerUndoManager::Instance::getOrCreate(mc, ApiRoute::UndoHistory);
+	
+	auto group = scopeStr == "group";
+	
+	auto domainIndex = RestServerUndoManager::getDomains().indexOf(domainFilter);
+	
+	RestServerUndoManager::Domain d = RestServerUndoManager::Domain::Undefined;
+	
+	if (domainIndex != -1)
+		d = (RestServerUndoManager::Domain)domainIndex;
+	
+	auto result = RestServerUndoManager::Instance::getResponse({}, um->getHistory(shouldFlatten, group, d));
+	
+	req->complete(result);
+	return req->waitForResponse();
+}
+
+RestServer::Response RestHelpers::handleUndoClear(MainController* mc,
+                                                   RestServer::AsyncRequest::Ptr req)
+{
+	auto um = RestServerUndoManager::Instance::getOrCreate(mc, ApiRoute::UndoClear);
+	
+	um->clearUndoHistory();
+	
+	auto result = RestServerUndoManager::Instance::getResponse({}, um->getDiffJSON(true, true));
+	req->complete(result);
+	return req->waitForResponse();
+}
+
+// ============================================================================
+// Builder Helper Methods
+// ============================================================================
+
+int RestHelpers::resolveChainIndex(const String& chainName)
+{
+	auto lower = chainName.toLowerCase();
+	
+	if (lower == "direct") return raw::IDs::Chains::Direct;
+	if (lower == "midi")   return raw::IDs::Chains::Midi;
+	if (lower == "gain")   return raw::IDs::Chains::Gain;
+	if (lower == "pitch")  return raw::IDs::Chains::Pitch;
+	if (lower == "fx")     return raw::IDs::Chains::FX;
+	
+	return -2; // Invalid
+}
+
+String RestHelpers::getChainName(int chainIndex)
+{
+	if (chainIndex == raw::IDs::Chains::Direct) return "direct";
+	if (chainIndex == raw::IDs::Chains::Midi)   return "midi";
+	if (chainIndex == raw::IDs::Chains::Gain)   return "gain";
+	if (chainIndex == raw::IDs::Chains::Pitch)  return "pitch";
+	if (chainIndex == raw::IDs::Chains::FX)     return "fx";
+	
+	return "unknown";
+}
+
+bool RestHelpers::validateTypeForChain(const Identifier& typeId, 
+                                        int chainIndex, 
+                                        DynamicObject::Ptr hints)
+{
+	ProcessorMetadataRegistry registry;
+	auto md = registry.get(typeId);
+	jassert(md != nullptr); // Should be checked by caller
+	
+	StringArray validChains;
+	
+	// Map metadata type to valid chains
+	if (md->type == ProcessorMetadataIds::Modulator)
+	{
+		validChains.add("gain");
+		validChains.add("pitch");
+	}
+	else if (md->type == ProcessorMetadataIds::Effect)
+	{
+		validChains.add("fx");
+	}
+	else if (md->type == ProcessorMetadataIds::MidiProcessor)
+	{
+		validChains.add("midi");
+	}
+	else if (md->type == ProcessorMetadataIds::SoundGenerator)
+	{
+		validChains.add("direct");
+	}
+	
+	hints->setProperty(RestApiIds::validChains, var(validChains));
+	
+	// Check if requested chain is valid
+	String requestedChain = getChainName(chainIndex);
+	return validChains.contains(requestedChain);
+}
+
+Processor* RestHelpers::findProcessorByName(MainController* mc, const String& name)
+{
+	return ProcessorHelpers::getFirstProcessorWithName(
+		mc->getMainSynthChain(), name);
+}
+
+var RestHelpers::buildModuleTree(const ProcessorOrValueTree& root, const TreeOptions& options)
+{
+	auto md = root.getMetadata();
+	auto metadata = md.toJSON();
+
+	auto obj = metadata.getDynamicObject();
+
+	if (!options.verbose)
+	{
+		obj->removeProperty("description");
+		obj->removeProperty("builderPath");
+		obj->removeProperty("metadataType");
+		obj->removeProperty("interfaces");
+	}
+
+	obj->setProperty("bypassed", root.isBypassed());
+	obj->setProperty("processorId", root.getId());
+	obj->setProperty("colour", root.getColour());
+
+	if (options.includeParameters)
+	{
+		auto parameters = metadata["parameters"];
+		jassert(parameters.size() == md.parameters.size());
+		int idx = 0;
+
+		for (const auto& p : md.parameters)
+		{
+			auto po = parameters[idx].getDynamicObject();
+
+			if (root.isRuntimeData())
+			{
+				auto value = root.getAttribute(p.parameterIndex);
+				auto normValue = p.range.convertTo0to1(value, false);
+				String valueAsString = p.vtc.active ? p.vtc(value) : String(value);
+
+				po->setProperty("value", value);
+				po->setProperty("valueNormalized", normValue);
+				po->setProperty("valueAsString", valueAsString);
+			}
+
+			if (!options.verbose)
+			{
+				po->removeProperty("description");
+				po->removeProperty("metadataType");
+				po->removeProperty("mode");
+				po->removeProperty("type");
+				po->removeProperty("unit");
+			}
+
+			idx++;
+		}
+	}
+	else
+	{
+		obj->removeProperty("parameters");
+	}
+
+	if (md.type == ProcessorMetadataIds::SoundGenerator)
+	{
+		auto mp = root.getChild(ModulatorSynth::InternalChains::MidiProcessor);
+
+		Array<var> midiProcessors;
+		
+		for (int i = 0; i < mp.getNumChildren(); i++)
+			midiProcessors.add(buildModuleTree(mp.getChild(i), options));
+		
+		obj->setProperty("midi", var(midiProcessors));
+		
+		Array<var> fxProcessors;
+
+		auto fx = root.getChild(ModulatorSynth::InternalChains::EffectChain);
+
+		for (int i = 0; i < fx.getNumChildren(); i++)
+			fxProcessors.add(buildModuleTree(fx.getChild(i), options));
+
+		obj->setProperty("fx", var(fxProcessors));
+
+		if (md.hasChildren)
+		{
+			Array<var> children;
+
+			auto offset = md.modulation.size() + 2;
+
+			for (int i = offset; i < root.getNumChildren(); i++)
+			{
+				auto cp = root.getChild(i);
+				children.add(buildModuleTree(cp, options));
+			}
+
+			obj->setProperty("children", var(children));
+		}
+	}
+
+	auto modData = obj->getProperty("modulation");
+
+	if (auto md = modData.getArray())
+	{
+		for (auto& modChain : *md)
+		{
+			if (modChain["disabled"])
+				continue;
+
+			auto mo = modChain.getDynamicObject();
+
+			if (!options.verbose)
+			{
+				mo->removeProperty("description");
+				mo->removeProperty("metadataType");
+			}
+
+			auto idx = (int)modChain["chainIndex"];
+			auto mc = root.getChild(idx);
+
+			Array<var> children;
+
+			if(mc.getType() == ModulatorChain::getClassType())
+			{
+				mo->setProperty("colour", mc.getColour());
+
+				for (int i = 0; i < mc.getNumChildren(); i++)
+					children.add(buildModuleTree(mc.getChild(i), options));
+			}
+
+			modChain.getDynamicObject()->setProperty("children", var(children));
+		}
+	}
+
+	return metadata;
+}
+
+Array<var> RestHelpers::buildChainArray(Processor* parent, int chainIndex)
+{
+	// TODO: Implement chain array building
+	// Get chain from parent, iterate processors, call buildModuleTree on each
+	return Array<var>();
 }
 
 } // namespace hise

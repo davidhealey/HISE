@@ -127,6 +127,26 @@ public:
         testParseCSSFromFile();
         testParseCSSEmptyCode();
         testShutdown();
+        testBuilderTree();
+        testBuilderApply();
+        testBuilderCloneNestedModules();
+        
+        testBuilderChildOpsFailAfterParentDeleted();
+        testBuilderApplyMissingOp();
+        testBuilderApplyUnknownOp();
+        testBuilderApplyMissingFields();
+        testUndoPushGroup();
+		testPlanValidationRemoveThenSetIdFails();
+		testPlanValidationRenameThenRemoveOldNameFails();
+		testPlanValidationAddRemoveAddSameIdSucceeds();
+		testPlanValidationRemoveParentThenChildOpFails();
+
+        testUndoPopGroup();
+        testUndoBack();
+        testUndoForward();
+        testUndoDiff();
+        testUndoHistory();
+        testUndoClear();
         
         // Verify all endpoints were tested
         verifyAllEndpointsTested();
@@ -1058,9 +1078,7 @@ private:
         auto response = ctx->httpPost("/api/repl", JSON::toString(var(bodyObj.get())));
         var json = ctx->parseJson(response);
         
-        expect((bool)json["error"], "Should have error flag");
-        expect(json["message"].toString().contains("expression"),
-               "Error message should mention expression");
+        expectErrorMessageContains(json, "expression");
     }
     
     //==========================================================================
@@ -1079,9 +1097,7 @@ private:
         auto response = ctx->httpPost("/api/repl", JSON::toString(var(bodyObj.get())));
         var json = ctx->parseJson(response);
         
-        expect((bool)json["error"], "Should have error flag");
-        expect(json["message"].toString().contains("moduleId"),
-               "Error message should mention moduleId");
+        expectErrorMessageContains(json, "moduleId");
     }
     
     //==========================================================================
@@ -1100,9 +1116,7 @@ private:
         auto response = ctx->httpPost("/api/repl", JSON::toString(var(bodyObj.get())));
         var json = ctx->parseJson(response);
         
-        expect((bool)json["error"], "Should have error flag");
-        expect(json["message"].toString().contains("not found"),
-               "Error message should mention not found");
+        expectErrorMessageContains(json, "not found");
     }
     
     //==========================================================================
@@ -2172,8 +2186,7 @@ private:
         auto response = ctx->httpGet("/api/screenshot?moduleId=Interface&id=NonExistent");
         var json = ctx->parseJson(response);
         
-        expect(!(bool)json["success"], "Should fail for non-existent component");
-        expect(json.hasProperty("error"), "Should have error message");
+        expectErrorMessageContains(json, "component not found");
     }
     
     //==========================================================================
@@ -2346,8 +2359,7 @@ private:
             auto response = ctx->httpGet("/api/screenshot?moduleId=Interface&outputPath=C:/temp/screenshot.jpg");
             var json = ctx->parseJson(response);
             
-            expect(!(bool)json["success"], "Should fail for non-.png extension");
-            expect(json["message"].toString().containsIgnoreCase(".png"), "Error should mention .png extension");
+            expectErrorMessageContains(json, ".png");
         }
         
         // Test: parent directory doesn't exist
@@ -2356,8 +2368,7 @@ private:
                                           + URL::addEscapeChars("C:/nonexistent_dir_12345/screenshot.png", true));
             var json = ctx->parseJson(response);
             
-            expect(!(bool)json["success"], "Should fail for non-existent parent directory");
-            expect(json["message"].toString().containsIgnoreCase("directory"), "Error should mention directory");
+            expectErrorMessageContains(json, "directory");
         }
     }
     
@@ -2533,9 +2544,7 @@ private:
         auto response = ctx->httpGet("/api/get_included_files?moduleId=NonExistentModule");
         var json = ctx->parseJson(response);
         
-        expect(!(bool)json["success"], "Should fail for unknown module");
-        expect(json["message"].toString().contains("module not found"),
-               "Error should mention module not found: " + response);
+        expectErrorMessageContains(json, "module not found");
     }
     
     //==========================================================================
@@ -3187,6 +3196,1105 @@ private:
         }
         expect(found, "shutdown should exist in route metadata");
     }
+    
+    void testBuilderTree()
+    {
+        /** Setup: Fresh project with default module tree
+         *  Scenario: Request module tree hierarchy
+         *  Expected: Returns tree structure with master chain
+         */
+        beginTest("GET /api/builder/tree");
+        
+        ctx->reset();
+        
+        auto response = ctx->httpGet("/api/builder/tree");
+        var json = ctx->parseJson(response);
+        
+        expect((bool)json[RestApiIds::success], "Should succeed");
+        expect(json.hasProperty(RestApiIds::result), "Should contain result");
+        expect(json[RestApiIds::errors].isArray(), "errors should be array");
+        expectEquals<int>(json[RestApiIds::errors].size(), 0, "Should have no errors");
+    }
+    
+    /** Directly deletes the processor - this can be used to simulate data model drift from an external operation. */
+	void deleteProcessor(const String& moduleId)
+	{
+		if (auto p = ProcessorHelpers::getFirstProcessorWithName(ctx->mc->getMainSynthChain(), moduleId))
+		{
+			//rest_undo::builder::Helpers::deleteProcessorAsync(p);
+
+			if (auto c = dynamic_cast<Chain*>(p->getParentProcessor(false)))
+				c->getHandler()->remove(p, true);
+		}
+	}
+
+    void expectNoBuilderError(const var& json)
+    {
+        expect((bool)json[RestApiIds::success], "Should succeed");
+
+        auto e = json[RestApiIds::errors];
+		expect(json.hasProperty(RestApiIds::result), "Should contain result");
+		//expect(json[RestApiIds::logs].isArray(), "logs should be array");
+		expect(e.isArray(), "errors should be array");
+		//expectEquals<int>(e.size(), 0, "Should not contain errors");
+
+        if (e.isArray())
+        {
+            for (auto& er : *e.getArray())
+                expect(false, er["errorMessage"].toString());            
+        }
+    }
+
+    void expectErrorMessageContains(const var& json, const String& text)
+    {
+        expect(!(bool)json[RestApiIds::success], "Should fail");
+        expect(json[RestApiIds::errors].isArray(), "Should have errors array");
+        expect(json[RestApiIds::errors].size() > 0, "Should have at least one error");
+
+        if (json[RestApiIds::errors].isArray() && json[RestApiIds::errors].size() > 0)
+        {
+            auto msg = json[RestApiIds::errors][0][RestApiIds::errorMessage].toString();
+            expect(msg.containsIgnoreCase(text), "Error should mention " + text + ": " + msg);
+        }
+    }
+
+    void resetBuilderState()
+    {
+        ctx->reset();
+        auto clearJson = ctx->parseJson(ctx->httpPost("/api/undo/clear", "{}"));
+        expect((bool)clearJson[RestApiIds::success], "undo/clear should succeed during builder reset");
+    }
+
+    var postBuilderOps(const Array<var>& ops)
+    {
+        DynamicObject::Ptr bodyObj = new DynamicObject();
+        bodyObj->setProperty(RestApiIds::operations, var(ops));
+        auto response = ctx->httpPost("/api/builder/apply", JSON::toString(var(bodyObj.get())));
+        return ctx->parseJson(response);
+    }
+
+    var makeAddOp(const String& type, const String& name,
+                  const String& parent = "Master Chain", int chain = -1)
+    {
+        DynamicObject::Ptr op = new DynamicObject();
+        op->setProperty(RestApiIds::op, "add");
+        op->setProperty(RestApiIds::type, type);
+        op->setProperty(RestApiIds::parent, parent);
+        op->setProperty(RestApiIds::chain, chain);
+        op->setProperty(RestApiIds::name, name);
+        return var(op.get());
+    }
+
+    var makeSetBypassedOp(const String& target, bool value)
+    {
+        DynamicObject::Ptr op = new DynamicObject();
+        op->setProperty(RestApiIds::op, "set_bypassed");
+        op->setProperty(RestApiIds::target, target);
+        op->setProperty(RestApiIds::bypassed, value);
+        return var(op.get());
+    }
+
+    var makeSetIdOp(const String& target, const String& name)
+    {
+        DynamicObject::Ptr op = new DynamicObject();
+        op->setProperty(RestApiIds::op, "set_id");
+        op->setProperty(RestApiIds::target, target);
+        op->setProperty(RestApiIds::name, name);
+        return var(op.get());
+    }
+
+    var makeRemoveOp(const String& target)
+    {
+        DynamicObject::Ptr op = new DynamicObject();
+        op->setProperty(RestApiIds::op, "remove");
+        op->setProperty(RestApiIds::target, target);
+        return var(op.get());
+    }
+
+    var makeCloneOp(const String& source, int count)
+    {
+        DynamicObject::Ptr op = new DynamicObject();
+        op->setProperty(RestApiIds::op, "clone");
+        op->setProperty(RestApiIds::source, source);
+        op->setProperty(RestApiIds::count, count);
+        return var(op.get());
+    }
+
+    var makeSetAttributesOp(const String& target, const NamedValueSet& kv)
+    {
+        DynamicObject::Ptr attrs = new DynamicObject();
+
+        for (int i = 0; i < kv.size(); i++)
+            attrs->setProperty(kv.getName(i), kv.getValueAt(i));
+
+        DynamicObject::Ptr op = new DynamicObject();
+        op->setProperty(RestApiIds::op, "set_attributes");
+        op->setProperty(RestApiIds::target, target);
+        op->setProperty(RestApiIds::mode, "value");
+        op->setProperty(RestApiIds::attributes, var(attrs.get()));
+        return var(op.get());
+    }
+
+    void expectBuilderProcessorExists(const String& moduleName)
+    {
+        auto ok = ProcessorHelpers::getFirstProcessorWithName(ctx->mc->getMainSynthChain(), moduleName) != nullptr;
+        expect(ok, moduleName + " does not exist");
+    }
+
+	void expectBuilderProcessorRemoved(const String& moduleName)
+	{
+		auto ok = ProcessorHelpers::getFirstProcessorWithName(ctx->mc->getMainSynthChain(), moduleName) == nullptr;
+		expect(ok, moduleName + " is not removed");
+	}
+
+	void expectBuilderProcessorBypassed(const String& moduleName, bool expectedValue)
+	{
+		auto p = ProcessorHelpers::getFirstProcessorWithName(ctx->mc->getMainSynthChain(), moduleName);
+		expect(p != nullptr, moduleName + " not found");
+
+		if (p != nullptr)
+		{
+			String m;
+			m << moduleName;
+			m << (expectedValue ? " should be bypassed" : " should not be bypassed");
+			expect(p->isBypassed() == expectedValue, m);
+		}
+	}
+
+    void expectBuilderProcessorAttribute(const String& moduleName, const String& parameterId, float value)
+    {
+		auto p = ProcessorHelpers::getFirstProcessorWithName(ctx->mc->getMainSynthChain(), moduleName);
+		expect(p != nullptr, moduleName + " not found");
+
+		if (p != nullptr)
+		{
+			auto idx = p->getParameterIndexForIdentifier(Identifier(parameterId));
+			expect(idx >= 0, moduleName + ": unknown parameter " + parameterId);
+
+			if (idx >= 0)
+			{
+				auto actualValue = p->getAttribute(idx);
+				String m;
+				m << moduleName << "." << parameterId << "=" << String(value);
+				expectWithinAbsoluteError<float>(actualValue, value, 0.01f, m);
+			}
+		}
+    }
+
+	void expectDiffEntry(const var& json, int index, const String& action,
+		const String& target, const String& domain = "builder")
+	{
+		auto diff = json[RestApiIds::result][RestApiIds::diff];
+		expect(diff.isArray(), "result.diff should be array");
+		expect(index >= 0 && index < diff.size(), "Diff index out of range");
+
+		if (index >= 0 && index < diff.size())
+		{
+			expectEquals(diff[index]["domain"].toString(), domain);
+			expectEquals(diff[index]["action"].toString(), action);
+			expectEquals(diff[index]["target"].toString(), target);
+		}
+	}
+
+	void expectHasNestedChild(const String& parentId, const String& childId)
+	{
+		auto p = ProcessorHelpers::getFirstProcessorWithName(ctx->mc->getMainSynthChain(), parentId);
+		expect(p != nullptr, parentId + " not found");
+
+		if (p != nullptr)
+		{
+			auto c = ProcessorHelpers::getFirstProcessorWithName(p, childId);
+			expect(c != nullptr, parentId + " should contain child " + childId);
+		}
+	}
+
+	void expectErrorPhase(const var& json, const String& phase)
+	{
+		expect(json[RestApiIds::errors].isArray(), "errors should be array");
+		expect(json[RestApiIds::errors].size() > 0, "response should contain at least one error");
+
+		if (json[RestApiIds::errors].isArray() && json[RestApiIds::errors].size() > 0)
+		{
+			auto cs = json[RestApiIds::errors][0][RestApiIds::callstack];
+			expect(cs.isArray() && cs.size() >= 4, "callstack should contain op / phase / group / endpoint frames");
+			if (cs.isArray() && cs.size() >= 2)
+				expectEquals(cs[1].toString(), String("phase: ") + phase);
+		}
+	}
+
+    void testBuilderApply()
+    {
+        /** Setup: Fresh project
+         *  Scenario: Batch add a SineSynth and set its attributes
+         *  Expected: Operations are applied successfully
+         */
+        beginTest("POST /api/builder/apply");
+        
+        resetBuilderState();
+
+        Array<var> ops;
+        ops.add(makeAddOp("SineSynth", "MySine"));
+
+        auto json = postBuilderOps(ops);
+
+        expectNoBuilderError(json);
+        expectBuilderProcessorExists("MySine");
+        expectBuilderProcessorBypassed("MySine", false);
+        expectEquals<int>(json[RestApiIds::result][RestApiIds::diff].size(), 1,
+            "Initial add should produce one diff item");
+        expectDiffEntry(json, 0, "+", "MySine");
+
+        auto result = json[RestApiIds::result];
+        expect(result.isObject(), "result should be an object");
+        expect(result[RestApiIds::diff].isArray(), "result.diff should be array");
+
+        Array<var> ops2;
+        ops2.add(makeSetBypassedOp("MySine", true));
+        ops2.add(makeSetIdOp("MySine", "MySineRenamed"));
+
+        json = postBuilderOps(ops2);
+
+        expectNoBuilderError(json);
+
+        expectBuilderProcessorRemoved("MySine");
+        expectBuilderProcessorExists("MySineRenamed");
+        expectBuilderProcessorBypassed("MySineRenamed", true);
+        expectDiffEntry(json, 0, "+", "MySineRenamed");
+
+        Array<var> ops3;
+        NamedValueSet attrs;
+        attrs.set("SaturationAmount", 0.25);
+        attrs.set("OctaveTranspose", -3.0);
+        attrs.set("SemiTones", 4.0);
+        ops3.add(makeSetAttributesOp("MySineRenamed", attrs));
+
+        json = postBuilderOps(ops3);
+        expectNoBuilderError(json);
+        expectBuilderProcessorAttribute("MySineRenamed", "SaturationAmount", 0.25f);
+        expectBuilderProcessorAttribute("MySineRenamed", "OctaveTranspose", -3.0f);
+        expectBuilderProcessorAttribute("MySineRenamed", "SemiTones", 4.0f);
+        expectDiffEntry(json, 0, "+", "MySineRenamed");
+
+        auto undoJson = ctx->parseJson(ctx->httpPost("/api/undo/back", "{}"));
+        expectNoBuilderError(undoJson);
+        expectBuilderProcessorAttribute("MySineRenamed", "SaturationAmount", 0.0f);
+
+        auto redoJson = ctx->parseJson(ctx->httpPost("/api/undo/forward", "{}"));
+        expectNoBuilderError(redoJson);
+        expectBuilderProcessorAttribute("MySineRenamed", "SaturationAmount", 0.25f);
+
+    }
+
+    void testBuilderCloneNestedModules()
+    {
+        /** Setup: Parent module with nested child
+         *  Scenario: Clone parent once
+         *  Expected: Cloned parent exists and contains nested child module type
+         */
+        beginTest("POST /api/builder/apply (clone nested modules)");
+
+        resetBuilderState();
+
+        Array<var> seedOps;
+        seedOps.add(makeAddOp("SineSynth", "NestedParent"));
+        auto seedJson = postBuilderOps(seedOps);
+        expectNoBuilderError(seedJson);
+
+        seedOps.clear();
+        seedOps.add(makeAddOp("LFO", "NestedChild", "NestedParent", 1));
+        seedJson = postBuilderOps(seedOps);
+        expectNoBuilderError(seedJson);
+        expectBuilderProcessorExists("NestedParent");
+        expectBuilderProcessorExists("NestedChild");
+        expectHasNestedChild("NestedParent", "NestedChild");
+
+        Array<var> cloneOps;
+        cloneOps.add(makeCloneOp("NestedParent", 1));
+        auto cloneJson = postBuilderOps(cloneOps);
+        expectNoBuilderError(cloneJson);
+
+        auto diff = cloneJson[RestApiIds::result][RestApiIds::diff];
+        expect(diff.isArray(), "diff should be array");
+        expect(diff.size() >= 1, "clone should append at least one diff entry");
+
+        String clonedParentName;
+
+        for (int i = 0; i < diff.size(); i++)
+        {
+            auto action = diff[i]["action"].toString();
+            auto target = diff[i]["target"].toString();
+
+            if (action == "+" && target != "NestedParent")
+            {
+                clonedParentName = target;
+                break;
+            }
+        }
+
+        expect(clonedParentName.isNotEmpty(), "Should find cloned parent name in diff list");
+
+        if (clonedParentName.isNotEmpty())
+        {
+            expectBuilderProcessorExists(clonedParentName);
+
+            auto parent = ProcessorHelpers::getFirstProcessorWithName(ctx->mc->getMainSynthChain(), clonedParentName);
+            expect(parent != nullptr, "Cloned parent must exist");
+
+            bool hasNestedLfo = false;
+
+            if (parent != nullptr)
+            {
+                Processor::Iterator<Processor> iter(parent, false);
+                while (auto p = iter.getNextProcessor())
+                {
+                    if (p->getType().toString() == "LFO")
+                    {
+                        hasNestedLfo = true;
+                        break;
+                    }
+                }
+            }
+
+            expect(hasNestedLfo, "Cloned parent should contain cloned nested LFO child");
+        }
+    }
+
+	void testPlanValidationRemoveThenSetIdFails()
+	{
+		/** Setup: Real module exists, then queued for removal in plan
+		 *  Scenario: Try renaming removed module in same plan
+		 *  Expected: Validation fails (module logically deleted in plan view)
+		 */
+		beginTest("Plan validation: remove then set_id fails");
+
+		resetBuilderState();
+
+		Array<var> seedOps;
+		seedOps.add(makeAddOp("SineSynth", "CaseA"));
+		auto seedJson = postBuilderOps(seedOps);
+		expectNoBuilderError(seedJson);
+
+		DynamicObject::Ptr pushBody = new DynamicObject();
+		pushBody->setProperty(RestApiIds::name, "case-a");
+		auto pushJson = ctx->parseJson(ctx->httpPost("/api/undo/push_group", JSON::toString(var(pushBody.get()))));
+		expectNoBuilderError(pushJson);
+
+		Array<var> ops;
+		ops.add(makeRemoveOp("CaseA"));
+		auto removeJson = postBuilderOps(ops);
+		expectNoBuilderError(removeJson);
+
+		ops.clear();
+		ops.add(makeSetIdOp("CaseA", "CaseARenamed"));
+		auto setIdJson = postBuilderOps(ops);
+		expect(!(bool)setIdJson[RestApiIds::success], "Renaming removed module should fail in plan validation");
+		expectErrorPhase(setIdJson, "validate");
+	}
+
+	void testPlanValidationRenameThenRemoveOldNameFails()
+	{
+		/** Setup: Real module exists, then queued for rename in plan
+		 *  Scenario: Remove using old name in same plan
+		 *  Expected: Validation fails (old name no longer valid)
+		 */
+		beginTest("Plan validation: rename then remove old name fails");
+
+		resetBuilderState();
+
+		Array<var> seedOps;
+		seedOps.add(makeAddOp("SineSynth", "CaseB"));
+		auto seedJson = postBuilderOps(seedOps);
+		expectNoBuilderError(seedJson);
+
+		DynamicObject::Ptr pushBody = new DynamicObject();
+		pushBody->setProperty(RestApiIds::name, "case-b");
+		auto pushJson = ctx->parseJson(ctx->httpPost("/api/undo/push_group", JSON::toString(var(pushBody.get()))));
+		expectNoBuilderError(pushJson);
+
+		Array<var> ops;
+		ops.add(makeSetIdOp("CaseB", "CaseBRenamed"));
+		auto renameJson = postBuilderOps(ops);
+		expectNoBuilderError(renameJson);
+
+		ops.clear();
+		ops.add(makeRemoveOp("CaseB"));
+		auto removeOldJson = postBuilderOps(ops);
+		expect(!(bool)removeOldJson[RestApiIds::success], "Removing old name should fail after rename in plan");
+		expectErrorPhase(removeOldJson, "validate");
+	}
+
+	void testPlanValidationAddRemoveAddSameIdSucceeds()
+	{
+		/** Setup: Empty plan group
+		 *  Scenario: add X, remove X, add X in same plan
+		 *  Expected: All validations pass and pop executes successfully
+		 */
+		beginTest("Plan validation: add/remove/add same id succeeds");
+
+		resetBuilderState();
+
+		DynamicObject::Ptr pushBody = new DynamicObject();
+		pushBody->setProperty(RestApiIds::name, "case-c");
+		auto pushJson = ctx->parseJson(ctx->httpPost("/api/undo/push_group", JSON::toString(var(pushBody.get()))));
+		expectNoBuilderError(pushJson);
+
+		Array<var> ops;
+		ops.add(makeAddOp("SineSynth", "CaseC"));
+		auto add1 = postBuilderOps(ops);
+		expectNoBuilderError(add1);
+
+		ops.clear();
+		ops.add(makeRemoveOp("CaseC"));
+		auto rem = postBuilderOps(ops);
+		expectNoBuilderError(rem);
+
+		ops.clear();
+		ops.add(makeAddOp("SineSynth", "CaseC"));
+		auto add2 = postBuilderOps(ops);
+		expectNoBuilderError(add2);
+
+		DynamicObject::Ptr popBody = new DynamicObject();
+		popBody->setProperty(RestApiIds::cancel, false);
+		auto popJson = ctx->parseJson(ctx->httpPost("/api/undo/pop_group", JSON::toString(var(popBody.get()))));
+		expectNoBuilderError(popJson);
+		expectBuilderProcessorExists("CaseC");
+	}
+
+	void testPlanValidationRemoveParentThenChildOpFails()
+	{
+		/** Setup: Parent + nested child exist
+		 *  Scenario: Queue parent removal, then queue child operation
+		 *  Expected: Child op fails validation because child is logically gone
+		 */
+		beginTest("Plan validation: remove parent then child op fails");
+
+		resetBuilderState();
+
+		Array<var> seedOps;
+		seedOps.add(makeAddOp("SineSynth", "CaseParent"));
+		auto seedJson = postBuilderOps(seedOps);
+		expectNoBuilderError(seedJson);
+
+		seedOps.clear();
+		seedOps.add(makeAddOp("LFO", "CaseChild", "CaseParent", 1));
+		seedJson = postBuilderOps(seedOps);
+		expectNoBuilderError(seedJson);
+
+		DynamicObject::Ptr pushBody = new DynamicObject();
+		pushBody->setProperty(RestApiIds::name, "case-d");
+		auto pushJson = ctx->parseJson(ctx->httpPost("/api/undo/push_group", JSON::toString(var(pushBody.get()))));
+		expectNoBuilderError(pushJson);
+
+		Array<var> ops;
+		ops.add(makeRemoveOp("CaseParent"));
+		auto remParentJson = postBuilderOps(ops);
+		expectNoBuilderError(remParentJson);
+
+		ops.clear();
+        ops.add(makeSetIdOp("CaseChild", "CaseChildRenamed"));
+		auto childOpJson = postBuilderOps(ops);
+		expect(!(bool)childOpJson[RestApiIds::success], "Child op should fail after parent removal in plan");
+		expectErrorPhase(childOpJson, "validate");
+	}
+
+    
+
+    void testBuilderChildOpsFailAfterParentDeleted()
+    {
+        /** Setup: Parent + nested child, then parent is deleted manually
+         *  Scenario: Execute pre-validated child operations via pop_group
+         *  Expected: Each operation fails with phase=runtime because child is gone
+         */
+        beginTest("POST /api/builder/apply (child ops fail after parent delete)");
+
+        auto runRuntimeCase = [this](const var& childOp, const String& label)
+        {
+            resetBuilderState();
+
+            Array<var> seedOps;
+            seedOps.add(makeAddOp("SineSynth", "RuntimeParent"));
+            auto seedJson = postBuilderOps(seedOps);
+            expectNoBuilderError(seedJson);
+
+            seedOps.clear();
+            seedOps.add(makeAddOp("LFO", "RuntimeChild", "RuntimeParent", 1));
+            seedJson = postBuilderOps(seedOps);
+            expectNoBuilderError(seedJson);
+            expectBuilderProcessorExists("RuntimeParent");
+            expectBuilderProcessorExists("RuntimeChild");
+
+            DynamicObject::Ptr pushBody = new DynamicObject();
+            pushBody->setProperty(RestApiIds::name, "runtime-case-" + label);
+            auto pushJson = ctx->parseJson(ctx->httpPost("/api/undo/push_group", JSON::toString(var(pushBody.get()))));
+            expectNoBuilderError(pushJson);
+
+            Array<var> groupedOps;
+            groupedOps.add(childOp);
+            auto groupedJson = postBuilderOps(groupedOps);
+            expectNoBuilderError(groupedJson);
+
+            deleteProcessor("RuntimeParent");
+
+            expectBuilderProcessorRemoved("RuntimeParent");
+            expectBuilderProcessorRemoved("RuntimeChild");
+
+            DynamicObject::Ptr popBody = new DynamicObject();
+            popBody->setProperty(RestApiIds::cancel, false);
+            auto popJson = ctx->parseJson(ctx->httpPost("/api/undo/pop_group", JSON::toString(var(popBody.get()))));
+
+            expect(!(bool)popJson[RestApiIds::success], "Pop should fail for " + label);
+            expect(popJson[RestApiIds::errors].isArray(), "errors should be array for " + label);
+            expect(popJson[RestApiIds::errors].size() > 0, "Should contain runtime error for " + label);
+
+            auto cs = popJson[RestApiIds::errors][0][RestApiIds::callstack];
+            expect(cs.isArray() && cs.size() >= 4, "Callstack should have runtime frames for " + label);
+            expectEquals(cs[1].toString(), String("phase: runtime"), "Phase should be runtime for " + label);
+            expectEquals(cs[3].toString(), String("endpoint: api/undo/pop_group"), "Endpoint should be pop_group for " + label);
+        };
+
+        runRuntimeCase(makeSetBypassedOp("RuntimeChild", true), "set_bypassed");
+        runRuntimeCase(makeSetIdOp("RuntimeChild", "RuntimeChildRenamed"), "set_id");
+
+        NamedValueSet attrs;
+        attrs.set("Intensity", 0.5);
+        runRuntimeCase(makeSetAttributesOp("RuntimeChild", attrs), "set_attributes");
+
+        runRuntimeCase(makeCloneOp("RuntimeChild", 1), "clone");
+        runRuntimeCase(makeRemoveOp("RuntimeChild"), "remove");
+    }
+    
+    void testBuilderApplyMissingOp()
+    {
+        /** Setup: Fresh project
+         *  Scenario: Send operation without op field
+         *  Expected: Validation error
+         */
+        beginTest("POST /api/builder/apply (missing op)");
+        
+        resetBuilderState();
+        
+        Array<var> ops;
+        
+        DynamicObject::Ptr op1 = new DynamicObject();
+        op1->setProperty(RestApiIds::type, "SineSynth");
+        op1->setProperty(RestApiIds::chain, -1);
+        ops.add(var(op1.get()));
+        
+        DynamicObject::Ptr bodyObj = new DynamicObject();
+        bodyObj->setProperty(RestApiIds::operations, var(ops));
+        
+        auto response = ctx->httpPost("/api/builder/apply",
+                                      JSON::toString(var(bodyObj.get())));
+        var json = ctx->parseJson(response);
+        
+        expect(!(bool)json[RestApiIds::success], "Should fail - missing op field");
+        expect(json[RestApiIds::errors].isArray(), "errors should be array");
+        expectEquals<int>(json[RestApiIds::errors].size(), 1, "Should have exactly one validation error");
+
+        auto e = json[RestApiIds::errors][0];
+        expect(e[RestApiIds::errorMessage].toString().contains("op field is required"),
+               "Error should mention missing op field");
+
+        auto callstack = e[RestApiIds::callstack];
+        expect(callstack.isArray(), "callstack should be array");
+        expectEquals(callstack[0].toString(), String("op[0]: "), "Frame 0 should reference op index");
+        expectEquals(callstack[1].toString(), String("phase: prevalidate"), "Frame 1 should be prevalidate phase");
+        expectEquals(callstack[3].toString(), String("endpoint: api/builder/apply"), "Frame 3 should be endpoint");
+    }
+    
+    void testBuilderApplyUnknownOp()
+    {
+        /** Setup: Fresh project
+         *  Scenario: Send operation with unknown op type
+         *  Expected: Validation error
+         */
+        beginTest("POST /api/builder/apply (unknown op)");
+        
+        resetBuilderState();
+        
+        Array<var> ops;
+        
+        DynamicObject::Ptr op1 = new DynamicObject();
+        op1->setProperty(RestApiIds::op, "nonexistent");
+        op1->setProperty(RestApiIds::target, "Something");
+        ops.add(var(op1.get()));
+        
+        DynamicObject::Ptr bodyObj = new DynamicObject();
+        bodyObj->setProperty(RestApiIds::operations, var(ops));
+        
+        auto response = ctx->httpPost("/api/builder/apply",
+                                      JSON::toString(var(bodyObj.get())));
+        var json = ctx->parseJson(response);
+        
+        expect(!(bool)json[RestApiIds::success], "Should fail - unknown op");
+        expect(json[RestApiIds::errors].isArray(), "errors should be array");
+        expectEquals<int>(json[RestApiIds::errors].size(), 1, "Should have one error");
+
+        auto e = json[RestApiIds::errors][0];
+        expect(e[RestApiIds::errorMessage].toString().contains("unsupported op"),
+               "Error should mention unsupported op");
+
+        auto callstack = e[RestApiIds::callstack];
+        expectEquals(callstack[1].toString(), String("phase: prevalidate"), "Should report prevalidate phase");
+        expectEquals(callstack[3].toString(), String("endpoint: api/builder/apply"), "Should report builder endpoint");
+    }
+    
+    void testBuilderApplyMissingFields()
+    {
+        /** Setup: Fresh project
+         *  Scenario: Send operations with missing required fields per type
+         *  Expected: Validation errors for each bad operation
+         */
+        beginTest("POST /api/builder/apply (missing fields)");
+        
+        resetBuilderState();
+        
+        Array<var> ops;
+        
+        // add missing type
+        DynamicObject::Ptr op1 = new DynamicObject();
+        op1->setProperty(RestApiIds::op, "add");
+        op1->setProperty(RestApiIds::chain, 3);
+        ops.add(var(op1.get()));
+        
+        // remove missing target
+        DynamicObject::Ptr op2 = new DynamicObject();
+        op2->setProperty(RestApiIds::op, "remove");
+        ops.add(var(op2.get()));
+        
+        // set_attributes missing attributes object
+        DynamicObject::Ptr op3 = new DynamicObject();
+        op3->setProperty(RestApiIds::op, "set_attributes");
+        op3->setProperty(RestApiIds::target, "Something");
+        ops.add(var(op3.get()));
+
+        // set_id missing name
+        DynamicObject::Ptr op4 = new DynamicObject();
+        op4->setProperty(RestApiIds::op, "set_id");
+        op4->setProperty(RestApiIds::target, "Anything");
+        ops.add(var(op4.get()));
+
+        // set_bypassed missing bypassed
+        DynamicObject::Ptr op5 = new DynamicObject();
+        op5->setProperty(RestApiIds::op, "set_bypassed");
+        op5->setProperty(RestApiIds::target, "Anything");
+        ops.add(var(op5.get()));
+
+        // set_effect missing effect
+        DynamicObject::Ptr op6 = new DynamicObject();
+        op6->setProperty(RestApiIds::op, "set_effect");
+        op6->setProperty(RestApiIds::target, "Anything");
+        ops.add(var(op6.get()));
+
+        // clone missing source / invalid count
+        DynamicObject::Ptr op7 = new DynamicObject();
+        op7->setProperty(RestApiIds::op, "clone");
+        op7->setProperty(RestApiIds::count, 0);
+        ops.add(var(op7.get()));
+        
+        DynamicObject::Ptr bodyObj = new DynamicObject();
+        bodyObj->setProperty(RestApiIds::operations, var(ops));
+        
+        auto response = ctx->httpPost("/api/builder/apply",
+                                      JSON::toString(var(bodyObj.get())));
+        var json = ctx->parseJson(response);
+        
+        expect(!(bool)json[RestApiIds::success], "Should fail validation");
+        expectEquals<int>(json[RestApiIds::errors].size(), 7, "Should have one error per bad operation");
+
+        for (int i = 0; i < json[RestApiIds::errors].size(); i++)
+        {
+            auto e = json[RestApiIds::errors][i];
+            auto cs = e[RestApiIds::callstack];
+            expect(cs.isArray(), "Each error must include callstack");
+            expect(cs.size() >= 4, "Callstack should have 4 frames");
+            expect(cs[1].toString() == "phase: prevalidate", "Should be prevalidate phase");
+            expect(cs[3].toString() == "endpoint: api/builder/apply", "Should include endpoint frame");
+        }
+
+        // Validate operation index mapping remains stable.
+        expectEquals(json[RestApiIds::errors][0][RestApiIds::callstack][0].toString(), String("op[0]: add"));
+        expectEquals(json[RestApiIds::errors][1][RestApiIds::callstack][0].toString(), String("op[1]: remove"));
+        expectEquals(json[RestApiIds::errors][2][RestApiIds::callstack][0].toString(), String("op[2]: set_attributes"));
+        expectEquals(json[RestApiIds::errors][3][RestApiIds::callstack][0].toString(), String("op[3]: set_id"));
+        expectEquals(json[RestApiIds::errors][4][RestApiIds::callstack][0].toString(), String("op[4]: set_bypassed"));
+        expectEquals(json[RestApiIds::errors][5][RestApiIds::callstack][0].toString(), String("op[5]: set_effect"));
+        expectEquals(json[RestApiIds::errors][6][RestApiIds::callstack][0].toString(), String("op[6]: clone"));
+
+        // Validate-only branch: existing module with unknown parameter
+        Array<var> validateOps;
+        DynamicObject::Ptr add = new DynamicObject();
+        add->setProperty(RestApiIds::op, "add");
+        add->setProperty(RestApiIds::type, "SineSynth");
+        add->setProperty(RestApiIds::parent, "Master Chain");
+        add->setProperty(RestApiIds::chain, -1);
+        add->setProperty(RestApiIds::name, "MySine");
+        validateOps.add(var(add.get()));
+
+        DynamicObject::Ptr addBody = new DynamicObject();
+        addBody->setProperty(RestApiIds::operations, var(validateOps));
+        auto addResponse = ctx->httpPost("/api/builder/apply", JSON::toString(var(addBody.get())));
+        auto addJson = ctx->parseJson(addResponse);
+        expect((bool)addJson[RestApiIds::success], "Seeding MySine should succeed");
+
+        validateOps.clear();
+        DynamicObject::Ptr badAttr = new DynamicObject();
+        badAttr->setProperty(RestApiIds::op, "set_attributes");
+        badAttr->setProperty(RestApiIds::target, "MySine");
+        badAttr->setProperty(RestApiIds::mode, "value");
+
+        DynamicObject::Ptr attrs = new DynamicObject();
+        attrs->setProperty("DefinitelyNotARealParameter", 1.0);
+        badAttr->setProperty(RestApiIds::attributes, var(attrs.get()));
+        validateOps.add(var(badAttr.get()));
+
+        DynamicObject::Ptr validateBody = new DynamicObject();
+        validateBody->setProperty(RestApiIds::operations, var(validateOps));
+        auto validateResponse = ctx->httpPost("/api/builder/apply", JSON::toString(var(validateBody.get())));
+        auto validateJson = ctx->parseJson(validateResponse);
+
+        expect(!(bool)validateJson[RestApiIds::success], "Unknown parameter should fail validation");
+        expectEquals<int>(validateJson[RestApiIds::errors].size(), 1, "Should return one validation error");
+        auto validateStack = validateJson[RestApiIds::errors][0][RestApiIds::callstack];
+        expectEquals(validateStack[1].toString(), String("phase: validate"), "Should report validate phase");
+        expectEquals(validateStack[3].toString(), String("endpoint: api/builder/apply"), "Should include endpoint");
+    }
+    
+    void testUndoPushGroup()
+    {
+        /** Setup: Fresh project
+         *  Scenario: Push a new undo group
+         *  Expected: Returns success with group context
+         */
+        beginTest("POST /api/undo/push_group");
+        
+        resetBuilderState();
+        
+        DynamicObject::Ptr bodyObj = new DynamicObject();
+        bodyObj->setProperty(RestApiIds::name, "Test Group");
+        
+        auto response = ctx->httpPost("/api/undo/push_group",
+                                      JSON::toString(var(bodyObj.get())));
+        var json = ctx->parseJson(response);
+
+        expect((bool)json[RestApiIds::success], "Should succeed");
+        expect(json[RestApiIds::errors].isArray(), "errors should be array");
+        expectEquals<int>(json[RestApiIds::errors].size(), 0, "Should have no errors");
+
+        auto result = json[RestApiIds::result];
+        expect(result.isObject(), "result should be object");
+        expectEquals(result[RestApiIds::groupName].toString(), String("Test Group"), "groupName should match pushed group");
+    }
+    
+    void testUndoPopGroup()
+    {
+        /** Setup: Push a group first
+         *  Scenario: Pop the group
+         *  Expected: Returns success
+         */
+        beginTest("POST /api/undo/pop_group");
+        
+        resetBuilderState();
+
+        // push group
+        DynamicObject::Ptr pushBody = new DynamicObject();
+        pushBody->setProperty(RestApiIds::name, "Pop Test Group");
+        auto pushResponse = ctx->httpPost("/api/undo/push_group", JSON::toString(var(pushBody.get())));
+        auto pushJson = ctx->parseJson(pushResponse);
+        expect((bool)pushJson[RestApiIds::success], "push_group should succeed");
+
+        // add in group (deferred execution)
+        Array<var> groupOps;
+        DynamicObject::Ptr add = new DynamicObject();
+        add->setProperty(RestApiIds::op, "add");
+        add->setProperty(RestApiIds::type, "SineSynth");
+        add->setProperty(RestApiIds::chain, -1);
+        add->setProperty(RestApiIds::parent, "Master Chain");
+        add->setProperty(RestApiIds::name, "GroupSynth");
+        groupOps.add(var(add.get()));
+        DynamicObject::Ptr addBody = new DynamicObject();
+        addBody->setProperty(RestApiIds::operations, var(groupOps));
+        auto addResponse = ctx->httpPost("/api/builder/apply", JSON::toString(var(addBody.get())));
+        auto addJson = ctx->parseJson(addResponse);
+        expect((bool)addJson[RestApiIds::success], "group add should succeed");
+
+        // pop group and execute deferred actions
+        DynamicObject::Ptr popBody = new DynamicObject();
+        popBody->setProperty(RestApiIds::cancel, false);
+        auto popResponse = ctx->httpPost("/api/undo/pop_group", JSON::toString(var(popBody.get())));
+        auto popJson = ctx->parseJson(popResponse);
+        expect((bool)popJson[RestApiIds::success], "pop_group execute should succeed");
+        expectBuilderProcessorExists("GroupSynth");
+        expectDiffEntry(popJson, 0, "+", "GroupSynth");
+
+        // runtime drift test: seed in runtime, then queue remove in group, delete directly, then pop
+        Array<var> seedOps;
+        DynamicObject::Ptr seed = new DynamicObject();
+        seed->setProperty(RestApiIds::op, "add");
+        seed->setProperty(RestApiIds::type, "SineSynth");
+        seed->setProperty(RestApiIds::chain, -1);
+        seed->setProperty(RestApiIds::parent, "Master Chain");
+        seed->setProperty(RestApiIds::name, "DriftSynth");
+        seedOps.add(var(seed.get()));
+        DynamicObject::Ptr seedBody = new DynamicObject();
+        seedBody->setProperty(RestApiIds::operations, var(seedOps));
+        auto seedResponse = ctx->httpPost("/api/builder/apply", JSON::toString(var(seedBody.get())));
+        auto seedJson = ctx->parseJson(seedResponse);
+        expect((bool)seedJson[RestApiIds::success], "Seeding DriftSynth should succeed");
+
+        pushBody->setProperty(RestApiIds::name, "Runtime Drift Group");
+        pushResponse = ctx->httpPost("/api/undo/push_group", JSON::toString(var(pushBody.get())));
+        pushJson = ctx->parseJson(pushResponse);
+        expect((bool)pushJson[RestApiIds::success], "Second push_group should succeed");
+
+        Array<var> removeOps;
+        DynamicObject::Ptr remove = new DynamicObject();
+        remove->setProperty(RestApiIds::op, "remove");
+        remove->setProperty(RestApiIds::target, "DriftSynth");
+        removeOps.add(var(remove.get()));
+        DynamicObject::Ptr removeBody = new DynamicObject();
+        removeBody->setProperty(RestApiIds::operations, var(removeOps));
+        auto removeResponse = ctx->httpPost("/api/builder/apply", JSON::toString(var(removeBody.get())));
+        auto removeJson = ctx->parseJson(removeResponse);
+        expect((bool)removeJson[RestApiIds::success], "remove should be queued inside group");
+
+        deleteProcessor("DriftSynth");
+
+        popBody->setProperty(RestApiIds::cancel, false);
+        popResponse = ctx->httpPost("/api/undo/pop_group", JSON::toString(var(popBody.get())));
+        popJson = ctx->parseJson(popResponse);
+
+        expect(!(bool)popJson[RestApiIds::success], "Runtime drift should fail on pop_group execute");
+        expect(popJson[RestApiIds::errors].isArray(), "errors should be array");
+        expect(popJson[RestApiIds::errors].size() > 0, "Should include runtime error");
+
+        expectRuntimeCallStack(popJson, "api/undo/pop_group");
+    }
+    
+    void expectRuntimeCallStack(const var& obj, const String& endpoint)
+    {
+        auto errors = obj[RestApiIds::errors];
+
+        expect(errors.isArray() && errors.size() > 0);
+
+        if (errors.isArray() && errors.size() > 0)
+        {
+			auto first = errors[0];
+
+			auto runtimeCallstack = first[RestApiIds::callstack];
+
+            expect(runtimeCallstack.isArray(), "runtime callstack should be array");
+
+            if (runtimeCallstack.isArray())
+            {
+				expect(runtimeCallstack[1].toString() == "phase: runtime", "Runtime drift should be tagged as runtime");
+				expect(runtimeCallstack[3].toString() == "endpoint: " + endpoint, "Endpoint should be " + endpoint);
+            }
+        }
+    }
+
+    void testUndoBack()
+    {
+        /** Setup: Fresh project
+         *  Scenario: Call undo with nothing to undo
+         *  Expected: Returns success=false
+         */
+        beginTest("POST /api/undo/back");
+        
+        resetBuilderState();
+
+        Array<var> ops;
+        DynamicObject::Ptr add = new DynamicObject();
+        add->setProperty(RestApiIds::op, "add");
+        add->setProperty(RestApiIds::type, "SineSynth");
+        add->setProperty(RestApiIds::chain, -1);
+        add->setProperty(RestApiIds::parent, "Master Chain");
+        add->setProperty(RestApiIds::name, "UndoSynth");
+        ops.add(var(add.get()));
+
+        DynamicObject::Ptr body = new DynamicObject();
+        body->setProperty(RestApiIds::operations, var(ops));
+        auto addResponse = ctx->httpPost("/api/builder/apply", JSON::toString(var(body.get())));
+        auto addJson = ctx->parseJson(addResponse);
+        expect((bool)addJson[RestApiIds::success], "seed add should succeed");
+        expectBuilderProcessorExists("UndoSynth");
+        expectDiffEntry(addJson, 0, "+", "UndoSynth");
+
+        auto response = ctx->httpPost("/api/undo/back", "{}");
+        var json = ctx->parseJson(response);
+        expect((bool)json[RestApiIds::success], "Undo should succeed after one action");
+        expectBuilderProcessorRemoved("UndoSynth");
+        expectEquals<int>(json[RestApiIds::result][RestApiIds::diff].size(), 0,
+            "Diff should be empty after undoing only action");
+
+        // second undo should fail (nothing left)
+        response = ctx->httpPost("/api/undo/back", "{}");
+        json = ctx->parseJson(response);
+        expect(!(bool)json[RestApiIds::success], "Second undo should fail when nothing to undo");
+    }
+    
+    void testUndoForward()
+    {
+        /** Setup: Fresh project
+         *  Scenario: Call redo with nothing to redo
+         *  Expected: Returns success=false
+         */
+        beginTest("POST /api/undo/forward");
+        
+        resetBuilderState();
+
+        Array<var> ops;
+        DynamicObject::Ptr add = new DynamicObject();
+        add->setProperty(RestApiIds::op, "add");
+        add->setProperty(RestApiIds::type, "SineSynth");
+        add->setProperty(RestApiIds::chain, -1);
+        add->setProperty(RestApiIds::parent, "Master Chain");
+        add->setProperty(RestApiIds::name, "RedoSynth");
+        ops.add(var(add.get()));
+
+        DynamicObject::Ptr body = new DynamicObject();
+        body->setProperty(RestApiIds::operations, var(ops));
+        auto addResponse = ctx->httpPost("/api/builder/apply", JSON::toString(var(body.get())));
+        auto addJson = ctx->parseJson(addResponse);
+        expect((bool)addJson[RestApiIds::success], "seed add should succeed");
+        expectBuilderProcessorExists("RedoSynth");
+
+        auto undoResponse = ctx->httpPost("/api/undo/back", "{}");
+        auto undoJson = ctx->parseJson(undoResponse);
+        expect((bool)undoJson[RestApiIds::success], "undo should succeed");
+        expectBuilderProcessorRemoved("RedoSynth");
+
+        auto response = ctx->httpPost("/api/undo/forward", "{}");
+        var json = ctx->parseJson(response);
+        expect((bool)json[RestApiIds::success], "redo should succeed after undo");
+        expectBuilderProcessorExists("RedoSynth");
+        expectDiffEntry(json, 0, "+", "RedoSynth");
+
+        response = ctx->httpPost("/api/undo/forward", "{}");
+        json = ctx->parseJson(response);
+        expect(!(bool)json[RestApiIds::success], "second redo should fail");
+    }
+    
+    void testUndoDiff()
+    {
+        /** Setup: Fresh project
+         *  Scenario: Query diff with default params
+         *  Expected: Returns empty diff
+         */
+        beginTest("GET /api/undo/diff");
+        
+        resetBuilderState();
+
+        auto response = ctx->httpGet("/api/undo/diff");
+        var json = ctx->parseJson(response);
+        expect((bool)json[RestApiIds::success], "Should succeed");
+        expect(json[RestApiIds::result].isObject(), "result should be object");
+        expect(json[RestApiIds::result][RestApiIds::diff].isArray(), "result.diff should be array");
+        expectEquals<int>(json[RestApiIds::result][RestApiIds::diff].size(), 0, "Fresh state should have empty diff");
+
+        Array<var> ops;
+        ops.add(makeAddOp("SineSynth", "DiffSynth"));
+        auto addJson = postBuilderOps(ops);
+        expectNoBuilderError(addJson);
+
+        response = ctx->httpGet("/api/undo/diff");
+        json = ctx->parseJson(response);
+        expect((bool)json[RestApiIds::success], "Diff query should succeed after add");
+        expectEquals<int>(json[RestApiIds::result][RestApiIds::diff].size(), 1, "Should have one diff entry");
+        expectDiffEntry(json, 0, "+", "DiffSynth");
+
+        response = ctx->httpGet("/api/undo/diff?scope=root&flatten=1&domain=builder");
+        json = ctx->parseJson(response);
+        expect((bool)json[RestApiIds::success], "Diff root+flatten+domain query should succeed");
+        expectDiffEntry(json, 0, "+", "DiffSynth");
+
+        // invalid scope should fail request
+        response = ctx->httpGet("/api/undo/diff?scope=invalid_scope");
+        json = ctx->parseJson(response);
+        expect(!(bool)json[RestApiIds::success], "Invalid scope should fail");
+    }
+    
+    void testUndoHistory()
+    {
+        /** Setup: Fresh project
+         *  Scenario: Query history with default params
+         *  Expected: Returns empty history
+         */
+        beginTest("GET /api/undo/history");
+        
+        resetBuilderState();
+
+        auto response = ctx->httpGet("/api/undo/history");
+        var json = ctx->parseJson(response);
+        expect((bool)json[RestApiIds::success], "Should succeed");
+        expect(json[RestApiIds::result].isObject(), "result should be object");
+        expect(json[RestApiIds::result][RestApiIds::history].isArray(), "result.history should be array");
+        expectEquals<int>(json[RestApiIds::result][RestApiIds::history].size(), 0, "Fresh history should be empty");
+
+        Array<var> ops;
+        ops.add(makeAddOp("SineSynth", "HistorySynth"));
+        auto addJson = postBuilderOps(ops);
+        expectNoBuilderError(addJson);
+
+        response = ctx->httpGet("/api/undo/history");
+        json = ctx->parseJson(response);
+        expect((bool)json[RestApiIds::success], "history query should succeed after add");
+        expectEquals<int>(json[RestApiIds::result][RestApiIds::history].size(), 1,
+            "Should have one history entry after add");
+        expectEquals<int>((int)json[RestApiIds::result][RestApiIds::cursor], 0,
+            "Cursor should point to first action");
+
+        response = ctx->httpGet("/api/undo/history?scope=root&flatten=1");
+        json = ctx->parseJson(response);
+        expect((bool)json[RestApiIds::success], "root+flatten query should succeed");
+        expectEquals(json[RestApiIds::result][RestApiIds::scope].toString(), String("root"));
+
+        response = ctx->httpGet("/api/undo/history?scope=invalid_scope");
+        json = ctx->parseJson(response);
+        expect(!(bool)json[RestApiIds::success], "Invalid history scope should fail");
+    }
+    
+    void testUndoClear()
+    {
+        /** Setup: Fresh project
+         *  Scenario: Clear undo history
+         *  Expected: Returns success
+         */
+        beginTest("POST /api/undo/clear");
+        
+        resetBuilderState();
+
+        // Seed history with one action
+        Array<var> ops;
+        DynamicObject::Ptr add = new DynamicObject();
+        add->setProperty(RestApiIds::op, "add");
+        add->setProperty(RestApiIds::type, "SineSynth");
+        add->setProperty(RestApiIds::chain, -1);
+        add->setProperty(RestApiIds::parent, "Master Chain");
+        add->setProperty(RestApiIds::name, "ClearSynth");
+        ops.add(var(add.get()));
+
+        DynamicObject::Ptr body = new DynamicObject();
+        body->setProperty(RestApiIds::operations, var(ops));
+        auto addResponse = ctx->httpPost("/api/builder/apply", JSON::toString(var(body.get())));
+        auto addJson = ctx->parseJson(addResponse);
+        expect((bool)addJson[RestApiIds::success], "Seeding action should succeed");
+
+        auto response = ctx->httpPost("/api/undo/clear", "{}");
+        var json = ctx->parseJson(response);
+        expect((bool)json[RestApiIds::success], "undo/clear should succeed");
+
+        auto historyResponse = ctx->httpGet("/api/undo/history");
+        auto historyJson = ctx->parseJson(historyResponse);
+        expect((bool)historyJson[RestApiIds::success], "history query should succeed");
+        expectEquals<int>(historyJson[RestApiIds::result][RestApiIds::history].size(), 0,
+                          "history should be empty after clear");
+
+        auto undoResponse = ctx->httpPost("/api/undo/back", "{}");
+        auto undoJson = ctx->parseJson(undoResponse);
+        expect(!(bool)undoJson[RestApiIds::success], "Nothing should be undoable after clear");
+    }
+    
 };
 
 static RestServerTest restServerTest;

@@ -37,191 +37,7 @@ namespace hise { using namespace juce;
 // Forward declaration for ReplayConsoleHandler
 class InteractionTestWindow;
 
-//==============================================================================
-/** Identifiers for REST API parameter names and JSON response keys.
-    Using Identifiers instead of string literals provides compile-time safety
-    and better performance for property lookups.
-*/
-#define DECLARE_ID(x) const Identifier x(#x);
 
-namespace RestApiIds
-{
-    // Request/body parameters
-    DECLARE_ID(moduleId);
-    DECLARE_ID(callback);
-    DECLARE_ID(script);
-    DECLARE_ID(compile);
-    DECLARE_ID(hierarchy);
-    
-    // Common response fields
-    DECLARE_ID(success);
-    DECLARE_ID(result);
-    DECLARE_ID(logs);
-    DECLARE_ID(errors);
-    DECLARE_ID(errorMessage);
-    DECLARE_ID(callstack);
-    
-    // list_methods response
-    DECLARE_ID(methods);
-    DECLARE_ID(path);
-    DECLARE_ID(method);
-    DECLARE_ID(category);
-    DECLARE_ID(description);
-    DECLARE_ID(returns);
-    DECLARE_ID(queryParameters);
-    DECLARE_ID(bodyParameters);
-    DECLARE_ID(name);
-    DECLARE_ID(required);
-    DECLARE_ID(defaultValue);
-    
-    // status response
-    DECLARE_ID(server);
-    DECLARE_ID(version);
-    DECLARE_ID(compileTimeout);
-    DECLARE_ID(project);
-    DECLARE_ID(projectFolder);
-    DECLARE_ID(scriptsFolder);
-    DECLARE_ID(scriptProcessors);
-    DECLARE_ID(isMainInterface);
-    DECLARE_ID(externalFiles);
-    DECLARE_ID(callbacks);
-    DECLARE_ID(id);
-    DECLARE_ID(type);
-    DECLARE_ID(empty);
-    
-    // list_components response
-    DECLARE_ID(components);
-    DECLARE_ID(childComponents);
-    DECLARE_ID(visible);
-    DECLARE_ID(enabled);
-    DECLARE_ID(x);
-    DECLARE_ID(y);
-    DECLARE_ID(width);
-    DECLARE_ID(height);
-    
-    // get_component_properties response
-    DECLARE_ID(properties);
-    DECLARE_ID(value);
-    DECLARE_ID(isDefault);
-    DECLARE_ID(options);
-    
-    // get/set_component_value
-    DECLARE_ID(min);
-    DECLARE_ID(max);
-    DECLARE_ID(validateRange);
-    
-    // Debug parameters
-    DECLARE_ID(forceSynchronousExecution);
-    DECLARE_ID(warning);
-    
-    // set_component_property
-    DECLARE_ID(changes);
-    DECLARE_ID(force);
-    DECLARE_ID(applied);
-    DECLARE_ID(locked);
-    DECLARE_ID(property);
-    DECLARE_ID(recompileRequired);
-    
-    // set_script response
-    DECLARE_ID(updatedCallbacks);
-
-    // repl
-    DECLARE_ID(expression);
-    
-    // screenshot
-    DECLARE_ID(scale);
-    DECLARE_ID(imageData);
-    DECLARE_ID(outputPath);
-    DECLARE_ID(filePath);
-    DECLARE_ID(selectionCount);
-    
-    // LAF (LookAndFeel) integration
-    DECLARE_ID(laf);                  // LAF info object for a component
-    DECLARE_ID(location);             // location of the LAF definition
-    DECLARE_ID(renderStyle);          // "script", "css", "css_inline", "mixed"
-    DECLARE_ID(cssLocation);          // Full path to external CSS file
-    DECLARE_ID(lafRenderWarning);     // Warning object when LAF render timeout
-    DECLARE_ID(unrenderedComponents); // Array of unrendered component objects
-    DECLARE_ID(timeoutMs);            // Timeout value in milliseconds
-    DECLARE_ID(reason);               // Reason for not rendering: "invisible" or "timeout"
-    
-    // Interaction testing
-    DECLARE_ID(interactions);         // Array of interaction objects
-    DECLARE_ID(interactionsCompleted); // Number of interactions successfully executed
-    DECLARE_ID(totalElapsedMs);       // Total execution time in milliseconds
-    DECLARE_ID(executionLog);         // Array of executed events with timing
-    DECLARE_ID(screenshots);          // Object with screenshot id -> base64 PNG data
-    DECLARE_ID(parseWarnings);        // Array of non-fatal parse warnings
-    DECLARE_ID(verbose);              // If true, include extra debug info in response
-    DECLARE_ID(mouseState);           // Final mouse state object (when verbose=true)
-    DECLARE_ID(currentTarget);        // Component ID mouse is currently over
-    DECLARE_ID(pixelPosition);        // Absolute pixel position {x, y}
-    
-    // SelectMenuItem response fields
-    DECLARE_ID(selectedMenuItem);     // Object with selected menu item info
-    DECLARE_ID(text);                 // Menu item display text
-    DECLARE_ID(itemId);               // Menu item ID
-    
-    // diagnose_script response
-    DECLARE_ID(diagnostics);          // Array of diagnostic objects
-    DECLARE_ID(line);                 // Diagnostic line number
-    DECLARE_ID(column);               // Diagnostic column number
-    DECLARE_ID(severity);             // "error", "warning", "info", "hint"
-    DECLARE_ID(source);               // "syntax", "api-validation", "type-check", "language", "callscope"
-    DECLARE_ID(message);              // Diagnostic message text
-    DECLARE_ID(suggestions);          // Array of "did you mean?" suggestion strings
-    DECLARE_ID(async);                // If true, defer shadow parse to scripting thread (default: false)
-    
-    // get_included_files
-    DECLARE_ID(files);                // Array of included file entries
-    DECLARE_ID(processor);            // Owning processor ID for an included file
-    
-    // profile / attachable profiling
-    DECLARE_ID(durationMs);           // Profiling duration in milliseconds
-    DECLARE_ID(threadFilter);         // Array of thread names to filter
-    DECLARE_ID(eventFilter);          // Array of event type names to filter
-    DECLARE_ID(threads);              // Array of thread profiling results
-    DECLARE_ID(thread);               // Thread name string
-    DECLARE_ID(events);               // Array of profiled events in a thread
-    DECLARE_ID(duration);             // Event duration in ms
-    DECLARE_ID(sourceType);           // Event source type name
-    DECLARE_ID(children);             // Nested child events
-    DECLARE_ID(start);                // Event start time in ms
-    DECLARE_ID(mode);                 // "record" or "get"
-    DECLARE_ID(recording);            // Whether a recording is in progress
-    DECLARE_ID(profile);              // Enable attached profiling on an endpoint
-    DECLARE_ID(trackSource);          // Track source ID (causal link open end, -1 = none)
-    DECLARE_ID(trackTarget);          // Track target ID (causal link close end, -1 = none)
-    DECLARE_ID(flows);                // Array of cross-thread causal flow connections
-    DECLARE_ID(trackId);              // Shared integer ID connecting a flow source to target
-    DECLARE_ID(sourceEvent);          // Name of the event that caused the flow
-    DECLARE_ID(targetEvent);          // Name of the event that was caused
-    DECLARE_ID(sourceThread);         // Thread where the flow originated
-    DECLARE_ID(targetThread);         // Thread where the flow terminated
-    
-    // Profile query/summary parameters
-    DECLARE_ID(summary);              // If true, aggregate repeated events with stats
-    DECLARE_ID(filter);               // Wildcard pattern matched against event name
-    DECLARE_ID(minDuration);          // Only include events with duration >= this (ms)
-    DECLARE_ID(sourceTypeFilter);     // Wildcard pattern matched against sourceType name
-    DECLARE_ID(nested);               // When filtering, include children of matched events
-    DECLARE_ID(limit);                // Max results returned (default 15)
-    DECLARE_ID(wait);                 // If false, return immediately when recording in progress
-    
-    // Summary result fields
-    DECLARE_ID(results);              // Flat array of filtered/aggregated events
-    DECLARE_ID(count);                // Number of occurrences in summary
-    DECLARE_ID(median);               // Median duration (ms)
-    DECLARE_ID(peak);                 // Maximum duration (ms)
-    DECLARE_ID(total);                // Sum of durations (ms)
-    
-    // parse_css
-    DECLARE_ID(code);                 // CSS code string to parse
-    DECLARE_ID(selectors);            // Array of selector strings for specificity resolution
-    DECLARE_ID(resolved);             // Resolved pixel value for a property
-}
-
-#undef DECLARE_ID
 
 /** Helper utilities for REST API request handling.
     
@@ -257,6 +73,15 @@ struct RestHelpers
         StartProfiling,         ///< POST /api/profile - Run profiling session or retrieve last result
         ParseCSS,               ///< POST /api/parse_css - Parse CSS and return diagnostics
         Shutdown,               ///< POST /api/shutdown - Gracefully quit HISE
+        BuilderTree,            ///< GET  /api/builder/tree - Get module tree hierarchy
+        BuilderApply,           ///< POST /api/builder/apply - Apply operations to module tree
+        UndoPushGroup,          ///< POST /api/undo/push_group - Start a new undo group
+        UndoPopGroup,           ///< POST /api/undo/pop_group - End group, execute or discard
+        UndoBack,               ///< POST /api/undo/back - Undo last action
+        UndoForward,            ///< POST /api/undo/forward - Redo next action
+        UndoDiff,               ///< GET  /api/undo/diff - Current diff state
+        UndoHistory,            ///< GET  /api/undo/history - Full undo history
+        UndoClear,              ///< POST /api/undo/clear - Clear undo history
         numRoutes
     };
     
@@ -601,6 +426,42 @@ struct RestHelpers
      */
     static RestServer::Response handleShutdown(MainController* mc, 
                                                 RestServer::AsyncRequest::Ptr req);
+    
+    /** Handler for GET /api/builder/tree - Get module tree hierarchy */
+    static RestServer::Response handleBuilderTree(MainController* mc, 
+                                                   RestServer::AsyncRequest::Ptr req);
+    
+    /** Handler for POST /api/builder/apply - Apply operations to module tree */
+    static RestServer::Response handleBuilderApply(MainController* mc,
+                                                    RestServer::AsyncRequest::Ptr req);
+    
+    /** Handler for POST /api/undo/push_group - Start a new undo group */
+    static RestServer::Response handleUndoPushGroup(MainController* mc,
+                                                     RestServer::AsyncRequest::Ptr req);
+    
+    /** Handler for POST /api/undo/pop_group - End group, execute or discard */
+    static RestServer::Response handleUndoPopGroup(MainController* mc,
+                                                    RestServer::AsyncRequest::Ptr req);
+    
+    /** Handler for POST /api/undo/back - Undo last action */
+    static RestServer::Response handleUndoBack(MainController* mc,
+                                                RestServer::AsyncRequest::Ptr req);
+    
+    /** Handler for POST /api/undo/forward - Redo next action */
+    static RestServer::Response handleUndoForward(MainController* mc,
+                                                   RestServer::AsyncRequest::Ptr req);
+    
+    /** Handler for GET /api/undo/diff - Current diff state */
+    static RestServer::Response handleUndoDiff(MainController* mc,
+                                                RestServer::AsyncRequest::Ptr req);
+    
+    /** Handler for GET /api/undo/history - Full undo history */
+    static RestServer::Response handleUndoHistory(MainController* mc,
+                                                   RestServer::AsyncRequest::Ptr req);
+    
+    /** Handler for POST /api/undo/clear - Clear undo history */
+    static RestServer::Response handleUndoClear(MainController* mc,
+                                                 RestServer::AsyncRequest::Ptr req);
 
 #if HISE_INCLUDE_PROFILING_TOOLKIT
     /** Query options for filtering and summarizing profiling results. */
@@ -660,6 +521,117 @@ struct RestHelpers
         DebugSession::ProfileDataSource::ProfileInfoBase* root,
         const ProfileQueryOptions& options);
 #endif
+
+private:
+    // Builder helpers
+    
+    /** Resolve chain name string to raw::IDs::Chains constant.
+     *  Returns -2 if invalid. Case-insensitive.
+     */
+    static int resolveChainIndex(const String& chainName);
+    
+    /** Get chain name from index constant. */
+    static String getChainName(int chainIndex);
+    
+    /** Validate module type for chain using ProcessorMetadata.
+     *  Returns true if valid, sets errorHints on failure.
+     */
+    static bool validateTypeForChain(const Identifier& typeId, 
+                                      int chainIndex, 
+                                      DynamicObject::Ptr errorHints);
+    
+    /** Find processor by name in tree. */
+    static Processor* findProcessorByName(MainController* mc, const String& name);
+    
+    struct TreeOptions
+    {
+        bool includeParameters = false;
+        bool verbose = false;
+    };
+
+    struct ProcessorOrValueTree
+    {
+        ProcessorMetadata getMetadata() const
+        {
+            if (p != nullptr)
+                return p->getMetadata();
+            else
+            {
+                ProcessorMetadataRegistry rd;
+
+                if (auto pmd = rd.get(v.getType()))
+                    return *pmd;
+            }
+
+            return {};
+        }
+
+        bool isBypassed() const
+        {
+            if (p != nullptr)
+                return p->isBypassed();
+
+            return v[scriptnode::PropertyIds::Bypassed];
+        }
+
+        String getId() const
+        {
+            if (p != nullptr)
+                return p->getId();
+
+            return v[PropertyIds::ID].toString();
+        }
+
+        String getColour() const
+        {
+            if (p != nullptr)
+                return "#" + p->getColour().toDisplayString(false);
+
+            return v[PropertyIds::ModColour].toString();
+        }
+
+        Identifier getType() const
+        {
+            if (p != nullptr)
+                return p->getType();
+
+            return v.getType();
+        }
+
+        bool isRuntimeData() const { return p != nullptr; }
+
+        int getNumChildren() const
+        {
+            if (p != nullptr)
+                return p->getNumChildProcessors();
+
+            return v.getNumChildren();
+        }
+
+        ProcessorOrValueTree getChild(int i) const
+        {
+            Processor* c = (p != nullptr && p->getNumChildProcessors() < i) ? p->getChildProcessor(i) : nullptr;
+            ValueTree cv = v.isValid() ? v.getChild(i) : ValueTree();
+            return { c, cv };
+        }
+
+        float getAttribute(int parameterIndex) const
+        {
+            if (p != nullptr)
+                return p->getAttribute(parameterIndex);
+
+            return 0.0f;
+        }
+
+        Processor* p = nullptr;
+        ValueTree v;
+    };
+
+    /** Build JSON tree representation of module hierarchy. */
+    static var buildModuleTree(const ProcessorOrValueTree& root, const TreeOptions& options);
+    
+    /** Build JSON array for a specific chain. */
+    static Array<var> buildChainArray(Processor* parent, int chainIndex);
 };
 
 } // namespace hise

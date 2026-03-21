@@ -80,6 +80,11 @@
 #include "backend/ai_tools/InteractionTestWindow.cpp"
 
 // RestHelpers.cpp must come after InteractionTester.h since it uses InteractionTester::TestResult
+
+#include "backend/ai_tools/RestServerUndoManager.h"
+#include "backend/ai_tools/RestServerUndoManagerActions.cpp"
+#include "backend/ai_tools/RestServerUndoManager.cpp"
+
 #include "backend/ai_tools/RestHelpers.cpp"
 
 #if HI_RUN_UNIT_TESTS

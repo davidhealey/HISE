@@ -6,7 +6,7 @@ This document describes the REST API available in HISE for enabling AI agents to
 
 - **Base URL**: `http://localhost:1900`
 - **Response Format**: JSON with consistent structure
-- **Common Fields**: All responses include `success` (boolean), `logs` (array), and `errors` (array)
+- **Common Fields**: All responses include `success` (boolean), `result` (object/string/null), `logs` (array), and `errors` (array)
 
 ### Response Structure
 
@@ -26,6 +26,8 @@ This document describes the REST API available in HISE for enabling AI agents to
   ]
 }
 ```
+
+For HTTP error responses (`400`, `404`, `409`, `500`, etc.), the response body uses the same envelope with `success: false` and an `errors` array. Legacy `error` / `message` fields are no longer used.
 
 ### Related Documentation
 
@@ -1166,6 +1168,134 @@ GET /api/get_included_files?moduleId=Interface
 
 ---
 
+## Builder And Undo API
+
+These endpoints provide transactional module tree editing with grouped execution, undo/redo, and diff/history inspection.
+
+### GET /api/builder/tree
+
+Return the runtime module tree, or the active validation tree when `group=current`.
+
+**Query Parameters**:
+
+| Parameter | Required | Default | Description |
+|-----------|----------|---------|-------------|
+| `moduleId` | No | root | Optional subtree root. In runtime mode, this resolves from live processors. In group mode, this resolves inside the plan tree. |
+| `group` | No | - | Optional group selector. Only `current` is supported. |
+| `queryParameters` | No | `true` | Include parameter lists in each node (`1` / `0`). |
+| `verbose` | No | `false` | Include extended metadata fields in each node (`1` / `0`). |
+
+**Behavior**:
+
+- No `group` parameter -> runtime tree.
+- `group=current` -> current validation tree.
+- `group=current` with no active group -> `400`.
+- `group` with any value other than `current` -> `501`.
+- `moduleId` not found in selected tree -> `404`.
+
+**Example (runtime tree)**:
+
+```bash
+curl "http://localhost:1900/api/builder/tree"
+```
+
+**Example (current group tree)**:
+
+```bash
+curl "http://localhost:1900/api/builder/tree?group=current"
+```
+
+### POST /api/builder/apply
+
+Apply one or more module-tree operations in a single request.
+
+Returns success / validation / runtime status with `result`, `logs`, and `errors`.
+
+**JSON Body**:
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `operations` | Yes | Non-empty array of operation objects. |
+
+Supported operations:
+
+- `add` -> `type`, `parent`, `chain`, `name`
+- `remove` -> `target`
+- `clone` -> `source`, `count`, optional `template`
+- `set_attributes` -> `target`, `attributes`, optional `mode` (`value`/`normalized`/`raw`)
+- `set_id` -> `target`, `name`
+- `set_bypassed` -> `target`, `bypassed`
+- `set_effect` -> `target`, `effect`
+- `set_complex_data` -> reserved/deferred
+
+**Example**:
+
+```bash
+curl -X POST "http://localhost:1900/api/builder/apply" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "operations": [
+      { "op": "add", "type": "SineSynth", "parent": "Master Chain", "chain": -1, "name": "MySine" },
+      { "op": "set_bypassed", "target": "MySine", "bypassed": true }
+    ]
+  }'
+```
+
+### POST /api/undo/push_group
+
+Start a new group. Subsequent builder operations are validated against group state and queued until pop.
+
+**Body**: `{ "name": "My Group" }`
+
+### POST /api/undo/pop_group
+
+End current group.
+
+- `cancel=false` (default): execute queued actions as one undoable unit.
+- `cancel=true`: discard queued actions.
+
+**Body**:
+
+```json
+{ "cancel": false }
+```
+
+### POST /api/undo/back
+
+Undo one action/group boundary.
+
+- If there is nothing to undo: `400` with `errors[0].errorMessage = "nothing to undo"`.
+
+### POST /api/undo/forward
+
+Redo one action/group boundary.
+
+- If there is nothing to redo: `400` with `errors[0].errorMessage = "nothing to redo"`.
+
+### GET /api/undo/diff
+
+Return active diff list.
+
+**Query Parameters**:
+
+| Parameter | Required | Default | Description |
+|-----------|----------|---------|-------------|
+| `scope` | No | `group` | `group` or `root` |
+| `domain` | No | all | Domain filter (eg `builder`) |
+| `flatten` | No | `false` | Merge cancelling actions into net effect |
+
+### GET /api/undo/history
+
+Return history list and cursor position.
+
+**Query Parameters**: same as `/api/undo/diff` (`scope`, `domain`, `flatten`).
+
+### POST /api/undo/clear
+
+Clear all undo history and active groups.
+
+---
+
 ## Component Lifecycle & Callbacks
 
 ### When Control Callbacks Fire
@@ -1483,7 +1613,10 @@ When compilation fails or a runtime error occurs, the `errors` array contains de
 
 ### Callstack Format
 
-Each callstack entry follows the format:
+Callstack supports two formats, depending on endpoint domain:
+
+1. **Script/runtime stack frames**:
+
 ```
 functionName() at path:line:column
 ```
@@ -1492,6 +1625,29 @@ functionName() at path:line:column
 - `path` - Relative path from project root, or `ModuleId.js` for inline callbacks
 - `line` - Line number (1-based)
 - `column` - Column number (1-based)
+
+2. **Builder/undo operation context frames** (most specific first):
+
+```
+op[<index>]: <operation summary>
+phase: prevalidate|validate|runtime
+group: <group name>
+endpoint: <api path>
+```
+
+Example:
+
+```json
+{
+  "errorMessage": "Can't find module with ID LFO1",
+  "callstack": [
+    "op[0]: set_id target=LFO1 name=LFO2",
+    "phase: validate",
+    "group: My Group",
+    "endpoint: api/builder/apply"
+  ]
+}
+```
 
 ### Error-Fixing Loop
 
