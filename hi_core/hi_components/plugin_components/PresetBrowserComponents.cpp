@@ -227,30 +227,24 @@ int PresetBrowserColumn::ColumnListModel::getNumRows()
 {
 	if (wildcard.isEmpty() && currentlyActiveTags.isEmpty())
 	{
-		const File& rootToUse = showFavoritesOnly ? totalRoot : root;
+		if (showFavoritesOnly && index == 2)
+		{
+			entries = parent->getAllFavoritePresets();
+			entries.sort();
+			empty = entries.isEmpty();
+			return entries.size();
+		}
 
-		if (!rootToUse.isDirectory())
+		if (!root.isDirectory())
 		{
 			entries.clear();
 			return 0;
 		}
 
 		entries.clear();
-		rootToUse.findChildFiles(entries, displayDirectories ? File::findDirectories : File::findFiles, allowRecursiveSearch || showFavoritesOnly);
+		root.findChildFiles(entries, displayDirectories ? File::findDirectories : File::findFiles, allowRecursiveSearch);
 
 		PresetBrowser::DataBaseHelpers::cleanFileList(parent->getMainController(), entries);
-
-		if (showFavoritesOnly && index == 2)
-		{
-			for (int i = 0; i < entries.size(); i++)
-			{
-				if (!PresetBrowser::DataBaseHelpers::isFavorite(database, entries[i]))
-				{
-					entries.remove(i--);
-					continue;
-				}
-			}
-		}
 
 		entries.sort();
 		empty = entries.isEmpty();
@@ -310,11 +304,8 @@ int PresetBrowserColumn::ColumnListModel::getNumRows()
 		{
 			for (int i = 0; i < entries.size(); i++)
 			{
-				if (!PresetBrowser::DataBaseHelpers::isFavorite(database, entries[i]))
-				{
+				if (!parent->isFavoriteInAnyDatabase(entries[i]))
 					entries.remove(i--);
-					continue;
-				}
 			}
 		}
 
@@ -401,16 +392,14 @@ void PresetBrowserColumn::ColumnListModel::paintListBoxItem(int rowNumber, Graph
 		auto column = parent->getColumn(index);
 		jassert(dynamic_cast<ListBox*>(column)->getModel() == this);
 		
-		if (showFavoritesOnly && parent.getComponent()->shouldShowFullPathFavorites())
-			itemName = entries[rowNumber].getRelativePathFrom(totalRoot);
+		bool showFullPath = (showFavoritesOnly && parent.getComponent()->shouldShowFullPathFavorites())
+		                 || (!wildcard.isEmpty() && parent.getComponent()->shouldShowFullPathSearch());
 
-		if (!wildcard.isEmpty() && parent.getComponent()->shouldShowFullPathSearch())
+		if (showFullPath)
 		{
 			const auto& f = entries[rowNumber];
 			const auto searchRoots = parent->getAllSearchRoots();
 
-			// Index 0 is the project root; expansions start at index 1 and are
-			// prefixed with their folder name so the user can tell them apart.
 			itemName = f.getRelativePathFrom(totalRoot);
 
 			for (int i = 0; i < searchRoots.size(); ++i)
@@ -442,15 +431,34 @@ const juce::Array<PresetBrowserColumn::ColumnListModel::CachedTag>& PresetBrowse
 
 Component* PresetBrowserColumn::ColumnListModel::refreshComponentForRow(int rowNumber, bool /*isRowSelected*/, Component* existingComponentToUpdate)
 {
+	if (index == 2 && parent.getComponent()->shouldShowFavoritesButton())
+	{
+		// Reuse existing overlays to avoid flicker, but only if the parent
+		// reference is still valid (setModel() may have replaced the model,
+		// leaving stale overlays in JUCE's spare-component cache).
+		if (auto* existing = dynamic_cast<FavoriteOverlay*>(existingComponentToUpdate))
+		{
+			if (&existing->parent == this)
+			{
+				existing->refreshIndex(rowNumber);
+				existing->refreshShape();
+				return existing;
+			}
+
+			delete existing;
+			existingComponentToUpdate = nullptr;
+		}
+
+		if (existingComponentToUpdate != nullptr)
+			delete existingComponentToUpdate;
+
+		return new FavoriteOverlay(*this, rowNumber);
+	}
+
 	if (existingComponentToUpdate != nullptr)
 		delete existingComponentToUpdate;
 
-	if (index == 2 && parent.getComponent()->shouldShowFavoritesButton())
-	{
-		return new FavoriteOverlay(*this, rowNumber);
-	}
-	else
-		return nullptr;
+	return nullptr;
 }
 
 void PresetBrowserColumn::ColumnListModel::sendRowChangeMessage(int row)
@@ -488,7 +496,7 @@ void PresetBrowserColumn::ColumnListModel::FavoriteOverlay::refreshShape()
 {
 	auto f = parent.getFileForIndex(index);
 
-	const bool on = PresetBrowser::DataBaseHelpers::isFavorite(parent.database, f);
+	const bool on = parent.isFavoriteInAnyDatabase(f);
 
 	auto path = parent.getPresetBrowserLookAndFeel().createPresetBrowserIcons(on ? "favorite_on" : "favorite_off");
 
@@ -509,14 +517,22 @@ void PresetBrowserColumn::ColumnListModel::FavoriteOverlay::refreshShape()
 }
 
 
+bool PresetBrowserColumn::ColumnListModel::isFavoriteInAnyDatabase(const File& f) const
+{
+	if (auto* pb = parent.getComponent())
+		return pb->isFavoriteInAnyDatabase(f);
+	return false;
+}
+
+
 void PresetBrowserColumn::ColumnListModel::FavoriteOverlay::buttonClicked(Button*)
 {
 	const bool newValue = !b->getToggleState();
 
 	auto f = parent.getFileForIndex(index);
 
-	PresetBrowser::DataBaseHelpers::setFavorite(parent.database, f, newValue);
-
+	if (auto* pb = findParentComponentOfClass<PresetBrowser>())
+		pb->setFavoriteForFile(f, newValue);
 
 	refreshShape();
 
@@ -1005,7 +1021,7 @@ void PresetBrowserColumn::paint(Graphics& g)
 
 	StringArray columnNames = { "Expansion", "Nothing", "Bank", "Column" };
 
-	if (currentRoot == File() && listModel->wildcard.isEmpty() && listModel->currentlyActiveTags.isEmpty())
+	if (currentRoot == File() && listModel->wildcard.isEmpty() && listModel->currentlyActiveTags.isEmpty() && !listModel->getShowFavoritesOnly())
 		emptyText = "Select a " + columnNames[jlimit(0, 3, index+1)];
 	else if (listModel->isEmpty())
 		emptyText = isResultBar ? "No results" : "Add a " + name;
