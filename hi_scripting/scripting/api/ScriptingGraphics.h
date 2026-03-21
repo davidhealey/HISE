@@ -1454,6 +1454,9 @@ namespace ScriptingObjects
 		/** Checks if the image has been loaded into the look and feel obkect */
 		bool isImageLoaded(String prettyName);
 
+		/** Returns the size of a loaded image as an array [width, height]. */
+		var getImageSize(String imageName);
+
 		// ========================================================================================
 
 		bool isUsingCSS() const { return !currentStyleSheet.isEmpty(); }
