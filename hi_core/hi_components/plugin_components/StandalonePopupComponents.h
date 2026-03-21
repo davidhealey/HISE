@@ -142,6 +142,7 @@ public:
 		SampleLocation, /// shows the sample location
 		DebugMode, /// toggles the Debug mode
 		ScaleFactorList, ///< the list of scale factors as Array<var> containing doubles.
+		LabelAlignment, ///< the alignment of the text labels ("left" or "right")
 		numProperties
 	};
 
@@ -189,6 +190,8 @@ private:
 	Array<Identifier> propIds;
 
 	Array<var> scaleFactorList;
+
+	bool labelRight = true;
 
 	BlackTextButtonLookAndFeel blaf;
 
