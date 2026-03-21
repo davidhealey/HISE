@@ -1140,6 +1140,7 @@ String ExpansionHandler::getEncryptionKey(const Identifier& expansionName) const
 bool ExpansionHandler::isEnabled() const noexcept
 { return enabled; }
 
+
 Array<Expansion::ExpansionType> ExpansionHandler::getAllowedExpansionTypes() const
 { 
 #if HISE_USE_UNLOCKER_FOR_EXPANSIONS && USE_FRONTEND

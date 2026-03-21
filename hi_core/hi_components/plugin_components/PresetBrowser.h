@@ -98,6 +98,7 @@ public:
 		bool fullPathSearch = false;
 		bool showExpansions = false;
 		bool showExpansionEditButtons = false;
+		bool showExpansionContentOnly = false;
 	};
 
 	// ============================================================================================
@@ -189,6 +190,7 @@ public:
 	bool shouldShowFavoritesButton() { return showFavoritesButton; }
 	bool shouldShowFullPathFavorites() { return fullPathFavorites; }
 	bool shouldShowFullPathSearch() { return fullPathSearch; }
+	bool isExpansionContentOnly() const { return expansionContentOnly && expHandler.getNumExpansions() > 0; }
 
 	void lookAndFeelChanged() override;
 
@@ -320,6 +322,7 @@ private:
 	bool fullPathFavorites = false;
 	bool fullPathSearch = false;
 	bool showOnlyPresets = false;
+	bool expansionContentOnly = false;
 	String currentWildcard = "*";
 	StringArray currentTagSelection;
 
@@ -337,6 +340,7 @@ private:
 	File findRootForFile(const File& f) const;
 	void updateDatabaseKeysForRename(const File& oldDirectory, const File& newDirectory);
 	void updateDatabaseKeyForFileRename(const File& oldFile, const File& newFile);
+	void updateExpansionContentOnlyState();
 
 	JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(PresetBrowser);
 

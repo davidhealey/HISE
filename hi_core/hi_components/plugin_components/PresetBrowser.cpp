@@ -643,6 +643,10 @@ void PresetBrowser::expansionPackLoaded(Expansion* currentExpansion)
 		selectionChanged(-1, -1, currentExpansion->getRootFolder(), false);
 	else
 		selectionChanged(-1, -1, File(), false);
+
+	// selectionChanged may have returned early (expansion already selected), so
+	// explicitly refresh the add button state in case only the loaded expansion changed.
+	updateExpansionContentOnlyState();
 }
 
 void PresetBrowser::expansionPackCreated(Expansion* newExpansion)
@@ -1283,6 +1287,52 @@ void PresetBrowser::setShowFullPathSearch(bool shouldShowFullPathSearch)
 	fullPathSearch = shouldShowFullPathSearch;
 }
 
+void PresetBrowser::updateExpansionContentOnlyState()
+{
+	if (!expansionContentOnly)
+	{
+		presetColumn->setExpansionAddButtonHidden(false);
+		return;
+	}
+
+	// When no expansions exist (e.g. expansion type is Disabled), the whole
+	// expansionContentOnly restriction is a no-op: keep the preset browser fully
+	// accessible and make sure the search root points at project presets.
+	if (expHandler.getNumExpansions() == 0)
+	{
+		presetColumn->setTotalRoot(rootFile);
+		return;
+	}
+
+	const auto* loadedExpansion = expHandler.getCurrentExpansion();
+	Expansion* selectedExpansion = currentlySelectedExpansion;
+	const bool isLoadedExpansion = (selectedExpansion != nullptr) && (selectedExpansion == loadedExpansion);
+
+	// Only show the add button in the preset column when the selected expansion
+	// is also the currently loaded (active) expansion.
+	presetColumn->setExpansionAddButtonHidden(!isLoadedExpansion);
+
+	// When no expansion is selected, clear the bank/category/preset column contents
+	// so the columns appear empty. Leave the preset column content alone when in
+	// search/favourites mode (showOnlyPresets) so those results are still displayed.
+	if (selectedExpansion == nullptr)
+	{
+		bankColumn->setNewRootDirectory(File());
+		categoryColumn->setNewRootDirectory(File());
+
+		if (!showOnlyPresets)
+			presetColumn->setNewRootDirectory(File());
+
+		presetColumn->setTotalRoot(File());
+	}
+	else
+	{
+		// Sync the search root to the selected expansion so that the search
+		// filter only shows presets from that expansion and not project presets.
+		presetColumn->setTotalRoot(selectedExpansion->getSubDirectory(FileHandlerBase::UserPresets));
+	}
+}
+
 void PresetBrowser::setHighlightColourAndFont(Colour c, Colour bgColour, Font f)
 {
 	auto& lf = getPresetBrowserLookAndFeel();
@@ -1502,6 +1552,9 @@ void PresetBrowser::setOptions(const Options& newOptions)
 	setShowEditButtons(2, newOptions.showRenameButton);
 	setShowEditButtons(3, newOptions.showDeleteButton);
 
+	expansionContentOnly = newOptions.showExpansionContentOnly;
+	updateExpansionContentOnlyState();
+
 	// Override expansion column buttons independently of the other columns.
 	// We hide individual buttons rather than disabling showButtonsAtBottom so that
 	// the 28px button area is still reserved, keeping the column height consistent
@@ -1605,6 +1658,10 @@ void PresetBrowser::selectionChanged(int columnIndex, int /*rowIndex*/, const Fi
 		}
 
 		presetColumn->setDatabase(getDataBase());
+
+		// Update the add button and column visibility for showExpansionContentOnly mode.
+		updateExpansionContentOnlyState();
+		resized();
 	}
 
 	if (columnIndex == 0)
