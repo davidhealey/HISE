@@ -895,12 +895,24 @@ class MidiLearnPanel : public TableFloatingTileBase,
 {
 public:
 
+	enum SpecialPanelIds
+	{
+		ScrollbarWidth = (int)TableFloatingTileBase::SpecialPanelIds::numSpecialPanelIds,
+		numSpecialPanelIds
+	};
+
 	MidiLearnPanel(FloatingTile* parent);
 	~MidiLearnPanel();
 
 	void changeListenerCallback(SafeChangeBroadcaster*) override;
 
 	SET_PANEL_NAME("MidiLearnPanel");
+
+	int getNumDefaultableProperties() const override { return (int)SpecialPanelIds::numSpecialPanelIds; }
+	Identifier getDefaultablePropertyId(int index) const override;
+	var getDefaultProperty(int index) const override;
+	var toDynamicObject() const override;
+	void fromDynamicObject(const var& object) override;
 
 	String getIndexName() const override { return "CC #"; };
 
@@ -929,6 +941,10 @@ public:
 	String getCellText(int rowNumber, int columnId) const override;
 
 	MidiControllerAutomationHandler& handler;
+
+private:
+
+	int scrollbarWidth = 16;
 
 	JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(MidiLearnPanel)
 };
