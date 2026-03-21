@@ -5314,6 +5314,23 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawScrollbar(Graphics& g_, Scr
 				setColourOrBlack(obj, "bgColour",    scrollbar, ScrollBar::ColourIds::backgroundColourId);
 				setColourOrBlack(obj, "itemColour",  scrollbar, ScrollBar::ColourIds::thumbColourId);
 				setColourOrBlack(obj, "itemColour2", scrollbar, ScrollBar::ColourIds::trackColourId);
+
+				if (auto vp = scrollbar.findParentComponentOfClass<juce::Viewport>())
+				{
+					auto id = vp->getComponentID();
+
+					// For Viewport mode, the ID is on the Viewport itself.
+					// For List/Table mode, the ID is on the parent ListBox.
+					if (id.isEmpty() && vp->getParentComponent() != nullptr)
+						id = vp->getParentComponent()->getComponentID();
+
+					if (id.isNotEmpty())
+						obj->setProperty("id", id);
+
+					if (vp->getProperties().contains("textColour"))
+						obj->setProperty("textColour", (int64)vp->getProperties()["textColour"]);
+				}
+
 				addParentFloatingTile(scrollbar, obj);
 			}
 		}
