@@ -1294,8 +1294,6 @@ void PresetBrowser::setHighlightColourAndFont(Colour c, Colour bgColour, Font f)
 	lf.font = f;
 	lf.highlightColour = c;
 
-	favoriteButton->setColours(c.withAlpha(0.7f), c.withAlpha(0.5f), c.withAlpha(0.6f));
-
 	setOpaque(bgColour.isOpaque());
 }
 
@@ -1485,6 +1483,10 @@ void PresetBrowser::setOptions(const Options& newOptions)
 	setHighlightColourAndFont(newOptions.highlightColour, newOptions.backgroundColour, newOptions.font);
 
 	getPresetBrowserLookAndFeel().textColour = newOptions.textColour;
+
+	auto tc = newOptions.textColour;
+	favoriteButton->setColours(tc.withAlpha(0.7f), tc.withAlpha(0.5f), tc.withAlpha(0.6f));
+
 	setNumColumns(newOptions.numColumns);
 	columnWidthRatios.clear();
 	columnWidthRatios.addArray(newOptions.columnWidthRatios);
