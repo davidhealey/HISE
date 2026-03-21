@@ -320,7 +320,7 @@ private:
 	ScopedPointer<BetterLabel> noteLabel;
 	ScopedPointer<TagList> tagList;
 	ScopedPointer<ShapeButton> closeButton;
-	ScopedPointer<TextButton> favoriteButton;
+	ScopedPointer<ShapeButton> favoriteButton;
 	ScopedPointer<ModalWindow> modalInputWindow;
 
 	ScopedPointer<TextButton> saveButton;
