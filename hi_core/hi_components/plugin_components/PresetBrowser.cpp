@@ -535,7 +535,7 @@ expHandler(mc->getExpansionHandler())
 
 	addAndMakeVisible(tagList = new TagList(mc, this));
 
-	addAndMakeVisible(favoriteButton = new TextButton("Show Favorites"));
+	addAndMakeVisible(favoriteButton = new ShapeButton("Favorites", Colours::white.withAlpha(0.5f), Colours::white.withAlpha(0.8f), Colours::white));
 	favoriteButton->addListener(this);
 
 	addAndMakeVisible(modalInputWindow = new ModalWindow(this));
@@ -1038,6 +1038,8 @@ void PresetBrowser::updateFavoriteButton()
 	showOnlyPresets = currentWildcard != "*" || on;
 
 	auto path = getPresetBrowserLookAndFeel().createPresetBrowserIcons(on ? "favorite_on" : "favorite_off");
+
+	favoriteButton->setShape(path, true, true, true);
 
 	if (presetColumn == nullptr)
 		return;
