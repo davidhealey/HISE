@@ -237,6 +237,10 @@ public:
 	Point<int> getMouseHoverInformation() const;
 
 	Array<File> getAllSearchRoots() const;
+	Array<File> getAllFavoritePresets();
+	bool isFavoriteInAnyDatabase(const File& presetFile) const;
+	void setFavoriteForFile(const File& presetFile, bool isFavorite);
+	void invalidateFavoritesCache() { favoritesCacheDirty = true; }
 
 	Component* getColumn(int columnIndex)
 	{
@@ -319,6 +323,14 @@ private:
 	WeakReference<Expansion> currentlySelectedExpansion;
 
 	var presetDatabase;
+
+	// Lazily rebuilt cache of favourite files across all roots.
+	mutable Array<File> cachedFavorites;
+	mutable bool favoritesCacheDirty = true;
+
+	void rebuildFavoritesCache() const;
+	var loadDatabaseForRoot(const File& rootDir) const;
+	void saveDatabaseForRoot(const var& db, const File& rootDir);
 
 	JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(PresetBrowser);
 

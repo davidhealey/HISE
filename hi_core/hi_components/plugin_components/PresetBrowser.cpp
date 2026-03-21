@@ -729,6 +729,138 @@ Array<File> PresetBrowser::getAllSearchRoots() const
 	return roots;
 }
 
+var PresetBrowser::loadDatabaseForRoot(const File& rootDir) const
+{
+	// Use the in-memory database for the currently loaded root so that
+	// unsaved changes (e.g. a just-toggled favourite) are reflected.
+	if (rootDir == rootFile)
+		return presetDatabase;
+
+	var db = JSON::parse(rootDir.getChildFile("db.json").loadFileAsString());
+	return db.isObject() ? db : var(new DynamicObject());
+}
+
+void PresetBrowser::saveDatabaseForRoot(const var& db, const File& rootDir)
+{
+	if (rootDir == rootFile)
+	{
+		presetDatabase = db;
+		savePresetDatabase(rootFile);
+	}
+	else
+	{
+		rootDir.getChildFile("db.json").replaceWithText(JSON::toString(db));
+	}
+}
+
+void PresetBrowser::rebuildFavoritesCache() const
+{
+	cachedFavorites.clear();
+
+	// Build the full cache across ALL roots regardless of which expansion is
+	// currently selected.  getAllFavoritePresets() filters by expansion later.
+	Array<File> allRoots;
+
+	if (defaultRoot.isDirectory())
+		allRoots.add(defaultRoot);
+
+	auto& handler = getMainController()->getExpansionHandler();
+
+	for (int i = 0; i < handler.getNumExpansions(); ++i)
+	{
+		if (auto e = handler.getExpansion(i))
+		{
+			auto userPresetsDir = e->getSubDirectory(FileHandlerBase::UserPresets);
+			if (userPresetsDir.isDirectory() && !allRoots.contains(userPresetsDir))
+				allRoots.add(userPresetsDir);
+		}
+	}
+
+	for (auto& rootDir : allRoots)
+	{
+		auto db = loadDatabaseForRoot(rootDir);
+
+		Array<File> presets;
+		rootDir.findChildFiles(presets, File::findFiles, true);
+		DataBaseHelpers::cleanFileList(const_cast<MainController*>(getMainController()), presets);
+
+		for (auto& preset : presets)
+		{
+			if (DataBaseHelpers::isFavorite(db, preset))
+				cachedFavorites.add(preset);
+		}
+	}
+
+	favoritesCacheDirty = false;
+}
+
+bool PresetBrowser::isFavoriteInAnyDatabase(const File& presetFile) const
+{
+	if (favoritesCacheDirty)
+		rebuildFavoritesCache();
+
+	return cachedFavorites.contains(presetFile);
+}
+
+void PresetBrowser::setFavoriteForFile(const File& presetFile, bool isFavorite)
+{
+	if (presetFile.isAChildOf(rootFile))
+	{
+		DataBaseHelpers::setFavorite(presetDatabase, presetFile, isFavorite);
+		savePresetDatabase(rootFile);
+		invalidateFavoritesCache();
+		return;
+	}
+
+	// Find the root this preset belongs to and update its database.
+	auto& handler = getMainController()->getExpansionHandler();
+
+	for (int i = 0; i < handler.getNumExpansions(); ++i)
+	{
+		if (auto e = handler.getExpansion(i))
+		{
+			auto userPresetsDir = e->getSubDirectory(FileHandlerBase::UserPresets);
+
+			if (presetFile.isAChildOf(userPresetsDir))
+			{
+				var db = loadDatabaseForRoot(userPresetsDir);
+				DataBaseHelpers::setFavorite(db, presetFile, isFavorite);
+				saveDatabaseForRoot(db, userPresetsDir);
+				invalidateFavoritesCache();
+				return;
+			}
+		}
+	}
+
+	// File belongs to defaultRoot but rootFile points elsewhere (expansion switch).
+	if (presetFile.isAChildOf(defaultRoot))
+	{
+		var db = loadDatabaseForRoot(defaultRoot);
+		DataBaseHelpers::setFavorite(db, presetFile, isFavorite);
+		saveDatabaseForRoot(db, defaultRoot);
+	}
+
+	invalidateFavoritesCache();
+}
+
+Array<File> PresetBrowser::getAllFavoritePresets()
+{
+	if (favoritesCacheDirty)
+		rebuildFavoritesCache();
+
+	if (currentlySelectedExpansion == nullptr)
+		return cachedFavorites;
+
+	auto expansionRoot = currentlySelectedExpansion->getSubDirectory(FileHandlerBase::UserPresets);
+	Array<File> filtered;
+
+	for (auto& f : cachedFavorites)
+		if (f.isAChildOf(expansionRoot))
+			filtered.add(f);
+
+	return filtered;
+}
+
 void PresetBrowser::presetChanged(const File& newPreset)
 {
 	// After we switched the expansions we need to make sure to run this logic so that it ca
@@ -939,6 +1071,28 @@ void PresetBrowser::resized()
 	if (tagList->isActive())
 		tagList->setBounds(listArea.removeFromTop(30));
 
+	const int folderOffset = expansionColumn != nullptr ? 1 : 0;
+	const int numColumnsToShow = jlimit(1, 4, numColumns + folderOffset);
+	int columnWidths[4] = { 0, 0, 0, 0 };
+	auto w = (double)getWidth();
+
+	if (columnWidthRatios.size() == numColumnsToShow)
+	{
+		for (int i = 0; i < numColumnsToShow; i++)
+		{
+			auto r = jlimit(0.0, 1.0, (double)columnWidthRatios[i]);
+			columnWidths[i] = roundToInt(w * r);
+		}
+	}
+	else
+	{
+		// column amount mismatch, use equal spacing...
+		const int columnWidth = roundToInt(w / (double)numColumnsToShow);
+
+		for (int i = 0; i < numColumnsToShow; i++)
+			columnWidths[i] = columnWidth;
+	}
+
 	if (showOnlyPresets)
 	{
 		if (expansionColumn != nullptr)
@@ -948,28 +1102,6 @@ void PresetBrowser::resized()
 	}
 	else
 	{
-		const int folderOffset = expansionColumn != nullptr ? 1 : 0;
-		const int numColumnsToShow = jlimit(1, 4, numColumns + folderOffset);
-		int columnWidths[4] = { 0, 0, 0, 0 };
-		auto w = (double)getWidth();
-
-		if (columnWidthRatios.size() == numColumnsToShow)
-		{
-			for (int i = 0; i < numColumnsToShow; i++)
-			{
-				auto r = jlimit(0.0, 1.0, (double)columnWidthRatios[i]);
-				columnWidths[i] = roundToInt(w * r);
-			}
-		}
-		else
-		{
-			// column amount mismatch, use equal spacing...
-			const int columnWidth = roundToInt(w / (double)numColumnsToShow);
-
-			for (int i = 0; i < numColumnsToShow; i++)
-				columnWidths[i] = columnWidth;
-		}
-
 		if(expansionColumn != nullptr)
 			expansionColumn->setBounds(listArea.removeFromLeft(columnWidths[0]).reduced(2, 2));
 
@@ -1045,7 +1177,7 @@ void PresetBrowser::labelTextChanged(Label* l)
 	{
 		showOnlyPresets = !currentTagSelection.isEmpty() || l->getText().isNotEmpty() || favoriteButton->getToggleState();
 
-		if (showOnlyPresets)
+		if (l->getText().isNotEmpty())
 			currentWildcard = "*" + l->getText() + "*";
 		else
 			currentWildcard = "*";
@@ -1067,6 +1199,9 @@ void PresetBrowser::updateFavoriteButton()
 
 	if (presetColumn == nullptr)
 		return;
+
+	if (on)
+		invalidateFavoritesCache();
 
 	presetColumn->setShowFavoritesOnly(on);
 
@@ -1396,14 +1531,18 @@ void PresetBrowser::selectionChanged(int columnIndex, int /*rowIndex*/, const Fi
 		currentBankFile = File();
 		currentCategoryFile = File();
 		currentlyLoadedPreset = 0;
-		
+
+		// Flush before loadPresetDatabase overwrites the in-memory state.
+		if (rootFile.isDirectory())
+			savePresetDatabase(rootFile);
+
 		if (file == File())
 		{
 			if (FullInstrumentExpansion::isEnabled(getMainController()))
 				rootFile = File();
 			else
 				rootFile = defaultRoot;
-				
+
 			currentlySelectedExpansion = nullptr;
 		}
 		else
@@ -1430,7 +1569,6 @@ void PresetBrowser::selectionChanged(int columnIndex, int /*rowIndex*/, const Fi
 		categoryColumn->setNewRootDirectory(currentCategoryFile);
 
 		loadPresetDatabase(rootFile);
-		presetColumn->setDatabase(getDataBase());
 		rebuildAllPresets();
 
 		if (showOnlyPresets)
@@ -1447,6 +1585,8 @@ void PresetBrowser::selectionChanged(int columnIndex, int /*rowIndex*/, const Fi
 			pc->setDisplayDirectories(false);
 			presetColumn->setModel(pc, rootFile);
 		}
+
+		presetColumn->setDatabase(getDataBase());
 	}
 
 	if (columnIndex == 0)
