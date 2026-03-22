@@ -1352,14 +1352,13 @@ namespace ScriptingObjects
 				css.drawPopupMenuSectionHeaderWithOptions(g, area, sectionName, o);
 			}
 
-			void getIdealPopupMenuItemSizeWithOptions (const String& text,
+			void getIdealPopupMenuItemSize (const String& text,
 	                                                   bool isSeparator,
 	                                                   int standardMenuItemHeight,
 	                                                   int& idealWidth,
-	                                                   int& idealHeight,
-	                                                   const PopupMenu::Options& options) override
+	                                                   int& idealHeight) override
 			{
-				css.getIdealPopupMenuItemSizeWithOptions(text, isSeparator, standardMenuItemHeight, idealWidth, idealHeight, options);
+				css.getIdealPopupMenuItemSize(text, isSeparator, standardMenuItemHeight, idealWidth, idealHeight);
 			}
 
 			/** Uses the selector ".popup and .popup-item". */

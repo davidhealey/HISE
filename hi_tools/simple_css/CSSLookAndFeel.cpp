@@ -446,8 +446,8 @@ StyleSheet::Ptr StyleSheetLookAndFeel::getBestPopupStyleSheet(bool getItem)
 	return root.css.getWithAllStates(nullptr, Selector::withClass(getItem ? "popup-item" : "popup"));
 }
 
-void StyleSheetLookAndFeel::getIdealPopupMenuItemSizeWithOptions(const String& text, bool isSeparator,
-	int standardMenuItemHeight, int& idealWidth, int& idealHeight, const PopupMenu::Options& options)
+void StyleSheetLookAndFeel::getIdealPopupMenuItemSize(const String& text, bool isSeparator,
+	int standardMenuItemHeight, int& idealWidth, int& idealHeight)
 {
 	if(auto ss = getBestPopupStyleSheet(true))
 	{
@@ -483,7 +483,7 @@ void StyleSheetLookAndFeel::getIdealPopupMenuItemSizeWithOptions(const String& t
 	}
 	else
 	{
-		GlobalHiseLookAndFeel::getIdealPopupMenuItemSizeWithOptions(text, isSeparator, standardMenuItemHeight, idealWidth, idealHeight, options);
+		GlobalHiseLookAndFeel::getIdealPopupMenuItemSize(text, isSeparator, standardMenuItemHeight, idealWidth, idealHeight);
 	}
 }
 
