@@ -2400,6 +2400,10 @@
                 "standardMenuHeight": {
                   "type": "int",
                   "description": "Standard menu item height"
+                },
+                "hasSubMenu": {
+                  "type": "bool",
+                  "description": "Whether the item has a submenu"
                 }
               }
             }

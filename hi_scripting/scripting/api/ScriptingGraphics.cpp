@@ -4185,7 +4185,7 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawAlertBox(Graphics& g_, Aler
 	GlobalHiseLookAndFeel::drawAlertBox(g_, w, ta, tl);
 }
 
-void ScriptingObjects::ScriptedLookAndFeel::Laf::getIdealPopupMenuItemSize(const String &text, bool isSeparator, int standardMenuItemHeight, int &idealWidth, int &idealHeight)
+void ScriptingObjects::ScriptedLookAndFeel::Laf::getIdealPopupMenuItemSizeWithOptions(const String &text, bool isSeparator, int standardMenuItemHeight, int &idealWidth, int &idealHeight, bool hasSubMenu, const PopupMenu::Options& options)
 {
     if (functionDefined("getIdealPopupMenuItemSize"))
     {
@@ -4194,7 +4194,8 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::getIdealPopupMenuItemSize(const
         obj->setProperty("text", text);
         obj->setProperty("isSeparator", isSeparator);
         obj->setProperty("standardMenuHeight", standardMenuItemHeight);
-        
+        obj->setProperty("hasSubMenu", hasSubMenu);
+
         var x = var(obj);
 
         auto nObj = get()->callDefinedFunction("getIdealPopupMenuItemSize", &x, 1);
@@ -4211,8 +4212,8 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::getIdealPopupMenuItemSize(const
             return;
         }
     }
-    
-    GlobalHiseLookAndFeel::getIdealPopupMenuItemSize(text, isSeparator, standardMenuItemHeight, idealWidth, idealHeight);
+
+    GlobalHiseLookAndFeel::getIdealPopupMenuItemSizeWithOptions(text, isSeparator, standardMenuItemHeight, idealWidth, idealHeight, hasSubMenu, options);
 }
 
 void ScriptingObjects::ScriptedLookAndFeel::Laf::drawFilterDragHandle(Graphics& g_, FilterDragOverlay& o, int index, Rectangle<float> handleBounds, const FilterDragOverlay::DragData& d)

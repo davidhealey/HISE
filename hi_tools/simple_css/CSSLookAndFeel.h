@@ -134,6 +134,7 @@ struct StyleSheetLookAndFeel: public GlobalHiseLookAndFeel
 	                                                   int standardMenuItemHeight,
 	                                                   int& idealWidth,
 	                                                   int& idealHeight,
+	                                                   bool hasSubMenu,
 	                                                   const PopupMenu::Options& options) override;
 
 	/** Uses the selector ".popup and .popup-item". */

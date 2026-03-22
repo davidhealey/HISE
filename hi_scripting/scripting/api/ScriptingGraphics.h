@@ -938,7 +938,7 @@ namespace ScriptingObjects
 
 			void drawTableHeaderColumn(Graphics& g, TableHeaderComponent&, const String& columnName, int columnId, int width, int height, bool isMouseOver, bool isMouseDown, int columnFlags) override;
 
-            void getIdealPopupMenuItemSize(const String &text, bool isSeparator, int standardMenuItemHeight, int &idealWidth, int &idealHeight) override;
+            void getIdealPopupMenuItemSizeWithOptions(const String &text, bool isSeparator, int standardMenuItemHeight, int &idealWidth, int &idealHeight, bool hasSubMenu, const PopupMenu::Options& options) override;
             
 			void drawFilterDragHandle(Graphics& g, FilterDragOverlay& o, int index, Rectangle<float> handleBounds, const FilterDragOverlay::DragData& d) override;
 			void drawFilterBackground(Graphics &g, FilterGraph& fg) override;
@@ -1357,9 +1357,10 @@ namespace ScriptingObjects
 	                                                   int standardMenuItemHeight,
 	                                                   int& idealWidth,
 	                                                   int& idealHeight,
+	                                                   bool hasSubMenu,
 	                                                   const PopupMenu::Options& options) override
 			{
-				css.getIdealPopupMenuItemSizeWithOptions(text, isSeparator, standardMenuItemHeight, idealWidth, idealHeight, options);
+				css.getIdealPopupMenuItemSizeWithOptions(text, isSeparator, standardMenuItemHeight, idealWidth, idealHeight, hasSubMenu, options);
 			}
 
 			/** Uses the selector ".popup and .popup-item". */
