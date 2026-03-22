@@ -1926,7 +1926,7 @@ public:
 
 	float getStringWidthFloat(const Font& f, const String& name)
 	{
-		return getStringWidthFromEmbeddedFont(name, f.getTypefaceName(), f.getHeight(), f.getExtraKerningFactor());
+		return f.getStringWidthFloat(name);
 	}
 
 	float getStringWidthFromEmbeddedFont(const String& text, const String& fontName, float fontSize,

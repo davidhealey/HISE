@@ -1982,15 +1982,9 @@ juce::Typeface* MainController::getFont(const String &fontName) const
 float MainController::getStringWidthFromEmbeddedFont(const String& text, const String& fontName, float fontSize,
 	                                     float kerningFactor)
 {
-	for(auto& tf: customTypeFaces)
-	{
-		auto nameToUse = tf.id.isValid() ? tf.id.toString() : tf.typeface->getName();
-
-		if (nameToUse == fontName || tf.typeface->getName() == fontName)
-			return tf.getStringWidthFloat(text, fontSize, kerningFactor);
-	}
-
-	return defaultFont.getStringWidthFloat(text, fontSize, kerningFactor);
+	auto f = getFontFromString(fontName, fontSize);
+	f.setExtraKerningFactor(kerningFactor);
+	return f.getStringWidthFloat(text);
 }
 
 Font MainController::getFontFromString(const String& fontName, float fontSize) const
