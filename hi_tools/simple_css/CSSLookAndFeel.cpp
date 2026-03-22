@@ -447,7 +447,7 @@ StyleSheet::Ptr StyleSheetLookAndFeel::getBestPopupStyleSheet(bool getItem)
 }
 
 void StyleSheetLookAndFeel::getIdealPopupMenuItemSizeWithOptions(const String& text, bool isSeparator,
-	int standardMenuItemHeight, int& idealWidth, int& idealHeight, bool /*hasSubMenu*/, const PopupMenu::Options& options)
+	int standardMenuItemHeight, int& idealWidth, int& idealHeight, bool hasSubMenu, const PopupMenu::Options& options)
 {
 	if(auto ss = getBestPopupStyleSheet(true))
 	{
@@ -483,7 +483,7 @@ void StyleSheetLookAndFeel::getIdealPopupMenuItemSizeWithOptions(const String& t
 	}
 	else
 	{
-		GlobalHiseLookAndFeel::getIdealPopupMenuItemSizeWithOptions(text, isSeparator, standardMenuItemHeight, idealWidth, idealHeight, options);
+		GlobalHiseLookAndFeel::getIdealPopupMenuItemSizeWithOptions(text, isSeparator, standardMenuItemHeight, idealWidth, idealHeight, hasSubMenu, options);
 	}
 }
 
