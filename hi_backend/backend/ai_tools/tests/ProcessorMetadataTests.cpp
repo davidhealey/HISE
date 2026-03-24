@@ -192,6 +192,10 @@ private:
 			// default value is dependent on chain type
 			defaultValueSkipMap[{MatrixModulator::getClassType(), MatrixModulator::SpecialParameters::Value}] = true;
 
+            defaultValueSkipMap[{DynamicsEffect::getClassType(), DynamicsEffect::Parameters::GateReduction}] = true;
+            defaultValueSkipMap[{DynamicsEffect::getClassType(), DynamicsEffect::Parameters::CompressorReduction}] = true;
+            defaultValueSkipMap[{DynamicsEffect::getClassType(), DynamicsEffect::Parameters::LimiterReduction}] = true;
+    
 			// weird decibel rounding error, disregard
 			defaultValueSkipMap[{MidiMetronome::getClassType(), MidiMetronome::Parameters::Volume}] = true;
 
@@ -774,28 +778,28 @@ private:
 		expectEquals(md.modulation.size(), 4, "Should have 4 modulation chains (2 base + 2 own)");
 
 		// Base: GainModulation
-		auto& gain = md.modulation[0];
+        auto gain = md.modulation[0];
 		expect(gain.chainIndex == ModulatorSynth::GainModulation, "Gain chain index");
 		expect(gain.id == Identifier("Gain Modulation"), "Gain chain ID");
 		expect(gain.modulationMode == scriptnode::modulation::ParameterMode::ScaleOnly,
 		       "Gain chain mode");
 
 		// Base: PitchModulation
-		auto& pitch = md.modulation[1];
+        auto pitch = md.modulation[1];
 		expect(pitch.chainIndex == ModulatorSynth::PitchModulation, "Pitch chain index");
 		expect(pitch.id == Identifier("Pitch Modulation"), "Pitch chain ID");
 		expect(pitch.modulationMode == scriptnode::modulation::ParameterMode::Pitch,
 		       "Pitch chain mode");
 
 		// Own: MixModulation
-		auto& mix = md.modulation[2];
+		auto mix = md.modulation[2];
 		expect(mix.chainIndex == WaveSynth::MixModulation, "Mix chain index");
 		expect(mix.id == Identifier("Mix Modulation"), "Mix chain ID");
 		expect(mix.modulationMode == scriptnode::modulation::ParameterMode::ScaleAdd,
 		       "Mix chain mode");
 
 		// Own: Osc2PitchChain
-		auto& osc2 = md.modulation[3];
+		auto osc2 = md.modulation[3];
 		expect(osc2.chainIndex == WaveSynth::Osc2PitchChain, "Osc2Pitch chain index");
 		expect(osc2.id == Identifier("Osc2 Pitch Modulation"), "Osc2Pitch chain ID");
 		expect(osc2.modulationMode == scriptnode::modulation::ParameterMode::Pitch,

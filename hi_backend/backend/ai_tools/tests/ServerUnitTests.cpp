@@ -2364,11 +2364,13 @@ private:
         
         // Test: parent directory doesn't exist
         {
-            auto response = ctx->httpGet("/api/screenshot?moduleId=Interface&outputPath=" 
+#if JUCE_WINDOWS
+            auto response = ctx->httpGet("/api/screenshot?moduleId=Interface&outputPath="
                                           + URL::addEscapeChars("C:/nonexistent_dir_12345/screenshot.png", true));
             var json = ctx->parseJson(response);
             
             expectErrorMessageContains(json, "directory");
+#endif
         }
     }
     

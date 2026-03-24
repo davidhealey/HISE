@@ -49,9 +49,7 @@ public:
     //[UserMethods]     -- You can add your own custom methods in this section.
 	void updateGui()
 	{
-		const bool shouldBeSynced = tempoSyncButton->getToggleState();
-
-        auto md = getProcessor()->getMetadata();
+		auto md = getProcessor()->getMetadata();
 
         md.updateTempoSync(*leftTimeSlider);
         md.updateTempoSync(*rightTimeSlider);

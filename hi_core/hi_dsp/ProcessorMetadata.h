@@ -37,6 +37,21 @@ namespace hise {
 using namespace juce;
 
 class Processor;
+class RoutableProcessor;
+class HotswappableProcessor;
+class ModulatorSampler;
+class MidiPlayer;
+class WavetableSynth;
+class VoiceStartModulator;
+class TimeVariantModulator;
+class EnvelopeModulator;
+class EffectProcessor;
+class MasterEffectProcessor;
+class MonophonicEffectProcessor;
+class VoiceEffectProcessor;
+class MidiProcessor;
+class ModulatorSynth;
+class Chain;
 
 #define DECLARE_ID(x) static const Identifier x(#x);
 
@@ -395,8 +410,8 @@ struct ProcessorMetadata
 		return (*this).withId(ProcessorType::getClassType())
 			.withMetadataType(DataType::Static)
 			.withPrettyName(ProcessorType::getClassName())
-			.withType<ProcessorType>()
-			.withInterface<ProcessorType>();
+			.template withType<ProcessorType>()
+			.template withInterface<ProcessorType>();
 	}
 
 	ProcessorMetadata withPrettyName(const String& name) const
