@@ -117,6 +117,21 @@ struct ProcessorMetadata
 {
 	using WildcardFilterList = std::vector<std::pair<Identifier, String>>;
 
+	struct ConstrainerParser
+	{
+		ConstrainerParser(const String& wildcardPattern);
+
+		/** Check if a processor type is allowed by this constrainer.
+		 *  Returns an empty Result on success, or an error message on rejection. */
+		Result check(const ProcessorMetadata& md) const;
+
+	private:
+
+		const bool matchAll = false;
+		StringArray positivePatterns;  // match against subtype
+		StringArray negativePatterns;  // match against processor type id
+	};
+
 	enum class DataType
 	{
 		Undefined = 0,

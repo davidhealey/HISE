@@ -45,19 +45,9 @@ public:
 
 	NoMidiInputConstrainer();
 
-	static ProcessorMetadata::WildcardFilterList getWildcard() 
-	{ 
-		return {
-			{ 
-				ProcessorMetadataIds::Modulator, 
-				ProcessorMetadataIds::TimeVariantModulator.toString()
-			},
-			{ 
-				ProcessorMetadataIds::Effect, 
-				ProcessorMetadataIds::MasterEffect.toString()
-			}
-		};
-	}
+	static ProcessorMetadata::WildcardFilterList getWildcard();
+
+	ProcessorMetadata::WildcardFilterList getWildcardFromObject() const override { return getWildcard(); }
 
 	String getDescription() const override;
 
@@ -65,29 +55,13 @@ public:
 
 private:
 
-	Array<FactoryType::ProcessorEntry> forbiddenModulators;
+	EffectProcessorChainFactoryType::NoVoiceEffectConstrainer noVoiceFX;
+	
+	Array<Identifier> allowedModulators;
 };
 
-class SynthGroupFXConstrainer : public FactoryType::Constrainer
-{
-public:
+using SynthGroupFXConstrainer = EffectProcessorChainFactoryType::VoiceEffectConstrainer;
 
-    SynthGroupFXConstrainer();
-
-    String getDescription() const override;
-
-	static ProcessorMetadata::WildcardFilterList getWildcard() 
-	{
-		return {
-			{
-				ProcessorMetadataIds::Effect, 
-				ProcessorMetadataIds::VoiceEffect.toString()
-			}
-		};
-	}
-
-    bool allowType(const Identifier &typeName) override;
-};
 
 class SynthGroupConstrainer : public FactoryType::Constrainer
 {
@@ -95,15 +69,9 @@ public:
 
 	SynthGroupConstrainer();
 
-	static ProcessorMetadata::WildcardFilterList getWildcard()
-	{
-		return {
-			{ 
-				ProcessorMetadataIds::SoundGenerator, 
-			    "!ModulatorSynthChain|!GlobalModulatorContainer|!ModulatorSynthGroup|!MacroModulationSource" 
-			}
-		};
-	}
+	static ProcessorMetadata::WildcardFilterList getWildcard();
+
+	ProcessorMetadata::WildcardFilterList getWildcardFromObject() const override { return getWildcard(); }
 
 	String getDescription() const override;
 

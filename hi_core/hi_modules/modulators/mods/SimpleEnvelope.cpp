@@ -59,7 +59,7 @@ hise::ProcessorMetadata SimpleEnvelope::createMetadata()
 		.withModulation(Mod(AttackChain)
 			.withId("AttackTimeModulation")
 			.withDescription("Modulates the attack time per voice")
-			.withConstrainer<VoiceStartModulator>()
+			.withConstrainer<VoiceStartModulatorFactoryType::Constrainer>()
 			.withMode(scriptnode::modulation::ParameterMode::ScaleOnly)
 			.withModulatedParameter(Attack));
 }

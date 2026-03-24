@@ -50,6 +50,13 @@ public:
 
         ctx = std::make_unique<TestContext>(*this);
 
+        testConstrainerParser<SynthGroupConstrainer>();
+        testConstrainerParser<SynthGroupFXConstrainer>();
+        testConstrainerParser<NoMidiInputConstrainer>();
+        testConstrainerParser<SlotFX::Constrainer>();
+        testConstrainerParser<NoGlobalsConstrainer>();
+        testConstrainerParser<VoiceStartModulatorFactoryType::Constrainer>();
+
         // LFO static metadata tests (no processor instance needed)
         testLfoMetadataParameterCount();
         testLfoMetadataParameterIds();
@@ -175,10 +182,72 @@ private:
 
         auto pToTest = b.create(parentSynthToUse, md.id, insertIndex);
 
+        
+
         expect(pToTest != nullptr, "module created OK");
 
         if(md.dataType == ProcessorMetadata::DataType::Dynamic)
             md = pToTest->getMetadata();
+
+        if (md.constrainerWildcard != "*")
+        {
+            auto c = dynamic_cast<Chain*>(pToTest);
+            expect(c != nullptr);
+            auto wildcards = c->getFactoryType()->getConstrainer()->getWildcardFromObject();
+
+            bool found = false;
+
+            for (auto& wc : wildcards)
+            {
+                if (wc.first == md.type)
+                {
+                    expectEquals(wc.second, md.constrainerWildcard, "constrainer wildcard mismatch");
+                    found = true;
+                    break;
+                }
+            }
+
+            expect(found, "wildcard not found");
+        }
+        else
+        {
+            if (auto c = dynamic_cast<Chain*>(pToTest))
+            {
+                expect(c->getFactoryType()->getConstrainer() == nullptr, "missing wildcard");
+            }
+        }
+
+		if (md.fxConstrainerWildcard != "*")
+		{
+            auto fxChain = dynamic_cast<EffectProcessorChain*>(pToTest->getChildProcessor(ModulatorSynth::InternalChains::EffectChain));
+
+			expect(fxChain != nullptr);
+			auto wildcards = fxChain->getFactoryType()->getConstrainer()->getWildcardFromObject();
+
+			bool found = false;
+
+			for (auto& wc : wildcards)
+			{
+				if (wc.first == ProcessorMetadataIds::Effect)
+				{
+					expectEquals(wc.second, md.fxConstrainerWildcard, "constrainer wildcard mismatch");
+					found = true;
+					break;
+				}
+			}
+
+			expect(found, "wildcard not found");
+		}
+		else
+		{
+            if (dynamic_cast<ModulatorSynth*>(pToTest) != nullptr)
+            {
+				if (auto fxChain = dynamic_cast<EffectProcessorChain*>(pToTest->getChildProcessor(ModulatorSynth::InternalChains::EffectChain)))
+				{
+					expect(fxChain->getFactoryType()->getConstrainer() == nullptr, "missing wildcard");
+				}
+            }
+		}
 
         auto state = pToTest->exportAsValueTree();
 
@@ -390,6 +459,45 @@ private:
 			auto expected = m.modulationMode;
 
 			expectEquals<int>((int)actual, (int)expected, "mode mismatch at " + m.id.toString());
+
+			if (m.constrainerWildcard != "*")
+			{
+                auto constrainer = modChain->getFactoryType()->getConstrainer();
+
+                if (constrainer == nullptr)
+                {
+                    auto isVoiceStart = dynamic_cast<VoiceStartModulatorFactoryType*>(modChain->getFactoryType()) != nullptr;
+
+                    expect(isVoiceStart == (m.constrainerWildcard == ProcessorMetadataIds::VoiceStartModulator.toString()),
+                        "not a voice start modchain");
+
+                }
+                else
+                {
+					auto wildcards = constrainer->getWildcardFromObject();
+
+					bool found = false;
+
+					for (auto& wc : wildcards)
+					{
+						if (wc.first == ProcessorMetadataIds::Modulator)
+						{
+							expectEquals(wc.second, m.constrainerWildcard, "constrainer wildcard mismatch at " + m.id.toString());
+							found = true;
+							break;
+						}
+					}
+
+					expect(found, "wildcard not found");
+                }
+			}
+            else
+            {
+                auto noConstrainer = modChain->getFactoryType()->getConstrainer() == nullptr;
+                auto notOnlyVoiceStart = dynamic_cast<VoiceStartModulatorFactoryType*>(modChain->getFactoryType()) == nullptr;
+
+                expect(noConstrainer&& notOnlyVoiceStart, "missing wildcard");
+            }
         }
 
     }
@@ -556,6 +664,74 @@ private:
         // Non-tempo-sync parameters should have -1 controller index
         expect(md[LfoModulator::FadeIn].tempoSyncControllerIndex == -1,
                "FadeIn should not have tempo sync");
+    }
+
+   
+
+    template <typename T> void testConstrainerParser()
+    {
+        ScopedPointer<T> constrainer = new T();
+
+        beginTest("Testing constrainer wildcard parser for " + constrainer->getDescription());
+
+        using ConstrainerMap = std::map<std::pair<Identifier, String>, std::vector<Identifier>>;
+
+        ProcessorMetadataRegistry rd;
+
+        std::vector<ProcessorMetadata> allData;
+
+        for (const auto& typeId : rd.getRegisteredTypes())
+            allData.push_back(*rd.get(typeId));
+
+        ConstrainerMap okMap;
+        ConstrainerMap fails;
+
+        auto wildcard = T::getWildcard();
+
+        
+
+        for (const auto& wc : wildcard)
+        {
+            Identifier typeFilter = wc.first;
+
+            std::vector<Identifier> okList, failList;
+
+            for (const auto& md : allData)
+            {
+                if (md.type != typeFilter)
+                    continue;
+
+                if (constrainer->allowType(md.id))
+                    okList.push_back(md.id);
+                else
+                    failList.push_back(md.id);
+            }
+
+            okMap[wc] = okList;
+            fails[wc] = failList;
+        }
+
+        for (auto& wc : okMap)
+        {
+            ProcessorMetadata::ConstrainerParser okParser(wc.first.second);
+
+            for (const auto& typeId : wc.second)
+            {
+                auto r = okParser.check(*rd.get(typeId));
+                expect(r.wasOk(), wc.first.second + "should accept: " + typeId.toString() + ". got: " + r.getErrorMessage());
+            }
+        }
+
+		for (auto& wc : fails)
+		{
+			ProcessorMetadata::ConstrainerParser failParser(wc.first.second);
+
+			for (const auto& typeId : wc.second)
+			{
+                auto r = failParser.check(*rd.get(typeId));
+				expect(!r.wasOk(), wc.first.second + " - should reject: " + typeId.toString());
+			}
+		}
     }
 
     void testLfoMetadataValueList()

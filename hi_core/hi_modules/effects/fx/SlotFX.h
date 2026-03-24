@@ -56,18 +56,8 @@ public:
 		return ProcessorMetadata(getClassType())
 			.withDescription("A placeholder for another effect that can be swapped dynamically.")
 			.withStandardMetadata<SlotFX>()
-			.withChildFXConstrainer<SlotFX>();
+			.withChildFXConstrainer<SlotFX::Constrainer>();
 	}
-
-	static ProcessorMetadata::WildcardFilterList getWildcard()
-	{
-		return {
-			{
-				ProcessorMetadataIds::Effect,
-				"MasterEffect|!RouteEffect|!SlotFX"
-			}
-		};
-	};
 
 	SlotFX(MainController *mc, const String &uid);
 
@@ -226,34 +216,38 @@ public:
 	*/
 	bool setEffect(const String& typeName, bool synchronously=false);
 
-private:
-
-	class Constrainer : public FactoryType::Constrainer
+	class Constrainer : public EffectProcessorChainFactoryType::NoVoiceEffectConstrainer
 	{
 	public:
 
-	private:
-
-		String getDescription() const override { return "No poly FX"; }
-
-#define DEACTIVATE(x) if (typeName == x::getClassType()) return false;
-
-		bool allowType(const Identifier &typeName) override
+		static ProcessorMetadata::WildcardFilterList getWildcard()
 		{
-			DEACTIVATE(PolyFilterEffect);
+			return {
+				{
+					ProcessorMetadataIds::Effect,
+					ProcessorMetadataIds::MasterEffect.toString() + "|" + 
+					ProcessorMetadataIds::MonophonicEffect.toString() + "|" +
+				    makeNegativeFilterWildcard<RouteEffect, SlotFX>()
+				}
+			};
+		};
 
-            DEACTIVATE(PolyshapeFX);
-			DEACTIVATE(HarmonicFilter);
-			DEACTIVATE(HarmonicMonophonicFilter);
-			DEACTIVATE(StereoEffect);
-			DEACTIVATE(RouteEffect);
-			DEACTIVATE(SlotFX);
+		String getDescription() const override { return "slot fx constrainer"; }
+
+		bool allowType(const Identifier& typeName) override
+		{
+			if (!NoVoiceEffectConstrainer::allowType(typeName))
+				return false;
+
+			if (typeName == RouteEffect::getClassType()) return false;
+			if (typeName == SlotFX::getClassType()) return false;
 
 			return true;
 		}
 
-#undef DEACTIVATE
 	};
+
+private:
 
 	void createList();
 

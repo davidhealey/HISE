@@ -410,4 +410,55 @@ float ProcessorMetadata::getDefaultValue(const Processor* p, int parameterIndex)
 	return 0.0f;
 }
 
+ProcessorMetadata::ConstrainerParser::ConstrainerParser(const String& wildcardPattern):
+  matchAll(wildcardPattern == "*")
+{
+	if (!matchAll)
+	{
+		auto tokens = StringArray::fromTokens(wildcardPattern, "|", "");
+
+		for (const auto& t : tokens)
+		{
+			if (t.startsWithChar('!'))
+				negativePatterns.add(t.substring(1));
+			else
+				positivePatterns.add(t);
+		}
+	}
+	
+}
+
+Result ProcessorMetadata::ConstrainerParser::check(const ProcessorMetadata& md) const
+{
+	if (matchAll)
+		return Result::ok();
+
+	auto typeString = md.id.toString();
+
+	for (auto& n : negativePatterns)
+	{
+		if (typeString.matchesWildcard(n, false))
+			return Result::fail("negative match");
+	}
+
+	auto isFilter = md.id == PolyFilterEffect::getClassType();
+
+	for (auto p : positivePatterns)
+	{
+		// special rule: allow PolyFilterEffect to be used
+		// as positive wildcard - this is required by NoMidiInputConstrainer
+		if (isFilter && md.id.toString() == p)
+			return Result::ok();
+
+
+		if (p.matchesWildcard(md.subtype, false))
+			return Result::ok();
+	}
+
+	if (!positivePatterns.isEmpty())
+		return Result::fail("no positive match");
+	else
+		return Result::ok();
+}
+
 } // namespace hise

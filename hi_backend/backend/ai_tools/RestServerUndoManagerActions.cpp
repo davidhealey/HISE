@@ -392,13 +392,16 @@ struct add : public ActionBase
 		return {};
 	}
 
-	Error expectWildcardMatch(const Identifier& subtype, const String& wildcard) const
+	Error expectWildcardMatch(const ProcessorMetadata& md, const String& wildcard) const
 	{
-		if (!subtype.toString().matchesWildcard(wildcard, false))
+		ProcessorMetadata::ConstrainerParser cp(wildcard);
+		auto r = cp.check(md);
+
+		if (r.failed())
 		{
 			return Error(*this)
-				.withError("Illegal subtype " + subtype.toString())
-				.withHint("Allowed types: " + wildcard);
+				.withError(r.getErrorMessage() + ": " + md.id.toString())
+				.withHint("Constrainer: " + wildcard);
 		}
 
 		return {};
@@ -449,7 +452,7 @@ struct add : public ActionBase
 			if (!e)
 				return e;
 
-			return expectWildcardMatch(md->subtype, pm->fxConstrainerWildcard);
+			return expectWildcardMatch(*md, pm->fxConstrainerWildcard);
 		}
 		else if (md->type == ProcessorMetadataIds::SoundGenerator)
 		{
@@ -457,7 +460,7 @@ struct add : public ActionBase
 			if (!e)
 				return e;
 
-			e = expectWildcardMatch(md->subtype, pm->constrainerWildcard);
+			e = expectWildcardMatch(*md, pm->constrainerWildcard);
 
 			if (!e)
 				return e;
@@ -487,7 +490,7 @@ struct add : public ActionBase
 						return Error(*this).withError(mod.id.toString() + " is disabled");
 
 					
-					e = expectWildcardMatch(md->subtype, mod.constrainerWildcard);
+					e = expectWildcardMatch(*md, mod.constrainerWildcard);
 
 					if (!e)
 						return e;

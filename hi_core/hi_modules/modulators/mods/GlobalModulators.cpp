@@ -841,4 +841,25 @@ void GlobalEnvelopeModulator::calculateBlock(int startSample, int numSamples)
 	
 }
 
+NoGlobalsConstrainer::NoGlobalsConstrainer()
+{
+	illegalTypes.add(GlobalEnvelopeModulator::getClassType());
+	illegalTypes.add(GlobalVoiceStartModulator::getClassType());
+	illegalTypes.add(GlobalTimeVariantModulator::getClassType());
+	illegalTypes.add(GlobalStaticTimeVariantModulator::getClassType());
+}
+
+hise::ProcessorMetadata::WildcardFilterList NoGlobalsConstrainer::getWildcard()
+{
+	return {
+		{
+			ProcessorMetadataIds::Modulator,
+			makeNegativeFilterWildcard<GlobalEnvelopeModulator,
+									   GlobalVoiceStartModulator,
+									   GlobalTimeVariantModulator,
+									   GlobalStaticTimeVariantModulator>()
+		}
+	};
+}
+
 } // namespace hise

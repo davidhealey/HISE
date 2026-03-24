@@ -484,12 +484,7 @@ public:
     /** Only used in Global Modulator Containers. */
     void setResetUnsavedValue(bool shouldReset);
 
-	static ProcessorMetadata::WildcardFilterList getWildcard() 
-	{ 
-		return {
-			{ ProcessorMetadataIds::Modulator, ProcessorMetadataIds::VoiceStartModulator.toString() }
-		};
-	};
+	
 
 	static Path getSymbolPath();
 
@@ -769,6 +764,36 @@ class VoiceStartModulatorFactoryType: public FactoryType
 
 public:
 
+	struct Constrainer : public FactoryType::Constrainer
+	{
+		static ProcessorMetadata::WildcardFilterList getWildcard()
+		{
+			return {
+				{ ProcessorMetadataIds::Modulator, ProcessorMetadataIds::VoiceStartModulator.toString() }
+			};
+		};
+
+		ProcessorMetadata::WildcardFilterList getWildcardFromObject() const override { return getWildcard(); }
+
+		Constrainer()
+		{
+			Array<ProcessorEntry> tn;
+			fillArrayWithTypes(tn);
+
+			for (const auto& p : tn)
+				typeNames.add(p.type);
+		}
+
+		String getDescription() const override { return "Voice start modulators only"; }
+
+		bool allowType(const Identifier& typeName) override
+		{
+			return typeNames.contains(typeName);
+		}
+
+		Array<Identifier> typeNames;
+	};
+
 	VoiceStartModulatorFactoryType(int numVoices_, Modulation::Mode m, Processor *p):
 		FactoryType(p),
 		numVoices(numVoices_),
@@ -787,6 +812,8 @@ public:
 	};
 
 private:
+
+	static void fillArrayWithTypes(Array<ProcessorEntry>& tn);
 
 	Array<ProcessorEntry> typeNames;
 

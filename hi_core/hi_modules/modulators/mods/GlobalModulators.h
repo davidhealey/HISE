@@ -118,32 +118,7 @@ private:
 	Array<WeakReference<GlobalModulatorContainer>> watchedContainers;
 };
 
-/** Deactivates Globals (this is used in Global Containers. */
-class NoGlobalsConstrainer : public FactoryType::Constrainer
-{
-public:
 
-	static ProcessorMetadata::WildcardFilterList getWildcard()
-	{
-		return { 
-			{
-				ProcessorMetadataIds::Modulator,
-				"!Global*Modulator"
-			}
-		};
-	}
-
-private:
-
-	String getDescription() const override { return "No global modulators"; }
-
-	// Runtime filtering disabled - the wildcard metadata (!Global*Modulator) is the operative filter.
-	// This allowType override is kept for API compatibility until the Constrainer system is fully retired.
-	bool allowType(const Identifier &typeName) override
-	{
-        return true;
-	}
-};
 
 
 /** A modulator that connects to a global VoiceStartModulator (eg. Velocity).
@@ -327,6 +302,29 @@ public:
 	HiseEvent currentEvents[NUM_POLYPHONIC_VOICES];
 
 	int envelopeIndex = -1;
+};
+
+/** Deactivates Globals (this is used in Global Containers. */
+class NoGlobalsConstrainer : public FactoryType::Constrainer
+{
+public:
+
+	NoGlobalsConstrainer();
+
+	static ProcessorMetadata::WildcardFilterList getWildcard();
+
+	ProcessorMetadata::WildcardFilterList getWildcardFromObject() const override { return getWildcard(); }
+
+	String getDescription() const override { return "No global modulators"; }
+
+	// Runtime filtering disabled - the wildcard metadata (!Global*Modulator) is the operative filter.
+	// This allowType override is kept for API compatibility until the Constrainer system is fully retired.
+	bool allowType(const Identifier& typeName) override
+	{
+		return !illegalTypes.contains(typeName);
+	}
+
+	Array<Identifier> illegalTypes;
 };
 
 
