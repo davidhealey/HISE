@@ -102,41 +102,55 @@ struct RestServerUndoManager
 				return true;
 			};
 
-			std::map<String, int> baseNameCount;
+		std::map<String, int> baseNameCount;
+		StringArray existingIds;
 
-			valuetree::Helpers::forEach(moduleTree, [&](ValueTree& v)
-			{
-				if (!shouldProcessNode(v))
-					return false;
-
-				baseNameCount[getBaseName(v["ID"].toString())]++;
+		valuetree::Helpers::forEach(moduleTree, [&](ValueTree& v)
+		{
+			if (!shouldProcessNode(v))
 				return false;
-			});
 
-			Array<ValueTree> nodesToRename;
+			auto id = v["ID"].toString();
+			existingIds.add(id);
+			baseNameCount[getBaseName(id)]++;
+			return false;
+		});
 
-			valuetree::Helpers::forEach(addedTree, [&](ValueTree& v)
+		Array<ValueTree> nodesToRename;
+
+		valuetree::Helpers::forEach(addedTree, [&](ValueTree& v)
+		{
+			if (shouldProcessNode(v))
+				nodesToRename.add(v);
+
+			return false;
+		});
+
+		for (auto node : nodesToRename)
+		{
+			if (!node.isValid() || !shouldProcessNode(node))
+				continue;
+
+			auto currentId = node["ID"].toString();
+
+			// If the exact name doesn't collide, keep it as-is
+			if (!existingIds.contains(currentId))
 			{
-				if (shouldProcessNode(v))
-					nodesToRename.add(v);
-
-				return false;
-			});
-
-			for (auto node : nodesToRename)
-			{
-				if (!node.isValid() || !shouldProcessNode(node))
-					continue;
-
-				auto currentId = node["ID"].toString();
-				auto baseName = getBaseName(currentId);
-
-				auto amount = ++baseNameCount[baseName];
-				auto newId = amount > 1 ? (baseName + String(amount)) : baseName;
-
-				if (newId != currentId)
-					node.setProperty("ID", newId, nullptr);
+				existingIds.add(currentId);
+				baseNameCount[getBaseName(currentId)]++;
+				continue;
 			}
+
+			// Collision found - strip trailing numbers and renumber
+			auto baseName = getBaseName(currentId);
+			auto amount = ++baseNameCount[baseName];
+			auto newId = amount > 1 ? (baseName + String(amount)) : baseName;
+
+			if (newId != currentId)
+				node.setProperty("ID", newId, nullptr);
+
+			existingIds.add(newId);
+		}
 		}
 
 		bool add(const String& parent, ValueTree np, int chainIndex)

@@ -802,17 +802,29 @@ String FactoryType::getUniqueName(Processor *id, String name/*=String()*/)
 
 	if (id == chain) return chain->getId();
 
-	int amount = 0;
-
 	if(name.isEmpty()) name = id->getId();
 
+	// If the exact name is unique in the tree, keep it as-is
+	int exactCount = 0;
 
+	Processor::Iterator<Processor> iter(chain, false);
 
+	while (auto* p = iter.getNextProcessor())
+	{
+		if (p->getId() == name)
+			exactCount++;
+	}
+
+	if (exactCount <= 1)
+		return name;
+
+	// Collision found - strip trailing numbers and renumber
 	auto lastNumbers = String(name.getTrailingIntValue());
 
 	if (lastNumbers.isNotEmpty())
 		name = name.upToLastOccurrenceOf(lastNumbers, false, false);
 
+	int amount = 0;
 	countProcessorsWithSameId(amount, chain, id, name);
 
 	// If this happens, you haven't added the processor yet.

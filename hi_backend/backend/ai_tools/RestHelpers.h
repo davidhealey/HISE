@@ -610,7 +610,7 @@ private:
 
         ProcessorOrValueTree getChild(int i) const
         {
-            Processor* c = (p != nullptr && p->getNumChildProcessors() < i) ? p->getChildProcessor(i) : nullptr;
+            Processor* c = (p != nullptr && p->getNumChildProcessors() > i) ? p->getChildProcessor(i) : nullptr;
             ValueTree cv = v.isValid() ? v.getChild(i) : ValueTree();
             return { c, cv };
         }
