@@ -113,7 +113,7 @@ public:
 	{
 		auto v = VoiceEffectProcessor::exportAsValueTree();
 		AudioSampleProcessor::saveToValueTree(v);
-		saveAttribute(Position, "TableIndex");
+		saveAttribute(Position, "Position");
 		saveAttribute(Mix, "Mix");
 		saveAttribute(WhiteNoise, "WhiteNoise");
 		saveAttribute(GrainSize, "GrainSize");

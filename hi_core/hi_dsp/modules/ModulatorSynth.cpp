@@ -32,7 +32,7 @@
 
 namespace hise { using namespace juce;
 
-hise::ProcessorMetadata ModulatorSynth::createBaseMetadata()
+hise::ProcessorMetadata ModulatorSynth::createBaseMetadata(bool useUnityGain)
 {
 	using Par = ProcessorMetadata::ParameterMetadata;
 	using Mod = ProcessorMetadata::ModulationMetadata;
@@ -42,7 +42,7 @@ hise::ProcessorMetadata ModulatorSynth::createBaseMetadata()
 			.withId("Gain")
 			.withDescription("The output volume as normalised linear gain (0.0 to 1.0), not decibels. Use a SimpleGain effect in the FX chain for decibel-scaled volume control.")
 			.withSliderMode(HiSlider::NormalizedPercentage, {})
-			.withDefault(1.0f))
+			.withDefault(useUnityGain ? 1.0f : 0.25f))
 		.withParameter(Par(Balance)
 			.withId("Balance")
 			.withDescription("The stereo balance")
@@ -52,7 +52,7 @@ hise::ProcessorMetadata ModulatorSynth::createBaseMetadata()
 			.withId("VoiceLimit")
 			.withDescription("The maximum number of voices")
 			.withSliderMode(HiSlider::Discrete, { 1.0, 256.0, 1.0 })
-			.withDefault(64.0f))
+			.withDefault((float)NUM_POLYPHONIC_VOICES))
 		.withParameter(Par(KillFadeTime)
 			.withId("KillFadeTime")
 			.withDescription("The fade out time in milliseconds when voices are killed by exceeding the voice limit or by a voice killer")

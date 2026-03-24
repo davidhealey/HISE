@@ -689,7 +689,7 @@ hise::ProcessorMetadata PolyshapeFX::createMetadata()
 			.withId("Drive")
 			.withDescription("The distortion drive amount in decibels")
 			.withSliderMode(HiSlider::Decibel, Range(0.0, 60.0).withCentreSkew(24.0))
-			.withDefault(1.0f))
+			.withDefault(0.0f))
 		.withParameter(Par(Mode)
 			.withId("Mode")
 			.withDescription("Selects the waveshaping function (populated dynamically from available shapers)")
@@ -792,6 +792,7 @@ void PolyshapeFX::restoreFromValueTree(const ValueTree &v)
 	loadAttribute(Drive, "Drive");
 	loadAttribute(Mode, "Mode");
 	loadAttribute(Oversampling, "Oversampling");
+	loadAttribute(Bias, "Bias");
 }
 
 juce::ValueTree PolyshapeFX::exportAsValueTree() const
@@ -804,6 +805,7 @@ juce::ValueTree PolyshapeFX::exportAsValueTree() const
 	saveAttribute(Drive, "Drive");
 	saveAttribute(Mode, "Mode");
 	saveAttribute(Oversampling, "Oversampling");
+	saveAttribute(Bias, "Bias");
 
 	return v;
 }

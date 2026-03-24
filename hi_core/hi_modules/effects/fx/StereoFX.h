@@ -87,6 +87,8 @@ public:
 
 	StereoEffect(MainController *mc, const String &uid, int numVoices);;
 
+	const bool metadataInitialised = false;
+
 	float getAttribute(int parameterIndex) const override;
 	void setInternalAttribute(int parameterIndex, float newValue) override;;
 	ModulationDisplayValue::QueryFunction::Ptr getModulationQueryFunction(int parameterIndex) const override;

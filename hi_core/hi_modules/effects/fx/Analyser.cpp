@@ -50,7 +50,7 @@ hise::ProcessorMetadata AnalyserEffect::createMetadata()
 		.withParameter(Par(BufferSize)
 			.withId("BufferSize")
 			.withDescription("Size of the analysis buffer in samples, affecting frequency resolution and latency")
-			.withValueList({ "4096", "8192", "16384", "32768" })
+			.withRange({ 0.0, 32768.0, 1.0})
 			.withDefault(8192.0f));
 }
 

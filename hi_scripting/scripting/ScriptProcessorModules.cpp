@@ -516,6 +516,8 @@ JavascriptPolyphonicEffect::JavascriptPolyphonicEffect(MainController *mc, const
 
 	extraModSources.init(modChains);
 	
+	extraModSources.updateModulationProperties({}, {});
+
 	editorStateIdentifiers.add("contentShown");
 	editorStateIdentifiers.add("onInitOpen");
 	editorStateIdentifiers.add("onControlOpen");
@@ -776,6 +778,8 @@ onControlCallback(new SnippetDocument("onControl", "number value"))
 	finaliseModChains();
 
 	extraModSources.init(modChains);
+
+	extraModSources.updateModulationProperties({}, {});
 
 	editorStateIdentifiers.add("contentShown");
 	editorStateIdentifiers.add("onInitOpen");
@@ -1878,6 +1882,8 @@ JavascriptSynthesiser::JavascriptSynthesiser(MainController *mc, const String &i
 
 	extraModSources.init(modChains, 2);
 
+	extraModSources.updateModulationProperties({}, {});
+
 	for(int i = 0; i < numMods; i++)
 		modChains[i + 2].getChain()->setColour(Colour(0xFF888888));
 	
@@ -2218,10 +2224,14 @@ hise::ProcessorMetadata ScriptnodeVoiceKiller::createMetadata()
 }
 
 void ScriptnodeVoiceKiller::setInternalAttribute(int parameter_index, float newValue)
-{}
+{
+	EnvelopeModulator::setInternalAttribute(parameter_index, newValue);
+}
 
 float ScriptnodeVoiceKiller::getAttribute(int parameter_index) const
-{ return 0.0f; }
+{ 
+	return EnvelopeModulator::getAttribute(parameter_index); 
+}
 
 int ScriptnodeVoiceKiller::getNumInternalChains() const
 { return 0; }

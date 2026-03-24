@@ -78,8 +78,9 @@ float MidSideDecoder::getWidth() const noexcept
 	return width;
 }
 
-StereoEffect::StereoEffect(MainController *mc, const String &uid, int numVoices) :
+StereoEffect::StereoEffect(MainController* mc, const String& uid, int numVoices) :
 	VoiceEffectProcessor(mc, uid, numVoices),
+	metadataInitialised(updateParameterSlots()),
 	pan(getDefaultValue(Pan)/100.0f)
 {
 	modChains += {this, "Pan Modulation", ModulatorChain::ModulationType::Normal, Modulation::PanMode};
@@ -89,8 +90,6 @@ StereoEffect::StereoEffect(MainController *mc, const String &uid, int numVoices)
 	modChains[InternalChains::BalanceChain].setExpandToAudioRate(true);
 	modChains[InternalChains::BalanceChain].setIncludeMonophonicValuesInVoiceRendering(true);
 	modChains[InternalChains::BalanceChain].setAllowModificationOfVoiceValues(true);
-
-	updateParameterSlots();
 
 	auto tmp = WeakReference<Processor>(this);
 

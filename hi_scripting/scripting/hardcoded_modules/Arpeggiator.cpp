@@ -403,15 +403,6 @@ void Arpeggiator::onInit()
 	inputMidiChannel->set("tooltip", "The MIDI channel that is fed into the arpeggiator.");
 	outputMidiChannel->set("tooltip", "The MIDI channel that is used for the arpeggiated notes");
 
-	for (int i = 0; i < getScriptingContent()->getNumComponents(); i++)
-	{
-		String s;
-		s << String(i);
-		s << ": ";
-		s << getScriptingContent()->getComponent(i)->getId();
-		DBG(s);
-	}
-
 	updateParameterSlots(getScriptingContent()->getNumComponents());
 }
 

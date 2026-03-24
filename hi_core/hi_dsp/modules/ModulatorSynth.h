@@ -131,7 +131,7 @@ public:
 	 *  via ModulatorSynth::createBaseMetadata() to inherit the 4 base parameters
 	 *  and 2 standard modulation chains.
 	 */
-	static ProcessorMetadata createBaseMetadata();
+	static ProcessorMetadata createBaseMetadata(bool useUnityGain=false);
 
 	// ===================================================================================================================
 

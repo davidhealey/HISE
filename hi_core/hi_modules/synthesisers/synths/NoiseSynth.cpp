@@ -105,6 +105,8 @@ hise::ProcessorMetadata SilentSynth::createMetadata()
 	return ModulatorSynth::createBaseMetadata()
 		.withStandardMetadata<SilentSynth>()
 		.withDescription("A silent sound generator that routes signals through its effect chain without producing audio of its own.")
+		.withDisabledChain(ModulatorSynth::BasicChains::GainChain)
+		.withDisabledChain(ModulatorSynth::BasicChains::PitchChain)
 		;
 }
 
@@ -113,8 +115,8 @@ SilentSynth::SilentSynth(MainController *mc, const String &id, int numVoices) :
 {
 	finaliseModChains();
 
-	modChains[BasicChains::GainChain].getChain()->setBypassed(true);
-	modChains[BasicChains::PitchChain].getChain()->setBypassed(true);
+	disableChain(ModulatorSynth::InternalChains::GainModulation, true);
+	disableChain(ModulatorSynth::InternalChains::PitchModulation, true);
 
 	for (int i = 0; i < numVoices; i++) 
 		addVoice(new SilentVoice(this));

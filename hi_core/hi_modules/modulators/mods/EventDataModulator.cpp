@@ -74,7 +74,7 @@ hise::ProcessorMetadata EventDataEnvelope::createMetadata()
 			.withId("SmoothingTime")
 			.withDescription("Smoothing time for value changes in milliseconds")
 			.withSliderMode(HiSlider::Time, scriptnode::InvertableParameterRange(0.0, 2000.0, 0.0).withCentreSkew(100.0))
-			.withDefault(20.0f));
+			.withDefault(0.0f));
 }
 
 EventDataModulator::EventDataModulator(MainController* mc, const String& id, int numVoices, Modulation::Mode m):

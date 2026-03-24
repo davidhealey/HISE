@@ -1877,6 +1877,10 @@ hise::ProcessorMetadata DspNetwork::Holder::withDynamicParametersFromNetwork(con
 		auto modProperties = an->getParameterProperties();
 		md = md.withDynamicModulation(modProperties, numMods, offset);
 	}
+	else
+	{
+		md = md.withDynamicModulation({}, numMods, offset);
+	}
 
 	return md;
 }

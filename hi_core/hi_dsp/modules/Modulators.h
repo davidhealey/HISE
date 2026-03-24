@@ -93,6 +93,10 @@ public:
 	/** returns the mode the Modulator is operating. */
 	Mode getMode() const noexcept;;
 
+	static scriptnode::modulation::ParameterMode convertToScriptnodeMode(Mode m);
+
+	static Mode convertFromScriptnodeMode(scriptnode::modulation::ParameterMode pm);
+
 	static Mode getModeFromModProperties(const scriptnode::modulation::ParameterProperties& modProperties, int parameterIndex);;
 	
 	/** This applies the intensity to the given value and returns the applied value. 

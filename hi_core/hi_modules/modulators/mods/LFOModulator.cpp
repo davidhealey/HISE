@@ -51,6 +51,7 @@ hise::ProcessorMetadata LfoModulator::createMetadata()
 			.withDynamicDefault([](const Processor* p){
 				return dynamic_cast<const LfoModulator*>(p)->tempoSync ? (float)TempoSyncer::Eighth : 3.0f;
 			 })
+			.withDefault(3.0f)
 			.withTempoSyncMode(TempoSync))
 		.withParameter(Par(FadeIn)
 			.withId("FadeIn")

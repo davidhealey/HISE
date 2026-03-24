@@ -38,7 +38,7 @@ hise::ProcessorMetadata ModulatorSampler::createMetadata()
 	using Mod = ProcessorMetadata::ModulationMetadata;
 	using Range = scriptnode::InvertableParameterRange;
 
-	return ModulatorSynth::createBaseMetadata()
+	return ModulatorSynth::createBaseMetadata(true)
 		.withStandardMetadata<ModulatorSampler>()
 		.withDescription("A disk-streaming sampler with sample maps, round robin, crossfade groups, and timestretching.")
 		.withComplexDataInterface(ExternalData::DataType::Table)
@@ -56,7 +56,7 @@ hise::ProcessorMetadata ModulatorSampler::createMetadata()
 			.withId("VoiceAmount")
 			.withDescription("The actual number of allocated voices for sample playback")
 			.withSliderMode(HiSlider::Discrete, Range(1.0, (double)NUM_POLYPHONIC_VOICES, 1.0))
-			.withDefault(0.0f))
+			.withDefault((float)NUM_POLYPHONIC_VOICES))
 		.withParameter(Par(RRGroupAmount)
 			.withId("RRGroupAmount")
 			.withDescription("Number of round-robin groups. Also used as a general mapping dimension for velocity layers or articulations.")
@@ -85,7 +85,7 @@ hise::ProcessorMetadata ModulatorSampler::createMetadata()
 		.withParameter(Par(Purged)
 			.withId("Purged")
 			.withDescription("Memory management: Disabled keeps samples loaded, Enabled unloads all preload buffers, Lazy Load delays preloading until first trigger")
-			.withValueList({ "Disabled", "Enabled", "Lazy Load" })
+			.withValueList({ "Disabled", "Enabled", "Lazy Load" }, 0.0f)
 			.withDefault(0.0f))
 		.withParameter(Par(Reversed)
 			.withId("Reversed")
@@ -560,6 +560,7 @@ void ModulatorSampler::restoreFromValueTree(const ValueTree &v)
 
     loadAttribute(CrossfadeGroups, "CrossfadeGroups");
     loadAttribute(RRGroupAmount, "RRGroupAmount");
+	loadAttribute(LowPassEnvelopeOrder, "LowPassEnvelopeOrder");
 
 	auto groupData = v.getChildWithName(groupIds::Layers);
 
@@ -606,6 +607,7 @@ ValueTree ModulatorSampler::exportAsValueTree() const
 	saveAttribute(Reversed, "Reversed");
 	v.setProperty("NumChannels", numChannels, nullptr);
     saveAttribute(UseStaticMatrix, "UseStaticMatrix");
+	saveAttribute(LowPassEnvelopeOrder, "LowPassEnvelopeOrder");
 
 	ValueTree channels("channels");
 

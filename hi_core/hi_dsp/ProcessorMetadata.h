@@ -450,22 +450,21 @@ struct ProcessorMetadata
 	{
 		auto copy = *this;
 
-		for (int mi = 0; mi < mod.getNumUsed(INT_MAX); mi++)
+		for (int mi = 0; mi < numMax; mi++)
 		{
 			ModulationMetadata md;
 			md.dataType = DataType::Dynamic;
 
-			auto pi = mod.getParameterIndex(mi);
-
-			auto piWithOffset = pi + copy.getNumParameters(DataType::Static);
-
-			if (isPositiveAndBelow(piWithOffset, copy.parameters.size()))
-			{
-				md.id = copy.parameters[piWithOffset].id + "Modulation";
-			}
-
 			if (mod.isUsed(mi))
 			{
+				auto pi = mod.getParameterIndex(mi);
+				auto piWithOffset = pi + copy.getNumParameters(DataType::Static);
+
+				if (isPositiveAndBelow(piWithOffset, copy.parameters.size()))
+				{
+					md.id = copy.parameters[piWithOffset].id + "Modulation";
+				}
+
 				md.chainIndex = mod.getModulationChainIndex(pi) + dynamicChainOffset;
 				md.colour = mod.getModulationColourRaw(pi);
 				md.parameterIndex = piWithOffset;
@@ -477,6 +476,8 @@ struct ProcessorMetadata
 			}
 			else
 			{
+				md.chainIndex = dynamicChainOffset + mi;
+				md.modulationMode = scriptnode::modulation::ParameterMode::ScaleAdd;
 				md = md.asDisabled();
 			}
 

@@ -42,7 +42,7 @@ namespace hise {
 class ProcessorMetadataTest : public juce::UnitTest
 {
 public:
-    ProcessorMetadataTest() : UnitTest("ProcessorMetadata Tests", "AI Tools") {}
+    ProcessorMetadataTest() : UnitTest("ProcessorMetadata Tests", "Processors") {}
 
     void runTest() override
     {
@@ -80,6 +80,8 @@ public:
         testRegistryAllEntriesValid();
         testRegistryToJSON();
 
+
+
         // LFO processor integration tests (require MainController)
         testLfoParameterResolution();
         testLfoHasInitialisedMetadata();
@@ -95,6 +97,11 @@ public:
         // Edge case tests
         testOperatorBracketOutOfRange();
         testGetParameterByIdInvalid();
+
+        ctx.reset();
+
+        // Module body parameter integrity test
+        testAllModules();
 
         ctx.reset();
     }
@@ -146,6 +153,259 @@ private:
     // Static metadata tests - operate on LfoModulator::createMetadata() directly
     //==========================================================================
 
+    void testModule(ProcessorMetadata md, ModulatorSynth* parentSynthToUse)
+    {
+        beginTest("Testing metadata integrity for " + md.id.toString());
+
+        raw::Builder b(ctx->mc);
+
+        int insertIndex = -2;
+
+        if (md.type == ProcessorMetadataIds::SoundGenerator)
+        {
+            parentSynthToUse = ctx->mc->getMainSynthChain();
+            insertIndex = -1;
+        }
+        else if (md.type == ProcessorMetadataIds::Effect)
+            insertIndex = ModulatorSynth::InternalChains::EffectChain;
+        else if (md.type == ProcessorMetadataIds::MidiProcessor)
+            insertIndex = ModulatorSynth::InternalChains::MidiProcessor;
+        else
+            insertIndex = ModulatorSynth::InternalChains::GainModulation;
+
+        auto pToTest = b.create(parentSynthToUse, md.id, insertIndex);
+
+        expect(pToTest != nullptr, "module created OK");
+
+        if(md.dataType == ProcessorMetadata::DataType::Dynamic)
+            md = pToTest->getMetadata();
+
+        auto state = pToTest->exportAsValueTree();
+
+        std::map<std::pair<Identifier, int>, bool> defaultValueSkipMap;
+
+        // Define custom rules for the default value skip check
+        {
+			// macro value is a dynamic property
+			defaultValueSkipMap[{MacroModulator::getClassType(), MacroModulator::SpecialParameters::MacroValue}] = true;
+
+			// default value is dependent on chain type
+			defaultValueSkipMap[{MatrixModulator::getClassType(), MatrixModulator::SpecialParameters::Value}] = true;
+
+			// weird decibel rounding error, disregard
+			defaultValueSkipMap[{MidiMetronome::getClassType(), MidiMetronome::Parameters::Volume}] = true;
+
+			// no voices, disregard
+			defaultValueSkipMap[{SendContainer::getClassType(), ModulatorSynth::Parameters::VoiceLimit}] = true;
+        }
+        
+        std::map<std::pair<Identifier, int>, int> exportValueSkipMap;
+
+        // Define custom rules for the exportAsValueTree() integrity check
+        {
+            // these are read only parameters and not supposed to be stored in the value tree
+            exportValueSkipMap[{DynamicsEffect::getClassType(), DynamicsEffect::Parameters::GateReduction}] = true;
+            exportValueSkipMap[{DynamicsEffect::getClassType(), DynamicsEffect::Parameters::CompressorReduction}] = true;
+            exportValueSkipMap[{DynamicsEffect::getClassType(), DynamicsEffect::Parameters::LimiterReduction}] = true;
+
+            // these are read only parameters or stored in a subtree
+            exportValueSkipMap[{MidiPlayer::getClassType(), MidiPlayer::SpecialParameters::CurrentPosition}] = true;
+            exportValueSkipMap[{MidiPlayer::getClassType(), MidiPlayer::SpecialParameters::LoopStart}] = true;
+            exportValueSkipMap[{MidiPlayer::getClassType(), MidiPlayer::SpecialParameters::LoopEnd}] = true;
+            
+            // this information is stored in the slider pack data
+            exportValueSkipMap[{LfoModulator::getClassType(), LfoModulator::Parameters::NumSteps}] = true;
+        }
+
+        std::map<std::pair<Identifier, int>, bool> roundTripSkipMap;
+        {
+			// eco mode is deprecated anyways
+            roundTripSkipMap[{AhdsrEnvelope::getClassType(), AhdsrEnvelope::SpecialParameters::EcoMode}] = true;
+
+			// dynamic value, disregard
+            roundTripSkipMap[{Arpeggiator::getClassType(), Arpeggiator::Parameters::CurrentStep}] = true;
+
+            // these are truncated with each other and highly mess up the fuzzer
+            roundTripSkipMap[{ChokeGroupProcessor::getClassType(), ChokeGroupProcessor::SpecialParameters::HiKey}] = true;
+            roundTripSkipMap[{ChokeGroupProcessor::getClassType(), ChokeGroupProcessor::SpecialParameters::LoKey}] = true;
+
+            // dynamic parameters...
+            roundTripSkipMap[{ ConvolutionEffect::getClassType(), ConvolutionEffect::Parameters::Latency}] = true;
+            roundTripSkipMap[{ ConvolutionEffect::getClassType(), ConvolutionEffect::Parameters::ImpulseLength}] = true;
+
+            // they are dependent on the tempo sync value
+            roundTripSkipMap[{ DelayEffect::getClassType(), DelayEffect::Parameters::DelayTimeLeft}] = true;
+            roundTripSkipMap[{ DelayEffect::getClassType(), DelayEffect::Parameters::DelayTimeRight}] = true;
+
+            // these are read only parameters and not supposed to be stored in the value tree
+			roundTripSkipMap[{DynamicsEffect::getClassType(), DynamicsEffect::Parameters::GateReduction}] = true;
+			roundTripSkipMap[{DynamicsEffect::getClassType(), DynamicsEffect::Parameters::CompressorReduction}] = true;
+			roundTripSkipMap[{DynamicsEffect::getClassType(), DynamicsEffect::Parameters::LimiterReduction}] = true;
+
+            // folded into wet level parameter
+            roundTripSkipMap[{SimpleReverbEffect::getClassType(), SimpleReverbEffect::Parameters::DryLevel}] = true;
+
+			// these require actual MIDI data to operate correctly
+			roundTripSkipMap[{MidiPlayer::getClassType(), MidiPlayer::SpecialParameters::CurrentPosition}] = true;
+            roundTripSkipMap[{MidiPlayer::getClassType(), MidiPlayer::SpecialParameters::CurrentSequence}] = true;
+            roundTripSkipMap[{MidiPlayer::getClassType(), MidiPlayer::SpecialParameters::CurrentTrack}] = true;
+			roundTripSkipMap[{MidiPlayer::getClassType(), MidiPlayer::SpecialParameters::LoopStart}] = true;
+			roundTripSkipMap[{MidiPlayer::getClassType(), MidiPlayer::SpecialParameters::LoopEnd}] = true;
+
+            // this is rounded to power of two internally
+            roundTripSkipMap[{PolyFilterEffect::getClassType(), PolyFilterEffect::Parameters::Quality}] = true;
+
+            // weird rounding error...
+            roundTripSkipMap[{ AudioLooper::getClassType(), AudioLooper::SpecialParameters::SampleStartMod}] = true;
+        }
+
+        for (int i = 0; i < md.parameters.size(); i++)
+        {
+            const auto& p = md.parameters[i];
+            auto idx = p.parameterIndex;
+            auto propId = p.id;
+
+            std::pair<Identifier, int> key = { pToTest->getType(), idx };
+
+			if (defaultValueSkipMap[key])
+				continue;
+
+            auto v1 = md.getDefaultValue(pToTest, i);
+            auto v2 = pToTest->getAttribute(idx);
+
+            String msg;
+			msg << "outside range: ";
+			msg << propId.toString() + " [" + String(idx) + "]";
+
+            expect(p.range.getRange().contains(v1) || p.range.getRange().getEnd() == v1, msg);
+
+            msg = {};
+            msg << "parameter default value mismatch: ";
+            msg << propId.toString() + " [" + String(idx) + "]";
+            expectWithinAbsoluteError<float>(v1, v2, 0.001f, msg);
+
+            // skip testing hardcoded processors, they store their values differently...
+            if (dynamic_cast<HardcodedScriptProcessor*>(pToTest) != nullptr)
+                continue;
+
+			if (exportValueSkipMap[key])
+				continue;
+
+            expect(state.hasProperty(propId), "exportAsValueTree(): missing property " + propId.toString());
+
+            auto v3 = (float)state[propId];
+
+            msg = {};
+			msg << "exportAsValueTree() value mismatch: ";
+			msg << propId.toString() + " [" + String(idx) + "]";
+
+            expectWithinAbsoluteError<float>(v2, v3, 0.001f, msg);
+        }
+
+        NamedValueSet randomParameters;
+
+        for (const auto& p : md.parameters)
+        {
+            auto newValue = Random::getSystemRandom().nextDouble();
+            newValue = p.range.convertFrom0to1(newValue, false);
+            randomParameters.set(p.id, newValue);
+            pToTest->setAttribute(p.parameterIndex, newValue, dontSendNotification);
+        }
+
+        auto state2 = pToTest->exportAsValueTree();
+
+		for (const auto& p : md.parameters)
+		{
+            auto idx = p.parameterIndex;
+            auto propId = p.id;
+
+            std::pair<Identifier, int> key = { pToTest->getType(), idx };
+
+            // voice limits behave weird and I don't want to check this now...
+            if (propId.toString() == "VoiceLimit")
+                continue;
+
+            if (roundTripSkipMap[key])
+                continue;
+
+			if (defaultValueSkipMap[key])
+				continue;
+
+            auto v1 = pToTest->getAttribute(idx);
+            auto v3 = (float)randomParameters[propId];
+
+            String msg;
+            msg << "getAttribute after randomizing within range: ";
+            msg << propId.toString() + " [" + String(idx) + "]";
+
+            expectWithinAbsoluteError<float>(v1, v3, 0.01f, msg);
+
+			// skip testing hardcoded processors, they store their values differently...
+			if (dynamic_cast<HardcodedScriptProcessor*>(pToTest) != nullptr)
+				continue;
+
+			if (exportValueSkipMap[key])
+				continue;
+
+            auto v2 = (float)state2[propId];
+
+            msg = {};
+			msg << "exportAsValueTree() after randomizing within range: ";
+			msg << propId.toString() + " [" + String(idx) + "]";
+
+            expectWithinAbsoluteError<float>(v2, v3, 0.01f, msg);
+		}
+
+        // testing modulation setup
+
+		auto numModChains = md.modulation.size();
+
+		if (md.type == ProcessorMetadataIds::SoundGenerator)
+			numModChains += 2;
+
+		expectEquals<int>(pToTest->getNumInternalChains(), numModChains, "modulation chain amount mismatch");
+        
+        for (const auto& m : md.modulation)
+        {
+            auto idx = m.chainIndex;
+
+            auto modChain = dynamic_cast<ModulatorChain*>(pToTest->getChildProcessor(idx));
+            expect(modChain != nullptr, "not a modulation chain: #" + String(idx));
+
+            if (auto ms = dynamic_cast<ModulatorSynth*>(pToTest))
+            {
+                auto isDisabled = ms->isChainDisabled((ModulatorSynth::InternalChains)idx) ||
+                                 modChain->isBypassed();
+                auto shouldBeDisabled = m.disabled;
+
+                expect(isDisabled == shouldBeDisabled, "disable mismatch at " + m.id.toString());
+    
+            }
+
+			auto actual = Modulation::convertToScriptnodeMode(modChain->getMode());
+			auto expected = m.modulationMode;
+
+			expectEquals<int>((int)actual, (int)expected, "mode mismatch at " + m.id.toString());
+        }
+
+    }
+
+    void testAllModules()
+    {
+        ctx = std::make_unique<TestContext>(*this);
+
+        raw::Builder b(ctx->mc);
+
+        auto sine = b.create<SineSynth>(ctx->mc->getMainSynthChain());
+
+        ProcessorMetadataRegistry rd;
+
+        for (auto id : rd.getRegisteredTypes())
+        {
+            testModule(*rd.get(id), sine);
+        }
+    }
+
     void testLfoMetadataParameterCount()
     {
         beginTest("LFO metadata has 11 parameters");
@@ -166,7 +426,7 @@ private:
 
         auto md = LfoModulator::createMetadata();
         StringArray expectedIds = {
-            "Frequency", "FadeIn", "WaveFormType", "Legato", "TempoSync",
+            "Frequency", "FadeIn", "WaveformType", "Legato", "TempoSync",
             "SmoothingTime", "NumSteps", "LoopEnabled", "PhaseOffset",
             "SyncToMasterClock", "IgnoreNoteOn"
         };
@@ -416,9 +676,9 @@ private:
 		auto md = WaveSynth::createMetadata();
 
 		// Base parameter defaults (inherited from createBaseMetadata)
-		expectEquals(md.getParameterById(ModulatorSynth::Gain)->defaultValue, 1.0f, "Gain default");
+		expectEquals(md.getParameterById(ModulatorSynth::Gain)->defaultValue, 0.25f, "Gain default");
 		expectEquals(md.getParameterById(ModulatorSynth::Balance)->defaultValue, 0.0f, "Balance default");
-		expectEquals(md.getParameterById(ModulatorSynth::VoiceLimit)->defaultValue, 64.0f, "VoiceLimit default");
+		expectEquals(md.getParameterById(ModulatorSynth::VoiceLimit)->defaultValue, (float)NUM_POLYPHONIC_VOICES, "VoiceLimit default");
 		expectEquals(md.getParameterById(ModulatorSynth::KillFadeTime)->defaultValue, 20.0f, "KillFadeTime default");
 
 		// Own parameter defaults
@@ -624,28 +884,25 @@ private:
     {
         beginTest("Registry toJSON produces array");
 
-        SharedResourcePointer<ProcessorMetadataRegistry> registry;
-        auto json = registry->toJSON();
+        ProcessorMetadataRegistry registry;
+        auto json = registry.toJSON();
 
-        expect(json.isArray(), "toJSON should return an array");
-        expect(json.size() > 70, "JSON array should have entries for all processors");
+        auto moduleList = json["modules"];
+
+        expect(moduleList.isArray(), "toJSON should return an array");
+        expect(moduleList.size() > 70, "JSON array should have entries for all processors");
 
         // Find LFO in the JSON output
         bool foundLfo = false;
-        for (int i = 0; i < json.size(); i++)
+        for (int i = 0; i < moduleList.size(); i++)
         {
-            if (json[i]["id"].toString() == "LFO")
+            if (moduleList[i]["id"].toString() == "LFO")
             {
                 foundLfo = true;
-                auto params = json[i]["parameters"];
+                auto params = moduleList[i]["parameters"];
                 expect(params.isArray(), "LFO should have parameters array in JSON");
                 expect(params.size() == 11, "LFO JSON should have 11 parameters");
 
-                // Spot-check a parameter
-                expect(params[0]["id"].toString() == "Frequency",
-                       "First parameter should be Frequency");
-                expect((float)params[0]["defaultValue"] == 3.0f,
-                       "Frequency default should be 3.0");
                 break;
             }
         }

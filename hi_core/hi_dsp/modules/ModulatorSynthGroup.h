@@ -279,7 +279,7 @@ public:
 		using Par = ProcessorMetadata::ParameterMetadata;
 		using Mod = ProcessorMetadata::ModulationMetadata;
 
-		return ModulatorSynth::createBaseMetadata()
+		return ModulatorSynth::createBaseMetadata(true)
 			.withStandardMetadata<ModulatorSynthGroup>()
 			.withDescription("A container for synthesisers that share common modulation, with optional FM synthesis and unison detune/spread.")
 			.withChildConstrainer<SynthGroupConstrainer>()
@@ -323,7 +323,7 @@ public:
 				.withId("KillSecondVoices")
 				.withDescription("Kills retriggered voices instead of allowing multiple notes")
 				.asToggle()
-				.withDefault(0.0f))
+				.withDefault(1.0f))
 			.withModulation(Mod(InternalChains::DetuneModulation)
 				.withId("Detune Modulation")
 				.withDescription("Modulates the unison detune amount")

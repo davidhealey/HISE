@@ -130,8 +130,11 @@ struct SendContainer : public ModulatorSynth
 		prepareToPlay(getSampleRate(), getLargestBlockSize());
 	}
 
-	float getAttribute(int) const override { return 1.0f; };
-	void setInternalAttribute(int, float) override {};
+	float getAttribute(int index) const override { return ModulatorSynth::getAttribute(index); };
+	void setInternalAttribute(int index, float value) override 
+	{
+		ModulatorSynth::setInternalAttribute(index, value);
+	};
 
 	void addProcessorsWhenEmpty() override
 	{

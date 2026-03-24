@@ -138,7 +138,7 @@ public:
 
 	static ProcessorMetadata createMetadata()
 	{
-		return ModulatorSynth::createBaseMetadata()
+		return ModulatorSynth::createBaseMetadata(true)
 			.withStandardMetadata<ModulatorSynthChain>()
 			.withDescription("A container for other Sound generators.")
 			.withFXConstrainer<NoMidiInputConstrainer>()

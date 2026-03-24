@@ -55,6 +55,7 @@ public:
 	ChokeGroupProcessor(MainController *mc, const String &id) :
 		MidiProcessor(mc, id)
 	{
+		midiRange = { 0, 127 };
 		mc->getEventHandler().addChokeListener(this);
 		updateParameterSlots();
 	};

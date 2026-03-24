@@ -1381,6 +1381,7 @@ void ModulatorSynthGroup::restoreFromValueTree(const ValueTree &v)
 	loadAttribute(UnisonoDetune, "UnisonoDetune");
 	loadAttribute(UnisonoSpread, "UnisonoSpread");
 	loadAttribute(KillSecondVoices, "KillSecondVoices");
+	loadAttribute(ForceMono, "ForceMono");
 
 }
 
@@ -1395,6 +1396,7 @@ ValueTree ModulatorSynthGroup::exportAsValueTree() const
 	saveAttribute(UnisonoDetune, "UnisonoDetune");
 	saveAttribute(UnisonoSpread, "UnisonoSpread");
 	saveAttribute(KillSecondVoices, "KillSecondVoices");
+	saveAttribute(ForceMono, "ForceMono");
 
 	return v;
 }

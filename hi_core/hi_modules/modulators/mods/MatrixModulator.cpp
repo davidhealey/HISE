@@ -54,7 +54,7 @@ hise::ProcessorMetadata MatrixModulator::createMetadata()
 			.withId("SmoothingTime")
 			.withDescription("The smoothing time for the value parameter")
 			.withSliderMode(HiSlider::Time, Range(0.0, 2000.0, 0.1).withCentreSkew(200.0))
-			.withDefault(200.0f));
+			.withDefault(50.0f));
 }
 
 Array<Identifier> MatrixModulator::getRangeIds(bool isInput)

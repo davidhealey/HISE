@@ -325,6 +325,10 @@ bool ProcessorMetadata::setup(HiComboBox& comboBox, Processor* p, int parameterI
 	for (int i = 0; i < pd->vtc.itemList.size(); i++)
 		comboBox.addItem(pd->vtc.itemList[i], startIndex + i);
 
+	auto v = (int)p->getAttribute(parameterIndex);
+
+	comboBox.setSelectedId(v, dontSendNotification);
+
 	if (!pd->description.isEmpty())
 		comboBox.setTooltip(pd->description);
 

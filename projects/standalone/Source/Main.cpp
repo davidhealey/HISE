@@ -954,6 +954,7 @@ return 0;
 
 	static void createBuilderCache(const String& commandLine)
 	{
+#if 0
 		scriptnode::NodeDatabase db;
 
 		auto processNodes = db.getNodeIds(false);
@@ -1074,6 +1075,7 @@ return 0;
 
 		auto nf = File::getSpecialLocation(File::userDesktopDirectory).getChildFile("scriptnodeList2.json");
 		nf.replaceWithText(JSON::toString(var(obj.get())));
+#endif
 
 		hise::ProcessorMetadataRegistry r;
 		print("Building module list...");
@@ -1606,10 +1608,10 @@ public:
 		{
 #if HI_RUN_UNIT_TESTS
 			UnitTestRunner runner;
-			runner.setAssertOnFailure(true);
+			//runner.setAssertOnFailure(false);
             
 			// If you're working on a unit test, just set this to the "Current" category
-			const String category = "allofem";
+			const String category = "";
 
             if(UnitTest::getTestsInCategory(category).isEmpty())
                 runner.runAllTests();

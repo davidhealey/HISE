@@ -624,11 +624,13 @@ public:
 		channelNumber = Content.addKnob("channelNumber", 0, 0);
 		channelNumber->set("text", "MIDI Channel");
 		channelNumber->setRange(1, 16, 1);
+		channelNumber->setValue(1);
 
 		mpeStartChannel = Content.addKnob("mpeStart", 150, 0);
 		mpeStartChannel->set("width", 170);
 		mpeStartChannel->set("text", "MPE Start Channel");
 		mpeStartChannel->setRange(2, 16, 1);
+		mpeStartChannel->setValue(2);
 
 		mpeEndChannel = Content.addKnob("mpeEnd", 150 + 190, 0);
 		mpeEndChannel->set("width", 170);
@@ -764,6 +766,7 @@ public:
 		channelNumber = Content.addKnob("channelNumber", 0, 0);
 		channelNumber->set("text", "MIDI Channel");
 		channelNumber->setRange(1, 16, 1);
+		channelNumber->setValue(1);
 
 		channel = 1;
 	}

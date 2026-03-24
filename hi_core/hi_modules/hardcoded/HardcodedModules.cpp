@@ -56,6 +56,9 @@ HardcodedMasterFX::HardcodedMasterFX(MainController* mc, const String& uid) :
 
 	getMatrix().setNumAllowedConnections(NUM_MAX_CHANNELS);
 	connectionChanged();
+
+	extraMods.updateModulationProperties({},
+		BIND_MEMBER_FUNCTION_1(HardcodedSwappableEffect::getParameterInitData));
 }
 
 HardcodedMasterFX::~HardcodedMasterFX()
@@ -327,6 +330,9 @@ HardcodedPolyphonicFX::HardcodedPolyphonicFX(MainController *mc, const String &u
 	getMatrix().init();
 	getMatrix().setOnlyEnablingAllowed(true);
 	connectionChanged();
+
+	extraModSources.updateModulationProperties({},
+		BIND_MEMBER_FUNCTION_1(HardcodedSwappableEffect::getParameterInitData));
 }
 
 HardcodedPolyphonicFX::~HardcodedPolyphonicFX()
@@ -984,6 +990,9 @@ HardcodedSynthesiser::HardcodedSynthesiser(MainController* mc, const String& id,
 	connectionChanged();
 
 	polyHandler.setVoiceResetter(this);
+
+	extraModSources.updateModulationProperties({},
+		BIND_MEMBER_FUNCTION_1(HardcodedSwappableEffect::getParameterInitData));
 }
 
 HardcodedSynthesiser::~HardcodedSynthesiser()
@@ -1142,7 +1151,7 @@ bool HardcodedSynthesiser::setEffect(const String& effectName, bool cond)
 		extraModSources.updateModulationProperties(modProperties, 
 			BIND_MEMBER_FUNCTION_1(HardcodedSwappableEffect::getParameterInitData));
 	}
-
+	
 	extraModSources.updateModulationChainIdAndColour(this, modProperties,
 		BIND_MEMBER_FUNCTION_1(HardcodedSwappableEffect::getOpaqueNodeParameterId));
 
