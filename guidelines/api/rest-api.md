@@ -1241,6 +1241,43 @@ curl -X POST "http://localhost:1900/api/builder/apply" \
   }'
 ```
 
+**Response**:
+
+The `result` field contains a diff summary showing the net effect of all operations. This is the same format as `GET /api/undo/diff?flatten=true`.
+
+```json
+{
+  "success": true,
+  "result": {
+    "scope": "group",
+    "groupName": "root",
+    "diff": [
+      { "target": "MySine", "action": "+", "domain": "builder" }
+    ]
+  },
+  "logs": [],
+  "errors": []
+}
+```
+
+When called inside an undo group (after `push_group`), the diff accumulates all operations in the group so far. The `scope` is `"group"` and `groupName` reflects the group name passed to `push_group`.
+
+**Result fields**:
+
+| Field | Description |
+|-------|-------------|
+| `scope` | `"group"` when inside a group, `"root"` at root level (currently always returns `"group"`) |
+| `groupName` | Name of the current group (or `"root"` at root level) |
+| `diff` | Array of diff entries representing the net effect |
+
+**Diff entry fields**:
+
+| Field | Description |
+|-------|-------------|
+| `target` | Module ID affected |
+| `action` | `"+"` (added), `"-"` (removed), `"*"` (modified). Structural actions take priority - if a module was added and then modified, it shows as `"+"`. |
+| `domain` | Operation domain (e.g., `"builder"`) |
+
 ### POST /api/undo/push_group
 
 Start a new group. Subsequent builder operations are validated against group state and queued until pop.

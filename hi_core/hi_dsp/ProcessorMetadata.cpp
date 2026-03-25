@@ -229,30 +229,24 @@ var ProcessorMetadata::toJSON() const
 		break;
 	}
 
-	if (!interfaceClasses.isEmpty())
-	{
-		Array<var> interfaces;
-		for (auto& i : interfaceClasses)
-			interfaces.add(i.toString());
-		obj->setProperty("interfaces", var(interfaces));
-	}
+	Array<var> interfaces;
+	for (auto& i : interfaceClasses)
+		interfaces.add(i.toString());
+	obj->setProperty("interfaces", var(interfaces));
+	
 
-	if (!parameters.isEmpty())
-	{
-		Array<var> params;
-		for (auto& p : parameters)
-			params.add(p.toJSON());
-		obj->setProperty("parameters", var(params));
-	}
+	Array<var> params;
+	for (auto& p : parameters)
+		params.add(p.toJSON());
+	
+	obj->setProperty("parameters", var(params));
+	
 
-	if (!modulation.isEmpty())
-	{
-		Array<var> mods;
-		for (auto& m : modulation)
-			mods.add(m.toJSON());
-		obj->setProperty("modulation", var(mods));
-	}
-
+	Array<var> mods;
+	for (auto& m : modulation)
+		mods.add(m.toJSON());
+	obj->setProperty("modulation", var(mods));
+	
 	return var(obj.get());
 }
 

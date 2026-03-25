@@ -240,7 +240,7 @@ void RestServerUndoManager::Instance::performAction(AsyncRequest::Ptr req, Actio
 		if (!isTestRun(cs))
 			killVoicesAndPerform(req, l);
 		else
-			req->complete(getResponse({}));
+			req->complete(getResponse({}, getDiffJSON(true, true)));
 	}
 }
 

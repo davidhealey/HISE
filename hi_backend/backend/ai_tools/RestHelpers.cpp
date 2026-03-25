@@ -3663,21 +3663,31 @@ var RestHelpers::buildModuleTree(const ProcessorOrValueTree& root, const TreeOpt
 	{
 		for (auto& modChain : *md)
 		{
-			if (modChain["disabled"])
-				continue;
-
 			auto mo = modChain.getDynamicObject();
 
+			
+			
 			if (!options.verbose)
 			{
 				mo->removeProperty("description");
 				mo->removeProperty("metadataType");
 			}
 
+			Array<var> children;
+
+			if (modChain["disabled"])
+			{
+				HiseModulationColours hc;
+
+				mo->setProperty("colour", "#" + hc.getColour(HiseModulationColours::ColourId::ExtraMod).toDisplayString(false));
+
+				modChain.getDynamicObject()->setProperty("children", var(children));
+
+				continue;
+			}
+
 			auto idx = (int)modChain["chainIndex"];
 			auto mc = root.getChild(idx);
-
-			Array<var> children;
 
 			if(mc.getType() == ModulatorChain::getClassType())
 			{

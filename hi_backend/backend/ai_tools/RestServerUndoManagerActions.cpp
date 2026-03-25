@@ -469,14 +469,17 @@ struct add : public ActionBase
 		{
 			jassert(md->type == ProcessorMetadataIds::Modulator);
 
-			if (chainIndex == Chains::Direct || chainIndex == Chains::Midi || chainIndex == Chains::FX)
+			if (pm->type == ProcessorMetadataIds::SoundGenerator)
 			{
-				e = expectChainIndex(md->type, Chains::Gain);
+				if(chainIndex == Chains::Direct || chainIndex == Chains::Midi || chainIndex == Chains::FX)
+				{
+					e = expectChainIndex(md->type, Chains::Gain);
 
-				if (!e)
-					return e;
+					if (!e)
+						return e;
+				}
 			}
-			
+				
 			String hint;
 
 			bool found = false;
@@ -485,10 +488,8 @@ struct add : public ActionBase
 			{
 				if (mod.chainIndex == chainIndex)
 				{
-
 					if (mod.disabled)
 						return Error(*this).withError(mod.id.toString() + " is disabled");
-
 					
 					e = expectWildcardMatch(*md, mod.constrainerWildcard);
 
