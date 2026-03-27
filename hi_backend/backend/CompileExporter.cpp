@@ -1516,7 +1516,7 @@ CompileExporter::ErrorCodes CompileExporter::createPluginDataHeaderFile(const St
 	HeaderHelpers::addStaticDspFactoryRegistration(pluginDataHeaderFile, this);
 	HeaderHelpers::addCopyProtectionHeaderLines(publicKey, pluginDataHeaderFile);
 
-	pluginDataHeaderFile << "AudioProcessor* JUCE_CALLTYPE createPluginFilter() { CREATE_PLUGIN(nullptr, nullptr); }\n";
+	HeaderHelpers::addMoonbaseProcessorFunction(pluginDataHeaderFile, "AudioProcessor* JUCE_CALLTYPE createPluginFilter()", "nullptr, nullptr");
 	pluginDataHeaderFile << "\n";
 
     if(iOSAUv3)
@@ -1548,7 +1548,7 @@ CompileExporter::ErrorCodes CompileExporter::createStandaloneAppHeaderFile(const
 	HeaderHelpers::addStaticDspFactoryRegistration(pluginDataHeaderFile, this);
 	HeaderHelpers::addCopyProtectionHeaderLines(publicKey, pluginDataHeaderFile);
 
-    pluginDataHeaderFile << "AudioProcessor* hise::StandaloneProcessor::createProcessor() { CREATE_PLUGIN(deviceManager, callback); }\n";
+	HeaderHelpers::addMoonbaseProcessorFunction(pluginDataHeaderFile, "AudioProcessor* hise::StandaloneProcessor::createProcessor()", "deviceManager, callback");
     pluginDataHeaderFile << "\n";
     pluginDataHeaderFile << "START_JUCE_APPLICATION(hise::FrontendStandaloneApplication)\n";
 
@@ -3159,6 +3159,22 @@ void CompileExporter::HeaderHelpers::addProjectInfoLines(CompileExporter* export
 	pluginDataHeaderFile << "String hise::FrontendHandler::getHiseVersion() { return " << hiseVersion.quoted() << "; };" << nl;
 
 	pluginDataHeaderFile << "String hise::FrontendHandler::getDefaultUserPreset() const { return " << defaultPreset.quoted() << "; };" << nl;
+}
+
+void CompileExporter::HeaderHelpers::addMoonbaseProcessorFunction(String& p, const String& functionSignature, const String& createPluginArgs)
+{
+	p << "#if MOONBASE\n";
+	p << "MOONBASE_DECLARE_LICENSING_USING_JUCE_PROJECTINFO\n";
+	p << functionSignature << "\n";
+	p << "{\n";
+	p << "    auto* proc = hise::FrontendFactory::createPluginWithAudioFiles(" << createPluginArgs << ");\n";
+	p << "    if (auto* fp = dynamic_cast<hise::FrontendProcessor*>(proc))\n";
+	p << "        fp->moonbaseClient = std::move(moonbaseClient);\n";
+	p << "    return proc;\n";
+	p << "}\n";
+	p << "#else\n";
+	p << functionSignature << " { CREATE_PLUGIN(" << createPluginArgs << "); }\n";
+	p << "#endif\n";
 }
 
 void CompileExporter::HeaderHelpers::writeHeaderFile(const String & solutionDirectory, const String& pluginDataHeaderFile)

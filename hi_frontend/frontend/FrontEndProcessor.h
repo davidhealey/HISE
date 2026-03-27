@@ -213,6 +213,10 @@ public:
 	Unlocker unlocker;
 #endif
 
+#if MOONBASE
+	std::unique_ptr<Moonbase::JUCEClient::API> moonbaseClient;
+#endif
+
     bool deactivatedBecauseOfMemoryLimitation = false;
     
 private:
