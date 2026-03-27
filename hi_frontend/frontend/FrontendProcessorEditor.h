@@ -140,6 +140,10 @@ public:
 
 private:
 
+#if MOONBASE
+    std::unique_ptr<Moonbase::JUCEClient::ActivationUI> activationUI;
+#endif
+
     LookAndFeel_V3 globalLookAndFeel;
     
     ScopedPointer<FrontendEditorHolder> container;

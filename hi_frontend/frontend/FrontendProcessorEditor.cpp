@@ -195,6 +195,12 @@ AudioProcessorEditor(fp)
         
 	if (FullInstrumentExpansion::isEnabled(getMainController()))
 		getMainController()->getLockFreeDispatcher().addPresetLoadListener(this);
+
+#if MOONBASE
+	if (auto* fpe = dynamic_cast<FrontendProcessor*>(getAudioProcessor()))
+		if (fpe->moonbaseClient != nullptr)
+			activationUI.reset(fpe->moonbaseClient->createActivationUi(*this));
+#endif
 }
 
 FrontendProcessorEditor::~FrontendProcessorEditor()
@@ -332,6 +338,10 @@ void FrontendProcessorEditor::resized()
 
 	loaderOverlay->setBounds(0, 0, width, height);
 	debugLoggerComponent->setBounds(0, height -90, width, 90);
+
+#if MOONBASE
+	MOONBASE_RESIZE_ACTIVATION_UI
+#endif
 }
 
 } // namespace hise

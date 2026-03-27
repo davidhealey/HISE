@@ -51,7 +51,15 @@ END_JUCE_MODULE_DECLARATION
 #ifndef HI_FRONTEND_INCLUDED
 #define HI_FRONTEND_INCLUDED
 
+#ifndef MOONBASE
+#define MOONBASE 0
+#endif
+
 #include "../hi_core/hi_core.h"
+
+#if MOONBASE
+#include <moonbase_JUCEClient/moonbase_JUCEClient.h>
+#endif
 #include "../hi_scripting/hi_scripting.h"
 
 #ifndef USE_FRONTEND
