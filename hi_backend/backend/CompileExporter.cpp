@@ -1516,7 +1516,17 @@ CompileExporter::ErrorCodes CompileExporter::createPluginDataHeaderFile(const St
 	HeaderHelpers::addStaticDspFactoryRegistration(pluginDataHeaderFile, this);
 	HeaderHelpers::addCopyProtectionHeaderLines(publicKey, pluginDataHeaderFile);
 
-	HeaderHelpers::addMoonbaseProcessorFunction(pluginDataHeaderFile, "AudioProcessor* JUCE_CALLTYPE createPluginFilter()", "nullptr, nullptr");
+	{
+		auto imagesDir = GET_PROJECT_HANDLER(chainToExport).getSubDirectory(ProjectHandler::SubDirectories::Images);
+		auto findBinaryName = [&](const String& base) -> String {
+			for (auto& ext : { ".svg", ".png" })
+				if (imagesDir.getChildFile(base + ext).existsAsFile())
+					return (base + ext).replaceCharacter('.', '_');
+			return {};
+		};
+		HeaderHelpers::addMoonbaseProcessorFunction(pluginDataHeaderFile, "AudioProcessor* JUCE_CALLTYPE createPluginFilter()", "nullptr, nullptr",
+		                                             findBinaryName("moonbase_spinner"), findBinaryName("moonbase_company_logo"));
+	}
 	pluginDataHeaderFile << "\n";
 
     if(iOSAUv3)
@@ -1548,7 +1558,17 @@ CompileExporter::ErrorCodes CompileExporter::createStandaloneAppHeaderFile(const
 	HeaderHelpers::addStaticDspFactoryRegistration(pluginDataHeaderFile, this);
 	HeaderHelpers::addCopyProtectionHeaderLines(publicKey, pluginDataHeaderFile);
 
-	HeaderHelpers::addMoonbaseProcessorFunction(pluginDataHeaderFile, "AudioProcessor* hise::StandaloneProcessor::createProcessor()", "deviceManager, callback");
+	{
+		auto imagesDir = GET_PROJECT_HANDLER(chainToExport).getSubDirectory(ProjectHandler::SubDirectories::Images);
+		auto findBinaryName = [&](const String& base) -> String {
+			for (auto& ext : { ".svg", ".png" })
+				if (imagesDir.getChildFile(base + ext).existsAsFile())
+					return (base + ext).replaceCharacter('.', '_');
+			return {};
+		};
+		HeaderHelpers::addMoonbaseProcessorFunction(pluginDataHeaderFile, "AudioProcessor* hise::StandaloneProcessor::createProcessor()", "deviceManager, callback",
+		                                             findBinaryName("moonbase_spinner"), findBinaryName("moonbase_company_logo"));
+	}
     pluginDataHeaderFile << "\n";
     pluginDataHeaderFile << "START_JUCE_APPLICATION(hise::FrontendStandaloneApplication)\n";
 
@@ -2227,10 +2247,12 @@ XmlElement* createXmlElementForFile(ModulatorSynthChain* chainToExport, String& 
 			templateProject = templateProject.replace("%ICON_FILE%", "smallIcon=\"" + fileId + "\" bigIcon=\"" + fileId + "\"");
 
 		bool isSourceFile = (allowCompilation && f.hasFileExtension(".cpp")) || f.getFileName() == "factory.cpp";
-		bool isSplashScreen = f.getFileName().contains("SplashScreen");
+		bool isResource = f.getFileName().contains("SplashScreen")
+		               || f.getFileName().startsWith("moonbase_spinner.")
+		               || f.getFileName().startsWith("moonbase_company_logo.");
 
 		xml->setAttribute("compile", isSourceFile ? 1 : 0);
-		xml->setAttribute("resource", isSplashScreen ? 1 : 0);
+		xml->setAttribute("resource", isResource ? 1 : 0);
 
 		const String relativePath = f.getRelativePathFrom(GET_PROJECT_HANDLER(chainToExport).getSubDirectory(ProjectHandler::SubDirectories::Binaries));
 
@@ -2312,6 +2334,15 @@ void CompileExporter::ProjectTemplateHelpers::handleAdditionalSourceCode(Compile
 		REPLACE_WILDCARD_WITH_STRING("%USE_SPLASH_SCREEN%", "disabled");
 	}
 
+	// Moonbase image assets: developer drops moonbase_spinner.svg/png and/or
+	// moonbase_company_logo.svg/png into the project's Images folder.
+	for (auto& name : { "moonbase_spinner.svg", "moonbase_spinner.png",
+	                    "moonbase_company_logo.svg", "moonbase_company_logo.png" })
+	{
+		File f = GET_PROJECT_HANDLER(chainToExport).getSubDirectory(ProjectHandler::SubDirectories::Images).getChildFile(name);
+		if (f.existsAsFile())
+			additionalSourceFiles.add(f);
+	}
 
 	String beatportLibPath = "";
 
@@ -3161,7 +3192,8 @@ void CompileExporter::HeaderHelpers::addProjectInfoLines(CompileExporter* export
 	pluginDataHeaderFile << "String hise::FrontendHandler::getDefaultUserPreset() const { return " << defaultPreset.quoted() << "; };" << nl;
 }
 
-void CompileExporter::HeaderHelpers::addMoonbaseProcessorFunction(String& p, const String& functionSignature, const String& createPluginArgs)
+void CompileExporter::HeaderHelpers::addMoonbaseProcessorFunction(String& p, const String& functionSignature, const String& createPluginArgs,
+                                                                   const String& spinnerBinaryName, const String& companyLogoBinaryName)
 {
 	p << "#if MOONBASE\n";
 	p << "MOONBASE_DECLARE_LICENSING_USING_JUCE_PROJECTINFO\n";
@@ -3169,7 +3201,31 @@ void CompileExporter::HeaderHelpers::addMoonbaseProcessorFunction(String& p, con
 	p << "{\n";
 	p << "    auto* proc = hise::FrontendFactory::createPluginWithAudioFiles(" << createPluginArgs << ");\n";
 	p << "    if (auto* fp = dynamic_cast<hise::FrontendProcessor*>(proc))\n";
+	p << "    {\n";
 	p << "        fp->moonbaseClient = std::move(moonbaseClient);\n";
+	p << "        fp->moonbaseUISetup = [](Moonbase::JUCEClient::ActivationUI* ui)\n";
+	p << "        {\n";
+	p << "            ui->setWelcomePageText(ProjectInfo::projectName, \"License Management\");\n";
+
+	if (spinnerBinaryName.isNotEmpty())
+		p << "            ui->setSpinnerLogo(juce::Drawable::createFromImageData(BinaryData::" << spinnerBinaryName << ", BinaryData::" << spinnerBinaryName << "Size));\n";
+
+	if (companyLogoBinaryName.isNotEmpty())
+	{
+		if (companyLogoBinaryName.endsWith("_svg"))
+		{
+			p << "            ui->setCompanyLogo(juce::Drawable::createFromImageData(BinaryData::" << companyLogoBinaryName << ", BinaryData::" << companyLogoBinaryName << "Size));\n";
+		}
+		else
+		{
+			p << "            auto companyLogo = std::make_unique<juce::ImageComponent>();\n";
+			p << "            companyLogo->setImage(juce::ImageCache::getFromMemory(BinaryData::" << companyLogoBinaryName << ", BinaryData::" << companyLogoBinaryName << "Size));\n";
+			p << "            ui->setCompanyLogo(std::move(companyLogo));\n";
+		}
+	}
+
+	p << "        };\n";
+	p << "    }\n";
 	p << "    return proc;\n";
 	p << "}\n";
 	p << "#else\n";
