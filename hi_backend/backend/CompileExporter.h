@@ -363,7 +363,8 @@ protected:
 		static void addCopyProtectionHeaderLines(const String &publicKey, String& pluginDataHeaderFile);
 		static void addFullExpansionTypeSetter(CompileExporter* exporter, String& pluginDataHeaderFile);
 		static void addProjectInfoLines(CompileExporter* exporter, String& pluginDataHeaderFile);
-		static void addMoonbaseProcessorFunction(String& pluginDataHeaderFile, const String& functionSignature, const String& createPluginArgs);
+		static void addMoonbaseProcessorFunction(String& pluginDataHeaderFile, const String& functionSignature, const String& createPluginArgs,
+		                                          const String& spinnerBinaryName = {}, const String& companyLogoBinaryName = {});
 
 		static void writeHeaderFile(const String & solutionDirectory, const String& pluginDataHeaderFile);
 	};

@@ -215,6 +215,7 @@ public:
 
 #if MOONBASE
 	std::unique_ptr<Moonbase::JUCEClient::API> moonbaseClient;
+	std::function<void(Moonbase::JUCEClient::ActivationUI*)> moonbaseUISetup;
 #endif
 
     bool deactivatedBecauseOfMemoryLimitation = false;

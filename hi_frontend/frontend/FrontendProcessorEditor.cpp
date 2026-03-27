@@ -198,8 +198,14 @@ AudioProcessorEditor(fp)
 
 #if MOONBASE
 	if (auto* fpe = dynamic_cast<FrontendProcessor*>(getAudioProcessor()))
+	{
 		if (fpe->moonbaseClient != nullptr)
+		{
 			activationUI.reset(fpe->moonbaseClient->createActivationUi(*this));
+			if (activationUI && fpe->moonbaseUISetup)
+				fpe->moonbaseUISetup(activationUI.get());
+		}
+	}
 #endif
 }
 
