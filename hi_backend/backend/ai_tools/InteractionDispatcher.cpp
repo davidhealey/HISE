@@ -599,7 +599,7 @@ void TestExecutor::clearMockComponents()
 
 void TestExecutor::addMockMenuItem(const String& text, int itemId, Rectangle<int> bounds)
 {
-    PopupMenu::VisibleMenuItem item;
+    InteractionExecutorBase::VisibleMenuItem item;
     item.text = text;
     item.itemId = itemId;
     item.screenBounds = bounds;

@@ -398,6 +398,15 @@ struct InteractionExecutorBase
     virtual ~InteractionExecutorBase() = default;
     
     //==========================================================================
+    /** A visible menu item from an open popup menu. */
+    struct VisibleMenuItem
+    {
+        String text;
+        int itemId = 0;
+        Rectangle<int> screenBounds;
+    };
+
+    //==========================================================================
     /** Result of resolving component ID ↔ position (bidirectional). */
     struct ResolveResult
     {
@@ -452,7 +461,7 @@ struct InteractionExecutorBase
     virtual void setCursorPosition(Point<int> pos) = 0;
     
     /** Get all currently visible menu items from open popup menus. */
-    virtual Array<PopupMenu::VisibleMenuItem> getVisibleMenuItems() const = 0;
+    virtual Array<VisibleMenuItem> getVisibleMenuItems() const = 0;
     
     /** Wait until the executor is ready to process events.
      *  @returns The number of milliseconds waited, or -1 if timed out.

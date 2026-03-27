@@ -189,7 +189,7 @@ public:
     Array<LogEntry> log;
     std::map<String, MockComponent> mockComponents;
     Point<int> cursorPosition{0, 0};
-    Array<PopupMenu::VisibleMenuItem> mockMenuItems;
+    Array<InteractionExecutorBase::VisibleMenuItem> mockMenuItems;
     
     //==========================================================================
     /** Reset all state for a new test. */
@@ -234,7 +234,7 @@ public:
     Point<int> getCurrentCursorPosition() const override { return cursorPosition; }
     void setCursorPosition(Point<int> pos) override { cursorPosition = pos; }
     
-    Array<PopupMenu::VisibleMenuItem> getVisibleMenuItems() const override { return mockMenuItems; }
+    Array<InteractionExecutorBase::VisibleMenuItem> getVisibleMenuItems() const override { return mockMenuItems; }
     
     int waitUntilReady() override { return 0; }  // TestExecutor is always immediately ready
 };

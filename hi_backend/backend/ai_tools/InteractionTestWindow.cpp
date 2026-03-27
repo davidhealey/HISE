@@ -278,14 +278,15 @@ InteractionTestWindow::RecordingListener::detectPopupMenuSelection(const MouseEv
     PopupMenuSelectionInfo result;
     
     // Get all visible menu items from open popup menus
+#if !HISE_JUCE8
     auto menuItems = PopupMenu::getVisibleMenuItems(e.eventComponent);
-    
+
     if (menuItems.isEmpty())
         return result;  // No popup menu open
-    
+
     // Get the click position in screen coordinates
     Point<int> screenPos = e.getScreenPosition();
-    
+
     // Check if click is inside any menu item's bounds
     for (const auto& item : menuItems)
     {
@@ -297,6 +298,9 @@ InteractionTestWindow::RecordingListener::detectPopupMenuSelection(const MouseEv
             return result;
         }
     }
+#else
+    ignoreUnused(e);
+#endif
     
     return result;  // Click was not on a menu item (e.g., menu background or outside)
 }
@@ -1321,30 +1325,34 @@ void InteractionTestWindow::RealExecutor::beginSyntheticInputMode()
     if (window != nullptr)
         window->grabKeyboardFocus();
     
+#if !HISE_JUCE8
     PopupMenu::setSyntheticInputMode(true);
-    
+
     auto& desktop = Desktop::getInstance();
     for (int i = 0; i < desktop.getNumMouseSources(); ++i)
     {
         if (auto* source = desktop.getMouseSource(i))
             source->setSyntheticPositionMode(true);
     }
-    
+
     ComponentPeer::getNativeRealtimeModifiers = &RealExecutor::getSyntheticModifiersCallback;
+#endif
 }
 
 void InteractionTestWindow::RealExecutor::endSyntheticInputMode()
 {
+#if !HISE_JUCE8
     PopupMenu::setSyntheticInputMode(false);
-    
+
     auto& desktop = Desktop::getInstance();
     for (int i = 0; i < desktop.getNumMouseSources(); ++i)
     {
         if (auto* source = desktop.getMouseSource(i))
             source->setSyntheticPositionMode(false);
     }
-    
+
     ComponentPeer::getNativeRealtimeModifiers = nullptr;
+#endif
     activeExecutor = nullptr;
 }
 
@@ -1572,8 +1580,13 @@ void InteractionTestWindow::RealExecutor::injectMouseEvent(Point<float> pixelPos
             MouseInputSource::InputSourceType::mouse,
             windowPos,
             mods,
+#if HISE_JUCE8
+            MouseInputSource::defaultPressure,
+            MouseInputSource::defaultOrientation,
+#else
             MouseInputSource::invalidPressure,
             MouseInputSource::invalidOrientation,
+#endif
             Time::currentTimeMillis(),
             {},
             0
@@ -1594,27 +1607,29 @@ void InteractionTestWindow::RealExecutor::setCursorPosition(Point<int> pos)
     cursorPosition = pos;
 }
 
-Array<PopupMenu::VisibleMenuItem> InteractionTestWindow::RealExecutor::getVisibleMenuItems() const
+Array<InteractionExecutorBase::VisibleMenuItem> InteractionTestWindow::RealExecutor::getVisibleMenuItems() const
 {
+    Array<InteractionExecutorBase::VisibleMenuItem> localItems;
+
+#if !HISE_JUCE8
     auto screenItems = PopupMenu::getVisibleMenuItems(window);
-    
-    Array<PopupMenu::VisibleMenuItem> localItems;
-    
+
     if (window != nullptr)
     {
         for (auto& item : screenItems)
         {
             auto localBounds = window->getLocalArea(nullptr, item.screenBounds);
             localBounds.translate(0, -TopBar::HEIGHT);  // Offset for TopBar
-            
-            PopupMenu::VisibleMenuItem localItem;
+
+            InteractionExecutorBase::VisibleMenuItem localItem;
             localItem.text = item.text;
             localItem.itemId = item.itemId;
             localItem.screenBounds = localBounds;
             localItems.add(localItem);
         }
     }
-    
+#endif
+
     return localItems;
 }
 
