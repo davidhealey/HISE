@@ -2025,7 +2025,13 @@ void CompileExporter::ProjectTemplateHelpers::handleCompilerInfo(CompileExporter
 		REPLACE_WILDCARD_WITH_STRING("%HISE_INCLUDE_LORIS%", "0");
 	}
 
-	const bool hasMoonbase = exporter->hisePath.getChildFile("moonbase_JUCEClient").isDirectory();
+	const String allExtraDefines = exporter->dataObject.getSetting(HiseSettings::Project::ExtraDefinitionsWindows).toString()
+	                             + exporter->dataObject.getSetting(HiseSettings::Project::ExtraDefinitionsOSX).toString()
+	                             + exporter->dataObject.getSetting(HiseSettings::Project::ExtraDefinitionsLinux).toString();
+
+	const bool hasMoonbase = exporter->hisePath.getChildFile("moonbase_JUCEClient").isDirectory()
+	                      && allExtraDefines.contains("MOONBASE")
+	                      && !allExtraDefines.contains("MOONBASE=0");
 
 	if (hasMoonbase)
 	{
@@ -2815,7 +2821,8 @@ void CompileExporter::BatchFileCreator::createBatchFile(CompileExporter* exporte
 
 	const bool addMoonbasePreBuild = moonbasePreBuildScript.existsAsFile()
 	                              && moonbaseApiConfig.existsAsFile()
-	                              && allDefines.contains("MOONBASE");
+	                              && allDefines.contains("MOONBASE")
+	                              && !allDefines.contains("MOONBASE=0");
     
 	String projectType;
 
