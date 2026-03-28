@@ -56,7 +56,7 @@ static const unsigned char projectStandaloneTemplate_jucer_lines[] = R"(
     </GROUP>
   </MAINGROUP>
   <EXPORTFORMATS>
-    <%VS_VERSION% targetFolder="Builds/%TARGET_FOLDER%/" IPP1ALibrary="%IPP_1A%"  %ICON_FILE% extraDefs="%EXTRA_DEFINES_WIN%&#10;%PERFETTO_INCLUDE_WIN%"  extraLinkerFlags="%FFT_LINKER_FLAGS%&#10;%UAC_LEVEL%" extraCompilerFlags="/bigobj /cgthreads8 %MSVC_WARNINGS% %PERFETTO_COMPILER_FLAGS_WIN%&#10;">
+    <%VS_VERSION% targetFolder="Builds/%TARGET_FOLDER%/" IPP1ALibrary="%IPP_1A%"  %ICON_FILE% extraDefs="%EXTRA_DEFINES_WIN%&#10;%MOONBASE_APP_MODE_DEFINE%&#10;%PERFETTO_INCLUDE_WIN%"  extraLinkerFlags="%FFT_LINKER_FLAGS%&#10;%UAC_LEVEL%" extraCompilerFlags="/bigobj /cgthreads8 %MSVC_WARNINGS% %PERFETTO_COMPILER_FLAGS_WIN%&#10;">
       <CONFIGURATIONS>
         <CONFIGURATION name="Debug" winWarningLevel="1" generateManifest="1" winArchitecture="x64"
                        libraryPath="%WIN_STATIC_LIB_FOLDER_D64%" isDebug="1" optimisation="1" targetName="%NAME% Debug"
@@ -97,10 +97,11 @@ static const unsigned char projectStandaloneTemplate_jucer_lines[] = R"(
         <MODULEPATH id="hi_snex" path="%HISE_PATH%"/>
 		<MODULEPATH id="melatonin_blur" path="%HISE_PATH%"/>
 		%LORIS_MODULEPATH%
+		%MOONBASE_MODULEPATH%
       </MODULEPATHS>
     </%VS_VERSION%>
     <XCODE_MAC targetFolder="Builds/MacOSX" vstFolder="%VSTSDK_FOLDER%" extraCompilerFlags="-Wno-reorder -Wno-inconsistent-missing-override -fno-aligned-allocation -ffp-contract=off" %ICON_FILE% 
-               extraLinkerFlags="%OSX_STATIC_LIBS%" extraDefs="%EXTRA_DEFINES_OSX%&#10;%PERFETTO_INCLUDE_MACOS%" hardenedRuntime="0" hardenedRuntimeOptions="com.apple.security.cs.allow-jit,com.apple.security.cs.allow-unsigned-executable-memory,com.apple.security.device.audio-input" xcodeValidArchs="arm64,arm64e,x86_64" externalLibraries="%BEATPORT_LIB_MACOS%;%OSX_EXTERNAL_LIBRARIES%">
+               extraLinkerFlags="%OSX_STATIC_LIBS%" extraDefs="%EXTRA_DEFINES_OSX%&#10;%MOONBASE_APP_MODE_DEFINE%&#10;%PERFETTO_INCLUDE_MACOS%" hardenedRuntime="0" hardenedRuntimeOptions="com.apple.security.cs.allow-jit,com.apple.security.cs.allow-unsigned-executable-memory,com.apple.security.device.audio-input" xcodeValidArchs="arm64,arm64e,x86_64" externalLibraries="%BEATPORT_LIB_MACOS%;%OSX_EXTERNAL_LIBRARIES%">
       <CONFIGURATIONS>
         <CONFIGURATION name="Debug" osxSDK="default" osxCompatibility="10.9 SDK" osxArchitecture="%MACOS_ARCHITECTURE%"
                        isDebug="1" optimisation="1" targetName="%NAME% Debug"
@@ -143,9 +144,10 @@ static const unsigned char projectStandaloneTemplate_jucer_lines[] = R"(
         <MODULEPATH id="hi_snex" path="%HISE_PATH%"/>
 		<MODULEPATH id="melatonin_blur" path="%HISE_PATH%"/>
 		%LORIS_MODULEPATH%
+		%MOONBASE_MODULEPATH%
       </MODULEPATHS>
     </XCODE_MAC>
-   <LINUX_MAKE targetFolder="Builds/LinuxMakefile" linuxExtraPkgConfig="%LINUX_GUI_LIBS%" extraLinkerFlags="-no-pie&#10;-flto=auto&#10;-fuse-ld=gold&#10;%FFT_LINKER_FLAGS%" extraCompilerFlags="-fpermissive" extraDefs="%EXTRA_DEFINES_LINUX%">
+   <LINUX_MAKE targetFolder="Builds/LinuxMakefile" linuxExtraPkgConfig="%LINUX_GUI_LIBS%" extraLinkerFlags="-no-pie&#10;-flto=auto&#10;-fuse-ld=gold&#10;%FFT_LINKER_FLAGS%" extraCompilerFlags="-fpermissive" extraDefs="%EXTRA_DEFINES_LINUX%&#10;%MOONBASE_APP_MODE_DEFINE%">
       <CONFIGURATIONS>
         <CONFIGURATION name="Debug" isDebug="1" optimisation="1" targetName="%NAME%" headerPath="%FAUST_HEADER_PATH%" libraryPath=""/>
         <CONFIGURATION name="Release" isDebug="0" optimisation="3" targetName="%NAME%" headerPath="%FAUST_HEADER_PATH%" libraryPath="" linkTimeOptimisation="%LINK_TIME_OPTIMISATION%"/>
@@ -182,6 +184,7 @@ static const unsigned char projectStandaloneTemplate_jucer_lines[] = R"(
         <MODULEPATH id="hi_snex" path="%HISE_PATH%"/>
 		<MODULEPATH id="melatonin_blur" path="%HISE_PATH%"/>
 		%LORIS_MODULEPATH%
+		%MOONBASE_MODULEPATH%
       </MODULEPATHS>
     </LINUX_MAKE>
   </EXPORTFORMATS>
@@ -217,6 +220,7 @@ static const unsigned char projectStandaloneTemplate_jucer_lines[] = R"(
     <MODULE id="hi_snex" showAllCode="1" useLocalCopy="0" useGlobalPath="0"/>
 	<MODULE id="melatonin_blur" showAllCode="1" useLocalCopy="0" useGlobalPath="0"/>
 	%LORIS_MODULEINFO%
+	%MOONBASE_MODULEINFO%
   </MODULES>
   <JUCEOPTIONS JUCE_QUICKTIME="disabled" USE_BACKEND="disabled" USE_FRONTEND="enabled" USE_RAW_FRONTEND="%USE_RAW_FRONTEND%"
                HI_EXPORT_DSP_LIBRARY="disabled" USE_COPY_PROTECTION="%USE_COPY_PROTECTION%"
