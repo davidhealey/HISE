@@ -108,6 +108,7 @@ static const unsigned char projectTemplate_jucer_lines[] = R"(
         <MODULEPATH id="hi_snex" path="%HISE_PATH%"/>
 		<MODULEPATH id="melatonin_blur" path="%HISE_PATH%"/>
         %LORIS_MODULEPATH%
+        %MOONBASE_MODULEPATH%
       </MODULEPATHS>
     </%VS_VERSION%>
     <XCODE_MAC targetFolder="Builds/MacOSX"  vstLegacyFolder="%VSTSDK_FOLDER%" vst3Folder="%VSTSDK3_FOLDER%"  aaxFolder="%AAX_PATH%" extraCompilerFlags="-Wno-reorder -Wno-inconsistent-missing-override  -fno-aligned-allocation -ffp-contract=off"
@@ -155,6 +156,7 @@ static const unsigned char projectTemplate_jucer_lines[] = R"(
         <MODULEPATH id="hi_snex" path="%HISE_PATH%"/>
 		<MODULEPATH id="melatonin_blur" path="%HISE_PATH%"/>
         %LORIS_MODULEPATH%
+        %MOONBASE_MODULEPATH%
       </MODULEPATHS>
     </XCODE_MAC>
     <XCODE_IPHONE targetFolder="Builds/iOS" iosScreenOrientation="landscape" extraCompilerFlags="-Wno-reorder -Wno-inconsistent-missing-override -fno-aligned-allocation" extraLinkerFlags="%OSX_STATIC_LIBS%" extraDefs="%EXTRA_DEFINES_IOS%&#10;HISE_IOS=1&#10;JUCE_USE_CUSTOM_PLUGIN_STANDALONE_APP=1&#10;USE_VDSP_FFT=1" %ICON_FILE% 
@@ -203,6 +205,7 @@ static const unsigned char projectTemplate_jucer_lines[] = R"(
         <MODULEPATH id="hi_snex" path="%HISE_PATH%"/>
 		<MODULEPATH id="melatonin_blur" path="%HISE_PATH%"/>
         %LORIS_MODULEPATH%
+        %MOONBASE_MODULEPATH%
       </MODULEPATHS>
     </XCODE_IPHONE>)"
     R"(
@@ -246,6 +249,7 @@ static const unsigned char projectTemplate_jucer_lines[] = R"(
         <MODULEPATH id="hnode_jit" path="%HISE_PATH%"/>
 		<MODULEPATH id="melatonin_blur" path="%HISE_PATH%"/>
         %LORIS_MODULEPATH%
+        %MOONBASE_MODULEPATH%
       </MODULEPATHS>
     </LINUX_MAKE>
   </EXPORTFORMATS>
@@ -282,6 +286,7 @@ static const unsigned char projectTemplate_jucer_lines[] = R"(
     <MODULE id="hi_snex" showAllCode="1" useLocalCopy="0" useGlobalPath="0"/>
 	<MODULE id="melatonin_blur" showAllCode="1" useLocalCopy="0" useGlobalPath="0"/>
     %LORIS_MODULEINFO%
+    %MOONBASE_MODULEINFO%
   </MODULES>
   <JUCEOPTIONS JUCE_QUICKTIME="disabled" USE_BACKEND="disabled" USE_FRONTEND="enabled" USE_RAW_FRONTEND="%USE_RAW_FRONTEND%" HI_EXPORT_DSP_LIBRARY="disabled" HISE_ENABLE_MIDI_INPUT_FOR_FX="%ENABLE_MIDI_INPUT_FX%" PROCESS_SOUND_GENERATORS_IN_FX_PLUGIN="%PROCESS_SOUND_GENERATORS_IN_FX_PLUGIN%" HISE_MIDIFX_PLUGIN="%HISE_MIDIFX_PLUGIN%" USE_COPY_PROTECTION="%USE_COPY_PROTECTION%" IS_STANDALONE_APP="disabled"
                FRONTEND_IS_PLUGIN="%FRONTEND_IS_PLUGIN%" USE_CUSTOM_FRONTEND_TOOLBAR="%USE_CUSTOM_FRONTEND_TOOLBAR%" IS_STANDALONE_FRONTEND="%IS_STANDALONE_FRONTEND%"  USE_GLITCH_DETECTION = "enabled" ENABLE_PLOTTER="disabled" ENABLE_SCRIPTING_SAFE_CHECKS="disabled"

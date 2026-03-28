@@ -2025,6 +2025,21 @@ void CompileExporter::ProjectTemplateHelpers::handleCompilerInfo(CompileExporter
 		REPLACE_WILDCARD_WITH_STRING("%HISE_INCLUDE_LORIS%", "0");
 	}
 
+	const bool hasMoonbase = exporter->hisePath.getChildFile("moonbase_JUCEClient").isDirectory();
+
+	if (hasMoonbase)
+	{
+		REPLACE_WILDCARD_WITH_STRING("%MOONBASE_MODULEPATH%", R"(<MODULEPATH id="moonbase_JUCEClient" path="%HISE_PATH%"/>)");
+		REPLACE_WILDCARD_WITH_STRING("%MOONBASE_MODULEINFO%", R"(<MODULE id="moonbase_JUCEClient" showAllCode="1" useLocalCopy="0" useGlobalPath="0"/>)");
+		REPLACE_WILDCARD_WITH_STRING("%MOONBASE_APP_MODE_DEFINE%", "MOONBASE_APP_MODE=1");
+	}
+	else
+	{
+		REPLACE_WILDCARD_WITH_STRING("%MOONBASE_MODULEPATH%", "");
+		REPLACE_WILDCARD_WITH_STRING("%MOONBASE_MODULEINFO%", "");
+		REPLACE_WILDCARD_WITH_STRING("%MOONBASE_APP_MODE_DEFINE%", "");
+	}
+
 	const File jucePath = exporter->hisePath.getChildFile("JUCE/modules");
 
 	REPLACE_WILDCARD_WITH_STRING("%HISE_PATH%", exporter->hisePath.getFullPathName());
