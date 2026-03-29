@@ -1563,7 +1563,7 @@ void ModulatorSamplerSoundPool::clearUnreferencedMonoliths()
 {
 	for (int i = 0; i < loadedMonoliths.size(); i++)
 	{
-		if (loadedMonoliths[i]->getReferenceCount() == 2)
+		if (loadedMonoliths[i] != nullptr && loadedMonoliths[i]->getReferenceCount() == 2)
 		{
 			loadedMonoliths.remove(i--);
 		}

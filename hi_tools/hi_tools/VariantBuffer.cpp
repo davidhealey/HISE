@@ -864,7 +864,9 @@ VariantBuffer * VariantBuffer::Factory::getFreeVariantBuffer()
 {
 	for (int i = 0; i < stackSize; i++)
 	{
-		const int thisRefCount = sectionBufferStack.getUnchecked(i)->getReferenceCount();
+		auto* buf = sectionBufferStack.getUnchecked(i);
+		if (buf == nullptr) continue;
+		const int thisRefCount = buf->getReferenceCount();
 		if (thisRefCount == 2)
 		{
 			VariantBuffer::Ptr p(sectionBufferStack[i]);

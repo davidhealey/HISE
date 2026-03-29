@@ -571,6 +571,7 @@ void MultiMicModulatorSamplerVoice::calculateBlock(int startSample, int numSampl
 
 	for (int i = 0; i < wrappedVoices.size(); i++)
 	{
+		if (wrappedVoices[i] == nullptr) continue;
 		const StreamingSamplerSound *sound = wrappedVoices[i]->getLoadedSound();
 
 		if (sound == nullptr) continue;
@@ -603,7 +604,7 @@ void MultiMicModulatorSamplerVoice::calculateBlock(int startSample, int numSampl
 	{
 		for (int i = 0; i < wrappedVoices.size(); i++)
 		{
-			if (wrappedVoices[i]->getLoadedSound() == nullptr) continue;
+			if (wrappedVoices[i] == nullptr || wrappedVoices[i]->getLoadedSound() == nullptr) continue;
 
 			FloatVectorOperations::multiply(voiceBuffer.getWritePointer(2 * i, startIndex), modValues + startIndex, samplesInBlock);
 			FloatVectorOperations::multiply(voiceBuffer.getWritePointer(2 * i + 1, startIndex), modValues + startIndex, samplesInBlock);
@@ -614,7 +615,7 @@ void MultiMicModulatorSamplerVoice::calculateBlock(int startSample, int numSampl
 	{
 		for (int i = 0; i < wrappedVoices.size(); i++)
 		{
-			if (wrappedVoices[i]->getLoadedSound() == nullptr) continue;
+			if (wrappedVoices[i] == nullptr || wrappedVoices[i]->getLoadedSound() == nullptr) continue;
 
 			FloatVectorOperations::multiply(voiceBuffer.getWritePointer(2 * i, startIndex), crossFadeValues + startIndex, samplesInBlock);
 			FloatVectorOperations::multiply(voiceBuffer.getWritePointer(2 * i + 1, startIndex), crossFadeValues + startIndex, samplesInBlock);
@@ -653,7 +654,7 @@ void MultiMicModulatorSamplerVoice::calculateBlock(int startSample, int numSampl
 
 	for (int i = 0; i < wrappedVoices.size(); i++)
 	{
-		if (wrappedVoices[i]->getLoadedSound() == nullptr) continue;
+		if (wrappedVoices[i] == nullptr || wrappedVoices[i]->getLoadedSound() == nullptr) continue;
 
 		if (lGain != 1.0f)
 			FloatVectorOperations::multiply(voiceBuffer.getWritePointer(2 * i, startIndex), lGain, samplesInBlock);
@@ -701,7 +702,8 @@ double MultiMicModulatorSamplerVoice::getDiskUsage()
 
 	for (int i = 0; i < wrappedVoices.size(); i++)
 	{
-		diskUsage += wrappedVoices[i]->getDiskUsage();
+		if (wrappedVoices[i] != nullptr)
+			diskUsage += wrappedVoices[i]->getDiskUsage();
 	}
 
 	return diskUsage;

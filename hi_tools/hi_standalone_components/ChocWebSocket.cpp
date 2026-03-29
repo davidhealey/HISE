@@ -360,6 +360,7 @@ void WebViewData::TCPServer::CommunicationThread::run()
 
 		for(int i = 0; i < parent.openConnections.size(); i++)
 		{
+			if (parent.openConnections[i] == nullptr) continue;
 			uint8 buffer[1024];
 			parent.openConnections[i]->waitUntilReady(true, 5);
 			int bytesRead = parent.openConnections[i]->read(buffer, sizeof(buffer), false);
@@ -381,6 +382,7 @@ void WebViewData::TCPServer::CommunicationThread::run()
 					mos.write(buffer, bytesRead);
 				}
 
+				if (parent.openConnections[i] == nullptr) break;
 				parent.openConnections[i]->waitUntilReady(true, 5);
 				bytesRead = parent.openConnections[i]->read(buffer, sizeof(buffer), false);
 			}

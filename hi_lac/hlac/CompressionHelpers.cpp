@@ -448,6 +448,9 @@ int CompressionHelpers::getPaddedSampleSize(int samplesNeeded)
 
 uint8 CompressionHelpers::getBitReductionForDifferential(AudioBufferInt16& b)
 {
+	if (b.size <= 0)
+		return 0;
+
 	AudioBufferInt16 copy(b.size);
 
 	memcpy(copy.getWritePointer(), b.getReadPointer(), 2 * (size_t)b.size);
