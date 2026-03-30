@@ -2213,6 +2213,9 @@ namespace ScriptingObjects
 		/** Returns the output channel that is mapped to the given input channel (or -1). */
 		var getDestinationChannelForSource(var sourceIndex) const;
 
+		/** This forces the routing matrix to calculate its peak levels. */
+		void setForcePeakMeters(bool shouldBeEnabled);
+
 		// ============================================================================================================ 
 
 		RoutableProcessor* getRoutableProcessor() { return dynamic_cast<RoutableProcessor*>(rp.get()); }

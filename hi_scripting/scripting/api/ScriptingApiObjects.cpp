@@ -4011,6 +4011,7 @@ struct ScriptingObjects::ScriptRoutingMatrix::Wrapper
 	API_METHOD_WRAPPER_0(ScriptRoutingMatrix, getNumDestinationChannels);
 	API_METHOD_WRAPPER_1(ScriptRoutingMatrix, getSourceChannelsForDestination);
 	API_METHOD_WRAPPER_1(ScriptRoutingMatrix, getDestinationChannelForSource);
+	API_VOID_METHOD_WRAPPER_1(ScriptRoutingMatrix, setForcePeakMeters);
 };
 
 ScriptingObjects::ScriptRoutingMatrix::ScriptRoutingMatrix(ProcessorWithScriptingContent *p, Processor *processor):
@@ -4028,6 +4029,7 @@ ScriptingObjects::ScriptRoutingMatrix::ScriptRoutingMatrix(ProcessorWithScriptin
 	ADD_API_METHOD_0(getNumDestinationChannels);
 	ADD_API_METHOD_1(getSourceChannelsForDestination);
 	ADD_API_METHOD_1(getDestinationChannelForSource);
+	ADD_API_METHOD_1(setForcePeakMeters);
 
 	if (auto r = dynamic_cast<RoutableProcessor*>(rp.get()))
 	{
@@ -4229,6 +4231,17 @@ var ScriptingObjects::ScriptRoutingMatrix::getDestinationChannelForSource(var so
 	}
 
 	return -1;
+}
+
+void ScriptingObjects::ScriptRoutingMatrix::setForcePeakMeters(bool shouldBeEnabled)
+{
+	if (checkValidObject())
+	{
+		if (auto r = dynamic_cast<RoutableProcessor*>(rp.get()))
+		{
+			return r->getMatrix().setForcePeakMeters(shouldBeEnabled);
+		}
+	}
 }
 
 // ScriptingSynth ==============================================================================================================
