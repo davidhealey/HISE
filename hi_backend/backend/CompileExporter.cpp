@@ -3235,9 +3235,9 @@ void CompileExporter::HeaderHelpers::addMoonbaseProcessorFunction(String& p, con
                                                                    const String& spinnerBinaryName, const String& companyLogoBinaryName)
 {
 	p << "#if MOONBASE\n";
-	p << "MOONBASE_DECLARE_LICENSING_USING_JUCE_PROJECTINFO\n";
 	p << functionSignature << "\n";
 	p << "{\n";
+	p << "    auto moonbaseClient = MOONBASE_INIT_API(ProjectInfo::companyName, ProjectInfo::projectName, ProjectInfo::versionString);\n";
 	p << "    auto* proc = hise::FrontendFactory::createPluginWithAudioFiles(" << createPluginArgs << ");\n";
 	p << "    if (auto* fp = dynamic_cast<hise::FrontendProcessor*>(proc))\n";
 	p << "    {\n";
