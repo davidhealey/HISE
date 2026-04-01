@@ -1337,6 +1337,10 @@ juce::ValueTree DspNetwork::cloneValueTreeWithNewIds(const ValueTree& treeToClon
 		if (v[PropertyIds::Automated])
 			v.removeProperty(PropertyIds::Automated, nullptr);
 
+		if (v[PropertyIds::AutomatedExternal])
+			v.removeProperty(PropertyIds::AutomatedExternal, nullptr);
+		
+
 		return false;
 	});
 
@@ -3015,6 +3019,7 @@ bool DspNetworkListeners::PatchAutosaver::stripValueTree(ValueTree& v)
 		removeIfDefault(v, id, PropertyIds::Helpers::getDefaultValue(id));
 
 	removeIfDefined(v, PropertyIds::Value, PropertyIds::Automated);
+	removeIfDefined(v, PropertyIds::Value, PropertyIds::AutomatedExternal);
 
 	if(v.hasProperty(PropertyIds::DefaultValue) && v[PropertyIds::DefaultValue] == v[PropertyIds::Value])
 		v.removeProperty(PropertyIds::DefaultValue, nullptr);

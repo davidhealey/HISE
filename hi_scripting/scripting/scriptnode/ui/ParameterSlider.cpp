@@ -1020,7 +1020,7 @@ ParameterSlider::ParameterSlider(NodeBase* node_, int index_) :
 		}
 	});
 
-	automationListener.setCallback(pTree, {PropertyIds::Automated}, valuetree::AsyncMode::Asynchronously,
+	automationListener.setCallback(pTree, {PropertyIds::Automated, PropertyIds::AutomatedExternal}, valuetree::AsyncMode::Asynchronously,
 	[this](const Identifier& id, var newValue)
 	{
 		checkEnabledState();
@@ -1135,7 +1135,7 @@ bool ParameterSlider::isInterestedInDragSource(const SourceDetails& details)
 	if (details.sourceComponent == this)
 		return false;
 
-	if(pTree[PropertyIds::Automated])
+	if(pTree[PropertyIds::Automated] || pTree[PropertyIds::AutomatedExternal])
 		return false;
 
 	WeakReference<NodeBase> sourceNode = DspNetworkListeners::getSourceNodeFromComponentDrag(details.sourceComponent);

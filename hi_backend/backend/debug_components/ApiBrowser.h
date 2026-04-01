@@ -1159,7 +1159,7 @@ public:
 			this->rebuildModuleList(true);
 		});
         
-        colourUpdater.setCallback(networkTree, { PropertyIds::NodeColour, PropertyIds::Automated }, valuetree::AsyncMode::Asynchronously, [this](ValueTree, Identifier)
+        colourUpdater.setCallback(networkTree, { PropertyIds::NodeColour, PropertyIds::Automated, PropertyIds::AutomatedExternal }, valuetree::AsyncMode::Asynchronously, [this](ValueTree, Identifier)
         {
             this->selectionChanged({});
         });

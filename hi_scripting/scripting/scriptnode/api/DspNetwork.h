@@ -949,7 +949,7 @@ struct DspNetworkListeners
 						return false;
 				}
 
-				return !v[PropertyIds::Automated];
+				return !(v[PropertyIds::Automated] || v[PropertyIds::AutomatedExternal]);
 			}
 
 			return true;
