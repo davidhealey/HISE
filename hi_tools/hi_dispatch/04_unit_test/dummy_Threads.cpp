@@ -85,7 +85,11 @@ AudioThread::~AudioThread()
 void AudioThread::startSimulation()
 {
 	SimulatedThread::startSimulation();
+#if HISE_JUCE8
+	startThread(juce::Thread::Priority::highest);
+#else
 	startThread(Thread::realtimeAudioPriority);
+#endif
 }
 
 void AudioThread::audioCallback()
@@ -169,7 +173,11 @@ UISimulator::UISimulator(MainController* mc):
 void UISimulator::startSimulation()
 {
 	SimulatedThread::startSimulation();
+#if HISE_JUCE8
+	startThread(juce::Thread::Priority::normal);
+#else
 	startThread(5);
+#endif
 }
 
 UISimulator::~UISimulator()
