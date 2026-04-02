@@ -4232,6 +4232,7 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::getIdealPopupMenuItemSize(const
         }
         if(nObj.isInt() || nObj.isInt64() || nObj.isDouble())
         {
+            GlobalHiseLookAndFeel::getIdealPopupMenuItemSize(text, isSeparator, standardMenuItemHeight, idealWidth, idealHeight);
             idealHeight = (int)nObj;
             return;
         }
