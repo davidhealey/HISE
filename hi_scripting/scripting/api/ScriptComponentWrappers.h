@@ -378,9 +378,13 @@ public:
 				simple_css::FlexboxComponent::Helpers::writeManualPseudoState(*c, styleSheetPseudoState);
 			}
 
+			w.onRepaintMessage();
+
 			c->repaint();
 		}
 	}
+
+	virtual void onRepaintMessage() {}
 
     Processor *getProcessor();
     
@@ -1009,7 +1013,8 @@ public:
 		void updateValue(var newValue) override;
 
         void updateLookAndFeel();
-        
+		void onRepaintMessage() override;
+
 		JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(FloatingTileWrapper)
 	};
 

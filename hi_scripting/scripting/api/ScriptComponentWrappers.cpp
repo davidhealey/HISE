@@ -3085,6 +3085,18 @@ void ScriptCreatedComponentWrappers::FloatingTileWrapper::updateComponent()
 {
 }
 
+void ScriptCreatedComponentWrappers::FloatingTileWrapper::onRepaintMessage()
+{
+	auto ft = dynamic_cast<FloatingTile*>(getComponent());
+	if (ft == nullptr) return;
+
+	if (auto ftc = ft->getCurrentFloatingPanel())
+	{
+		if (auto sft = dynamic_cast<ScriptingApi::Content::ScriptFloatingTile*>(getScriptComponent()))
+			ftc->fromDynamicObject(sft->getContentData());
+	}
+}
+
 void ScriptCreatedComponentWrappers::FloatingTileWrapper::updateComponent(int propertyIndex, var newValue)
 {
 	ScriptCreatedComponentWrapper::updateComponent(propertyIndex, newValue);
@@ -3099,18 +3111,22 @@ void ScriptCreatedComponentWrappers::FloatingTileWrapper::updateComponent(int pr
 
 	switch (propertyIndex)
 	{
-	PROPERTY_CASE::ScriptComponent::itemColour: 
-	PROPERTY_CASE::ScriptComponent::itemColour2:
-	PROPERTY_CASE::ScriptFloatingTile::itemColour3:
-	PROPERTY_CASE::ScriptComponent::bgColour: 
-	PROPERTY_CASE::ScriptComponent::textColour: 
-	PROPERTY_CASE::ScriptFloatingTile::Properties::Font:
-	PROPERTY_CASE::ScriptFloatingTile::Properties::FontSize:
-	PROPERTY_CASE::ScriptFloatingTile::Properties::Data :
+	PROPERTY_CASE::ScriptFloatingTile::Properties::Data:
 	PROPERTY_CASE::ScriptFloatingTile::Properties::ContentType:
         ft->setContent(sft->getContentData());
         updateLookAndFeel();
         break;
+	PROPERTY_CASE::ScriptComponent::itemColour:
+	PROPERTY_CASE::ScriptComponent::itemColour2:
+	PROPERTY_CASE::ScriptFloatingTile::itemColour3:
+	PROPERTY_CASE::ScriptComponent::bgColour:
+	PROPERTY_CASE::ScriptComponent::textColour:
+	PROPERTY_CASE::ScriptFloatingTile::Properties::Font:
+	PROPERTY_CASE::ScriptFloatingTile::Properties::FontSize:
+		ftc->fromDynamicObject(sft->getContentData());
+		ft->repaint();
+		updateLookAndFeel();
+		break;
 	}
 
 #if USE_BACKEND
