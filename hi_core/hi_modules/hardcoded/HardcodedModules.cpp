@@ -958,7 +958,7 @@ void HardcodedSynthesiser::Voice::prepareToPlay(double sampleRate, int samplesPe
 {
 	auto numSynthChannels = synth->numChannelsToRender;
 
-	if (numSynthChannels != voiceBuffer.getNumChannels())
+	if (numSynthChannels != voiceBuffer.getNumChannels() && numSynthChannels > 0)
 		voiceBuffer.setSize(numSynthChannels, samplesPerBlock);
 	
 	ModulatorSynthVoice::prepareToPlay(sampleRate, samplesPerBlock);

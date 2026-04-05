@@ -343,7 +343,7 @@ bool RestServerUndoManager::Instance::popPlan(AsyncRequest::Ptr req)
 	if (planStack.isEmpty())
 		return false;
 
-	auto shouldCancel = (bool)req->getRequest()["cancel"].getIntValue();
+	auto shouldCancel = (bool)req->getRequest().getJsonBody().getProperty(RestApiIds::cancel, false);
 
 	auto lastPlan = planStack.removeAndReturn(planStack.size() - 1);
 

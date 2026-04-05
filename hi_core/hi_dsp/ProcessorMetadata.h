@@ -238,7 +238,12 @@ struct ProcessorMetadata
 		{
 			auto copy = *this;
 			copy.type = Type::List;
-			copy.range = { (double)startIndex, (double)(startIndex + items.size() - 1), 1.0 };
+            
+            if(items.size() == 1)
+                copy.range = { (double)startIndex, (double)startIndex + 1.0, 1.0};
+            else
+                copy.range = { (double)startIndex, (double)(startIndex + items.size() - 1), 1.0 };
+            
 			copy.vtc = ValueToTextConverter::createForOptions(items);
 			return copy;
 		}

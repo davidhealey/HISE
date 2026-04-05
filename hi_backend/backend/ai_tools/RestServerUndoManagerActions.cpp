@@ -76,7 +76,7 @@ namespace builder {
 			if (processor != nullptr)
 				return processor->getType();
 
-			return Identifier();
+			return type;
 		}
 
 		bool initAtValidation(RestServerUndoManager::PlanValidationState::Ptr data, MainController* mc)
@@ -133,8 +133,16 @@ namespace builder {
 		void setProcessor(Processor* p)
 		{
 			processor = p;
-		}
+            
+            if(p != nullptr)
+                type = p->getType();
+        }
 
+        void setType(const Identifier& t)
+        {
+            type = t;
+        }
+        
 		void setId(String newId)
 		{
 			id = newId;
@@ -144,6 +152,7 @@ namespace builder {
 		}
 
 		String id;
+        Identifier type;
 		WeakReference<Processor> processor;
 		ValueTree planData;
 	};
@@ -258,8 +267,15 @@ struct Helpers
 		}
 	}
 
-	static void deleteProcessorAsync(Processor* pToDelete)
+	static void deleteProcessorAsync(ProcessorReference& pToDelete)
 	{
+        auto pm = pToDelete.get();
+        
+        if(pm == nullptr)
+            return;
+        
+        pToDelete.setType(pm->getType());
+        
 		auto f = [](Processor* p)
 		{
 			auto mc = p->getMainController();
@@ -277,7 +293,7 @@ struct Helpers
 			return SafeFunctionCall::OK;
 		};
 
-		pToDelete->getMainController()->getGlobalAsyncModuleHandler().removeAsync(pToDelete, f);
+		pm->getMainController()->getGlobalAsyncModuleHandler().removeAsync(pm, f);
 	}
 };
 
@@ -354,7 +370,8 @@ struct add : public ActionBase
 		raw::Builder b(getMainController());
 		createdProcessor.setProcessor(b.create(parentProcessor.get(), typeId, chainIndex));
 
-		createdProcessor.setId(createdProcessor.id);
+        if(createdProcessor.id.isNotEmpty())
+            createdProcessor.setId(createdProcessor.id);
 	}
 
 	void undo() override
@@ -363,7 +380,7 @@ struct add : public ActionBase
 			Helpers::throwProcessorDeleted(createdProcessor.getId());
 
 		auto mc = getMainController();
-		Helpers::deleteProcessorAsync(createdProcessor.get());
+		Helpers::deleteProcessorAsync(createdProcessor);
 	}
 
 	bool needsKillVoice() const override { return true; }
@@ -565,7 +582,7 @@ struct remove : public ActionBase
 
 		savedState = targetProcessor.get()->exportAsValueTree();
 
-		Helpers::deleteProcessorAsync(targetProcessor.get());
+		Helpers::deleteProcessorAsync(targetProcessor);
 	}
 
 	void undo() override 
@@ -695,7 +712,7 @@ struct clone : public ActionBase
 		for (auto b : createdClones)
 		{
 			if (b.initAtPerform(getMainController()))
-				Helpers::deleteProcessorAsync(b.get());
+				Helpers::deleteProcessorAsync(b);
 			else
 				Helpers::throwProcessorDeleted(b.getId());
 		}
