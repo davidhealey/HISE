@@ -323,6 +323,8 @@ public:
 
 	SnippetBrowserHelpers::Category currentCategory = SnippetBrowserHelpers::Category::Undefined;
 
+    BackendProcessorEditor* getEditor() { return mainEditor.getComponent(); }
+    
 private:
 
 	mcl::TokenCollection::Ptr javascriptTokens;

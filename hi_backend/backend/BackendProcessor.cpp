@@ -343,7 +343,10 @@ RestServer::Response BackendProcessor::onAsyncRequest(RestServer::AsyncRequest::
 	
 	case RestHelpers::ApiRoute::BuilderApply:
 		return RestHelpers::handleBuilderApply(this, req);
-	
+
+	case RestHelpers::ApiRoute::BuilderReset:
+		return RestHelpers::handleBuilderReset(this, req);
+
 	case RestHelpers::ApiRoute::UndoPushGroup:
 		return RestHelpers::handleUndoPushGroup(this, req);
 	

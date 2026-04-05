@@ -849,6 +849,13 @@ const Array<RestHelpers::RouteMetadata>& RestHelpers::getRouteMetadata()
 				"set_effect (target, effect), "
 				"set_complex_data (reserved / deferred)")));
 		
+		// ApiRoute::BuilderReset
+		m.add(RouteMetadata(ApiRoute::BuilderReset, "api/builder/reset")
+			.withMethod(RestServer::POST)
+			.withCategory("builder")
+			.withDescription("Reset the module tree to an empty state (equivalent to File -> New). Clears all undo history.")
+			.withReturns("Success confirmation"));
+
 		// ApiRoute::UndoPushGroup
 		m.add(RouteMetadata(ApiRoute::UndoPushGroup, "api/undo/push_group")
 			.withMethod(RestServer::POST)
@@ -3343,6 +3350,40 @@ RestServer::Response RestHelpers::handleBuilderApply(MainController* mc,
 		}
 	});
 	
+	return req->waitForResponse();
+}
+
+// ============================================================================
+// Builder Reset Handler
+// ============================================================================
+
+RestServer::Response RestHelpers::handleBuilderReset(MainController* mc,
+                                                      RestServer::AsyncRequest::Ptr req)
+{
+    auto um = RestServerUndoManager::Instance::getOrCreate(mc, RestHelpers::ApiRoute::BuilderReset);
+    
+    
+    
+    mc->getKillStateHandler().killVoicesAndCall(mc->getMainSynthChain(), [um, req](Processor* p)
+    {
+        p->getMainController()->clearPreset(sendNotificationAsync);
+        dynamic_cast<BackendProcessor*>(p->getMainController())->createInterface(600, 500);
+
+        DynamicObject::Ptr result = new DynamicObject();
+        result->setProperty(RestApiIds::success, true);
+        result->setProperty(RestApiIds::result, "Module tree reset");
+        result->setProperty(RestApiIds::logs, Array<var>());
+        result->setProperty(RestApiIds::errors, Array<var>());
+
+        
+        req->complete(RestServer::Response::ok(var(result.get())));
+        
+        um->clearUndoHistory();
+        um->flushUI(p);
+        
+        return SafeFunctionCall::OK;
+    }, MainController::KillStateHandler::TargetThread::SampleLoadingThread);
+    
 	return req->waitForResponse();
 }
 

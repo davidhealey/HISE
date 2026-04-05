@@ -75,6 +75,7 @@ struct RestHelpers
         Shutdown,               ///< POST /api/shutdown - Gracefully quit HISE
         BuilderTree,            ///< GET  /api/builder/tree - Get module tree hierarchy
         BuilderApply,           ///< POST /api/builder/apply - Apply operations to module tree
+        BuilderReset,           ///< POST /api/builder/reset - Reset module tree (File->New)
         UndoPushGroup,          ///< POST /api/undo/push_group - Start a new undo group
         UndoPopGroup,           ///< POST /api/undo/pop_group - End group, execute or discard
         UndoBack,               ///< POST /api/undo/back - Undo last action
@@ -434,7 +435,11 @@ struct RestHelpers
     /** Handler for POST /api/builder/apply - Apply operations to module tree */
     static RestServer::Response handleBuilderApply(MainController* mc,
                                                     RestServer::AsyncRequest::Ptr req);
-    
+
+    /** Handler for POST /api/builder/reset - Reset module tree (File->New) */
+    static RestServer::Response handleBuilderReset(MainController* mc,
+                                                    RestServer::AsyncRequest::Ptr req);
+
     /** Handler for POST /api/undo/push_group - Start a new undo group */
     static RestServer::Response handleUndoPushGroup(MainController* mc,
                                                      RestServer::AsyncRequest::Ptr req);

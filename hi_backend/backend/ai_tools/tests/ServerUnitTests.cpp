@@ -135,6 +135,7 @@ public:
         testBuilderApplyMissingOp();
         testBuilderApplyUnknownOp();
         testBuilderApplyMissingFields();
+        testBuilderReset();
         testUndoPushGroup();
 		testPlanValidationRemoveThenSetIdFails();
 		testPlanValidationRenameThenRemoveOldNameFails();
@@ -3962,6 +3963,37 @@ private:
         expectEquals(validateStack[3].toString(), String("endpoint: api/builder/apply"), "Should include endpoint");
     }
     
+    void testBuilderReset()
+    {
+        /** Setup: Add a module first so tree is non-empty
+         *  Scenario: POST /api/builder/reset to clear the module tree
+         *  Expected: Returns success, tree is empty afterward
+         */
+        beginTest("POST /api/builder/reset");
+
+        resetBuilderState();
+
+        // Add a module so we have something to reset
+        Array<var> ops;
+        DynamicObject::Ptr addOp = new DynamicObject();
+        addOp->setProperty(RestApiIds::op, "add");
+        addOp->setProperty(RestApiIds::type, "SineSynth");
+        addOp->setProperty(RestApiIds::parent, "Master Chain");
+        addOp->setProperty(RestApiIds::chain, -1);
+        addOp->setProperty(RestApiIds::name, "TestSine");
+        ops.add(var(addOp.get()));
+
+        auto addJson = postBuilderOps(ops);
+        expect((bool)addJson[RestApiIds::success], "Should add module successfully");
+
+        // Now reset
+        auto response = ctx->httpPost("/api/builder/reset", "{}");
+        var json = ctx->parseJson(response);
+
+        expect((bool)json[RestApiIds::success], "Reset should succeed");
+        expectEquals(json[RestApiIds::result].toString(), String("Module tree reset"), "Should return reset message");
+    }
+
     void testUndoPushGroup()
     {
         /** Setup: Fresh project
