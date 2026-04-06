@@ -217,6 +217,14 @@ namespace RestApiIds
     DECLARE_ID(selectors);            // Array of selector strings for specificity resolution
     DECLARE_ID(resolved);             // Resolved pixel value for a property
 
+    // Wizard endpoints
+    DECLARE_ID(wizardId);             // Wizard identifier string
+    DECLARE_ID(answers);              // Key/value form data from wizard
+    DECLARE_ID(tasks);                // Array of task function names to execute
+    DECLARE_ID(jobId);                // Job identifier for async wizard tasks
+    DECLARE_ID(finished);             // Whether an async job has completed
+    DECLARE_ID(progress);             // Progress value 0.0-1.0 for async jobs
+
     // Builder endpoints
     DECLARE_ID(operations);           // Array of builder operation objects
     DECLARE_ID(parent);               // Parent module name
@@ -318,6 +326,8 @@ public:
         */
         String operator[](const Identifier& name) const;
 
+        bool getTrueValue(const Identifier& name) const;
+        
         /** Parse POST body as JSON. Returns undefined var on parse failure. */
         var getJsonBody() const;
     };

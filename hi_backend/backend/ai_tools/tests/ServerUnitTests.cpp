@@ -148,7 +148,11 @@ public:
         testUndoDiff();
         testUndoHistory();
         testUndoClear();
-        
+
+        testWizardInitialise();
+        testWizardExecute();
+        testWizardStatus();
+
         // Verify all endpoints were tested
         verifyAllEndpointsTested();
         
@@ -4295,7 +4299,7 @@ private:
          *  Expected: Returns success
          */
         beginTest("POST /api/undo/clear");
-        
+
         resetBuilderState();
 
         // Seed history with one action
@@ -4328,7 +4332,132 @@ private:
         auto undoJson = ctx->parseJson(undoResponse);
         expect(!(bool)undoJson[RestApiIds::success], "Nothing should be undoable after clear");
     }
-    
+
+    // ========================================================================
+    // Wizard Endpoint Tests
+    // ========================================================================
+
+    void testWizardInitialise()
+    {
+        /** Scenario: GET /api/wizard/initialise with valid and invalid wizard IDs
+         *  Expected: Valid ID returns success, unknown ID returns 400
+         */
+        beginTest("GET /api/wizard/initialise");
+
+        // Valid wizard ID
+        auto response = ctx->httpGet("/api/wizard/initialise?id=new_project");
+        var json = ctx->parseJson(response);
+        expect((bool)json[RestApiIds::success], "Should succeed for valid wizard ID");
+        expect(json[RestApiIds::result].isObject(), "Result should be an object");
+
+        // Missing id parameter
+        auto missingResponse = ctx->httpGet("/api/wizard/initialise");
+        var missingJson = ctx->parseJson(missingResponse);
+        expect(!(bool)missingJson[RestApiIds::success], "Should fail without id parameter");
+
+        // Unknown wizard ID
+        auto unknownResponse = ctx->httpGet("/api/wizard/initialise?id=nonexistent_wizard");
+        var unknownJson = ctx->parseJson(unknownResponse);
+        expect(!(bool)unknownJson[RestApiIds::success], "Should fail for unknown wizard ID");
+    }
+
+    void testWizardExecute()
+    {
+        /** Scenario: POST /api/wizard/execute with validation edge cases
+         *  Expected: Missing fields and invalid values return 400
+         */
+        beginTest("POST /api/wizard/execute");
+
+        // Missing wizardId
+        {
+            DynamicObject::Ptr bodyObj = new DynamicObject();
+            bodyObj->setProperty(RestApiIds::answers, var(new DynamicObject()));
+            Array<var> tasks;
+            tasks.add("someTask");
+            bodyObj->setProperty(RestApiIds::tasks, var(tasks));
+
+            auto response = ctx->httpPost("/api/wizard/execute",
+                                          JSON::toString(var(bodyObj.get())));
+            var json = ctx->parseJson(response);
+            expect(!(bool)json[RestApiIds::success], "Should fail without wizardId");
+        }
+
+        // Missing answers
+        {
+            DynamicObject::Ptr bodyObj = new DynamicObject();
+            bodyObj->setProperty(RestApiIds::wizardId, "new_project");
+            Array<var> tasks;
+            tasks.add("createEmptyProject");
+            bodyObj->setProperty(RestApiIds::tasks, var(tasks));
+
+            auto response = ctx->httpPost("/api/wizard/execute",
+                                          JSON::toString(var(bodyObj.get())));
+            var json = ctx->parseJson(response);
+            expect(!(bool)json[RestApiIds::success], "Should fail without answers object");
+        }
+
+        // Invalid task name for wizard
+        {
+            DynamicObject::Ptr bodyObj = new DynamicObject();
+            bodyObj->setProperty(RestApiIds::wizardId, "new_project");
+            bodyObj->setProperty(RestApiIds::answers, var(new DynamicObject()));
+            Array<var> tasks;
+            tasks.add("invalidTaskName");
+            bodyObj->setProperty(RestApiIds::tasks, var(tasks));
+
+            auto response = ctx->httpPost("/api/wizard/execute",
+                                          JSON::toString(var(bodyObj.get())));
+            var json = ctx->parseJson(response);
+            expect(!(bool)json[RestApiIds::success], "Should fail with invalid task name");
+        }
+
+        // Unknown wizard ID
+        {
+            DynamicObject::Ptr bodyObj = new DynamicObject();
+            bodyObj->setProperty(RestApiIds::wizardId, "nonexistent");
+            bodyObj->setProperty(RestApiIds::answers, var(new DynamicObject()));
+            Array<var> tasks;
+            tasks.add("task");
+            bodyObj->setProperty(RestApiIds::tasks, var(tasks));
+
+            auto response = ctx->httpPost("/api/wizard/execute",
+                                          JSON::toString(var(bodyObj.get())));
+            var json = ctx->parseJson(response);
+            expect(!(bool)json[RestApiIds::success], "Should fail for unknown wizard ID");
+        }
+
+        // Wrong tasks array size (empty)
+        {
+            DynamicObject::Ptr bodyObj = new DynamicObject();
+            bodyObj->setProperty(RestApiIds::wizardId, "recompile");
+            bodyObj->setProperty(RestApiIds::answers, var(new DynamicObject()));
+            bodyObj->setProperty(RestApiIds::tasks, var(Array<var>()));
+
+            auto response = ctx->httpPost("/api/wizard/execute",
+                                          JSON::toString(var(bodyObj.get())));
+            var json = ctx->parseJson(response);
+            expect(!(bool)json[RestApiIds::success], "Should fail with empty tasks array");
+        }
+    }
+
+    void testWizardStatus()
+    {
+        /** Scenario: GET /api/wizard/status with unknown job ID
+         *  Expected: Returns error for unknown job
+         */
+        beginTest("GET /api/wizard/status");
+
+        // Missing jobId
+        auto missingResponse = ctx->httpGet("/api/wizard/status");
+        var missingJson = ctx->parseJson(missingResponse);
+        expect(!(bool)missingJson[RestApiIds::success], "Should fail without jobId");
+
+        // Unknown jobId
+        auto response = ctx->httpGet("/api/wizard/status?jobId=nonexistent_job_123");
+        var json = ctx->parseJson(response);
+        expect(!(bool)json[RestApiIds::success], "Should fail for unknown job ID");
+    }
+
 };
 
 static RestServerTest restServerTest;

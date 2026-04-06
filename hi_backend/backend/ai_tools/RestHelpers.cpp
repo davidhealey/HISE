@@ -268,6 +268,25 @@ void RestHelpers::waitForPendingCallbacks(ScriptComponent* sc, int timeoutMs)
 	}
 }
 
+bool RestHelpers::getTrueValue(const var& v)
+{
+	if (v.isBool())
+		return (bool)v;
+
+	if (v.isInt() || v.isInt64())
+		return (int)v != 0;
+
+	auto s = v.toString();
+
+	if (s == "true")
+		return true;
+
+	if (s == "false" || s.isEmpty())
+		return false;
+
+	return s.getIntValue() != 0;
+}
+
 //==============================================================================
 // LAF (LookAndFeel) integration helpers
 
@@ -424,8 +443,8 @@ static void addLafRenderWarningIfNeeded(MainController* mc,
 RestServer::Response RestHelpers::handleRecompile(MainController* mc, RestServer::AsyncRequest::Ptr req)
 {
 	auto obj = req->getRequest().getJsonBody();
-	bool forceSync = (bool)obj.getProperty(RestApiIds::forceSynchronousExecution, false);
-	
+	bool forceSync = getTrueValue(obj.getProperty(RestApiIds::forceSynchronousExecution, false));
+
 	// Create ScopedBadBabysitter if forceSynchronousExecution is requested
 	// This bypasses all threading checks and executes everything synchronously
 	std::unique_ptr<MainController::ScopedBadBabysitter> syncMode;
@@ -435,7 +454,7 @@ RestServer::Response RestHelpers::handleRecompile(MainController* mc, RestServer
 	// Start attached profiling session if requested (fire-and-forget).
 	// Results are retrieved later via POST /api/profile { "mode": "get" }
 #if HISE_INCLUDE_PROFILING_TOOLKIT
-	if ((bool)obj.getProperty(RestApiIds::profile, false))
+	if (getTrueValue(obj.getProperty(RestApiIds::profile, false)))
 		startProfilingSession(mc, obj, 2000.0);
 #endif
 
@@ -911,9 +930,35 @@ const Array<RestHelpers::RouteMetadata>& RestHelpers::getRouteMetadata()
 			.withDescription("Clear the entire undo history and exit all groups")
 			.withReturns("Empty diff state"));
 		
+		// ApiRoute::WizardInitialise
+		m.add(RouteMetadata(ApiRoute::WizardInitialise, "api/wizard/initialise")
+			.withMethod(RestServer::GET)
+			.withCategory("wizard")
+			.withDescription("Fetch pre-populated field defaults for a wizard form")
+			.withReturns("Flat key/value object of field defaults, or error if wizard ID unknown")
+			.withQueryParam(RouteParameter(RestApiIds::id, "Wizard ID string (new_project, recompile, plugin_export, compile_networks, audio_export, install_package_maker)")));
+
+		// ApiRoute::WizardExecute
+		m.add(RouteMetadata(ApiRoute::WizardExecute, "api/wizard/execute")
+			.withMethod(RestServer::POST)
+			.withCategory("wizard")
+			.withDescription("Execute a wizard task. Sync tasks return immediately; async tasks return a jobId for polling")
+			.withReturns("Sync: result string with logs. Async: {jobId, async: true}")
+			.withBodyParam(RouteParameter(RestApiIds::wizardId, "Wizard ID string"))
+			.withBodyParam(RouteParameter(RestApiIds::answers, "Key/value object of all form field answers"))
+			.withBodyParam(RouteParameter(RestApiIds::tasks, "Array with exactly one task function name to execute")));
+
+		// ApiRoute::WizardStatus
+		m.add(RouteMetadata(ApiRoute::WizardStatus, "api/wizard/status")
+			.withMethod(RestServer::GET)
+			.withCategory("wizard")
+			.withDescription("Poll progress of a long-running async wizard job")
+			.withReturns("finished=true when job is done")
+			.withQueryParam(RouteParameter(RestApiIds::jobId, "Job ID returned by wizard/execute")));
+
 		// Verify count matches enum
 		jassert(m.size() == (int)ApiRoute::numRoutes);
-		
+
 		return m;
 	}();
 	
@@ -1193,7 +1238,7 @@ RestServer::Response RestHelpers::handleSetScript(MainController* mc, RestServer
 	auto obj = req->getRequest().getJsonBody();
 	
 	// Check for forceSynchronousExecution debug mode
-	bool forceSync = (bool)obj.getProperty(RestApiIds::forceSynchronousExecution, false);
+	bool forceSync = getTrueValue(obj.getProperty(RestApiIds::forceSynchronousExecution, false));
 	
 	std::unique_ptr<MainController::ScopedBadBabysitter> syncMode;
 	if (forceSync)
@@ -1318,8 +1363,7 @@ RestServer::Response RestHelpers::handleListComponents(MainController* mc, RestS
 	if (auto jp = getScriptProcessor(mc, req))
 	{
 		auto ps = dynamic_cast<ProcessorWithScriptingContent*>(jp);
-		auto hierarchyParam = req->getRequest()[RestApiIds::hierarchy];
-		auto useHierarchy = (hierarchyParam == "true" || hierarchyParam == "1");
+		auto useHierarchy = req->getRequest().getTrueValue(RestApiIds::hierarchy);
 
 		auto p = dynamic_cast<Processor*>(jp);
 		auto moduleId = p->getId();
@@ -1481,7 +1525,7 @@ RestServer::Response RestHelpers::handleSetComponentValue(MainController* mc, Re
 	auto obj = req->getRequest().getJsonBody();
 	
 	// Check for forceSynchronousExecution debug mode
-	bool forceSync = (bool)obj.getProperty(RestApiIds::forceSynchronousExecution, false);
+	bool forceSync = getTrueValue(obj.getProperty(RestApiIds::forceSynchronousExecution, false));
 	
 	std::unique_ptr<MainController::ScopedBadBabysitter> syncMode;
 	if (forceSync)
@@ -1509,9 +1553,9 @@ RestServer::Response RestHelpers::handleSetComponentValue(MainController* mc, Re
 	if (auto sc = c->getComponentWithName(Identifier(componentId)))
 	{
 		auto newValue = obj[RestApiIds::value];
-		auto validateRange = obj.getProperty(RestApiIds::validateRange, false);
-		
-		if ((bool)validateRange)
+		auto validateRange = getTrueValue(obj.getProperty(RestApiIds::validateRange, false));
+
+		if (validateRange)
 		{
 			double minVal = (double)sc->getScriptObjectProperty(ScriptComponent::min);
 			double maxVal = (double)sc->getScriptObjectProperty(ScriptComponent::max);
@@ -1567,7 +1611,7 @@ RestServer::Response RestHelpers::handleSetComponentProperties(MainController* m
 	if (!changesVar.isArray() || changesVar.size() == 0)
 		return req->fail(400, "changes must be a non-empty array");
 	
-	bool force = (bool)obj.getProperty(RestApiIds::force, false);
+	bool force = getTrueValue(obj.getProperty(RestApiIds::force, false));
 	
 	// Phase 1: Validation - collect all locked properties if force=false
 	Array<var> lockedProperties;
@@ -1943,7 +1987,7 @@ RestServer::Response RestHelpers::handleSimulateInteractions(BackendProcessor* b
 		return req->fail(400, "'interactions' must be an array");
 	
 	// Parse verbose flag (default false)
-	bool verbose = (bool)body.getProperty(RestApiIds::verbose, false);
+	bool verbose = getTrueValue(body.getProperty(RestApiIds::verbose, false));
 	
 	// Get the interaction tester (only available when REST server is running)
 	auto* tester = bp->getInteractionTester();
@@ -2137,7 +2181,7 @@ RestServer::Response RestHelpers::handleDiagnoseScript(MainController* mc, RestS
 	auto resolvedModuleId = dynamic_cast<Processor*>(jp)->getId();
 	auto normalizedFilePath = fileName.replace("\\", "/");
 	
-	auto useAsync = (bool)obj.getProperty(RestApiIds::async, false);
+	auto useAsync = getTrueValue(obj.getProperty(RestApiIds::async, false));
 	
 	// Shared lambda for building the diagnostics JSON array
 	auto buildDiagArray = [](const JavascriptProcessor::DiagnosticList& diagnostics)
@@ -2852,7 +2896,7 @@ RestServer::Response RestHelpers::handleStartProfiling(MainController* mc,
 		if (dh.isRecordingMultithread())
 		{
 			// Check wait param — if false, return immediately with recording status
-			bool shouldWait = (bool)obj.getProperty(RestApiIds::wait, true);
+			bool shouldWait = getTrueValue(obj.getProperty(RestApiIds::wait, true));
 
 			if (!shouldWait)
 			{
@@ -3155,14 +3199,10 @@ RestServer::Response RestHelpers::handleBuilderTree(MainController* mc,
 
 	auto group = req->getRequest()[RestApiIds::group];
 
-	
-	
-
 	TreeOptions o;
 
-	auto includeParams = req->getRequest()[RestApiIds::queryParameters];
-	o.includeParameters = includeParams.isEmpty() ? true : (bool)includeParams.getIntValue();
-	o.verbose = (bool)req->getRequest()[RestApiIds::verbose].getIntValue();
+    o.includeParameters = req->getRequest().getTrueValue(RestApiIds::queryParameters);
+    o.verbose = req->getRequest().getTrueValue(RestApiIds::verbose);
 
 	var tree;
 
@@ -3423,7 +3463,7 @@ RestServer::Response RestHelpers::handleUndoPopGroup(MainController* mc,
 	// When cancel=false, popPlan calls performAction which completes the request.
 	// When cancel=true, popPlan just pops without executing, so we complete here.
 	auto obj = req->getRequest().getJsonBody();
-	bool shouldCancel = (bool)obj.getProperty(RestApiIds::cancel, false);
+	bool shouldCancel = getTrueValue(obj.getProperty(RestApiIds::cancel, false));
 	
 	if (shouldCancel)
 	{
@@ -3533,6 +3573,142 @@ RestServer::Response RestHelpers::handleUndoClear(MainController* mc,
 	auto result = RestServerUndoManager::Instance::getResponse({}, um->getDiffJSON(true, true));
 	req->complete(result);
 	return req->waitForResponse();
+}
+
+// ============================================================================
+// Wizard Endpoint Handlers
+// ============================================================================
+
+namespace WizardIds
+{
+	static const StringArray validWizardIds = {
+		"new_project", "recompile", "plugin_export",
+		"compile_networks", "audio_export", "install_package_maker"
+	};
+
+	static bool isValidTaskForWizard(const String& wizardId, const String& task)
+	{
+		if (wizardId == "new_project")
+			return task == "createEmptyProject" || task == "importHxiTask" || task == "extractRhapsody";
+		if (wizardId == "recompile")
+			return task == "task";
+		if (wizardId == "plugin_export")
+			return task == "compileTask";
+		if (wizardId == "compile_networks")
+			return task == "compileTask";
+		if (wizardId == "audio_export")
+			return task == "onExport";
+		if (wizardId == "install_package_maker")
+			return task == "writePackageJson";
+		return false;
+	}
+
+	static String getValidTasksForWizard(const String& wizardId)
+	{
+		if (wizardId == "new_project")
+			return "createEmptyProject, importHxiTask, extractRhapsody";
+		if (wizardId == "recompile")
+			return "task";
+		if (wizardId == "plugin_export")
+			return "compileTask";
+		if (wizardId == "compile_networks")
+			return "compileTask";
+		if (wizardId == "audio_export")
+			return "onExport";
+		if (wizardId == "install_package_maker")
+			return "writePackageJson";
+		return "";
+	}
+}
+
+RestServer::Response RestHelpers::handleWizardInitialise(MainController* mc,
+                                                          RestServer::AsyncRequest::Ptr req)
+{
+	auto wizardId = req->getRequest()[RestApiIds::id];
+
+	if (wizardId.isEmpty())
+		return req->fail(400, "id query parameter is required");
+
+	if (!WizardIds::validWizardIds.contains(wizardId))
+		return req->fail(400, "Unknown wizard ID: " + wizardId +
+			". Valid IDs: " + WizardIds::validWizardIds.joinIntoString(", "));
+
+    WizardExecutor w(mc);
+    w.registerExecutor<multipage::library::NewProjectCreator>("new_project");
+    auto ok = w.initialise(req->getRequest());
+	req->complete(ok);
+	return req->waitForResponse();
+}
+
+RestServer::Response RestHelpers::handleWizardExecute(MainController* mc,
+                                                       RestServer::AsyncRequest::Ptr req)
+{
+	auto obj = req->getRequest().getJsonBody();
+
+	auto wizardId = obj[RestApiIds::wizardId].toString();
+	auto answers = obj[RestApiIds::answers];
+	auto tasks = obj[RestApiIds::tasks];
+
+	// Validate required fields
+	if (wizardId.isEmpty())
+		return req->fail(400, "wizardId is required in request body");
+
+	if (!answers.isObject())
+		return req->fail(400, "answers must be a key/value object");
+
+	if (!tasks.isArray() || tasks.size() != 1)
+		return req->fail(400, "tasks must be an array with exactly one task function name");
+
+	// Validate wizard ID
+	if (!WizardIds::validWizardIds.contains(wizardId))
+		return req->fail(400, "Unknown wizard ID: " + wizardId +
+			". Valid IDs: " + WizardIds::validWizardIds.joinIntoString(", "));
+
+	// Validate task name for this wizard
+	auto taskName = tasks[0].toString();
+
+	if (!WizardIds::isValidTaskForWizard(wizardId, taskName))
+		return req->fail(400, "Invalid task '" + taskName + "' for wizard '" + wizardId +
+			"'. Valid tasks: " + WizardIds::getValidTasksForWizard(wizardId));
+
+	// TODO (Christoph): Wire up to dialog_library task logic.
+	// 1. Create headless wizard instance or call extracted business logic
+	// 2. Populate state->globalState with answers
+	// 3. Call the task function (e.g., createEmptyProject, compileTask, etc.)
+	// 4. For sync tasks: return result directly
+	// 5. For async tasks (audio_export): start background job, return {jobId, async: true}
+
+    WizardExecutor w(mc);
+    w.registerExecutor<multipage::library::NewProjectCreator>("new_project");
+    auto ok = w.execute(req->getRequest());
+    req->complete(ok);
+    return req->waitForResponse();
+    
+#if 0
+	DynamicObject::Ptr result = new DynamicObject();
+	result->setProperty(RestApiIds::success, true);
+	result->setProperty(RestApiIds::result, "Wizard '" + wizardId + "' task '" + taskName + "' not yet implemented");
+	result->setProperty(RestApiIds::logs, Array<var>());
+	result->setProperty(RestApiIds::errors, Array<var>());
+
+	req->complete(RestServer::Response::ok(var(result.get())));
+	return req->waitForResponse();
+#endif
+}
+
+RestServer::Response RestHelpers::handleWizardStatus(MainController* mc,
+                                                      RestServer::AsyncRequest::Ptr req)
+{
+	auto jobId = req->getRequest()[RestApiIds::jobId];
+
+	if (jobId.isEmpty())
+		return req->fail(400, "jobId query parameter is required");
+
+	// TODO (Christoph): Look up active async job by jobId.
+	// Return {finished, progress, message} from the job's current state.
+	// If jobId is unknown, return error.
+
+	return req->fail(404, "No active job with ID: " + jobId);
 }
 
 // ============================================================================

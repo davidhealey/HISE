@@ -367,7 +367,16 @@ RestServer::Response BackendProcessor::onAsyncRequest(RestServer::AsyncRequest::
 	
 	case RestHelpers::ApiRoute::UndoClear:
 		return RestHelpers::handleUndoClear(this, req);
-		
+
+	case RestHelpers::ApiRoute::WizardInitialise:
+		return RestHelpers::handleWizardInitialise(this, req);
+
+	case RestHelpers::ApiRoute::WizardExecute:
+		return RestHelpers::handleWizardExecute(this, req);
+
+	case RestHelpers::ApiRoute::WizardStatus:
+		return RestHelpers::handleWizardStatus(this, req);
+
 	default:
 		return req->fail(404, "Unknown API endpoint: " + subURL);
 	}

@@ -847,12 +847,43 @@ var NewProjectCreator::onTemplateSelector(const var::NativeFunctionArgs& args)
 	return var();
 }
 
+
+
+var NewProjectCreator::initialise(MainController* bp)
+{
+    auto& sd = dynamic_cast<GlobalSettingManager*>(bp)->getSettingsObject();
+    auto s = sd.getSetting(HiseSettings::Compiler::DefaultProjectFolder).toString();
+    jassert(s.isNotEmpty());
+    
+    DynamicObject::Ptr o = new DynamicObject();
+    o->setProperty("DefaultProjectFolder", s);
+    return var(o.get());
+}
+
+var NewProjectCreator::execute(MainController* bp, const StringPairArray& answers)
+{
+    auto pName = answers["ProjectName"];
+    auto wd = File(answers["DefaultProjectFolder"]);
+    
+    auto newProjectFolder = wd.getChildFile(pName);
+    
+    //GET_PROJECT_HANDLER(bp->getMainSynthChain()).createNewProject(newProjectFolder, nullptr);
+    
+    debugToConsole(bp->getMainSynthChain(), "Created directory structure");
+    
+    return var("Project created at " + newProjectFolder.getFullPathName());
+}
+
 var NewProjectCreator::initFolder(const var::NativeFunctionArgs& args)
 {
-	auto& sd = dynamic_cast<GlobalSettingManager*>(bpe->getBackendProcessor())->getSettingsObject();
-	auto s = sd.getSetting(HiseSettings::Compiler::DefaultProjectFolder).toString();
-	jassert(s.isNotEmpty());
-	state->globalState.getDynamicObject()->setProperty("DefaultProjectFolder", s);
+    auto obj = initialise(bpe->getBackendProcessor());
+    
+    if(auto d = obj.getDynamicObject())
+    {
+        for(const auto& nv: d->getProperties())
+            state->globalState.getDynamicObject()->setProperty(nv.name, nv.value);
+    }
+    
 	return var();
 }
 
@@ -881,6 +912,8 @@ var NewProjectCreator::writeDefaultLocation(const var::NativeFunctionArgs& args)
 		
 	return var();
 }
+
+
 
 var NewProjectCreator::createEmptyProject(const var::NativeFunctionArgs& args)
 {

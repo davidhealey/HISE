@@ -83,6 +83,9 @@ struct RestHelpers
         UndoDiff,               ///< GET  /api/undo/diff - Current diff state
         UndoHistory,            ///< GET  /api/undo/history - Full undo history
         UndoClear,              ///< POST /api/undo/clear - Clear undo history
+        WizardInitialise,       ///< GET  /api/wizard/initialise - Get wizard form defaults
+        WizardExecute,          ///< POST /api/wizard/execute - Execute a wizard task
+        WizardStatus,           ///< GET  /api/wizard/status - Poll async job progress
         numRoutes
     };
     
@@ -289,6 +292,110 @@ struct RestHelpers
         Array<var> errors;
     };
     
+    struct WizardExecutor: public ControlledObject
+    {
+        WizardExecutor(MainController* mc):
+          ControlledObject(mc)
+        {};
+        
+        using InitFunction = std::function<var(MainController*)>;
+        using Executor = std::function<var(MainController*, const StringPairArray&)>;
+     
+        struct Item
+        {
+            InitFunction init;
+            Executor     exec;
+        };
+        
+        RestServer::Response initialise(const RestServer::Request& req)
+        {
+            auto id = Identifier(req["id"]);
+         
+            if(executors.find(id) != executors.end())
+            {
+                auto result = executors.at(id).init(getMainController());
+                setResult(result);
+            }
+            else
+            {
+                setError("Can't find wizard with id " + id.toString());
+            }
+                           
+            return makeResponse();
+        }
+        
+        RestServer::Response execute(const RestServer::Request& req)
+        {
+            auto jsonBody = req.getJsonBody();
+            auto id = Identifier(jsonBody[RestApiIds::wizardId]);
+            
+            StringPairArray answers;
+            
+            auto a = jsonBody[RestApiIds::answers];
+            
+            if(auto obj = a.getDynamicObject())
+            {
+                for(const auto& nv: obj->getProperties())
+                    answers.set(nv.name.toString(), nv.value.toString());
+            }
+            
+            if(executors.find(id) != executors.end())
+            {
+                auto result = executors.at(id).exec(getMainController(), answers);
+                setResult(result);
+            }
+                
+            else
+            {
+                setError("Can't find wizard with id " + id.toString());
+            }
+            
+            return makeResponse();
+        }
+        
+        template <typename T> void registerExecutor(const Identifier& id)
+        {
+            executors[id] = { T::initialise, T::execute };
+        }
+        
+    private:
+        
+        RestServer::Response makeResponse() const
+        {
+            auto o = new DynamicObject();
+            o->setProperty(RestApiIds::success, success);
+            o->setProperty(RestApiIds::result, result);  // Empty defaults placeholder
+            o->setProperty(RestApiIds::logs, logs);
+            o->setProperty(RestApiIds::errors, errors);
+            
+            return RestServer::Response::ok(var(o));
+        }
+        
+        void addLog(const String& message)
+        {
+            logs.add(var(message));
+        }
+        
+        void setResult(const var& r)
+        {
+            success = true;
+            result = r;
+        }
+        
+        void setError(const String& error)
+        {
+            success = false;
+            errors.add(error);
+        }
+        
+        bool success = true;
+        var result;
+        Array<var> logs;
+        Array<var> errors;
+        
+        std::map<Identifier, Item> executors;
+    };
+    
     /** Gets a JavascriptProcessor from the request's moduleId parameter.
         
         @param mc   The MainController
@@ -316,7 +423,13 @@ struct RestHelpers
         @returns    DynamicObject with id, type, position, size, and childComponents
     */
     static DynamicObject::Ptr createRecursivePropertyTree(ScriptComponent* sc);
-    
+
+    /** Robustly converts a var to bool, handling JSON booleans, integers, and
+        string representations ("true"/"false"/"0"/"1").
+        Use this for all boolean API parameters from POST JSON bodies.
+    */
+    static bool getTrueValue(const var& v);
+
     //==========================================================================
     // Route metadata registry
     
@@ -468,6 +581,18 @@ struct RestHelpers
     static RestServer::Response handleUndoClear(MainController* mc,
                                                  RestServer::AsyncRequest::Ptr req);
 
+    /** Handler for GET /api/wizard/initialise - Get wizard form defaults */
+    static RestServer::Response handleWizardInitialise(MainController* mc,
+                                                        RestServer::AsyncRequest::Ptr req);
+
+    /** Handler for POST /api/wizard/execute - Execute a wizard task */
+    static RestServer::Response handleWizardExecute(MainController* mc,
+                                                     RestServer::AsyncRequest::Ptr req);
+
+    /** Handler for GET /api/wizard/status - Poll async job progress */
+    static RestServer::Response handleWizardStatus(MainController* mc,
+                                                    RestServer::AsyncRequest::Ptr req);
+
 #if HISE_INCLUDE_PROFILING_TOOLKIT
     /** Query options for filtering and summarizing profiling results. */
     struct ProfileQueryOptions
@@ -489,8 +614,8 @@ struct RestHelpers
         static ProfileQueryOptions fromJson(const var& json)
         {
             ProfileQueryOptions opts;
-            opts.summary = (bool)json.getProperty(RestApiIds::summary, false);
-            opts.nested = (bool)json.getProperty(RestApiIds::nested, false);
+            opts.summary = getTrueValue(json.getProperty(RestApiIds::summary, false));
+            opts.nested = getTrueValue(json.getProperty(RestApiIds::nested, false));
             opts.filter = json.getProperty(RestApiIds::filter, "").toString();
             opts.sourceTypeFilter = json.getProperty(RestApiIds::sourceTypeFilter, "").toString();
             opts.minDuration = (double)json.getProperty(RestApiIds::minDuration, 0.0);

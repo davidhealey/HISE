@@ -320,6 +320,10 @@ public:
 		MULTIPAGE_BIND_CPP(NewProjectCreator, createEmptyProject);
 	}
 
+    static var initialise(MainController* bp);
+    
+    static var execute(MainController* bp, const StringPairArray& args);
+    
 	var onTemplateSelector(const var::NativeFunctionArgs& args);
 	var initFolder(const var::NativeFunctionArgs& args);
 	var onProjectNameUpdate(const var::NativeFunctionArgs& args);

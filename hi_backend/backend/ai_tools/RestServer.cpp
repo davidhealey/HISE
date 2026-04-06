@@ -174,6 +174,22 @@ String RestServer::Request::operator[](const Identifier& name) const
     return {};
 }
 
+bool RestServer::Request::getTrueValue(const Identifier& name) const
+{
+    auto v = (*this)[name];
+    
+    if(v.isEmpty())
+        return false;
+    
+    if(v == "true")
+        return true;
+    
+    if(v == "false")
+        return false;
+    
+    return v.getIntValue();
+}
+
 var RestServer::Request::getJsonBody() const
 {
     var result;
