@@ -256,6 +256,13 @@ namespace RestApiIds
     DECLARE_ID(attributes);           // Parameter values object {paramName: value}
     DECLARE_ID(effect);               // Effect/network name for HotswappableEffect modules
 
+    // UI component endpoints
+    DECLARE_ID(componentType);        // Component type (ScriptButton, ScriptPanel, etc.)
+    DECLARE_ID(newId);                // New component ID for rename
+    DECLARE_ID(saveInPreset);         // Whether component value is saved in presets
+    DECLARE_ID(parentId);             // Parent component ID for add/move operations
+    DECLARE_ID(keepPosition);         // Preserve absolute position when reparenting
+
 }
 
 #undef DECLARE_ID

@@ -86,6 +86,8 @@ struct RestHelpers
         WizardInitialise,       ///< GET  /api/wizard/initialise - Get wizard form defaults
         WizardExecute,          ///< POST /api/wizard/execute - Execute a wizard task
         WizardStatus,           ///< GET  /api/wizard/status - Poll async job progress
+        UITree,                 ///< GET  /api/ui/tree - Get UI component tree hierarchy
+        UIApply,                ///< POST /api/ui/apply - Apply operations to UI component tree
         numRoutes
     };
     
@@ -592,6 +594,14 @@ struct RestHelpers
     /** Handler for GET /api/wizard/status - Poll async job progress */
     static RestServer::Response handleWizardStatus(MainController* mc,
                                                     RestServer::AsyncRequest::Ptr req);
+
+    /** Handler for GET /api/ui/tree - Get UI component tree hierarchy */
+    static RestServer::Response handleUITree(MainController* mc,
+                                              RestServer::AsyncRequest::Ptr req);
+
+    /** Handler for POST /api/ui/apply - Apply operations to UI component tree */
+    static RestServer::Response handleUIApply(MainController* mc,
+                                               RestServer::AsyncRequest::Ptr req);
 
 #if HISE_INCLUDE_PROFILING_TOOLKIT
     /** Query options for filtering and summarizing profiling results. */

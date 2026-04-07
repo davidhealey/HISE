@@ -252,20 +252,63 @@ struct RestServerUndoManager
 		UndoManager um;
 	};
 
+	/** Stores a deep copy of a script processor's content ValueTree for plan-mode validation
+	    of UI component operations. Created eagerly in pushPlan() using "Interface" as moduleId. */
+	struct UIValidationState : public ReferenceCountedObject,
+	                            public ControlledObject
+	{
+		using Ptr = ReferenceCountedObjectPtr<UIValidationState>;
+
+		UIValidationState(MainController* mc);
+
+		/** Find a component ValueTree by ID (recursive search). */
+		ValueTree findComponent(const String& id) const;
+
+		/** Check if a component with the given ID exists. */
+		bool componentExists(const String& id) const;
+
+		/** Check if child is a descendant of parent in the tree. */
+		bool isDescendantOf(const String& child, const String& parent) const;
+
+		/** Get all component IDs in the tree. */
+		StringArray getAllComponentIds() const;
+
+		/** Get the component type string for a given ID. */
+		String getComponentType(const String& id) const;
+
+		// Plan-mode mutations (modify the copied tree only)
+		void addComponent(const String& parentId, const String& type, const String& id, int x, int y, int w, int h);
+		void removeComponent(const String& id);
+		void renameComponent(const String& oldId, const String& newId);
+		void moveComponent(const String& id, const String& newParent, int insertIndex = -1);
+		void setProperty(const String& id, const Identifier& prop, const var& value);
+
+		ValueTree contentTree;   // deep copy of contentPropertyData
+		String moduleId;
+
+		/** Static map of component type -> valid property IDs for plan-mode validation. */
+		static const std::map<Identifier, std::vector<Identifier>>& getPropertyMap();
+
+	private:
+
+		static ValueTree findComponentRecursive(const ValueTree& tree, const String& id);
+	};
+
 	enum class Domain
 	{
 		Undefined  = 0x0,
 		Builder    = 0x01, // modify the module tree
-		UI         = 0x02, // modify the script components (not implemented)
+		UI         = 0x02, // modify the script components
 		numDomains
 	};
 
 	enum RebuildLevel
 	{
-		Nothing    = 0x0,
-		UpdateUI   = 0x1,   // use this if the data model should send a UI update (eg. patch browser rebuild).
-		UniqueId   = 0x2,	// use this if the data model should update the ID set
-		Recompile  = 0x4	// use this if the action should trigger a recompilation
+		Nothing        = 0x0,
+		UpdateUI       = 0x1,   // use this if the data model should send a UI update (eg. patch browser rebuild).
+		UniqueId       = 0x2,	// use this if the data model should update the ID set
+		Recompile      = 0x4,	// use this if the action should trigger a recompilation
+        ParameterSlots = 0x8    // use this if the action should trigger a parameter slot update
 	};
 
 	struct CallStack
@@ -520,10 +563,14 @@ struct RestServerUndoManager
 		virtual void perform() = 0;
 		virtual void undo() = 0;
 
+		/** Override this to return the moduleId for UI actions (used for recompile targeting). */
+		virtual String getModuleId() const { return {}; }
+
 		// filled in by the factory...
 		Domain d = Domain::Undefined;
 
 		PlanValidationState::Ptr planValidation;
+		UIValidationState::Ptr uiValidation;
 	};
 
 	struct Factory: public ControlledObject
@@ -592,6 +639,7 @@ struct RestServerUndoManager
 
 			String name;
 			PlanValidationState::Ptr planValidationState;
+			UIValidationState::Ptr uiValidationState;
 			ActionBase::Ptr currentAction;
 			ActionBase::List actions;
 		};
@@ -614,10 +662,11 @@ struct RestServerUndoManager
 		void pushPlan(const String& name);
 		bool popPlan(AsyncRequest::Ptr req);;
 
-		ActionBase::Ptr createAction(Domain d, const var& obj) const 
-		{ 
-			auto ad = f.create(d, obj); 
+		ActionBase::Ptr createAction(Domain d, const var& obj) const
+		{
+			auto ad = f.create(d, obj);
 			ad->planValidation = getCurrentValidationState();
+			ad->uiValidation = getCurrentUIValidationState();
 			return ad;
 		}
 
@@ -626,6 +675,11 @@ struct RestServerUndoManager
 		PlanValidationState::Ptr getCurrentValidationState() const
 		{
 			return getCurrentStack()->planValidationState;
+		}
+
+		UIValidationState::Ptr getCurrentUIValidationState() const
+		{
+			return getCurrentStack()->uiValidationState;
 		}
 
 		String getCurrentGroupId() const { return getCurrentStack()->name; }
@@ -800,9 +854,10 @@ struct RestServerUndoManager
 				for (auto a : subActions)
 				{
 					a->planValidation = planValidation;
+					a->uiValidation = uiValidation;
 					a->perform();
 				}
-				
+
 				if (!subActions.isEmpty() && postOpCallback)
 					postOpCallback(subActions, false);
 			}
@@ -823,11 +878,23 @@ struct RestServerUndoManager
 				return "group";
 			}
 
+			String getModuleId() const override
+			{
+				for (auto a : subActions)
+				{
+					auto id = a->getModuleId();
+					if (id.isNotEmpty())
+						return id;
+				}
+				return {};
+			}
+
 			Error validate() override
 			{
 				for (auto a : subActions)
 				{
 					a->planValidation = planValidation;
+					a->uiValidation = uiValidation;
 					auto e = a->validate();
 
 					if (!e)

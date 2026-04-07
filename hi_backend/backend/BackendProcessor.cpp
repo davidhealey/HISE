@@ -377,6 +377,12 @@ RestServer::Response BackendProcessor::onAsyncRequest(RestServer::AsyncRequest::
 	case RestHelpers::ApiRoute::WizardStatus:
 		return RestHelpers::handleWizardStatus(this, req);
 
+	case RestHelpers::ApiRoute::UITree:
+		return RestHelpers::handleUITree(this, req);
+
+	case RestHelpers::ApiRoute::UIApply:
+		return RestHelpers::handleUIApply(this, req);
+
 	default:
 		return req->fail(404, "Unknown API endpoint: " + subURL);
 	}

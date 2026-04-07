@@ -153,6 +153,11 @@ public:
         testWizardExecute();
         testWizardStatus();
 
+        testUITree();
+        testUIApply();
+        testUIApplyValidation();
+        testUIApplyUndo();
+
         // Verify all endpoints were tested
         verifyAllEndpointsTested();
         
@@ -4456,6 +4461,253 @@ private:
         auto response = ctx->httpGet("/api/wizard/status?jobId=nonexistent_job_123");
         var json = ctx->parseJson(response);
         expect(!(bool)json[RestApiIds::success], "Should fail for unknown job ID");
+    }
+
+    // ======================================================================
+    // UI Endpoint Helpers
+    // ======================================================================
+
+    var postUIApplyOps(const Array<var>& ops, const String& moduleId = "Interface")
+    {
+        DynamicObject::Ptr bodyObj = new DynamicObject();
+        bodyObj->setProperty(RestApiIds::moduleId, moduleId);
+        bodyObj->setProperty(RestApiIds::operations, var(ops));
+
+        auto response = ctx->httpPost("/api/ui/apply",
+                                       JSON::toString(var(bodyObj.get())));
+        return ctx->parseJson(response);
+    }
+
+    var makeUIAddOp(const String& componentType, const String& id = {},
+                    const String& parentId = {}, int x = 0, int y = 0,
+                    int w = 128, int h = 48)
+    {
+        DynamicObject::Ptr op = new DynamicObject();
+        op->setProperty(RestApiIds::op, "add");
+        op->setProperty(RestApiIds::componentType, componentType);
+        if (id.isNotEmpty())
+            op->setProperty(RestApiIds::id, id);
+        if (parentId.isNotEmpty())
+            op->setProperty(RestApiIds::parentId, parentId);
+        op->setProperty(RestApiIds::x, x);
+        op->setProperty(RestApiIds::y, y);
+        op->setProperty(RestApiIds::width, w);
+        op->setProperty(RestApiIds::height, h);
+        return var(op.get());
+    }
+
+    var makeUIRemoveOp(const String& target)
+    {
+        DynamicObject::Ptr op = new DynamicObject();
+        op->setProperty(RestApiIds::op, "remove");
+        op->setProperty(RestApiIds::target, target);
+        return var(op.get());
+    }
+
+    var makeUISetOp(const String& target, const NamedValueSet& props, bool force = false)
+    {
+        DynamicObject::Ptr op = new DynamicObject();
+        op->setProperty(RestApiIds::op, "set");
+        op->setProperty(RestApiIds::target, target);
+
+        DynamicObject::Ptr propsObj = new DynamicObject();
+        for (int i = 0; i < props.size(); i++)
+            propsObj->setProperty(props.getName(i), props.getValueAt(i));
+        op->setProperty(RestApiIds::properties, var(propsObj.get()));
+
+        if (force)
+            op->setProperty(RestApiIds::force, true);
+
+        return var(op.get());
+    }
+
+    var makeUIMoveOp(const String& target, const String& parent)
+    {
+        DynamicObject::Ptr op = new DynamicObject();
+        op->setProperty(RestApiIds::op, "move");
+        op->setProperty(RestApiIds::target, target);
+        op->setProperty(RestApiIds::parent, parent);
+        return var(op.get());
+    }
+
+    var makeUIRenameOp(const String& target, const String& newId)
+    {
+        DynamicObject::Ptr op = new DynamicObject();
+        op->setProperty(RestApiIds::op, "rename");
+        op->setProperty(RestApiIds::target, target);
+        op->setProperty(RestApiIds::newId, newId);
+        return var(op.get());
+    }
+
+    void expectUISuccess(const var& json)
+    {
+        expect((bool)json[RestApiIds::success], "Should succeed");
+        auto e = json[RestApiIds::errors];
+        expect(e.isArray(), "errors should be array");
+        if (e.isArray())
+        {
+            for (auto& er : *e.getArray())
+                expect(false, er["errorMessage"].toString());
+        }
+    }
+
+    // ======================================================================
+    // UI Tests
+    // ======================================================================
+
+    void testUITree()
+    {
+        beginTest("GET /api/ui/tree");
+
+        ctx->reset();
+        ctx->compile("Content.makeFrontInterface(600, 400);\n"
+                      "const var knob1 = Content.addKnob(\"Knob1\", 10, 10);\n"
+                      "const var panel1 = Content.addPanel(\"Panel1\", 0, 100);\n");
+
+        auto response = ctx->httpGet("/api/ui/tree?moduleId=Interface");
+        var json = ctx->parseJson(response);
+
+        expect((bool)json[RestApiIds::success], "Should succeed");
+
+        auto result = json[RestApiIds::result];
+        expectEquals(result[RestApiIds::id].toString(), String("Content"), "Root should be Content");
+        expect(result[RestApiIds::childComponents].isArray(), "Should have childComponents array");
+        expect(result[RestApiIds::childComponents].size() >= 2, "Should have at least 2 children");
+
+        // Verify fields exist on first child
+        auto firstChild = result[RestApiIds::childComponents][0];
+        expect(firstChild.hasProperty(RestApiIds::id), "Child should have id");
+        expect(firstChild.hasProperty(RestApiIds::type), "Child should have type");
+        expect(firstChild.hasProperty(RestApiIds::visible), "Child should have visible");
+        expect(firstChild.hasProperty(RestApiIds::enabled), "Child should have enabled");
+        expect(firstChild.hasProperty(RestApiIds::saveInPreset), "Child should have saveInPreset");
+        expect(firstChild.hasProperty(RestApiIds::x), "Child should have x");
+        expect(firstChild.hasProperty(RestApiIds::y), "Child should have y");
+        expect(firstChild.hasProperty(RestApiIds::width), "Child should have width");
+        expect(firstChild.hasProperty(RestApiIds::height), "Child should have height");
+        expect(firstChild.hasProperty(RestApiIds::childComponents), "Child should have childComponents");
+    }
+
+    void testUIApply()
+    {
+        beginTest("POST /api/ui/apply - basic operations");
+
+        ctx->reset();
+        ctx->compile("Content.makeFrontInterface(600, 400);\n");
+
+        // Add a panel
+        Array<var> ops;
+        ops.add(makeUIAddOp("ScriptPanel", "TestPanel", {}, 0, 0, 400, 300));
+        auto json = postUIApplyOps(ops);
+        expectUISuccess(json);
+
+        // Add a button as child of panel
+        ops.clear();
+        ops.add(makeUIAddOp("ScriptButton", "TestButton", "TestPanel", 10, 10, 100, 30));
+        json = postUIApplyOps(ops);
+        expectUISuccess(json);
+
+        // Set properties
+        ops.clear();
+        NamedValueSet props;
+        props.set(Identifier("x"), 50);
+        props.set(Identifier("y"), 50);
+        ops.add(makeUISetOp("TestButton", props));
+        json = postUIApplyOps(ops);
+        expectUISuccess(json);
+
+        // Rename
+        ops.clear();
+        ops.add(makeUIRenameOp("TestButton", "RenamedButton"));
+        json = postUIApplyOps(ops);
+        expectUISuccess(json);
+
+        // Move to root
+        ops.clear();
+        ops.add(makeUIMoveOp("RenamedButton", ""));
+        json = postUIApplyOps(ops);
+        expectUISuccess(json);
+
+        // Remove
+        ops.clear();
+        ops.add(makeUIRemoveOp("TestPanel"));
+        json = postUIApplyOps(ops);
+        expectUISuccess(json);
+    }
+
+    void testUIApplyValidation()
+    {
+        beginTest("POST /api/ui/apply - validation errors");
+
+        ctx->reset();
+        ctx->compile("Content.makeFrontInterface(600, 400);\n"
+                      "const var knob1 = Content.addKnob(\"Knob1\", 10, 10);\n");
+
+        // Unknown component type
+        Array<var> ops;
+        ops.add(makeUIAddOp("ScriptNonexistent", "Foo"));
+        auto json = postUIApplyOps(ops);
+        expect(!(bool)json[RestApiIds::success], "Should fail for unknown type");
+
+        // Duplicate ID
+        ops.clear();
+        ops.add(makeUIAddOp("ScriptButton", "Knob1"));
+        json = postUIApplyOps(ops);
+        expect(!(bool)json[RestApiIds::success], "Should fail for duplicate ID");
+
+        // Remove non-existent target
+        ops.clear();
+        ops.add(makeUIRemoveOp("NonExistent"));
+        json = postUIApplyOps(ops);
+        expect(!(bool)json[RestApiIds::success], "Should fail for non-existent target");
+
+        // Rename to existing ID
+        ops.clear();
+        ops.add(makeUIAddOp("ScriptButton", "TestBtn"));
+        json = postUIApplyOps(ops);
+        expectUISuccess(json);
+
+        ops.clear();
+        ops.add(makeUIRenameOp("TestBtn", "Knob1"));
+        json = postUIApplyOps(ops);
+        expect(!(bool)json[RestApiIds::success], "Should fail for duplicate rename target");
+
+        // Set unknown property
+        ops.clear();
+        NamedValueSet badProps;
+        badProps.set(Identifier("nonExistentProp"), 42);
+        ops.add(makeUISetOp("Knob1", badProps));
+        json = postUIApplyOps(ops);
+        expect(!(bool)json[RestApiIds::success], "Should fail for unknown property");
+    }
+
+    void testUIApplyUndo()
+    {
+        beginTest("POST /api/ui/apply - undo/redo");
+
+        ctx->reset();
+        ctx->compile("Content.makeFrontInterface(600, 400);\n");
+
+        // Clear undo history first
+        ctx->httpPost("/api/undo/clear", "{}");
+
+        // Add a button
+        Array<var> ops;
+        ops.add(makeUIAddOp("ScriptButton", "UndoBtn", {}, 10, 10, 100, 30));
+        auto json = postUIApplyOps(ops);
+        expectUISuccess(json);
+
+        // Verify it exists in tree
+        auto treeJson = ctx->parseJson(ctx->httpGet("/api/ui/tree?moduleId=Interface"));
+        expect((bool)treeJson[RestApiIds::success], "Tree should succeed");
+
+        // Undo
+        auto undoJson = ctx->parseJson(ctx->httpPost("/api/undo/back", "{}"));
+        expect((bool)undoJson[RestApiIds::success], "Undo should succeed");
+
+        // Redo
+        auto redoJson = ctx->parseJson(ctx->httpPost("/api/undo/forward", "{}"));
+        expect((bool)redoJson[RestApiIds::success], "Redo should succeed");
     }
 
 };

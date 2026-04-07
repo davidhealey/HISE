@@ -194,9 +194,9 @@ struct Helpers
 		String hint;
 
 		if (correction.isNotEmpty())
-			hint << "Did you mean " << correction;
+			hint << ". Did you mean " << correction;
 		else if (availableOptions < 6)
-			hint << "Available parameters: " << availableOptions.joinIntoString(",");
+			hint << ". Available parameters: " << availableOptions.joinIntoString(",");
 
 		return hint;
 	}
@@ -449,7 +449,7 @@ struct add : public ActionBase
 			auto hint = FuzzySearcher::suggestCorrection(typeId.toString(), sa);
 
 			if (hint.isNotEmpty())
-				e = e.withHint("Did you mean: " + hint);
+				e = e.withHint(". Did you mean: " + hint);
 
 			return e;
 		}
@@ -1203,7 +1203,7 @@ struct set_effect : public ActionBase
 
 	int getRebuildLevel(Domain d, bool undo) const override
 	{
-		return 0;
+		return RebuildLevel::ParameterSlots;
 	}
 
 	void addToDiffList(std::vector<Diff>& diffList, bool undo) override
@@ -1312,6 +1312,8 @@ struct set_complex_data : public ActionBase
 	var previousData;
 	WeakReference<Processor> targetProcessor;
 
+    String getModuleId() const override { return target; }
+    
 	int getRebuildLevel(Domain d, bool undo) const override
 	{
 		if (d != Domain::Builder) return 0;
@@ -1353,5 +1355,873 @@ struct set_complex_data : public ActionBase
 };
 
 } // builder
+
+namespace ui {
+
+// Valid component types for the add operation
+static const StringArray& getValidComponentTypes()
+{
+	static StringArray types = {
+		"ScriptButton", "ScriptSlider", "ScriptPanel", "ScriptComboBox",
+		"ScriptLabel", "ScriptImage", "ScriptTable", "ScriptSliderPack",
+		"ScriptAudioWaveform", "ScriptFloatingTile", "ScriptWebView", "ScriptedViewport"
+	};
+	return types;
+}
+
+static ScriptingApi::Content* getContent(MainController* mc, const String& moduleId)
+{
+	auto jp = dynamic_cast<JavascriptProcessor*>(
+		ProcessorHelpers::getFirstProcessorWithName(mc->getMainSynthChain(), moduleId));
+	if (jp == nullptr)
+		return nullptr;
+	return dynamic_cast<ProcessorWithScriptingContent*>(jp)->getScriptingContent();
+}
+
+static String autoGenerateId(const String& componentType, ScriptingApi::Content* content,
+                              RestServerUndoManager::UIValidationState::Ptr uiState)
+{
+	StringArray existingIds;
+
+	if (uiState != nullptr)
+		existingIds = uiState->getAllComponentIds();
+	else if (content != nullptr)
+	{
+		for (int i = 0; i < content->getNumComponents(); i++)
+			existingIds.add(content->getComponent(i)->getName().toString());
+	}
+
+	for (int suffix = 1; ; suffix++)
+	{
+		auto candidate = componentType + String(suffix);
+		if (!existingIds.contains(candidate))
+			return candidate;
+	}
+}
+
+// ============================================================================
+// ui::add
+// ============================================================================
+
+struct add : public ActionBase
+{
+	BUILDER_ID(add);
+
+	static Error prevalidate(MainController*, const var& op)
+	{
+		auto compType = op[RestApiIds::componentType].toString();
+
+		if (compType.isEmpty())
+			return Error().withError("add requires 'componentType'");
+
+		if (!getValidComponentTypes().contains(compType))
+		{
+			auto hint = FuzzySearcher::suggestCorrection(compType, getValidComponentTypes());
+			auto e = Error().withError("Unknown component type: " + compType);
+			if (hint.isNotEmpty())
+				e = e.withHint(". Did you mean: " + hint);
+			return e;
+		}
+
+		return {};
+	}
+
+	add(MainController* mc, const var& obj) :
+		ActionBase(mc),
+		componentType(obj[RestApiIds::componentType].toString()),
+		componentId(obj[RestApiIds::id].toString()),
+		parentId(obj[RestApiIds::parentId].toString()),
+		moduleId(obj[RestApiIds::moduleId].toString()),
+		x((int)obj.getProperty(RestApiIds::x, 0)),
+		y((int)obj.getProperty(RestApiIds::y, 0)),
+		w((int)obj.getProperty(RestApiIds::width, 128)),
+		h((int)obj.getProperty(RestApiIds::height, 48))
+	{
+		if (moduleId.isEmpty()) moduleId = "Interface";
+	}
+
+	String componentType, componentId, parentId, moduleId;
+	int x, y, w, h;
+
+	String getModuleId() const override { return moduleId; }
+
+	int getRebuildLevel(Domain d, bool /*undo*/) const override
+	{
+        auto rl = (int)RebuildLevel::ParameterSlots;
+        
+        if(d == Domain::UI)
+            rl |= (int)RebuildLevel::Recompile;
+        
+        return rl;
+	}
+
+	void addToDiffList(std::vector<Diff>& diffList, bool undo) override
+	{
+		Diff d;
+		d.target = Identifier(componentId);
+		d.domain = Domain::UI;
+		d.type = undo ? Diff::Type::Remove : Diff::Type::Add;
+		diffList.push_back(d);
+	}
+
+	Error validate() override
+	{
+		// Auto-generate ID if not provided
+		if (componentId.isEmpty())
+		{
+			auto content = getContent(getMainController(), moduleId);
+			componentId = autoGenerateId(componentType, content, uiValidation);
+		}
+
+		// Check uniqueness
+		if (uiValidation != nullptr)
+		{
+			if (uiValidation->componentExists(componentId))
+				return Error().withError("A component with ID '" + componentId + "' already exists");
+
+			if (parentId.isNotEmpty() && !uiValidation->componentExists(parentId))
+				return Error().withError("Parent component '" + parentId + "' does not exist");
+
+			uiValidation->addComponent(parentId, componentType, componentId, x, y, w, h);
+		}
+		else
+		{
+			auto content = getContent(getMainController(), moduleId);
+			if (content == nullptr)
+				return Error().withError("Can't find script processor: " + moduleId);
+
+			if (content->getComponentWithName(Identifier(componentId)) != nullptr)
+				return Error().withError("A component with ID '" + componentId + "' already exists");
+
+			if (parentId.isNotEmpty() && content->getComponentWithName(Identifier(parentId)) == nullptr)
+				return Error().withError("Parent component '" + parentId + "' does not exist");
+		}
+
+		return {};
+	}
+
+	void perform() override
+	{
+		auto content = getContent(getMainController(), moduleId);
+		if (content == nullptr)
+			throw Error().withError("Can't find script processor: " + moduleId);
+
+		ValueTree newChild("Component");
+		newChild.setProperty("type", componentType, nullptr);
+		newChild.setProperty("id", componentId, nullptr);
+		newChild.setProperty("x", x, nullptr);
+		newChild.setProperty("y", y, nullptr);
+		newChild.setProperty("width", w, nullptr);
+		newChild.setProperty("height", h, nullptr);
+
+		if (parentId.isNotEmpty())
+		{
+			auto parentTree = content->getValueTreeForComponent(Identifier(parentId));
+			if (parentTree.isValid())
+				parentTree.addChild(newChild, -1, nullptr);
+		}
+		else
+		{
+			content->getContentProperties().addChild(newChild, -1, nullptr);
+		}
+
+
+	}
+
+	void undo() override
+	{
+		auto content = getContent(getMainController(), moduleId);
+		if (content == nullptr) return;
+
+		auto v = content->getValueTreeForComponent(Identifier(componentId));
+		if (v.isValid())
+			v.getParent().removeChild(v, nullptr);
+
+
+	}
+
+	bool needsKillVoice() const override { return false; }
+
+	String getHistoryMessage(bool undo) const override
+	{
+		return (undo ? "Remove " : "Add ") + componentType + " '" + componentId + "'";
+	}
+
+	String getDescription() const override
+	{
+		return "add " + componentType + " '" + componentId + "'";
+	}
+};
+
+// ============================================================================
+// ui::remove
+// ============================================================================
+
+struct remove : public ActionBase
+{
+	BUILDER_ID(remove);
+
+	static Error prevalidate(MainController*, const var& op)
+	{
+		if (op[RestApiIds::target].toString().isEmpty())
+			return Error().withError("remove requires 'target'");
+		return {};
+	}
+
+	remove(MainController* mc, const var& obj) :
+		ActionBase(mc),
+		targetId(obj[RestApiIds::target].toString()),
+		moduleId(obj[RestApiIds::moduleId].toString())
+	{
+		if (moduleId.isEmpty()) moduleId = "Interface";
+	}
+
+	String targetId, moduleId;
+	ValueTree savedState;
+	int savedIndex = -1;
+	String savedParentId;
+
+	String getModuleId() const override { return moduleId; }
+
+	int getRebuildLevel(Domain d, bool /*undo*/) const override
+	{
+        auto rl = (int)RebuildLevel::ParameterSlots;
+        
+        if(d == Domain::UI)
+            rl |= (int)RebuildLevel::Recompile;
+        
+        return rl;
+	}
+
+	void addToDiffList(std::vector<Diff>& diffList, bool undo) override
+	{
+		Diff d;
+		d.target = Identifier(targetId);
+		d.domain = Domain::UI;
+		d.type = undo ? Diff::Type::Add : Diff::Type::Remove;
+		diffList.push_back(d);
+	}
+
+	Error validate() override
+	{
+		if (uiValidation != nullptr)
+		{
+			if (!uiValidation->componentExists(targetId))
+				return Error().withError("Component '" + targetId + "' does not exist");
+
+			uiValidation->removeComponent(targetId);
+		}
+		// In runtime mode, defer existence check to perform() to support
+		// batched ops where a preceding add creates the target.
+		return {};
+	}
+
+	void perform() override
+	{
+		auto content = getContent(getMainController(), moduleId);
+		if (content == nullptr)
+			throw Error().withError("Can't find script processor: " + moduleId);
+
+		auto v = content->getValueTreeForComponent(Identifier(targetId));
+		if (!v.isValid())
+			throw Error().withError("Component '" + targetId + "' does not exist");
+
+		savedState = v.createCopy();
+		savedParentId = v.getParent().getProperty("id").toString();
+		savedIndex = v.getParent().indexOf(v);
+		v.getParent().removeChild(v, nullptr);
+	}
+
+	void undo() override
+	{
+		auto content = getContent(getMainController(), moduleId);
+		if (content == nullptr) return;
+
+		if (savedParentId.isNotEmpty())
+		{
+			auto parentTree = content->getValueTreeForComponent(Identifier(savedParentId));
+			if (parentTree.isValid())
+				parentTree.addChild(savedState, savedIndex, nullptr);
+		}
+		else
+		{
+			content->getContentProperties().addChild(savedState, savedIndex, nullptr);
+		}
+
+
+	}
+
+	bool needsKillVoice() const override { return false; }
+
+	String getHistoryMessage(bool undo) const override
+	{
+		return (undo ? "Restore " : "Remove ") + targetId;
+	}
+
+	String getDescription() const override
+	{
+		return "remove '" + targetId + "'";
+	}
+};
+
+// ============================================================================
+// ui::set
+// ============================================================================
+
+struct set : public ActionBase
+{
+	BUILDER_ID(set);
+
+	static Error prevalidate(MainController*, const var& op)
+	{
+		if (op[RestApiIds::target].toString().isEmpty())
+			return Error().withError("set requires 'target'");
+		if (!op[RestApiIds::properties].isObject())
+			return Error().withError("set requires 'properties' object");
+		return {};
+	}
+
+	set(MainController* mc, const var& obj) :
+		ActionBase(mc),
+		targetId(obj[RestApiIds::target].toString()),
+		moduleId(obj[RestApiIds::moduleId].toString()),
+		newProperties(obj[RestApiIds::properties]),
+		forceOverride((bool)obj.getProperty(RestApiIds::force, false))
+	{
+		if (moduleId.isEmpty()) moduleId = "Interface";
+	}
+
+	String targetId, moduleId;
+	var newProperties;
+	bool forceOverride;
+	NamedValueSet oldValues;
+	bool changesParentComponent = false;
+
+	String getModuleId() const override { return moduleId; }
+
+	int getRebuildLevel(Domain d, bool /*undo*/) const override
+    {
+        auto rl = 0;
+        
+        if(d == Domain::UI && changesParentComponent)
+        {
+            rl |= RebuildLevel::ParameterSlots;
+            rl |= RebuildLevel::Recompile;
+        }
+        
+        return rl;
+    }
+
+	void addToDiffList(std::vector<Diff>& diffList, bool /*undo*/) override
+	{
+		Diff d;
+		d.target = Identifier(targetId);
+		d.domain = Domain::UI;
+		d.type = Diff::Type::Modify;
+		diffList.push_back(d);
+	}
+
+	Error validate() override
+	{
+		auto props = newProperties.getDynamicObject();
+		if (props == nullptr)
+			return Error().withError("properties must be an object");
+
+		static const Identifier parentComponentId("parentComponent");
+
+		for (int i = 0; i < props->getProperties().size(); i++)
+		{
+			if (props->getProperties().getName(i) == parentComponentId)
+				changesParentComponent = true;
+		}
+
+		if (uiValidation != nullptr)
+		{
+			if (!uiValidation->componentExists(targetId))
+				return Error().withError("Component '" + targetId + "' does not exist");
+
+			// Plan-mode: validate property names against static type map
+			auto compType = uiValidation->getComponentType(targetId);
+			auto& propertyMap = RestServerUndoManager::UIValidationState::getPropertyMap();
+			auto it = propertyMap.find(Identifier(compType));
+
+			if (it != propertyMap.end())
+			{
+				for (int i = 0; i < props->getProperties().size(); i++)
+				{
+					auto propName = props->getProperties().getName(i);
+					bool found = false;
+					for (auto& validProp : it->second)
+					{
+						if (validProp == propName)
+						{
+							found = true;
+							break;
+						}
+					}
+					if (!found)
+					{
+						StringArray validNames;
+						for (auto& vp : it->second)
+							validNames.add(vp.toString());
+
+						auto hint = FuzzySearcher::suggestCorrection(propName.toString(), validNames);
+						auto e = Error().withError("Unknown property '" + propName.toString() + "' on " + compType);
+						if (hint.isNotEmpty())
+							e = e.withHint(". Did you mean: " + hint);
+						return e;
+					}
+				}
+			}
+
+			// Apply to validation tree
+			for (int i = 0; i < props->getProperties().size(); i++)
+			{
+				auto propName = props->getProperties().getName(i);
+				auto propValue = props->getProperties().getValueAt(i);
+				uiValidation->setProperty(targetId, propName, propValue);
+			}
+		}
+		else
+		{
+			auto content = getContent(getMainController(), moduleId);
+			if (content == nullptr)
+				return Error().withError("Can't find script processor: " + moduleId);
+
+			auto sc = content->getComponentWithName(Identifier(targetId));
+
+			// In runtime mode, the component may not exist yet if a preceding
+			// add op in the same batch creates it. Defer existence check to perform().
+			if (sc == nullptr)
+				return {};
+
+			// Runtime: full validation with live component
+			for (int i = 0; i < props->getProperties().size(); i++)
+			{
+				auto propName = props->getProperties().getName(i);
+
+				if (!sc->hasProperty(propName))
+				{
+					StringArray validNames;
+					for (int j = 0; j < sc->getNumIds(); j++)
+						validNames.add(sc->getIdFor(j).toString());
+
+					auto hint = FuzzySearcher::suggestCorrection(propName.toString(), validNames);
+					auto e = Error().withError("Unknown property '" + propName.toString() + "' on '" + targetId + "'");
+					if (hint.isNotEmpty())
+						e = e.withHint(". Did you mean: " + hint);
+					return e;
+				}
+
+				// Check options for list-type properties
+				auto opts = sc->getOptionsFor(propName);
+				if (!opts.isEmpty())
+				{
+					auto val = props->getProperties().getValueAt(i).toString();
+					if (!opts.contains(val))
+					{
+						return Error().withError("Invalid value '" + val + "' for property '" + propName.toString() + "'")
+							.withHint("Valid options: " + opts.joinIntoString(", "));
+					}
+				}
+
+				if (!forceOverride && sc->isPropertyOverwrittenByScript(propName))
+					return Error().withError("Property '" + propName.toString() + "' on '" + targetId + "' is locked by script (use force=true to override)");
+
+				// Save old value for undo
+				oldValues.set(propName, sc->getScriptObjectProperty(propName));
+			}
+		}
+
+		return {};
+	}
+
+	void perform() override
+	{
+		auto content = getContent(getMainController(), moduleId);
+		if (content == nullptr)
+			throw Error().withError("Can't find script processor: " + moduleId);
+
+		ValueTreeUpdateWatcher::ScopedDelayer sd(content->getUpdateWatcher());
+
+		auto sc = content->getComponentWithName(Identifier(targetId));
+		if (sc == nullptr)
+			throw Error().withError("Component '" + targetId + "' does not exist");
+
+		auto props = newProperties.getDynamicObject();
+		if (props == nullptr) return;
+
+		// Save old values if not already done (deferred from validation)
+		if (oldValues.isEmpty())
+		{
+			for (int i = 0; i < props->getProperties().size(); i++)
+			{
+				auto propName = props->getProperties().getName(i);
+				oldValues.set(propName, sc->getScriptObjectProperty(propName));
+			}
+		}
+
+		for (int i = 0; i < props->getProperties().size(); i++)
+		{
+			auto propName = props->getProperties().getName(i);
+			auto propValue = props->getProperties().getValueAt(i);
+
+			sc->setScriptObjectPropertyWithChangeMessage(propName, propValue, sendNotification);
+		}
+	}
+
+	void undo() override
+	{
+		auto content = getContent(getMainController(), moduleId);
+		if (content == nullptr) return;
+
+		auto sc = content->getComponentWithName(Identifier(targetId));
+		if (sc == nullptr) return;
+
+        ValueTreeUpdateWatcher::ScopedDelayer sd(content->getUpdateWatcher());
+        
+		for (int i = 0; i < oldValues.size(); i++)
+		{
+			auto propName = oldValues.getName(i);
+			auto propValue = oldValues.getValueAt(i);
+			sc->setScriptObjectPropertyWithChangeMessage(propName, propValue, sendNotification);
+		}
+	}
+
+	bool needsKillVoice() const override { return false; }
+
+	String getHistoryMessage(bool undo) const override
+	{
+		return (undo ? "Undo set on " : "Set properties on ") + targetId;
+	}
+
+	String getDescription() const override
+	{
+		return "set properties on '" + targetId + "'";
+	}
+};
+
+// ============================================================================
+// ui::move
+// ============================================================================
+
+struct move : public ActionBase
+{
+	BUILDER_ID(move);
+
+	static Error prevalidate(MainController*, const var& op)
+	{
+		if (op[RestApiIds::target].toString().isEmpty())
+			return Error().withError("move requires 'target'");
+
+		// parent can be empty string (= move to root), but field must exist
+		if (!op.hasProperty(RestApiIds::parent))
+			return Error().withError("move requires 'parent' (empty string for root)");
+
+		return {};
+	}
+
+	move(MainController* mc, const var& obj) :
+		ActionBase(mc),
+		targetId(obj[RestApiIds::target].toString()),
+		newParentId(obj[RestApiIds::parent].toString()),
+		moduleId(obj[RestApiIds::moduleId].toString()),
+		insertIndex((int)obj.getProperty(RestApiIds::index, -1)),
+		keepPosition((bool)obj.getProperty(RestApiIds::keepPosition, false))
+	{
+		if (moduleId.isEmpty()) moduleId = "Interface";
+	}
+
+	String targetId, newParentId, moduleId;
+	int insertIndex;
+	bool keepPosition;
+	String oldParentId;
+	int oldX = 0, oldY = 0, oldIndex = -1;
+
+	String getModuleId() const override { return moduleId; }
+
+    int getRebuildLevel(Domain d, bool /*undo*/) const override
+    {
+        auto rl = (int)RebuildLevel::ParameterSlots;
+        
+        if(d == Domain::UI)
+            rl |= (int)RebuildLevel::Recompile;
+        
+        return rl;
+    }
+
+
+	void addToDiffList(std::vector<Diff>& diffList, bool /*undo*/) override
+	{
+		Diff d;
+		d.target = Identifier(targetId);
+		d.domain = Domain::UI;
+		d.type = Diff::Type::Modify;
+		diffList.push_back(d);
+	}
+
+	Error validate() override
+	{
+		if (uiValidation != nullptr)
+		{
+			if (!uiValidation->componentExists(targetId))
+				return Error().withError("Component '" + targetId + "' does not exist");
+
+			if (newParentId.isNotEmpty() && !uiValidation->componentExists(newParentId))
+				return Error().withError("Parent component '" + newParentId + "' does not exist");
+
+			if (newParentId.isNotEmpty() && uiValidation->isDescendantOf(newParentId, targetId))
+				return Error().withError("Cannot move '" + targetId + "' to its own descendant '" + newParentId + "'");
+
+			uiValidation->moveComponent(targetId, newParentId, insertIndex);
+		}
+		// In runtime mode, defer existence checks to perform() to support
+		// batched ops where preceding ops create the targets.
+
+		return {};
+	}
+
+	void perform() override
+	{
+		auto content = getContent(getMainController(), moduleId);
+		if (content == nullptr)
+			throw Error().withError("Can't find script processor: " + moduleId);
+
+		ValueTreeUpdateWatcher::ScopedDelayer sd(content->getUpdateWatcher());
+
+		auto v = content->getValueTreeForComponent(Identifier(targetId));
+		if (!v.isValid())
+			throw Error().withError("Component '" + targetId + "' does not exist");
+
+		static const Identifier pc("parentComponent");
+		static const Identifier xId("x");
+		static const Identifier yId("y");
+
+		// Save old state for undo
+		oldParentId = v.getParent().getProperty("id").toString();
+		oldX = (int)v.getProperty(xId);
+		oldY = (int)v.getProperty(yId);
+		oldIndex = v.getParent().indexOf(v);
+
+		// Resolve new parent tree
+		ValueTree newParentTree;
+		if (newParentId.isNotEmpty())
+			newParentTree = content->getValueTreeForComponent(Identifier(newParentId));
+		else
+			newParentTree = content->getContentProperties();
+
+		if (!newParentTree.isValid()) return;
+
+		// Compute position adjustment if keepPosition is enabled
+		Point<int> newPos(oldX, oldY);
+
+		if (keepPosition)
+		{
+			auto cPos = ContentValueTreeHelpers::getLocalPosition(v);
+			ContentValueTreeHelpers::getAbsolutePosition(v, cPos);
+
+			auto nPos = ContentValueTreeHelpers::getLocalPosition(newParentTree);
+			ContentValueTreeHelpers::getAbsolutePosition(newParentTree, nPos);
+
+			newPos = cPos - nPos;
+		}
+
+		// Adjust insertIndex if moving within same parent (moveItems pattern)
+		int idx = insertIndex;
+		if (v.getParent() == newParentTree && idx >= 0 && v.getParent().indexOf(v) < idx)
+			--idx;
+
+		// Reparent
+		v.getParent().removeChild(v, nullptr);
+		v.setProperty(pc, newParentId, nullptr);
+
+		if (keepPosition)
+		{
+			v.setProperty(xId, newPos.getX(), nullptr);
+			v.setProperty(yId, newPos.getY(), nullptr);
+		}
+
+		newParentTree.addChild(v, idx, nullptr);
+	}
+
+	void undo() override
+	{
+		auto content = getContent(getMainController(), moduleId);
+		if (content == nullptr) return;
+
+		ValueTreeUpdateWatcher::ScopedDelayer sd(content->getUpdateWatcher());
+
+		auto v = content->getValueTreeForComponent(Identifier(targetId));
+		if (!v.isValid()) return;
+
+		static const Identifier pc("parentComponent");
+
+		v.getParent().removeChild(v, nullptr);
+		v.setProperty(pc, oldParentId, nullptr);
+		v.setProperty("x", oldX, nullptr);
+		v.setProperty("y", oldY, nullptr);
+
+		if (oldParentId.isNotEmpty())
+		{
+			auto parentTree = content->getValueTreeForComponent(Identifier(oldParentId));
+			if (parentTree.isValid())
+				parentTree.addChild(v, oldIndex, nullptr);
+		}
+		else
+		{
+			content->getContentProperties().addChild(v, oldIndex, nullptr);
+		}
+	}
+
+	bool needsKillVoice() const override { return false; }
+
+	String getHistoryMessage(bool undo) const override
+	{
+		auto target = undo ? oldParentId : newParentId;
+		return "Move '" + targetId + "' to " + (target.isEmpty() ? "root" : "'" + target + "'");
+	}
+
+	String getDescription() const override
+	{
+		return "move '" + targetId + "' to " + (newParentId.isEmpty() ? "root" : "'" + newParentId + "'");
+	}
+};
+
+// ============================================================================
+// ui::rename
+// ============================================================================
+
+struct rename : public ActionBase
+{
+	BUILDER_ID(rename);
+
+	static Error prevalidate(MainController*, const var& op)
+	{
+		if (op[RestApiIds::target].toString().isEmpty())
+			return Error().withError("rename requires 'target'");
+		if (op[RestApiIds::newId].toString().isEmpty())
+			return Error().withError("rename requires 'newId'");
+
+		auto newName = op[RestApiIds::newId].toString();
+
+		// Validate identifier characters
+		if (!Identifier::isValidIdentifier(newName))
+			return Error().withError("'" + newName + "' is not a valid identifier (alphanumeric + underscore, must start with letter)");
+
+		return {};
+	}
+
+	rename(MainController* mc, const var& obj) :
+		ActionBase(mc),
+		targetId(obj[RestApiIds::target].toString()),
+		newName(obj[RestApiIds::newId].toString()),
+		moduleId(obj[RestApiIds::moduleId].toString())
+	{
+		if (moduleId.isEmpty()) moduleId = "Interface";
+	}
+
+	String targetId, newName, moduleId;
+
+	String getModuleId() const override { return moduleId; }
+
+    int getRebuildLevel(Domain d, bool /*undo*/) const override
+    {
+        auto rl = (int)RebuildLevel::ParameterSlots;
+        
+        if(d == Domain::UI)
+            rl |= (int)RebuildLevel::Recompile;
+        
+        return rl;
+    }
+
+
+	void addToDiffList(std::vector<Diff>& diffList, bool undo) override
+	{
+		Diff d;
+		d.target = Identifier(undo ? targetId : newName);
+		d.domain = Domain::UI;
+		d.type = Diff::Type::Modify;
+		diffList.push_back(d);
+	}
+
+	Error validate() override
+	{
+		if (targetId == newName)
+			return {};
+
+		if (uiValidation != nullptr)
+		{
+			if (!uiValidation->componentExists(targetId))
+				return Error().withError("Component '" + targetId + "' does not exist");
+
+			if (uiValidation->componentExists(newName))
+				return Error().withError("A component with ID '" + newName + "' already exists");
+
+			uiValidation->renameComponent(targetId, newName);
+		}
+		// In runtime mode, defer existence checks to perform() to support
+		// batched ops where preceding ops create the targets.
+
+		return {};
+	}
+
+	void perform() override
+	{
+		auto content = getContent(getMainController(), moduleId);
+		if (content == nullptr)
+			throw Error().withError("Can't find script processor: " + moduleId);
+
+		auto v = content->getValueTreeForComponent(Identifier(targetId));
+		if (!v.isValid())
+			throw Error().withError("Component '" + targetId + "' does not exist");
+
+		v.setProperty("id", newName, nullptr);
+
+		// Update parentComponent references in any children that referenced the old name
+		valuetree::Helpers::forEach(content->getContentProperties(), [&](ValueTree& child)
+		{
+			if (child.getProperty("parentComponent").toString() == targetId)
+				child.setProperty("parentComponent", newName, nullptr);
+			return false;
+		});
+
+
+	}
+
+	void undo() override
+	{
+		auto content = getContent(getMainController(), moduleId);
+		if (content == nullptr) return;
+
+		auto v = content->getValueTreeForComponent(Identifier(newName));
+		if (v.isValid())
+			v.setProperty("id", targetId, nullptr);
+
+		// Reverse parentComponent references
+		valuetree::Helpers::forEach(content->getContentProperties(), [&](ValueTree& child)
+		{
+			if (child.getProperty("parentComponent").toString() == newName)
+				child.setProperty("parentComponent", targetId, nullptr);
+			return false;
+		});
+
+
+	}
+
+	bool needsKillVoice() const override { return false; }
+
+	String getHistoryMessage(bool undo) const override
+	{
+		return undo ? ("Rename '" + newName + "' back to '" + targetId + "'")
+		            : ("Rename '" + targetId + "' to '" + newName + "'");
+	}
+
+	String getDescription() const override
+	{
+		return "rename '" + targetId + "' to '" + newName + "'";
+	}
+};
+
+} // ui
 } // rest_undo
 } // hise

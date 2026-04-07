@@ -956,6 +956,30 @@ const Array<RestHelpers::RouteMetadata>& RestHelpers::getRouteMetadata()
 			.withReturns("finished=true when job is done")
 			.withQueryParam(RouteParameter(RestApiIds::jobId, "Job ID returned by wizard/execute")));
 
+		// ApiRoute::UITree
+		m.add(RouteMetadata(ApiRoute::UITree, "api/ui/tree")
+			.withCategory("ui")
+			.withDescription("Get UI component tree hierarchy for a script processor's interface")
+			.withReturns("Recursive tree with id, type, visible, enabled, saveInPreset, x, y, width, height, childComponents")
+			.withModuleIdParam()
+			.withQueryParam(RouteParameter(RestApiIds::group,
+				"Optional group selector. 'current' returns the active plan's validation tree").asOptional()));
+
+		// ApiRoute::UIApply
+		m.add(RouteMetadata(ApiRoute::UIApply, "api/ui/apply")
+			.withMethod(RestServer::POST)
+			.withCategory("ui")
+			.withDescription("Apply batched UI component operations (add, remove, set, move, rename)")
+			.withReturns("Diff of changes with domain='ui', action symbols (+/-/*), and target component IDs")
+			.withBodyParam(RouteParameter(RestApiIds::moduleId, "Script processor ID"))
+			.withBodyParam(RouteParameter(RestApiIds::operations,
+				"Array of operations. Each requires 'op' field: "
+				"add (componentType, id?, parentId?, x?, y?, width?, height?), "
+				"remove (target), "
+				"set (target, properties, force?), "
+				"move (target, parent, index?, keepPosition?), "
+				"rename (target, newId)")));
+
 		// Verify count matches enum
 		jassert(m.size() == (int)ApiRoute::numRoutes);
 
@@ -3683,17 +3707,6 @@ RestServer::Response RestHelpers::handleWizardExecute(MainController* mc,
     auto ok = w.execute(req->getRequest());
     req->complete(ok);
     return req->waitForResponse();
-    
-#if 0
-	DynamicObject::Ptr result = new DynamicObject();
-	result->setProperty(RestApiIds::success, true);
-	result->setProperty(RestApiIds::result, "Wizard '" + wizardId + "' task '" + taskName + "' not yet implemented");
-	result->setProperty(RestApiIds::logs, Array<var>());
-	result->setProperty(RestApiIds::errors, Array<var>());
-
-	req->complete(RestServer::Response::ok(var(result.get())));
-	return req->waitForResponse();
-#endif
 }
 
 RestServer::Response RestHelpers::handleWizardStatus(MainController* mc,
@@ -3709,6 +3722,256 @@ RestServer::Response RestHelpers::handleWizardStatus(MainController* mc,
 	// If jobId is unknown, return error.
 
 	return req->fail(404, "No active job with ID: " + jobId);
+}
+
+// ============================================================================
+// UI Tree Handler
+// ============================================================================
+
+static var buildUIComponentTreeFromValueTree(const ValueTree& v)
+{
+	DynamicObject::Ptr obj = new DynamicObject();
+
+	obj->setProperty(RestApiIds::id, v.getProperty("id"));
+	obj->setProperty(RestApiIds::type, v.getProperty("type"));
+	obj->setProperty(RestApiIds::visible, v.getProperty("visible", true));
+	obj->setProperty(RestApiIds::enabled, v.getProperty("enabled", true));
+	obj->setProperty(RestApiIds::saveInPreset, v.getProperty("saveInPreset", false));
+	obj->setProperty(RestApiIds::x, v.getProperty("x", 0));
+	obj->setProperty(RestApiIds::y, v.getProperty("y", 0));
+	obj->setProperty(RestApiIds::width, v.getProperty("width", 128));
+	obj->setProperty(RestApiIds::height, v.getProperty("height", 48));
+
+	Array<var> children;
+	for (int i = 0; i < v.getNumChildren(); i++)
+		children.add(buildUIComponentTreeFromValueTree(v.getChild(i)));
+
+	obj->setProperty(RestApiIds::childComponents, var(children));
+	return var(obj.get());
+}
+
+static var buildUIComponentTreeFromScriptComponent(ScriptComponent* sc)
+{
+	DynamicObject::Ptr obj = new DynamicObject();
+
+	obj->setProperty(RestApiIds::id, sc->getName().toString());
+	obj->setProperty(RestApiIds::type, sc->getObjectName().toString());
+	obj->setProperty(RestApiIds::visible, sc->getScriptObjectProperty(ScriptComponent::visible));
+	obj->setProperty(RestApiIds::enabled, sc->getScriptObjectProperty(ScriptComponent::enabled));
+	obj->setProperty(RestApiIds::saveInPreset, sc->getScriptObjectProperty(ScriptComponent::saveInPreset));
+	obj->setProperty(RestApiIds::x, sc->getScriptObjectProperty(ScriptComponent::x));
+	obj->setProperty(RestApiIds::y, sc->getScriptObjectProperty(ScriptComponent::y));
+	obj->setProperty(RestApiIds::width, sc->getScriptObjectProperty(ScriptComponent::width));
+	obj->setProperty(RestApiIds::height, sc->getScriptObjectProperty(ScriptComponent::height));
+
+	Array<var> children;
+
+	auto v = sc->getPropertyValueTree();
+	for (auto c : v)
+	{
+		if (auto child = sc->getScriptProcessor()->getScriptingContent()->getComponentWithName(c["id"].toString()))
+			children.add(buildUIComponentTreeFromScriptComponent(child));
+	}
+
+	obj->setProperty(RestApiIds::childComponents, var(children));
+	return var(obj.get());
+}
+
+RestServer::Response RestHelpers::handleUITree(MainController* mc,
+                                                RestServer::AsyncRequest::Ptr req)
+{
+	if (auto jp = getScriptProcessor(mc, req))
+	{
+		auto content = dynamic_cast<ProcessorWithScriptingContent*>(jp)->getScriptingContent();
+		auto group = req->getRequest()[RestApiIds::group];
+
+		var tree;
+
+		if (group.isNotEmpty())
+		{
+			if (group != "current")
+				return req->fail(501, "only 'current' group is supported");
+
+			auto um = RestServerUndoManager::Instance::getOrCreate(mc, ApiRoute::UITree);
+			auto uiState = um->getCurrentUIValidationState();
+
+			if (uiState == nullptr || !uiState->contentTree.isValid())
+				return req->fail(400, group == "current" ? "No current UI validation state" : "group not found");
+
+			// Build tree from UIValidationState's copied ValueTree
+			auto& ct = uiState->contentTree;
+
+			DynamicObject::Ptr root = new DynamicObject();
+			root->setProperty(RestApiIds::id, "Content");
+			root->setProperty(RestApiIds::type, "ScriptPanel");
+			root->setProperty(RestApiIds::visible, true);
+			root->setProperty(RestApiIds::enabled, true);
+			root->setProperty(RestApiIds::saveInPreset, false);
+			root->setProperty(RestApiIds::x, 0);
+			root->setProperty(RestApiIds::y, 0);
+			root->setProperty(RestApiIds::width, ct.getProperty("width", 600));
+			root->setProperty(RestApiIds::height, ct.getProperty("height", 500));
+
+			Array<var> children;
+			for (int i = 0; i < ct.getNumChildren(); i++)
+				children.add(buildUIComponentTreeFromValueTree(ct.getChild(i)));
+			root->setProperty(RestApiIds::childComponents, var(children));
+
+			tree = var(root.get());
+		}
+		else
+		{
+			// Build root Content node
+			DynamicObject::Ptr root = new DynamicObject();
+			root->setProperty(RestApiIds::id, "Content");
+			root->setProperty(RestApiIds::type, "ScriptPanel");
+			root->setProperty(RestApiIds::visible, true);
+			root->setProperty(RestApiIds::enabled, true);
+			root->setProperty(RestApiIds::saveInPreset, false);
+			root->setProperty(RestApiIds::x, 0);
+			root->setProperty(RestApiIds::y, 0);
+			root->setProperty(RestApiIds::width, content->getContentProperties().getProperty("width", 600));
+			root->setProperty(RestApiIds::height, content->getContentProperties().getProperty("height", 500));
+
+			Array<var> children;
+			for (int i = 0; i < content->getNumComponents(); i++)
+			{
+				auto sc = content->getComponent(i);
+				if (sc->getParentScriptComponent() == nullptr)
+					children.add(buildUIComponentTreeFromScriptComponent(sc));
+			}
+			root->setProperty(RestApiIds::childComponents, var(children));
+
+			tree = var(root.get());
+		}
+
+		DynamicObject::Ptr result = new DynamicObject();
+		result->setProperty(RestApiIds::success, true);
+		result->setProperty(RestApiIds::result, tree);
+		result->setProperty(RestApiIds::logs, Array<var>());
+		result->setProperty(RestApiIds::errors, Array<var>());
+
+		req->complete(RestServer::Response::ok(var(result.get())));
+		return req->waitForResponse();
+	}
+	else
+	{
+		return req->fail(404, "moduleId is not a valid script processor");
+	}
+}
+
+// ============================================================================
+// UI Apply Handler
+// ============================================================================
+
+RestServer::Response RestHelpers::handleUIApply(MainController* mc,
+                                                 RestServer::AsyncRequest::Ptr req)
+{
+	static constexpr ApiRoute CurrentEndpoint = ApiRoute::UIApply;
+
+	std::vector<RestServerUndoManager::CallStack> errorCallstack;
+
+	req->setUseCustomErrors(true);
+	auto obj = req->getRequest().getJsonBody();
+
+	// --- Field validation ---
+
+	auto ops = obj[RestApiIds::operations];
+	if (!ops.isArray())
+		return req->fail(400, "operations must be an array");
+
+	if (ops.size() == 0)
+		return req->fail(400, "operations array must not be empty");
+
+	auto noErrors = true;
+
+	auto um = RestServerUndoManager::Instance::getOrCreate(mc, CurrentEndpoint);
+
+	// Phase 1: Validate required fields per operation type
+	for (int i = 0; i < ops.size(); i++)
+	{
+		auto ok = um->prevalidate(RestServerUndoManager::Domain::UI, ops[i]);
+
+		if (!ok)
+		{
+			noErrors = false;
+
+			errorCallstack.push_back(RestServerUndoManager::CallStack(ok.getErrorMessage())
+				.withGroup(um->getCurrentGroupId())
+				.withPhase(RestServerUndoManager::CallStack::Phase::Prevalidation)
+				.withOperation(i, ops[i][RestApiIds::op].toString())
+				.withEndpoint(CurrentEndpoint));
+		}
+	}
+
+	if (!noErrors)
+	{
+		DynamicObject::Ptr result = new DynamicObject();
+		result->setProperty(RestApiIds::success, false);
+		result->setProperty(RestApiIds::result, var());
+		result->setProperty(RestApiIds::logs, Array<var>());
+		result->setProperty(RestApiIds::errors, RestServerUndoManager::CallStack::toJSONList(errorCallstack));
+		req->complete(RestServer::Response::ok(var(result.get())));
+		return req->waitForResponse();
+	}
+
+	// Phase 2: Create actions and validate semantics
+	using ActionBase = RestServerUndoManager::ActionBase;
+	ActionBase::List actions;
+
+	for (int i = 0; i < ops.size(); i++)
+	{
+		auto ad = um->createAction(RestServerUndoManager::Domain::UI, ops[i]);
+		auto ok = ad->validate();
+
+		if (ok)
+			actions.add(ad);
+		else
+		{
+			errorCallstack.push_back(RestServerUndoManager::CallStack(ok.getErrorMessage())
+				.withGroup(um->getCurrentGroupId())
+				.withPhase(RestServerUndoManager::CallStack::Phase::Validation)
+				.withOperation(i, ad->getDescription())
+				.withEndpoint(CurrentEndpoint));
+
+			noErrors = false;
+		}
+	}
+
+	if (!noErrors)
+	{
+		DynamicObject::Ptr result = new DynamicObject();
+		result->setProperty(RestApiIds::success, false);
+		result->setProperty(RestApiIds::result, var());
+		result->setProperty(RestApiIds::logs, Array<var>());
+		result->setProperty(RestApiIds::errors, RestServerUndoManager::CallStack::toJSONList(errorCallstack));
+		req->complete(RestServer::Response::ok(var(result.get())));
+		return req->waitForResponse();
+	}
+
+	// Phase 3: Execute via undo manager
+	um->setValidationErrors(errorCallstack);
+
+    auto mid = obj[RestApiIds::moduleId].toString();
+    auto sp = dynamic_cast<ProcessorWithScriptingContent*>(ProcessorHelpers::getFirstProcessorWithName(mc->getMainSynthChain(), mid));
+    
+    if(sp == nullptr)
+        return req->fail(404, String("module with ID ") + mid + String(" + not found"));
+    
+    //ValueTreeUpdateWatcher::ScopedDelayer sd(sp->getScriptingContent()->getUpdateWatcher(), true);
+    
+	um->performAction(req, actions, [](ActionBase::List l, bool undo)
+	{
+		if (!l.isEmpty())
+		{
+			auto mc = l.getFirst()->getMainController();
+
+			for (auto a : l)
+				debugToConsole(mc->getMainSynthChain(), a->getHistoryMessage(undo));
+		}
+	});
+
+	return req->waitForResponse();
 }
 
 // ============================================================================
