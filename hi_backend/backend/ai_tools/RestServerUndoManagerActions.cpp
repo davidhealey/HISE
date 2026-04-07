@@ -1203,7 +1203,7 @@ struct set_effect : public ActionBase
 
 	int getRebuildLevel(Domain d, bool undo) const override
 	{
-		return RebuildLevel::ParameterSlots;
+		return 0;
 	}
 
 	void addToDiffList(std::vector<Diff>& diffList, bool undo) override
@@ -1445,14 +1445,11 @@ struct add : public ActionBase
 
 	String getModuleId() const override { return moduleId; }
 
-	int getRebuildLevel(Domain d, bool /*undo*/) const override
+	int getRebuildLevel(Domain d, bool undo) const override
 	{
-        auto rl = (int)RebuildLevel::ParameterSlots;
-        
-        if(d == Domain::UI)
-            rl |= (int)RebuildLevel::Recompile;
-        
-        return rl;
+		if (undo && d == Domain::UI)
+			return (int)RebuildLevel::Recompile;
+		return 0;
 	}
 
 	void addToDiffList(std::vector<Diff>& diffList, bool undo) override
@@ -1506,6 +1503,8 @@ struct add : public ActionBase
 		if (content == nullptr)
 			throw Error().withError("Can't find script processor: " + moduleId);
 
+		ValueTreeUpdateWatcher::ScopedSuspender ss(content->getUpdateWatcher());
+
 		ValueTree newChild("Component");
 		newChild.setProperty("type", componentType, nullptr);
 		newChild.setProperty("id", componentId, nullptr);
@@ -1526,7 +1525,9 @@ struct add : public ActionBase
 			content->getContentProperties().addChild(newChild, -1, nullptr);
 		}
 
-
+		// Create the C++ ScriptComponent and add to components array
+		content->addComponentsFromValueTree(newChild);
+		content->componentAdded();
 	}
 
 	void undo() override
@@ -1534,11 +1535,11 @@ struct add : public ActionBase
 		auto content = getContent(getMainController(), moduleId);
 		if (content == nullptr) return;
 
+		ValueTreeUpdateWatcher::ScopedSuspender ss(content->getUpdateWatcher());
+
 		auto v = content->getValueTreeForComponent(Identifier(componentId));
 		if (v.isValid())
 			v.getParent().removeChild(v, nullptr);
-
-
 	}
 
 	bool needsKillVoice() const override { return false; }
@@ -1584,14 +1585,11 @@ struct remove : public ActionBase
 
 	String getModuleId() const override { return moduleId; }
 
-	int getRebuildLevel(Domain d, bool /*undo*/) const override
+	int getRebuildLevel(Domain d, bool) const override
 	{
-        auto rl = (int)RebuildLevel::ParameterSlots;
-        
-        if(d == Domain::UI)
-            rl |= (int)RebuildLevel::Recompile;
-        
-        return rl;
+		if (d == Domain::UI)
+			return (int)RebuildLevel::Recompile;
+		return 0;
 	}
 
 	void addToDiffList(std::vector<Diff>& diffList, bool undo) override
@@ -1623,6 +1621,8 @@ struct remove : public ActionBase
 		if (content == nullptr)
 			throw Error().withError("Can't find script processor: " + moduleId);
 
+		ValueTreeUpdateWatcher::ScopedSuspender ss(content->getUpdateWatcher());
+
 		auto v = content->getValueTreeForComponent(Identifier(targetId));
 		if (!v.isValid())
 			throw Error().withError("Component '" + targetId + "' does not exist");
@@ -1638,6 +1638,8 @@ struct remove : public ActionBase
 		auto content = getContent(getMainController(), moduleId);
 		if (content == nullptr) return;
 
+		ValueTreeUpdateWatcher::ScopedSuspender ss(content->getUpdateWatcher());
+
 		if (savedParentId.isNotEmpty())
 		{
 			auto parentTree = content->getValueTreeForComponent(Identifier(savedParentId));
@@ -1648,8 +1650,6 @@ struct remove : public ActionBase
 		{
 			content->getContentProperties().addChild(savedState, savedIndex, nullptr);
 		}
-
-
 	}
 
 	bool needsKillVoice() const override { return false; }
@@ -1679,6 +1679,15 @@ struct set : public ActionBase
 			return Error().withError("set requires 'target'");
 		if (!op[RestApiIds::properties].isObject())
 			return Error().withError("set requires 'properties' object");
+
+		// Reject parentComponent changes - use the 'move' operation instead
+		if (auto props = op[RestApiIds::properties].getDynamicObject())
+		{
+			static const Identifier pcId("parentComponent");
+			if (props->hasProperty(pcId))
+				return Error().withError("Cannot change 'parentComponent' via set - use the 'move' operation instead");
+		}
+
 		return {};
 	}
 
@@ -1696,22 +1705,10 @@ struct set : public ActionBase
 	var newProperties;
 	bool forceOverride;
 	NamedValueSet oldValues;
-	bool changesParentComponent = false;
 
 	String getModuleId() const override { return moduleId; }
 
-	int getRebuildLevel(Domain d, bool /*undo*/) const override
-    {
-        auto rl = 0;
-        
-        if(d == Domain::UI && changesParentComponent)
-        {
-            rl |= RebuildLevel::ParameterSlots;
-            rl |= RebuildLevel::Recompile;
-        }
-        
-        return rl;
-    }
+	int getRebuildLevel(Domain, bool) const override { return 0; }
 
 	void addToDiffList(std::vector<Diff>& diffList, bool /*undo*/) override
 	{
@@ -1727,14 +1724,6 @@ struct set : public ActionBase
 		auto props = newProperties.getDynamicObject();
 		if (props == nullptr)
 			return Error().withError("properties must be an object");
-
-		static const Identifier parentComponentId("parentComponent");
-
-		for (int i = 0; i < props->getProperties().size(); i++)
-		{
-			if (props->getProperties().getName(i) == parentComponentId)
-				changesParentComponent = true;
-		}
 
 		if (uiValidation != nullptr)
 		{
@@ -1941,16 +1930,12 @@ struct move : public ActionBase
 
 	String getModuleId() const override { return moduleId; }
 
-    int getRebuildLevel(Domain d, bool /*undo*/) const override
+    int getRebuildLevel(Domain d, bool) const override
     {
-        auto rl = (int)RebuildLevel::ParameterSlots;
-        
         if(d == Domain::UI)
-            rl |= (int)RebuildLevel::Recompile;
-        
-        return rl;
+            return (int)RebuildLevel::Recompile;
+        return 0;
     }
-
 
 	void addToDiffList(std::vector<Diff>& diffList, bool /*undo*/) override
 	{
@@ -1988,7 +1973,7 @@ struct move : public ActionBase
 		if (content == nullptr)
 			throw Error().withError("Can't find script processor: " + moduleId);
 
-		ValueTreeUpdateWatcher::ScopedDelayer sd(content->getUpdateWatcher());
+		ValueTreeUpdateWatcher::ScopedSuspender ss(content->getUpdateWatcher());
 
 		auto v = content->getValueTreeForComponent(Identifier(targetId));
 		if (!v.isValid())
@@ -2050,7 +2035,7 @@ struct move : public ActionBase
 		auto content = getContent(getMainController(), moduleId);
 		if (content == nullptr) return;
 
-		ValueTreeUpdateWatcher::ScopedDelayer sd(content->getUpdateWatcher());
+		ValueTreeUpdateWatcher::ScopedSuspender ss(content->getUpdateWatcher());
 
 		auto v = content->getValueTreeForComponent(Identifier(targetId));
 		if (!v.isValid()) return;
@@ -2125,16 +2110,12 @@ struct rename : public ActionBase
 
 	String getModuleId() const override { return moduleId; }
 
-    int getRebuildLevel(Domain d, bool /*undo*/) const override
+    int getRebuildLevel(Domain d, bool) const override
     {
-        auto rl = (int)RebuildLevel::ParameterSlots;
-        
         if(d == Domain::UI)
-            rl |= (int)RebuildLevel::Recompile;
-        
-        return rl;
+            return (int)RebuildLevel::Recompile;
+        return 0;
     }
-
 
 	void addToDiffList(std::vector<Diff>& diffList, bool undo) override
 	{
@@ -2172,6 +2153,8 @@ struct rename : public ActionBase
 		if (content == nullptr)
 			throw Error().withError("Can't find script processor: " + moduleId);
 
+		ValueTreeUpdateWatcher::ScopedSuspender ss(content->getUpdateWatcher());
+
 		auto v = content->getValueTreeForComponent(Identifier(targetId));
 		if (!v.isValid())
 			throw Error().withError("Component '" + targetId + "' does not exist");
@@ -2185,14 +2168,14 @@ struct rename : public ActionBase
 				child.setProperty("parentComponent", newName, nullptr);
 			return false;
 		});
-
-
 	}
 
 	void undo() override
 	{
 		auto content = getContent(getMainController(), moduleId);
 		if (content == nullptr) return;
+
+		ValueTreeUpdateWatcher::ScopedSuspender ss(content->getUpdateWatcher());
 
 		auto v = content->getValueTreeForComponent(Identifier(newName));
 		if (v.isValid())
@@ -2205,8 +2188,6 @@ struct rename : public ActionBase
 				child.setProperty("parentComponent", targetId, nullptr);
 			return false;
 		});
-
-
 	}
 
 	bool needsKillVoice() const override { return false; }

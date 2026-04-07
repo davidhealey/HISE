@@ -1714,7 +1714,7 @@ RestServer::Response RestHelpers::handleSetComponentProperties(MainController* m
 	Array<var> appliedChanges;
 	bool recompileRequired = false;
 	
-	ValueTreeUpdateWatcher::ScopedDelayer sd(content->getUpdateWatcher(), true);
+	ValueTreeUpdateWatcher::ScopedSuspender sd(content->getUpdateWatcher());
 
 	for (int i = 0; i < changesVar.size(); i++)
 	{

@@ -184,15 +184,6 @@ bool RestServerUndoManager::Instance::killVoicesAndPerform(AsyncRequest::Ptr req
 		if ((a->getRebuildLevel(Domain::Builder, shouldUndo) & RebuildLevel::UpdateUI) != 0)
 			flushUI(getMainController()->getMainSynthChain());
 
-        if((a->getRebuildLevel(Domain::Undefined, shouldUndo) & RebuildLevel::ParameterSlots) != 0)
-        {
-            auto p = ProcessorHelpers::getFirstProcessorWithName(getMainController()->getMainSynthChain(), a->getModuleId());
-            
-            jassert(p != nullptr);
-            
-            p->updateParameterSlots();
-        }
-        
 		if ((a->getRebuildLevel(Domain::UI, shouldUndo) & RebuildLevel::Recompile) != 0)
 		{
 			auto uiModuleId = a->getModuleId();
@@ -204,11 +195,32 @@ bool RestServerUndoManager::Instance::killVoicesAndPerform(AsyncRequest::Ptr req
 				{
 					auto content = dynamic_cast<ProcessorWithScriptingContent*>(uiJp)->getScriptingContent();
 
+					// Signal the UI to tear down JUCE component wrappers before recompiling.
+					// This prevents the message thread from accessing stale component state
+					// while the scripting thread rebuilds the component tree.
+					std::atomic<bool> uiCleared(false);
+
+					MessageManager::callAsync([content, &uiCleared]()
+					{
+						content->setIsRebuilding(true);
+						content->resetContentProperties();
+						uiCleared.store(true);
+					});
+
+					while (!uiCleared.load())
+						Thread::sleep(50);
 
 					getMainController()->getKillStateHandler().killVoicesAndCall(
 						dynamic_cast<Processor*>(uiJp),
 						[](Processor* p) {
-							dynamic_cast<JavascriptProcessor*>(p)->compileScript({});
+							auto jp = dynamic_cast<JavascriptProcessor*>(p);
+							auto c = dynamic_cast<ProcessorWithScriptingContent*>(jp)->getScriptingContent();
+
+							jp->compileScript([c](const JavascriptProcessor::SnippetResult&)
+							{
+								c->setIsRebuilding(false);
+							});
+
 							return SafeFunctionCall::OK;
 						},
 						MainController::KillStateHandler::TargetThread::ScriptingThread

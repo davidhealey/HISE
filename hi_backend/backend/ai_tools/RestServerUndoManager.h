@@ -307,8 +307,7 @@ struct RestServerUndoManager
 		Nothing        = 0x0,
 		UpdateUI       = 0x1,   // use this if the data model should send a UI update (eg. patch browser rebuild).
 		UniqueId       = 0x2,	// use this if the data model should update the ID set
-		Recompile      = 0x4,	// use this if the action should trigger a recompilation
-        ParameterSlots = 0x8    // use this if the action should trigger a parameter slot update
+		Recompile      = 0x4	// use this if the action should trigger a recompilation
 	};
 
 	struct CallStack
