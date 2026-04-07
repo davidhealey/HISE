@@ -1493,8 +1493,8 @@ struct add : public ActionBase
 			if (content->getComponentWithName(Identifier(componentId)) != nullptr)
 				return Error().withError("A component with ID '" + componentId + "' already exists");
 
-			if (parentId.isNotEmpty() && content->getComponentWithName(Identifier(parentId)) == nullptr)
-				return Error().withError("Parent component '" + parentId + "' does not exist");
+			// Defer parentId existence check to perform() to support batched ops
+			// where a preceding add creates the parent.
 		}
 
 		return {};
@@ -1517,8 +1517,9 @@ struct add : public ActionBase
 		if (parentId.isNotEmpty())
 		{
 			auto parentTree = content->getValueTreeForComponent(Identifier(parentId));
-			if (parentTree.isValid())
-				parentTree.addChild(newChild, -1, nullptr);
+			if (!parentTree.isValid())
+				throw Error().withError("Parent component '" + parentId + "' does not exist");
+			parentTree.addChild(newChild, -1, nullptr);
 		}
 		else
 		{
