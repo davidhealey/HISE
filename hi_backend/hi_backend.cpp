@@ -85,6 +85,7 @@
 #include "backend/ai_tools/RestServerUndoManagerActions.cpp"
 #include "backend/ai_tools/RestServerUndoManager.cpp"
 
+#include "backend/ai_tools/RestApiDefinitions.cpp"
 #include "backend/ai_tools/RestHelpers.cpp"
 
 #if HI_RUN_UNIT_TESTS

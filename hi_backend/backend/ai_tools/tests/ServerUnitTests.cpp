@@ -359,94 +359,89 @@ private:
     //==========================================================================
     void testListMethods()
     {
-        beginTest("GET / (list_methods)");
-        
+        beginTest("GET / (OpenAPI spec)");
+
         auto response = ctx->httpGet("/");
         expect(response.isNotEmpty(), "Should return response");
-        
+
         var json = ctx->parseJson(response);
-        expect((bool)json["success"], "success should be true");
-        
-        auto methods = json["methods"];
-        expect(methods.isArray(), "methods should be array");
-        expect(methods.size() == (int)RestHelpers::ApiRoute::numRoutes, 
-               "Should have all " + String((int)RestHelpers::ApiRoute::numRoutes) + " routes");
-        
-        // Verify sorted by category then path
-        String lastCategory;
-        String lastPath;
-        for (int i = 0; i < methods.size(); i++)
+
+        // Verify OpenAPI 3.0 root structure
+        expect(json["openapi"].toString() == "3.0.3", "Should be OpenAPI 3.0.3");
+        expect(json["info"].isObject(), "Should have info object");
+        expect(json["info"]["title"].toString() == "HISE REST API", "Should have correct title");
+        expect(json["paths"].isObject(), "Should have paths object");
+        expect(json["tags"].isArray(), "Should have tags array");
+
+        // Verify all routes are present in paths
+        auto* pathsObj = json["paths"].getDynamicObject();
+        expect(pathsObj != nullptr, "paths should be a JSON object");
+
+        // Count total operations across all paths
+        int totalOps = 0;
+
+        if (pathsObj != nullptr)
         {
-            auto cat = methods[i]["category"].toString();
-            auto path = methods[i]["path"].toString();
-            
-            if (cat != lastCategory)
+            for (const auto& pathEntry : pathsObj->getProperties())
             {
-                // New category - should be alphabetically >= last category
-                expect(lastCategory.isEmpty() || cat.compare(lastCategory) >= 0,
-                       "Categories should be sorted: " + lastCategory + " -> " + cat);
-                lastCategory = cat;
-                lastPath = "";
-            }
-            
-            // Within same category, paths should be sorted
-            expect(lastPath.isEmpty() || path.compare(lastPath) >= 0,
-                   "Paths should be sorted within category: " + lastPath + " -> " + path);
-            lastPath = path;
-        }
-        
-        // Verify status endpoint structure
-        bool foundStatus = false;
-        for (int i = 0; i < methods.size(); i++)
-        {
-            if (methods[i]["path"].toString() == "/api/status")
-            {
-                foundStatus = true;
-                expect(methods[i]["method"].toString() == "GET", "status should be GET");
-                expect(methods[i]["category"].toString() == "status", "status should have 'status' category");
-                expect(methods[i]["description"].toString().isNotEmpty(), "status should have description");
-                expect(methods[i]["returns"].toString().isNotEmpty(), "status should have returns");
-                break;
-            }
-        }
-        expect(foundStatus, "Should include /api/status endpoint");
-        
-        // Verify POST endpoint has bodyParameters
-        for (int i = 0; i < methods.size(); i++)
-        {
-            if (methods[i]["path"].toString() == "/api/set_script")
-            {
-                expect(methods[i]["method"].toString() == "POST", "set_script should be POST");
-                auto bodyParams = methods[i]["bodyParameters"];
-                expect(bodyParams.isArray(), "set_script should have bodyParameters");
-                expect(bodyParams.size() >= 3, "set_script should have at least 3 body params");
-                
-                // Verify moduleId is in body params
-                bool hasModuleId = false;
-                for (int j = 0; j < bodyParams.size(); j++)
+                if (auto* methods = pathEntry.value.getDynamicObject())
                 {
-                    if (bodyParams[j]["name"].toString() == "moduleId")
-                    {
-                        hasModuleId = true;
-                        expect((bool)bodyParams[j]["required"], "moduleId should be required");
-                    }
+                    for (const auto& method : methods->getProperties())
+                        totalOps++;
                 }
-                expect(hasModuleId, "set_script should have moduleId in bodyParameters");
-                break;
             }
         }
-        
-        // Verify GET endpoint has queryParameters
-        for (int i = 0; i < methods.size(); i++)
-        {
-            if (methods[i]["path"].toString() == "/api/get_script")
-            {
-                auto queryParams = methods[i]["queryParameters"];
-                expect(queryParams.isArray(), "get_script should have queryParameters");
-                expect(queryParams.size() >= 1, "get_script should have at least 1 query param");
-                break;
-            }
-        }
+
+        expect(totalOps == (int)RestHelpers::ApiRoute::numRoutes,
+               "Should have " + String((int)RestHelpers::ApiRoute::numRoutes)
+               + " operations, got " + String(totalOps));
+
+        // Verify /api/status is a GET with tags and summary
+        auto statusPath = json["paths"]["/api/status"];
+        expect(statusPath.isObject(), "Should have /api/status path");
+        auto statusGet = statusPath["get"];
+        expect(statusGet.isObject(), "status should be GET");
+        expect(statusGet["tags"].isArray(), "status should have tags");
+        expect(statusGet["summary"].toString().isNotEmpty(), "status should have summary");
+
+        // Verify POST /api/set_script has requestBody with schema
+        auto setScriptPost = json["paths"]["/api/set_script"]["post"];
+        expect(setScriptPost.isObject(), "set_script should be POST");
+        auto reqBody = setScriptPost["requestBody"];
+        expect(reqBody.isObject(), "set_script should have requestBody");
+        auto bodySchema = reqBody["content"]["application/json"]["schema"];
+        expect(bodySchema.isObject(), "set_script should have JSON schema");
+        expect(bodySchema["properties"].isObject(), "schema should have properties");
+
+        // Verify enriched builder/apply has discriminated operations schema
+        auto applyPost = json["paths"]["/api/builder/apply"]["post"];
+        expect(applyPost.isObject(), "builder/apply should be POST");
+        auto applyBody = applyPost["requestBody"]["content"]["application/json"]["schema"];
+        auto opsSchema = applyBody["properties"]["operations"];
+        expect(opsSchema["type"].toString() == "array", "operations should be array type");
+        auto itemsSchema = opsSchema["items"];
+        expect(itemsSchema.isObject(), "operations should have items schema");
+        expect(itemsSchema["discriminator"].isObject(), "items should have discriminator");
+        expect(itemsSchema["discriminator"]["propertyName"].toString() == "op",
+               "discriminator should be on 'op' field");
+        expect(itemsSchema["x-variants"].isArray(), "should have variant descriptions");
+        expect(itemsSchema["properties"].isObject(), "items should have properties");
+
+        // Verify builder/apply has response schema with diff fields
+        auto applyResp = applyPost["responses"]["200"]["content"]["application/json"]["schema"];
+        auto resultProps = applyResp["properties"]["result"]["properties"];
+        expect(resultProps.isObject(), "response result should have properties");
+        expect(resultProps["scope"].isObject(), "should have scope field");
+        expect(resultProps["diff"].isObject(), "should have diff field");
+
+        // Verify builder/apply has error codes
+        auto applyResponses = applyPost["responses"];
+        expect(applyResponses["400"].isObject(), "should have 400 error");
+        expect(applyResponses["404"].isObject(), "should have 404 error");
+
+        // Verify builder/apply has examples
+        auto applyExample = applyPost["requestBody"]["content"]["application/json"]["example"];
+        expect(applyExample.isObject(), "should have request example");
     }
     
     //==========================================================================

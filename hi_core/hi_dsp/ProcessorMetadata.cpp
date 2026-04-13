@@ -175,7 +175,9 @@ var ProcessorMetadata::ModulationMetadata::toJSON() const
 
 	}
 
-	obj->setProperty("colour", (int)colour);
+	HiseModulationColours hc;
+	
+	obj->setProperty("colour", "#" + hc.getColour(disabled ? HiseModulationColours::ColourId::ExtraMod : colour).toDisplayString(false));
 
 	return var(obj.get());
 }

@@ -92,18 +92,54 @@ struct RestHelpers
         numRoutes
     };
     
-    /** Metadata for a REST API route parameter. Uses fluent builder pattern. */
+    /** Parameter type for OpenAPI schema generation. */
+    enum class ParamType
+    {
+        String,   ///< JSON string
+        Int,      ///< JSON integer
+        Float,    ///< JSON number
+        Bool,     ///< JSON boolean
+        Array,    ///< JSON array (itemType describes element type)
+        Object,   ///< JSON object (free-form)
+        Enum      ///< String with fixed set of values (enumValues)
+    };
+
+    /** A variant of an object schema, keyed by a discriminator value.
+     *  Used for oneOf schemas (e.g., operations array where "op" determines the shape).
+     */
+    struct SchemaVariant
+    {
+        String discriminatorValue;  ///< e.g., "add", "remove", "set"
+        String description;
+    };
+
+    /** Metadata for a REST API route parameter. Uses fluent builder pattern.
+     *
+     *  Supports nested schemas for complex objects:
+     *  - Object type: properties array describes child fields
+     *  - Array of objects: itemSchema points to a shared RouteParameter describing the element
+     *  - Discriminated unions: discriminator + variants for oneOf schemas
+     */
     struct RouteParameter
     {
         Identifier name;
         String description;
         String defaultValue;  ///< Empty = no default
         bool required = true;
-        
+        ParamType type = ParamType::String;
+        StringArray enumValues;   ///< Valid values for Enum type
+        String example;           ///< Example value for OpenAPI spec
+
+        // Nested schema support
+        Array<RouteParameter> properties;       ///< Child fields for Object type
+        std::shared_ptr<RouteParameter> itemSchema;  ///< Element schema for Array type (replaces itemType)
+        String discriminator;                   ///< Field name that selects the variant (e.g., "op", "type")
+        Array<SchemaVariant> variants;          ///< Variant descriptions keyed by discriminator value
+
         /** Constructor with required fields. */
         RouteParameter(const Identifier& name_, const String& desc_)
             : name(name_), description(desc_) {}
-        
+
         /** Set a default value (implies optional). */
         RouteParameter withDefault(const String& def) const
         {
@@ -112,12 +148,71 @@ struct RestHelpers
             copy.required = false;
             return copy;
         }
-        
+
         /** Mark as optional without a default value. */
         RouteParameter asOptional() const
         {
             auto copy = *this;
             copy.required = false;
+            return copy;
+        }
+
+        /** Set the parameter type for OpenAPI schema. */
+        RouteParameter withType(ParamType t) const
+        {
+            auto copy = *this;
+            copy.type = t;
+            return copy;
+        }
+
+        /** Set allowed enum values (implies Enum type). */
+        RouteParameter withEnumValues(const StringArray& values) const
+        {
+            auto copy = *this;
+            copy.type = ParamType::Enum;
+            copy.enumValues = values;
+            return copy;
+        }
+
+        /** Add a child property (implies Object type). */
+        RouteParameter withProperty(const RouteParameter& child) const
+        {
+            auto copy = *this;
+            copy.type = ParamType::Object;
+            copy.properties.add(child);
+            return copy;
+        }
+
+        /** Set the array element schema (implies Array type). */
+        RouteParameter withArrayItems(const RouteParameter& schema) const
+        {
+            auto copy = *this;
+            copy.type = ParamType::Array;
+            copy.itemSchema = std::make_shared<RouteParameter>(schema);
+            return copy;
+        }
+
+        /** Set the discriminator field for oneOf schemas. */
+        RouteParameter withDiscriminator(const String& fieldName) const
+        {
+            auto copy = *this;
+            copy.discriminator = fieldName;
+            return copy;
+        }
+
+        /** Add a variant for a discriminated union. */
+        RouteParameter withVariant(const String& value, const String& desc) const
+        {
+            auto copy = *this;
+            copy.variants.add({ value, desc });
+            return copy;
+        }
+
+        /** Set an example value for OpenAPI documentation. */
+        RouteParameter withExample(const String& ex) const
+        {
+            auto copy = *this;
+            copy.example = ex;
             return copy;
         }
     };
@@ -129,10 +224,15 @@ struct RestHelpers
         String path;              ///< e.g., "api/status" (without leading /)
         RestServer::Method method = RestServer::GET;
         String category;          ///< "status", "scripting", "ui"
-        String description;       ///< One-liner description
+        String summary;           ///< Short one-sentence summary (OpenAPI summary)
+        String description;       ///< Detailed description with behavioral notes (OpenAPI description)
         String returns;           ///< One-liner describing response
         Array<RouteParameter> queryParameters;   ///< For GET requests
         Array<RouteParameter> bodyParameters;    ///< For POST requests (JSON body)
+        Array<RouteParameter> responseFields;    ///< Fields inside the "result" object
+        Array<int> errorCodes;                   ///< HTTP error status codes (e.g., 400, 404)
+        String requestExample;                   ///< JSON string example for request body
+        String responseExample;                  ///< JSON string example for response body
         
         /** Default constructor for juce::Array compatibility. */
         RouteMetadata() = default;
@@ -155,6 +255,13 @@ struct RestHelpers
             return copy;
         }
         
+        RouteMetadata withSummary(const String& s) const
+        {
+            auto copy = *this;
+            copy.summary = s;
+            return copy;
+        }
+
         RouteMetadata withDescription(const String& desc) const
         {
             auto copy = *this;
@@ -183,6 +290,34 @@ struct RestHelpers
             return copy;
         }
         
+        RouteMetadata withRequestExample(const String& ex) const
+        {
+            auto copy = *this;
+            copy.requestExample = ex;
+            return copy;
+        }
+
+        RouteMetadata withResponseExample(const String& ex) const
+        {
+            auto copy = *this;
+            copy.responseExample = ex;
+            return copy;
+        }
+
+        RouteMetadata withResponseField(const RouteParameter& p) const
+        {
+            auto copy = *this;
+            copy.responseFields.add(p);
+            return copy;
+        }
+
+        RouteMetadata withErrorCodes(const Array<int>& codes) const
+        {
+            auto copy = *this;
+            copy.errorCodes = codes;
+            return copy;
+        }
+
         /** Convenience: adds standard moduleId query parameter. */
         RouteMetadata withModuleIdParam() const
         {

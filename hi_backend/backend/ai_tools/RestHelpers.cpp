@@ -30,6 +30,8 @@
 *   ===========================================================================
 */
 
+
+
 namespace hise { using namespace juce;
 
 //==============================================================================
@@ -592,424 +594,7 @@ DynamicObject::Ptr RestHelpers::createRecursivePropertyTree(ScriptComponent* sc)
 //==============================================================================
 // Route metadata registry
 
-const Array<RestHelpers::RouteMetadata>& RestHelpers::getRouteMetadata()
-{
-	static Array<RouteMetadata> metadata = []()
-	{
-		Array<RouteMetadata> m;
-		
-		// The order MUST match ApiRoute enum!
-		
-		// ApiRoute::ListMethods
-		m.add(RouteMetadata(ApiRoute::ListMethods, "")
-			.withCategory("status")
-			.withDescription("List all available API methods with parameters and descriptions")
-			.withReturns("Array of method definitions with path, parameters, and documentation"));
-		
-		// ApiRoute::Status
-		m.add(RouteMetadata(ApiRoute::Status, "api/status")
-			.withCategory("status")
-			.withDescription("Get project status and discover available script processors")
-			.withReturns("Server info (version, compileTimeout in seconds), project info, scriptsFolder path, and scriptProcessors with their callbacks"));
-		
-		// ApiRoute::GetScript
-		m.add(RouteMetadata(ApiRoute::GetScript, "api/get_script")
-			.withCategory("scripting")
-			.withDescription("Read script content from a processor's callbacks")
-			.withReturns("Callbacks object with script content for requested callback(s). Includes externalFiles array with name and full path.")
-			.withModuleIdParam()
-			.withQueryParam(RouteParameter(RestApiIds::callback, "Specific callback name (e.g., onInit). If omitted, returns all callbacks.").asOptional()));
-		
-		// ApiRoute::SetScript
-		m.add(RouteMetadata(ApiRoute::SetScript, "api/set_script")
-			.withMethod(RestServer::POST)
-			.withCategory("scripting")
-			.withDescription("Update one or more callbacks and optionally compile. Only specified callbacks are updated; others remain unchanged.")
-			.withReturns("Compilation result with updatedCallbacks array, success status, logs, errors, and optional lafRenderWarning listing unrendered LAF components with reason (invisible or timeout)")
-			.withBodyParam(RouteParameter(RestApiIds::moduleId, "The script processor's module ID"))
-			.withBodyParam(RouteParameter(RestApiIds::callbacks, "Object with callback names as keys and script content as values (e.g., {onInit: \"...\", onNoteOn: \"...\"})"))
-			.withBodyParam(RouteParameter(RestApiIds::compile, "Whether to compile after setting").withDefault("true"))
-			.withBodyParam(RouteParameter(RestApiIds::forceSynchronousExecution, "Debug tool: Bypass threading model for synchronous execution. WARNING: May cause crashes due to race conditions - use only as last resort after saving.").withDefault("false")));
-		
-		m.add(RouteMetadata(ApiRoute::EvaluateREPL, "api/repl")
-			.withMethod(RestServer::POST)
-			.withCategory("scripting")
-			.withDescription("Evaluates a script expression with the current script engine and returns the result")
-			.withReturns("Evaluation result with success status, logs and error messages")
-			.withBodyParam(RouteParameter(RestApiIds::moduleId, "The script processor's module ID"))
-			.withBodyParam(RouteParameter(RestApiIds::expression, "The HiseScript expression that is evaluated. Note that any side effects of this evaluation might change the runtime state of HISE.")));
 
-		// ApiRoute::Recompile
-		m.add(RouteMetadata(ApiRoute::Recompile, "api/recompile")
-			.withMethod(RestServer::POST)
-			.withCategory("scripting")
-			.withDescription("Recompile a processor (restores preset values, triggering callbacks for saveInPreset components)")
-			.withReturns("Compilation result with success status, logs, errors, and optional lafRenderWarning listing unrendered LAF components with reason (invisible or timeout)")
-			.withBodyParam(RouteParameter(RestApiIds::moduleId, "The script processor's module ID"))
-			.withBodyParam(RouteParameter(RestApiIds::forceSynchronousExecution, "Debug tool: Bypass threading model for synchronous execution. WARNING: May cause crashes due to race conditions - use only as last resort after saving.").withDefault("false"))
-			.withBodyParam(RouteParameter(RestApiIds::profile, "Start a profiling session alongside compilation. Retrieve results later via POST /api/profile with mode=\"get\".").withDefault("false"))
-			.withBodyParam(RouteParameter(RestApiIds::durationMs, "Profiling duration in ms when profile=true (100-5000).").withDefault("2000")));
-		
-		// ApiRoute::ListComponents
-		m.add(RouteMetadata(ApiRoute::ListComponents, "api/list_components")
-			.withCategory("ui")
-			.withDescription("List all UI components in a script processor")
-			.withReturns("Array of components with id, type, and laf info (flat list or hierarchical tree with layout properties)")
-			.withModuleIdParam()
-			.withQueryParam(RouteParameter(RestApiIds::hierarchy, "If true, returns nested tree with layout properties").withDefault("false")));
-		
-		// ApiRoute::GetComponentProperties
-		m.add(RouteMetadata(ApiRoute::GetComponentProperties, "api/get_component_properties")
-			.withCategory("ui")
-			.withDescription("Get all properties for a specific UI component")
-			.withReturns("Component type and array of properties with id, value, isDefault, and options")
-			.withModuleIdParam()
-			.withQueryParam(RouteParameter(RestApiIds::id, "The component's ID (e.g., Button1, Panel1)")));
-		
-		// ApiRoute::GetComponentValue
-		m.add(RouteMetadata(ApiRoute::GetComponentValue, "api/get_component_value")
-			.withCategory("ui")
-			.withDescription("Get the current runtime value of a UI component")
-			.withReturns("Component type, current value, and min/max range")
-			.withModuleIdParam()
-			.withQueryParam(RouteParameter(RestApiIds::id, "The component's ID (e.g., GainKnob, BypassButton)")));
-		
-		// ApiRoute::SetComponentValue
-		m.add(RouteMetadata(ApiRoute::SetComponentValue, "api/set_component_value")
-			.withMethod(RestServer::POST)
-			.withCategory("ui")
-			.withDescription("Set the runtime value of a UI component (triggers control callback)")
-			.withReturns("Success status")
-			.withBodyParam(RouteParameter(RestApiIds::moduleId, "The script processor's module ID"))
-			.withBodyParam(RouteParameter(RestApiIds::id, "The component's ID"))
-			.withBodyParam(RouteParameter(RestApiIds::value, "The value to set"))
-			.withBodyParam(RouteParameter(RestApiIds::validateRange, "If true, validates value is within component's min/max range").withDefault("false"))
-			.withBodyParam(RouteParameter(RestApiIds::forceSynchronousExecution, "Debug tool: Bypass threading model for synchronous execution. WARNING: May cause crashes due to race conditions - use only as last resort after saving.").withDefault("false")));
-		
-		// ApiRoute::SetComponentProperties
-		m.add(RouteMetadata(ApiRoute::SetComponentProperties, "api/set_component_properties")
-			.withMethod(RestServer::POST)
-			.withCategory("ui")
-			.withDescription("Set properties on one or more UI components (like Interface Designer)")
-			.withReturns("Success with applied changes (recompileRequired=true if parentComponent changed), or error with locked properties if any are script-controlled")
-			.withBodyParam(RouteParameter(RestApiIds::moduleId, "The script processor's module ID"))
-			.withBodyParam(RouteParameter(RestApiIds::changes, "Array of {id, properties: {...}} objects"))
-			.withBodyParam(RouteParameter(RestApiIds::force, "If true, bypasses script-lock check and sets all properties").withDefault("false")));
-		
-		// ApiRoute::Screenshot
-		m.add(RouteMetadata(ApiRoute::Screenshot, "api/screenshot")
-			.withCategory("ui")
-			.withDescription("Capture screenshot of interface or specific component")
-			.withReturns("Base64-encoded PNG image data with dimensions, or file path if outputPath is specified")
-			.withQueryParam(RouteParameter(RestApiIds::moduleId, "Script processor ID").withDefault("Interface"))
-			.withQueryParam(RouteParameter(RestApiIds::id, "Component ID to capture (omit for full interface)").asOptional())
-			.withQueryParam(RouteParameter(RestApiIds::scale, "Scale factor (0.5 or 1.0)").withDefault("1.0"))
-			.withQueryParam(RouteParameter(RestApiIds::outputPath, "File path to save PNG (must end with .png). If provided, writes to file instead of returning Base64").asOptional()));
-		
-		// ApiRoute::GetSelectedComponents
-		m.add(RouteMetadata(ApiRoute::GetSelectedComponents, "api/get_selected_components")
-			.withCategory("ui")
-			.withDescription("Get the currently selected UI components from the Interface Designer")
-			.withReturns("Selection count and array of selected components with all properties")
-			.withQueryParam(RouteParameter(RestApiIds::moduleId, "The script processor's module ID").withDefault("Interface")));
-		
-		// ApiRoute::SimulateInteractions
-		m.add(RouteMetadata(ApiRoute::SimulateInteractions, "api/simulate_interactions")
-			.withMethod(RestServer::POST)
-			.withCategory("testing")
-			.withDescription("Execute a sequence of UI interactions in a test window. Auto-inserts moveTo events as needed for proper mouse positioning.")
-			.withReturns("Execution result with success status, completion count, timing, execution log, captured screenshots, and optionally mouseState when verbose=true")
-			.withBodyParam(RouteParameter(RestApiIds::interactions, 
-				"Array of interaction objects. Types: 'moveTo' (explicit mouse positioning), 'click' (uses current position), "
-				"'doubleClick' (expands to two clicks), 'drag' (uses pixel 'delta'), 'selectMenuItem' (click menu item by text), "
-				"'screenshot' (capture interface). Fields: 'target' (component ID), 'delay' (ms before action), "
-				"'normalizedPosition' (0-1, default center), 'pixelPosition' (absolute, takes precedence), 'delta' (for drag), "
-				"'subtarget' (optional sub-component ID), 'rightClick' (boolean), 'shiftDown'/'ctrlDown'/'altDown'/'cmdDown' (modifiers), "
-				"'menuItemText' (for selectMenuItem), 'id'/'scale' (for screenshot)"))
-			.withBodyParam(RouteParameter(RestApiIds::verbose, "If true, include auto-insertion details and final mouseState in response").withDefault("false")));
-		
-		// ApiRoute::DiagnoseScript
-		m.add(RouteMetadata(ApiRoute::DiagnoseScript, "api/diagnose_script")
-			.withMethod(RestServer::POST)
-			.withCategory("scripting")
-			.withDescription("Run diagnostic-only shadow parse on a script file. Returns structured diagnostics "
-							 "without modifying runtime state. Requires at least one prior successful compile (F5).")
-			.withReturns("Array of diagnostics with line, column, severity, source, message, and suggestions")
-			.withBodyParam(RouteParameter(RestApiIds::moduleId, 
-				"The script processor's module ID. Required if filePath is not provided.").asOptional())
-			.withBodyParam(RouteParameter(RestApiIds::filePath,
-				"Path to the external .js file (absolute or relative to Scripts folder). "
-				"Required if moduleId is not provided. When used alone, HISE resolves the owning processor.").asOptional())
-			.withBodyParam(RouteParameter(RestApiIds::async,
-				"If true, defer the shadow parse to the scripting thread (slower, blocks audio). "
-				"Default is false: runs directly on the HTTP thread with a read lock.").withDefault("false")));
-		
-		// ApiRoute::GetIncludedFiles
-		m.add(RouteMetadata(ApiRoute::GetIncludedFiles, "api/get_included_files")
-			.withCategory("scripting")
-			.withDescription("List all included (watched) external script files. "
-							 "Without moduleId, returns all files across all processors with owning processor names. "
-							 "With moduleId, returns files for that processor only.")
-			.withReturns("Array of included files as full paths, optionally with owning processor ID")
-			.withQueryParam(RouteParameter(RestApiIds::moduleId, 
-				"Filter by script processor. If omitted, returns files from all processors with processor names.").asOptional()));
-		
-		// ApiRoute::StartProfiling
-		m.add(RouteMetadata(ApiRoute::StartProfiling, "api/profile")
-			.withMethod(RestServer::POST)
-			.withCategory("scripting")
-			.withDescription("Start a profiling session or retrieve last result. "
-							 "mode=\"record\" starts a new session (non-blocking, returns immediately). "
-							 "mode=\"get\" returns last result with optional filtering/summary. "
-							 "Workflow: record once, then query with different filters.")
-			.withReturns("Full tree (threads+flows), filtered results, or recording status")
-			.withBodyParam(RouteParameter(RestApiIds::mode,
-				"\"record\" = start new session (non-blocking), "
-				"\"get\" = return last result (blocks if recording in progress)")
-				.withDefault("record"))
-			.withBodyParam(RouteParameter(RestApiIds::durationMs,
-				"Recording duration in milliseconds (100-5000). Used in record mode.")
-				.withDefault("1000"))
-			.withBodyParam(RouteParameter(RestApiIds::threadFilter,
-				"Array of thread names to include (default: all). In record mode, controls "
-				"which threads are recorded. In get mode, filters which threads are queried. "
-				"Valid: Audio Thread, Scripting Thread, UI Thread, Loading Thread, etc.")
-				.asOptional())
-			.withBodyParam(RouteParameter(RestApiIds::eventFilter,
-				"Array of event source types to record (default: all). Used in record mode. "
-				"Valid: DSP, Script, Lock, Callback, Trace, TimerCallback, Scriptnode, etc.")
-				.asOptional())
-			.withBodyParam(RouteParameter(RestApiIds::summary,
-				"If true, aggregate repeated events with count/median/peak/min/total stats. "
-				"Used in get mode.")
-				.withDefault("false"))
-			.withBodyParam(RouteParameter(RestApiIds::filter,
-				"Wildcard pattern matched against event name (e.g. \"slow*\", \"*.processBlock*\"). "
-				"Case-insensitive. Used in get mode.")
-				.asOptional())
-			.withBodyParam(RouteParameter(RestApiIds::minDuration,
-				"Only include events with duration >= this value in ms. Used in get mode.")
-				.asOptional())
-			.withBodyParam(RouteParameter(RestApiIds::sourceTypeFilter,
-				"Wildcard pattern matched against sourceType (e.g. \"Trace\", \"Script\"). "
-				"Case-insensitive. Used in get mode.")
-				.asOptional())
-			.withBodyParam(RouteParameter(RestApiIds::nested,
-				"When filtering, include children of matched events. Used in get mode.")
-				.withDefault("false"))
-			.withBodyParam(RouteParameter(RestApiIds::limit,
-				"Max number of results in filtered/summary mode (1-100). Used in get mode.")
-				.withDefault("15"))
-			.withBodyParam(RouteParameter(RestApiIds::wait,
-				"If false, return immediately when recording is in progress instead of "
-				"blocking. Returns {recording: true}. Used in get mode.")
-				.withDefault("true")));
-		
-		// ApiRoute::ParseCSS
-		m.add(RouteMetadata(ApiRoute::ParseCSS, "api/parse_css")
-			.withMethod(RestServer::POST)
-			.withCategory("scripting")
-			.withDescription("Parse CSS code and return structured diagnostics. "
-				"Accepts either inline code or a file path to a .css file. "
-				"Optionally resolves properties for a set of selectors using CSS specificity rules")
-			.withReturns("Diagnostics array with line/column/severity/message, "
-				"list of parsed selectors, "
-				"and resolved properties when selectors are provided")
-			.withBodyParam(RouteParameter(RestApiIds::code,
-				"The CSS code to parse (provide this or filePath)").asOptional())
-			.withBodyParam(RouteParameter(RestApiIds::filePath,
-				"Path to a .css file. Relative paths resolve against the Scripts/ directory "
-				"(provide this or code)").asOptional())
-			.withBodyParam(RouteParameter(RestApiIds::selectors,
-				"Array of selector strings representing a component's selectors "
-				"(e.g. [\"button\", \".my-class\", \"#MyId\"]). "
-				"Resolves properties using CSS specificity").asOptional())
-			.withBodyParam(RouteParameter(RestApiIds::width,
-				"Reference width in pixels for resolving percentage and relative units").asOptional())
-			.withBodyParam(RouteParameter(RestApiIds::height,
-				"Reference height in pixels for resolving percentage and relative units").asOptional()));
-		
-		// ApiRoute::Shutdown
-		m.add(RouteMetadata(ApiRoute::Shutdown, "api/shutdown")
-			.withMethod(RestServer::POST)
-			.withCategory("status")
-			.withDescription("Gracefully quit the HISE application")
-			.withReturns("Success confirmation before shutdown begins"));
-		
-		// ApiRoute::BuilderTree
-		m.add(RouteMetadata(ApiRoute::BuilderTree, "api/builder/tree")
-			.withMethod(RestServer::GET)
-			.withCategory("builder")
-			.withDescription("Returns runtime module tree, or active validation tree when group=current")
-			.withReturns("Nested JSON tree with metadata / modulation / children; 400 when no current group, 501 for unsupported group values")
-			.withQueryParam(RouteParameter(RestApiIds::moduleId,
-				"Optional root module ID to return a subtree").asOptional())
-			.withQueryParam(RouteParameter(RestApiIds::group,
-				"Optional group selector. Only 'current' is supported").asOptional())
-			.withQueryParam(RouteParameter(RestApiIds::queryParameters,
-				"If false, omit parameter lists from the tree").withDefault("true"))
-			.withQueryParam(RouteParameter(RestApiIds::verbose,
-				"If true, include verbose metadata in tree nodes").withDefault("false")));
-		
-		// ApiRoute::BuilderApply
-		m.add(RouteMetadata(ApiRoute::BuilderApply, "api/builder/apply")
-			.withMethod(RestServer::POST)
-			.withCategory("builder")
-			.withDescription("Apply one or more operations to the module tree in a single batch")
-			.withReturns("Success / validation / runtime status with diff result, logs, and errors")
-			.withBodyParam(RouteParameter(RestApiIds::operations,
-				"Array of operations. Each object requires 'op' field: "
-				"add (type, parent, chain, name), "
-				"remove (target), "
-				"clone (source, count, template?), "
-				"set_attributes (target, attributes, mode?[value/normalized/raw]), "
-				"set_id (target, name), "
-				"set_bypassed (target, bypassed), "
-				"set_effect (target, effect), "
-				"set_complex_data (reserved / deferred)")));
-		
-		// ApiRoute::BuilderReset
-		m.add(RouteMetadata(ApiRoute::BuilderReset, "api/builder/reset")
-			.withMethod(RestServer::POST)
-			.withCategory("builder")
-			.withDescription("Reset the module tree to an empty state (equivalent to File -> New). Clears all undo history.")
-			.withReturns("Success confirmation"));
-
-		// ApiRoute::UndoPushGroup
-		m.add(RouteMetadata(ApiRoute::UndoPushGroup, "api/undo/push_group")
-			.withMethod(RestServer::POST)
-			.withCategory("undo")
-			.withDescription("Start a new undo group. Actions are recorded but not executed until pop_group.")
-			.withReturns("Current diff state for the new group")
-			.withBodyParam(RouteParameter(RestApiIds::name, "Label for the group")));
-		
-		// ApiRoute::UndoPopGroup
-		m.add(RouteMetadata(ApiRoute::UndoPopGroup, "api/undo/pop_group")
-			.withMethod(RestServer::POST)
-			.withCategory("undo")
-			.withDescription("End the current undo group. Executes all actions as one undoable batch, or discards them.")
-			.withReturns("Updated diff state after group is applied or discarded")
-			.withBodyParam(RouteParameter(RestApiIds::cancel, "If true, discard the group without executing").withDefault("false")));
-		
-		// ApiRoute::UndoBack
-		m.add(RouteMetadata(ApiRoute::UndoBack, "api/undo/back")
-			.withMethod(RestServer::POST)
-			.withCategory("undo")
-			.withDescription("Undo the last action or group. Stops at group boundaries.")
-			.withReturns("Updated diff state after undo; 400 when nothing to undo"));
-		
-		// ApiRoute::UndoForward
-		m.add(RouteMetadata(ApiRoute::UndoForward, "api/undo/forward")
-			.withMethod(RestServer::POST)
-			.withCategory("undo")
-			.withDescription("Redo the next action or group. Stops at group boundaries.")
-			.withReturns("Updated diff state after redo; 400 when nothing to redo"));
-		
-		// ApiRoute::UndoDiff
-		m.add(RouteMetadata(ApiRoute::UndoDiff, "api/undo/diff")
-			.withCategory("undo")
-			.withDescription("Returns the current diff state showing active changes")
-			.withReturns("Diff array with scope, depth, groupName, and action entries")
-			.withQueryParam(RouteParameter(RestApiIds::scope, "group = current group only, root = full stack").withDefault("group"))
-			.withQueryParam(RouteParameter(RestApiIds::domain, "Filter by domain (e.g., builder, ui)").asOptional())
-			.withQueryParam(RouteParameter(RestApiIds::flatten, "If true, compute net effect merging cancelling actions").withDefault("false")));
-		
-		// ApiRoute::UndoHistory
-		m.add(RouteMetadata(ApiRoute::UndoHistory, "api/undo/history")
-			.withCategory("undo")
-			.withDescription("Returns the full undo history including redo buffer and cursor position")
-			.withReturns("History array with cursor position, group nesting, and action entries")
-			.withQueryParam(RouteParameter(RestApiIds::scope, "group = current group only, root = full stack with nested groups").withDefault("group"))
-			.withQueryParam(RouteParameter(RestApiIds::domain, "Filter by domain (e.g., builder, ui)").asOptional())
-			.withQueryParam(RouteParameter(RestApiIds::flatten, "If true, flatten group nesting to a single list").withDefault("false")));
-		
-		// ApiRoute::UndoClear
-		m.add(RouteMetadata(ApiRoute::UndoClear, "api/undo/clear")
-			.withMethod(RestServer::POST)
-			.withCategory("undo")
-			.withDescription("Clear the entire undo history and exit all groups")
-			.withReturns("Empty diff state"));
-		
-		// ApiRoute::WizardInitialise
-		m.add(RouteMetadata(ApiRoute::WizardInitialise, "api/wizard/initialise")
-			.withMethod(RestServer::GET)
-			.withCategory("wizard")
-			.withDescription("Fetch pre-populated field defaults for a wizard form")
-			.withReturns("Flat key/value object of field defaults, or error if wizard ID unknown")
-			.withQueryParam(RouteParameter(RestApiIds::id, "Wizard ID string (new_project, recompile, plugin_export, compile_networks, audio_export, install_package_maker)")));
-
-		// ApiRoute::WizardExecute
-		m.add(RouteMetadata(ApiRoute::WizardExecute, "api/wizard/execute")
-			.withMethod(RestServer::POST)
-			.withCategory("wizard")
-			.withDescription("Execute a wizard task. Sync tasks return immediately; async tasks return a jobId for polling")
-			.withReturns("Sync: result string with logs. Async: {jobId, async: true}")
-			.withBodyParam(RouteParameter(RestApiIds::wizardId, "Wizard ID string"))
-			.withBodyParam(RouteParameter(RestApiIds::answers, "Key/value object of all form field answers"))
-			.withBodyParam(RouteParameter(RestApiIds::tasks, "Array with exactly one task function name to execute")));
-
-		// ApiRoute::WizardStatus
-		m.add(RouteMetadata(ApiRoute::WizardStatus, "api/wizard/status")
-			.withMethod(RestServer::GET)
-			.withCategory("wizard")
-			.withDescription("Poll progress of a long-running async wizard job")
-			.withReturns("finished=true when job is done")
-			.withQueryParam(RouteParameter(RestApiIds::jobId, "Job ID returned by wizard/execute")));
-
-		// ApiRoute::UITree
-		m.add(RouteMetadata(ApiRoute::UITree, "api/ui/tree")
-			.withCategory("ui")
-			.withDescription("Get UI component tree hierarchy for a script processor's interface")
-			.withReturns("Recursive tree with id, type, visible, enabled, saveInPreset, x, y, width, height, childComponents")
-			.withModuleIdParam()
-			.withQueryParam(RouteParameter(RestApiIds::group,
-				"Optional group selector. 'current' returns the active plan's validation tree").asOptional()));
-
-		// ApiRoute::UIApply
-		m.add(RouteMetadata(ApiRoute::UIApply, "api/ui/apply")
-			.withMethod(RestServer::POST)
-			.withCategory("ui")
-			.withDescription("Apply batched UI component operations (add, remove, set, move, rename)")
-			.withReturns("Diff of changes with domain='ui', action symbols (+/-/*), and target component IDs")
-			.withBodyParam(RouteParameter(RestApiIds::moduleId, "Script processor ID"))
-			.withBodyParam(RouteParameter(RestApiIds::operations,
-				"Array of operations. Each requires 'op' field: "
-				"add (componentType, id?, parentId?, x?, y?, width?, height?), "
-				"remove (target), "
-				"set (target, properties, force?), "
-				"move (target, parent, index?, keepPosition?), "
-				"rename (target, newId)")));
-
-		// ApiRoute::InjectMidi
-		m.add(RouteMetadata(ApiRoute::InjectMidi, "api/inject_midi")
-			.withMethod(RestServer::POST)
-			.withCategory("midi")
-			.withDescription("Inject MIDI messages into the virtual keyboard. Non-blocking: queues messages and returns immediately. "
-				"Notes auto-send note-off after duration. Multiple calls merge into the pending queue. "
-				"Send allNotesOff to panic (clears queue). Send empty messages array to poll status.")
-			.withReturns("Playback status: isPlaying, durationMs, activeNotes, eventsInSequence, playedEvents, progress")
-			.withBodyParam(RouteParameter(RestApiIds::messages,
-				"Array of MIDI messages. Each requires 'type' field: "
-				"note (channel?, noteNumber, velocity?, duration?, timestamp?), "
-				"cc (channel?, controller, value, timestamp?), "
-				"pitchbend (channel?, value, timestamp?), "
-				"allNotesOff (timestamp?), "
-				"repl (expression, id?, moduleId?, timestamp?), "
-				"set_attribute (parameterId, value, processorId?, timestamp?), "
-				"testsignal (signal, duration?, frequency?, startFrequency?, endFrequency?, timestamp?)"))
-			.withBodyParam(RouteParameter(RestApiIds::blocking,
-				"If true, block until the sequence completes before returning (default: false)").asOptional())
-			.withBodyParam(RouteParameter(RestApiIds::recordOutput,
-				"File path to record audio output as WAV. Implies blocking mode. Duration is auto-computed from the sequence.").asOptional()));
-
-		// Verify count matches enum
-		jassert(m.size() == (int)ApiRoute::numRoutes);
-
-		return m;
-	}();
-	
-	return metadata;
-}
 
 String RestHelpers::getRoutePath(RestHelpers::ApiRoute route)
 {
@@ -1030,98 +615,383 @@ RestHelpers::ApiRoute RestHelpers::findRoute(const String& subURL)
 //==============================================================================
 // Route handlers
 
+// Convert ParamType to OpenAPI type string
+static String paramTypeToOpenApi(RestHelpers::ParamType t)
+{
+	switch (t)
+	{
+	case RestHelpers::ParamType::String: return "string";
+	case RestHelpers::ParamType::Int:    return "integer";
+	case RestHelpers::ParamType::Float:  return "number";
+	case RestHelpers::ParamType::Bool:   return "boolean";
+	case RestHelpers::ParamType::Array:  return "array";
+	case RestHelpers::ParamType::Object: return "object";
+	case RestHelpers::ParamType::Enum:   return "string";
+	default: return "string";
+	}
+}
+
+// Recursively convert a RouteParameter to an OpenAPI schema object
+static var paramToOpenApiSchema(const RestHelpers::RouteParameter& p)
+{
+	DynamicObject::Ptr schema = new DynamicObject();
+
+	// Discriminated union → oneOf
+	if (!p.variants.isEmpty() && p.discriminator.isNotEmpty())
+	{
+		schema->setProperty("type", "object");
+
+		// Build properties from the flat property list
+		if (!p.properties.isEmpty())
+		{
+			DynamicObject::Ptr props = new DynamicObject();
+			Array<var> requiredArr;
+
+			for (const auto& child : p.properties)
+			{
+				props->setProperty(child.name, paramToOpenApiSchema(child));
+
+				if (child.required)
+					requiredArr.add(child.name.toString());
+			}
+
+			schema->setProperty("properties", var(props.get()));
+
+			if (!requiredArr.isEmpty())
+				schema->setProperty("required", var(requiredArr));
+		}
+
+		// Add discriminator
+		DynamicObject::Ptr disc = new DynamicObject();
+		disc->setProperty("propertyName", p.discriminator);
+		schema->setProperty("discriminator", var(disc.get()));
+
+		// Add variant descriptions as x-variants extension
+		Array<var> variantArr;
+
+		for (const auto& v : p.variants)
+		{
+			DynamicObject::Ptr vObj = new DynamicObject();
+			vObj->setProperty("value", v.discriminatorValue);
+			vObj->setProperty("description", v.description);
+			variantArr.add(var(vObj.get()));
+		}
+
+		schema->setProperty("x-variants", var(variantArr));
+	}
+	// Object with properties
+	else if (p.type == RestHelpers::ParamType::Object && !p.properties.isEmpty())
+	{
+		schema->setProperty("type", "object");
+
+		DynamicObject::Ptr props = new DynamicObject();
+		Array<var> requiredArr;
+
+		for (const auto& child : p.properties)
+		{
+			props->setProperty(child.name, paramToOpenApiSchema(child));
+
+			if (child.required)
+				requiredArr.add(child.name.toString());
+		}
+
+		schema->setProperty("properties", var(props.get()));
+
+		if (!requiredArr.isEmpty())
+			schema->setProperty("required", var(requiredArr));
+	}
+	// Array with item schema
+	else if (p.type == RestHelpers::ParamType::Array && p.itemSchema)
+	{
+		schema->setProperty("type", "array");
+		schema->setProperty("items", paramToOpenApiSchema(*p.itemSchema));
+	}
+	// Enum
+	else if (p.type == RestHelpers::ParamType::Enum && !p.enumValues.isEmpty())
+	{
+		schema->setProperty("type", "string");
+
+		Array<var> enumArr;
+
+		for (const auto& v : p.enumValues)
+			enumArr.add(v);
+
+		schema->setProperty("enum", var(enumArr));
+	}
+	// Simple type
+	else
+	{
+		schema->setProperty("type", paramTypeToOpenApi(p.type));
+	}
+
+	if (p.description.isNotEmpty())
+		schema->setProperty("description", p.description);
+
+	if (p.defaultValue.isNotEmpty())
+		schema->setProperty("default", p.defaultValue);
+
+	if (p.example.isNotEmpty())
+		schema->setProperty("example", p.example);
+
+	return var(schema.get());
+}
+
+// Build the response schema for a route, wrapped in the standard envelope
+static var buildResponseSchema(const RestHelpers::RouteMetadata& route)
+{
+	DynamicObject::Ptr envelope = new DynamicObject();
+	envelope->setProperty("type", "object");
+
+	DynamicObject::Ptr envProps = new DynamicObject();
+
+	// success
+	DynamicObject::Ptr successProp = new DynamicObject();
+	successProp->setProperty("type", "boolean");
+	envProps->setProperty("success", var(successProp.get()));
+
+	// result
+	if (!route.responseFields.isEmpty())
+	{
+		DynamicObject::Ptr resultSchema = new DynamicObject();
+		resultSchema->setProperty("type", "object");
+
+		DynamicObject::Ptr resultProps = new DynamicObject();
+
+		for (const auto& rf : route.responseFields)
+			resultProps->setProperty(rf.name, paramToOpenApiSchema(rf));
+
+		resultSchema->setProperty("properties", var(resultProps.get()));
+		envProps->setProperty("result", var(resultSchema.get()));
+	}
+	else
+	{
+		DynamicObject::Ptr resultSchema = new DynamicObject();
+		resultSchema->setProperty("type", "object");
+		resultSchema->setProperty("description", route.returns);
+		envProps->setProperty("result", var(resultSchema.get()));
+	}
+
+	// logs
+	DynamicObject::Ptr logsProp = new DynamicObject();
+	logsProp->setProperty("type", "array");
+	DynamicObject::Ptr logItems = new DynamicObject();
+	logItems->setProperty("type", "string");
+	logsProp->setProperty("items", var(logItems.get()));
+	envProps->setProperty("logs", var(logsProp.get()));
+
+	// errors
+	DynamicObject::Ptr errorsProp = new DynamicObject();
+	errorsProp->setProperty("type", "array");
+	DynamicObject::Ptr errorItems = new DynamicObject();
+	errorItems->setProperty("type", "object");
+	errorsProp->setProperty("items", var(errorItems.get()));
+	envProps->setProperty("errors", var(errorsProp.get()));
+
+	envelope->setProperty("properties", var(envProps.get()));
+	envelope->setProperty("required", var(Array<var>{ var("success"), var("result"), var("logs"), var("errors") }));
+
+	return var(envelope.get());
+}
+
 RestServer::Response RestHelpers::handleListMethods(MainController* mc, RestServer::AsyncRequest::Ptr req)
 {
 	ignoreUnused(mc);
-	
+
 	const auto& metadata = getRouteMetadata();
-	
-	// Sort by category, then alphabetically by path
-	Array<int> sortedIndices;
-	for (int i = 0; i < metadata.size(); i++)
-		sortedIndices.add(i);
-	
-	// JUCE ElementComparator for sorting indices by category then path
-	struct RouteIndexComparator
+
+	// Root object
+	DynamicObject::Ptr root = new DynamicObject();
+	root->setProperty("openapi", "3.0.3");
+
+	// Info
+	DynamicObject::Ptr info = new DynamicObject();
+	info->setProperty("title", "HISE REST API");
+	info->setProperty("description", "REST API for AI-assisted development in HISE");
+	info->setProperty("version", "1.0.0");
+	root->setProperty("info", var(info.get()));
+
+	// Servers
+	Array<var> servers;
+	DynamicObject::Ptr server = new DynamicObject();
+	server->setProperty("url", "http://localhost:1900");
+	server->setProperty("description", "Local HISE instance");
+	servers.add(var(server.get()));
+	root->setProperty("servers", var(servers));
+
+	// Collect unique tags from categories
+	StringArray categories;
+
+	for (const auto& route : metadata)
+		categories.addIfNotAlreadyThere(route.category);
+
+	categories.sort(false);
+
+	Array<var> tags;
+
+	for (const auto& cat : categories)
 	{
-		const Array<RouteMetadata>& routes;
-		
-		RouteIndexComparator(const Array<RouteMetadata>& r) : routes(r) {}
-		
-		int compareElements(int a, int b) const
-		{
-			const auto& ra = routes[a];
-			const auto& rb = routes[b];
-			
-			int catCompare = ra.category.compare(rb.category);
-			if (catCompare != 0)
-				return catCompare;
-			
-			return ra.path.compare(rb.path);
-		}
-	};
-	
-	RouteIndexComparator comparator(metadata);
-	sortedIndices.sort(comparator);
-	
-	// Build response
-	DynamicObject::Ptr result = new DynamicObject();
-	result->setProperty(RestApiIds::success, true);
-	
-	Array<var> methods;
-	for (int idx : sortedIndices)
+		DynamicObject::Ptr tag = new DynamicObject();
+		tag->setProperty("name", cat);
+		tags.add(var(tag.get()));
+	}
+
+	root->setProperty("tags", var(tags));
+
+	// Paths
+	DynamicObject::Ptr paths = new DynamicObject();
+
+	for (const auto& route : metadata)
 	{
-		const auto& route = metadata[idx];
-		
-		DynamicObject::Ptr m = new DynamicObject();
-		m->setProperty(RestApiIds::path, "/" + route.path);
-		m->setProperty(RestApiIds::method, route.method == RestServer::GET ? "GET" : "POST");
-		m->setProperty(RestApiIds::category, route.category);
-		m->setProperty(RestApiIds::description, route.description);
-		m->setProperty(RestApiIds::returns, route.returns);
-		
-		// Query parameters (for GET)
+		String pathKey = "/" + route.path;
+		String methodKey = route.method == RestServer::GET ? "get" : "post";
+
+		DynamicObject::Ptr operation = new DynamicObject();
+
+		// Tags
+		operation->setProperty("tags", var(Array<var>{ var(route.category) }));
+
+		// Summary (concise sentence) & description (detailed with behavioral notes)
+		operation->setProperty("summary", route.summary.isNotEmpty() ? route.summary : route.description);
+
+		if (route.summary.isNotEmpty())
+			operation->setProperty("description", route.description);
+
+		// Operation ID from path
+		String opId = route.path.replace("/", "_").replace("api_", "");
+		operation->setProperty("operationId", opId);
+
+		// Query parameters
 		if (!route.queryParameters.isEmpty())
 		{
 			Array<var> params;
-			for (const auto& p : route.queryParameters)
+
+			for (const auto& qp : route.queryParameters)
 			{
 				DynamicObject::Ptr param = new DynamicObject();
-				param->setProperty(RestApiIds::name, p.name.toString());
-				param->setProperty(RestApiIds::description, p.description);
-				param->setProperty(RestApiIds::required, p.required);
-				if (p.defaultValue.isNotEmpty())
-					param->setProperty(RestApiIds::defaultValue, p.defaultValue);
-				params.add(param.get());
+				param->setProperty("name", qp.name.toString());
+				param->setProperty("in", "query");
+				param->setProperty("description", qp.description);
+				param->setProperty("required", qp.required);
+				param->setProperty("schema", paramToOpenApiSchema(qp));
+
+				if (qp.example.isNotEmpty())
+					param->setProperty("example", qp.example);
+
+				params.add(var(param.get()));
 			}
-			m->setProperty(RestApiIds::queryParameters, params);
+
+			operation->setProperty("parameters", var(params));
 		}
-		
-		// Body parameters (for POST)
+
+		// Request body (POST with body params)
 		if (!route.bodyParameters.isEmpty())
 		{
-			Array<var> params;
-			for (const auto& p : route.bodyParameters)
+			DynamicObject::Ptr requestBody = new DynamicObject();
+			requestBody->setProperty("required", true);
+
+			DynamicObject::Ptr content = new DynamicObject();
+			DynamicObject::Ptr jsonMedia = new DynamicObject();
+
+			// Build body schema from parameters
+			DynamicObject::Ptr bodySchema = new DynamicObject();
+			bodySchema->setProperty("type", "object");
+
+			DynamicObject::Ptr bodyProps = new DynamicObject();
+			Array<var> requiredArr;
+
+			for (const auto& bp : route.bodyParameters)
 			{
-				DynamicObject::Ptr param = new DynamicObject();
-				param->setProperty(RestApiIds::name, p.name.toString());
-				param->setProperty(RestApiIds::description, p.description);
-				param->setProperty(RestApiIds::required, p.required);
-				if (p.defaultValue.isNotEmpty())
-					param->setProperty(RestApiIds::defaultValue, p.defaultValue);
-				params.add(param.get());
+				bodyProps->setProperty(bp.name, paramToOpenApiSchema(bp));
+
+				if (bp.required)
+					requiredArr.add(bp.name.toString());
 			}
-			m->setProperty(RestApiIds::bodyParameters, params);
+
+			bodySchema->setProperty("properties", var(bodyProps.get()));
+
+			if (!requiredArr.isEmpty())
+				bodySchema->setProperty("required", var(requiredArr));
+
+			jsonMedia->setProperty("schema", var(bodySchema.get()));
+
+			// Request example
+			if (route.requestExample.isNotEmpty())
+			{
+				var exampleJson;
+				JSON::parse(route.requestExample, exampleJson);
+
+				if (!exampleJson.isVoid())
+					jsonMedia->setProperty("example", exampleJson);
+			}
+
+			content->setProperty("application/json", var(jsonMedia.get()));
+			requestBody->setProperty("content", var(content.get()));
+			operation->setProperty("requestBody", var(requestBody.get()));
 		}
-		
-		methods.add(m.get());
+
+		// Responses
+		DynamicObject::Ptr responses = new DynamicObject();
+
+		// 200 OK
+		DynamicObject::Ptr ok200 = new DynamicObject();
+		ok200->setProperty("description", "Successful response");
+
+		DynamicObject::Ptr okContent = new DynamicObject();
+		DynamicObject::Ptr okJsonMedia = new DynamicObject();
+		okJsonMedia->setProperty("schema", buildResponseSchema(route));
+
+		// Response example
+		if (route.responseExample.isNotEmpty())
+		{
+			var exampleJson;
+			JSON::parse(route.responseExample, exampleJson);
+
+			if (!exampleJson.isVoid())
+				okJsonMedia->setProperty("example", exampleJson);
+		}
+
+		okContent->setProperty("application/json", var(okJsonMedia.get()));
+		ok200->setProperty("content", var(okContent.get()));
+		responses->setProperty("200", var(ok200.get()));
+
+		// Error responses
+		for (int code : route.errorCodes)
+		{
+			DynamicObject::Ptr errResp = new DynamicObject();
+
+			switch (code)
+			{
+			case 400: errResp->setProperty("description", "Bad request - invalid or missing parameters"); break;
+			case 404: errResp->setProperty("description", "Not found - unknown module or resource"); break;
+			case 409: errResp->setProperty("description", "Conflict - operation conflicts with current state"); break;
+			case 500: errResp->setProperty("description", "Internal server error"); break;
+			case 503: errResp->setProperty("description", "Service unavailable"); break;
+			default:  errResp->setProperty("description", "Error"); break;
+			}
+
+			responses->setProperty(String(code), var(errResp.get()));
+		}
+
+		operation->setProperty("responses", var(responses.get()));
+
+		// Add to paths (handle multiple methods on same path)
+		auto existingPath = paths->getProperty(Identifier(pathKey));
+
+		if (auto* existingObj = existingPath.getDynamicObject())
+		{
+			existingObj->setProperty(Identifier(methodKey), var(operation.get()));
+		}
+		else
+		{
+			DynamicObject::Ptr pathItem = new DynamicObject();
+			pathItem->setProperty(Identifier(methodKey), var(operation.get()));
+			paths->setProperty(Identifier(pathKey), var(pathItem.get()));
+		}
 	}
-	
-	result->setProperty(RestApiIds::methods, methods);
-	result->setProperty(RestApiIds::logs, Array<var>());
-	result->setProperty(RestApiIds::errors, Array<var>());
-	
-	req->complete(RestServer::Response::ok(var(result.get())));
+
+	root->setProperty("paths", var(paths.get()));
+
+	req->complete(RestServer::Response::ok(var(root.get())));
 	return req->waitForResponse();
 }
 
@@ -2180,7 +2050,7 @@ RestServer::Response RestHelpers::handleDiagnoseScript(MainController* mc, RestS
 	
 	if (moduleIdStr.isNotEmpty())
 	{
-		// moduleId provided — use it to find the processor
+		// moduleId provided - use it to find the processor
 		jp = getScriptProcessor(mc, req);
 		
 		if (jp == nullptr)
@@ -2188,7 +2058,7 @@ RestServer::Response RestHelpers::handleDiagnoseScript(MainController* mc, RestS
 		
 		if (filePathStr.isEmpty())
 		{
-			// moduleId only, no filePath — need to pick a file
+			// moduleId only, no filePath - need to pick a file
 			// Use the first external file if available
 			if (jp->getNumWatchedFiles() > 0)
 			{
@@ -2206,7 +2076,7 @@ RestServer::Response RestHelpers::handleDiagnoseScript(MainController* mc, RestS
 	}
 	else if (filePathStr.isNotEmpty())
 	{
-		// filePath only — resolve the owning processor
+		// filePath only - resolve the owning processor
 		if (!targetFile.existsAsFile())
 			return req->fail(404, "File not found: " + targetFile.getFullPathName());
 		
@@ -2941,7 +2811,7 @@ RestServer::Response RestHelpers::handleStartProfiling(MainController* mc,
 	{
 		if (dh.isRecordingMultithread())
 		{
-			// Check wait param — if false, return immediately with recording status
+			// Check wait param - if false, return immediately with recording status
 			bool shouldWait = getTrueValue(obj.getProperty(RestApiIds::wait, true));
 
 			if (!shouldWait)
@@ -2954,11 +2824,11 @@ RestServer::Response RestHelpers::handleStartProfiling(MainController* mc,
 				return req->waitForResponse();
 			}
 
-			// Recording in progress — block until it finishes
+			// Recording in progress - block until it finishes
 			return waitForRecording();
 		}
 
-		// Not recording — return last result immediately (or "no data")
+		// Not recording - return last result immediately (or "no data")
 		auto lastResult = dh.recordingFlushBroadcaster.getLastValue<0>();
 
 		DynamicObject::Ptr result = new DynamicObject();
@@ -2980,7 +2850,7 @@ RestServer::Response RestHelpers::handleStartProfiling(MainController* mc,
 		req->complete(RestServer::Response::ok(var(result.get())));
 		return req->waitForResponse();
 	}
-	else // "record" mode (default) — non-blocking, returns immediately
+	else // "record" mode (default) - non-blocking, returns immediately
 	{
 		if (!startProfilingSession(mc, obj))
 			return req->fail(409, "A profiling session is already in progress");
@@ -4637,7 +4507,7 @@ AudioSampleBuffer MidiInjector::generateSignal(const String& signal, double samp
 		for (int i = 0; i < numSamples; i++)
 			ch0[i] = rng.nextFloat() * 2.0f - 1.0f;
 	}
-	// "silence" — buffer is already cleared
+	// "silence" - buffer is already cleared
 
 	// Copy channel 0 to channel 1
 	FloatVectorOperations::copy(buffer.getWritePointer(1), ch0, numSamples);
@@ -4880,7 +4750,7 @@ RestServer::Response RestHelpers::handleInjectMidi(BackendProcessor* bp,
 	injector->queueMessages(*messagesArray);
 
 	// If blocking mode, wait for sequence to complete (with 30s timeout)
-	// Recording implies blocking — we need to wait for the sequence to finish
+	// Recording implies blocking - we need to wait for the sequence to finish
 	bool blocking = isRecording || getTrueValue(body.getProperty(RestApiIds::blocking, false));
 
 	if (blocking)
