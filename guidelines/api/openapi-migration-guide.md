@@ -273,30 +273,30 @@ For each entry in `rest-api.md`:
 
 | Endpoint | Status | Complexity | Key challenge |
 |----------|--------|-----------|---------------|
-| GET / | N/A | - | This IS the OpenAPI endpoint |
-| GET /api/status | Inline | Low | Response fields only |
-| GET /api/get_script | Inline | Low | Response has callbacks object |
-| POST /api/set_script | Inline | Medium | Body params + compile response |
-| POST /api/repl | Inline | Low | Simple params + response |
-| POST /api/recompile | Inline | Low | Same as set_script response |
-| GET /api/list_components | Inline | Medium | Response tree structure |
-| GET /api/get_component_properties | Inline | Medium | Nested properties array |
-| POST /api/set_component_properties | Inline | Medium | Properties object + locked handling |
-| GET /api/get_component_value | Inline | Low | Simple response |
-| POST /api/set_component_value | Inline | Medium | Triggers callbacks, value normalization |
-| GET /api/screenshot | Inline | Low | Query params + base64 response |
-| GET /api/get_selected_components | Inline | Medium | Array of component objects |
-| POST /api/simulate_interactions | Inline | High | Discriminated union (interaction types) |
-| POST /api/diagnose_script | Inline | Medium | Diagnostics array schema |
-| GET /api/get_included_files | Inline | Low | Simple array response |
-| POST /api/profile | Inline | High | Mode-dependent params and response |
-| POST /api/parse_css | Inline | Medium | Optional selector resolution |
-| POST /api/shutdown | Inline | Trivial | No params |
-| GET /api/builder/tree | Inline | Medium | Recursive tree response |
-| POST /api/builder/apply | **Migrated** | High | Reference implementation |
-| POST /api/builder/reset | Inline | Trivial | No params |
-| POST /api/undo/* | Inline | Low | 7 simple endpoints |
-| GET /api/wizard/* | Inline | Low-Medium | 3 endpoints with form data |
-| GET /api/ui/tree | Inline | Medium | Recursive tree response |
-| POST /api/ui/apply | Inline | High | Discriminated union (UI operations) |
-| POST /api/inject_midi | Inline | High | Discriminated union (event types) + response fields |
+| GET / | **Migrated** | - | listMethods() |
+| GET /api/status | **Migrated** | Low | status() - nested response objects |
+| GET /api/get_script | **Migrated** | Low | getScript() - callbacks object + externalFiles |
+| POST /api/set_script | **Migrated** | Medium | setScript() - body params + compile response |
+| POST /api/repl | **Migrated** | Low | evaluateRepl() - simple params + response |
+| POST /api/recompile | **Migrated** | Low | recompile() - profile params |
+| GET /api/list_components | **Migrated** | Medium | listComponents() - flat/tree response |
+| GET /api/get_component_properties | **Migrated** | Medium | getComponentProperties() - nested properties |
+| POST /api/set_component_properties | **Migrated** | Medium | setComponentProperties() - locked handling |
+| GET /api/get_component_value | **Migrated** | Low | getComponentValue() - simple response |
+| POST /api/set_component_value | **Migrated** | Medium | setComponentValue() - callbacks + validation |
+| GET /api/screenshot | **Migrated** | Low | screenshot() - query params + dual response |
+| GET /api/get_selected_components | **Migrated** | Medium | getSelectedComponents() - component array |
+| POST /api/simulate_interactions | **Migrated** | High | simulateInteractions() - discriminated union |
+| POST /api/diagnose_script | **Migrated** | Medium | diagnoseScript() - diagnostics schema |
+| GET /api/get_included_files | **Migrated** | Low | getIncludedFiles() - dual response format |
+| POST /api/profile | **Migrated** | High | startProfiling() - mode-dependent params |
+| POST /api/parse_css | **Migrated** | Medium | parseCss() - optional selector resolution |
+| POST /api/shutdown | **Migrated** | Trivial | shutdown() |
+| GET /api/builder/tree | **Migrated** | Medium | builderTree() - group/runtime modes |
+| POST /api/builder/apply | **Migrated** | High | applyBuilder() - reference implementation |
+| POST /api/builder/reset | **Migrated** | Trivial | builderReset() |
+| POST /api/undo/* | **Migrated** | Low | 7 endpoints: undoPushGroup/PopGroup/Back/Forward/Diff/History/Clear |
+| GET /api/wizard/* | **Migrated** | Low-Medium | wizardInitialise/Execute/Status |
+| GET /api/ui/tree | **Migrated** | Medium | uiTree() - recursive tree + group mode |
+| POST /api/ui/apply | **Migrated** | High | uiApply() - discriminated union (5 ops) |
+| POST /api/inject_midi | **Migrated** | High | injectMidi() - discriminated union (7 types) + replResults |
