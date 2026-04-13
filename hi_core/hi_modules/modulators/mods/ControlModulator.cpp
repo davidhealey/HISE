@@ -64,7 +64,7 @@ hise::ProcessorMetadata ControlModulator::createMetadata()
 		.withParameter(ProcessorMetadata::ParameterMetadata(Parameters::DefaultValue)
 			.withId("DefaultValue")
 			.withDescription("The initial value before any MIDI CC message is received")
-			.withSliderMode(HiSlider::NormalizedPercentage, {})
+			.withSliderMode(HiSlider::Discrete, Range(0.0, 127.0, 1.0))
 			.withDefault(0.0f));
 }
 

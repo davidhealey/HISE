@@ -354,6 +354,46 @@ curl -X POST "http://localhost:1900/api/recompile" \
 
 ---
 
+### POST /api/repl
+
+Evaluate a HISEScript expression using the current script engine and return the result. The processor must have been compiled at least once.
+
+**Parameters** (JSON body):
+
+| Parameter | Required | Default | Description |
+|-----------|----------|---------|-------------|
+| `moduleId` | Yes | — | The script processor's module ID |
+| `expression` | Yes | — | The HISEScript expression to evaluate |
+
+**Example Request**:
+```bash
+curl -X POST http://localhost:1900/api/repl \
+  -H "Content-Type: application/json" \
+  -d '{"moduleId": "Interface", "expression": "Engine.getSampleRate()"}'
+```
+
+**Response**:
+```json
+{
+  "success": true,
+  "moduleId": "Interface",
+  "result": "REPL Evaluation OK",
+  "value": 44100,
+  "logs": [],
+  "errors": []
+}
+```
+
+**Error Cases**:
+
+| Status | Condition |
+|--------|-----------|
+| 400 | Missing `moduleId` or `expression` |
+| 404 | Unknown module ID |
+| 500 | Script engine not compiled yet |
+
+---
+
 ### GET /api/list_components
 
 List all UI components in a script processor.
@@ -999,6 +1039,53 @@ curl "http://localhost:1900/api/get_selected_components?moduleId=Interface"
 
 ---
 
+### POST /api/simulate_interactions
+
+Execute a sequence of UI interactions (mouse movements, clicks, drags, screenshots) in a dedicated test window. Auto-inserts `moveTo` events as needed for proper mouse positioning. Mouse state persists across API calls for sequential interaction workflows.
+
+**Parameters** (JSON body):
+
+| Parameter | Required | Default | Description |
+|-----------|----------|---------|-------------|
+| `interactions` | Yes | — | Array of interaction objects (see below) |
+| `verbose` | No | `false` | Include auto-insertion details and final mouse state in response |
+
+**Interaction types**: `moveTo`, `click`, `doubleClick`, `drag`, `selectMenuItem`, `screenshot`
+
+Each interaction targets a component by ID and supports optional timing parameters (`delayMs`, `durationMs`).
+
+**Example Request**:
+```bash
+curl -X POST http://localhost:1900/api/simulate_interactions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "interactions": [
+      {"type": "click", "target": "Button1"},
+      {"type": "screenshot", "id": "after_click"}
+    ]
+  }'
+```
+
+**Response**:
+```json
+{
+  "success": true,
+  "interactionsCompleted": 2,
+  "totalElapsedMs": 120,
+  "executionLog": [...],
+  "screenshots": {"after_click": {"sizeKB": 12.5, "width": 600, "height": 400}},
+  "logs": [],
+  "errors": []
+}
+```
+
+**Notes**:
+- This endpoint blocks until all interactions complete (30s timeout)
+- Mouse state persists across calls — subsequent calls continue from the last cursor position
+- The test window is created when the REST server starts and re-created if closed
+
+---
+
 ### POST /api/diagnose_script
 
 Run a diagnostic-only shadow parse on an external `.js` script file. Returns structured diagnostics (API hallucinations, type mismatches, language rule violations, audio-thread safety warnings) **without modifying runtime state** — no recompilation, no execution.
@@ -1168,6 +1255,117 @@ GET /api/get_included_files?moduleId=Interface
 
 ---
 
+### POST /api/profile
+
+Start a profiling session or retrieve the last profiling result. Requires HISE to be built with `HISE_INCLUDE_PROFILING_TOOLKIT`.
+
+**Parameters** (JSON body):
+
+| Parameter | Required | Default | Description |
+|-----------|----------|---------|-------------|
+| `mode` | No | `"record"` | `"record"` to start a new session, `"get"` to retrieve results |
+| `durationMs` | No | `1000` | Recording duration in ms (100–5000), record mode only |
+| `threadFilter` | No | all | Array of thread names: `"Audio Thread"`, `"Scripting Thread"`, `"UI Thread"`, `"Loading Thread"` |
+| `eventFilter` | No | all | Array of event types: `"DSP"`, `"Script"`, `"Lock"`, `"Callback"`, `"Trace"`, `"TimerCallback"`, `"Scriptnode"` |
+| `summary` | No | `false` | Aggregate repeated events with count/median/peak stats (get mode) |
+| `filter` | No | — | Wildcard pattern for event names (get mode) |
+| `minDuration` | No | `0` | Only include events with duration >= this value in ms (get mode) |
+| `nested` | No | `false` | Include children of matched events (get mode) |
+| `limit` | No | `15` | Max results 1–100 (get mode) |
+| `wait` | No | `true` | If `false`, return immediately when recording is in progress (get mode) |
+
+**Example — Record**:
+```bash
+curl -X POST http://localhost:1900/api/profile \
+  -H "Content-Type: application/json" \
+  -d '{"mode": "record", "durationMs": 2000}'
+```
+
+**Example — Get with filtering**:
+```bash
+curl -X POST http://localhost:1900/api/profile \
+  -H "Content-Type: application/json" \
+  -d '{"mode": "get", "summary": true, "threadFilter": ["Audio Thread"], "minDuration": 0.1}'
+```
+
+**Notes**:
+- Record mode is non-blocking — returns immediately with `{success: true, recording: true}`
+- Returns 409 if a recording session is already in progress
+- Returns 400 if profiling toolkit is not enabled in the build
+
+---
+
+### POST /api/parse_css
+
+Parse CSS code and return structured diagnostics. Optionally resolves properties for a set of selectors using CSS specificity rules.
+
+**Parameters** (JSON body):
+
+| Parameter | Required | Default | Description |
+|-----------|----------|---------|-------------|
+| `code` | Conditional | — | CSS code string to parse (required if `filePath` not given) |
+| `filePath` | Conditional | — | Path to a `.css` file (relative to Scripts/ or absolute) |
+| `selectors` | No | — | Array of selector strings to resolve properties for |
+| `width` | No | — | Reference width in pixels for resolving relative units |
+| `height` | No | — | Reference height in pixels for resolving relative units |
+
+**Example Request**:
+```bash
+curl -X POST http://localhost:1900/api/parse_css \
+  -H "Content-Type: application/json" \
+  -d '{"code": ".myClass { background: red; padding: 10px; }", "selectors": [".myClass"]}'
+```
+
+**Response**:
+```json
+{
+  "success": true,
+  "diagnostics": [],
+  "selectors": [".myClass"],
+  "properties": {"background": "red", "padding": "10px"},
+  "logs": [],
+  "errors": []
+}
+```
+
+**Error Cases**:
+
+| Status | Condition |
+|--------|-----------|
+| 400 | Neither `code` nor `filePath` provided |
+| 404 | File not found at `filePath` |
+
+---
+
+### POST /api/shutdown
+
+Gracefully quit the HISE application.
+
+**Parameters**: None
+
+**Example Request**:
+```bash
+curl -X POST http://localhost:1900/api/shutdown \
+  -H "Content-Type: application/json" \
+  -d '{}'
+```
+
+**Response**:
+```json
+{
+  "success": true,
+  "result": "Shutdown initiated",
+  "logs": [],
+  "errors": []
+}
+```
+
+**Notes**:
+- The HTTP response is sent before the application exits
+- The shutdown is scheduled asynchronously via `JUCEApplication::quit()`
+
+---
+
 ## Builder And Undo API
 
 These endpoints provide transactional module tree editing with grouped execution, undo/redo, and diff/history inspection.
@@ -1278,6 +1476,29 @@ When called inside an undo group (after `push_group`), the diff accumulates all 
 | `action` | `"+"` (added), `"-"` (removed), `"*"` (modified). Structural actions take priority - if a module was added and then modified, it shows as `"+"`. |
 | `domain` | Operation domain (e.g., `"builder"`) |
 
+### POST /api/builder/reset
+
+Reset the module tree to an empty state (equivalent to File -> New). Clears all undo history.
+
+**Parameters**: None
+
+**Example Request**:
+```bash
+curl -X POST http://localhost:1900/api/builder/reset \
+  -H "Content-Type: application/json" \
+  -d '{}'
+```
+
+**Response**:
+```json
+{
+  "success": true,
+  "result": "Module tree reset",
+  "logs": [],
+  "errors": []
+}
+```
+
 ### POST /api/undo/push_group
 
 Start a new group. Subsequent builder operations are validated against group state and queued until pop.
@@ -1330,6 +1551,343 @@ Return history list and cursor position.
 ### POST /api/undo/clear
 
 Clear all undo history and active groups.
+
+---
+
+## Wizard API
+
+These endpoints drive the wizard system for project creation, plugin export, and other multi-step tasks.
+
+### GET /api/wizard/initialise
+
+Fetch pre-populated field defaults for a wizard form.
+
+**Parameters** (query string):
+
+| Parameter | Required | Default | Description |
+|-----------|----------|---------|-------------|
+| `id` | Yes | — | Wizard ID: `new_project`, `recompile`, `plugin_export`, `compile_networks`, `audio_export`, `install_package_maker` |
+
+**Example Request**:
+```bash
+curl "http://localhost:1900/api/wizard/initialise?id=new_project"
+```
+
+**Response**: Flat key/value object of field defaults for the wizard form.
+
+**Error Cases**:
+
+| Status | Condition |
+|--------|-----------|
+| 400 | Missing or unknown wizard ID |
+
+### POST /api/wizard/execute
+
+Execute a wizard task. Synchronous tasks return immediately; asynchronous tasks return a job ID for polling.
+
+**Parameters** (JSON body):
+
+| Parameter | Required | Default | Description |
+|-----------|----------|---------|-------------|
+| `wizardId` | Yes | — | Wizard ID string |
+| `answers` | Yes | — | Key/value object of all form field answers |
+| `tasks` | Yes | — | Array with exactly one task function name to execute |
+
+**Example Request**:
+```bash
+curl -X POST http://localhost:1900/api/wizard/execute \
+  -H "Content-Type: application/json" \
+  -d '{"wizardId": "new_project", "answers": {"projectName": "MyPlugin"}, "tasks": ["createProject"]}'
+```
+
+**Response (sync)**: Result string with logs.
+
+**Response (async)**: `{"jobId": "...", "async": true}` — poll with `/api/wizard/status`.
+
+**Error Cases**:
+
+| Status | Condition |
+|--------|-----------|
+| 400 | Missing/invalid `wizardId`, `answers`, or `tasks` |
+| 400 | Unknown wizard ID or invalid task for wizard |
+
+### GET /api/wizard/status
+
+Poll progress of a long-running asynchronous wizard job.
+
+**Parameters** (query string):
+
+| Parameter | Required | Default | Description |
+|-----------|----------|---------|-------------|
+| `jobId` | Yes | — | Job ID returned by `/api/wizard/execute` |
+
+**Response**: `{"finished": true/false, "progress": 0.0-1.0}`
+
+**Error Cases**:
+
+| Status | Condition |
+|--------|-----------|
+| 400 | Missing `jobId` |
+| 404 | No active job with that ID |
+
+---
+
+## UI Component Tree API
+
+These endpoints provide batched UI component editing with undo support, similar to the Builder API for the module tree.
+
+### GET /api/ui/tree
+
+Get the UI component tree hierarchy for a script processor's interface.
+
+**Parameters** (query string):
+
+| Parameter | Required | Default | Description |
+|-----------|----------|---------|-------------|
+| `moduleId` | Yes | — | Script processor ID (e.g., `"Interface"`) |
+| `group` | No | — | `"current"` returns the active undo group's validation tree |
+
+**Example Request**:
+```bash
+curl "http://localhost:1900/api/ui/tree?moduleId=Interface"
+```
+
+**Response**:
+```json
+{
+  "success": true,
+  "result": {
+    "id": "Content",
+    "type": "ScriptPanel",
+    "x": 0, "y": 0, "width": 600, "height": 500,
+    "visible": true, "enabled": true, "saveInPreset": false,
+    "childComponents": [
+      {
+        "id": "Button1",
+        "type": "ScriptButton",
+        "x": 10, "y": 10, "width": 128, "height": 28,
+        "visible": true, "enabled": true, "saveInPreset": true,
+        "childComponents": []
+      }
+    ]
+  },
+  "logs": [],
+  "errors": []
+}
+```
+
+### POST /api/ui/apply
+
+Apply batched UI component operations (add, remove, set, move, rename) with undo support.
+
+**Parameters** (JSON body):
+
+| Parameter | Required | Default | Description |
+|-----------|----------|---------|-------------|
+| `moduleId` | Yes | — | Script processor ID |
+| `operations` | Yes | — | Array of operation objects (see below) |
+
+**Operation types**:
+- `add` — `{op: "add", componentType, id?, parentId?, x?, y?, width?, height?}`
+- `remove` — `{op: "remove", target}`
+- `set` — `{op: "set", target, properties, force?}`
+- `move` — `{op: "move", target, parent, index?, keepPosition?}`
+- `rename` — `{op: "rename", target, newId}`
+
+**Example Request**:
+```bash
+curl -X POST http://localhost:1900/api/ui/apply \
+  -H "Content-Type: application/json" \
+  -d '{
+    "moduleId": "Interface",
+    "operations": [
+      {"op": "add", "componentType": "ScriptButton", "id": "MyButton", "x": 10, "y": 10, "width": 100, "height": 30}
+    ]
+  }'
+```
+
+**Response**: Diff of changes with `domain="ui"`, action symbols (`+`/`-`/`*`), and target component IDs.
+
+**Notes**:
+- Operations are pre-validated before execution; invalid operations return 400 with detailed error
+- All operations are undoable via the undo API
+- Component types: `ScriptButton`, `ScriptSlider`, `ScriptPanel`, `ScriptComboBox`, `ScriptLabel`, `ScriptTable`, `ScriptImage`, etc.
+
+---
+
+### POST /api/inject_midi
+
+Inject MIDI messages and test events into HISE with precise timing. Non-blocking by default: queues messages and returns immediately. A background `HighResolutionTimer` dispatches events at the correct timestamps with sub-ms precision. Notes automatically send note-off after their `duration` to prevent stuck notes.
+
+Multiple calls merge into the pending queue. Send `allNotesOff` as a panic button to clear everything.
+
+**Parameters** (JSON body):
+
+| Parameter | Required | Default | Description |
+|-----------|----------|---------|-------------|
+| `messages` | Yes | — | Array of event objects (see below) |
+| `blocking` | No | `false` | If `true`, wait for the entire sequence to complete before returning. Useful for test scenarios where you want all REPL results in one response. 30s timeout. |
+| `recordOutput` | No | — | File path to record audio output as WAV. Recording duration is auto-computed from the sequence. Implies `blocking: true`. The response includes `recordOutput` with the file path on success. |
+
+**Message types**:
+
+| Field | note | cc | pitchbend | allNotesOff | repl | set_attribute | testsignal |
+|-------|------|----|-----------|-------------|------|---------------|------------|
+| `type` | required | required | required | required | required | required | required |
+| `timestamp` | optional (0) | optional (0) | optional (0) | optional (0) | optional (0) | optional (0) | optional (0) |
+| `channel` | optional (1, range 1-16) | optional (1) | optional (1) | — | — | — | — |
+| `noteNumber` | required (0-127) | — | — | — | — | — | — |
+| `velocity` | optional (0.0-1.0, default 1.0) | — | — | — | — | — | — |
+| `duration` | optional (default 500ms) | — | — | — | — | — | optional (default 500ms) |
+| `controller` | — | required (0-127) | — | — | — | — | — |
+| `value` | — | required (0-127) | required (0-16383) | — | — | required | — |
+| `expression` | — | — | — | — | required | — | — |
+| `id` | — | — | — | — | optional | — | — |
+| `moduleId` | — | — | — | — | optional ("Interface") | — | — |
+| `processorId` | — | — | — | — | — | optional ("Interface") | — |
+| `parameterId` | — | — | — | — | — | required | — |
+| `signal` | — | — | — | — | — | — | required |
+| `frequency` | — | — | — | — | — | — | optional (440) |
+| `startFrequency` | — | — | — | — | — | — | optional (20) |
+| `endFrequency` | — | — | — | — | — | — | optional (20000) |
+
+- **`timestamp`**: Absolute time offset in ms from the start of the sequence. Use `0` for immediate dispatch. Multiple messages with the same timestamp fire simultaneously (chords).
+- **`duration`**: Time in ms before automatic note-off (for `note`) or signal length (for `testsignal`).
+- **`allNotesOff`**: Fires note-off for all active notes, calls `MainController::allNotesOff()`, stops any playing test signal, and clears the entire remaining queue.
+- **`repl`**: Evaluates a HISEScript expression at the given timestamp with precise timing. Results are collected in the `replResults` array on the next response (or in the same response when `blocking: true`). An optional `id` field lets you tag results for identification.
+- **`testsignal`**: Injects a predefined test signal into the audio stream via `MainController::setBufferToPlay()`. The signal is processed through the entire synth chain including master FX. Available signals: `sine`, `saw`, `sweep` (log sine sweep), `dirac` (impulse), `noise` (white), `silence`. Generated signals are cached for reuse across calls.
+- **`set_attribute`**: Sets a processor parameter at the given timestamp. The `processorId` identifies the target processor (any module in the tree), and `parameterId` is the parameter name (resolved via `Processor::getMetadata()`). Value is validated against the parameter's range at request time.
+
+**Example — Play a chord**:
+```bash
+curl -X POST http://localhost:1900/api/inject_midi \
+  -H "Content-Type: application/json" \
+  -d '{
+    "messages": [
+      {"type": "note", "noteNumber": 60, "velocity": 0.8, "duration": 1000, "timestamp": 0},
+      {"type": "note", "noteNumber": 64, "velocity": 0.8, "duration": 1000, "timestamp": 0},
+      {"type": "note", "noteNumber": 67, "velocity": 0.8, "duration": 1000, "timestamp": 0}
+    ]
+  }'
+```
+
+**Example — Melody with polyphony**:
+```bash
+curl -X POST http://localhost:1900/api/inject_midi \
+  -H "Content-Type: application/json" \
+  -d '{
+    "messages": [
+      {"type": "note", "noteNumber": 60, "duration": 2000, "timestamp": 0},
+      {"type": "note", "noteNumber": 67, "duration": 400, "timestamp": 1000},
+      {"type": "cc", "controller": 74, "value": 100, "timestamp": 1500},
+      {"type": "note", "noteNumber": 72, "duration": 500, "timestamp": 2000}
+    ]
+  }'
+```
+
+**Example — DSP test: inject signal, check state, record output**:
+```bash
+curl -X POST http://localhost:1900/api/inject_midi \
+  -H "Content-Type: application/json" \
+  -d '{
+    "blocking": true,
+    "recordOutput": "D:/Tests/sweep_output.wav",
+    "messages": [
+      {"type": "testsignal", "signal": "sweep", "duration": 1000, "timestamp": 0},
+      {"type": "repl", "id": "level", "expression": "Synth.getNumPressedKeys()", "timestamp": 500}
+    ]
+  }'
+```
+
+**Example — Automate a parameter during playback**:
+```bash
+curl -X POST http://localhost:1900/api/inject_midi \
+  -H "Content-Type: application/json" \
+  -d '{
+    "messages": [
+      {"type": "note", "noteNumber": 60, "duration": 2000, "timestamp": 0},
+      {"type": "set_attribute", "processorId": "Simple Gain", "parameterId": "Gain", "value": -12.0, "timestamp": 500},
+      {"type": "set_attribute", "processorId": "Simple Gain", "parameterId": "Gain", "value": 0.0, "timestamp": 1500}
+    ]
+  }'
+```
+
+**Example — Poll status / Panic**:
+```bash
+# Poll (empty messages)
+curl -X POST http://localhost:1900/api/inject_midi \
+  -H "Content-Type: application/json" \
+  -d '{"messages": []}'
+
+# Panic (stop everything)
+curl -X POST http://localhost:1900/api/inject_midi \
+  -H "Content-Type: application/json" \
+  -d '{"messages": [{"type": "allNotesOff"}]}'
+```
+
+**Response** (standard envelope with payload inside `result`):
+```json
+{
+  "success": true,
+  "result": {
+    "isPlaying": true,
+    "durationMs": 2500,
+    "activeNotes": 2,
+    "eventsInSequence": 4,
+    "playedEvents": 1,
+    "progress": 0.4
+  },
+  "logs": [],
+  "errors": []
+}
+```
+
+**Response with REPL results** (when `blocking: true`):
+```json
+{
+  "success": true,
+  "result": {
+    "isPlaying": false,
+    "durationMs": 1000,
+    "activeNotes": 0,
+    "eventsInSequence": 2,
+    "playedEvents": 2,
+    "progress": 1.0,
+    "replResults": [
+      {
+        "id": "voicecheck",
+        "expression": "Synth.getNumPressedKeys()",
+        "moduleId": "Interface",
+        "timestamp": 500,
+        "success": true,
+        "value": 1
+      }
+    ]
+  },
+  "logs": [],
+  "errors": []
+}
+```
+
+**Result Fields**:
+| Field | Description |
+|-------|-------------|
+| `isPlaying` | `true` while the sequence is being dispatched or notes are active |
+| `durationMs` | Total duration of the sequence (last event timestamp + its duration) |
+| `activeNotes` | Number of notes currently sounding (note-on sent, note-off not yet fired) |
+| `eventsInSequence` | Total logical events in queue (note on+off = 1 event) |
+| `playedEvents` | Number of events dispatched so far |
+| `progress` | 0.0–1.0 playhead position against sequence duration |
+| `replResults` | Array of REPL evaluation results (only present when results are available) |
+| `recordOutput` | File path of recorded WAV (only present when `recordOutput` was specified) |
+
+**Notes**:
+- By default the endpoint returns immediately (non-blocking). Use `blocking: true` or `recordOutput` to wait for completion
+- Send an empty `messages` array to poll the current playback status without queuing anything
+- Multiple calls merge into the pending queue; timestamps in new calls are relative to "now"
+- `allNotesOff` acts as a panic button: clears the entire queue, fires all pending note-offs, stops any playing test signal
+- The `activeNotes` count in the immediate response may be 0 if the timer hasn't fired yet; poll again to see the updated state
+- REPL errors include sanitized `errorMessage`, `location`, and `callstack` fields (no base64)
 
 ---
 

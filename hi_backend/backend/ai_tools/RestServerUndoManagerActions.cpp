@@ -2159,6 +2159,11 @@ struct rename : public ActionBase
 		if (!v.isValid())
 			throw Error().withError("Component '" + targetId + "' does not exist");
 
+		auto v2 = content->getValueTreeForComponent(Identifier(newName));
+
+		if (v2.isValid())
+			throw Error().withError("A component with ID'" + newName + "' already exists");
+
 		v.setProperty("id", newName, nullptr);
 
 		// Update parentComponent references in any children that referenced the old name

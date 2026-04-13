@@ -383,6 +383,9 @@ RestServer::Response BackendProcessor::onAsyncRequest(RestServer::AsyncRequest::
 	case RestHelpers::ApiRoute::UIApply:
 		return RestHelpers::handleUIApply(this, req);
 
+	case RestHelpers::ApiRoute::InjectMidi:
+		return RestHelpers::handleInjectMidi(this, req);
+
 	default:
 		return req->fail(404, "Unknown API endpoint: " + subURL);
 	}
@@ -394,14 +397,18 @@ void BackendProcessor::serverStarted(int port)
 	
 	// Create interaction tester when server starts
 	interactionTester = std::make_unique<InteractionTester>(this);
+
+	// Create MIDI injector when server starts
+	midiInjector = std::make_unique<MidiInjector>(this);
 }
 
 void BackendProcessor::serverStopped()
 {
 	debugToConsole(getMainSynthChain(), "REST API Server stopped");
 	
-	// Destroy interaction tester when server stops
+	// Destroy interaction tester and MIDI injector when server stops
 	interactionTester = nullptr;
+	midiInjector = nullptr;
 }
 
 void BackendProcessor::requestReceived(const String& method, const String& path)
@@ -633,6 +640,11 @@ BackendProcessor::~BackendProcessor()
 InteractionTester* BackendProcessor::getInteractionTester()
 {
 	return interactionTester.get();
+}
+
+MidiInjector* BackendProcessor::getMidiInjector()
+{
+	return midiInjector.get();
 }
 
 void BackendProcessor::showInteractionTestWindow()

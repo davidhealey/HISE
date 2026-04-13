@@ -440,6 +440,9 @@ private:
         
         for (const auto& m : md.modulation)
         {
+            if (m.disabled)
+                continue;
+
             auto idx = m.chainIndex;
 
             auto modChain = dynamic_cast<ModulatorChain*>(pToTest->getChildProcessor(idx));

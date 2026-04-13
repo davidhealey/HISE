@@ -980,6 +980,28 @@ const Array<RestHelpers::RouteMetadata>& RestHelpers::getRouteMetadata()
 				"move (target, parent, index?, keepPosition?), "
 				"rename (target, newId)")));
 
+		// ApiRoute::InjectMidi
+		m.add(RouteMetadata(ApiRoute::InjectMidi, "api/inject_midi")
+			.withMethod(RestServer::POST)
+			.withCategory("midi")
+			.withDescription("Inject MIDI messages into the virtual keyboard. Non-blocking: queues messages and returns immediately. "
+				"Notes auto-send note-off after duration. Multiple calls merge into the pending queue. "
+				"Send allNotesOff to panic (clears queue). Send empty messages array to poll status.")
+			.withReturns("Playback status: isPlaying, durationMs, activeNotes, eventsInSequence, playedEvents, progress")
+			.withBodyParam(RouteParameter(RestApiIds::messages,
+				"Array of MIDI messages. Each requires 'type' field: "
+				"note (channel?, noteNumber, velocity?, duration?, timestamp?), "
+				"cc (channel?, controller, value, timestamp?), "
+				"pitchbend (channel?, value, timestamp?), "
+				"allNotesOff (timestamp?), "
+				"repl (expression, id?, moduleId?, timestamp?), "
+				"set_attribute (parameterId, value, processorId?, timestamp?), "
+				"testsignal (signal, duration?, frequency?, startFrequency?, endFrequency?, timestamp?)"))
+			.withBodyParam(RouteParameter(RestApiIds::blocking,
+				"If true, block until the sequence completes before returning (default: false)").asOptional())
+			.withBodyParam(RouteParameter(RestApiIds::recordOutput,
+				"File path to record audio output as WAV. Implies blocking mode. Duration is auto-computed from the sequence.").asOptional()));
+
 		// Verify count matches enum
 		jassert(m.size() == (int)ApiRoute::numRoutes);
 
@@ -4189,6 +4211,723 @@ Array<var> RestHelpers::buildChainArray(Processor* parent, int chainIndex)
 	// TODO: Implement chain array building
 	// Get chain from parent, iterate processors, call buildModuleTree on each
 	return Array<var>();
+}
+
+//==============================================================================
+// MidiInjector implementation
+//==============================================================================
+
+MidiInjector::MidiInjector(MainController* mc_)
+	: mc(mc_)
+{
+}
+
+MidiInjector::~MidiInjector()
+{
+	stopTimer();
+}
+
+void MidiInjector::queueMessages(const Array<var>& messages)
+{
+	auto now = Time::getMillisecondCounterHiRes();
+
+	ScopedLock sl(lock);
+
+	// If nothing is playing, reset counters for a fresh sequence
+	bool wasIdle = scheduledEvents.isEmpty() && activeNotes.isEmpty();
+
+	if (wasIdle)
+	{
+		totalEvents = 0;
+		playedEvents = 0;
+		sequenceStartMs = now;
+		sequenceEndMs = now;
+	}
+
+	for (const auto& msg : messages)
+	{
+		auto type = msg.getProperty(RestApiIds::type, "").toString();
+
+		if (type.isEmpty())
+			continue;
+
+		ScheduledEvent e;
+		e.type = type;
+		e.channel = (int)msg.getProperty(RestApiIds::channel, 1);
+		e.noteNumber = (int)msg.getProperty(RestApiIds::noteNumber, 0);
+		e.velocity = (float)msg.getProperty(RestApiIds::velocity, 1.0);
+		e.controller = (int)msg.getProperty(RestApiIds::controller, 0);
+		e.value = (int)msg.getProperty(RestApiIds::value, 0);
+		e.duration = (int)msg.getProperty(RestApiIds::duration, 500);
+		e.expression = msg.getProperty(RestApiIds::expression, "").toString();
+		e.replId = msg.getProperty(RestApiIds::id, "").toString();
+		e.moduleId = msg.getProperty(RestApiIds::moduleId, "Interface").toString();
+		e.attributeValue = (float)msg.getProperty(RestApiIds::value, 0.0);
+
+		// testsignal fields
+		e.signal = msg.getProperty(RestApiIds::signal, "").toString();
+		e.frequency = (float)msg.getProperty(RestApiIds::frequency, 440.0);
+		e.startFrequency = (float)msg.getProperty(RestApiIds::startFrequency, 20.0);
+		e.endFrequency = (float)msg.getProperty(RestApiIds::endFrequency, 20000.0);
+
+		// set_attribute uses processorId instead of moduleId
+		if (type == "set_attribute")
+		{
+			e.moduleId = msg.getProperty(RestApiIds::processorId, "Interface").toString();
+			e.parameterIndex = (int)msg.getProperty(Identifier("_resolvedIndex"), -1);
+			e.attributeValue = (float)msg.getProperty(RestApiIds::value, 0.0);
+		}
+
+		e.fireTimeMs = now + (double)(int)msg.getProperty(RestApiIds::timestamp, 0);
+
+		// allNotesOff with delay=0 triggers immediate panic
+		if (type == "allNotesOff" && e.fireTimeMs <= now)
+		{
+			panic();
+			// Don't queue anything after allNotesOff in this batch
+			break;
+		}
+
+		// Insert sorted by fireTimeMs
+		int insertIdx = 0;
+		while (insertIdx < scheduledEvents.size() &&
+		       scheduledEvents[insertIdx].fireTimeMs <= e.fireTimeMs)
+			insertIdx++;
+
+		scheduledEvents.insert(insertIdx, e);
+		totalEvents++;
+
+		// Update sequence end time (account for note duration)
+		double eventEndMs = e.fireTimeMs;
+
+		if (type == "note")
+			eventEndMs += e.duration;
+
+		if (eventEndMs > sequenceEndMs)
+			sequenceEndMs = eventEndMs;
+	}
+
+	scheduleNextCallback();
+}
+
+MidiInjector::Status MidiInjector::getStatus() const
+{
+	ScopedLock sl(lock);
+
+	Status s;
+	s.isPlaying = !scheduledEvents.isEmpty() || !activeNotes.isEmpty();
+	s.activeNotes = activeNotes.size();
+	s.eventsInSequence = totalEvents;
+	s.playedEvents = playedEvents;
+
+	if (totalEvents > 0 && sequenceEndMs > sequenceStartMs)
+	{
+		auto now = Time::getMillisecondCounterHiRes();
+		auto elapsed = now - sequenceStartMs;
+		auto totalDuration = sequenceEndMs - sequenceStartMs;
+
+		s.durationMs = roundToInt(totalDuration);
+		s.progress = s.isPlaying ? jlimit(0.0, 1.0, elapsed / totalDuration) : 1.0;
+	}
+	else
+	{
+		s.durationMs = 0;
+		s.progress = s.isPlaying ? 0.0 : 1.0;
+	}
+
+	return s;
+}
+
+void MidiInjector::hiResTimerCallback()
+{
+	ScopedLock sl(lock);
+
+	auto now = Time::getMillisecondCounterHiRes();
+
+	// Fire all due scheduled events
+	while (!scheduledEvents.isEmpty() && scheduledEvents.getFirst().fireTimeMs <= now)
+	{
+		auto e = scheduledEvents.removeAndReturn(0);
+		fireEvent(e);
+	}
+
+	// Fire all due note-offs
+	fireDueNoteOffs(now);
+
+	// Schedule next or stop
+	scheduleNextCallback();
+}
+
+void MidiInjector::fireEvent(const ScheduledEvent& e)
+{
+	if (e.type == "allNotesOff")
+	{
+		panic();
+		return;
+	}
+
+	if (e.type == "repl")
+	{
+		fireReplEvent(e);
+		playedEvents++;
+		return;
+	}
+
+	if (e.type == "set_attribute")
+	{
+		if (auto* processor = ProcessorHelpers::getFirstProcessorWithName(mc->getMainSynthChain(), e.moduleId))
+			processor->setAttribute(e.parameterIndex, e.attributeValue, dispatch::DispatchType::sendNotificationAsync);
+
+		playedEvents++;
+		return;
+	}
+
+	if (e.type == "testsignal")
+	{
+		fireTestSignalEvent(e);
+		playedEvents++;
+		return;
+	}
+
+	auto noteOff = RestHelpers::dispatchSingleMidiMessage(
+		mc, e.type, e.channel, e.noteNumber, e.velocity, e.controller, e.value);
+
+	playedEvents++;
+
+	if (noteOff.valid)
+	{
+		// Convert to ActiveNote with absolute note-off time
+		ActiveNote an;
+		an.channel = noteOff.channel;
+		an.noteNumber = noteOff.noteNumber;
+		an.noteOffTimeMs = Time::getMillisecondCounterHiRes() + e.duration;
+
+		// Insert sorted by noteOffTimeMs
+		int insertIdx = 0;
+		while (insertIdx < activeNotes.size() &&
+		       activeNotes[insertIdx].noteOffTimeMs <= an.noteOffTimeMs)
+			insertIdx++;
+
+		activeNotes.insert(insertIdx, an);
+	}
+}
+
+void MidiInjector::fireNoteOff(const ActiveNote& n)
+{
+	mc->getKeyboardState().noteOff(n.channel, n.noteNumber, 1.0f);
+}
+
+void MidiInjector::fireDueNoteOffs(double now)
+{
+	while (!activeNotes.isEmpty() && activeNotes.getFirst().noteOffTimeMs <= now)
+	{
+		auto n = activeNotes.removeAndReturn(0);
+		fireNoteOff(n);
+	}
+}
+
+void MidiInjector::fireReplEvent(const ScheduledEvent& e)
+{
+	auto jp = dynamic_cast<JavascriptProcessor*>(
+		ProcessorHelpers::getFirstProcessorWithName(mc->getMainSynthChain(), e.moduleId));
+
+	DynamicObject::Ptr entry = new DynamicObject();
+
+	if (e.replId.isNotEmpty())
+		entry->setProperty(RestApiIds::id, e.replId);
+
+	entry->setProperty(RestApiIds::expression, e.expression);
+	entry->setProperty(RestApiIds::moduleId, e.moduleId);
+	entry->setProperty(RestApiIds::timestamp, roundToInt(e.fireTimeMs - sequenceStartMs));
+
+	if (jp == nullptr)
+	{
+		entry->setProperty(RestApiIds::success, false);
+		entry->setProperty(RestApiIds::value, "module not found: " + e.moduleId);
+	}
+	else if (auto engine = jp->getScriptEngine())
+	{
+		auto r = Result::ok();
+		auto v = engine->evaluate(e.expression, &r);
+
+		if (v.isUndefined() || v.isVoid())
+			v = "undefined";
+
+		entry->setProperty(RestApiIds::success, r.wasOk());
+		entry->setProperty(RestApiIds::value, v);
+
+		if (!r.wasOk())
+		{
+			auto scriptRoot = mc->getSampleManager().getProjectHandler()
+				.getSubDirectory(FileHandlerBase::Scripts);
+
+			auto errorLines = StringArray::fromLines(r.getErrorMessage());
+			auto parsed = RestHelpers::BaseScopedConsoleHandler::parseError(
+				errorLines[0], scriptRoot, e.moduleId);
+
+			entry->setProperty(RestApiIds::errorMessage, parsed.message);
+
+			if (parsed.location.isNotEmpty())
+				entry->setProperty(RestApiIds::location, parsed.location);
+
+			// Parse callstack entries
+			Array<var> callstack;
+
+			for (int ci = 1; ci < errorLines.size(); ci++)
+			{
+				auto csEntry = RestHelpers::BaseScopedConsoleHandler::parseError(
+					errorLines[ci], scriptRoot, e.moduleId);
+
+				if (csEntry.location.isNotEmpty())
+					callstack.add(csEntry.toCallstackString());
+			}
+
+			if (!callstack.isEmpty())
+				entry->setProperty(RestApiIds::callstack, var(callstack));
+		}
+	}
+	else
+	{
+		entry->setProperty(RestApiIds::success, false);
+		entry->setProperty(RestApiIds::value, "no script engine present");
+	}
+
+	replResults.add(var(entry.get()));
+}
+
+Array<var> MidiInjector::takeReplResults()
+{
+	ScopedLock sl(lock);
+	Array<var> results;
+	results.swapWith(replResults);
+	return results;
+}
+
+void MidiInjector::panic()
+{
+	// Fire note-off for all active notes
+	for (const auto& n : activeNotes)
+		fireNoteOff(n);
+
+	activeNotes.clear();
+	scheduledEvents.clear();
+	mc->allNotesOff();
+	mc->stopBufferToPlay();
+
+	totalEvents = 0;
+	playedEvents = 0;
+	sequenceStartMs = 0;
+	sequenceEndMs = 0;
+
+	stopTimer();
+}
+
+void MidiInjector::scheduleNextCallback()
+{
+	if (scheduledEvents.isEmpty() && activeNotes.isEmpty())
+	{
+		stopTimer();
+		return;
+	}
+
+	auto now = Time::getMillisecondCounterHiRes();
+	double nextTime = std::numeric_limits<double>::max();
+
+	if (!scheduledEvents.isEmpty())
+		nextTime = jmin(nextTime, scheduledEvents.getFirst().fireTimeMs);
+
+	if (!activeNotes.isEmpty())
+		nextTime = jmin(nextTime, activeNotes.getFirst().noteOffTimeMs);
+
+	int deltaMs = jmax(1, roundToInt(nextTime - now));
+	startTimer(deltaMs);
+}
+
+//==============================================================================
+// Test signal generation
+//==============================================================================
+
+void MidiInjector::fireTestSignalEvent(const ScheduledEvent& e)
+{
+	auto sampleRate = mc->getMainSynthChain()->getSampleRate();
+
+	if (sampleRate <= 0.0)
+		return;
+
+	auto key = makeSignalCacheKey(e, sampleRate);
+
+	if (!signalCache.contains(key))
+	{
+		int numSamples = roundToInt(sampleRate * e.duration / 1000.0);
+
+		if (numSamples <= 0)
+			numSamples = 1;
+
+		auto buffer = generateSignal(e.signal, sampleRate, numSamples,
+		                              e.frequency, e.startFrequency, e.endFrequency);
+
+		signalCache.set(key, std::move(buffer));
+	}
+
+	mc->setBufferToPlay(signalCache[key], sampleRate);
+}
+
+String MidiInjector::makeSignalCacheKey(const ScheduledEvent& e, double sampleRate)
+{
+	String key;
+	key << e.signal << "|" << String(sampleRate) << "|" << String(e.duration);
+
+	if (e.signal == "sine" || e.signal == "saw")
+		key << "|" << String(e.frequency);
+	else if (e.signal == "sweep")
+		key << "|" << String(e.startFrequency) << "|" << String(e.endFrequency);
+
+	return key;
+}
+
+AudioSampleBuffer MidiInjector::generateSignal(const String& signal, double sampleRate,
+    int numSamples, float frequency, float startFreq, float endFreq)
+{
+#if 0
+	AudioSampleBuffer buffer(2, numSamples);
+	buffer.clear();
+
+	auto* ch0 = buffer.getWritePointer(0);
+
+	if (signal == "sine")
+	{
+		for (int i = 0; i < numSamples; i++)
+		{
+			double t = (double)i / sampleRate;
+			ch0[i] = (float)std::sin(2.0 * MathConstants<double>::pi * frequency * t);
+		}
+	}
+	else if (signal == "saw")
+	{
+		for (int i = 0; i < numSamples; i++)
+		{
+			double t = (double)i / sampleRate;
+			double phase = std::fmod(frequency * t, 1.0);
+			ch0[i] = (float)(2.0 * phase - 1.0);
+		}
+	}
+	else if (signal == "sweep")
+	{
+		// Logarithmic sine sweep
+		double duration = (double)numSamples / sampleRate;
+		double logRatio = std::log(endFreq / startFreq);
+
+		for (int i = 0; i < numSamples; i++)
+		{
+			double t = (double)i / sampleRate;
+			double instantFreq = startFreq * std::exp(logRatio * t / duration);
+			double phase = 2.0 * MathConstants<double>::pi * startFreq * duration / logRatio
+			             * (std::exp(logRatio * t / duration) - 1.0);
+			ch0[i] = (float)std::sin(phase);
+		}
+	}
+	else if (signal == "dirac")
+	{
+		ch0[0] = 1.0f;
+	}
+	else if (signal == "noise")
+	{
+		Random rng;
+
+		for (int i = 0; i < numSamples; i++)
+			ch0[i] = rng.nextFloat() * 2.0f - 1.0f;
+	}
+	// "silence" — buffer is already cleared
+
+	// Copy channel 0 to channel 1
+	FloatVectorOperations::copy(buffer.getWritePointer(1), ch0, numSamples);
+
+	return buffer;
+#endif
+	return {};
+}
+
+//==============================================================================
+// dispatchSingleMidiMessage
+//==============================================================================
+
+RestHelpers::PendingNoteOff RestHelpers::dispatchSingleMidiMessage(
+	MainController* mc, const String& type, int channel,
+	int noteNumber, float velocity, int controller, int value)
+{
+	auto& ks = mc->getKeyboardState();
+
+	if (type == "note")
+	{
+		ks.noteOn(channel, noteNumber, velocity);
+
+		PendingNoteOff result;
+		result.channel = channel;
+		result.noteNumber = noteNumber;
+		result.valid = true;
+		return result;
+	}
+	else if (type == "cc")
+	{
+		ks.injectMessage(MidiMessage::controllerEvent(channel, controller, value));
+	}
+	else if (type == "pitchbend")
+	{
+		ks.injectMessage(MidiMessage::pitchWheel(channel, value));
+	}
+	else if (type == "allNotesOff")
+	{
+		mc->allNotesOff();
+	}
+
+	return {};
+}
+
+//==============================================================================
+// handleInjectMidi
+//==============================================================================
+
+RestServer::Response RestHelpers::handleInjectMidi(BackendProcessor* bp,
+                                                    RestServer::AsyncRequest::Ptr req)
+{
+	auto* injector = bp->getMidiInjector();
+
+	if (injector == nullptr)
+		return req->fail(503, "MIDI injector not available");
+
+	auto body = req->getRequest().getJsonBody();
+	auto messagesVar = body.getProperty(RestApiIds::messages, var());
+
+	if (!messagesVar.isArray())
+		return req->fail(400, "Missing or invalid 'messages' array");
+
+	auto* messagesArray = messagesVar.getArray();
+
+	// Validate messages before queuing
+	for (int i = 0; i < messagesArray->size(); i++)
+	{
+		auto& msg = messagesArray->getReference(i);
+		auto type = msg.getProperty(RestApiIds::type, "").toString();
+
+		if (type.isEmpty())
+			return req->fail(400, "Message at index " + String(i) + " missing 'type' field");
+
+		if (type != "note" && type != "cc" && type != "pitchbend" && type != "allNotesOff" && type != "repl" && type != "set_attribute" && type != "testsignal")
+			return req->fail(400, "Message at index " + String(i) + " has unknown type: " + type);
+
+		if (type == "testsignal")
+		{
+			auto signal = msg.getProperty(RestApiIds::signal, "").toString();
+
+			if (signal.isEmpty())
+				return req->fail(400, "testsignal at index " + String(i) + " missing 'signal'");
+
+			if (signal != "sine" && signal != "saw" && signal != "sweep" &&
+			    signal != "dirac" && signal != "noise" && signal != "silence")
+				return req->fail(400, "testsignal at index " + String(i) + " has unknown signal type: " + signal);
+
+			if ((signal == "sine" || signal == "saw") && msg.hasProperty(RestApiIds::frequency))
+			{
+				float freq = (float)msg.getProperty(RestApiIds::frequency, 440.0);
+
+				if (freq <= 0.0f)
+					return req->fail(400, "testsignal at index " + String(i) + " has invalid frequency: " + String(freq));
+			}
+
+			if (signal == "sweep")
+			{
+				float startFreq = (float)msg.getProperty(RestApiIds::startFrequency, 20.0);
+				float endFreq = (float)msg.getProperty(RestApiIds::endFrequency, 20000.0);
+
+				if (startFreq <= 0.0f || endFreq <= 0.0f)
+					return req->fail(400, "testsignal at index " + String(i) + " has invalid sweep frequency range");
+			}
+		}
+		else if (type == "set_attribute")
+		{
+			auto processorId = msg.getProperty(RestApiIds::processorId, "Interface").toString();
+			auto parameterId = msg.getProperty(RestApiIds::parameterId, "").toString();
+
+			if (parameterId.isEmpty())
+				return req->fail(400, "set_attribute at index " + String(i) + " missing 'parameterId'");
+
+			if (!msg.hasProperty(RestApiIds::value))
+				return req->fail(400, "set_attribute at index " + String(i) + " missing 'value'");
+
+			auto* processor = ProcessorHelpers::getFirstProcessorWithName(bp->getMainSynthChain(), processorId);
+
+			if (processor == nullptr)
+				return req->fail(400, "set_attribute at index " + String(i) + ": processor not found: " + processorId);
+
+			auto metadata = processor->getMetadata();
+			int resolvedIndex = -1;
+
+			for (int p = 0; p < metadata.parameters.size(); p++)
+			{
+				if (metadata.parameters[p].id == Identifier(parameterId))
+				{
+					resolvedIndex = metadata.parameters[p].parameterIndex;
+
+					// Validate value against range
+					auto range = metadata.parameters[p].range;
+					float val = (float)msg.getProperty(RestApiIds::value, 0.0);
+
+					if (val < (float)range.rng.start || val > (float)range.rng.end)
+						return req->fail(400, "set_attribute at index " + String(i) + ": value " + String(val)
+							+ " out of range [" + String(range.rng.start) + ", " + String(range.rng.end) + "] for parameter " + parameterId);
+
+					break;
+				}
+			}
+
+			if (resolvedIndex == -1)
+				return req->fail(400, "set_attribute at index " + String(i) + ": parameter not found: " + parameterId + " on processor " + processorId);
+
+			// Store resolved index back into the message for queueMessages to pick up
+			msg.getDynamicObject()->setProperty(Identifier("_resolvedIndex"), resolvedIndex);
+		}
+		else if (type == "repl")
+		{
+			auto expr = msg.getProperty(RestApiIds::expression, "").toString();
+
+			if (expr.isEmpty())
+				return req->fail(400, "REPL message at index " + String(i) + " missing 'expression'");
+		}
+		else if (type == "note")
+		{
+			if (!msg.hasProperty(RestApiIds::noteNumber))
+				return req->fail(400, "Note message at index " + String(i) + " missing 'noteNumber'");
+
+			int noteNumber = (int)msg.getProperty(RestApiIds::noteNumber, 0);
+
+			if (noteNumber < 0 || noteNumber > 127)
+				return req->fail(400, "Note message at index " + String(i) + " has invalid noteNumber: " + String(noteNumber));
+		}
+		else if (type == "cc")
+		{
+			if (!msg.hasProperty(RestApiIds::controller))
+				return req->fail(400, "CC message at index " + String(i) + " missing 'controller'");
+
+			if (!msg.hasProperty(RestApiIds::value))
+				return req->fail(400, "CC message at index " + String(i) + " missing 'value'");
+
+			int ctrl = (int)msg.getProperty(RestApiIds::controller, 0);
+			int val = (int)msg.getProperty(RestApiIds::value, 0);
+
+			if (ctrl < 0 || ctrl > 127)
+				return req->fail(400, "CC message at index " + String(i) + " has invalid controller: " + String(ctrl));
+
+			if (val < 0 || val > 127)
+				return req->fail(400, "CC message at index " + String(i) + " has invalid value: " + String(val));
+		}
+		else if (type == "pitchbend")
+		{
+			if (!msg.hasProperty(RestApiIds::value))
+				return req->fail(400, "Pitchbend message at index " + String(i) + " missing 'value'");
+
+			int val = (int)msg.getProperty(RestApiIds::value, 0);
+
+			if (val < 0 || val > 16383)
+				return req->fail(400, "Pitchbend message at index " + String(i) + " has invalid value: " + String(val));
+		}
+
+		// Validate channel if present (only for MIDI message types)
+		if (type != "allNotesOff" && type != "repl" && type != "set_attribute" && type != "testsignal" && msg.hasProperty(RestApiIds::channel))
+		{
+			int ch = (int)msg.getProperty(RestApiIds::channel, 1);
+
+			if (ch < 1 || ch > 16)
+				return req->fail(400, "Message at index " + String(i) + " has invalid channel: " + String(ch));
+		}
+	}
+
+	// Start audio recording if outputFile specified
+	auto recordOutput = body.getProperty(RestApiIds::recordOutput, "").toString();
+	bool isRecording = false;
+
+	if (recordOutput.isNotEmpty())
+	{
+		// Compute sequence duration from messages
+		double maxEndMs = 0.0;
+
+		for (int i = 0; i < messagesArray->size(); i++)
+		{
+			auto& msg = messagesArray->getReference(i);
+			double ts = (double)(int)msg.getProperty(RestApiIds::timestamp, 0);
+			double dur = (double)(int)msg.getProperty(RestApiIds::duration, 500);
+			auto type = msg.getProperty(RestApiIds::type, "").toString();
+
+			double endMs = ts;
+
+			if (type == "note" || type == "testsignal")
+				endMs += dur;
+
+			if (endMs > maxEndMs)
+				maxEndMs = endMs;
+		}
+
+		double recordSeconds = (maxEndMs / 1000.0) + 0.1; // add 100ms margin
+
+		if (recordSeconds < 0.1)
+			recordSeconds = 0.1;
+
+		File outputFile(recordOutput);
+		bp->getDebugLogger().startRecording(recordSeconds, outputFile);
+		isRecording = true;
+	}
+
+	// Queue messages
+	injector->queueMessages(*messagesArray);
+
+	// If blocking mode, wait for sequence to complete (with 30s timeout)
+	// Recording implies blocking — we need to wait for the sequence to finish
+	bool blocking = isRecording || getTrueValue(body.getProperty(RestApiIds::blocking, false));
+
+	if (blocking)
+	{
+		auto startWait = Time::getMillisecondCounterHiRes();
+		constexpr double maxWaitMs = 30000.0;
+
+		while (injector->getStatus().isPlaying)
+		{
+			if (Time::getMillisecondCounterHiRes() - startWait > maxWaitMs)
+				return req->fail(500, "Blocking inject_midi timed out after 30 seconds");
+
+			Thread::sleep(5);
+		}
+
+		// If recording, wait a bit more for the DebugLogger to finish writing
+		if (isRecording)
+			Thread::sleep(200);
+	}
+
+	// Build response with standard envelope: { success, result, logs, errors }
+	auto status = injector->getStatus();
+
+	DynamicObject::Ptr payload = new DynamicObject();
+	payload->setProperty(RestApiIds::isPlaying, status.isPlaying);
+	payload->setProperty(RestApiIds::durationMs, status.durationMs);
+	payload->setProperty(RestApiIds::activeNotes, status.activeNotes);
+	payload->setProperty(RestApiIds::eventsInSequence, status.eventsInSequence);
+	payload->setProperty(RestApiIds::playedEvents, status.playedEvents);
+	payload->setProperty(RestApiIds::progress, status.progress);
+
+	if (isRecording)
+		payload->setProperty(RestApiIds::recordOutput, recordOutput);
+
+	// Include any REPL results accumulated since last call
+	auto replResults = injector->takeReplResults();
+
+	if (!replResults.isEmpty())
+		payload->setProperty(RestApiIds::replResults, var(replResults));
+
+	DynamicObject::Ptr envelope = new DynamicObject();
+	envelope->setProperty(RestApiIds::success, true);
+	envelope->setProperty(RestApiIds::result, var(payload.get()));
+	envelope->setProperty(RestApiIds::logs, var(Array<var>()));
+	envelope->setProperty(RestApiIds::errors, var(Array<var>()));
+
+	return RestServer::Response::ok(var(envelope.get()));
 }
 
 } // namespace hise

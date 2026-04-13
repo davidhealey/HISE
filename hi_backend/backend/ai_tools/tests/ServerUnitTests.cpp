@@ -158,6 +158,18 @@ public:
         testUIApplyValidation();
         testUIApplyUndo();
 
+        testInjectMidiNote();
+        testInjectMidiChord();
+        testInjectMidiCC();
+        testInjectMidiPitchbend();
+        testInjectMidiAllNotesOff();
+        testInjectMidiSequence();
+        testInjectMidiValidation();
+        testInjectMidiEmptyPoll();
+        testInjectMidiRepl();
+        testInjectMidiSetAttribute();
+        testInjectMidiTestSignal();
+
         // Verify all endpoints were tested
         verifyAllEndpointsTested();
         
@@ -4708,6 +4720,514 @@ private:
         // Redo
         auto redoJson = ctx->parseJson(ctx->httpPost("/api/undo/forward", "{}"));
         expect((bool)redoJson[RestApiIds::success], "Redo should succeed");
+    }
+
+    //==========================================================================
+    // inject_midi tests
+    //==========================================================================
+
+    /** Helper to build a MIDI message JSON object. */
+    var makeMidiMessage(const String& type, int channel = 1, int noteNumber = 60,
+                        float velocity = 1.0f, int duration = 500, int timestamp = 0,
+                        int controller = 0, int value = 0)
+    {
+        DynamicObject::Ptr obj = new DynamicObject();
+        obj->setProperty(RestApiIds::type, type);
+
+        if (type != "allNotesOff")
+            obj->setProperty(RestApiIds::channel, channel);
+
+        if (type == "note")
+        {
+            obj->setProperty(RestApiIds::noteNumber, noteNumber);
+            obj->setProperty(RestApiIds::velocity, velocity);
+            obj->setProperty(RestApiIds::duration, duration);
+        }
+        else if (type == "cc")
+        {
+            obj->setProperty(RestApiIds::controller, controller);
+            obj->setProperty(RestApiIds::value, value);
+        }
+        else if (type == "pitchbend")
+        {
+            obj->setProperty(RestApiIds::value, value);
+        }
+
+        if (timestamp > 0)
+            obj->setProperty(RestApiIds::timestamp, timestamp);
+
+        return var(obj.get());
+    }
+
+    /** Helper to POST inject_midi messages and parse the response. */
+    var postMidi(const Array<var>& messages)
+    {
+        DynamicObject::Ptr body = new DynamicObject();
+        body->setProperty(RestApiIds::messages, var(messages));
+
+        auto response = ctx->httpPost("/api/inject_midi",
+                                       JSON::toString(var(body.get())));
+        return ctx->parseJson(response);
+    }
+
+    /** Extract the result sub-object from an inject_midi envelope response. */
+    var getMidiResult(const var& json)
+    {
+        return json[RestApiIds::result];
+    }
+
+    /** Helper to reset the MidiInjector state before each test. */
+    void resetMidiInjector()
+    {
+        Array<var> panic;
+        panic.add(makeMidiMessage("allNotesOff"));
+        postMidi(panic);
+    }
+
+    void testInjectMidiNote()
+    {
+        /** Setup: Clean state with compiled interface
+         *  Scenario: Inject a single note
+         *  Expected: success=true, eventsInSequence=1
+         */
+        beginTest("POST /api/inject_midi - single note");
+
+        ctx->reset();
+        ctx->compile("Content.makeFrontInterface(600, 400);");
+        resetMidiInjector();
+
+        Array<var> messages;
+        messages.add(makeMidiMessage("note", 1, 60, 1.0f, 200));
+
+        auto json = postMidi(messages);
+
+        expect((bool)json[RestApiIds::success], "Should succeed");
+        auto r = getMidiResult(json);
+        expectEquals<int>(r[RestApiIds::eventsInSequence], 1, "Should have 1 event");
+    }
+
+    void testInjectMidiChord()
+    {
+        /** Setup: Clean state with compiled interface
+         *  Scenario: Inject 3 notes simultaneously (C major chord)
+         *  Expected: success=true, eventsInSequence=3
+         */
+        beginTest("POST /api/inject_midi - chord (3 notes)");
+
+        ctx->reset();
+        ctx->compile("Content.makeFrontInterface(600, 400);");
+        resetMidiInjector();
+
+        Array<var> messages;
+        messages.add(makeMidiMessage("note", 1, 60, 0.8f, 300));  // C
+        messages.add(makeMidiMessage("note", 1, 64, 0.8f, 300));  // E
+        messages.add(makeMidiMessage("note", 1, 67, 0.8f, 300));  // G
+
+        auto json = postMidi(messages);
+
+        expect((bool)json[RestApiIds::success], "Should succeed");
+        auto r = getMidiResult(json);
+        expectEquals<int>(r[RestApiIds::eventsInSequence], 3, "Should have 3 events");
+    }
+
+    void testInjectMidiCC()
+    {
+        /** Setup: Clean state with compiled interface
+         *  Scenario: Inject a CC message
+         *  Expected: success=true, eventsInSequence=1
+         */
+        beginTest("POST /api/inject_midi - CC message");
+
+        ctx->reset();
+        ctx->compile("Content.makeFrontInterface(600, 400);");
+        resetMidiInjector();
+
+        Array<var> messages;
+        messages.add(makeMidiMessage("cc", 1, 0, 0, 0, 0, 74, 64));
+
+        auto json = postMidi(messages);
+
+        expect((bool)json[RestApiIds::success], "Should succeed");
+        auto r = getMidiResult(json);
+        expectEquals<int>(r[RestApiIds::eventsInSequence], 1, "Should have 1 event");
+    }
+
+    void testInjectMidiPitchbend()
+    {
+        /** Setup: Clean state with compiled interface
+         *  Scenario: Inject a pitchbend message
+         *  Expected: success=true, eventsInSequence=1
+         */
+        beginTest("POST /api/inject_midi - pitchbend");
+
+        ctx->reset();
+        ctx->compile("Content.makeFrontInterface(600, 400);");
+        resetMidiInjector();
+
+        Array<var> messages;
+        messages.add(makeMidiMessage("pitchbend", 1, 0, 0, 0, 0, 0, 8192));
+
+        auto json = postMidi(messages);
+
+        expect((bool)json[RestApiIds::success], "Should succeed");
+        auto r = getMidiResult(json);
+        expectEquals<int>(r[RestApiIds::eventsInSequence], 1, "Should have 1 event");
+    }
+
+    void testInjectMidiAllNotesOff()
+    {
+        /** Setup: Inject notes, then allNotesOff
+         *  Scenario: allNotesOff with delay=0 should panic immediately
+         *  Expected: Queue is cleared, isPlaying=false
+         */
+        beginTest("POST /api/inject_midi - allNotesOff panic");
+
+        ctx->reset();
+        ctx->compile("Content.makeFrontInterface(600, 400);");
+
+        // Inject a long note
+        Array<var> messages;
+        messages.add(makeMidiMessage("note", 1, 60, 1.0f, 5000));
+
+        postMidi(messages);
+
+        // Now send allNotesOff
+        Array<var> panicMessages;
+        panicMessages.add(makeMidiMessage("allNotesOff"));
+
+        auto json = postMidi(panicMessages);
+
+        expect((bool)json[RestApiIds::success], "Should succeed");
+        auto r = getMidiResult(json);
+        expect(!(bool)r[RestApiIds::isPlaying], "Should not be playing after panic");
+        expectEquals<int>(r[RestApiIds::activeNotes], 0, "No active notes after panic");
+    }
+
+    void testInjectMidiSequence()
+    {
+        /** Setup: Clean state with compiled interface
+         *  Scenario: Inject a sequence with delays between messages
+         *  Expected: success=true, isPlaying=true, durationMs reflects delays
+         */
+        beginTest("POST /api/inject_midi - delayed sequence");
+
+        ctx->reset();
+        ctx->compile("Content.makeFrontInterface(600, 400);");
+        resetMidiInjector();
+
+        Array<var> messages;
+        messages.add(makeMidiMessage("note", 1, 60, 1.0f, 200, 0));     // at t=0
+        messages.add(makeMidiMessage("note", 1, 64, 1.0f, 200, 500));   // at t=500ms
+        messages.add(makeMidiMessage("cc", 1, 0, 0, 0, 1000, 74, 100)); // at t=1000ms
+
+        auto json = postMidi(messages);
+
+        expect((bool)json[RestApiIds::success], "Should succeed");
+        auto r = getMidiResult(json);
+        expectEquals<int>(r[RestApiIds::eventsInSequence], 3, "Should have 3 events");
+
+        // durationMs should account for delays + note duration
+        int durationMs = (int)r[RestApiIds::durationMs];
+        expect(durationMs >= 1000, "Duration should be at least 1000ms (last event at t=1000)");
+
+        // Clean up
+        Array<var> panicMessages;
+        panicMessages.add(makeMidiMessage("allNotesOff"));
+        postMidi(panicMessages);
+    }
+
+    void testInjectMidiValidation()
+    {
+        /** Setup: Clean state
+         *  Scenario: Send various invalid messages
+         *  Expected: 400 errors with descriptive messages
+         */
+        beginTest("POST /api/inject_midi - validation");
+
+        ctx->reset();
+        ctx->compile("Content.makeFrontInterface(600, 400);");
+
+        // Missing type field
+        {
+            DynamicObject::Ptr body = new DynamicObject();
+            Array<var> msgs;
+            DynamicObject::Ptr msg = new DynamicObject();
+            msg->setProperty(RestApiIds::noteNumber, 60);
+            msgs.add(var(msg.get()));
+            body->setProperty(RestApiIds::messages, var(msgs));
+
+            auto response = ctx->httpPost("/api/inject_midi", JSON::toString(var(body.get())));
+            var json = ctx->parseJson(response);
+            expect(!(bool)json[RestApiIds::success], "Should fail without type");
+        }
+
+        // Unknown type
+        {
+            DynamicObject::Ptr body = new DynamicObject();
+            Array<var> msgs;
+            DynamicObject::Ptr msg = new DynamicObject();
+            msg->setProperty(RestApiIds::type, "sysex");
+            msgs.add(var(msg.get()));
+            body->setProperty(RestApiIds::messages, var(msgs));
+
+            auto response = ctx->httpPost("/api/inject_midi", JSON::toString(var(body.get())));
+            var json = ctx->parseJson(response);
+            expect(!(bool)json[RestApiIds::success], "Should fail with unknown type");
+        }
+
+        // Note missing noteNumber
+        {
+            DynamicObject::Ptr body = new DynamicObject();
+            Array<var> msgs;
+            DynamicObject::Ptr msg = new DynamicObject();
+            msg->setProperty(RestApiIds::type, "note");
+            msgs.add(var(msg.get()));
+            body->setProperty(RestApiIds::messages, var(msgs));
+
+            auto response = ctx->httpPost("/api/inject_midi", JSON::toString(var(body.get())));
+            var json = ctx->parseJson(response);
+            expect(!(bool)json[RestApiIds::success], "Should fail without noteNumber");
+        }
+
+        // CC missing controller
+        {
+            DynamicObject::Ptr body = new DynamicObject();
+            Array<var> msgs;
+            DynamicObject::Ptr msg = new DynamicObject();
+            msg->setProperty(RestApiIds::type, "cc");
+            msg->setProperty(RestApiIds::value, 64);
+            msgs.add(var(msg.get()));
+            body->setProperty(RestApiIds::messages, var(msgs));
+
+            auto response = ctx->httpPost("/api/inject_midi", JSON::toString(var(body.get())));
+            var json = ctx->parseJson(response);
+            expect(!(bool)json[RestApiIds::success], "Should fail without controller");
+        }
+
+        // Invalid channel
+        {
+            DynamicObject::Ptr body = new DynamicObject();
+            Array<var> msgs;
+            DynamicObject::Ptr msg = new DynamicObject();
+            msg->setProperty(RestApiIds::type, "note");
+            msg->setProperty(RestApiIds::noteNumber, 60);
+            msg->setProperty(RestApiIds::channel, 17);
+            msgs.add(var(msg.get()));
+            body->setProperty(RestApiIds::messages, var(msgs));
+
+            auto response = ctx->httpPost("/api/inject_midi", JSON::toString(var(body.get())));
+            var json = ctx->parseJson(response);
+            expect(!(bool)json[RestApiIds::success], "Should fail with channel 17");
+        }
+
+        // Missing messages array entirely
+        {
+            auto response = ctx->httpPost("/api/inject_midi", "{}");
+            var json = ctx->parseJson(response);
+            expect(!(bool)json[RestApiIds::success], "Should fail without messages array");
+        }
+    }
+
+    void testInjectMidiRepl()
+    {
+        /** Setup: Compile interface with a variable
+         *  Scenario: Play a note and evaluate a repl expression at the same timestamp
+         *  Expected: replResults array in response contains the evaluation result
+         */
+        beginTest("POST /api/inject_midi - repl event");
+
+        ctx->reset();
+        ctx->compile("Content.makeFrontInterface(600, 400);\nreg x = 42;");
+        resetMidiInjector();
+
+        // Queue a repl event with timestamp=0 (fires immediately)
+        DynamicObject::Ptr body = new DynamicObject();
+        Array<var> msgs;
+
+        DynamicObject::Ptr replMsg = new DynamicObject();
+        replMsg->setProperty(RestApiIds::type, "repl");
+        replMsg->setProperty(RestApiIds::expression, "x");
+        replMsg->setProperty(RestApiIds::timestamp, 0);
+        msgs.add(var(replMsg.get()));
+        body->setProperty(RestApiIds::messages, var(msgs));
+
+        auto response = ctx->httpPost("/api/inject_midi", JSON::toString(var(body.get())));
+        var json = ctx->parseJson(response);
+
+        expect((bool)json[RestApiIds::success], "Should succeed");
+        auto r = getMidiResult(json);
+        expectEquals<int>(r[RestApiIds::eventsInSequence], 1, "Should have 1 event");
+
+        // The repl result might not be in the immediate response since the timer
+        // fires asynchronously. Poll until we get it.
+        Array<var> allReplResults;
+
+        // Check immediate response first
+        if (r.hasProperty(RestApiIds::replResults))
+        {
+            auto results = r[RestApiIds::replResults];
+            if (results.isArray())
+                for (int i = 0; i < results.size(); i++)
+                    allReplResults.add(results[i]);
+        }
+
+        // Poll a few times if needed
+        for (int attempt = 0; attempt < 10 && allReplResults.isEmpty(); attempt++)
+        {
+            MessageManager::getInstance()->runDispatchLoopUntil(50);
+            Array<var> emptyMsgs;
+            auto pollJson = postMidi(emptyMsgs);
+            auto pollR = getMidiResult(pollJson);
+
+            if (pollR.hasProperty(RestApiIds::replResults))
+            {
+                auto results = pollR[RestApiIds::replResults];
+                if (results.isArray())
+                    for (int i = 0; i < results.size(); i++)
+                        allReplResults.add(results[i]);
+            }
+        }
+
+        expect(!allReplResults.isEmpty(), "Should have at least one REPL result");
+
+        if (!allReplResults.isEmpty())
+        {
+            auto firstResult = allReplResults[0];
+            expect((bool)firstResult[RestApiIds::success], "REPL eval should succeed");
+            expectEquals<int>(firstResult[RestApiIds::value], 42, "Should return value of x");
+            expect(firstResult[RestApiIds::expression].toString() == "x", "Should echo expression");
+        }
+    }
+
+    void testInjectMidiSetAttribute()
+    {
+        /** Setup: Compile interface with a knob
+         *  Scenario: Queue a set_attribute event to change the knob value
+         *  Expected: success=true, value is applied
+         */
+        beginTest("POST /api/inject_midi - set_attribute event");
+
+        ctx->reset();
+        ctx->compile("Content.makeFrontInterface(600, 400);\n"
+                      "const var Knob1 = Content.addKnob('Knob1', 0, 0);");
+        resetMidiInjector();
+
+        // set_attribute with timestamp=0 fires immediately
+        DynamicObject::Ptr body = new DynamicObject();
+        Array<var> msgs;
+
+        DynamicObject::Ptr attrMsg = new DynamicObject();
+        attrMsg->setProperty(RestApiIds::type, "set_attribute");
+        attrMsg->setProperty(RestApiIds::processorId, "Interface");
+        attrMsg->setProperty(RestApiIds::parameterId, "Knob1");
+        attrMsg->setProperty(RestApiIds::value, 0.5);
+        attrMsg->setProperty(RestApiIds::timestamp, 0);
+        msgs.add(var(attrMsg.get()));
+        body->setProperty(RestApiIds::messages, var(msgs));
+
+        auto response = ctx->httpPost("/api/inject_midi", JSON::toString(var(body.get())));
+        var json = ctx->parseJson(response);
+
+        expect((bool)json[RestApiIds::success], "Should succeed");
+        auto r = getMidiResult(json);
+        expectEquals<int>(r[RestApiIds::eventsInSequence], 1, "Should have 1 event");
+
+        // Validate that set_attribute with invalid parameterId is rejected
+        DynamicObject::Ptr body2 = new DynamicObject();
+        Array<var> msgs2;
+
+        DynamicObject::Ptr badMsg = new DynamicObject();
+        badMsg->setProperty(RestApiIds::type, "set_attribute");
+        badMsg->setProperty(RestApiIds::parameterId, "NonExistentKnob");
+        badMsg->setProperty(RestApiIds::value, 0.5);
+        msgs2.add(var(badMsg.get()));
+        body2->setProperty(RestApiIds::messages, var(msgs2));
+
+        auto response2 = ctx->httpPost("/api/inject_midi", JSON::toString(var(body2.get())));
+        var json2 = ctx->parseJson(response2);
+
+        expect(!(bool)json2[RestApiIds::success], "Should fail with unknown parameterId");
+    }
+
+    void testInjectMidiTestSignal()
+    {
+        /** Setup: Clean state
+         *  Scenario: Inject a sine test signal and verify it succeeds
+         *  Expected: success=true, eventsInSequence=1
+         */
+        beginTest("POST /api/inject_midi - testsignal");
+
+        ctx->reset();
+        ctx->compile("Content.makeFrontInterface(600, 400);");
+        resetMidiInjector();
+
+        // Queue a short sine signal
+        DynamicObject::Ptr body = new DynamicObject();
+        Array<var> msgs;
+
+        DynamicObject::Ptr sigMsg = new DynamicObject();
+        sigMsg->setProperty(RestApiIds::type, "testsignal");
+        sigMsg->setProperty(RestApiIds::signal, "sine");
+        sigMsg->setProperty(RestApiIds::frequency, 440.0);
+        sigMsg->setProperty(RestApiIds::duration, 100);
+        sigMsg->setProperty(RestApiIds::timestamp, 0);
+        msgs.add(var(sigMsg.get()));
+        body->setProperty(RestApiIds::messages, var(msgs));
+
+        auto response = ctx->httpPost("/api/inject_midi", JSON::toString(var(body.get())));
+        var json = ctx->parseJson(response);
+
+        expect((bool)json[RestApiIds::success], "Should succeed");
+        auto r = getMidiResult(json);
+        expectEquals<int>(r[RestApiIds::eventsInSequence], 1, "Should have 1 event");
+
+        // Test validation: unknown signal type
+        DynamicObject::Ptr body2 = new DynamicObject();
+        Array<var> msgs2;
+
+        DynamicObject::Ptr badSig = new DynamicObject();
+        badSig->setProperty(RestApiIds::type, "testsignal");
+        badSig->setProperty(RestApiIds::signal, "kazoo");
+        msgs2.add(var(badSig.get()));
+        body2->setProperty(RestApiIds::messages, var(msgs2));
+
+        auto response2 = ctx->httpPost("/api/inject_midi", JSON::toString(var(body2.get())));
+        var json2 = ctx->parseJson(response2);
+
+        expect(!(bool)json2[RestApiIds::success], "Should fail with unknown signal type");
+
+        // Clean up
+        Array<var> panicMsgs;
+        panicMsgs.add(makeMidiMessage("allNotesOff"));
+        postMidi(panicMsgs);
+    }
+
+    void testInjectMidiEmptyPoll()
+    {
+        /** Setup: Clean state, nothing playing
+         *  Scenario: Send empty messages array to poll status
+         *  Expected: success=true, isPlaying=false, progress=1.0
+         */
+        beginTest("POST /api/inject_midi - empty poll");
+
+        ctx->reset();
+        ctx->compile("Content.makeFrontInterface(600, 400);");
+
+        // Ensure clean state with panic first
+        Array<var> panicMessages;
+        panicMessages.add(makeMidiMessage("allNotesOff"));
+        postMidi(panicMessages);
+
+        // Poll with empty array
+        Array<var> empty;
+        auto json = postMidi(empty);
+
+        expect((bool)json[RestApiIds::success], "Should succeed");
+        auto r = getMidiResult(json);
+        expect(!(bool)r[RestApiIds::isPlaying], "Should not be playing");
+        expectEquals<int>(r[RestApiIds::activeNotes], 0, "No active notes");
+        expectEquals<int>(r[RestApiIds::eventsInSequence], 0, "No events");
+        expectEquals<int>(r[RestApiIds::playedEvents], 0, "No played events");
     }
 
 };

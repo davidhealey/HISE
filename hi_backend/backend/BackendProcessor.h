@@ -39,6 +39,7 @@ namespace hise { using namespace juce;
 
 class BackendProcessor;
 class InteractionTester;
+class MidiInjector;
 
 struct AnalyserInfo: public ReferenceCountedObject
 {
@@ -468,6 +469,9 @@ public:
 	
 	/** Returns the InteractionTester for UI interaction testing via REST API. */
 	InteractionTester* getInteractionTester();
+
+	/** Returns the MidiInjector for MIDI injection via REST API. */
+	MidiInjector* getMidiInjector();
 	
 	/** Shows the Interaction Test Window, creating the tester if needed. */
 	void showInteractionTestWindow();
@@ -653,6 +657,7 @@ private:
 	simple_css::Animator restServerAnimator;
 	
 	std::unique_ptr<InteractionTester> interactionTester;
+	std::unique_ptr<MidiInjector> midiInjector;
 
 	hise::ProcessorMetadataRegistry processorDatabase;
 

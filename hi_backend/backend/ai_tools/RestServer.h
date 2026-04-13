@@ -263,6 +263,27 @@ namespace RestApiIds
     DECLARE_ID(parentId);             // Parent component ID for add/move operations
     DECLARE_ID(keepPosition);         // Preserve absolute position when reparenting
 
+    // inject_midi
+    DECLARE_ID(messages);             // Array of MIDI message objects
+    DECLARE_ID(noteNumber);           // MIDI note number (0-127)
+    DECLARE_ID(velocity);             // Note velocity (0.0-1.0)
+    DECLARE_ID(channel);              // MIDI channel (1-16)
+    DECLARE_ID(controller);           // CC controller number (0-127)
+    DECLARE_ID(timestamp);            // Absolute time offset in ms from start of sequence
+    DECLARE_ID(isPlaying);            // Whether MIDI sequence is still playing
+    DECLARE_ID(activeNotes);          // Number of notes currently on
+    DECLARE_ID(eventsInSequence);     // Total logical events in queue
+    DECLARE_ID(playedEvents);         // Number of events dispatched so far
+    DECLARE_ID(replResults);          // Array of REPL evaluation results from inject_midi
+    DECLARE_ID(processorId);          // Target processor ID for set_attribute
+    DECLARE_ID(parameterId);          // Parameter name for set_attribute
+    DECLARE_ID(blocking);             // If true, wait for sequence to complete before responding
+    DECLARE_ID(signal);               // Test signal type (sine, saw, sweep, dirac, noise, silence)
+    DECLARE_ID(frequency);            // Signal frequency in Hz
+    DECLARE_ID(startFrequency);       // Sweep start frequency in Hz
+    DECLARE_ID(endFrequency);         // Sweep end frequency in Hz
+    DECLARE_ID(recordOutput);         // File path to record audio output to WAV
+
 }
 
 #undef DECLARE_ID
