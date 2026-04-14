@@ -428,7 +428,6 @@ BackendProcessor::BackendProcessor(AudioDeviceManager *deviceManager_/*=nullptr*
   AudioProcessorDriver(deviceManager_, callback_),
   scriptUnlocker(this),
   autosaver(this),
-  replServer(*this),
   pluginParameterRamp(this)
 {
 	// Register all REST API routes from the centralized metadata
@@ -508,16 +507,7 @@ if (!inUnitTestMode())
 	{
 		getAutoSaver().initialise();
 
-		if (BackendProcessor::isUsingCommandLineServerMode())
-		{
-			restServer.start(commandLineServerPort);
-		}
-		else if (getSettingsObject().getSetting(HiseSettings::Scripting::AutoStartRestServer).toString() == "Yes")
-		{
-			// Auto-start REST API server if enabled in settings
-			int port = (int)getSettingsObject().getSetting(HiseSettings::Scripting::RestApiPort);
-			restServer.start(port);
-		}
+		
 	}
 	
 	clearPreset(dontSendNotification);

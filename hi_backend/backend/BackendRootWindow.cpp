@@ -975,6 +975,28 @@ void BackendRootWindow::resized()
 
 #endif
 
+
+	auto bp = getBackendProcessor();
+	auto& restServer = bp->getRestServer();
+	
+	if (getTopLevelComponent() != nullptr && getLocalBounds().isEmpty() && !restServerInitialised)
+	{
+		restServerInitialised = true;
+
+		if (BackendProcessor::isUsingCommandLineServerMode())
+		{
+			restServer.start(bp->commandLineServerPort);
+		}
+		else if (bp->getSettingsObject().getSetting(HiseSettings::Scripting::AutoStartRestServer).toString() == "Yes")
+		{
+			// Auto-start REST API server if enabled in settings
+			int port = (int)bp->getSettingsObject().getSetting(HiseSettings::Scripting::RestApiPort);
+			restServer.start(port);
+		}
+	}
+
+	
+
 }
 
 void BackendRootWindow::showSettingsWindow()

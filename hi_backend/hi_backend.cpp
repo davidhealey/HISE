@@ -96,7 +96,6 @@
 #include "backend/ai_tools/tests/ProcessorMetadataTests.cpp"
 #endif
 
-#include "backend/ReplServer.cpp"
 #include "backend/BackendProcessor.cpp"
 #include "backend/BackendComponents.cpp"
 #include "backend/BackendToolbar.cpp"

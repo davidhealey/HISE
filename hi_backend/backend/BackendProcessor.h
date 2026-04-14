@@ -548,7 +548,6 @@ public:
 	
 	RestServer& getRestServer() { return restServer; }
 
-	ReplServer& getReplServer() { return replServer; }
 
 	simple_css::Animator& getCssParseAnimator() { return restServerAnimator; }
 
@@ -605,6 +604,8 @@ public:
 
 	PluginParameterRamp pluginParameterRamp;
 
+	static int commandLineServerPort;
+
 private:
 
 #if HISE_INCLUDE_PROFILING_TOOLKIT
@@ -653,7 +654,6 @@ private:
 	ScopedPointer<ControlledObject> buildUndoManager;
 
 	RestServer restServer;
-	ReplServer replServer;
 	simple_css::Animator restServerAnimator;
 	
 	std::unique_ptr<InteractionTester> interactionTester;
@@ -661,7 +661,7 @@ private:
 
 	hise::ProcessorMetadataRegistry processorDatabase;
 
-	static int commandLineServerPort;
+	
 
 	JUCE_DECLARE_WEAK_REFERENCEABLE(BackendProcessor);
 	JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(BackendProcessor)

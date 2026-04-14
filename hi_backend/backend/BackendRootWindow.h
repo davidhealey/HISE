@@ -375,6 +375,7 @@ private:
 	ScopedPointer<FloatingTileDocumentWindow> docWindow;
 
 	bool resetOnClose = false;
+	bool restServerInitialised = false;
 
 	JUCE_DECLARE_WEAK_REFERENCEABLE(BackendRootWindow);
 

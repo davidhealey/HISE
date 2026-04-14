@@ -211,6 +211,8 @@ public:
 				return 150; 
 		}
 
+		void initialiseMarkdown();
+
 		int getPopupWidth() const override
 		{
 			if (parser != nullptr)
@@ -279,6 +281,7 @@ public:
 		String arguments;
 
 		ScopedPointer<MarkdownRenderer> parser;
+		bool markdownInitialised = false;
 
 		const ValueTree methodTree;
 	};

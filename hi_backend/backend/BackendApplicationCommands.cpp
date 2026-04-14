@@ -146,7 +146,6 @@ void BackendCommandTarget::getAllCommands(Array<CommandID>& commands)
 		MenuToolsConvertSVGToPathData,
         MenuToolsBroadcasterWizard,
 		MenuToolsToggleRestServer,
-		MenuToolsToggleRepl,
 		MenuToolsShowInteractionTestWindow,
 		MenuExportRestoreToDefault,
 		MenuExportValidateUserPresets,
@@ -508,11 +507,6 @@ void BackendCommandTarget::getCommandInfo(CommandID commandID, ApplicationComman
 			bpe->getBackendProcessor()->getRestServer().isRunning(), 'X', false);
 		result.categoryName = "Tools";
 		break;
-	case MenuToolsToggleRepl:
-		setCommandTarget(result, "Toggle REPL Console", true,
-			bpe->getBackendProcessor()->getReplServer().isActive(), 'X', false);
-		result.categoryName = "Tools";
-		break;
 	case MenuToolsShowInteractionTestWindow:
 		setCommandTarget(result, "Show Interaction Test Window", true, false, 'X', false);
 		result.categoryName = "Tools";
@@ -807,21 +801,6 @@ bool BackendCommandTarget::perform(const InvocationInfo &info)
 		{
 			int port = (int)bpe->getBackendProcessor()->getSettingsObject().getSetting(HiseSettings::Scripting::RestApiPort);
 			server.start(port);
-		}
-		updateCommands();
-		return true;
-	}
-	case MenuToolsToggleRepl:
-	{
-		auto& repl = bpe->getBackendProcessor()->getReplServer();
-		if (repl.isActive())
-		{
-			repl.stop();
-		}
-		else
-		{
-			repl.start(true);
-			repl.launchCliClient();
 		}
 		updateCommands();
 		return true;
@@ -1171,7 +1150,6 @@ PopupMenu BackendCommandTarget::getMenuForIndex(int topLevelMenuIndex, const Str
             ADD_MENU_ITEM(MenuToolsConvertSVGToPathData);
             ADD_MENU_ITEM(MenuToolsBroadcasterWizard);
             ADD_MENU_ITEM(MenuToolsToggleRestServer);
-            ADD_MENU_ITEM(MenuToolsToggleRepl);
             ADD_MENU_ITEM(MenuToolsShowInteractionTestWindow);
             p.addSeparator();
             ADD_MENU_ITEM(MenuToolsShowDspNetworkDllInfo);
@@ -1188,7 +1166,6 @@ PopupMenu BackendCommandTarget::getMenuForIndex(int topLevelMenuIndex, const Str
 			ADD_MENU_ITEM(MenuToolsConvertSVGToPathData);
             ADD_MENU_ITEM(MenuToolsBroadcasterWizard);
             ADD_MENU_ITEM(MenuToolsToggleRestServer);
-            ADD_MENU_ITEM(MenuToolsToggleRepl);
             ADD_MENU_ITEM(MenuToolsShowInteractionTestWindow);
             
 			p.addSeparator();
