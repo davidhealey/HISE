@@ -747,6 +747,7 @@ static var buildResponseSchema(const RestHelpers::RouteMetadata& route)
 	// success (always present)
 	DynamicObject::Ptr successProp = new DynamicObject();
 	successProp->setProperty("type", "boolean");
+	successProp->setProperty("description", "Whether the request completed successfully");
 	envProps->setProperty("success", var(successProp.get()));
 
 	// Endpoint-specific response fields (flat, alongside success/logs/errors)
@@ -765,19 +766,45 @@ static var buildResponseSchema(const RestHelpers::RouteMetadata& route)
 		envProps->setProperty("result", var(resultProp.get()));
 	}
 
-	// logs
+	// logs - captured Console.print() output during request processing
 	DynamicObject::Ptr logsProp = new DynamicObject();
 	logsProp->setProperty("type", "array");
+	logsProp->setProperty("description",
+		"Console.print() output captured during request processing");
 	DynamicObject::Ptr logItems = new DynamicObject();
 	logItems->setProperty("type", "string");
 	logsProp->setProperty("items", var(logItems.get()));
 	envProps->setProperty("logs", var(logsProp.get()));
 
-	// errors
+	// errors - script errors with message and callstack
 	DynamicObject::Ptr errorsProp = new DynamicObject();
 	errorsProp->setProperty("type", "array");
+	errorsProp->setProperty("description",
+		"Script errors captured during request processing");
+
 	DynamicObject::Ptr errorItems = new DynamicObject();
 	errorItems->setProperty("type", "object");
+
+	DynamicObject::Ptr errorItemProps = new DynamicObject();
+
+	DynamicObject::Ptr errMsgProp = new DynamicObject();
+	errMsgProp->setProperty("type", "string");
+	errMsgProp->setProperty("description", "The error message");
+	errorItemProps->setProperty("errorMessage", var(errMsgProp.get()));
+
+	DynamicObject::Ptr callstackProp = new DynamicObject();
+	callstackProp->setProperty("type", "array");
+	callstackProp->setProperty("description",
+		"Call stack frames (e.g. \"myFunction() at Scripts/main.js:15:8\")");
+	DynamicObject::Ptr callstackItems = new DynamicObject();
+	callstackItems->setProperty("type", "string");
+	callstackProp->setProperty("items", var(callstackItems.get()));
+	errorItemProps->setProperty("callstack", var(callstackProp.get()));
+
+	errorItems->setProperty("properties", var(errorItemProps.get()));
+	errorItems->setProperty("required",
+		var(Array<var>{ var("errorMessage"), var("callstack") }));
+
 	errorsProp->setProperty("items", var(errorItems.get()));
 	envProps->setProperty("errors", var(errorsProp.get()));
 

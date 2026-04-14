@@ -52,7 +52,8 @@
                                     "type": "object",
                                     "properties": {
                                         "success": {
-                                            "type": "boolean"
+                                            "type": "boolean",
+                                            "description": "Whether the request completed successfully"
                                         },
                                         "result": {
                                             "type": "string",
@@ -60,14 +61,33 @@
                                         },
                                         "logs": {
                                             "type": "array",
+                                            "description": "Console.print() output captured during request processing",
                                             "items": {
                                                 "type": "string"
                                             }
                                         },
                                         "errors": {
                                             "type": "array",
+                                            "description": "Script errors captured during request processing",
                                             "items": {
-                                                "type": "object"
+                                                "type": "object",
+                                                "properties": {
+                                                    "errorMessage": {
+                                                        "type": "string",
+                                                        "description": "The error message"
+                                                    },
+                                                    "callstack": {
+                                                        "type": "array",
+                                                        "description": "Call stack frames (e.g. \"myFunction() at Scripts/main.js:15:8\")",
+                                                        "items": {
+                                                            "type": "string"
+                                                        }
+                                                    }
+                                                },
+                                                "required": [
+                                                    "errorMessage",
+                                                    "callstack"
+                                                ]
                                             }
                                         }
                                     },
@@ -100,7 +120,8 @@
                                     "type": "object",
                                     "properties": {
                                         "success": {
-                                            "type": "boolean"
+                                            "type": "boolean",
+                                            "description": "Whether the request completed successfully"
                                         },
                                         "server": {
                                             "type": "object",
@@ -195,14 +216,33 @@
                                         },
                                         "logs": {
                                             "type": "array",
+                                            "description": "Console.print() output captured during request processing",
                                             "items": {
                                                 "type": "string"
                                             }
                                         },
                                         "errors": {
                                             "type": "array",
+                                            "description": "Script errors captured during request processing",
                                             "items": {
-                                                "type": "object"
+                                                "type": "object",
+                                                "properties": {
+                                                    "errorMessage": {
+                                                        "type": "string",
+                                                        "description": "The error message"
+                                                    },
+                                                    "callstack": {
+                                                        "type": "array",
+                                                        "description": "Call stack frames (e.g. \"myFunction() at Scripts/main.js:15:8\")",
+                                                        "items": {
+                                                            "type": "string"
+                                                        }
+                                                    }
+                                                },
+                                                "required": [
+                                                    "errorMessage",
+                                                    "callstack"
+                                                ]
                                             }
                                         }
                                     },
@@ -286,7 +326,8 @@
                                     "type": "object",
                                     "properties": {
                                         "success": {
-                                            "type": "boolean"
+                                            "type": "boolean",
+                                            "description": "Whether the request completed successfully"
                                         },
                                         "moduleId": {
                                             "type": "string",
@@ -320,14 +361,33 @@
                                         },
                                         "logs": {
                                             "type": "array",
+                                            "description": "Console.print() output captured during request processing",
                                             "items": {
                                                 "type": "string"
                                             }
                                         },
                                         "errors": {
                                             "type": "array",
+                                            "description": "Script errors captured during request processing",
                                             "items": {
-                                                "type": "object"
+                                                "type": "object",
+                                                "properties": {
+                                                    "errorMessage": {
+                                                        "type": "string",
+                                                        "description": "The error message"
+                                                    },
+                                                    "callstack": {
+                                                        "type": "array",
+                                                        "description": "Call stack frames (e.g. \"myFunction() at Scripts/main.js:15:8\")",
+                                                        "items": {
+                                                            "type": "string"
+                                                        }
+                                                    }
+                                                },
+                                                "required": [
+                                                    "errorMessage",
+                                                    "callstack"
+                                                ]
                                             }
                                         }
                                     },
@@ -421,7 +481,8 @@
                                     "type": "object",
                                     "properties": {
                                         "success": {
-                                            "type": "boolean"
+                                            "type": "boolean",
+                                            "description": "Whether the request completed successfully"
                                         },
                                         "moduleId": {
                                             "type": "string",
@@ -449,14 +510,33 @@
                                         },
                                         "logs": {
                                             "type": "array",
+                                            "description": "Console.print() output captured during request processing",
                                             "items": {
                                                 "type": "string"
                                             }
                                         },
                                         "errors": {
                                             "type": "array",
+                                            "description": "Script errors captured during request processing",
                                             "items": {
-                                                "type": "object"
+                                                "type": "object",
+                                                "properties": {
+                                                    "errorMessage": {
+                                                        "type": "string",
+                                                        "description": "The error message"
+                                                    },
+                                                    "callstack": {
+                                                        "type": "array",
+                                                        "description": "Call stack frames (e.g. \"myFunction() at Scripts/main.js:15:8\")",
+                                                        "items": {
+                                                            "type": "string"
+                                                        }
+                                                    }
+                                                },
+                                                "required": [
+                                                    "errorMessage",
+                                                    "callstack"
+                                                ]
                                             }
                                         }
                                     },
@@ -536,7 +616,8 @@
                                     "type": "object",
                                     "properties": {
                                         "success": {
-                                            "type": "boolean"
+                                            "type": "boolean",
+                                            "description": "Whether the request completed successfully"
                                         },
                                         "moduleId": {
                                             "type": "string",
@@ -552,14 +633,33 @@
                                         },
                                         "logs": {
                                             "type": "array",
+                                            "description": "Console.print() output captured during request processing",
                                             "items": {
                                                 "type": "string"
                                             }
                                         },
                                         "errors": {
                                             "type": "array",
+                                            "description": "Script errors captured during request processing",
                                             "items": {
-                                                "type": "object"
+                                                "type": "object",
+                                                "properties": {
+                                                    "errorMessage": {
+                                                        "type": "string",
+                                                        "description": "The error message"
+                                                    },
+                                                    "callstack": {
+                                                        "type": "array",
+                                                        "description": "Call stack frames (e.g. \"myFunction() at Scripts/main.js:15:8\")",
+                                                        "items": {
+                                                            "type": "string"
+                                                        }
+                                                    }
+                                                },
+                                                "required": [
+                                                    "errorMessage",
+                                                    "callstack"
+                                                ]
                                             }
                                         }
                                     },
@@ -647,7 +747,8 @@
                                     "type": "object",
                                     "properties": {
                                         "success": {
-                                            "type": "boolean"
+                                            "type": "boolean",
+                                            "description": "Whether the request completed successfully"
                                         },
                                         "result": {
                                             "type": "string",
@@ -667,14 +768,33 @@
                                         },
                                         "logs": {
                                             "type": "array",
+                                            "description": "Console.print() output captured during request processing",
                                             "items": {
                                                 "type": "string"
                                             }
                                         },
                                         "errors": {
                                             "type": "array",
+                                            "description": "Script errors captured during request processing",
                                             "items": {
-                                                "type": "object"
+                                                "type": "object",
+                                                "properties": {
+                                                    "errorMessage": {
+                                                        "type": "string",
+                                                        "description": "The error message"
+                                                    },
+                                                    "callstack": {
+                                                        "type": "array",
+                                                        "description": "Call stack frames (e.g. \"myFunction() at Scripts/main.js:15:8\")",
+                                                        "items": {
+                                                            "type": "string"
+                                                        }
+                                                    }
+                                                },
+                                                "required": [
+                                                    "errorMessage",
+                                                    "callstack"
+                                                ]
                                             }
                                         }
                                     },
@@ -742,7 +862,8 @@
                                     "type": "object",
                                     "properties": {
                                         "success": {
-                                            "type": "boolean"
+                                            "type": "boolean",
+                                            "description": "Whether the request completed successfully"
                                         },
                                         "moduleId": {
                                             "type": "string",
@@ -772,14 +893,33 @@
                                         },
                                         "logs": {
                                             "type": "array",
+                                            "description": "Console.print() output captured during request processing",
                                             "items": {
                                                 "type": "string"
                                             }
                                         },
                                         "errors": {
                                             "type": "array",
+                                            "description": "Script errors captured during request processing",
                                             "items": {
-                                                "type": "object"
+                                                "type": "object",
+                                                "properties": {
+                                                    "errorMessage": {
+                                                        "type": "string",
+                                                        "description": "The error message"
+                                                    },
+                                                    "callstack": {
+                                                        "type": "array",
+                                                        "description": "Call stack frames (e.g. \"myFunction() at Scripts/main.js:15:8\")",
+                                                        "items": {
+                                                            "type": "string"
+                                                        }
+                                                    }
+                                                },
+                                                "required": [
+                                                    "errorMessage",
+                                                    "callstack"
+                                                ]
                                             }
                                         }
                                     },
@@ -855,7 +995,8 @@
                                     "type": "object",
                                     "properties": {
                                         "success": {
-                                            "type": "boolean"
+                                            "type": "boolean",
+                                            "description": "Whether the request completed successfully"
                                         },
                                         "moduleId": {
                                             "type": "string",
@@ -902,14 +1043,33 @@
                                         },
                                         "logs": {
                                             "type": "array",
+                                            "description": "Console.print() output captured during request processing",
                                             "items": {
                                                 "type": "string"
                                             }
                                         },
                                         "errors": {
                                             "type": "array",
+                                            "description": "Script errors captured during request processing",
                                             "items": {
-                                                "type": "object"
+                                                "type": "object",
+                                                "properties": {
+                                                    "errorMessage": {
+                                                        "type": "string",
+                                                        "description": "The error message"
+                                                    },
+                                                    "callstack": {
+                                                        "type": "array",
+                                                        "description": "Call stack frames (e.g. \"myFunction() at Scripts/main.js:15:8\")",
+                                                        "items": {
+                                                            "type": "string"
+                                                        }
+                                                    }
+                                                },
+                                                "required": [
+                                                    "errorMessage",
+                                                    "callstack"
+                                                ]
                                             }
                                         }
                                     },
@@ -992,7 +1152,8 @@
                                     "type": "object",
                                     "properties": {
                                         "success": {
-                                            "type": "boolean"
+                                            "type": "boolean",
+                                            "description": "Whether the request completed successfully"
                                         },
                                         "moduleId": {
                                             "type": "string",
@@ -1020,14 +1181,33 @@
                                         },
                                         "logs": {
                                             "type": "array",
+                                            "description": "Console.print() output captured during request processing",
                                             "items": {
                                                 "type": "string"
                                             }
                                         },
                                         "errors": {
                                             "type": "array",
+                                            "description": "Script errors captured during request processing",
                                             "items": {
-                                                "type": "object"
+                                                "type": "object",
+                                                "properties": {
+                                                    "errorMessage": {
+                                                        "type": "string",
+                                                        "description": "The error message"
+                                                    },
+                                                    "callstack": {
+                                                        "type": "array",
+                                                        "description": "Call stack frames (e.g. \"myFunction() at Scripts/main.js:15:8\")",
+                                                        "items": {
+                                                            "type": "string"
+                                                        }
+                                                    }
+                                                },
+                                                "required": [
+                                                    "errorMessage",
+                                                    "callstack"
+                                                ]
                                             }
                                         }
                                     },
@@ -1124,7 +1304,8 @@
                                     "type": "object",
                                     "properties": {
                                         "success": {
-                                            "type": "boolean"
+                                            "type": "boolean",
+                                            "description": "Whether the request completed successfully"
                                         },
                                         "moduleId": {
                                             "type": "string",
@@ -1148,14 +1329,33 @@
                                         },
                                         "logs": {
                                             "type": "array",
+                                            "description": "Console.print() output captured during request processing",
                                             "items": {
                                                 "type": "string"
                                             }
                                         },
                                         "errors": {
                                             "type": "array",
+                                            "description": "Script errors captured during request processing",
                                             "items": {
-                                                "type": "object"
+                                                "type": "object",
+                                                "properties": {
+                                                    "errorMessage": {
+                                                        "type": "string",
+                                                        "description": "The error message"
+                                                    },
+                                                    "callstack": {
+                                                        "type": "array",
+                                                        "description": "Call stack frames (e.g. \"myFunction() at Scripts/main.js:15:8\")",
+                                                        "items": {
+                                                            "type": "string"
+                                                        }
+                                                    }
+                                                },
+                                                "required": [
+                                                    "errorMessage",
+                                                    "callstack"
+                                                ]
                                             }
                                         }
                                     },
@@ -1262,7 +1462,8 @@
                                     "type": "object",
                                     "properties": {
                                         "success": {
-                                            "type": "boolean"
+                                            "type": "boolean",
+                                            "description": "Whether the request completed successfully"
                                         },
                                         "moduleId": {
                                             "type": "string",
@@ -1296,14 +1497,33 @@
                                         },
                                         "logs": {
                                             "type": "array",
+                                            "description": "Console.print() output captured during request processing",
                                             "items": {
                                                 "type": "string"
                                             }
                                         },
                                         "errors": {
                                             "type": "array",
+                                            "description": "Script errors captured during request processing",
                                             "items": {
-                                                "type": "object"
+                                                "type": "object",
+                                                "properties": {
+                                                    "errorMessage": {
+                                                        "type": "string",
+                                                        "description": "The error message"
+                                                    },
+                                                    "callstack": {
+                                                        "type": "array",
+                                                        "description": "Call stack frames (e.g. \"myFunction() at Scripts/main.js:15:8\")",
+                                                        "items": {
+                                                            "type": "string"
+                                                        }
+                                                    }
+                                                },
+                                                "required": [
+                                                    "errorMessage",
+                                                    "callstack"
+                                                ]
                                             }
                                         }
                                     },
@@ -1402,7 +1622,8 @@
                                     "type": "object",
                                     "properties": {
                                         "success": {
-                                            "type": "boolean"
+                                            "type": "boolean",
+                                            "description": "Whether the request completed successfully"
                                         },
                                         "moduleId": {
                                             "type": "string",
@@ -1434,14 +1655,33 @@
                                         },
                                         "logs": {
                                             "type": "array",
+                                            "description": "Console.print() output captured during request processing",
                                             "items": {
                                                 "type": "string"
                                             }
                                         },
                                         "errors": {
                                             "type": "array",
+                                            "description": "Script errors captured during request processing",
                                             "items": {
-                                                "type": "object"
+                                                "type": "object",
+                                                "properties": {
+                                                    "errorMessage": {
+                                                        "type": "string",
+                                                        "description": "The error message"
+                                                    },
+                                                    "callstack": {
+                                                        "type": "array",
+                                                        "description": "Call stack frames (e.g. \"myFunction() at Scripts/main.js:15:8\")",
+                                                        "items": {
+                                                            "type": "string"
+                                                        }
+                                                    }
+                                                },
+                                                "required": [
+                                                    "errorMessage",
+                                                    "callstack"
+                                                ]
                                             }
                                         }
                                     },
@@ -1506,7 +1746,8 @@
                                     "type": "object",
                                     "properties": {
                                         "success": {
-                                            "type": "boolean"
+                                            "type": "boolean",
+                                            "description": "Whether the request completed successfully"
                                         },
                                         "moduleId": {
                                             "type": "string",
@@ -1522,14 +1763,33 @@
                                         },
                                         "logs": {
                                             "type": "array",
+                                            "description": "Console.print() output captured during request processing",
                                             "items": {
                                                 "type": "string"
                                             }
                                         },
                                         "errors": {
                                             "type": "array",
+                                            "description": "Script errors captured during request processing",
                                             "items": {
-                                                "type": "object"
+                                                "type": "object",
+                                                "properties": {
+                                                    "errorMessage": {
+                                                        "type": "string",
+                                                        "description": "The error message"
+                                                    },
+                                                    "callstack": {
+                                                        "type": "array",
+                                                        "description": "Call stack frames (e.g. \"myFunction() at Scripts/main.js:15:8\")",
+                                                        "items": {
+                                                            "type": "string"
+                                                        }
+                                                    }
+                                                },
+                                                "required": [
+                                                    "errorMessage",
+                                                    "callstack"
+                                                ]
                                             }
                                         }
                                     },
@@ -1727,7 +1987,8 @@
                                     "type": "object",
                                     "properties": {
                                         "success": {
-                                            "type": "boolean"
+                                            "type": "boolean",
+                                            "description": "Whether the request completed successfully"
                                         },
                                         "interactionsCompleted": {
                                             "type": "integer",
@@ -1759,14 +2020,33 @@
                                         },
                                         "logs": {
                                             "type": "array",
+                                            "description": "Console.print() output captured during request processing",
                                             "items": {
                                                 "type": "string"
                                             }
                                         },
                                         "errors": {
                                             "type": "array",
+                                            "description": "Script errors captured during request processing",
                                             "items": {
-                                                "type": "object"
+                                                "type": "object",
+                                                "properties": {
+                                                    "errorMessage": {
+                                                        "type": "string",
+                                                        "description": "The error message"
+                                                    },
+                                                    "callstack": {
+                                                        "type": "array",
+                                                        "description": "Call stack frames (e.g. \"myFunction() at Scripts/main.js:15:8\")",
+                                                        "items": {
+                                                            "type": "string"
+                                                        }
+                                                    }
+                                                },
+                                                "required": [
+                                                    "errorMessage",
+                                                    "callstack"
+                                                ]
                                             }
                                         }
                                     },
@@ -1852,7 +2132,8 @@
                                     "type": "object",
                                     "properties": {
                                         "success": {
-                                            "type": "boolean"
+                                            "type": "boolean",
+                                            "description": "Whether the request completed successfully"
                                         },
                                         "moduleId": {
                                             "type": "string",
@@ -1918,14 +2199,33 @@
                                         },
                                         "logs": {
                                             "type": "array",
+                                            "description": "Console.print() output captured during request processing",
                                             "items": {
                                                 "type": "string"
                                             }
                                         },
                                         "errors": {
                                             "type": "array",
+                                            "description": "Script errors captured during request processing",
                                             "items": {
-                                                "type": "object"
+                                                "type": "object",
+                                                "properties": {
+                                                    "errorMessage": {
+                                                        "type": "string",
+                                                        "description": "The error message"
+                                                    },
+                                                    "callstack": {
+                                                        "type": "array",
+                                                        "description": "Call stack frames (e.g. \"myFunction() at Scripts/main.js:15:8\")",
+                                                        "items": {
+                                                            "type": "string"
+                                                        }
+                                                    }
+                                                },
+                                                "required": [
+                                                    "errorMessage",
+                                                    "callstack"
+                                                ]
                                             }
                                         }
                                     },
@@ -1995,7 +2295,8 @@
                                     "type": "object",
                                     "properties": {
                                         "success": {
-                                            "type": "boolean"
+                                            "type": "boolean",
+                                            "description": "Whether the request completed successfully"
                                         },
                                         "moduleId": {
                                             "type": "string",
@@ -2025,14 +2326,33 @@
                                         },
                                         "logs": {
                                             "type": "array",
+                                            "description": "Console.print() output captured during request processing",
                                             "items": {
                                                 "type": "string"
                                             }
                                         },
                                         "errors": {
                                             "type": "array",
+                                            "description": "Script errors captured during request processing",
                                             "items": {
-                                                "type": "object"
+                                                "type": "object",
+                                                "properties": {
+                                                    "errorMessage": {
+                                                        "type": "string",
+                                                        "description": "The error message"
+                                                    },
+                                                    "callstack": {
+                                                        "type": "array",
+                                                        "description": "Call stack frames (e.g. \"myFunction() at Scripts/main.js:15:8\")",
+                                                        "items": {
+                                                            "type": "string"
+                                                        }
+                                                    }
+                                                },
+                                                "required": [
+                                                    "errorMessage",
+                                                    "callstack"
+                                                ]
                                             }
                                         }
                                     },
@@ -2149,7 +2469,8 @@
                                     "type": "object",
                                     "properties": {
                                         "success": {
-                                            "type": "boolean"
+                                            "type": "boolean",
+                                            "description": "Whether the request completed successfully"
                                         },
                                         "recording": {
                                             "type": "boolean",
@@ -2228,14 +2549,33 @@
                                         },
                                         "logs": {
                                             "type": "array",
+                                            "description": "Console.print() output captured during request processing",
                                             "items": {
                                                 "type": "string"
                                             }
                                         },
                                         "errors": {
                                             "type": "array",
+                                            "description": "Script errors captured during request processing",
                                             "items": {
-                                                "type": "object"
+                                                "type": "object",
+                                                "properties": {
+                                                    "errorMessage": {
+                                                        "type": "string",
+                                                        "description": "The error message"
+                                                    },
+                                                    "callstack": {
+                                                        "type": "array",
+                                                        "description": "Call stack frames (e.g. \"myFunction() at Scripts/main.js:15:8\")",
+                                                        "items": {
+                                                            "type": "string"
+                                                        }
+                                                    }
+                                                },
+                                                "required": [
+                                                    "errorMessage",
+                                                    "callstack"
+                                                ]
                                             }
                                         }
                                     },
@@ -2319,7 +2659,8 @@
                                     "type": "object",
                                     "properties": {
                                         "success": {
-                                            "type": "boolean"
+                                            "type": "boolean",
+                                            "description": "Whether the request completed successfully"
                                         },
                                         "diagnostics": {
                                             "type": "array",
@@ -2339,14 +2680,33 @@
                                         },
                                         "logs": {
                                             "type": "array",
+                                            "description": "Console.print() output captured during request processing",
                                             "items": {
                                                 "type": "string"
                                             }
                                         },
                                         "errors": {
                                             "type": "array",
+                                            "description": "Script errors captured during request processing",
                                             "items": {
-                                                "type": "object"
+                                                "type": "object",
+                                                "properties": {
+                                                    "errorMessage": {
+                                                        "type": "string",
+                                                        "description": "The error message"
+                                                    },
+                                                    "callstack": {
+                                                        "type": "array",
+                                                        "description": "Call stack frames (e.g. \"myFunction() at Scripts/main.js:15:8\")",
+                                                        "items": {
+                                                            "type": "string"
+                                                        }
+                                                    }
+                                                },
+                                                "required": [
+                                                    "errorMessage",
+                                                    "callstack"
+                                                ]
                                             }
                                         }
                                     },
@@ -2398,7 +2758,8 @@
                                     "type": "object",
                                     "properties": {
                                         "success": {
-                                            "type": "boolean"
+                                            "type": "boolean",
+                                            "description": "Whether the request completed successfully"
                                         },
                                         "result": {
                                             "type": "string",
@@ -2406,14 +2767,33 @@
                                         },
                                         "logs": {
                                             "type": "array",
+                                            "description": "Console.print() output captured during request processing",
                                             "items": {
                                                 "type": "string"
                                             }
                                         },
                                         "errors": {
                                             "type": "array",
+                                            "description": "Script errors captured during request processing",
                                             "items": {
-                                                "type": "object"
+                                                "type": "object",
+                                                "properties": {
+                                                    "errorMessage": {
+                                                        "type": "string",
+                                                        "description": "The error message"
+                                                    },
+                                                    "callstack": {
+                                                        "type": "array",
+                                                        "description": "Call stack frames (e.g. \"myFunction() at Scripts/main.js:15:8\")",
+                                                        "items": {
+                                                            "type": "string"
+                                                        }
+                                                    }
+                                                },
+                                                "required": [
+                                                    "errorMessage",
+                                                    "callstack"
+                                                ]
                                             }
                                         }
                                     },
@@ -2496,7 +2876,8 @@
                                     "type": "object",
                                     "properties": {
                                         "success": {
-                                            "type": "boolean"
+                                            "type": "boolean",
+                                            "description": "Whether the request completed successfully"
                                         },
                                         "result": {
                                             "type": "string",
@@ -2504,14 +2885,33 @@
                                         },
                                         "logs": {
                                             "type": "array",
+                                            "description": "Console.print() output captured during request processing",
                                             "items": {
                                                 "type": "string"
                                             }
                                         },
                                         "errors": {
                                             "type": "array",
+                                            "description": "Script errors captured during request processing",
                                             "items": {
-                                                "type": "object"
+                                                "type": "object",
+                                                "properties": {
+                                                    "errorMessage": {
+                                                        "type": "string",
+                                                        "description": "The error message"
+                                                    },
+                                                    "callstack": {
+                                                        "type": "array",
+                                                        "description": "Call stack frames (e.g. \"myFunction() at Scripts/main.js:15:8\")",
+                                                        "items": {
+                                                            "type": "string"
+                                                        }
+                                                    }
+                                                },
+                                                "required": [
+                                                    "errorMessage",
+                                                    "callstack"
+                                                ]
                                             }
                                         }
                                     },
@@ -2708,7 +3108,8 @@
                                     "type": "object",
                                     "properties": {
                                         "success": {
-                                            "type": "boolean"
+                                            "type": "boolean",
+                                            "description": "Whether the request completed successfully"
                                         },
                                         "scope": {
                                             "type": "string",
@@ -2757,14 +3158,33 @@
                                         },
                                         "logs": {
                                             "type": "array",
+                                            "description": "Console.print() output captured during request processing",
                                             "items": {
                                                 "type": "string"
                                             }
                                         },
                                         "errors": {
                                             "type": "array",
+                                            "description": "Script errors captured during request processing",
                                             "items": {
-                                                "type": "object"
+                                                "type": "object",
+                                                "properties": {
+                                                    "errorMessage": {
+                                                        "type": "string",
+                                                        "description": "The error message"
+                                                    },
+                                                    "callstack": {
+                                                        "type": "array",
+                                                        "description": "Call stack frames (e.g. \"myFunction() at Scripts/main.js:15:8\")",
+                                                        "items": {
+                                                            "type": "string"
+                                                        }
+                                                    }
+                                                },
+                                                "required": [
+                                                    "errorMessage",
+                                                    "callstack"
+                                                ]
                                             }
                                         }
                                     },
@@ -2820,7 +3240,8 @@
                                     "type": "object",
                                     "properties": {
                                         "success": {
-                                            "type": "boolean"
+                                            "type": "boolean",
+                                            "description": "Whether the request completed successfully"
                                         },
                                         "result": {
                                             "type": "string",
@@ -2828,14 +3249,33 @@
                                         },
                                         "logs": {
                                             "type": "array",
+                                            "description": "Console.print() output captured during request processing",
                                             "items": {
                                                 "type": "string"
                                             }
                                         },
                                         "errors": {
                                             "type": "array",
+                                            "description": "Script errors captured during request processing",
                                             "items": {
-                                                "type": "object"
+                                                "type": "object",
+                                                "properties": {
+                                                    "errorMessage": {
+                                                        "type": "string",
+                                                        "description": "The error message"
+                                                    },
+                                                    "callstack": {
+                                                        "type": "array",
+                                                        "description": "Call stack frames (e.g. \"myFunction() at Scripts/main.js:15:8\")",
+                                                        "items": {
+                                                            "type": "string"
+                                                        }
+                                                    }
+                                                },
+                                                "required": [
+                                                    "errorMessage",
+                                                    "callstack"
+                                                ]
                                             }
                                         }
                                     },
@@ -2897,7 +3337,8 @@
                                     "type": "object",
                                     "properties": {
                                         "success": {
-                                            "type": "boolean"
+                                            "type": "boolean",
+                                            "description": "Whether the request completed successfully"
                                         },
                                         "scope": {
                                             "type": "string",
@@ -2945,14 +3386,33 @@
                                         },
                                         "logs": {
                                             "type": "array",
+                                            "description": "Console.print() output captured during request processing",
                                             "items": {
                                                 "type": "string"
                                             }
                                         },
                                         "errors": {
                                             "type": "array",
+                                            "description": "Script errors captured during request processing",
                                             "items": {
-                                                "type": "object"
+                                                "type": "object",
+                                                "properties": {
+                                                    "errorMessage": {
+                                                        "type": "string",
+                                                        "description": "The error message"
+                                                    },
+                                                    "callstack": {
+                                                        "type": "array",
+                                                        "description": "Call stack frames (e.g. \"myFunction() at Scripts/main.js:15:8\")",
+                                                        "items": {
+                                                            "type": "string"
+                                                        }
+                                                    }
+                                                },
+                                                "required": [
+                                                    "errorMessage",
+                                                    "callstack"
+                                                ]
                                             }
                                         }
                                     },
@@ -3016,7 +3476,8 @@
                                     "type": "object",
                                     "properties": {
                                         "success": {
-                                            "type": "boolean"
+                                            "type": "boolean",
+                                            "description": "Whether the request completed successfully"
                                         },
                                         "scope": {
                                             "type": "string",
@@ -3036,14 +3497,33 @@
                                         },
                                         "logs": {
                                             "type": "array",
+                                            "description": "Console.print() output captured during request processing",
                                             "items": {
                                                 "type": "string"
                                             }
                                         },
                                         "errors": {
                                             "type": "array",
+                                            "description": "Script errors captured during request processing",
                                             "items": {
-                                                "type": "object"
+                                                "type": "object",
+                                                "properties": {
+                                                    "errorMessage": {
+                                                        "type": "string",
+                                                        "description": "The error message"
+                                                    },
+                                                    "callstack": {
+                                                        "type": "array",
+                                                        "description": "Call stack frames (e.g. \"myFunction() at Scripts/main.js:15:8\")",
+                                                        "items": {
+                                                            "type": "string"
+                                                        }
+                                                    }
+                                                },
+                                                "required": [
+                                                    "errorMessage",
+                                                    "callstack"
+                                                ]
                                             }
                                         }
                                     },
@@ -3093,7 +3573,8 @@
                                     "type": "object",
                                     "properties": {
                                         "success": {
-                                            "type": "boolean"
+                                            "type": "boolean",
+                                            "description": "Whether the request completed successfully"
                                         },
                                         "scope": {
                                             "type": "string",
@@ -3113,14 +3594,33 @@
                                         },
                                         "logs": {
                                             "type": "array",
+                                            "description": "Console.print() output captured during request processing",
                                             "items": {
                                                 "type": "string"
                                             }
                                         },
                                         "errors": {
                                             "type": "array",
+                                            "description": "Script errors captured during request processing",
                                             "items": {
-                                                "type": "object"
+                                                "type": "object",
+                                                "properties": {
+                                                    "errorMessage": {
+                                                        "type": "string",
+                                                        "description": "The error message"
+                                                    },
+                                                    "callstack": {
+                                                        "type": "array",
+                                                        "description": "Call stack frames (e.g. \"myFunction() at Scripts/main.js:15:8\")",
+                                                        "items": {
+                                                            "type": "string"
+                                                        }
+                                                    }
+                                                },
+                                                "required": [
+                                                    "errorMessage",
+                                                    "callstack"
+                                                ]
                                             }
                                         }
                                     },
@@ -3164,7 +3664,8 @@
                                     "type": "object",
                                     "properties": {
                                         "success": {
-                                            "type": "boolean"
+                                            "type": "boolean",
+                                            "description": "Whether the request completed successfully"
                                         },
                                         "scope": {
                                             "type": "string",
@@ -3184,14 +3685,33 @@
                                         },
                                         "logs": {
                                             "type": "array",
+                                            "description": "Console.print() output captured during request processing",
                                             "items": {
                                                 "type": "string"
                                             }
                                         },
                                         "errors": {
                                             "type": "array",
+                                            "description": "Script errors captured during request processing",
                                             "items": {
-                                                "type": "object"
+                                                "type": "object",
+                                                "properties": {
+                                                    "errorMessage": {
+                                                        "type": "string",
+                                                        "description": "The error message"
+                                                    },
+                                                    "callstack": {
+                                                        "type": "array",
+                                                        "description": "Call stack frames (e.g. \"myFunction() at Scripts/main.js:15:8\")",
+                                                        "items": {
+                                                            "type": "string"
+                                                        }
+                                                    }
+                                                },
+                                                "required": [
+                                                    "errorMessage",
+                                                    "callstack"
+                                                ]
                                             }
                                         }
                                     },
@@ -3279,7 +3799,8 @@
                                     "type": "object",
                                     "properties": {
                                         "success": {
-                                            "type": "boolean"
+                                            "type": "boolean",
+                                            "description": "Whether the request completed successfully"
                                         },
                                         "scope": {
                                             "type": "string",
@@ -3327,14 +3848,33 @@
                                         },
                                         "logs": {
                                             "type": "array",
+                                            "description": "Console.print() output captured during request processing",
                                             "items": {
                                                 "type": "string"
                                             }
                                         },
                                         "errors": {
                                             "type": "array",
+                                            "description": "Script errors captured during request processing",
                                             "items": {
-                                                "type": "object"
+                                                "type": "object",
+                                                "properties": {
+                                                    "errorMessage": {
+                                                        "type": "string",
+                                                        "description": "The error message"
+                                                    },
+                                                    "callstack": {
+                                                        "type": "array",
+                                                        "description": "Call stack frames (e.g. \"myFunction() at Scripts/main.js:15:8\")",
+                                                        "items": {
+                                                            "type": "string"
+                                                        }
+                                                    }
+                                                },
+                                                "required": [
+                                                    "errorMessage",
+                                                    "callstack"
+                                                ]
                                             }
                                         }
                                     },
@@ -3423,7 +3963,8 @@
                                     "type": "object",
                                     "properties": {
                                         "success": {
-                                            "type": "boolean"
+                                            "type": "boolean",
+                                            "description": "Whether the request completed successfully"
                                         },
                                         "scope": {
                                             "type": "string",
@@ -3447,14 +3988,33 @@
                                         },
                                         "logs": {
                                             "type": "array",
+                                            "description": "Console.print() output captured during request processing",
                                             "items": {
                                                 "type": "string"
                                             }
                                         },
                                         "errors": {
                                             "type": "array",
+                                            "description": "Script errors captured during request processing",
                                             "items": {
-                                                "type": "object"
+                                                "type": "object",
+                                                "properties": {
+                                                    "errorMessage": {
+                                                        "type": "string",
+                                                        "description": "The error message"
+                                                    },
+                                                    "callstack": {
+                                                        "type": "array",
+                                                        "description": "Call stack frames (e.g. \"myFunction() at Scripts/main.js:15:8\")",
+                                                        "items": {
+                                                            "type": "string"
+                                                        }
+                                                    }
+                                                },
+                                                "required": [
+                                                    "errorMessage",
+                                                    "callstack"
+                                                ]
                                             }
                                         }
                                     },
@@ -3497,7 +4057,8 @@
                                     "type": "object",
                                     "properties": {
                                         "success": {
-                                            "type": "boolean"
+                                            "type": "boolean",
+                                            "description": "Whether the request completed successfully"
                                         },
                                         "scope": {
                                             "type": "string",
@@ -3517,14 +4078,33 @@
                                         },
                                         "logs": {
                                             "type": "array",
+                                            "description": "Console.print() output captured during request processing",
                                             "items": {
                                                 "type": "string"
                                             }
                                         },
                                         "errors": {
                                             "type": "array",
+                                            "description": "Script errors captured during request processing",
                                             "items": {
-                                                "type": "object"
+                                                "type": "object",
+                                                "properties": {
+                                                    "errorMessage": {
+                                                        "type": "string",
+                                                        "description": "The error message"
+                                                    },
+                                                    "callstack": {
+                                                        "type": "array",
+                                                        "description": "Call stack frames (e.g. \"myFunction() at Scripts/main.js:15:8\")",
+                                                        "items": {
+                                                            "type": "string"
+                                                        }
+                                                    }
+                                                },
+                                                "required": [
+                                                    "errorMessage",
+                                                    "callstack"
+                                                ]
                                             }
                                         }
                                     },
@@ -3585,7 +4165,8 @@
                                     "type": "object",
                                     "properties": {
                                         "success": {
-                                            "type": "boolean"
+                                            "type": "boolean",
+                                            "description": "Whether the request completed successfully"
                                         },
                                         "result": {
                                             "type": "string",
@@ -3593,14 +4174,33 @@
                                         },
                                         "logs": {
                                             "type": "array",
+                                            "description": "Console.print() output captured during request processing",
                                             "items": {
                                                 "type": "string"
                                             }
                                         },
                                         "errors": {
                                             "type": "array",
+                                            "description": "Script errors captured during request processing",
                                             "items": {
-                                                "type": "object"
+                                                "type": "object",
+                                                "properties": {
+                                                    "errorMessage": {
+                                                        "type": "string",
+                                                        "description": "The error message"
+                                                    },
+                                                    "callstack": {
+                                                        "type": "array",
+                                                        "description": "Call stack frames (e.g. \"myFunction() at Scripts/main.js:15:8\")",
+                                                        "items": {
+                                                            "type": "string"
+                                                        }
+                                                    }
+                                                },
+                                                "required": [
+                                                    "errorMessage",
+                                                    "callstack"
+                                                ]
                                             }
                                         }
                                     },
@@ -3682,7 +4282,8 @@
                                     "type": "object",
                                     "properties": {
                                         "success": {
-                                            "type": "boolean"
+                                            "type": "boolean",
+                                            "description": "Whether the request completed successfully"
                                         },
                                         "jobId": {
                                             "type": "string",
@@ -3690,14 +4291,33 @@
                                         },
                                         "logs": {
                                             "type": "array",
+                                            "description": "Console.print() output captured during request processing",
                                             "items": {
                                                 "type": "string"
                                             }
                                         },
                                         "errors": {
                                             "type": "array",
+                                            "description": "Script errors captured during request processing",
                                             "items": {
-                                                "type": "object"
+                                                "type": "object",
+                                                "properties": {
+                                                    "errorMessage": {
+                                                        "type": "string",
+                                                        "description": "The error message"
+                                                    },
+                                                    "callstack": {
+                                                        "type": "array",
+                                                        "description": "Call stack frames (e.g. \"myFunction() at Scripts/main.js:15:8\")",
+                                                        "items": {
+                                                            "type": "string"
+                                                        }
+                                                    }
+                                                },
+                                                "required": [
+                                                    "errorMessage",
+                                                    "callstack"
+                                                ]
                                             }
                                         }
                                     },
@@ -3751,7 +4371,8 @@
                                     "type": "object",
                                     "properties": {
                                         "success": {
-                                            "type": "boolean"
+                                            "type": "boolean",
+                                            "description": "Whether the request completed successfully"
                                         },
                                         "finished": {
                                             "type": "boolean",
@@ -3763,14 +4384,33 @@
                                         },
                                         "logs": {
                                             "type": "array",
+                                            "description": "Console.print() output captured during request processing",
                                             "items": {
                                                 "type": "string"
                                             }
                                         },
                                         "errors": {
                                             "type": "array",
+                                            "description": "Script errors captured during request processing",
                                             "items": {
-                                                "type": "object"
+                                                "type": "object",
+                                                "properties": {
+                                                    "errorMessage": {
+                                                        "type": "string",
+                                                        "description": "The error message"
+                                                    },
+                                                    "callstack": {
+                                                        "type": "array",
+                                                        "description": "Call stack frames (e.g. \"myFunction() at Scripts/main.js:15:8\")",
+                                                        "items": {
+                                                            "type": "string"
+                                                        }
+                                                    }
+                                                },
+                                                "required": [
+                                                    "errorMessage",
+                                                    "callstack"
+                                                ]
                                             }
                                         }
                                     },
@@ -3838,7 +4478,8 @@
                                     "type": "object",
                                     "properties": {
                                         "success": {
-                                            "type": "boolean"
+                                            "type": "boolean",
+                                            "description": "Whether the request completed successfully"
                                         },
                                         "result": {
                                             "type": "string",
@@ -3846,14 +4487,33 @@
                                         },
                                         "logs": {
                                             "type": "array",
+                                            "description": "Console.print() output captured during request processing",
                                             "items": {
                                                 "type": "string"
                                             }
                                         },
                                         "errors": {
                                             "type": "array",
+                                            "description": "Script errors captured during request processing",
                                             "items": {
-                                                "type": "object"
+                                                "type": "object",
+                                                "properties": {
+                                                    "errorMessage": {
+                                                        "type": "string",
+                                                        "description": "The error message"
+                                                    },
+                                                    "callstack": {
+                                                        "type": "array",
+                                                        "description": "Call stack frames (e.g. \"myFunction() at Scripts/main.js:15:8\")",
+                                                        "items": {
+                                                            "type": "string"
+                                                        }
+                                                    }
+                                                },
+                                                "required": [
+                                                    "errorMessage",
+                                                    "callstack"
+                                                ]
                                             }
                                         }
                                     },
@@ -4052,7 +4712,8 @@
                                     "type": "object",
                                     "properties": {
                                         "success": {
-                                            "type": "boolean"
+                                            "type": "boolean",
+                                            "description": "Whether the request completed successfully"
                                         },
                                         "scope": {
                                             "type": "string",
@@ -4101,14 +4762,33 @@
                                         },
                                         "logs": {
                                             "type": "array",
+                                            "description": "Console.print() output captured during request processing",
                                             "items": {
                                                 "type": "string"
                                             }
                                         },
                                         "errors": {
                                             "type": "array",
+                                            "description": "Script errors captured during request processing",
                                             "items": {
-                                                "type": "object"
+                                                "type": "object",
+                                                "properties": {
+                                                    "errorMessage": {
+                                                        "type": "string",
+                                                        "description": "The error message"
+                                                    },
+                                                    "callstack": {
+                                                        "type": "array",
+                                                        "description": "Call stack frames (e.g. \"myFunction() at Scripts/main.js:15:8\")",
+                                                        "items": {
+                                                            "type": "string"
+                                                        }
+                                                    }
+                                                },
+                                                "required": [
+                                                    "errorMessage",
+                                                    "callstack"
+                                                ]
                                             }
                                         }
                                     },
@@ -4336,7 +5016,8 @@
                                     "type": "object",
                                     "properties": {
                                         "success": {
-                                            "type": "boolean"
+                                            "type": "boolean",
+                                            "description": "Whether the request completed successfully"
                                         },
                                         "isPlaying": {
                                             "type": "boolean",
@@ -4408,14 +5089,33 @@
                                         },
                                         "logs": {
                                             "type": "array",
+                                            "description": "Console.print() output captured during request processing",
                                             "items": {
                                                 "type": "string"
                                             }
                                         },
                                         "errors": {
                                             "type": "array",
+                                            "description": "Script errors captured during request processing",
                                             "items": {
-                                                "type": "object"
+                                                "type": "object",
+                                                "properties": {
+                                                    "errorMessage": {
+                                                        "type": "string",
+                                                        "description": "The error message"
+                                                    },
+                                                    "callstack": {
+                                                        "type": "array",
+                                                        "description": "Call stack frames (e.g. \"myFunction() at Scripts/main.js:15:8\")",
+                                                        "items": {
+                                                            "type": "string"
+                                                        }
+                                                    }
+                                                },
+                                                "required": [
+                                                    "errorMessage",
+                                                    "callstack"
+                                                ]
                                             }
                                         }
                                     },
