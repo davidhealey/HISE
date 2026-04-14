@@ -454,7 +454,7 @@ RestServer::Response RestHelpers::handleRecompile(MainController* mc, RestServer
 		syncMode = std::make_unique<MainController::ScopedBadBabysitter>(mc);
 
 	// Start attached profiling session if requested (fire-and-forget).
-	// Results are retrieved later via POST /api/profile { "mode": "get" }
+	// Results are retrieved later via POST /api/testing/profile { "mode": "get" }
 #if HISE_INCLUDE_PROFILING_TOOLKIT
 	if (getTrueValue(obj.getProperty(RestApiIds::profile, false)))
 		startProfilingSession(mc, obj, 2000.0);
@@ -744,31 +744,25 @@ static var buildResponseSchema(const RestHelpers::RouteMetadata& route)
 
 	DynamicObject::Ptr envProps = new DynamicObject();
 
-	// success
+	// success (always present)
 	DynamicObject::Ptr successProp = new DynamicObject();
 	successProp->setProperty("type", "boolean");
 	envProps->setProperty("success", var(successProp.get()));
 
-	// result
+	// Endpoint-specific response fields (flat, alongside success/logs/errors)
 	if (!route.responseFields.isEmpty())
 	{
-		DynamicObject::Ptr resultSchema = new DynamicObject();
-		resultSchema->setProperty("type", "object");
-
-		DynamicObject::Ptr resultProps = new DynamicObject();
-
 		for (const auto& rf : route.responseFields)
-			resultProps->setProperty(rf.name, paramToOpenApiSchema(rf));
-
-		resultSchema->setProperty("properties", var(resultProps.get()));
-		envProps->setProperty("result", var(resultSchema.get()));
+			envProps->setProperty(rf.name, paramToOpenApiSchema(rf));
 	}
-	else
+	else if (route.returns.isNotEmpty())
 	{
-		DynamicObject::Ptr resultSchema = new DynamicObject();
-		resultSchema->setProperty("type", "object");
-		resultSchema->setProperty("description", route.returns);
-		envProps->setProperty("result", var(resultSchema.get()));
+		// No typed responseFields, but has a returns description:
+		// add a generic "result" string field for status messages
+		DynamicObject::Ptr resultProp = new DynamicObject();
+		resultProp->setProperty("type", "string");
+		resultProp->setProperty("description", route.returns);
+		envProps->setProperty("result", var(resultProp.get()));
 	}
 
 	// logs
@@ -788,7 +782,7 @@ static var buildResponseSchema(const RestHelpers::RouteMetadata& route)
 	envProps->setProperty("errors", var(errorsProp.get()));
 
 	envelope->setProperty("properties", var(envProps.get()));
-	envelope->setProperty("required", var(Array<var>{ var("success"), var("result"), var("logs"), var("errors") }));
+	envelope->setProperty("required", var(Array<var>{ var("success"), var("logs"), var("errors") }));
 
 	return var(envelope.get());
 }
@@ -1659,7 +1653,7 @@ RestServer::Response RestHelpers::handleSetComponentProperties(MainController* m
 	return req->waitForResponse();
 }
 
-RestServer::Response RestHelpers::handleScreenshot(MainController* mc, RestServer::AsyncRequest::Ptr req)
+RestServer::Response RestHelpers::handleTestingScreenshot(MainController* mc, RestServer::AsyncRequest::Ptr req)
 {
 	// Parse parameters
 	auto moduleId = req->getRequest()[RestApiIds::moduleId];
@@ -1759,32 +1753,32 @@ RestServer::Response RestHelpers::handleScreenshot(MainController* mc, RestServe
 	DynamicObject::Ptr result = new DynamicObject();
 	result->setProperty(RestApiIds::success, true);
 	result->setProperty(RestApiIds::moduleId, moduleId);
-	
+
 	if (componentId.isNotEmpty())
 		result->setProperty(RestApiIds::id, componentId);
-	
+
 	result->setProperty(RestApiIds::width, capturedImage.getWidth());
 	result->setProperty(RestApiIds::height, capturedImage.getHeight());
 	result->setProperty(RestApiIds::scale, scale);
-	
+
 	if (outputPath.isNotEmpty())
 	{
 		// File output mode: write PNG to file
 		File outputFile(outputPath);
-		
+
 		// Delete existing file to ensure clean overwrite (FileOutputStream doesn't truncate)
 		if (outputFile.existsAsFile())
 			outputFile.deleteFile();
-		
+
 		FileOutputStream fos(outputFile);
-		
+
 		if (fos.failedToOpen())
 			return req->fail(500, "failed to open output file: " + outputPath);
-		
+
 		PNGImageFormat pngFormat;
 		if (!pngFormat.writeImageToStream(capturedImage, fos))
 			return req->fail(500, "failed to write PNG to file");
-		
+
 		result->setProperty(RestApiIds::filePath, outputFile.getFullPathName());
 	}
 	else
@@ -1797,14 +1791,14 @@ RestServer::Response RestHelpers::handleScreenshot(MainController* mc, RestServe
 			if (!pngFormat.writeImageToStream(capturedImage, mos))
 				return req->fail(500, "failed to encode PNG");
 		}
-		
+
 		auto base64 = Base64::toBase64(mb.getData(), mb.getSize());
 		result->setProperty(RestApiIds::imageData, base64);
 	}
-	
+
 	result->setProperty(RestApiIds::logs, Array<var>());
 	result->setProperty(RestApiIds::errors, Array<var>());
-	
+
 	req->complete(RestServer::Response::ok(var(result.get())));
 	return req->waitForResponse();
 }
@@ -1886,7 +1880,7 @@ RestServer::Response RestHelpers::handleGetSelectedComponents(MainController* mc
 	return req->waitForResponse();
 }
 
-RestServer::Response RestHelpers::handleSimulateInteractions(BackendProcessor* bp, RestServer::AsyncRequest::Ptr req)
+RestServer::Response RestHelpers::handleTestingE2e(BackendProcessor* bp, RestServer::AsyncRequest::Ptr req)
 {
 	// Capture console output during interaction execution
 	ScopedConsoleHandler consoleHandler(bp, req);
@@ -2134,6 +2128,8 @@ RestServer::Response RestHelpers::handleDiagnoseScript(MainController* mc, RestS
 		result->setProperty(RestApiIds::moduleId, resolvedModuleId);
 		result->setProperty(RestApiIds::filePath, normalizedFilePath);
 		result->setProperty(RestApiIds::diagnostics, var(diagArray));
+		result->setProperty(RestApiIds::logs, Array<var>());
+		result->setProperty(RestApiIds::errors, Array<var>());
 		return RestServer::Response::ok(var(result.get()));
 	};
 	
@@ -2736,7 +2732,7 @@ var RestHelpers::profilingResultToSummary(
 
 #endif // HISE_INCLUDE_PROFILING_TOOLKIT
 
-RestServer::Response RestHelpers::handleStartProfiling(MainController* mc,
+RestServer::Response RestHelpers::handleTestingProfile(MainController* mc,
                                                         RestServer::AsyncRequest::Ptr req)
 {
 #if !HISE_INCLUDE_PROFILING_TOOLKIT
@@ -3168,10 +3164,10 @@ RestServer::Response RestHelpers::handleBuilderTree(MainController* mc,
 
 	DynamicObject::Ptr result = new DynamicObject();
 	result->setProperty(RestApiIds::success, true);
-	result->setProperty(RestApiIds::result, tree); // TODO: set to buildModuleTree(root)
+	result->setProperty(RestApiIds::result, tree);
 	result->setProperty(RestApiIds::logs, Array<var>());
 	result->setProperty(RestApiIds::errors, Array<var>());
-	
+
 	req->complete(RestServer::Response::ok(var(result.get())));
 	return req->waitForResponse();
 }
@@ -3737,6 +3733,7 @@ RestServer::Response RestHelpers::handleUITree(MainController* mc,
 			tree = var(root.get());
 		}
 
+		// Merge tree fields onto flat response
 		DynamicObject::Ptr result = new DynamicObject();
 		result->setProperty(RestApiIds::success, true);
 		result->setProperty(RestApiIds::result, tree);
@@ -4554,11 +4551,11 @@ RestHelpers::PendingNoteOff RestHelpers::dispatchSingleMidiMessage(
 }
 
 //==============================================================================
-// handleInjectMidi
+// handleTestingSequence
 //==============================================================================
 
-RestServer::Response RestHelpers::handleInjectMidi(BackendProcessor* bp,
-                                                    RestServer::AsyncRequest::Ptr req)
+RestServer::Response RestHelpers::handleTestingSequence(BackendProcessor* bp,
+                                                        RestServer::AsyncRequest::Ptr req)
 {
 	auto* injector = bp->getMidiInjector();
 
@@ -4761,7 +4758,7 @@ RestServer::Response RestHelpers::handleInjectMidi(BackendProcessor* bp,
 		while (injector->getStatus().isPlaying)
 		{
 			if (Time::getMillisecondCounterHiRes() - startWait > maxWaitMs)
-				return req->fail(500, "Blocking inject_midi timed out after 30 seconds");
+				return req->fail(500, "Blocking sequence timed out after 30 seconds");
 
 			Thread::sleep(5);
 		}
@@ -4771,33 +4768,31 @@ RestServer::Response RestHelpers::handleInjectMidi(BackendProcessor* bp,
 			Thread::sleep(200);
 	}
 
-	// Build response with standard envelope: { success, result, logs, errors }
+	// Build flat response
 	auto status = injector->getStatus();
 
-	DynamicObject::Ptr payload = new DynamicObject();
-	payload->setProperty(RestApiIds::isPlaying, status.isPlaying);
-	payload->setProperty(RestApiIds::durationMs, status.durationMs);
-	payload->setProperty(RestApiIds::activeNotes, status.activeNotes);
-	payload->setProperty(RestApiIds::eventsInSequence, status.eventsInSequence);
-	payload->setProperty(RestApiIds::playedEvents, status.playedEvents);
-	payload->setProperty(RestApiIds::progress, status.progress);
+	DynamicObject::Ptr result = new DynamicObject();
+	result->setProperty(RestApiIds::success, true);
+	result->setProperty(RestApiIds::isPlaying, status.isPlaying);
+	result->setProperty(RestApiIds::durationMs, status.durationMs);
+	result->setProperty(RestApiIds::activeNotes, status.activeNotes);
+	result->setProperty(RestApiIds::eventsInSequence, status.eventsInSequence);
+	result->setProperty(RestApiIds::playedEvents, status.playedEvents);
+	result->setProperty(RestApiIds::progress, status.progress);
 
 	if (isRecording)
-		payload->setProperty(RestApiIds::recordOutput, recordOutput);
+		result->setProperty(RestApiIds::recordOutput, recordOutput);
 
 	// Include any REPL results accumulated since last call
 	auto replResults = injector->takeReplResults();
 
 	if (!replResults.isEmpty())
-		payload->setProperty(RestApiIds::replResults, var(replResults));
+		result->setProperty(RestApiIds::replResults, var(replResults));
 
-	DynamicObject::Ptr envelope = new DynamicObject();
-	envelope->setProperty(RestApiIds::success, true);
-	envelope->setProperty(RestApiIds::result, var(payload.get()));
-	envelope->setProperty(RestApiIds::logs, var(Array<var>()));
-	envelope->setProperty(RestApiIds::errors, var(Array<var>()));
+	result->setProperty(RestApiIds::logs, var(Array<var>()));
+	result->setProperty(RestApiIds::errors, var(Array<var>()));
 
-	return RestServer::Response::ok(var(envelope.get()));
+	return RestServer::Response::ok(var(result.get()));
 }
 
 } // namespace hise

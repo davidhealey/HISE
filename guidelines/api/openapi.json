@@ -16,9 +16,6 @@
             "name": "builder"
         },
         {
-            "name": "midi"
-        },
-        {
             "name": "scripting"
         },
         {
@@ -58,7 +55,7 @@
                                             "type": "boolean"
                                         },
                                         "result": {
-                                            "type": "object",
+                                            "type": "string",
                                             "description": "OpenAPI 3.0.3 JSON specification"
                                         },
                                         "logs": {
@@ -76,7 +73,6 @@
                                     },
                                     "required": [
                                         "success",
-                                        "result",
                                         "logs",
                                         "errors"
                                     ]
@@ -106,101 +102,96 @@
                                         "success": {
                                             "type": "boolean"
                                         },
-                                        "result": {
+                                        "server": {
                                             "type": "object",
                                             "properties": {
-                                                "server": {
-                                                    "type": "object",
-                                                    "properties": {
-                                                        "version": {
-                                                            "type": "string",
-                                                            "description": "REST API version string"
-                                                        },
-                                                        "compileTimeout": {
-                                                            "type": "integer",
-                                                            "description": "Compile timeout in seconds"
-                                                        }
-                                                    },
-                                                    "required": [
-                                                        "version",
-                                                        "compileTimeout"
-                                                    ],
-                                                    "description": "Server info"
+                                                "version": {
+                                                    "type": "string",
+                                                    "description": "REST API version string"
                                                 },
-                                                "project": {
-                                                    "type": "object",
-                                                    "properties": {
-                                                        "name": {
-                                                            "type": "string",
-                                                            "description": "Project name"
-                                                        },
-                                                        "projectFolder": {
-                                                            "type": "string",
-                                                            "description": "Full path to project folder"
-                                                        },
-                                                        "scriptsFolder": {
-                                                            "type": "string",
-                                                            "description": "Full path to Scripts folder"
-                                                        }
-                                                    },
-                                                    "required": [
-                                                        "name",
-                                                        "projectFolder",
-                                                        "scriptsFolder"
-                                                    ],
-                                                    "description": "Project info"
-                                                },
-                                                "scriptProcessors": {
-                                                    "type": "array",
-                                                    "items": {
-                                                        "type": "object",
-                                                        "properties": {
-                                                            "moduleId": {
-                                                                "type": "string",
-                                                                "description": "Unique processor identifier"
-                                                            },
-                                                            "isMainInterface": {
-                                                                "type": "boolean",
-                                                                "description": "True if this processor renders the plugin UI"
-                                                            },
-                                                            "externalFiles": {
-                                                                "type": "array",
-                                                                "description": "Included .js files relative to scriptsFolder"
-                                                            },
-                                                            "callbacks": {
-                                                                "type": "array",
-                                                                "items": {
-                                                                    "type": "object",
-                                                                    "properties": {
-                                                                        "id": {
-                                                                            "type": "string",
-                                                                            "description": "Callback name (e.g. onInit, onNoteOn)"
-                                                                        },
-                                                                        "empty": {
-                                                                            "type": "boolean",
-                                                                            "description": "True if callback has no content"
-                                                                        }
-                                                                    },
-                                                                    "required": [
-                                                                        "id",
-                                                                        "empty"
-                                                                    ],
-                                                                    "description": "Callback entry"
-                                                                },
-                                                                "description": "Array of callback entries"
-                                                            }
-                                                        },
-                                                        "required": [
-                                                            "moduleId",
-                                                            "isMainInterface",
-                                                            "externalFiles",
-                                                            "callbacks"
-                                                        ],
-                                                        "description": "Script processor entry"
-                                                    },
-                                                    "description": "Array of script processor entries"
+                                                "compileTimeout": {
+                                                    "type": "integer",
+                                                    "description": "Compile timeout in seconds"
                                                 }
-                                            }
+                                            },
+                                            "required": [
+                                                "version",
+                                                "compileTimeout"
+                                            ],
+                                            "description": "Server info"
+                                        },
+                                        "project": {
+                                            "type": "object",
+                                            "properties": {
+                                                "name": {
+                                                    "type": "string",
+                                                    "description": "Project name"
+                                                },
+                                                "projectFolder": {
+                                                    "type": "string",
+                                                    "description": "Full path to project folder"
+                                                },
+                                                "scriptsFolder": {
+                                                    "type": "string",
+                                                    "description": "Full path to Scripts folder"
+                                                }
+                                            },
+                                            "required": [
+                                                "name",
+                                                "projectFolder",
+                                                "scriptsFolder"
+                                            ],
+                                            "description": "Project info"
+                                        },
+                                        "scriptProcessors": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "object",
+                                                "properties": {
+                                                    "moduleId": {
+                                                        "type": "string",
+                                                        "description": "Unique processor identifier"
+                                                    },
+                                                    "isMainInterface": {
+                                                        "type": "boolean",
+                                                        "description": "True if this processor renders the plugin UI"
+                                                    },
+                                                    "externalFiles": {
+                                                        "type": "array",
+                                                        "description": "Included .js files relative to scriptsFolder"
+                                                    },
+                                                    "callbacks": {
+                                                        "type": "array",
+                                                        "items": {
+                                                            "type": "object",
+                                                            "properties": {
+                                                                "id": {
+                                                                    "type": "string",
+                                                                    "description": "Callback name (e.g. onInit, onNoteOn)"
+                                                                },
+                                                                "empty": {
+                                                                    "type": "boolean",
+                                                                    "description": "True if callback has no content"
+                                                                }
+                                                            },
+                                                            "required": [
+                                                                "id",
+                                                                "empty"
+                                                            ],
+                                                            "description": "Callback entry"
+                                                        },
+                                                        "description": "Array of callback entries"
+                                                    }
+                                                },
+                                                "required": [
+                                                    "moduleId",
+                                                    "isMainInterface",
+                                                    "externalFiles",
+                                                    "callbacks"
+                                                ],
+                                                "description": "Script processor entry"
+                                            },
+                                            "description": "Array of script processor entries"
                                         },
                                         "logs": {
                                             "type": "array",
@@ -217,7 +208,6 @@
                                     },
                                     "required": [
                                         "success",
-                                        "result",
                                         "logs",
                                         "errors"
                                     ]
@@ -298,36 +288,35 @@
                                         "success": {
                                             "type": "boolean"
                                         },
-                                        "result": {
+                                        "moduleId": {
+                                            "type": "string",
+                                            "description": "The script processor's module ID"
+                                        },
+                                        "callbacks": {
                                             "type": "object",
-                                            "properties": {
-                                                "callbacks": {
-                                                    "type": "object",
-                                                    "description": "Object with callback names as keys and script content as values"
-                                                },
-                                                "externalFiles": {
-                                                    "type": "array",
-                                                    "items": {
-                                                        "type": "object",
-                                                        "properties": {
-                                                            "name": {
-                                                                "type": "string",
-                                                                "description": "File name"
-                                                            },
-                                                            "path": {
-                                                                "type": "string",
-                                                                "description": "Full file path"
-                                                            }
-                                                        },
-                                                        "required": [
-                                                            "name",
-                                                            "path"
-                                                        ],
-                                                        "description": "External file entry"
+                                            "description": "Object with callback names as keys and script content as values"
+                                        },
+                                        "externalFiles": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "object",
+                                                "properties": {
+                                                    "name": {
+                                                        "type": "string",
+                                                        "description": "File name"
                                                     },
-                                                    "description": "Array of external file entries"
-                                                }
-                                            }
+                                                    "path": {
+                                                        "type": "string",
+                                                        "description": "Full file path"
+                                                    }
+                                                },
+                                                "required": [
+                                                    "name",
+                                                    "path"
+                                                ],
+                                                "description": "External file entry"
+                                            },
+                                            "description": "Array of external file entries"
                                         },
                                         "logs": {
                                             "type": "array",
@@ -344,7 +333,6 @@
                                     },
                                     "required": [
                                         "success",
-                                        "result",
                                         "logs",
                                         "errors"
                                     ]
@@ -435,18 +423,29 @@
                                         "success": {
                                             "type": "boolean"
                                         },
+                                        "moduleId": {
+                                            "type": "string",
+                                            "description": "The script processor's module ID"
+                                        },
                                         "result": {
-                                            "type": "object",
-                                            "properties": {
-                                                "updatedCallbacks": {
-                                                    "type": "array",
-                                                    "description": "Array of callback names that were updated"
-                                                },
-                                                "externalFiles": {
-                                                    "type": "array",
-                                                    "description": "Array of included .js file names after compilation"
-                                                }
-                                            }
+                                            "type": "string",
+                                            "description": "Compilation status message"
+                                        },
+                                        "updatedCallbacks": {
+                                            "type": "array",
+                                            "description": "Array of callback names that were updated"
+                                        },
+                                        "externalFiles": {
+                                            "type": "array",
+                                            "description": "Array of included .js file names after compilation"
+                                        },
+                                        "forceSynchronousExecution": {
+                                            "type": "boolean",
+                                            "description": "Whether synchronous mode was used"
+                                        },
+                                        "warning": {
+                                            "type": "string",
+                                            "description": "Warning when synchronous mode was used"
                                         },
                                         "logs": {
                                             "type": "array",
@@ -463,7 +462,6 @@
                                     },
                                     "required": [
                                         "success",
-                                        "result",
                                         "logs",
                                         "errors"
                                     ]
@@ -540,14 +538,17 @@
                                         "success": {
                                             "type": "boolean"
                                         },
+                                        "moduleId": {
+                                            "type": "string",
+                                            "description": "The script processor's module ID"
+                                        },
                                         "result": {
-                                            "type": "object",
-                                            "properties": {
-                                                "value": {
-                                                    "type": "string",
-                                                    "description": "The evaluated result value"
-                                                }
-                                            }
+                                            "type": "string",
+                                            "description": "Status message"
+                                        },
+                                        "value": {
+                                            "type": "string",
+                                            "description": "The evaluated result value"
                                         },
                                         "logs": {
                                             "type": "array",
@@ -564,7 +565,6 @@
                                     },
                                     "required": [
                                         "success",
-                                        "result",
                                         "logs",
                                         "errors"
                                     ]
@@ -619,7 +619,7 @@
                                     },
                                     "profile": {
                                         "type": "boolean",
-                                        "description": "Start a profiling session alongside compilation. Retrieve results later via POST /api/profile with mode=\"get\".",
+                                        "description": "Start a profiling session alongside compilation. Retrieve results later via POST /api/testing/profile with mode=\"get\".",
                                         "default": "false"
                                     },
                                     "durationMs": {
@@ -650,13 +650,20 @@
                                             "type": "boolean"
                                         },
                                         "result": {
-                                            "type": "object",
-                                            "properties": {
-                                                "externalFiles": {
-                                                    "type": "array",
-                                                    "description": "Array of included .js file names after compilation"
-                                                }
-                                            }
+                                            "type": "string",
+                                            "description": "Compilation status message"
+                                        },
+                                        "externalFiles": {
+                                            "type": "array",
+                                            "description": "Array of included .js file names after compilation"
+                                        },
+                                        "forceSynchronousExecution": {
+                                            "type": "boolean",
+                                            "description": "Whether synchronous mode was used"
+                                        },
+                                        "warning": {
+                                            "type": "string",
+                                            "description": "Warning when synchronous mode was used"
                                         },
                                         "logs": {
                                             "type": "array",
@@ -673,7 +680,6 @@
                                     },
                                     "required": [
                                         "success",
-                                        "result",
                                         "logs",
                                         "errors"
                                     ]
@@ -738,32 +744,31 @@
                                         "success": {
                                             "type": "boolean"
                                         },
-                                        "result": {
-                                            "type": "object",
-                                            "properties": {
-                                                "components": {
-                                                    "type": "array",
-                                                    "items": {
-                                                        "type": "object",
-                                                        "properties": {
-                                                            "id": {
-                                                                "type": "string",
-                                                                "description": "Component ID"
-                                                            },
-                                                            "type": {
-                                                                "type": "string",
-                                                                "description": "Component type (e.g. ScriptButton, ScriptPanel)"
-                                                            }
-                                                        },
-                                                        "required": [
-                                                            "id",
-                                                            "type"
-                                                        ],
-                                                        "description": "Component entry (flat)"
+                                        "moduleId": {
+                                            "type": "string",
+                                            "description": "The script processor's module ID"
+                                        },
+                                        "components": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "object",
+                                                "properties": {
+                                                    "id": {
+                                                        "type": "string",
+                                                        "description": "Component ID"
                                                     },
-                                                    "description": "Array of component entries"
-                                                }
-                                            }
+                                                    "type": {
+                                                        "type": "string",
+                                                        "description": "Component type (e.g. ScriptButton, ScriptPanel)"
+                                                    }
+                                                },
+                                                "required": [
+                                                    "id",
+                                                    "type"
+                                                ],
+                                                "description": "Component entry (flat)"
+                                            },
+                                            "description": "Array of component entries"
                                         },
                                         "logs": {
                                             "type": "array",
@@ -780,7 +785,6 @@
                                     },
                                     "required": [
                                         "success",
-                                        "result",
                                         "logs",
                                         "errors"
                                     ]
@@ -853,45 +857,48 @@
                                         "success": {
                                             "type": "boolean"
                                         },
-                                        "result": {
-                                            "type": "object",
-                                            "properties": {
-                                                "type": {
-                                                    "type": "string",
-                                                    "description": "Component type (e.g. ScriptButton)"
-                                                },
+                                        "moduleId": {
+                                            "type": "string",
+                                            "description": "The script processor's module ID"
+                                        },
+                                        "id": {
+                                            "type": "string",
+                                            "description": "The component's ID"
+                                        },
+                                        "type": {
+                                            "type": "string",
+                                            "description": "Component type (e.g. ScriptButton)"
+                                        },
+                                        "properties": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "object",
                                                 "properties": {
-                                                    "type": "array",
-                                                    "items": {
-                                                        "type": "object",
-                                                        "properties": {
-                                                            "id": {
-                                                                "type": "string",
-                                                                "description": "Property name"
-                                                            },
-                                                            "value": {
-                                                                "type": "string",
-                                                                "description": "Current value (int, bool, string, or hex color)"
-                                                            },
-                                                            "isDefault": {
-                                                                "type": "boolean",
-                                                                "description": "True if value has not been explicitly changed"
-                                                            },
-                                                            "options": {
-                                                                "type": "array",
-                                                                "description": "Available choices for enum-type properties"
-                                                            }
-                                                        },
-                                                        "required": [
-                                                            "id",
-                                                            "value",
-                                                            "isDefault"
-                                                        ],
-                                                        "description": "Property entry"
+                                                    "id": {
+                                                        "type": "string",
+                                                        "description": "Property name"
                                                     },
-                                                    "description": "Array of property entries"
-                                                }
-                                            }
+                                                    "value": {
+                                                        "type": "string",
+                                                        "description": "Current value (int, bool, string, or hex color)"
+                                                    },
+                                                    "isDefault": {
+                                                        "type": "boolean",
+                                                        "description": "True if value has not been explicitly changed"
+                                                    },
+                                                    "options": {
+                                                        "type": "array",
+                                                        "description": "Available choices for enum-type properties"
+                                                    }
+                                                },
+                                                "required": [
+                                                    "id",
+                                                    "value",
+                                                    "isDefault"
+                                                ],
+                                                "description": "Property entry"
+                                            },
+                                            "description": "Array of property entries"
                                         },
                                         "logs": {
                                             "type": "array",
@@ -908,7 +915,6 @@
                                     },
                                     "required": [
                                         "success",
-                                        "result",
                                         "logs",
                                         "errors"
                                     ]
@@ -988,26 +994,29 @@
                                         "success": {
                                             "type": "boolean"
                                         },
-                                        "result": {
-                                            "type": "object",
-                                            "properties": {
-                                                "type": {
-                                                    "type": "string",
-                                                    "description": "Component type (e.g. ScriptSlider)"
-                                                },
-                                                "value": {
-                                                    "type": "number",
-                                                    "description": "Current runtime value"
-                                                },
-                                                "min": {
-                                                    "type": "number",
-                                                    "description": "Minimum value for the component's range"
-                                                },
-                                                "max": {
-                                                    "type": "number",
-                                                    "description": "Maximum value for the component's range"
-                                                }
-                                            }
+                                        "moduleId": {
+                                            "type": "string",
+                                            "description": "The script processor's module ID"
+                                        },
+                                        "id": {
+                                            "type": "string",
+                                            "description": "The component's ID"
+                                        },
+                                        "type": {
+                                            "type": "string",
+                                            "description": "Component type (e.g. ScriptSlider)"
+                                        },
+                                        "value": {
+                                            "type": "number",
+                                            "description": "Current runtime value"
+                                        },
+                                        "min": {
+                                            "type": "number",
+                                            "description": "Minimum value for the component's range"
+                                        },
+                                        "max": {
+                                            "type": "number",
+                                            "description": "Maximum value for the component's range"
                                         },
                                         "logs": {
                                             "type": "array",
@@ -1024,7 +1033,6 @@
                                     },
                                     "required": [
                                         "success",
-                                        "result",
                                         "logs",
                                         "errors"
                                     ]
@@ -1118,9 +1126,25 @@
                                         "success": {
                                             "type": "boolean"
                                         },
-                                        "result": {
-                                            "type": "object",
-                                            "description": "Success status"
+                                        "moduleId": {
+                                            "type": "string",
+                                            "description": "The script processor's module ID"
+                                        },
+                                        "id": {
+                                            "type": "string",
+                                            "description": "The component's ID"
+                                        },
+                                        "type": {
+                                            "type": "string",
+                                            "description": "Component type"
+                                        },
+                                        "forceSynchronousExecution": {
+                                            "type": "boolean",
+                                            "description": "Whether synchronous mode was used"
+                                        },
+                                        "warning": {
+                                            "type": "string",
+                                            "description": "Warning when synchronous mode was used"
                                         },
                                         "logs": {
                                             "type": "array",
@@ -1137,7 +1161,6 @@
                                     },
                                     "required": [
                                         "success",
-                                        "result",
                                         "logs",
                                         "errors"
                                     ]
@@ -1241,36 +1264,35 @@
                                         "success": {
                                             "type": "boolean"
                                         },
-                                        "result": {
-                                            "type": "object",
-                                            "properties": {
-                                                "applied": {
-                                                    "type": "array",
-                                                    "items": {
-                                                        "type": "object",
-                                                        "properties": {
-                                                            "id": {
-                                                                "type": "string",
-                                                                "description": "Component ID"
-                                                            },
-                                                            "properties": {
-                                                                "type": "array",
-                                                                "description": "Array of property names that were set"
-                                                            }
-                                                        },
-                                                        "required": [
-                                                            "id",
-                                                            "properties"
-                                                        ],
-                                                        "description": "Applied change entry"
+                                        "moduleId": {
+                                            "type": "string",
+                                            "description": "The script processor's module ID"
+                                        },
+                                        "applied": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "object",
+                                                "properties": {
+                                                    "id": {
+                                                        "type": "string",
+                                                        "description": "Component ID"
                                                     },
-                                                    "description": "Array of applied change entries"
+                                                    "properties": {
+                                                        "type": "array",
+                                                        "description": "Array of property names that were set"
+                                                    }
                                                 },
-                                                "recompileRequired": {
-                                                    "type": "boolean",
-                                                    "description": "True if parentComponent was changed - call /api/recompile to apply"
-                                                }
-                                            }
+                                                "required": [
+                                                    "id",
+                                                    "properties"
+                                                ],
+                                                "description": "Applied change entry"
+                                            },
+                                            "description": "Array of applied change entries"
+                                        },
+                                        "recompileRequired": {
+                                            "type": "boolean",
+                                            "description": "True if parentComponent was changed - call /api/recompile to apply"
                                         },
                                         "logs": {
                                             "type": "array",
@@ -1287,7 +1309,6 @@
                                     },
                                     "required": [
                                         "success",
-                                        "result",
                                         "logs",
                                         "errors"
                                     ]
@@ -1320,14 +1341,14 @@
                 }
             }
         },
-        "/api/screenshot": {
+        "/api/testing/screenshot": {
             "get": {
                 "tags": [
-                    "ui"
+                    "testing"
                 ],
                 "summary": "Capture screenshot of interface or specific component",
                 "description": "Captures a PNG screenshot of the full interface or a specific component. When capturing a specific component, the screenshot is cropped to that component's bounds within the full interface render. Returns Base64 by default, or writes to file when outputPath is specified.",
-                "operationId": "screenshot",
+                "operationId": "testing_screenshot",
                 "parameters": [
                     {
                         "name": "moduleId",
@@ -1383,30 +1404,33 @@
                                         "success": {
                                             "type": "boolean"
                                         },
-                                        "result": {
-                                            "type": "object",
-                                            "properties": {
-                                                "width": {
-                                                    "type": "integer",
-                                                    "description": "Width of captured image in pixels"
-                                                },
-                                                "height": {
-                                                    "type": "integer",
-                                                    "description": "Height of captured image in pixels"
-                                                },
-                                                "scale": {
-                                                    "type": "number",
-                                                    "description": "Scale factor that was applied"
-                                                },
-                                                "imageData": {
-                                                    "type": "string",
-                                                    "description": "Base64-encoded PNG data (only when outputPath not specified)"
-                                                },
-                                                "filePath": {
-                                                    "type": "string",
-                                                    "description": "Full path to saved PNG file (only when outputPath specified)"
-                                                }
-                                            }
+                                        "moduleId": {
+                                            "type": "string",
+                                            "description": "The script processor's module ID"
+                                        },
+                                        "id": {
+                                            "type": "string",
+                                            "description": "The component's ID (when specified)"
+                                        },
+                                        "width": {
+                                            "type": "integer",
+                                            "description": "Width of captured image in pixels"
+                                        },
+                                        "height": {
+                                            "type": "integer",
+                                            "description": "Height of captured image in pixels"
+                                        },
+                                        "scale": {
+                                            "type": "number",
+                                            "description": "Scale factor that was applied"
+                                        },
+                                        "imageData": {
+                                            "type": "string",
+                                            "description": "Base64-encoded PNG data (only when outputPath not specified)"
+                                        },
+                                        "filePath": {
+                                            "type": "string",
+                                            "description": "Full path to saved PNG file (only when outputPath specified)"
                                         },
                                         "logs": {
                                             "type": "array",
@@ -1423,7 +1447,6 @@
                                     },
                                     "required": [
                                         "success",
-                                        "result",
                                         "logs",
                                         "errors"
                                     ]
@@ -1485,18 +1508,17 @@
                                         "success": {
                                             "type": "boolean"
                                         },
-                                        "result": {
-                                            "type": "object",
-                                            "properties": {
-                                                "selectionCount": {
-                                                    "type": "integer",
-                                                    "description": "Number of currently selected components"
-                                                },
-                                                "components": {
-                                                    "type": "array",
-                                                    "description": "Array of selected components with properties"
-                                                }
-                                            }
+                                        "moduleId": {
+                                            "type": "string",
+                                            "description": "The script processor's module ID"
+                                        },
+                                        "selectionCount": {
+                                            "type": "integer",
+                                            "description": "Number of currently selected components"
+                                        },
+                                        "components": {
+                                            "type": "array",
+                                            "description": "Array of selected components with properties"
                                         },
                                         "logs": {
                                             "type": "array",
@@ -1513,7 +1535,6 @@
                                     },
                                     "required": [
                                         "success",
-                                        "result",
                                         "logs",
                                         "errors"
                                     ]
@@ -1547,14 +1568,14 @@
                 }
             }
         },
-        "/api/simulate_interactions": {
+        "/api/testing/e2e": {
             "post": {
                 "tags": [
                     "testing"
                 ],
                 "summary": "Execute a sequence of UI interactions in a test window",
                 "description": "Execute mouse movements, clicks, drags, menu selections, and screenshots in a dedicated test window. Auto-inserts moveTo events as needed for proper mouse positioning. Mouse state persists across API calls. Blocks until all interactions complete (30s timeout).",
-                "operationId": "simulate_interactions",
+                "operationId": "testing_e2e",
                 "requestBody": {
                     "required": true,
                     "content": {
@@ -1708,30 +1729,33 @@
                                         "success": {
                                             "type": "boolean"
                                         },
-                                        "result": {
+                                        "interactionsCompleted": {
+                                            "type": "integer",
+                                            "description": "Number of interactions executed"
+                                        },
+                                        "totalElapsedMs": {
+                                            "type": "integer",
+                                            "description": "Total execution time in milliseconds"
+                                        },
+                                        "executionLog": {
+                                            "type": "array",
+                                            "description": "Array of executed events with timing"
+                                        },
+                                        "screenshots": {
                                             "type": "object",
-                                            "properties": {
-                                                "interactionsCompleted": {
-                                                    "type": "integer",
-                                                    "description": "Number of interactions executed"
-                                                },
-                                                "totalElapsedMs": {
-                                                    "type": "integer",
-                                                    "description": "Total execution time in milliseconds"
-                                                },
-                                                "executionLog": {
-                                                    "type": "array",
-                                                    "description": "Array of executed events with timing"
-                                                },
-                                                "screenshots": {
-                                                    "type": "object",
-                                                    "description": "Object with screenshot id -> metadata"
-                                                },
-                                                "mouseState": {
-                                                    "type": "object",
-                                                    "description": "Final mouse state object (only when verbose=true)"
-                                                }
-                                            }
+                                            "description": "Object with screenshot id -> metadata"
+                                        },
+                                        "mouseState": {
+                                            "type": "object",
+                                            "description": "Final mouse state object (only when verbose=true)"
+                                        },
+                                        "parseWarnings": {
+                                            "type": "array",
+                                            "description": "Array of parse warnings"
+                                        },
+                                        "selectedMenuItem": {
+                                            "type": "object",
+                                            "description": "Selected menu item info"
                                         },
                                         "logs": {
                                             "type": "array",
@@ -1748,23 +1772,20 @@
                                     },
                                     "required": [
                                         "success",
-                                        "result",
                                         "logs",
                                         "errors"
                                     ]
                                 },
                                 "example": {
                                     "success": true,
-                                    "result": {
-                                        "interactionsCompleted": 2,
-                                        "totalElapsedMs": 120,
-                                        "executionLog": [],
-                                        "screenshots": {
-                                            "after_click": {
-                                                "sizeKB": 12.5,
-                                                "width": 600,
-                                                "height": 400
-                                            }
+                                    "interactionsCompleted": 2,
+                                    "totalElapsedMs": 120,
+                                    "executionLog": [],
+                                    "screenshots": {
+                                        "after_click": {
+                                            "sizeKB": 12.5,
+                                            "width": 600,
+                                            "height": 400
                                         }
                                     },
                                     "logs": [],
@@ -1833,64 +1854,67 @@
                                         "success": {
                                             "type": "boolean"
                                         },
-                                        "result": {
-                                            "type": "object",
-                                            "properties": {
-                                                "diagnostics": {
-                                                    "type": "array",
-                                                    "items": {
-                                                        "type": "object",
-                                                        "properties": {
-                                                            "line": {
-                                                                "type": "integer",
-                                                                "description": "1-based line number"
-                                                            },
-                                                            "column": {
-                                                                "type": "integer",
-                                                                "description": "1-based column number"
-                                                            },
-                                                            "severity": {
-                                                                "type": "string",
-                                                                "enum": [
-                                                                    "error",
-                                                                    "warning",
-                                                                    "info",
-                                                                    "hint"
-                                                                ],
-                                                                "description": "Diagnostic severity"
-                                                            },
-                                                            "source": {
-                                                                "type": "string",
-                                                                "enum": [
-                                                                    "syntax",
-                                                                    "api-validation",
-                                                                    "type-check",
-                                                                    "language",
-                                                                    "callscope"
-                                                                ],
-                                                                "description": "Diagnostic category"
-                                                            },
-                                                            "message": {
-                                                                "type": "string",
-                                                                "description": "Human-readable diagnostic message"
-                                                            },
-                                                            "suggestions": {
-                                                                "type": "array",
-                                                                "description": "Did-you-mean suggestions from fuzzy matching"
-                                                            }
-                                                        },
-                                                        "required": [
-                                                            "line",
-                                                            "column",
-                                                            "severity",
-                                                            "source",
-                                                            "message"
-                                                        ],
-                                                        "description": "Diagnostic entry"
+                                        "moduleId": {
+                                            "type": "string",
+                                            "description": "The resolved script processor's module ID"
+                                        },
+                                        "filePath": {
+                                            "type": "string",
+                                            "description": "The resolved file path"
+                                        },
+                                        "diagnostics": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "object",
+                                                "properties": {
+                                                    "line": {
+                                                        "type": "integer",
+                                                        "description": "1-based line number"
                                                     },
-                                                    "description": "Array of diagnostic entries"
-                                                }
-                                            }
+                                                    "column": {
+                                                        "type": "integer",
+                                                        "description": "1-based column number"
+                                                    },
+                                                    "severity": {
+                                                        "type": "string",
+                                                        "enum": [
+                                                            "error",
+                                                            "warning",
+                                                            "info",
+                                                            "hint"
+                                                        ],
+                                                        "description": "Diagnostic severity"
+                                                    },
+                                                    "source": {
+                                                        "type": "string",
+                                                        "enum": [
+                                                            "syntax",
+                                                            "api-validation",
+                                                            "type-check",
+                                                            "language",
+                                                            "callscope"
+                                                        ],
+                                                        "description": "Diagnostic category"
+                                                    },
+                                                    "message": {
+                                                        "type": "string",
+                                                        "description": "Human-readable diagnostic message"
+                                                    },
+                                                    "suggestions": {
+                                                        "type": "array",
+                                                        "description": "Did-you-mean suggestions from fuzzy matching"
+                                                    }
+                                                },
+                                                "required": [
+                                                    "line",
+                                                    "column",
+                                                    "severity",
+                                                    "source",
+                                                    "message"
+                                                ],
+                                                "description": "Diagnostic entry"
+                                            },
+                                            "description": "Array of diagnostic entries"
                                         },
                                         "logs": {
                                             "type": "array",
@@ -1907,7 +1931,6 @@
                                     },
                                     "required": [
                                         "success",
-                                        "result",
                                         "logs",
                                         "errors"
                                     ]
@@ -1974,32 +1997,31 @@
                                         "success": {
                                             "type": "boolean"
                                         },
-                                        "result": {
-                                            "type": "object",
-                                            "properties": {
-                                                "files": {
-                                                    "type": "array",
-                                                    "items": {
-                                                        "type": "object",
-                                                        "properties": {
-                                                            "path": {
-                                                                "type": "string",
-                                                                "description": "Full file path"
-                                                            },
-                                                            "processor": {
-                                                                "type": "string",
-                                                                "description": "Owning processor ID"
-                                                            }
-                                                        },
-                                                        "required": [
-                                                            "path",
-                                                            "processor"
-                                                        ],
-                                                        "description": "Included file entry (global mode)"
+                                        "moduleId": {
+                                            "type": "string",
+                                            "description": "The filtered processor ID (when moduleId was specified)"
+                                        },
+                                        "files": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "object",
+                                                "properties": {
+                                                    "path": {
+                                                        "type": "string",
+                                                        "description": "Full file path"
                                                     },
-                                                    "description": "Array of file entries or path strings"
-                                                }
-                                            }
+                                                    "processor": {
+                                                        "type": "string",
+                                                        "description": "Owning processor ID"
+                                                    }
+                                                },
+                                                "required": [
+                                                    "path",
+                                                    "processor"
+                                                ],
+                                                "description": "Included file entry (global mode)"
+                                            },
+                                            "description": "Array of file entries or path strings"
                                         },
                                         "logs": {
                                             "type": "array",
@@ -2016,7 +2038,6 @@
                                     },
                                     "required": [
                                         "success",
-                                        "result",
                                         "logs",
                                         "errors"
                                     ]
@@ -2041,14 +2062,14 @@
                 }
             }
         },
-        "/api/profile": {
+        "/api/testing/profile": {
             "post": {
                 "tags": [
-                    "scripting"
+                    "testing"
                 ],
                 "summary": "Start a profiling session or retrieve last result",
                 "description": "mode=\"record\" starts a new non-blocking session (returns immediately). mode=\"get\" returns last result with optional filtering and summary aggregation. Workflow: record once, then query with different filters. Returns 409 if a recording is already in progress. Returns 400 if profiling toolkit is not enabled in the build.",
-                "operationId": "profile",
+                "operationId": "testing_profile",
                 "requestBody": {
                     "required": true,
                     "content": {
@@ -2130,77 +2151,80 @@
                                         "success": {
                                             "type": "boolean"
                                         },
-                                        "result": {
-                                            "type": "object",
-                                            "properties": {
-                                                "threads": {
-                                                    "type": "array",
-                                                    "items": {
-                                                        "type": "object",
-                                                        "properties": {
-                                                            "thread": {
-                                                                "type": "string",
-                                                                "description": "Thread name"
-                                                            },
-                                                            "events": {
-                                                                "type": "array",
-                                                                "items": {
-                                                                    "type": "object",
-                                                                    "properties": {
-                                                                        "name": {
-                                                                            "type": "string",
-                                                                            "description": "Event name"
-                                                                        },
-                                                                        "duration": {
-                                                                            "type": "number",
-                                                                            "description": "Duration in ms"
-                                                                        },
-                                                                        "sourceType": {
-                                                                            "type": "string",
-                                                                            "description": "Event source type",
-                                                                            "example": "DSP"
-                                                                        },
-                                                                        "start": {
-                                                                            "type": "number",
-                                                                            "description": "Start time in ms"
-                                                                        },
-                                                                        "children": {
-                                                                            "type": "array",
-                                                                            "description": "Nested child events"
-                                                                        }
-                                                                    },
-                                                                    "required": [
-                                                                        "name",
-                                                                        "duration",
-                                                                        "sourceType",
-                                                                        "start"
-                                                                    ],
-                                                                    "description": "Profiled event entry"
-                                                                },
-                                                                "description": "Array of profiled events"
-                                                            }
-                                                        },
-                                                        "required": [
-                                                            "thread",
-                                                            "events"
-                                                        ],
-                                                        "description": "Thread profiling result"
+                                        "recording": {
+                                            "type": "boolean",
+                                            "description": "Whether a recording is in progress"
+                                        },
+                                        "durationMs": {
+                                            "type": "integer",
+                                            "description": "Recording duration in ms (record mode)"
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "description": "Status message (e.g. when no data)"
+                                        },
+                                        "threads": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "object",
+                                                "properties": {
+                                                    "thread": {
+                                                        "type": "string",
+                                                        "description": "Thread name"
                                                     },
-                                                    "description": "Array of thread profiling results"
+                                                    "events": {
+                                                        "type": "array",
+                                                        "items": {
+                                                            "type": "object",
+                                                            "properties": {
+                                                                "name": {
+                                                                    "type": "string",
+                                                                    "description": "Event name"
+                                                                },
+                                                                "duration": {
+                                                                    "type": "number",
+                                                                    "description": "Duration in ms"
+                                                                },
+                                                                "sourceType": {
+                                                                    "type": "string",
+                                                                    "description": "Event source type",
+                                                                    "example": "DSP"
+                                                                },
+                                                                "start": {
+                                                                    "type": "number",
+                                                                    "description": "Start time in ms"
+                                                                },
+                                                                "children": {
+                                                                    "type": "array",
+                                                                    "description": "Nested child events"
+                                                                }
+                                                            },
+                                                            "required": [
+                                                                "name",
+                                                                "duration",
+                                                                "sourceType",
+                                                                "start"
+                                                            ],
+                                                            "description": "Profiled event entry"
+                                                        },
+                                                        "description": "Array of profiled events"
+                                                    }
                                                 },
-                                                "flows": {
-                                                    "type": "array",
-                                                    "description": "Array of cross-thread causal flow connections"
-                                                },
-                                                "recording": {
-                                                    "type": "boolean",
-                                                    "description": "Whether a recording is in progress"
-                                                },
-                                                "results": {
-                                                    "type": "array",
-                                                    "description": "Flat array of filtered/aggregated events"
-                                                }
-                                            }
+                                                "required": [
+                                                    "thread",
+                                                    "events"
+                                                ],
+                                                "description": "Thread profiling result"
+                                            },
+                                            "description": "Array of thread profiling results"
+                                        },
+                                        "flows": {
+                                            "type": "array",
+                                            "description": "Array of cross-thread causal flow connections"
+                                        },
+                                        "results": {
+                                            "type": "array",
+                                            "description": "Flat array of filtered/aggregated events"
                                         },
                                         "logs": {
                                             "type": "array",
@@ -2217,16 +2241,14 @@
                                     },
                                     "required": [
                                         "success",
-                                        "result",
                                         "logs",
                                         "errors"
                                     ]
                                 },
                                 "example": {
                                     "success": true,
-                                    "result": {
-                                        "recording": true
-                                    },
+                                    "recording": true,
+                                    "durationMs": 2000,
                                     "logs": [],
                                     "errors": []
                                 }
@@ -2299,22 +2321,21 @@
                                         "success": {
                                             "type": "boolean"
                                         },
-                                        "result": {
+                                        "diagnostics": {
+                                            "type": "array",
+                                            "description": "Array of diagnostic entries"
+                                        },
+                                        "filePath": {
+                                            "type": "string",
+                                            "description": "The resolved CSS file path (when file was used)"
+                                        },
+                                        "selectors": {
+                                            "type": "array",
+                                            "description": "List of parsed selectors"
+                                        },
+                                        "properties": {
                                             "type": "object",
-                                            "properties": {
-                                                "diagnostics": {
-                                                    "type": "array",
-                                                    "description": "Array of diagnostic entries"
-                                                },
-                                                "selectors": {
-                                                    "type": "array",
-                                                    "description": "List of parsed selectors"
-                                                },
-                                                "properties": {
-                                                    "type": "object",
-                                                    "description": "Resolved properties when selectors provided"
-                                                }
-                                            }
+                                            "description": "Resolved properties when selectors provided"
                                         },
                                         "logs": {
                                             "type": "array",
@@ -2331,7 +2352,6 @@
                                     },
                                     "required": [
                                         "success",
-                                        "result",
                                         "logs",
                                         "errors"
                                     ]
@@ -2381,7 +2401,7 @@
                                             "type": "boolean"
                                         },
                                         "result": {
-                                            "type": "object",
+                                            "type": "string",
                                             "description": "Success confirmation before shutdown begins"
                                         },
                                         "logs": {
@@ -2399,7 +2419,6 @@
                                     },
                                     "required": [
                                         "success",
-                                        "result",
                                         "logs",
                                         "errors"
                                     ]
@@ -2480,7 +2499,7 @@
                                             "type": "boolean"
                                         },
                                         "result": {
-                                            "type": "object",
+                                            "type": "string",
                                             "description": "Nested JSON tree with metadata / modulation / children"
                                         },
                                         "logs": {
@@ -2498,7 +2517,6 @@
                                     },
                                     "required": [
                                         "success",
-                                        "result",
                                         "logs",
                                         "errors"
                                     ]
@@ -2506,10 +2524,10 @@
                                 "example": {
                                     "success": true,
                                     "result": {
-                                        "id": "Master Chain",
-                                        "type": "MasterContainer",
-                                        "chains": {},
-                                        "children": []
+                                        "id": "SynthChain",
+                                        "processorId": "Master Chain",
+                                        "type": "SoundGenerator",
+                                        "bypassed": false
                                     },
                                     "logs": [],
                                     "errors": []
@@ -2692,55 +2710,50 @@
                                         "success": {
                                             "type": "boolean"
                                         },
-                                        "result": {
-                                            "type": "object",
-                                            "properties": {
-                                                "scope": {
-                                                    "type": "string",
-                                                    "enum": [
-                                                        "group",
-                                                        "root"
-                                                    ],
-                                                    "description": "Scope level"
-                                                },
-                                                "groupName": {
-                                                    "type": "string",
-                                                    "description": "Active group name"
-                                                },
-                                                "diff": {
-                                                    "type": "array",
-                                                    "items": {
-                                                        "type": "object",
-                                                        "properties": {
-                                                            "target": {
-                                                                "type": "string",
-                                                                "description": "Module ID affected"
-                                                            },
-                                                            "action": {
-                                                                "type": "string",
-                                                                "enum": [
-                                                                    "+",
-                                                                    "-",
-                                                                    "*"
-                                                                ],
-                                                                "description": "Net action symbol"
-                                                            },
-                                                            "domain": {
-                                                                "type": "string",
-                                                                "description": "Operation domain",
-                                                                "example": "builder"
-                                                            }
-                                                        },
-                                                        "required": [
-                                                            "target",
-                                                            "action",
-                                                            "domain"
-                                                        ],
-                                                        "description": "Diff entry"
+                                        "scope": {
+                                            "type": "string",
+                                            "enum": [
+                                                "group",
+                                                "root"
+                                            ],
+                                            "description": "Scope level"
+                                        },
+                                        "groupName": {
+                                            "type": "string",
+                                            "description": "Active group name"
+                                        },
+                                        "diff": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "object",
+                                                "properties": {
+                                                    "target": {
+                                                        "type": "string",
+                                                        "description": "Module ID affected"
                                                     },
-                                                    "description": "Array of diff entries"
-                                                }
-                                            }
+                                                    "action": {
+                                                        "type": "string",
+                                                        "enum": [
+                                                            "+",
+                                                            "-",
+                                                            "*"
+                                                        ],
+                                                        "description": "Net action symbol"
+                                                    },
+                                                    "domain": {
+                                                        "type": "string",
+                                                        "description": "Operation domain",
+                                                        "example": "builder"
+                                                    }
+                                                },
+                                                "required": [
+                                                    "target",
+                                                    "action",
+                                                    "domain"
+                                                ],
+                                                "description": "Diff entry"
+                                            },
+                                            "description": "Array of diff entries"
                                         },
                                         "logs": {
                                             "type": "array",
@@ -2757,24 +2770,21 @@
                                     },
                                     "required": [
                                         "success",
-                                        "result",
                                         "logs",
                                         "errors"
                                     ]
                                 },
                                 "example": {
                                     "success": true,
-                                    "result": {
-                                        "scope": "group",
-                                        "groupName": "root",
-                                        "diff": [
-                                            {
-                                                "target": "MySine",
-                                                "action": "+",
-                                                "domain": "builder"
-                                            }
-                                        ]
-                                    },
+                                    "scope": "group",
+                                    "groupName": "root",
+                                    "diff": [
+                                        {
+                                            "target": "MySine",
+                                            "action": "+",
+                                            "domain": "builder"
+                                        }
+                                    ],
                                     "logs": [],
                                     "errors": []
                                 }
@@ -2813,7 +2823,7 @@
                                             "type": "boolean"
                                         },
                                         "result": {
-                                            "type": "object",
+                                            "type": "string",
                                             "description": "Success confirmation"
                                         },
                                         "logs": {
@@ -2831,7 +2841,6 @@
                                     },
                                     "required": [
                                         "success",
-                                        "result",
                                         "logs",
                                         "errors"
                                     ]
@@ -2890,54 +2899,49 @@
                                         "success": {
                                             "type": "boolean"
                                         },
-                                        "result": {
-                                            "type": "object",
-                                            "properties": {
-                                                "scope": {
-                                                    "type": "string",
-                                                    "enum": [
-                                                        "group",
-                                                        "root"
-                                                    ],
-                                                    "description": "Scope level"
-                                                },
-                                                "groupName": {
-                                                    "type": "string",
-                                                    "description": "Active group name"
-                                                },
-                                                "diff": {
-                                                    "type": "array",
-                                                    "items": {
-                                                        "type": "object",
-                                                        "properties": {
-                                                            "target": {
-                                                                "type": "string",
-                                                                "description": "Affected ID"
-                                                            },
-                                                            "action": {
-                                                                "type": "string",
-                                                                "enum": [
-                                                                    "+",
-                                                                    "-",
-                                                                    "*"
-                                                                ],
-                                                                "description": "Net action symbol"
-                                                            },
-                                                            "domain": {
-                                                                "type": "string",
-                                                                "description": "Operation domain"
-                                                            }
-                                                        },
-                                                        "required": [
-                                                            "target",
-                                                            "action",
-                                                            "domain"
-                                                        ],
-                                                        "description": "Diff entry"
+                                        "scope": {
+                                            "type": "string",
+                                            "enum": [
+                                                "group",
+                                                "root"
+                                            ],
+                                            "description": "Scope level"
+                                        },
+                                        "groupName": {
+                                            "type": "string",
+                                            "description": "Active group name"
+                                        },
+                                        "diff": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "object",
+                                                "properties": {
+                                                    "target": {
+                                                        "type": "string",
+                                                        "description": "Affected ID"
                                                     },
-                                                    "description": "Array of diff entries"
-                                                }
-                                            }
+                                                    "action": {
+                                                        "type": "string",
+                                                        "enum": [
+                                                            "+",
+                                                            "-",
+                                                            "*"
+                                                        ],
+                                                        "description": "Net action symbol"
+                                                    },
+                                                    "domain": {
+                                                        "type": "string",
+                                                        "description": "Operation domain"
+                                                    }
+                                                },
+                                                "required": [
+                                                    "target",
+                                                    "action",
+                                                    "domain"
+                                                ],
+                                                "description": "Diff entry"
+                                            },
+                                            "description": "Array of diff entries"
                                         },
                                         "logs": {
                                             "type": "array",
@@ -2954,18 +2958,15 @@
                                     },
                                     "required": [
                                         "success",
-                                        "result",
                                         "logs",
                                         "errors"
                                     ]
                                 },
                                 "example": {
                                     "success": true,
-                                    "result": {
-                                        "scope": "group",
-                                        "groupName": "Add synth and configure",
-                                        "diff": []
-                                    },
+                                    "scope": "group",
+                                    "groupName": "Add synth and configure",
+                                    "diff": [],
                                     "logs": [],
                                     "errors": []
                                 }
@@ -3017,9 +3018,21 @@
                                         "success": {
                                             "type": "boolean"
                                         },
-                                        "result": {
-                                            "type": "object",
-                                            "description": "Updated diff state after group is applied or discarded"
+                                        "scope": {
+                                            "type": "string",
+                                            "enum": [
+                                                "group",
+                                                "root"
+                                            ],
+                                            "description": "Scope level"
+                                        },
+                                        "groupName": {
+                                            "type": "string",
+                                            "description": "Active group name"
+                                        },
+                                        "diff": {
+                                            "type": "array",
+                                            "description": "Array of diff entries"
                                         },
                                         "logs": {
                                             "type": "array",
@@ -3036,24 +3049,21 @@
                                     },
                                     "required": [
                                         "success",
-                                        "result",
                                         "logs",
                                         "errors"
                                     ]
                                 },
                                 "example": {
                                     "success": true,
-                                    "result": {
-                                        "scope": "group",
-                                        "groupName": "root",
-                                        "diff": [
-                                            {
-                                                "target": "MySine",
-                                                "action": "+",
-                                                "domain": "builder"
-                                            }
-                                        ]
-                                    },
+                                    "scope": "group",
+                                    "groupName": "root",
+                                    "diff": [
+                                        {
+                                            "target": "MySine",
+                                            "action": "+",
+                                            "domain": "builder"
+                                        }
+                                    ],
                                     "logs": [],
                                     "errors": []
                                 }
@@ -3085,9 +3095,21 @@
                                         "success": {
                                             "type": "boolean"
                                         },
-                                        "result": {
-                                            "type": "object",
-                                            "description": "Updated diff state after undo"
+                                        "scope": {
+                                            "type": "string",
+                                            "enum": [
+                                                "group",
+                                                "root"
+                                            ],
+                                            "description": "Scope level"
+                                        },
+                                        "groupName": {
+                                            "type": "string",
+                                            "description": "Active group name"
+                                        },
+                                        "diff": {
+                                            "type": "array",
+                                            "description": "Array of diff entries"
                                         },
                                         "logs": {
                                             "type": "array",
@@ -3104,18 +3126,15 @@
                                     },
                                     "required": [
                                         "success",
-                                        "result",
                                         "logs",
                                         "errors"
                                     ]
                                 },
                                 "example": {
                                     "success": true,
-                                    "result": {
-                                        "scope": "group",
-                                        "groupName": "root",
-                                        "diff": []
-                                    },
+                                    "scope": "group",
+                                    "groupName": "root",
+                                    "diff": [],
                                     "logs": [],
                                     "errors": []
                                 }
@@ -3147,9 +3166,21 @@
                                         "success": {
                                             "type": "boolean"
                                         },
-                                        "result": {
-                                            "type": "object",
-                                            "description": "Updated diff state after redo"
+                                        "scope": {
+                                            "type": "string",
+                                            "enum": [
+                                                "group",
+                                                "root"
+                                            ],
+                                            "description": "Scope level"
+                                        },
+                                        "groupName": {
+                                            "type": "string",
+                                            "description": "Active group name"
+                                        },
+                                        "diff": {
+                                            "type": "array",
+                                            "description": "Array of diff entries"
                                         },
                                         "logs": {
                                             "type": "array",
@@ -3166,24 +3197,21 @@
                                     },
                                     "required": [
                                         "success",
-                                        "result",
                                         "logs",
                                         "errors"
                                     ]
                                 },
                                 "example": {
                                     "success": true,
-                                    "result": {
-                                        "scope": "group",
-                                        "groupName": "root",
-                                        "diff": [
-                                            {
-                                                "target": "MySine",
-                                                "action": "+",
-                                                "domain": "builder"
-                                            }
-                                        ]
-                                    },
+                                    "scope": "group",
+                                    "groupName": "root",
+                                    "diff": [
+                                        {
+                                            "target": "MySine",
+                                            "action": "+",
+                                            "domain": "builder"
+                                        }
+                                    ],
                                     "logs": [],
                                     "errors": []
                                 }
@@ -3253,58 +3281,49 @@
                                         "success": {
                                             "type": "boolean"
                                         },
-                                        "result": {
-                                            "type": "object",
-                                            "properties": {
-                                                "scope": {
-                                                    "type": "string",
-                                                    "enum": [
-                                                        "group",
-                                                        "root"
-                                                    ],
-                                                    "description": "Active scope level"
-                                                },
-                                                "depth": {
-                                                    "type": "integer",
-                                                    "description": "Stack depth"
-                                                },
-                                                "groupName": {
-                                                    "type": "string",
-                                                    "description": "Active group name"
-                                                },
-                                                "diff": {
-                                                    "type": "array",
-                                                    "items": {
-                                                        "type": "object",
-                                                        "properties": {
-                                                            "target": {
-                                                                "type": "string",
-                                                                "description": "Affected ID"
-                                                            },
-                                                            "action": {
-                                                                "type": "string",
-                                                                "enum": [
-                                                                    "+",
-                                                                    "-",
-                                                                    "*"
-                                                                ],
-                                                                "description": "Net action symbol"
-                                                            },
-                                                            "domain": {
-                                                                "type": "string",
-                                                                "description": "Operation domain"
-                                                            }
-                                                        },
-                                                        "required": [
-                                                            "target",
-                                                            "action",
-                                                            "domain"
-                                                        ],
-                                                        "description": "Diff entry"
+                                        "scope": {
+                                            "type": "string",
+                                            "enum": [
+                                                "group",
+                                                "root"
+                                            ],
+                                            "description": "Active scope level"
+                                        },
+                                        "groupName": {
+                                            "type": "string",
+                                            "description": "Active group name"
+                                        },
+                                        "diff": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "object",
+                                                "properties": {
+                                                    "target": {
+                                                        "type": "string",
+                                                        "description": "Affected ID"
                                                     },
-                                                    "description": "Array of diff entries"
-                                                }
-                                            }
+                                                    "action": {
+                                                        "type": "string",
+                                                        "enum": [
+                                                            "+",
+                                                            "-",
+                                                            "*"
+                                                        ],
+                                                        "description": "Net action symbol"
+                                                    },
+                                                    "domain": {
+                                                        "type": "string",
+                                                        "description": "Operation domain"
+                                                    }
+                                                },
+                                                "required": [
+                                                    "target",
+                                                    "action",
+                                                    "domain"
+                                                ],
+                                                "description": "Diff entry"
+                                            },
+                                            "description": "Array of diff entries"
                                         },
                                         "logs": {
                                             "type": "array",
@@ -3321,25 +3340,22 @@
                                     },
                                     "required": [
                                         "success",
-                                        "result",
                                         "logs",
                                         "errors"
                                     ]
                                 },
                                 "example": {
                                     "success": true,
-                                    "result": {
-                                        "scope": "group",
-                                        "depth": 0,
-                                        "groupName": "root",
-                                        "diff": [
-                                            {
-                                                "target": "MySine",
-                                                "action": "+",
-                                                "domain": "builder"
-                                            }
-                                        ]
-                                    },
+                                    "scope": "group",
+                                    "depth": 0,
+                                    "groupName": "root",
+                                    "diff": [
+                                        {
+                                            "target": "MySine",
+                                            "action": "+",
+                                            "domain": "builder"
+                                        }
+                                    ],
                                     "logs": [],
                                     "errors": []
                                 }
@@ -3409,18 +3425,25 @@
                                         "success": {
                                             "type": "boolean"
                                         },
-                                        "result": {
-                                            "type": "object",
-                                            "properties": {
-                                                "cursor": {
-                                                    "type": "integer",
-                                                    "description": "Current undo position"
-                                                },
-                                                "history": {
-                                                    "type": "array",
-                                                    "description": "History entries array"
-                                                }
-                                            }
+                                        "scope": {
+                                            "type": "string",
+                                            "enum": [
+                                                "group",
+                                                "root"
+                                            ],
+                                            "description": "Scope level"
+                                        },
+                                        "groupName": {
+                                            "type": "string",
+                                            "description": "Active group name"
+                                        },
+                                        "cursor": {
+                                            "type": "integer",
+                                            "description": "Current undo position"
+                                        },
+                                        "history": {
+                                            "type": "array",
+                                            "description": "History entries array"
                                         },
                                         "logs": {
                                             "type": "array",
@@ -3437,17 +3460,14 @@
                                     },
                                     "required": [
                                         "success",
-                                        "result",
                                         "logs",
                                         "errors"
                                     ]
                                 },
                                 "example": {
                                     "success": true,
-                                    "result": {
-                                        "cursor": 2,
-                                        "history": []
-                                    },
+                                    "cursor": 2,
+                                    "history": [],
                                     "logs": [],
                                     "errors": []
                                 }
@@ -3479,9 +3499,21 @@
                                         "success": {
                                             "type": "boolean"
                                         },
-                                        "result": {
-                                            "type": "object",
-                                            "description": "Empty diff state"
+                                        "scope": {
+                                            "type": "string",
+                                            "enum": [
+                                                "group",
+                                                "root"
+                                            ],
+                                            "description": "Scope level"
+                                        },
+                                        "groupName": {
+                                            "type": "string",
+                                            "description": "Active group name"
+                                        },
+                                        "diff": {
+                                            "type": "array",
+                                            "description": "Array of diff entries"
                                         },
                                         "logs": {
                                             "type": "array",
@@ -3498,18 +3530,15 @@
                                     },
                                     "required": [
                                         "success",
-                                        "result",
                                         "logs",
                                         "errors"
                                     ]
                                 },
                                 "example": {
                                     "success": true,
-                                    "result": {
-                                        "scope": "group",
-                                        "groupName": "root",
-                                        "diff": []
-                                    },
+                                    "scope": "group",
+                                    "groupName": "root",
+                                    "diff": [],
                                     "logs": [],
                                     "errors": []
                                 }
@@ -3559,7 +3588,7 @@
                                             "type": "boolean"
                                         },
                                         "result": {
-                                            "type": "object",
+                                            "type": "string",
                                             "description": "Flat key/value object of field defaults, or error if wizard ID unknown"
                                         },
                                         "logs": {
@@ -3577,17 +3606,14 @@
                                     },
                                     "required": [
                                         "success",
-                                        "result",
                                         "logs",
                                         "errors"
                                     ]
                                 },
                                 "example": {
                                     "success": true,
-                                    "result": {
-                                        "projectName": "MyPlugin",
-                                        "projectPath": "D:/Projects"
-                                    },
+                                    "projectName": "MyPlugin",
+                                    "projectPath": "D:/Projects",
                                     "logs": [],
                                     "errors": []
                                 }
@@ -3658,14 +3684,9 @@
                                         "success": {
                                             "type": "boolean"
                                         },
-                                        "result": {
-                                            "type": "object",
-                                            "properties": {
-                                                "jobId": {
-                                                    "type": "string",
-                                                    "description": "Job ID for async tasks (only present when async)"
-                                                }
-                                            }
+                                        "jobId": {
+                                            "type": "string",
+                                            "description": "Job ID for async tasks (only present when async)"
                                         },
                                         "logs": {
                                             "type": "array",
@@ -3682,7 +3703,6 @@
                                     },
                                     "required": [
                                         "success",
-                                        "result",
                                         "logs",
                                         "errors"
                                     ]
@@ -3733,18 +3753,13 @@
                                         "success": {
                                             "type": "boolean"
                                         },
-                                        "result": {
-                                            "type": "object",
-                                            "properties": {
-                                                "finished": {
-                                                    "type": "boolean",
-                                                    "description": "Whether the job has completed"
-                                                },
-                                                "progress": {
-                                                    "type": "number",
-                                                    "description": "Progress value 0.0-1.0"
-                                                }
-                                            }
+                                        "finished": {
+                                            "type": "boolean",
+                                            "description": "Whether the job has completed"
+                                        },
+                                        "progress": {
+                                            "type": "number",
+                                            "description": "Progress value 0.0-1.0"
                                         },
                                         "logs": {
                                             "type": "array",
@@ -3761,17 +3776,14 @@
                                     },
                                     "required": [
                                         "success",
-                                        "result",
                                         "logs",
                                         "errors"
                                     ]
                                 },
                                 "example": {
                                     "success": true,
-                                    "result": {
-                                        "finished": false,
-                                        "progress": 0.5
-                                    },
+                                    "finished": false,
+                                    "progress": 0.5,
                                     "logs": [],
                                     "errors": []
                                 }
@@ -3829,21 +3841,8 @@
                                             "type": "boolean"
                                         },
                                         "result": {
-                                            "type": "object",
-                                            "properties": {
-                                                "id": {
-                                                    "type": "string",
-                                                    "description": "Root component ID"
-                                                },
-                                                "type": {
-                                                    "type": "string",
-                                                    "description": "Root component type"
-                                                },
-                                                "childComponents": {
-                                                    "type": "array",
-                                                    "description": "Nested child component tree"
-                                                }
-                                            }
+                                            "type": "string",
+                                            "description": "Recursive tree with component properties and nested childComponents"
                                         },
                                         "logs": {
                                             "type": "array",
@@ -3860,7 +3859,6 @@
                                     },
                                     "required": [
                                         "success",
-                                        "result",
                                         "logs",
                                         "errors"
                                     ]
@@ -3877,20 +3875,7 @@
                                         "visible": true,
                                         "enabled": true,
                                         "saveInPreset": false,
-                                        "childComponents": [
-                                            {
-                                                "id": "Button1",
-                                                "type": "ScriptButton",
-                                                "x": 10,
-                                                "y": 10,
-                                                "width": 128,
-                                                "height": 28,
-                                                "visible": true,
-                                                "enabled": true,
-                                                "saveInPreset": true,
-                                                "childComponents": []
-                                            }
-                                        ]
+                                        "childComponents": []
                                     },
                                     "logs": [],
                                     "errors": []
@@ -4069,55 +4054,50 @@
                                         "success": {
                                             "type": "boolean"
                                         },
-                                        "result": {
-                                            "type": "object",
-                                            "properties": {
-                                                "scope": {
-                                                    "type": "string",
-                                                    "enum": [
-                                                        "group",
-                                                        "root"
-                                                    ],
-                                                    "description": "Scope level"
-                                                },
-                                                "groupName": {
-                                                    "type": "string",
-                                                    "description": "Active group name"
-                                                },
-                                                "diff": {
-                                                    "type": "array",
-                                                    "items": {
-                                                        "type": "object",
-                                                        "properties": {
-                                                            "target": {
-                                                                "type": "string",
-                                                                "description": "Component ID affected"
-                                                            },
-                                                            "action": {
-                                                                "type": "string",
-                                                                "enum": [
-                                                                    "+",
-                                                                    "-",
-                                                                    "*"
-                                                                ],
-                                                                "description": "Net action symbol"
-                                                            },
-                                                            "domain": {
-                                                                "type": "string",
-                                                                "description": "Operation domain",
-                                                                "example": "ui"
-                                                            }
-                                                        },
-                                                        "required": [
-                                                            "target",
-                                                            "action",
-                                                            "domain"
-                                                        ],
-                                                        "description": "Diff entry"
+                                        "scope": {
+                                            "type": "string",
+                                            "enum": [
+                                                "group",
+                                                "root"
+                                            ],
+                                            "description": "Scope level"
+                                        },
+                                        "groupName": {
+                                            "type": "string",
+                                            "description": "Active group name"
+                                        },
+                                        "diff": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "object",
+                                                "properties": {
+                                                    "target": {
+                                                        "type": "string",
+                                                        "description": "Component ID affected"
                                                     },
-                                                    "description": "Array of diff entries"
-                                                }
-                                            }
+                                                    "action": {
+                                                        "type": "string",
+                                                        "enum": [
+                                                            "+",
+                                                            "-",
+                                                            "*"
+                                                        ],
+                                                        "description": "Net action symbol"
+                                                    },
+                                                    "domain": {
+                                                        "type": "string",
+                                                        "description": "Operation domain",
+                                                        "example": "ui"
+                                                    }
+                                                },
+                                                "required": [
+                                                    "target",
+                                                    "action",
+                                                    "domain"
+                                                ],
+                                                "description": "Diff entry"
+                                            },
+                                            "description": "Array of diff entries"
                                         },
                                         "logs": {
                                             "type": "array",
@@ -4134,24 +4114,21 @@
                                     },
                                     "required": [
                                         "success",
-                                        "result",
                                         "logs",
                                         "errors"
                                     ]
                                 },
                                 "example": {
                                     "success": true,
-                                    "result": {
-                                        "scope": "group",
-                                        "groupName": "root",
-                                        "diff": [
-                                            {
-                                                "target": "MyButton",
-                                                "action": "+",
-                                                "domain": "ui"
-                                            }
-                                        ]
-                                    },
+                                    "scope": "group",
+                                    "groupName": "root",
+                                    "diff": [
+                                        {
+                                            "target": "MyButton",
+                                            "action": "+",
+                                            "domain": "ui"
+                                        }
+                                    ],
                                     "logs": [],
                                     "errors": []
                                 }
@@ -4167,14 +4144,14 @@
                 }
             }
         },
-        "/api/inject_midi": {
+        "/api/testing/sequence": {
             "post": {
                 "tags": [
-                    "midi"
+                    "testing"
                 ],
                 "summary": "Inject MIDI messages and test events with precise timing",
                 "description": "Queue MIDI messages for dispatch via a HighResolutionTimer with sub-ms precision. Non-blocking by default: returns immediately after queuing. Notes auto-send note-off after duration. Multiple calls merge into the pending queue. Send allNotesOff to panic (clears queue). Send empty messages array to poll status. Use blocking=true or recordOutput to wait for completion.",
-                "operationId": "inject_midi",
+                "operationId": "testing_sequence",
                 "requestBody": {
                     "required": true,
                     "content": {
@@ -4361,78 +4338,73 @@
                                         "success": {
                                             "type": "boolean"
                                         },
-                                        "result": {
-                                            "type": "object",
-                                            "properties": {
-                                                "isPlaying": {
-                                                    "type": "boolean",
-                                                    "description": "True while sequence is being dispatched or notes are active"
-                                                },
-                                                "durationMs": {
-                                                    "type": "integer",
-                                                    "description": "Total duration of the sequence in ms"
-                                                },
-                                                "activeNotes": {
-                                                    "type": "integer",
-                                                    "description": "Number of notes currently sounding"
-                                                },
-                                                "eventsInSequence": {
-                                                    "type": "integer",
-                                                    "description": "Total logical events in queue"
-                                                },
-                                                "playedEvents": {
-                                                    "type": "integer",
-                                                    "description": "Number of events dispatched so far"
-                                                },
-                                                "progress": {
-                                                    "type": "number",
-                                                    "description": "Playhead position 0.0-1.0"
-                                                },
-                                                "replResults": {
-                                                    "type": "array",
-                                                    "items": {
-                                                        "type": "object",
-                                                        "properties": {
-                                                            "id": {
-                                                                "type": "string",
-                                                                "description": "Tag from the repl message"
-                                                            },
-                                                            "expression": {
-                                                                "type": "string",
-                                                                "description": "The expression that was evaluated"
-                                                            },
-                                                            "moduleId": {
-                                                                "type": "string",
-                                                                "description": "Processor used for evaluation"
-                                                            },
-                                                            "timestamp": {
-                                                                "type": "integer",
-                                                                "description": "Scheduled timestamp in ms"
-                                                            },
-                                                            "success": {
-                                                                "type": "boolean",
-                                                                "description": "Whether evaluation succeeded"
-                                                            },
-                                                            "value": {
-                                                                "type": "string",
-                                                                "description": "Evaluated result value"
-                                                            }
-                                                        },
-                                                        "required": [
-                                                            "expression",
-                                                            "moduleId",
-                                                            "timestamp",
-                                                            "success"
-                                                        ],
-                                                        "description": "REPL result entry"
+                                        "isPlaying": {
+                                            "type": "boolean",
+                                            "description": "True while sequence is being dispatched or notes are active"
+                                        },
+                                        "durationMs": {
+                                            "type": "integer",
+                                            "description": "Total duration of the sequence in ms"
+                                        },
+                                        "activeNotes": {
+                                            "type": "integer",
+                                            "description": "Number of notes currently sounding"
+                                        },
+                                        "eventsInSequence": {
+                                            "type": "integer",
+                                            "description": "Total logical events in queue"
+                                        },
+                                        "playedEvents": {
+                                            "type": "integer",
+                                            "description": "Number of events dispatched so far"
+                                        },
+                                        "progress": {
+                                            "type": "number",
+                                            "description": "Playhead position 0.0-1.0"
+                                        },
+                                        "replResults": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "object",
+                                                "properties": {
+                                                    "id": {
+                                                        "type": "string",
+                                                        "description": "Tag from the repl message"
                                                     },
-                                                    "description": "Array of REPL evaluation results (when available)"
+                                                    "expression": {
+                                                        "type": "string",
+                                                        "description": "The expression that was evaluated"
+                                                    },
+                                                    "moduleId": {
+                                                        "type": "string",
+                                                        "description": "Processor used for evaluation"
+                                                    },
+                                                    "timestamp": {
+                                                        "type": "integer",
+                                                        "description": "Scheduled timestamp in ms"
+                                                    },
+                                                    "success": {
+                                                        "type": "boolean",
+                                                        "description": "Whether evaluation succeeded"
+                                                    },
+                                                    "value": {
+                                                        "type": "string",
+                                                        "description": "Evaluated result value"
+                                                    }
                                                 },
-                                                "recordOutput": {
-                                                    "type": "string",
-                                                    "description": "File path of recorded WAV (only when recordOutput was specified)"
-                                                }
-                                            }
+                                                "required": [
+                                                    "expression",
+                                                    "moduleId",
+                                                    "timestamp",
+                                                    "success"
+                                                ],
+                                                "description": "REPL result entry"
+                                            },
+                                            "description": "Array of REPL evaluation results (when available)"
+                                        },
+                                        "recordOutput": {
+                                            "type": "string",
+                                            "description": "File path of recorded WAV (only when recordOutput was specified)"
                                         },
                                         "logs": {
                                             "type": "array",
@@ -4449,21 +4421,18 @@
                                     },
                                     "required": [
                                         "success",
-                                        "result",
                                         "logs",
                                         "errors"
                                     ]
                                 },
                                 "example": {
                                     "success": true,
-                                    "result": {
-                                        "isPlaying": true,
-                                        "durationMs": 1000,
-                                        "activeNotes": 2,
-                                        "eventsInSequence": 2,
-                                        "playedEvents": 0,
-                                        "progress": 0.0
-                                    },
+                                    "isPlaying": true,
+                                    "durationMs": 1000,
+                                    "activeNotes": 2,
+                                    "eventsInSequence": 2,
+                                    "playedEvents": 0,
+                                    "progress": 0.0,
                                     "logs": [],
                                     "errors": []
                                 }

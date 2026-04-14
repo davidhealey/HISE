@@ -152,7 +152,14 @@ hise::RestServer::Response RestServerUndoManager::Instance::getResponse(const st
 {
 	DynamicObject::Ptr result = new DynamicObject();
 	result->setProperty(RestApiIds::success, callstacks.empty());
-	result->setProperty(RestApiIds::result, r);
+
+	// Flatten diff object fields onto the top-level response
+	if (auto* diffObj = r.getDynamicObject())
+	{
+		for (const auto& prop : diffObj->getProperties())
+			result->setProperty(prop.name, prop.value);
+	}
+
 	result->setProperty(RestApiIds::logs, Array<var>());
 	result->setProperty(RestApiIds::errors, CallStack::toJSONList(callstacks));
 	return RestServer::Response::ok(var(result.get()));

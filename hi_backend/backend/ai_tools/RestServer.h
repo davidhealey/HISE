@@ -237,6 +237,8 @@ namespace RestApiIds
     DECLARE_ID(validChains);          // Array of valid chain names for a type
     const Identifier template_("template");;            // Name template with {n} placeholder
     DECLARE_ID(created);              // Array of created module names
+    DECLARE_ID(parameters);
+    DECLARE_ID(prettyName);
 
     // Undo system
     DECLARE_ID(scope);                // "group" or "root"
@@ -263,7 +265,7 @@ namespace RestApiIds
     DECLARE_ID(parentId);             // Parent component ID for add/move operations
     DECLARE_ID(keepPosition);         // Preserve absolute position when reparenting
 
-    // inject_midi
+    // testing/sequence
     DECLARE_ID(messages);             // Array of MIDI message objects
     DECLARE_ID(noteNumber);           // MIDI note number (0-127)
     DECLARE_ID(velocity);             // Note velocity (0.0-1.0)
@@ -274,7 +276,7 @@ namespace RestApiIds
     DECLARE_ID(activeNotes);          // Number of notes currently on
     DECLARE_ID(eventsInSequence);     // Total logical events in queue
     DECLARE_ID(playedEvents);         // Number of events dispatched so far
-    DECLARE_ID(replResults);          // Array of REPL evaluation results from inject_midi
+    DECLARE_ID(replResults);          // Array of REPL evaluation results from testing/sequence
     DECLARE_ID(processorId);          // Target processor ID for set_attribute
     DECLARE_ID(parameterId);          // Parameter name for set_attribute
     DECLARE_ID(blocking);             // If true, wait for sequence to complete before responding

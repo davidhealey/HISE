@@ -116,6 +116,7 @@ struct RestApiEndpoints
 			.withModuleIdParam()
 			.withQueryParam(RouteParameter(RestApiIds::callback,
 				"Specific callback name (e.g. onInit). If omitted, returns all callbacks.").asOptional())
+			.withResponseField(RouteParameter(RestApiIds::moduleId, "The script processor's module ID"))
 			.withResponseField(RouteParameter(RestApiIds::callbacks, "Object with callback names as keys and script content as values")
 				.withType(ParamType::Object))
 			.withResponseField(RouteParameter(RestApiIds::externalFiles, "Array of external file entries")
@@ -148,10 +149,17 @@ struct RestApiEndpoints
 				"Debug tool: Bypass threading model for synchronous execution. "
 				"WARNING: May cause crashes due to race conditions - use only as last resort after saving.")
 				.withType(ParamType::Bool).withDefault("false"))
+			.withResponseField(RouteParameter(RestApiIds::moduleId, "The script processor's module ID"))
+			.withResponseField(RouteParameter(RestApiIds::result, "Compilation status message")
+				.asOptional())
 			.withResponseField(RouteParameter(RestApiIds::updatedCallbacks, "Array of callback names that were updated")
 				.withType(ParamType::Array))
 			.withResponseField(RouteParameter(RestApiIds::externalFiles, "Array of included .js file names after compilation")
 				.withType(ParamType::Array))
+			.withResponseField(RouteParameter(RestApiIds::forceSynchronousExecution, "Whether synchronous mode was used")
+				.withType(ParamType::Bool).asOptional())
+			.withResponseField(RouteParameter(RestApiIds::warning, "Warning when synchronous mode was used")
+				.asOptional())
 			.withErrorCodes({ 404 })
 			.withRequestExample("{\"moduleId\": \"Interface\", \"callbacks\": {\"onInit\": \"Content.makeFrontInterface(600, 500);\\nConsole.print(123);\"}, \"compile\": true}")
 			.withResponseExample(R"({"success": true, "result": "Recompiled OK", "updatedCallbacks": ["onInit"], "externalFiles": ["utils.js"], "logs": ["123"], "errors": []})"));
@@ -172,6 +180,9 @@ struct RestApiEndpoints
 				.withExample("Interface"))
 			.withBodyParam(RouteParameter(RestApiIds::expression, "The HISEScript expression to evaluate")
 				.withExample("Engine.getSampleRate()"))
+			.withResponseField(RouteParameter(RestApiIds::moduleId, "The script processor's module ID"))
+			.withResponseField(RouteParameter(RestApiIds::result, "Status message")
+				.asOptional())
 			.withResponseField(RouteParameter(RestApiIds::value, "The evaluated result value"))
 			.withErrorCodes({ 400, 404, 500 })
 			.withRequestExample("{\"moduleId\": \"Interface\", \"expression\": \"Engine.getSampleRate()\"}")
@@ -198,13 +209,19 @@ struct RestApiEndpoints
 				.withType(ParamType::Bool).withDefault("false"))
 			.withBodyParam(RouteParameter(RestApiIds::profile,
 				"Start a profiling session alongside compilation. "
-				"Retrieve results later via POST /api/profile with mode=\"get\".")
+				"Retrieve results later via POST /api/testing/profile with mode=\"get\".")
 				.withType(ParamType::Bool).withDefault("false"))
 			.withBodyParam(RouteParameter(RestApiIds::durationMs,
 				"Profiling duration in ms when profile=true (100-5000)")
 				.withType(ParamType::Int).withDefault("2000"))
+			.withResponseField(RouteParameter(RestApiIds::result, "Compilation status message")
+				.asOptional())
 			.withResponseField(RouteParameter(RestApiIds::externalFiles, "Array of included .js file names after compilation")
 				.withType(ParamType::Array))
+			.withResponseField(RouteParameter(RestApiIds::forceSynchronousExecution, "Whether synchronous mode was used")
+				.withType(ParamType::Bool).asOptional())
+			.withResponseField(RouteParameter(RestApiIds::warning, "Warning when synchronous mode was used")
+				.asOptional())
 			.withErrorCodes({ 404 })
 			.withRequestExample(R"({"moduleId": "Interface"})")
 			.withResponseExample(R"({"success": true, "result": "Recompiled OK", "externalFiles": ["utils.js"], "logs": [], "errors": []})"));
@@ -228,6 +245,7 @@ struct RestApiEndpoints
 			.withModuleIdParam()
 			.withQueryParam(RouteParameter(RestApiIds::hierarchy, "If true, returns nested tree with layout properties")
 				.withType(ParamType::Bool).withDefault("false"))
+			.withResponseField(RouteParameter(RestApiIds::moduleId, "The script processor's module ID"))
 			.withResponseField(RouteParameter(RestApiIds::components, "Array of component entries")
 				.withArrayItems(componentFlat))
 			.withErrorCodes({ 404 })
@@ -256,6 +274,8 @@ struct RestApiEndpoints
 			.withModuleIdParam()
 			.withQueryParam(RouteParameter(RestApiIds::id, "The component's ID (e.g. Button1, Panel1)")
 				.withExample("Button1"))
+			.withResponseField(RouteParameter(RestApiIds::moduleId, "The script processor's module ID"))
+			.withResponseField(RouteParameter(RestApiIds::id, "The component's ID"))
 			.withResponseField(RouteParameter(RestApiIds::type, "Component type (e.g. ScriptButton)"))
 			.withResponseField(RouteParameter(RestApiIds::properties, "Array of property entries")
 				.withArrayItems(propEntry))
@@ -275,6 +295,8 @@ struct RestApiEndpoints
 			.withModuleIdParam()
 			.withQueryParam(RouteParameter(RestApiIds::id, "The component's ID (e.g. GainKnob, BypassButton)")
 				.withExample("GainKnob"))
+			.withResponseField(RouteParameter(RestApiIds::moduleId, "The script processor's module ID"))
+			.withResponseField(RouteParameter(RestApiIds::id, "The component's ID"))
 			.withResponseField(RouteParameter(RestApiIds::type, "Component type (e.g. ScriptSlider)"))
 			.withResponseField(RouteParameter(RestApiIds::value, "Current runtime value")
 				.withType(ParamType::Float))
@@ -312,6 +334,13 @@ struct RestApiEndpoints
 				"Debug tool: Bypass threading model for synchronous execution. "
 				"WARNING: May cause crashes due to race conditions - use only as last resort after saving.")
 				.withType(ParamType::Bool).withDefault("false"))
+			.withResponseField(RouteParameter(RestApiIds::moduleId, "The script processor's module ID"))
+			.withResponseField(RouteParameter(RestApiIds::id, "The component's ID"))
+			.withResponseField(RouteParameter(RestApiIds::type, "Component type"))
+			.withResponseField(RouteParameter(RestApiIds::forceSynchronousExecution, "Whether synchronous mode was used")
+				.withType(ParamType::Bool).asOptional())
+			.withResponseField(RouteParameter(RestApiIds::warning, "Warning when synchronous mode was used")
+				.asOptional())
 			.withErrorCodes({ 400, 404 })
 			.withRequestExample(R"({"moduleId": "Interface", "id": "GainKnob", "value": 6.0})")
 			.withResponseExample(R"({"success": true, "moduleId": "Interface", "id": "GainKnob", "type": "ScriptSlider", "logs": [], "errors": []})"));
@@ -348,6 +377,7 @@ struct RestApiEndpoints
 			.withBodyParam(RouteParameter(RestApiIds::force,
 				"If true, bypasses script-lock check and sets all properties")
 				.withType(ParamType::Bool).withDefault("false"))
+			.withResponseField(RouteParameter(RestApiIds::moduleId, "The script processor's module ID"))
 			.withResponseField(RouteParameter(RestApiIds::applied, "Array of applied change entries")
 				.withArrayItems(appliedEntry))
 			.withResponseField(RouteParameter(RestApiIds::recompileRequired,
@@ -358,11 +388,11 @@ struct RestApiEndpoints
 			.withResponseExample(R"({"success": true, "moduleId": "Interface", "applied": [{"id": "Knob1", "properties": ["x", "y"]}], "recompileRequired": false, "logs": [], "errors": []})"));
 	}
 
-	/* GET /api/screenshot */
-	static void screenshot(Array<RouteMetadata>& m)
+	/* GET /api/testing/screenshot */
+	static void testingScreenshot(Array<RouteMetadata>& m)
 	{
-		m.add(RouteMetadata(ApiRoute::Screenshot, "api/screenshot")
-			.withCategory("ui")
+		m.add(RouteMetadata(ApiRoute::TestingScreenshot, "api/testing/screenshot")
+			.withCategory("testing")
 			.withSummary("Capture screenshot of interface or specific component")
 			.withDescription("Captures a PNG screenshot of the full interface or a specific component. "
 				"When capturing a specific component, the screenshot is cropped to that component's "
@@ -377,6 +407,9 @@ struct RestApiEndpoints
 				.withType(ParamType::Float).withDefault("1.0"))
 			.withQueryParam(RouteParameter(RestApiIds::outputPath,
 				"File path to save PNG (must end with .png). Writes to file instead of returning Base64").asOptional())
+			.withResponseField(RouteParameter(RestApiIds::moduleId, "The script processor's module ID"))
+			.withResponseField(RouteParameter(RestApiIds::id, "The component's ID (when specified)")
+				.asOptional())
 			.withResponseField(RouteParameter(RestApiIds::width, "Width of captured image in pixels")
 				.withType(ParamType::Int))
 			.withResponseField(RouteParameter(RestApiIds::height, "Height of captured image in pixels")
@@ -388,7 +421,7 @@ struct RestApiEndpoints
 			.withResponseField(RouteParameter(RestApiIds::filePath,
 				"Full path to saved PNG file (only when outputPath specified)").asOptional())
 			.withErrorCodes({ 400, 404, 500 })
-			.withRequestExample(R"(GET /api/screenshot?moduleId=Interface&scale=0.5)")
+			.withRequestExample(R"(GET /api/testing/screenshot?moduleId=Interface&scale=0.5)")
 			.withResponseExample(R"({"success": true, "moduleId": "Interface", "width": 600, "height": 500, "scale": 1.0, "imageData": "iVBORw0KGgo...", "logs": [], "errors": []})"));
 	}
 
@@ -405,6 +438,7 @@ struct RestApiEndpoints
 			.withReturns("Selection count and array of selected components with all properties")
 			.withQueryParam(RouteParameter(RestApiIds::moduleId, "The script processor's module ID")
 				.withDefault("Interface"))
+			.withResponseField(RouteParameter(RestApiIds::moduleId, "The script processor's module ID"))
 			.withResponseField(RouteParameter(RestApiIds::selectionCount, "Number of currently selected components")
 				.withType(ParamType::Int))
 			.withResponseField(RouteParameter(RestApiIds::components, "Array of selected components with properties")
@@ -414,8 +448,8 @@ struct RestApiEndpoints
 			.withResponseExample(R"({"success": true, "moduleId": "Interface", "selectionCount": 1, "components": [{"id": "Button1", "type": "ScriptButton", "properties": [{"id": "x", "value": 162, "isDefault": true}]}], "logs": [], "errors": []})"));
 	}
 
-	/* POST /api/simulate_interactions */
-	static void simulateInteractions(Array<RouteMetadata>& m)
+	/* POST /api/testing/e2e */
+	static void testingE2e(Array<RouteMetadata>& m)
 	{
 		auto interactionItem = RouteParameter(Identifier("interaction"), "Interaction object")
 			.withType(ParamType::Object)
@@ -453,7 +487,7 @@ struct RestApiEndpoints
 			.withProperty(RouteParameter(RestApiIds::scale, "Scale factor for screenshot type")
 				.withType(ParamType::Float).asOptional());
 
-		m.add(RouteMetadata(ApiRoute::SimulateInteractions, "api/simulate_interactions")
+		m.add(RouteMetadata(ApiRoute::TestingE2e, "api/testing/e2e")
 			.withMethod(RestServer::POST)
 			.withCategory("testing")
 			.withSummary("Execute a sequence of UI interactions in a test window")
@@ -478,9 +512,13 @@ struct RestApiEndpoints
 			.withResponseField(RouteParameter(RestApiIds::mouseState,
 				"Final mouse state object (only when verbose=true)")
 				.withType(ParamType::Object).asOptional())
+			.withResponseField(RouteParameter(RestApiIds::parseWarnings, "Array of parse warnings")
+				.withType(ParamType::Array).asOptional())
+			.withResponseField(RouteParameter(RestApiIds::selectedMenuItem, "Selected menu item info")
+				.withType(ParamType::Object).asOptional())
 			.withErrorCodes({ 400, 500, 503 })
 			.withRequestExample(R"({"interactions": [{"type": "click", "target": "Button1"}, {"type": "screenshot", "id": "after_click"}]})")
-			.withResponseExample(R"({"success": true, "result": {"interactionsCompleted": 2, "totalElapsedMs": 120, "executionLog": [], "screenshots": {"after_click": {"sizeKB": 12.5, "width": 600, "height": 400}}}, "logs": [], "errors": []})"));
+			.withResponseExample(R"({"success": true, "interactionsCompleted": 2, "totalElapsedMs": 120, "executionLog": [], "screenshots": {"after_click": {"sizeKB": 12.5, "width": 600, "height": 400}}, "logs": [], "errors": []})"));
 	}
 
 	/* POST /api/diagnose_script */
@@ -518,6 +556,8 @@ struct RestApiEndpoints
 				"If true, defer the shadow parse to the scripting thread (slower, blocks audio). "
 				"Default is false: runs directly on the HTTP thread with a read lock.")
 				.withType(ParamType::Bool).withDefault("false"))
+			.withResponseField(RouteParameter(RestApiIds::moduleId, "The resolved script processor's module ID"))
+			.withResponseField(RouteParameter(RestApiIds::filePath, "The resolved file path"))
 			.withResponseField(RouteParameter(RestApiIds::diagnostics, "Array of diagnostic entries")
 				.withArrayItems(diagnosticEntry))
 			.withErrorCodes({ 400, 404 })
@@ -543,6 +583,8 @@ struct RestApiEndpoints
 			.withReturns("Array of included files as full paths, optionally with owning processor ID")
 			.withQueryParam(RouteParameter(RestApiIds::moduleId,
 				"Filter by script processor. If omitted, returns files from all processors with processor names.").asOptional())
+			.withResponseField(RouteParameter(RestApiIds::moduleId, "The filtered processor ID (when moduleId was specified)")
+				.asOptional())
 			.withResponseField(RouteParameter(RestApiIds::files, "Array of file entries or path strings")
 				.withArrayItems(fileEntry))
 			.withErrorCodes({ 404 })
@@ -550,8 +592,8 @@ struct RestApiEndpoints
 			.withResponseExample(R"({"success": true, "files": [{"path": "D:/Projects/Scripts/utils.js", "processor": "Interface"}], "logs": [], "errors": []})"));
 	}
 
-	/* POST /api/profile */
-	static void startProfiling(Array<RouteMetadata>& m)
+	/* POST /api/testing/profile */
+	static void testingProfile(Array<RouteMetadata>& m)
 	{
 		auto eventEntry = RouteParameter(Identifier("entry"), "Profiled event entry")
 			.withType(ParamType::Object)
@@ -571,9 +613,9 @@ struct RestApiEndpoints
 			.withProperty(RouteParameter(RestApiIds::events, "Array of profiled events")
 				.withArrayItems(eventEntry));
 
-		m.add(RouteMetadata(ApiRoute::StartProfiling, "api/profile")
+		m.add(RouteMetadata(ApiRoute::TestingProfile, "api/testing/profile")
 			.withMethod(RestServer::POST)
-			.withCategory("scripting")
+			.withCategory("testing")
 			.withSummary("Start a profiling session or retrieve last result")
 			.withDescription("mode=\"record\" starts a new non-blocking session (returns immediately). "
 				"mode=\"get\" returns last result with optional filtering and summary aggregation. "
@@ -615,17 +657,21 @@ struct RestApiEndpoints
 			.withBodyParam(RouteParameter(RestApiIds::wait,
 				"If false, return immediately when recording is in progress instead of blocking. Used in get mode.")
 				.withType(ParamType::Bool).withDefault("true"))
-			.withResponseField(RouteParameter(RestApiIds::threads, "Array of thread profiling results")
-				.withArrayItems(threadEntry))
-			.withResponseField(RouteParameter(RestApiIds::flows, "Array of cross-thread causal flow connections")
-				.withType(ParamType::Array).asOptional())
 			.withResponseField(RouteParameter(RestApiIds::recording, "Whether a recording is in progress")
 				.withType(ParamType::Bool).asOptional())
+			.withResponseField(RouteParameter(RestApiIds::durationMs, "Recording duration in ms (record mode)")
+				.withType(ParamType::Int).asOptional())
+			.withResponseField(RouteParameter(RestApiIds::message, "Status message (e.g. when no data)")
+				.asOptional())
+			.withResponseField(RouteParameter(RestApiIds::threads, "Array of thread profiling results")
+				.withArrayItems(threadEntry).asOptional())
+			.withResponseField(RouteParameter(RestApiIds::flows, "Array of cross-thread causal flow connections")
+				.withType(ParamType::Array).asOptional())
 			.withResponseField(RouteParameter(RestApiIds::results, "Flat array of filtered/aggregated events")
 				.withType(ParamType::Array).asOptional())
 			.withErrorCodes({ 400, 409 })
 			.withRequestExample(R"({"mode": "record", "durationMs": 2000})")
-			.withResponseExample(R"({"success": true, "result": {"recording": true}, "logs": [], "errors": []})"));
+			.withResponseExample(R"({"success": true, "recording": true, "durationMs": 2000, "logs": [], "errors": []})"));
 	}
 
 	/* POST /api/parse_css */
@@ -656,6 +702,8 @@ struct RestApiEndpoints
 				.withType(ParamType::Int).asOptional())
 			.withResponseField(RouteParameter(RestApiIds::diagnostics, "Array of diagnostic entries")
 				.withType(ParamType::Array))
+			.withResponseField(RouteParameter(RestApiIds::filePath, "The resolved CSS file path (when file was used)")
+				.asOptional())
 			.withResponseField(RouteParameter(RestApiIds::selectors, "List of parsed selectors")
 				.withType(ParamType::Array).asOptional())
 			.withResponseField(RouteParameter(RestApiIds::properties, "Resolved properties when selectors provided")
@@ -702,7 +750,7 @@ struct RestApiEndpoints
 				.withType(ParamType::Bool).withDefault("false"))
 			.withErrorCodes({ 400, 404, 501 })
 			.withRequestExample(R"(GET /api/builder/tree)")
-			.withResponseExample(R"({"success": true, "result": {"id": "Master Chain", "type": "MasterContainer", "chains": {}, "children": []}, "logs": [], "errors": []})"));
+			.withResponseExample(R"({"success": true, "result": {"id": "SynthChain", "processorId": "Master Chain", "type": "SoundGenerator", "bypassed": false}, "logs": [], "errors": []})"));
 	}
 
 	/* /api/builder/apply */
@@ -764,7 +812,7 @@ struct RestApiEndpoints
 				.withArrayItems(diffEntry))
 			.withErrorCodes({ 400, 404, 409 })
 			.withRequestExample(R"({"operations": [{"op": "add", "type": "SineSynth", "parent": "Master Chain", "chain": -1, "name": "MySine"}, {"op": "set_bypassed", "target": "MySine", "bypassed": true}]})")
-			.withResponseExample(R"({"success": true, "result": {"scope": "group", "groupName": "root", "diff": [{"target": "MySine", "action": "+", "domain": "builder"}]}, "logs": [], "errors": []})"));
+			.withResponseExample(R"({"success": true, "scope": "group", "groupName": "root", "diff": [{"target": "MySine", "action": "+", "domain": "builder"}], "logs": [], "errors": []})"));
 	}
 
 	/* POST /api/builder/reset */
@@ -806,7 +854,7 @@ struct RestApiEndpoints
 				.withArrayItems(diffEntry))
 			.withErrorCodes({ 400 })
 			.withRequestExample(R"({"name": "Add synth and configure"})")
-			.withResponseExample(R"({"success": true, "result": {"scope": "group", "groupName": "Add synth and configure", "diff": []}, "logs": [], "errors": []})"));
+			.withResponseExample(R"({"success": true, "scope": "group", "groupName": "Add synth and configure", "diff": [], "logs": [], "errors": []})"));
 	}
 
 	/* POST /api/undo/pop_group */
@@ -822,9 +870,14 @@ struct RestApiEndpoints
 			.withBodyParam(RouteParameter(RestApiIds::cancel,
 				"If true, discard the group without executing")
 				.withType(ParamType::Bool).withDefault("false"))
+			.withResponseField(RouteParameter(RestApiIds::scope, "Scope level")
+				.withEnumValues({ "group", "root" }))
+			.withResponseField(RouteParameter(RestApiIds::groupName, "Active group name"))
+			.withResponseField(RouteParameter(RestApiIds::diff, "Array of diff entries")
+				.withType(ParamType::Array))
 			.withErrorCodes({ 400 })
 			.withRequestExample(R"({"cancel": false})")
-			.withResponseExample(R"({"success": true, "result": {"scope": "group", "groupName": "root", "diff": [{"target": "MySine", "action": "+", "domain": "builder"}]}, "logs": [], "errors": []})"));
+			.withResponseExample(R"({"success": true, "scope": "group", "groupName": "root", "diff": [{"target": "MySine", "action": "+", "domain": "builder"}], "logs": [], "errors": []})"));
 	}
 
 	/* POST /api/undo/back */
@@ -837,8 +890,13 @@ struct RestApiEndpoints
 			.withDescription("Undo the last action or group. Stops at group boundaries. "
 				"Returns 400 when there is nothing to undo.")
 			.withReturns("Updated diff state after undo")
+			.withResponseField(RouteParameter(RestApiIds::scope, "Scope level")
+				.withEnumValues({ "group", "root" }))
+			.withResponseField(RouteParameter(RestApiIds::groupName, "Active group name"))
+			.withResponseField(RouteParameter(RestApiIds::diff, "Array of diff entries")
+				.withType(ParamType::Array))
 			.withErrorCodes({ 400 })
-			.withResponseExample(R"({"success": true, "result": {"scope": "group", "groupName": "root", "diff": []}, "logs": [], "errors": []})"));
+			.withResponseExample(R"({"success": true, "scope": "group", "groupName": "root", "diff": [], "logs": [], "errors": []})"));
 	}
 
 	/* POST /api/undo/forward */
@@ -851,8 +909,13 @@ struct RestApiEndpoints
 			.withDescription("Redo the next action or group. Stops at group boundaries. "
 				"Returns 400 when there is nothing to redo.")
 			.withReturns("Updated diff state after redo")
+			.withResponseField(RouteParameter(RestApiIds::scope, "Scope level")
+				.withEnumValues({ "group", "root" }))
+			.withResponseField(RouteParameter(RestApiIds::groupName, "Active group name"))
+			.withResponseField(RouteParameter(RestApiIds::diff, "Array of diff entries")
+				.withType(ParamType::Array))
 			.withErrorCodes({ 400 })
-			.withResponseExample(R"({"success": true, "result": {"scope": "group", "groupName": "root", "diff": [{"target": "MySine", "action": "+", "domain": "builder"}]}, "logs": [], "errors": []})"));
+			.withResponseExample(R"({"success": true, "scope": "group", "groupName": "root", "diff": [{"target": "MySine", "action": "+", "domain": "builder"}], "logs": [], "errors": []})"));
 	}
 
 	/* GET /api/undo/diff */
@@ -882,14 +945,12 @@ struct RestApiEndpoints
 				.withType(ParamType::Bool).withDefault("false"))
 			.withResponseField(RouteParameter(RestApiIds::scope, "Active scope level")
 				.withEnumValues({ "group", "root" }))
-			.withResponseField(RouteParameter(RestApiIds::depth, "Stack depth")
-				.withType(ParamType::Int))
 			.withResponseField(RouteParameter(RestApiIds::groupName, "Active group name"))
 			.withResponseField(RouteParameter(RestApiIds::diff, "Array of diff entries")
 				.withArrayItems(diffEntry))
 			.withErrorCodes({ 400 })
 			.withRequestExample(R"(GET /api/undo/diff?scope=group&flatten=true)")
-			.withResponseExample(R"({"success": true, "result": {"scope": "group", "depth": 0, "groupName": "root", "diff": [{"target": "MySine", "action": "+", "domain": "builder"}]}, "logs": [], "errors": []})"));
+			.withResponseExample(R"({"success": true, "scope": "group", "depth": 0, "groupName": "root", "diff": [{"target": "MySine", "action": "+", "domain": "builder"}], "logs": [], "errors": []})"));
 	}
 
 	/* GET /api/undo/history */
@@ -910,13 +971,16 @@ struct RestApiEndpoints
 			.withQueryParam(RouteParameter(RestApiIds::flatten,
 				"If true, flatten group nesting to a single list")
 				.withType(ParamType::Bool).withDefault("false"))
+			.withResponseField(RouteParameter(RestApiIds::scope, "Scope level")
+				.withEnumValues({ "group", "root" }))
+			.withResponseField(RouteParameter(RestApiIds::groupName, "Active group name"))
 			.withResponseField(RouteParameter(RestApiIds::cursor, "Current undo position")
 				.withType(ParamType::Int))
 			.withResponseField(RouteParameter(RestApiIds::history, "History entries array")
 				.withType(ParamType::Array))
 			.withErrorCodes({ 400 })
 			.withRequestExample(R"(GET /api/undo/history?scope=root)")
-			.withResponseExample(R"({"success": true, "result": {"cursor": 2, "history": []}, "logs": [], "errors": []})"));
+			.withResponseExample(R"({"success": true, "cursor": 2, "history": [], "logs": [], "errors": []})"));
 	}
 
 	/* POST /api/undo/clear */
@@ -929,7 +993,12 @@ struct RestApiEndpoints
 			.withDescription("Clears the entire undo history and exits all active groups. "
 				"Returns an empty diff state.")
 			.withReturns("Empty diff state")
-			.withResponseExample(R"({"success": true, "result": {"scope": "group", "groupName": "root", "diff": []}, "logs": [], "errors": []})"));
+			.withResponseField(RouteParameter(RestApiIds::scope, "Scope level")
+				.withEnumValues({ "group", "root" }))
+			.withResponseField(RouteParameter(RestApiIds::groupName, "Active group name"))
+			.withResponseField(RouteParameter(RestApiIds::diff, "Array of diff entries")
+				.withType(ParamType::Array))
+			.withResponseExample(R"({"success": true, "scope": "group", "groupName": "root", "diff": [], "logs": [], "errors": []})"));
 	}
 
 	/* GET /api/wizard/initialise */
@@ -947,7 +1016,7 @@ struct RestApiEndpoints
 				.withEnumValues({ "new_project", "recompile", "plugin_export", "compile_networks", "audio_export", "install_package_maker" }))
 			.withErrorCodes({ 400 })
 			.withRequestExample(R"(GET /api/wizard/initialise?id=new_project)")
-			.withResponseExample(R"({"success": true, "result": {"projectName": "MyPlugin", "projectPath": "D:/Projects"}, "logs": [], "errors": []})"));
+			.withResponseExample(R"({"success": true, "projectName": "MyPlugin", "projectPath": "D:/Projects", "logs": [], "errors": []})"));
 	}
 
 	/* POST /api/wizard/execute */
@@ -990,7 +1059,7 @@ struct RestApiEndpoints
 				.withType(ParamType::Float))
 			.withErrorCodes({ 400, 404 })
 			.withRequestExample(R"(GET /api/wizard/status?jobId=abc123)")
-			.withResponseExample(R"({"success": true, "result": {"finished": false, "progress": 0.5}, "logs": [], "errors": []})"));
+			.withResponseExample(R"({"success": true, "finished": false, "progress": 0.5, "logs": [], "errors": []})"));
 	}
 
 	/* GET /api/ui/tree */
@@ -1007,13 +1076,9 @@ struct RestApiEndpoints
 			.withModuleIdParam()
 			.withQueryParam(RouteParameter(RestApiIds::group,
 				"Optional group selector. 'current' returns the active plan's validation tree").asOptional())
-			.withResponseField(RouteParameter(RestApiIds::id, "Root component ID"))
-			.withResponseField(RouteParameter(RestApiIds::type, "Root component type"))
-			.withResponseField(RouteParameter(RestApiIds::childComponents, "Nested child component tree")
-				.withType(ParamType::Array))
 			.withErrorCodes({ 400, 404, 501 })
 			.withRequestExample(R"(GET /api/ui/tree?moduleId=Interface)")
-			.withResponseExample(R"({"success": true, "result": {"id": "Content", "type": "ScriptPanel", "x": 0, "y": 0, "width": 600, "height": 500, "visible": true, "enabled": true, "saveInPreset": false, "childComponents": [{"id": "Button1", "type": "ScriptButton", "x": 10, "y": 10, "width": 128, "height": 28, "visible": true, "enabled": true, "saveInPreset": true, "childComponents": []}]}, "logs": [], "errors": []})"));
+			.withResponseExample(R"({"success": true, "result": {"id": "Content", "type": "ScriptPanel", "x": 0, "y": 0, "width": 600, "height": 500, "visible": true, "enabled": true, "saveInPreset": false, "childComponents": []}, "logs": [], "errors": []})"));
 	}
 
 	/* POST /api/ui/apply */
@@ -1082,11 +1147,11 @@ struct RestApiEndpoints
 				.withArrayItems(diffEntry))
 			.withErrorCodes({ 400, 404 })
 			.withRequestExample(R"({"moduleId": "Interface", "operations": [{"op": "add", "componentType": "ScriptButton", "id": "MyButton", "x": 10, "y": 10, "width": 100, "height": 30}]})")
-			.withResponseExample(R"({"success": true, "result": {"scope": "group", "groupName": "root", "diff": [{"target": "MyButton", "action": "+", "domain": "ui"}]}, "logs": [], "errors": []})"));
+			.withResponseExample(R"({"success": true, "scope": "group", "groupName": "root", "diff": [{"target": "MyButton", "action": "+", "domain": "ui"}], "logs": [], "errors": []})"));
 	}
 
-	/* POST /api/inject_midi */
-	static void injectMidi(Array<RouteMetadata>& m)
+	/* POST /api/testing/sequence */
+	static void testingSequence(Array<RouteMetadata>& m)
 	{
 		auto msgItem = RouteParameter(RestApiIds::messages, "MIDI message object")
 			.withType(ParamType::Object)
@@ -1141,9 +1206,9 @@ struct RestApiEndpoints
 				.withType(ParamType::Bool))
 			.withProperty(RouteParameter(RestApiIds::value, "Evaluated result value").asOptional());
 
-		m.add(RouteMetadata(ApiRoute::InjectMidi, "api/inject_midi")
+		m.add(RouteMetadata(ApiRoute::TestingSequence, "api/testing/sequence")
 			.withMethod(RestServer::POST)
-			.withCategory("midi")
+			.withCategory("testing")
 			.withSummary("Inject MIDI messages and test events with precise timing")
 			.withDescription("Queue MIDI messages for dispatch via a HighResolutionTimer with sub-ms "
 				"precision. Non-blocking by default: returns immediately after queuing. Notes auto-send "
@@ -1177,7 +1242,7 @@ struct RestApiEndpoints
 				"File path of recorded WAV (only when recordOutput was specified)").asOptional())
 			.withErrorCodes({ 400, 503 })
 			.withRequestExample(R"({"messages": [{"type": "note", "noteNumber": 60, "velocity": 0.8, "duration": 1000, "timestamp": 0}, {"type": "note", "noteNumber": 64, "velocity": 0.8, "duration": 1000, "timestamp": 0}]})")
-			.withResponseExample(R"({"success": true, "result": {"isPlaying": true, "durationMs": 1000, "activeNotes": 2, "eventsInSequence": 2, "playedEvents": 0, "progress": 0.0}, "logs": [], "errors": []})"));
+			.withResponseExample(R"({"success": true, "isPlaying": true, "durationMs": 1000, "activeNotes": 2, "eventsInSequence": 2, "playedEvents": 0, "progress": 0.0, "logs": [], "errors": []})"));
 	}
 };
 
@@ -1200,12 +1265,12 @@ const Array<RestHelpers::RouteMetadata>& RestHelpers::getRouteMetadata()
 			RestApiEndpoints::getComponentValue(m);
 			RestApiEndpoints::setComponentValue(m);
 			RestApiEndpoints::setComponentProperties(m);
-			RestApiEndpoints::screenshot(m);
+			RestApiEndpoints::testingScreenshot(m);
 			RestApiEndpoints::getSelectedComponents(m);
-			RestApiEndpoints::simulateInteractions(m);
+			RestApiEndpoints::testingE2e(m);
 			RestApiEndpoints::diagnoseScript(m);
 			RestApiEndpoints::getIncludedFiles(m);
-			RestApiEndpoints::startProfiling(m);
+			RestApiEndpoints::testingProfile(m);
 			RestApiEndpoints::parseCss(m);
 			RestApiEndpoints::shutdown(m);
 			RestApiEndpoints::builderTree(m);
@@ -1223,7 +1288,7 @@ const Array<RestHelpers::RouteMetadata>& RestHelpers::getRouteMetadata()
 			RestApiEndpoints::wizardStatus(m);
 			RestApiEndpoints::uiTree(m);
 			RestApiEndpoints::uiApply(m);
-			RestApiEndpoints::injectMidi(m);
+			RestApiEndpoints::testingSequence(m);
 
 			// Verify count matches enum
 			jassert(m.size() == (int)ApiRoute::numRoutes);

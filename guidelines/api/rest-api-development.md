@@ -84,7 +84,7 @@ struct RestApiEndpoints
     using ApiRoute       = RestHelpers::ApiRoute;
 
     static void applyBuilder(Array<RouteMetadata>& m) { /* ... */ }
-    static void injectMidi(Array<RouteMetadata>& m)   { /* ... */ }
+    static void testingSequence(Array<RouteMetadata>& m) { /* ... */ }
     // ... one function per endpoint
 };
 ```
@@ -259,6 +259,7 @@ Don't forget to:
 - [ ] Add switch case in `BackendProcessor.cpp`
 - [ ] Add unit test in `ServerUnitTests.cpp`
 - [ ] Verify the OpenAPI output via `curl http://localhost:1900/`
+- [ ] Dump the updated spec to `guidelines/api/openapi.json` via `curl -s http://localhost:1900/ | python -m json.tool > guidelines/api/openapi.json`
 
 ---
 
@@ -511,18 +512,18 @@ expectEquals<int>(json["count"], 5, "Should have 5 items");
 | `/api/recompile` | POST | scripting | `recompile` |
 | `/api/diagnose_script` | POST | scripting | `diagnoseScript` |
 | `/api/get_included_files` | GET | scripting | `getIncludedFiles` |
-| `/api/profile` | POST | scripting | `startProfiling` |
+| `/api/testing/profile` | POST | testing | `testingProfile` |
 | `/api/parse_css` | POST | scripting | `parseCss` |
 | `/api/list_components` | GET | ui | `listComponents` |
 | `/api/get_component_properties` | GET | ui | `getComponentProperties` |
 | `/api/get_component_value` | GET | ui | `getComponentValue` |
 | `/api/set_component_value` | POST | ui | `setComponentValue` |
 | `/api/set_component_properties` | POST | ui | `setComponentProperties` |
-| `/api/screenshot` | GET | ui | `screenshot` |
+| `/api/testing/screenshot` | GET | testing | `testingScreenshot` |
 | `/api/get_selected_components` | GET | ui | `getSelectedComponents` |
 | `/api/ui/tree` | GET | ui | `uiTree` |
 | `/api/ui/apply` | POST | ui | `uiApply` |
-| `/api/simulate_interactions` | POST | testing | `simulateInteractions` |
+| `/api/testing/e2e` | POST | testing | `testingE2e` |
 | `/api/builder/tree` | GET | builder | `builderTree` |
 | `/api/builder/apply` | POST | builder | `applyBuilder` |
 | `/api/builder/reset` | POST | builder | `builderReset` |
@@ -536,7 +537,7 @@ expectEquals<int>(json["count"], 5, "Should have 5 items");
 | `/api/wizard/initialise` | GET | wizard | `wizardInitialise` |
 | `/api/wizard/execute` | POST | wizard | `wizardExecute` |
 | `/api/wizard/status` | GET | wizard | `wizardStatus` |
-| `/api/inject_midi` | POST | midi | `injectMidi` |
+| `/api/testing/sequence` | POST | testing | `testingSequence` |
 
 **Note:** The `diagnose_script` endpoint is consumed by the native LSP proxy binary at `tools/hise_lsp_server/`. The proxy forwards LSP `didSave` notifications to this endpoint and maps the response to standard LSP `publishDiagnostics`. See `tools/hise_lsp_server/README.md` for details.
 

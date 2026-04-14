@@ -93,16 +93,16 @@ public:
         testSetComponentPropertiesParentComponent();
         testSetComponentPropertiesRemoveFromParent();
         testSetComponentPropertiesInvalidParent();
-        testScreenshotBasic();
-        testScreenshotComponent();
-        testScreenshotInvalidComponent();
-        testScreenshotScale();
-        testScreenshotPixelVerification();
-        testScreenshotPixelVerificationScaled();
-        testScreenshotFileOutput();
-        testScreenshotFileOutputErrors();
+        testTestingScreenshotBasic();
+        testTestingScreenshotComponent();
+        testTestingScreenshotInvalidComponent();
+        testTestingScreenshotScale();
+        testTestingScreenshotPixelVerification();
+        testTestingScreenshotPixelVerificationScaled();
+        testTestingScreenshotFileOutput();
+        testTestingScreenshotFileOutputErrors();
         testGetSelectedComponents();
-        testSimulateInteractionsExcluded();
+        testTestingE2eExcluded();
         testGetIncludedFilesGlobal();
         testGetIncludedFilesForModule();
         testGetIncludedFilesUnknownModule();
@@ -112,13 +112,13 @@ public:
         testDiagnoseScriptSuccess();
         testDiagnoseScriptWithDiagnostics();
         testDiagnoseScriptFilePath();
-        testStartProfilingRecord();
-        testStartProfilingGetAfterRecord();
-        testStartProfilingSummary();
-        testStartProfilingFilter();
-        testStartProfilingThreadFilter();
-        testStartProfilingNested();
-        testStartProfilingGetNoData();
+        testTestingProfileRecord();
+        testTestingProfileGetAfterRecord();
+        testTestingProfileSummary();
+        testTestingProfileFilter();
+        testTestingProfileThreadFilter();
+        testTestingProfileNested();
+        testTestingProfileGetNoData();
         testParseCSSValid();
         testParseCSSError();
         testParseCSSWarnings();
@@ -158,21 +158,24 @@ public:
         testUIApplyValidation();
         testUIApplyUndo();
 
-        testInjectMidiNote();
-        testInjectMidiChord();
-        testInjectMidiCC();
-        testInjectMidiPitchbend();
-        testInjectMidiAllNotesOff();
-        testInjectMidiSequence();
-        testInjectMidiValidation();
-        testInjectMidiEmptyPoll();
-        testInjectMidiRepl();
-        testInjectMidiSetAttribute();
-        testInjectMidiTestSignal();
+        testTestingSequenceNote();
+        testTestingSequenceChord();
+        testTestingSequenceCC();
+        testTestingSequencePitchbend();
+        testTestingSequenceAllNotesOff();
+        testTestingSequenceSequence();
+        testTestingSequenceValidation();
+        testTestingSequenceEmptyPoll();
+        testTestingSequenceRepl();
+        testTestingSequenceSetAttribute();
+        testTestingSequenceTestSignal();
 
         // Verify all endpoints were tested
         verifyAllEndpointsTested();
-        
+
+        // Verify response envelopes match route metadata
+        verifyResponseEnvelopes();
+
         // Clean up
         ctx.reset();
     }
@@ -190,6 +193,8 @@ private:
     struct TestContext
     {
         StringArray touchedEndpoints;
+        String lastRequestedPath;
+        std::map<String, var> capturedResponses;
         
         TestContext(UnitTest& parentTest) : test(parentTest)
         {
@@ -241,20 +246,22 @@ private:
             // Track the endpoint path (without query params) for coverage
             auto path = endpoint.upToFirstOccurrenceOf("?", false, false);
             touchedEndpoints.addIfNotAlreadyThere(path);
-            
+            lastRequestedPath = path;
+
             return httpRequestWithMessagePump([endpoint]()
             {
                 URL url("http://localhost:" + String(TEST_PORT) + endpoint);
                 return url.readEntireTextStream(false);
             });
         }
-        
+
         /** Make a POST request with JSON body to the test server (runs on background thread, pumps message loop). */
         String httpPost(const String& endpoint, const String& jsonBody)
         {
             // Track the endpoint path (without query params) for coverage
             auto path = endpoint.upToFirstOccurrenceOf("?", false, false);
             touchedEndpoints.addIfNotAlreadyThere(path);
+            lastRequestedPath = path;
             
             return httpRequestWithMessagePump([endpoint, jsonBody]()
             {
@@ -296,11 +303,22 @@ private:
         
     public:
         
-        /** Parse JSON response and return as var. */
+        /** Parse JSON response and return as var. Also captures for envelope validation. */
         var parseJson(const String& response)
         {
             var result;
             JSON::parse(response, result);
+
+            // Capture successful responses for envelope validation
+            if (lastRequestedPath.isNotEmpty() && result.isObject())
+            {
+                if (auto* obj = result.getDynamicObject())
+                {
+                    if ((bool)obj->getProperty(RestApiIds::success))
+                        capturedResponses[lastRequestedPath] = result;
+                }
+            }
+
             return result;
         }
         
@@ -427,12 +445,11 @@ private:
         expect(itemsSchema["x-variants"].isArray(), "should have variant descriptions");
         expect(itemsSchema["properties"].isObject(), "items should have properties");
 
-        // Verify builder/apply has response schema with diff fields
+        // Verify builder/apply has response schema with flat diff fields
         auto applyResp = applyPost["responses"]["200"]["content"]["application/json"]["schema"];
-        auto resultProps = applyResp["properties"]["result"]["properties"];
-        expect(resultProps.isObject(), "response result should have properties");
-        expect(resultProps["scope"].isObject(), "should have scope field");
-        expect(resultProps["diff"].isObject(), "should have diff field");
+        auto respProps = applyResp["properties"];
+        expect(respProps["scope"].isObject(), "should have scope field");
+        expect(respProps["diff"].isObject(), "should have diff field");
 
         // Verify builder/apply has error codes
         auto applyResponses = applyPost["responses"];
@@ -463,6 +480,83 @@ private:
         }
     }
     
+    //==========================================================================
+    void verifyResponseEnvelopes()
+    {
+        beginTest("Response envelopes match route metadata");
+
+        const auto& metadata = RestHelpers::getRouteMetadata();
+
+        for (const auto& route : metadata)
+        {
+            auto fullPath = "/" + route.path;
+            auto it = ctx->capturedResponses.find(fullPath);
+
+            if (it == ctx->capturedResponses.end())
+                continue;
+
+            auto response = it->second;
+            auto* obj = response.getDynamicObject();
+
+            if (obj == nullptr)
+                continue;
+
+            // 1. Standard envelope fields must be present
+            expect(obj->hasProperty(RestApiIds::success),
+                   fullPath + ": missing 'success'");
+            expect(obj->hasProperty(RestApiIds::logs),
+                   fullPath + ": missing 'logs'");
+            expect(obj->hasProperty(RestApiIds::errors),
+                   fullPath + ": missing 'errors'");
+
+            // Tree endpoints wrap their payload in result -- skip flat field checks
+            bool usesNestedResult = route.path == "api/builder/tree"
+                                 || route.path == "api/ui/tree"
+                                 || route.path == "api/wizard/initialise";
+
+            if (!usesNestedResult)
+            {
+                // 2. Build set of allowed top-level keys
+                StringArray allowed;
+                allowed.add("success");
+                allowed.add("logs");
+                allowed.add("errors");
+                allowed.add("result");
+
+                for (const auto& rf : route.responseFields)
+                    allowed.add(rf.name.toString());
+
+                // 3. Check for unexpected fields
+                for (const auto& prop : obj->getProperties())
+                {
+                    expect(allowed.contains(prop.name.toString()),
+                           fullPath + ": unexpected response field '" +
+                           prop.name.toString() + "' not declared in route metadata");
+                }
+
+                // 4. Check required response fields are present
+                for (const auto& rf : route.responseFields)
+                {
+                    if (rf.required)
+                    {
+                        expect(obj->hasProperty(rf.name),
+                               fullPath + ": missing required response field '" +
+                               rf.name.toString() + "'");
+                    }
+                }
+
+                // 5. result must not be a nested object (flat convention)
+                if (obj->hasProperty(RestApiIds::result))
+                {
+                    auto rv = obj->getProperty(RestApiIds::result);
+                    expect(!rv.isObject(),
+                           fullPath + ": 'result' must not be a nested object -- "
+                           "use flat top-level fields instead");
+                }
+            }
+        }
+    }
+
     //==========================================================================
     void testStatusEndpoint()
     {
@@ -2138,9 +2232,9 @@ private:
     }
     
     //==========================================================================
-    void testScreenshotBasic()
+    void testTestingScreenshotBasic()
     {
-        beginTest("GET /api/screenshot (full interface)");
+        beginTest("GET /api/testing/screenshot (full interface)");
         
         ctx->reset();
         
@@ -2150,9 +2244,9 @@ private:
                      "TestPanel.set(\"width\", 100);\n"
                      "TestPanel.set(\"height\", 100);");
         
-        auto response = ctx->httpGet("/api/screenshot?moduleId=Interface");
+        auto response = ctx->httpGet("/api/testing/screenshot?moduleId=Interface");
         var json = ctx->parseJson(response);
-        
+
         // Note: Until capture logic is implemented, this will fail with "not yet implemented"
         // Once implemented, these assertions should pass:
         // expect((bool)json["success"], "Screenshot should succeed");
@@ -2162,79 +2256,79 @@ private:
         // expect((int)json["width"] == 400, "Width should match interface width");
         // expect((int)json["height"] == 300, "Height should match interface height");
         // expect((float)json["scale"] == 1.0f, "Scale should be 1.0 by default");
-        
+
         // For now, just verify the endpoint is registered and responds
-        expect(json.hasProperty("success") || json.hasProperty("error"), 
+        expect(json.hasProperty("success") || json.hasProperty("error"),
                "Should return a valid response structure");
     }
     
     //==========================================================================
-    void testScreenshotComponent()
+    void testTestingScreenshotComponent()
     {
-        beginTest("GET /api/screenshot (specific component)");
-        
+        beginTest("GET /api/testing/screenshot (specific component)");
+
         ctx->reset();
-        
+
         ctx->compile("Content.makeFrontInterface(400, 300);\n"
                      "const var TestPanel = Content.addPanel(\"TestPanel\", 50, 50);\n"
                      "TestPanel.set(\"width\", 100);\n"
                      "TestPanel.set(\"height\", 80);");
-        
-        auto response = ctx->httpGet("/api/screenshot?moduleId=Interface&id=TestPanel");
+
+        auto response = ctx->httpGet("/api/testing/screenshot?moduleId=Interface&id=TestPanel");
         var json = ctx->parseJson(response);
-        
+
         // Once implemented:
         // expect((bool)json["success"], "Component screenshot should succeed");
         // expect(json["id"].toString() == "TestPanel", "Should return component ID");
-        
-        expect(json.hasProperty("success") || json.hasProperty("error"), 
+
+        expect(json.hasProperty("success") || json.hasProperty("error"),
                "Should return a valid response structure");
     }
     
     //==========================================================================
-    void testScreenshotInvalidComponent()
+    void testTestingScreenshotInvalidComponent()
     {
-        beginTest("GET /api/screenshot (invalid component)");
-        
+        beginTest("GET /api/testing/screenshot (invalid component)");
+
         ctx->reset();
-        
+
         ctx->compile("Content.makeFrontInterface(400, 300);");
-        
-        auto response = ctx->httpGet("/api/screenshot?moduleId=Interface&id=NonExistent");
+
+        auto response = ctx->httpGet("/api/testing/screenshot?moduleId=Interface&id=NonExistent");
         var json = ctx->parseJson(response);
-        
+
         expectErrorMessageContains(json, "component not found");
     }
     
     //==========================================================================
-    void testScreenshotScale()
+    void testTestingScreenshotScale()
     {
-        beginTest("GET /api/screenshot (with scale)");
-        
+        beginTest("GET /api/testing/screenshot (with scale)");
+
         ctx->reset();
-        
+
         ctx->compile("Content.makeFrontInterface(400, 300);");
-        
-        auto response = ctx->httpGet("/api/screenshot?moduleId=Interface&scale=0.5");
+
+        auto response = ctx->httpGet("/api/testing/screenshot?moduleId=Interface&scale=0.5");
         var json = ctx->parseJson(response);
-        
+
         // Once implemented:
         // expect((bool)json["success"], "Scaled screenshot should succeed");
         // expect((int)json["width"] == 200, "Width should be scaled to 200");
         // expect((int)json["height"] == 150, "Height should be scaled to 150");
         // expect((float)json["scale"] == 0.5f, "Scale should be 0.5");
-        
-        expect(json.hasProperty("success") || json.hasProperty("error"), 
+
+        expect(json.hasProperty("success") || json.hasProperty("error"),
                "Should return a valid response structure");
     }
     
     //==========================================================================
-    void testScreenshotPixelVerification()
+    void testTestingScreenshotPixelVerification()
     {
-        beginTest("GET /api/screenshot (pixel verification)");
-        
+        beginTest("GET /api/testing/screenshot (pixel verification)");
+
         ctx->reset();
-        
+
         // Create a panel with a red fill paint routine
         ctx->compile("Content.makeFrontInterface(400, 300);\n"
                      "const var RedPanel = Content.addPanel(\"RedPanel\", 10, 10);\n"
@@ -2243,25 +2337,25 @@ private:
                      "RedPanel.setPaintRoutine(function(g) {\n"
                      "    g.fillAll(Colours.red);\n"
                      "});");
-        
-        auto response = ctx->httpGet("/api/screenshot?moduleId=Interface&id=RedPanel");
+
+        auto response = ctx->httpGet("/api/testing/screenshot?moduleId=Interface&id=RedPanel");
         var json = ctx->parseJson(response);
-        
+
         expect((bool)json["success"], "Screenshot should succeed");
         expect(json.hasProperty("imageData"), "Should have imageData");
-        
+
         // Decode Base64 to image
         String base64Data = json["imageData"].toString();
         MemoryOutputStream mos;
         bool decoded = Base64::convertFromBase64(mos, base64Data);
         expect(decoded, "Base64 decoding should succeed");
-        
+
         // Load as PNG image
         auto image = ImageFileFormat::loadFrom(mos.getData(), mos.getDataSize());
         expect(image.isValid(), "Should load as valid image");
         expect(image.getWidth() == 100, "Image width should be 100");
         expect(image.getHeight() == 100, "Image height should be 100");
-        
+
         // Verify center pixel is pure red (R:255, G:0, B:0, A:255)
         auto pixel = image.getPixelAt(50, 50);
         expect(pixel.getRed() == 255, "Red channel should be 255");
@@ -2271,12 +2365,12 @@ private:
     }
     
     //==========================================================================
-    void testScreenshotPixelVerificationScaled()
+    void testTestingScreenshotPixelVerificationScaled()
     {
-        beginTest("GET /api/screenshot (pixel verification with scale)");
-        
+        beginTest("GET /api/testing/screenshot (pixel verification with scale)");
+
         ctx->reset();
-        
+
         // Create a panel with a red fill paint routine
         ctx->compile("Content.makeFrontInterface(400, 300);\n"
                      "const var RedPanel = Content.addPanel(\"RedPanel\", 10, 10);\n"
@@ -2285,24 +2379,24 @@ private:
                      "RedPanel.setPaintRoutine(function(g) {\n"
                      "    g.fillAll(Colours.red);\n"
                      "});");
-        
-        auto response = ctx->httpGet("/api/screenshot?moduleId=Interface&id=RedPanel&scale=0.5");
+
+        auto response = ctx->httpGet("/api/testing/screenshot?moduleId=Interface&id=RedPanel&scale=0.5");
         var json = ctx->parseJson(response);
-        
+
         expect((bool)json["success"], "Screenshot should succeed");
-        
+
         // Decode Base64 to image
         String base64Data = json["imageData"].toString();
         MemoryOutputStream mos;
         bool decoded = Base64::convertFromBase64(mos, base64Data);
         expect(decoded, "Base64 decoding should succeed");
-        
+
         // Load as PNG image - should be half size
         auto image = ImageFileFormat::loadFrom(mos.getData(), mos.getDataSize());
         expect(image.isValid(), "Should load as valid image");
         expect(image.getWidth() == 50, "Image width should be 50 (scaled)");
         expect(image.getHeight() == 50, "Image height should be 50 (scaled)");
-        
+
         // Verify center pixel is still pure red
         auto pixel = image.getPixelAt(25, 25);
         expect(pixel.getRed() == 255, "Red channel should be 255");
@@ -2312,12 +2406,12 @@ private:
     }
     
     //==========================================================================
-    void testScreenshotFileOutput()
+    void testTestingScreenshotFileOutput()
     {
-        beginTest("GET /api/screenshot (file output)");
-        
+        beginTest("GET /api/testing/screenshot (file output)");
+
         ctx->reset();
-        
+
         // Create a panel with a red fill paint routine
         ctx->compile("Content.makeFrontInterface(400, 300);\n"
                      "const var RedPanel = Content.addPanel(\"RedPanel\", 10, 10);\n"
@@ -2326,54 +2420,54 @@ private:
                      "RedPanel.setPaintRoutine(function(g) {\n"
                      "    g.fillAll(Colours.red);\n"
                      "});");
-        
+
         // Use temp directory for output file
         File tempFile = File::getSpecialLocation(File::tempDirectory).getChildFile("hise_test_screenshot.png");
-        
+
         // Clean up any existing file
         tempFile.deleteFile();
-        
-        auto response = ctx->httpGet("/api/screenshot?moduleId=Interface&id=RedPanel&outputPath=" 
+
+        auto response = ctx->httpGet("/api/testing/screenshot?moduleId=Interface&id=RedPanel&outputPath="
                                       + URL::addEscapeChars(tempFile.getFullPathName(), true));
         var json = ctx->parseJson(response);
-        
+
         expect((bool)json["success"], "Screenshot should succeed");
         expect(!json.hasProperty("imageData"), "Should not have imageData when outputPath specified");
         expect(json.hasProperty("filePath"), "Should have filePath");
         expect(json["filePath"].toString() == tempFile.getFullPathName(), "filePath should match requested path");
-        
+
         // Verify file exists
         expect(tempFile.existsAsFile(), "Output file should exist");
-        
+
         // Load the file and verify it's a valid PNG with correct dimensions
         auto image = ImageFileFormat::loadFrom(tempFile);
         expect(image.isValid(), "Should load as valid image");
         expect(image.getWidth() == 100, "Image width should be 100");
         expect(image.getHeight() == 100, "Image height should be 100");
-        
+
         // Verify pixel is red
         auto pixel = image.getPixelAt(50, 50);
         expect(pixel.getRed() == 255, "Red channel should be 255");
         expect(pixel.getGreen() == 0, "Green channel should be 0");
         expect(pixel.getBlue() == 0, "Blue channel should be 0");
         expect(pixel.getAlpha() == 255, "Alpha channel should be 255");
-        
+
         // Clean up
         tempFile.deleteFile();
     }
     
     //==========================================================================
-    void testScreenshotFileOutputErrors()
+    void testTestingScreenshotFileOutputErrors()
     {
-        beginTest("GET /api/screenshot (file output errors)");
-        
+        beginTest("GET /api/testing/screenshot (file output errors)");
+
         ctx->reset();
-        
+
         ctx->compile("Content.makeFrontInterface(400, 300);");
-        
+
         // Test: missing .png extension
         {
-            auto response = ctx->httpGet("/api/screenshot?moduleId=Interface&outputPath=C:/temp/screenshot.jpg");
+            auto response = ctx->httpGet("/api/testing/screenshot?moduleId=Interface&outputPath=C:/temp/screenshot.jpg");
             var json = ctx->parseJson(response);
             
             expectErrorMessageContains(json, ".png");
@@ -2382,7 +2476,7 @@ private:
         // Test: parent directory doesn't exist
         {
 #if JUCE_WINDOWS
-            auto response = ctx->httpGet("/api/screenshot?moduleId=Interface&outputPath="
+            auto response = ctx->httpGet("/api/testing/screenshot?moduleId=Interface&outputPath="
                                           + URL::addEscapeChars("C:/nonexistent_dir_12345/screenshot.png", true));
             var json = ctx->parseJson(response);
             
@@ -2418,30 +2512,30 @@ private:
         }
     }
     
-    void testSimulateInteractionsExcluded()
+    void testTestingE2eExcluded()
     {
-        beginTest("POST /api/simulate_interactions (excluded from tests)");
-        
+        beginTest("POST /api/testing/e2e (excluded from tests)");
+
         // This endpoint is explicitly excluded from full testing because:
         // 1. It spawns a separate InteractionTestWindow that would interfere with unit tests
         // 2. The interaction system has its own dedicated test suite (InteractionDispatcherTests)
         // 3. Real integration testing requires a visible window and synthetic mouse events
         //
         // We just mark it as "touched" for endpoint coverage verification.
-        ctx->touchedEndpoints.addIfNotAlreadyThere("/api/simulate_interactions");
-        
+        ctx->touchedEndpoints.addIfNotAlreadyThere("/api/testing/e2e");
+
         // Verify the endpoint exists in the route metadata
         bool found = false;
         for (const auto& route : RestHelpers::getRouteMetadata())
         {
-            if (route.path == "api/simulate_interactions")
+            if (route.path == "api/testing/e2e")
             {
                 found = true;
-                expect(route.method == RestServer::POST, "simulate_interactions should be POST");
+                expect(route.method == RestServer::POST, "testing/e2e should be POST");
                 break;
             }
         }
-        expect(found, "simulate_interactions should exist in route metadata");
+        expect(found, "testing/e2e should exist in route metadata");
     }
     
     //==========================================================================
@@ -2776,74 +2870,74 @@ private:
     
     //==========================================================================
     // Profile endpoint tests
-    
-    void testStartProfilingRecord()
+
+    void testTestingProfileRecord()
     {
         /** Setup: Fresh interface compiled
-         *  Scenario: POST /api/profile with mode=record and short duration
+         *  Scenario: POST /api/testing/profile with mode=record and short duration
          *  Expected: Returns immediately with recording=true (non-blocking)
          */
-        beginTest("POST /api/profile - record mode (non-blocking)");
-        
+        beginTest("POST /api/testing/profile - record mode (non-blocking)");
+
         ctx->reset();
         ctx->compile("Content.makeFrontInterface(600, 400);");
-        
+
         DynamicObject::Ptr bodyObj = new DynamicObject();
         bodyObj->setProperty("mode", "record");
         bodyObj->setProperty("durationMs", 200);
-        
-        auto response = ctx->httpPost("/api/profile",
+
+        auto response = ctx->httpPost("/api/testing/profile",
                                       JSON::toString(var(bodyObj.get())));
         var json = ctx->parseJson(response);
-        
+
         expect((bool)json["success"], "Record mode should succeed: " + response);
         expect((bool)json["recording"], "Should indicate recording is in progress");
     }
-    
-    void testStartProfilingGetAfterRecord()
+
+    void testTestingProfileGetAfterRecord()
     {
-        /** Setup: A profiling session was started by testStartProfilingRecord
-         *  Scenario: POST /api/profile with mode=get (blocks until recording done)
+        /** Setup: A profiling session was started by testTestingProfileRecord
+         *  Scenario: POST /api/testing/profile with mode=get (blocks until recording done)
          *  Expected: Returns the profiling result with threads and flows
          */
-        beginTest("POST /api/profile - get mode returns result");
-        
+        beginTest("POST /api/testing/profile - get mode returns result");
+
         DynamicObject::Ptr bodyObj = new DynamicObject();
         bodyObj->setProperty("mode", "get");
-        
-        auto response = ctx->httpPost("/api/profile",
+
+        auto response = ctx->httpPost("/api/testing/profile",
                                       JSON::toString(var(bodyObj.get())));
         var json = ctx->parseJson(response);
-        
+
         expect((bool)json["success"], "Get mode should succeed with prior data: " + response);
         expect(json["threads"].isArray(), "Should have threads array");
         expect(json["flows"].isArray(), "Should have flows array");
         expect(!(bool)json["recording"], "Should not be recording");
     }
-    
-    void testStartProfilingSummary()
+
+    void testTestingProfileSummary()
     {
         /** Setup: Profiling data available from prior record+get sequence
-         *  Scenario: POST /api/profile with mode=get, summary=true
+         *  Scenario: POST /api/testing/profile with mode=get, summary=true
          *  Expected: Returns results array with aggregated stats (count/median/peak/min/total)
          */
-        beginTest("POST /api/profile - summary mode");
-        
+        beginTest("POST /api/testing/profile - summary mode");
+
         DynamicObject::Ptr bodyObj = new DynamicObject();
         bodyObj->setProperty("mode", "get");
         bodyObj->setProperty("summary", true);
-        
-        auto response = ctx->httpPost("/api/profile",
+
+        auto response = ctx->httpPost("/api/testing/profile",
                                       JSON::toString(var(bodyObj.get())));
         var json = ctx->parseJson(response);
-        
+
         expect((bool)json["success"], "Summary mode should succeed: " + response);
         expect(json["results"].isArray(), "Should have results array");
         expect(json["flows"].isArray(), "Should have flows array");
-        
+
         // Verify summary entries have stat fields
         auto results = json["results"].getArray();
-        
+
         if (results != nullptr && results->size() > 0)
         {
             auto first = (*results)[0];
@@ -2854,29 +2948,29 @@ private:
             expect(first.hasProperty(RestApiIds::total), "Result should have total");
         }
     }
-    
-    void testStartProfilingFilter()
+
+    void testTestingProfileFilter()
     {
         /** Setup: Profiling data available from prior record+get sequence
-         *  Scenario: POST /api/profile with mode=get, filter="*processBlock*"
+         *  Scenario: POST /api/testing/profile with mode=get, filter="*processBlock*"
          *  Expected: Returns only events matching the wildcard pattern
          */
-        beginTest("POST /api/profile - filter mode");
-        
+        beginTest("POST /api/testing/profile - filter mode");
+
         DynamicObject::Ptr bodyObj = new DynamicObject();
         bodyObj->setProperty("mode", "get");
         bodyObj->setProperty("filter", "*processBlock*");
-        
-        auto response = ctx->httpPost("/api/profile",
+
+        auto response = ctx->httpPost("/api/testing/profile",
                                       JSON::toString(var(bodyObj.get())));
         var json = ctx->parseJson(response);
-        
+
         expect((bool)json["success"], "Filter mode should succeed: " + response);
         expect(json["results"].isArray(), "Should have results array");
-        
+
         // All returned events should match the pattern
         auto results = json["results"].getArray();
-        
+
         if (results != nullptr)
         {
             for (int i = 0; i < results->size(); i++)
@@ -2887,32 +2981,32 @@ private:
             }
         }
     }
-    
-    void testStartProfilingThreadFilter()
+
+    void testTestingProfileThreadFilter()
     {
         /** Setup: Profiling data available from prior record+get sequence
-         *  Scenario: POST /api/profile with mode=get, threadFilter=["Audio Thread"], summary=true
+         *  Scenario: POST /api/testing/profile with mode=get, threadFilter=["Audio Thread"], summary=true
          *  Expected: Returns only events from the Audio Thread
          */
-        beginTest("POST /api/profile - threadFilter on get mode");
-        
+        beginTest("POST /api/testing/profile - threadFilter on get mode");
+
         DynamicObject::Ptr bodyObj = new DynamicObject();
         bodyObj->setProperty("mode", "get");
         bodyObj->setProperty("summary", true);
-        
+
         Array<var> threads;
         threads.add("Audio Thread");
         bodyObj->setProperty("threadFilter", var(threads));
-        
-        auto response = ctx->httpPost("/api/profile",
+
+        auto response = ctx->httpPost("/api/testing/profile",
                                       JSON::toString(var(bodyObj.get())));
         var json = ctx->parseJson(response);
-        
+
         expect((bool)json["success"], "Thread filter should succeed: " + response);
         expect(json["results"].isArray(), "Should have results array");
-        
+
         auto results = json["results"].getArray();
-        
+
         if (results != nullptr)
         {
             for (int i = 0; i < results->size(); i++)
@@ -2923,30 +3017,30 @@ private:
             }
         }
     }
-    
-    void testStartProfilingNested()
+
+    void testTestingProfileNested()
     {
         /** Setup: Profiling data available from prior record+get sequence
-         *  Scenario: POST /api/profile with mode=get, filter="*processBlock*", nested=true, limit=1
+         *  Scenario: POST /api/testing/profile with mode=get, filter="*processBlock*", nested=true, limit=1
          *  Expected: Returns event with children subtree
          */
-        beginTest("POST /api/profile - nested output");
-        
+        beginTest("POST /api/testing/profile - nested output");
+
         DynamicObject::Ptr bodyObj = new DynamicObject();
         bodyObj->setProperty("mode", "get");
         bodyObj->setProperty("filter", "*processBlock*");
         bodyObj->setProperty("nested", true);
         bodyObj->setProperty("limit", 1);
-        
-        auto response = ctx->httpPost("/api/profile",
+
+        auto response = ctx->httpPost("/api/testing/profile",
                                       JSON::toString(var(bodyObj.get())));
         var json = ctx->parseJson(response);
-        
+
         expect((bool)json["success"], "Nested mode should succeed: " + response);
         expect(json["results"].isArray(), "Should have results array");
-        
+
         auto results = json["results"].getArray();
-        
+
         if (results != nullptr && results->size() > 0)
         {
             auto first = (*results)[0];
@@ -2954,26 +3048,26 @@ private:
             expect(first.hasProperty(RestApiIds::thread), "Nested result should have thread");
         }
     }
-    
-    void testStartProfilingGetNoData()
+
+    void testTestingProfileGetNoData()
     {
         /** Setup: Fresh reset with no prior profiling session
-         *  Scenario: POST /api/profile with mode=get
+         *  Scenario: POST /api/testing/profile with mode=get
          *  Expected: Returns success=false with message about no data
          */
-        beginTest("POST /api/profile - get mode with no prior data");
-        
+        beginTest("POST /api/testing/profile - get mode with no prior data");
+
         // Note: We can't easily clear the broadcaster's lastValue, so this test
         // verifies the endpoint works in get mode. After the previous test,
         // there IS data available, so this will succeed. We just verify the
         // structure is correct.
         DynamicObject::Ptr bodyObj = new DynamicObject();
         bodyObj->setProperty("mode", "get");
-        
-        auto response = ctx->httpPost("/api/profile",
+
+        auto response = ctx->httpPost("/api/testing/profile",
                                       JSON::toString(var(bodyObj.get())));
         var json = ctx->parseJson(response);
-        
+
         // After prior tests, lastValue will have data, so success=true
         expect(json["threads"].isArray(), "Should have threads array");
         expect(json["flows"].isArray(), "Should have flows array");
@@ -3230,7 +3324,6 @@ private:
         var json = ctx->parseJson(response);
         
         expect((bool)json[RestApiIds::success], "Should succeed");
-        expect(json.hasProperty(RestApiIds::result), "Should contain result");
         expect(json[RestApiIds::errors].isArray(), "errors should be array");
         expectEquals<int>(json[RestApiIds::errors].size(), 0, "Should have no errors");
     }
@@ -3252,10 +3345,7 @@ private:
         expect((bool)json[RestApiIds::success], "Should succeed");
 
         auto e = json[RestApiIds::errors];
-		expect(json.hasProperty(RestApiIds::result), "Should contain result");
-		//expect(json[RestApiIds::logs].isArray(), "logs should be array");
 		expect(e.isArray(), "errors should be array");
-		//expectEquals<int>(e.size(), 0, "Should not contain errors");
 
         if (e.isArray())
         {
@@ -3403,7 +3493,7 @@ private:
 	void expectDiffEntry(const var& json, int index, const String& action,
 		const String& target, const String& domain = "builder")
 	{
-		auto diff = json[RestApiIds::result][RestApiIds::diff];
+		auto diff = json[RestApiIds::diff];
 		expect(diff.isArray(), "result.diff should be array");
 		expect(index >= 0 && index < diff.size(), "Diff index out of range");
 
@@ -3459,13 +3549,11 @@ private:
         expectNoBuilderError(json);
         expectBuilderProcessorExists("MySine");
         expectBuilderProcessorBypassed("MySine", false);
-        expectEquals<int>(json[RestApiIds::result][RestApiIds::diff].size(), 1,
+        expectEquals<int>(json[RestApiIds::diff].size(), 1,
             "Initial add should produce one diff item");
         expectDiffEntry(json, 0, "+", "MySine");
 
-        auto result = json[RestApiIds::result];
-        expect(result.isObject(), "result should be an object");
-        expect(result[RestApiIds::diff].isArray(), "result.diff should be array");
+        expect(json[RestApiIds::diff].isArray(), "diff should be array");
 
         Array<var> ops2;
         ops2.add(makeSetBypassedOp("MySine", true));
@@ -3532,7 +3620,7 @@ private:
         auto cloneJson = postBuilderOps(cloneOps);
         expectNoBuilderError(cloneJson);
 
-        auto diff = cloneJson[RestApiIds::result][RestApiIds::diff];
+        auto diff = cloneJson[RestApiIds::diff];
         expect(diff.isArray(), "diff should be array");
         expect(diff.size() >= 1, "clone should append at least one diff entry");
 
@@ -4031,11 +4119,9 @@ private:
         expect(json[RestApiIds::errors].isArray(), "errors should be array");
         expectEquals<int>(json[RestApiIds::errors].size(), 0, "Should have no errors");
 
-        auto result = json[RestApiIds::result];
-        expect(result.isObject(), "result should be object");
-        expectEquals(result[RestApiIds::groupName].toString(), String("Test Group"), "groupName should match pushed group");
+        expectEquals(json[RestApiIds::groupName].toString(), String("Test Group"), "groupName should match pushed group");
     }
-    
+
     void testUndoPopGroup()
     {
         /** Setup: Push a group first
@@ -4174,7 +4260,7 @@ private:
         var json = ctx->parseJson(response);
         expect((bool)json[RestApiIds::success], "Undo should succeed after one action");
         expectBuilderProcessorRemoved("UndoSynth");
-        expectEquals<int>(json[RestApiIds::result][RestApiIds::diff].size(), 0,
+        expectEquals<int>(json[RestApiIds::diff].size(), 0,
             "Diff should be empty after undoing only action");
 
         // second undo should fail (nothing left)
@@ -4238,9 +4324,8 @@ private:
         auto response = ctx->httpGet("/api/undo/diff");
         var json = ctx->parseJson(response);
         expect((bool)json[RestApiIds::success], "Should succeed");
-        expect(json[RestApiIds::result].isObject(), "result should be object");
-        expect(json[RestApiIds::result][RestApiIds::diff].isArray(), "result.diff should be array");
-        expectEquals<int>(json[RestApiIds::result][RestApiIds::diff].size(), 0, "Fresh state should have empty diff");
+        expect(json[RestApiIds::diff].isArray(), "diff should be array");
+        expectEquals<int>(json[RestApiIds::diff].size(), 0, "Fresh state should have empty diff");
 
         Array<var> ops;
         ops.add(makeAddOp("SineSynth", "DiffSynth"));
@@ -4250,7 +4335,7 @@ private:
         response = ctx->httpGet("/api/undo/diff");
         json = ctx->parseJson(response);
         expect((bool)json[RestApiIds::success], "Diff query should succeed after add");
-        expectEquals<int>(json[RestApiIds::result][RestApiIds::diff].size(), 1, "Should have one diff entry");
+        expectEquals<int>(json[RestApiIds::diff].size(), 1, "Should have one diff entry");
         expectDiffEntry(json, 0, "+", "DiffSynth");
 
         response = ctx->httpGet("/api/undo/diff?scope=root&flatten=1&domain=builder");
@@ -4277,9 +4362,8 @@ private:
         auto response = ctx->httpGet("/api/undo/history");
         var json = ctx->parseJson(response);
         expect((bool)json[RestApiIds::success], "Should succeed");
-        expect(json[RestApiIds::result].isObject(), "result should be object");
-        expect(json[RestApiIds::result][RestApiIds::history].isArray(), "result.history should be array");
-        expectEquals<int>(json[RestApiIds::result][RestApiIds::history].size(), 0, "Fresh history should be empty");
+        expect(json[RestApiIds::history].isArray(), "history should be array");
+        expectEquals<int>(json[RestApiIds::history].size(), 0, "Fresh history should be empty");
 
         Array<var> ops;
         ops.add(makeAddOp("SineSynth", "HistorySynth"));
@@ -4289,15 +4373,15 @@ private:
         response = ctx->httpGet("/api/undo/history");
         json = ctx->parseJson(response);
         expect((bool)json[RestApiIds::success], "history query should succeed after add");
-        expectEquals<int>(json[RestApiIds::result][RestApiIds::history].size(), 1,
+        expectEquals<int>(json[RestApiIds::history].size(), 1,
             "Should have one history entry after add");
-        expectEquals<int>((int)json[RestApiIds::result][RestApiIds::cursor], 0,
+        expectEquals<int>((int)json[RestApiIds::cursor], 0,
             "Cursor should point to first action");
 
         response = ctx->httpGet("/api/undo/history?scope=root&flatten=1");
         json = ctx->parseJson(response);
         expect((bool)json[RestApiIds::success], "root+flatten query should succeed");
-        expectEquals(json[RestApiIds::result][RestApiIds::scope].toString(), String("root"));
+        expectEquals(json[RestApiIds::scope].toString(), String("root"));
 
         response = ctx->httpGet("/api/undo/history?scope=invalid_scope");
         json = ctx->parseJson(response);
@@ -4337,7 +4421,7 @@ private:
         auto historyResponse = ctx->httpGet("/api/undo/history");
         auto historyJson = ctx->parseJson(historyResponse);
         expect((bool)historyJson[RestApiIds::success], "history query should succeed");
-        expectEquals<int>(historyJson[RestApiIds::result][RestApiIds::history].size(), 0,
+        expectEquals<int>(historyJson[RestApiIds::history].size(), 0,
                           "history should be empty after clear");
 
         auto undoResponse = ctx->httpPost("/api/undo/back", "{}");
@@ -4360,7 +4444,6 @@ private:
         auto response = ctx->httpGet("/api/wizard/initialise?id=new_project");
         var json = ctx->parseJson(response);
         expect((bool)json[RestApiIds::success], "Should succeed for valid wizard ID");
-        expect(json[RestApiIds::result].isObject(), "Result should be an object");
 
         // Missing id parameter
         auto missingResponse = ctx->httpGet("/api/wizard/initialise");
@@ -4718,7 +4801,7 @@ private:
     }
 
     //==========================================================================
-    // inject_midi tests
+    // testing/sequence tests
     //==========================================================================
 
     /** Helper to build a MIDI message JSON object. */
@@ -4754,21 +4837,21 @@ private:
         return var(obj.get());
     }
 
-    /** Helper to POST inject_midi messages and parse the response. */
+    /** Helper to POST testing/sequence messages and parse the response. */
     var postMidi(const Array<var>& messages)
     {
         DynamicObject::Ptr body = new DynamicObject();
         body->setProperty(RestApiIds::messages, var(messages));
 
-        auto response = ctx->httpPost("/api/inject_midi",
+        auto response = ctx->httpPost("/api/testing/sequence",
                                        JSON::toString(var(body.get())));
         return ctx->parseJson(response);
     }
 
-    /** Extract the result sub-object from an inject_midi envelope response. */
+    /** Extract response fields from a testing/sequence response (flat envelope). */
     var getMidiResult(const var& json)
     {
-        return json[RestApiIds::result];
+        return json;
     }
 
     /** Helper to reset the MidiInjector state before each test. */
@@ -4779,13 +4862,13 @@ private:
         postMidi(panic);
     }
 
-    void testInjectMidiNote()
+    void testTestingSequenceNote()
     {
         /** Setup: Clean state with compiled interface
          *  Scenario: Inject a single note
          *  Expected: success=true, eventsInSequence=1
          */
-        beginTest("POST /api/inject_midi - single note");
+        beginTest("POST /api/testing/sequence - single note");
 
         ctx->reset();
         ctx->compile("Content.makeFrontInterface(600, 400);");
@@ -4801,13 +4884,13 @@ private:
         expectEquals<int>(r[RestApiIds::eventsInSequence], 1, "Should have 1 event");
     }
 
-    void testInjectMidiChord()
+    void testTestingSequenceChord()
     {
         /** Setup: Clean state with compiled interface
          *  Scenario: Inject 3 notes simultaneously (C major chord)
          *  Expected: success=true, eventsInSequence=3
          */
-        beginTest("POST /api/inject_midi - chord (3 notes)");
+        beginTest("POST /api/testing/sequence - chord (3 notes)");
 
         ctx->reset();
         ctx->compile("Content.makeFrontInterface(600, 400);");
@@ -4825,13 +4908,13 @@ private:
         expectEquals<int>(r[RestApiIds::eventsInSequence], 3, "Should have 3 events");
     }
 
-    void testInjectMidiCC()
+    void testTestingSequenceCC()
     {
         /** Setup: Clean state with compiled interface
          *  Scenario: Inject a CC message
          *  Expected: success=true, eventsInSequence=1
          */
-        beginTest("POST /api/inject_midi - CC message");
+        beginTest("POST /api/testing/sequence - CC message");
 
         ctx->reset();
         ctx->compile("Content.makeFrontInterface(600, 400);");
@@ -4847,13 +4930,13 @@ private:
         expectEquals<int>(r[RestApiIds::eventsInSequence], 1, "Should have 1 event");
     }
 
-    void testInjectMidiPitchbend()
+    void testTestingSequencePitchbend()
     {
         /** Setup: Clean state with compiled interface
          *  Scenario: Inject a pitchbend message
          *  Expected: success=true, eventsInSequence=1
          */
-        beginTest("POST /api/inject_midi - pitchbend");
+        beginTest("POST /api/testing/sequence - pitchbend");
 
         ctx->reset();
         ctx->compile("Content.makeFrontInterface(600, 400);");
@@ -4869,13 +4952,13 @@ private:
         expectEquals<int>(r[RestApiIds::eventsInSequence], 1, "Should have 1 event");
     }
 
-    void testInjectMidiAllNotesOff()
+    void testTestingSequenceAllNotesOff()
     {
         /** Setup: Inject notes, then allNotesOff
          *  Scenario: allNotesOff with delay=0 should panic immediately
          *  Expected: Queue is cleared, isPlaying=false
          */
-        beginTest("POST /api/inject_midi - allNotesOff panic");
+        beginTest("POST /api/testing/sequence - allNotesOff panic");
 
         ctx->reset();
         ctx->compile("Content.makeFrontInterface(600, 400);");
@@ -4898,13 +4981,13 @@ private:
         expectEquals<int>(r[RestApiIds::activeNotes], 0, "No active notes after panic");
     }
 
-    void testInjectMidiSequence()
+    void testTestingSequenceSequence()
     {
         /** Setup: Clean state with compiled interface
          *  Scenario: Inject a sequence with delays between messages
          *  Expected: success=true, isPlaying=true, durationMs reflects delays
          */
-        beginTest("POST /api/inject_midi - delayed sequence");
+        beginTest("POST /api/testing/sequence - delayed sequence");
 
         ctx->reset();
         ctx->compile("Content.makeFrontInterface(600, 400);");
@@ -4931,13 +5014,13 @@ private:
         postMidi(panicMessages);
     }
 
-    void testInjectMidiValidation()
+    void testTestingSequenceValidation()
     {
         /** Setup: Clean state
          *  Scenario: Send various invalid messages
          *  Expected: 400 errors with descriptive messages
          */
-        beginTest("POST /api/inject_midi - validation");
+        beginTest("POST /api/testing/sequence - validation");
 
         ctx->reset();
         ctx->compile("Content.makeFrontInterface(600, 400);");
@@ -4951,7 +5034,7 @@ private:
             msgs.add(var(msg.get()));
             body->setProperty(RestApiIds::messages, var(msgs));
 
-            auto response = ctx->httpPost("/api/inject_midi", JSON::toString(var(body.get())));
+            auto response = ctx->httpPost("/api/testing/sequence", JSON::toString(var(body.get())));
             var json = ctx->parseJson(response);
             expect(!(bool)json[RestApiIds::success], "Should fail without type");
         }
@@ -4965,7 +5048,7 @@ private:
             msgs.add(var(msg.get()));
             body->setProperty(RestApiIds::messages, var(msgs));
 
-            auto response = ctx->httpPost("/api/inject_midi", JSON::toString(var(body.get())));
+            auto response = ctx->httpPost("/api/testing/sequence", JSON::toString(var(body.get())));
             var json = ctx->parseJson(response);
             expect(!(bool)json[RestApiIds::success], "Should fail with unknown type");
         }
@@ -4979,7 +5062,7 @@ private:
             msgs.add(var(msg.get()));
             body->setProperty(RestApiIds::messages, var(msgs));
 
-            auto response = ctx->httpPost("/api/inject_midi", JSON::toString(var(body.get())));
+            auto response = ctx->httpPost("/api/testing/sequence", JSON::toString(var(body.get())));
             var json = ctx->parseJson(response);
             expect(!(bool)json[RestApiIds::success], "Should fail without noteNumber");
         }
@@ -4994,7 +5077,7 @@ private:
             msgs.add(var(msg.get()));
             body->setProperty(RestApiIds::messages, var(msgs));
 
-            auto response = ctx->httpPost("/api/inject_midi", JSON::toString(var(body.get())));
+            auto response = ctx->httpPost("/api/testing/sequence", JSON::toString(var(body.get())));
             var json = ctx->parseJson(response);
             expect(!(bool)json[RestApiIds::success], "Should fail without controller");
         }
@@ -5010,26 +5093,26 @@ private:
             msgs.add(var(msg.get()));
             body->setProperty(RestApiIds::messages, var(msgs));
 
-            auto response = ctx->httpPost("/api/inject_midi", JSON::toString(var(body.get())));
+            auto response = ctx->httpPost("/api/testing/sequence", JSON::toString(var(body.get())));
             var json = ctx->parseJson(response);
             expect(!(bool)json[RestApiIds::success], "Should fail with channel 17");
         }
 
         // Missing messages array entirely
         {
-            auto response = ctx->httpPost("/api/inject_midi", "{}");
+            auto response = ctx->httpPost("/api/testing/sequence", "{}");
             var json = ctx->parseJson(response);
             expect(!(bool)json[RestApiIds::success], "Should fail without messages array");
         }
     }
 
-    void testInjectMidiRepl()
+    void testTestingSequenceRepl()
     {
         /** Setup: Compile interface with a variable
          *  Scenario: Play a note and evaluate a repl expression at the same timestamp
          *  Expected: replResults array in response contains the evaluation result
          */
-        beginTest("POST /api/inject_midi - repl event");
+        beginTest("POST /api/testing/sequence - repl event");
 
         ctx->reset();
         ctx->compile("Content.makeFrontInterface(600, 400);\nreg x = 42;");
@@ -5046,7 +5129,7 @@ private:
         msgs.add(var(replMsg.get()));
         body->setProperty(RestApiIds::messages, var(msgs));
 
-        auto response = ctx->httpPost("/api/inject_midi", JSON::toString(var(body.get())));
+        auto response = ctx->httpPost("/api/testing/sequence", JSON::toString(var(body.get())));
         var json = ctx->parseJson(response);
 
         expect((bool)json[RestApiIds::success], "Should succeed");
@@ -5094,13 +5177,13 @@ private:
         }
     }
 
-    void testInjectMidiSetAttribute()
+    void testTestingSequenceSetAttribute()
     {
         /** Setup: Compile interface with a knob
          *  Scenario: Queue a set_attribute event to change the knob value
          *  Expected: success=true, value is applied
          */
-        beginTest("POST /api/inject_midi - set_attribute event");
+        beginTest("POST /api/testing/sequence - set_attribute event");
 
         ctx->reset();
         ctx->compile("Content.makeFrontInterface(600, 400);\n"
@@ -5120,7 +5203,7 @@ private:
         msgs.add(var(attrMsg.get()));
         body->setProperty(RestApiIds::messages, var(msgs));
 
-        auto response = ctx->httpPost("/api/inject_midi", JSON::toString(var(body.get())));
+        auto response = ctx->httpPost("/api/testing/sequence", JSON::toString(var(body.get())));
         var json = ctx->parseJson(response);
 
         expect((bool)json[RestApiIds::success], "Should succeed");
@@ -5138,19 +5221,19 @@ private:
         msgs2.add(var(badMsg.get()));
         body2->setProperty(RestApiIds::messages, var(msgs2));
 
-        auto response2 = ctx->httpPost("/api/inject_midi", JSON::toString(var(body2.get())));
+        auto response2 = ctx->httpPost("/api/testing/sequence", JSON::toString(var(body2.get())));
         var json2 = ctx->parseJson(response2);
 
         expect(!(bool)json2[RestApiIds::success], "Should fail with unknown parameterId");
     }
 
-    void testInjectMidiTestSignal()
+    void testTestingSequenceTestSignal()
     {
         /** Setup: Clean state
          *  Scenario: Inject a sine test signal and verify it succeeds
          *  Expected: success=true, eventsInSequence=1
          */
-        beginTest("POST /api/inject_midi - testsignal");
+        beginTest("POST /api/testing/sequence - testsignal");
 
         ctx->reset();
         ctx->compile("Content.makeFrontInterface(600, 400);");
@@ -5169,7 +5252,7 @@ private:
         msgs.add(var(sigMsg.get()));
         body->setProperty(RestApiIds::messages, var(msgs));
 
-        auto response = ctx->httpPost("/api/inject_midi", JSON::toString(var(body.get())));
+        auto response = ctx->httpPost("/api/testing/sequence", JSON::toString(var(body.get())));
         var json = ctx->parseJson(response);
 
         expect((bool)json[RestApiIds::success], "Should succeed");
@@ -5186,7 +5269,7 @@ private:
         msgs2.add(var(badSig.get()));
         body2->setProperty(RestApiIds::messages, var(msgs2));
 
-        auto response2 = ctx->httpPost("/api/inject_midi", JSON::toString(var(body2.get())));
+        auto response2 = ctx->httpPost("/api/testing/sequence", JSON::toString(var(body2.get())));
         var json2 = ctx->parseJson(response2);
 
         expect(!(bool)json2[RestApiIds::success], "Should fail with unknown signal type");
@@ -5197,13 +5280,13 @@ private:
         postMidi(panicMsgs);
     }
 
-    void testInjectMidiEmptyPoll()
+    void testTestingSequenceEmptyPoll()
     {
         /** Setup: Clean state, nothing playing
          *  Scenario: Send empty messages array to poll status
          *  Expected: success=true, isPlaying=false, progress=1.0
          */
-        beginTest("POST /api/inject_midi - empty poll");
+        beginTest("POST /api/testing/sequence - empty poll");
 
         ctx->reset();
         ctx->compile("Content.makeFrontInterface(600, 400);");

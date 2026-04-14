@@ -314,14 +314,14 @@ RestServer::Response BackendProcessor::onAsyncRequest(RestServer::AsyncRequest::
 		case RestHelpers::ApiRoute::SetComponentProperties:
 			return RestHelpers::handleSetComponentProperties(this, req);
 			
-		case RestHelpers::ApiRoute::Screenshot:
-			return RestHelpers::handleScreenshot(this, req);
+		case RestHelpers::ApiRoute::TestingScreenshot:
+			return RestHelpers::handleTestingScreenshot(this, req);
 			
 		case RestHelpers::ApiRoute::GetSelectedComponents:
 			return RestHelpers::handleGetSelectedComponents(this, req);
 			
-		case RestHelpers::ApiRoute::SimulateInteractions:
-			return RestHelpers::handleSimulateInteractions(this, req);
+		case RestHelpers::ApiRoute::TestingE2e:
+			return RestHelpers::handleTestingE2e(this, req);
 			
 		case RestHelpers::ApiRoute::DiagnoseScript:
 			return RestHelpers::handleDiagnoseScript(this, req);
@@ -329,8 +329,8 @@ RestServer::Response BackendProcessor::onAsyncRequest(RestServer::AsyncRequest::
 		case RestHelpers::ApiRoute::GetIncludedFiles:
 			return RestHelpers::handleGetIncludedFiles(this, req);
 			
-		case RestHelpers::ApiRoute::StartProfiling:
-			return RestHelpers::handleStartProfiling(this, req);
+		case RestHelpers::ApiRoute::TestingProfile:
+			return RestHelpers::handleTestingProfile(this, req);
 			
 		case RestHelpers::ApiRoute::ParseCSS:
 			return RestHelpers::handleParseCSS(this, req);
@@ -383,8 +383,8 @@ RestServer::Response BackendProcessor::onAsyncRequest(RestServer::AsyncRequest::
 	case RestHelpers::ApiRoute::UIApply:
 		return RestHelpers::handleUIApply(this, req);
 
-	case RestHelpers::ApiRoute::InjectMidi:
-		return RestHelpers::handleInjectMidi(this, req);
+	case RestHelpers::ApiRoute::TestingSequence:
+		return RestHelpers::handleTestingSequence(this, req);
 
 	default:
 		return req->fail(404, "Unknown API endpoint: " + subURL);

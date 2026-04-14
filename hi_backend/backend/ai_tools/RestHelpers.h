@@ -65,12 +65,12 @@ struct RestHelpers
         GetComponentValue,      ///< GET  /api/get_component_value - Get component runtime value
         SetComponentValue,      ///< POST /api/set_component_value - Set component runtime value
         SetComponentProperties, ///< POST /api/set_component_properties - Set component properties
-        Screenshot,             ///< GET  /api/screenshot - Capture UI screenshot
+        TestingScreenshot,      ///< GET  /api/testing/screenshot - Capture UI screenshot
         GetSelectedComponents,  ///< GET  /api/get_selected_components - Get selected UI components
-        SimulateInteractions,   ///< POST /api/simulate_interactions - Execute UI interaction sequence
+        TestingE2e,             ///< POST /api/testing/e2e - Execute end-to-end UI interaction sequence
         DiagnoseScript,         ///< POST /api/diagnose_script - Run diagnostic shadow parse
         GetIncludedFiles,       ///< GET  /api/get_included_files - List included script files
-        StartProfiling,         ///< POST /api/profile - Run profiling session or retrieve last result
+        TestingProfile,         ///< POST /api/testing/profile - Run profiling session or retrieve last result
         ParseCSS,               ///< POST /api/parse_css - Parse CSS and return diagnostics
         Shutdown,               ///< POST /api/shutdown - Gracefully quit HISE
         BuilderTree,            ///< GET  /api/builder/tree - Get module tree hierarchy
@@ -88,7 +88,7 @@ struct RestHelpers
         WizardStatus,           ///< GET  /api/wizard/status - Poll async job progress
         UITree,                 ///< GET  /api/ui/tree - Get UI component tree hierarchy
         UIApply,                ///< POST /api/ui/apply - Apply operations to UI component tree
-        InjectMidi,             ///< POST /api/inject_midi - Inject MIDI messages into keyboard state
+        TestingSequence,        ///< POST /api/testing/sequence - Run timed test sequence (MIDI, attributes, REPL, signals)
         numRoutes
     };
     
@@ -633,19 +633,19 @@ struct RestHelpers
     static RestServer::Response handleSetComponentProperties(MainController* mc, 
                                                              RestServer::AsyncRequest::Ptr req);
     
-    /** Handler for GET /api/screenshot - Capture UI screenshot. */
-    static RestServer::Response handleScreenshot(MainController* mc, 
-                                                 RestServer::AsyncRequest::Ptr req);
+    /** Handler for GET /api/testing/screenshot - Capture UI screenshot. */
+    static RestServer::Response handleTestingScreenshot(MainController* mc,
+                                                        RestServer::AsyncRequest::Ptr req);
     
     /** Handler for GET /api/get_selected_components - Get selected UI components. */
     static RestServer::Response handleGetSelectedComponents(MainController* mc, 
                                                             RestServer::AsyncRequest::Ptr req);
     
-    /** Handler for POST /api/simulate_interactions - Execute UI interaction sequence.
+    /** Handler for POST /api/testing/e2e - Execute end-to-end UI interaction sequence.
      *  Note: Takes BackendProcessor* to access InteractionTester.
      */
-    static RestServer::Response handleSimulateInteractions(BackendProcessor* bp, 
-                                                           RestServer::AsyncRequest::Ptr req);
+    static RestServer::Response handleTestingE2e(BackendProcessor* bp,
+                                                  RestServer::AsyncRequest::Ptr req);
     
     /** Handler for POST /api/diagnose_script - Run diagnostic shadow parse.
      *  Accepts moduleId and/or filePath. Reads file from disk, runs shadow parse,
@@ -661,12 +661,12 @@ struct RestHelpers
     static RestServer::Response handleGetIncludedFiles(MainController* mc, 
                                                        RestServer::AsyncRequest::Ptr req);
     
-    /** Handler for POST /api/profile - Start profiling or retrieve last result.
+    /** Handler for POST /api/testing/profile - Start profiling or retrieve last result.
      *  mode="record": starts a new session (non-blocking, returns immediately).
      *  mode="get": returns last result, with optional filter/summary parameters.
      *  When recording is in progress, "get" blocks until done (unless wait=false).
      */
-    static RestServer::Response handleStartProfiling(MainController* mc, 
+    static RestServer::Response handleTestingProfile(MainController* mc,
                                                       RestServer::AsyncRequest::Ptr req);
     
     /** Handler for POST /api/parse_css - Parse CSS code and return diagnostics.
@@ -772,9 +772,9 @@ struct RestHelpers
         MainController* mc, const String& type, int channel,
         int noteNumber, float velocity, int controller, int value);
 
-    /** Handler for POST /api/inject_midi - Inject MIDI messages into keyboard state */
-    static RestServer::Response handleInjectMidi(BackendProcessor* bp,
-                                                  RestServer::AsyncRequest::Ptr req);
+    /** Handler for POST /api/testing/sequence - Run timed test sequence */
+    static RestServer::Response handleTestingSequence(BackendProcessor* bp,
+                                                       RestServer::AsyncRequest::Ptr req);
 
 #if HISE_INCLUDE_PROFILING_TOOLKIT
     /** Query options for filtering and summarizing profiling results. */

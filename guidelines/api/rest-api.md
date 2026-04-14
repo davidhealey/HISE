@@ -868,7 +868,7 @@ MyButton.setControlCallback(onMyButtonChanged);
 
 ---
 
-### GET /api/screenshot
+### GET /api/testing/screenshot
 
 Capture a screenshot of the interface or a specific component.
 
@@ -882,22 +882,22 @@ Capture a screenshot of the interface or a specific component.
 
 **Example: Full interface screenshot**
 ```bash
-curl "http://localhost:1900/api/screenshot?moduleId=Interface"
+curl "http://localhost:1900/api/testing/screenshot?moduleId=Interface"
 ```
 
 **Example: Specific component screenshot**
 ```bash
-curl "http://localhost:1900/api/screenshot?moduleId=Interface&id=AmpPanel"
+curl "http://localhost:1900/api/testing/screenshot?moduleId=Interface&id=AmpPanel"
 ```
 
 **Example: Half-scale screenshot**
 ```bash
-curl "http://localhost:1900/api/screenshot?moduleId=Interface&scale=0.5"
+curl "http://localhost:1900/api/testing/screenshot?moduleId=Interface&scale=0.5"
 ```
 
 **Example: Save to file**
 ```bash
-curl "http://localhost:1900/api/screenshot?moduleId=Interface&outputPath=C:/temp/screenshot.png"
+curl "http://localhost:1900/api/testing/screenshot?moduleId=Interface&outputPath=C:/temp/screenshot.png"
 ```
 
 **Response (Base64 mode - default)**:
@@ -1039,7 +1039,7 @@ curl "http://localhost:1900/api/get_selected_components?moduleId=Interface"
 
 ---
 
-### POST /api/simulate_interactions
+### POST /api/testing/e2e
 
 Execute a sequence of UI interactions (mouse movements, clicks, drags, screenshots) in a dedicated test window. Auto-inserts `moveTo` events as needed for proper mouse positioning. Mouse state persists across API calls for sequential interaction workflows.
 
@@ -1056,7 +1056,7 @@ Each interaction targets a component by ID and supports optional timing paramete
 
 **Example Request**:
 ```bash
-curl -X POST http://localhost:1900/api/simulate_interactions \
+curl -X POST http://localhost:1900/api/testing/e2e \
   -H "Content-Type: application/json" \
   -d '{
     "interactions": [
@@ -1255,7 +1255,7 @@ GET /api/get_included_files?moduleId=Interface
 
 ---
 
-### POST /api/profile
+### POST /api/testing/profile
 
 Start a profiling session or retrieve the last profiling result. Requires HISE to be built with `HISE_INCLUDE_PROFILING_TOOLKIT`.
 
@@ -1276,14 +1276,14 @@ Start a profiling session or retrieve the last profiling result. Requires HISE t
 
 **Example — Record**:
 ```bash
-curl -X POST http://localhost:1900/api/profile \
+curl -X POST http://localhost:1900/api/testing/profile \
   -H "Content-Type: application/json" \
   -d '{"mode": "record", "durationMs": 2000}'
 ```
 
 **Example — Get with filtering**:
 ```bash
-curl -X POST http://localhost:1900/api/profile \
+curl -X POST http://localhost:1900/api/testing/profile \
   -H "Content-Type: application/json" \
   -d '{"mode": "get", "summary": true, "threadFilter": ["Audio Thread"], "minDuration": 0.1}'
 ```
@@ -1715,7 +1715,7 @@ curl -X POST http://localhost:1900/api/ui/apply \
 
 ---
 
-### POST /api/inject_midi
+### POST /api/testing/sequence
 
 Inject MIDI messages and test events into HISE with precise timing. Non-blocking by default: queues messages and returns immediately. A background `HighResolutionTimer` dispatches events at the correct timestamps with sub-ms precision. Notes automatically send note-off after their `duration` to prevent stuck notes.
 
@@ -1760,7 +1760,7 @@ Multiple calls merge into the pending queue. Send `allNotesOff` as a panic butto
 
 **Example — Play a chord**:
 ```bash
-curl -X POST http://localhost:1900/api/inject_midi \
+curl -X POST http://localhost:1900/api/testing/sequence \
   -H "Content-Type: application/json" \
   -d '{
     "messages": [
@@ -1773,7 +1773,7 @@ curl -X POST http://localhost:1900/api/inject_midi \
 
 **Example — Melody with polyphony**:
 ```bash
-curl -X POST http://localhost:1900/api/inject_midi \
+curl -X POST http://localhost:1900/api/testing/sequence \
   -H "Content-Type: application/json" \
   -d '{
     "messages": [
@@ -1787,7 +1787,7 @@ curl -X POST http://localhost:1900/api/inject_midi \
 
 **Example — DSP test: inject signal, check state, record output**:
 ```bash
-curl -X POST http://localhost:1900/api/inject_midi \
+curl -X POST http://localhost:1900/api/testing/sequence \
   -H "Content-Type: application/json" \
   -d '{
     "blocking": true,
@@ -1801,7 +1801,7 @@ curl -X POST http://localhost:1900/api/inject_midi \
 
 **Example — Automate a parameter during playback**:
 ```bash
-curl -X POST http://localhost:1900/api/inject_midi \
+curl -X POST http://localhost:1900/api/testing/sequence \
   -H "Content-Type: application/json" \
   -d '{
     "messages": [
@@ -1815,12 +1815,12 @@ curl -X POST http://localhost:1900/api/inject_midi \
 **Example — Poll status / Panic**:
 ```bash
 # Poll (empty messages)
-curl -X POST http://localhost:1900/api/inject_midi \
+curl -X POST http://localhost:1900/api/testing/sequence \
   -H "Content-Type: application/json" \
   -d '{"messages": []}'
 
 # Panic (stop everything)
-curl -X POST http://localhost:1900/api/inject_midi \
+curl -X POST http://localhost:1900/api/testing/sequence \
   -H "Content-Type: application/json" \
   -d '{"messages": [{"type": "allNotesOff"}]}'
 ```
@@ -2048,7 +2048,7 @@ Use the screenshot endpoint to create a visual feedback loop for UI development.
 1. POST /api/set_script
    -> Create/modify UI components with paint routines
 
-2. GET /api/screenshot?outputPath=/path/to/screenshot.png
+2. GET /api/testing/screenshot?outputPath=/path/to/screenshot.png
    -> Capture the result to a file
 
 3. Inspect the image file
@@ -2071,7 +2071,7 @@ curl -X POST "http://localhost:1900/api/set_script" \
   }'
 
 # 2. Capture screenshot of the panel
-curl "http://localhost:1900/api/screenshot?moduleId=Interface&id=MyPanel&outputPath=/path/to/screenshot.png"
+curl "http://localhost:1900/api/testing/screenshot?moduleId=Interface&id=MyPanel&outputPath=/path/to/screenshot.png"
 
 # 3. Inspect the image - should show a 100x100 blue square
 
@@ -2086,7 +2086,7 @@ curl -X POST "http://localhost:1900/api/set_script" \
   }'
 
 # 5. Capture again - should now show green
-curl "http://localhost:1900/api/screenshot?moduleId=Interface&id=MyPanel&outputPath=/path/to/screenshot.png"
+curl "http://localhost:1900/api/testing/screenshot?moduleId=Interface&id=MyPanel&outputPath=/path/to/screenshot.png"
 ```
 
 **Tips:**
@@ -2115,7 +2115,7 @@ Use `/api/get_selected_components` to enable AI-assisted workflows where the use
    - Code: Generate callbacks, use set_script
    - Hierarchy: Set parentComponent, use set_component_properties
 
-4. Optionally verify with GET /api/screenshot
+4. Optionally verify with GET /api/testing/screenshot
 ```
 
 **Example: Align selected buttons horizontally**
@@ -2181,7 +2181,7 @@ curl -s "http://localhost:1900/api/list_components?moduleId=Interface&hierarchy=
 - Use `set_component_properties` for layout changes (doesn't require recompilation)
 - Use `set_script` when adding callbacks or creating new components
 - The selection is cleared on recompile, so capture it before making script changes
-- Combine with `/api/screenshot` to verify visual results
+- Combine with `/api/testing/screenshot` to verify visual results
 
 ---
 
