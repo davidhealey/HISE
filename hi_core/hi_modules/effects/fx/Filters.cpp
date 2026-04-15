@@ -388,7 +388,7 @@ void PolyFilterEffect::renderNextBlock(AudioSampleBuffer &b, int startSample, in
 		}
 
 		auto gainMod = (double)modChains[GainChain].getOneModulationValue(startSample);
-		r.gainModValue = (double)(Decibels::decibelsToGain(gain * (gainMod - 1.0)));
+		r.gainModValue = (double)(Decibels::decibelsToGain(2.0 * gain * (gainMod - 1.0)));
 		r.qModValue = (double)modChains[ResonanceChain].getOneModulationValue(startSample);
 
 		monoFilters.setDisplayModValues(-1, (float)r.applyModValue(frequency), (float)r.gainModValue, (float)r.qModValue);
@@ -484,7 +484,7 @@ void PolyFilterEffect::applyEffect(int voiceIndex, AudioSampleBuffer &b, int sta
 	auto gainMod = (double)modChains[GainChain].getOneModulationValue(startSample);
   
 	if(gainMod != 1.0f)
-	    r.gainModValue = (double)(Decibels::decibelsToGain(gain * (gainMod - 1.0f)));
+	    r.gainModValue = (double)(Decibels::decibelsToGain(2.0 * gain * (gainMod - 1.0f)));
 
 	r.qModValue = (double)modChains[ResonanceChain].getOneModulationValue(startSample);
 
