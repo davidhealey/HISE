@@ -979,7 +979,7 @@ void BackendRootWindow::resized()
 	auto bp = getBackendProcessor();
 	auto& restServer = bp->getRestServer();
 	
-	if (getTopLevelComponent() != nullptr && getLocalBounds().isEmpty() && !restServerInitialised)
+	if (getTopLevelComponent() != nullptr && !getLocalBounds().isEmpty() && !restServerInitialised)
 	{
 		restServerInitialised = true;
 
