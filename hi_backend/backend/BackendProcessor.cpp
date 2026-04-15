@@ -386,6 +386,18 @@ RestServer::Response BackendProcessor::onAsyncRequest(RestServer::AsyncRequest::
 	case RestHelpers::ApiRoute::TestingSequence:
 		return RestHelpers::handleTestingSequence(this, req);
 
+	case RestHelpers::ApiRoute::DspList:
+		return RestHelpers::handleDspList(this, req);
+
+	case RestHelpers::ApiRoute::DspInit:
+		return RestHelpers::handleDspInit(this, req);
+
+	case RestHelpers::ApiRoute::DspTree:
+		return RestHelpers::handleDspTree(this, req);
+
+	case RestHelpers::ApiRoute::DspApply:
+		return RestHelpers::handleDspApply(this, req);
+
 	default:
 		return req->fail(404, "Unknown API endpoint: " + subURL);
 	}

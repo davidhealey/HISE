@@ -16,6 +16,9 @@
             "name": "builder"
         },
         {
+            "name": "dsp"
+        },
+        {
             "name": "scripting"
         },
         {
@@ -5144,6 +5147,637 @@
                     },
                     "503": {
                         "description": "Service unavailable"
+                    }
+                }
+            }
+        },
+        "/api/dsp/list": {
+            "get": {
+                "tags": [
+                    "dsp"
+                ],
+                "summary": "List available DspNetwork names",
+                "description": "Scans the project's DspNetworks/ folder for .xml files and returns their names (without extension). Also includes any in-memory networks that have been created via dsp/init.",
+                "operationId": "dsp_list",
+                "responses": {
+                    "200": {
+                        "description": "Successful response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "description": "Whether the request completed successfully"
+                                        },
+                                        "networks": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "string",
+                                                "description": "Network name"
+                                            },
+                                            "description": "Array of available network names"
+                                        },
+                                        "logs": {
+                                            "type": "array",
+                                            "description": "Console.print() output captured during request processing",
+                                            "items": {
+                                                "type": "string"
+                                            }
+                                        },
+                                        "errors": {
+                                            "type": "array",
+                                            "description": "Script errors captured during request processing",
+                                            "items": {
+                                                "type": "object",
+                                                "properties": {
+                                                    "errorMessage": {
+                                                        "type": "string",
+                                                        "description": "The error message"
+                                                    },
+                                                    "callstack": {
+                                                        "type": "array",
+                                                        "description": "Call stack frames (e.g. \"myFunction() at Scripts/main.js:15:8\")",
+                                                        "items": {
+                                                            "type": "string"
+                                                        }
+                                                    }
+                                                },
+                                                "required": [
+                                                    "errorMessage",
+                                                    "callstack"
+                                                ]
+                                            }
+                                        }
+                                    },
+                                    "required": [
+                                        "success",
+                                        "logs",
+                                        "errors"
+                                    ]
+                                },
+                                "example": {
+                                    "success": true,
+                                    "networks": [
+                                        "MyDSP",
+                                        "MyEffect",
+                                        "Reverb"
+                                    ],
+                                    "logs": [],
+                                    "errors": []
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/dsp/init": {
+            "post": {
+                "tags": [
+                    "dsp"
+                ],
+                "summary": "Create or load a DspNetwork",
+                "description": "Creates a new DspNetwork or loads an existing one. If the network XML file does not exist, it is created. If it already exists, it is loaded. Returns the initial tree in the result field (same shape as GET /api/dsp/tree) plus filePath (absolute path to the .xml file, empty for embedded networks) and embedded (whether the network is embedded). The name is sanitized to a valid C++ identifier.",
+                "operationId": "dsp_init",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "networkId": {
+                                        "type": "string",
+                                        "description": "Network name",
+                                        "example": "MyDSP"
+                                    },
+                                    "embedded": {
+                                        "type": "boolean",
+                                        "description": "Create as embedded network rather than file-based",
+                                        "default": "false"
+                                    }
+                                },
+                                "required": [
+                                    "networkId"
+                                ]
+                            },
+                            "example": {
+                                "networkId": "MyDSP"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Successful response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "description": "Whether the request completed successfully"
+                                        },
+                                        "filePath": {
+                                            "type": "string",
+                                            "description": "Absolute path to the network .xml file (empty for embedded networks)"
+                                        },
+                                        "embedded": {
+                                            "type": "boolean",
+                                            "description": "Whether the network is embedded"
+                                        },
+                                        "logs": {
+                                            "type": "array",
+                                            "description": "Console.print() output captured during request processing",
+                                            "items": {
+                                                "type": "string"
+                                            }
+                                        },
+                                        "errors": {
+                                            "type": "array",
+                                            "description": "Script errors captured during request processing",
+                                            "items": {
+                                                "type": "object",
+                                                "properties": {
+                                                    "errorMessage": {
+                                                        "type": "string",
+                                                        "description": "The error message"
+                                                    },
+                                                    "callstack": {
+                                                        "type": "array",
+                                                        "description": "Call stack frames (e.g. \"myFunction() at Scripts/main.js:15:8\")",
+                                                        "items": {
+                                                            "type": "string"
+                                                        }
+                                                    }
+                                                },
+                                                "required": [
+                                                    "errorMessage",
+                                                    "callstack"
+                                                ]
+                                            }
+                                        }
+                                    },
+                                    "required": [
+                                        "success",
+                                        "logs",
+                                        "errors"
+                                    ]
+                                },
+                                "example": {
+                                    "success": true,
+                                    "result": {
+                                        "networkId": "MyDSP",
+                                        "factoryPath": "container.chain",
+                                        "bypassed": false,
+                                        "parameters": [],
+                                        "connections": [],
+                                        "children": []
+                                    },
+                                    "filePath": "D:/Projects/MyPlugin/DspNetworks/MyDSP.xml",
+                                    "embedded": false,
+                                    "logs": [],
+                                    "errors": []
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad request - invalid or missing parameters"
+                    },
+                    "404": {
+                        "description": "Not found - unknown module or resource"
+                    }
+                }
+            }
+        },
+        "/api/dsp/tree": {
+            "get": {
+                "tags": [
+                    "dsp"
+                ],
+                "summary": "Get scriptnode network hierarchy",
+                "description": "Returns the nested JSON tree of the scriptnode network. Each node contains its nodeId, factoryPath, bypass state, parameters, modulation connections, and child nodes. The root node's nodeId matches the networkId. Use verbose=true to include full parameter range metadata (min, max, stepSize, middlePosition, defaultValue).",
+                "operationId": "dsp_tree",
+                "parameters": [
+                    {
+                        "name": "networkId",
+                        "in": "query",
+                        "description": "DspNetwork name",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "description": "DspNetwork name",
+                            "example": "MyDSP"
+                        },
+                        "example": "MyDSP"
+                    },
+                    {
+                        "name": "verbose",
+                        "in": "query",
+                        "description": "Include full parameter range metadata",
+                        "required": false,
+                        "schema": {
+                            "type": "boolean",
+                            "description": "Include full parameter range metadata",
+                            "default": "false"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "description": "Whether the request completed successfully"
+                                        },
+                                        "result": {
+                                            "type": "string",
+                                            "description": "Recursive node tree with parameters, connections, and children"
+                                        },
+                                        "logs": {
+                                            "type": "array",
+                                            "description": "Console.print() output captured during request processing",
+                                            "items": {
+                                                "type": "string"
+                                            }
+                                        },
+                                        "errors": {
+                                            "type": "array",
+                                            "description": "Script errors captured during request processing",
+                                            "items": {
+                                                "type": "object",
+                                                "properties": {
+                                                    "errorMessage": {
+                                                        "type": "string",
+                                                        "description": "The error message"
+                                                    },
+                                                    "callstack": {
+                                                        "type": "array",
+                                                        "description": "Call stack frames (e.g. \"myFunction() at Scripts/main.js:15:8\")",
+                                                        "items": {
+                                                            "type": "string"
+                                                        }
+                                                    }
+                                                },
+                                                "required": [
+                                                    "errorMessage",
+                                                    "callstack"
+                                                ]
+                                            }
+                                        }
+                                    },
+                                    "required": [
+                                        "success",
+                                        "logs",
+                                        "errors"
+                                    ]
+                                },
+                                "example": {
+                                    "success": true,
+                                    "result": {
+                                        "nodeId": "MyDSP",
+                                        "factoryPath": "container.chain",
+                                        "bypassed": false,
+                                        "parameters": [],
+                                        "connections": [],
+                                        "children": [
+                                            {
+                                                "nodeId": "Osc1",
+                                                "factoryPath": "core.oscillator",
+                                                "bypassed": false,
+                                                "parameters": [
+                                                    {
+                                                        "parameterId": "Frequency",
+                                                        "value": 440
+                                                    }
+                                                ],
+                                                "connections": [],
+                                                "children": []
+                                            }
+                                        ]
+                                    },
+                                    "logs": [],
+                                    "errors": []
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not found - unknown module or resource"
+                    }
+                }
+            }
+        },
+        "/api/dsp/apply": {
+            "post": {
+                "tags": [
+                    "dsp"
+                ],
+                "summary": "Apply batched operations to a scriptnode graph",
+                "description": "Apply one or more scriptnode operations in a single batch. Operations are pre-validated before execution; invalid operations return 400 with detailed error info. All operations are undoable via the undo API. When called inside an undo group (after push_group), the diff accumulates all operations in the group so far. The response contains a diff summary with the net effect. Partial failure rolls back the entire batch.",
+                "operationId": "dsp_apply",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "networkId": {
+                                        "type": "string",
+                                        "description": "DspNetwork name",
+                                        "example": "MyDSP"
+                                    },
+                                    "operations": {
+                                        "type": "array",
+                                        "items": {
+                                            "type": "object",
+                                            "properties": {
+                                                "op": {
+                                                    "type": "string",
+                                                    "enum": [
+                                                        "add",
+                                                        "remove",
+                                                        "move",
+                                                        "connect",
+                                                        "disconnect",
+                                                        "set",
+                                                        "bypass",
+                                                        "create_parameter",
+                                                        "clear"
+                                                    ],
+                                                    "description": "Operation type"
+                                                },
+                                                "factoryPath": {
+                                                    "type": "string",
+                                                    "description": "Factory path for add op (e.g. core.oscillator, filters.svf)"
+                                                },
+                                                "parent": {
+                                                    "type": "string",
+                                                    "description": "Parent container node ID for add/move ops"
+                                                },
+                                                "nodeId": {
+                                                    "type": "string",
+                                                    "description": "Node instance ID"
+                                                },
+                                                "parameterId": {
+                                                    "type": "string",
+                                                    "description": "Parameter name for set/create_parameter ops"
+                                                },
+                                                "index": {
+                                                    "type": "integer",
+                                                    "description": "Position within parent container"
+                                                },
+                                                "source": {
+                                                    "type": "string",
+                                                    "description": "Source node ID for connect/disconnect ops"
+                                                },
+                                                "target": {
+                                                    "type": "string",
+                                                    "description": "Target node ID for connect/disconnect ops"
+                                                },
+                                                "parameter": {
+                                                    "type": "string",
+                                                    "description": "Target parameter name for connect/disconnect ops"
+                                                },
+                                                "sourceOutput": {
+                                                    "type": "string",
+                                                    "description": "Source output name for connect op"
+                                                },
+                                                "value": {
+                                                    "type": "string",
+                                                    "description": "New value for set op"
+                                                },
+                                                "bypassed": {
+                                                    "type": "boolean",
+                                                    "description": "Bypass state for bypass op"
+                                                },
+                                                "min": {
+                                                    "type": "number",
+                                                    "description": "Minimum value for create_parameter"
+                                                },
+                                                "max": {
+                                                    "type": "number",
+                                                    "description": "Maximum value for create_parameter"
+                                                },
+                                                "defaultValue": {
+                                                    "type": "number",
+                                                    "description": "Default value for create_parameter"
+                                                },
+                                                "stepSize": {
+                                                    "type": "number",
+                                                    "description": "Step size for create_parameter (0 = continuous)"
+                                                },
+                                                "middlePosition": {
+                                                    "type": "number",
+                                                    "description": "Value at 50% of range for create_parameter (computes skew internally, mutually exclusive with skewFactor)"
+                                                },
+                                                "skewFactor": {
+                                                    "type": "number",
+                                                    "description": "Raw skew factor for create_parameter (mutually exclusive with middlePosition)"
+                                                }
+                                            },
+                                            "required": [
+                                                "op"
+                                            ],
+                                            "discriminator": {
+                                                "propertyName": "op"
+                                            },
+                                            "x-variants": [
+                                                {
+                                                    "value": "add",
+                                                    "description": "Add a node (factoryPath, parent, nodeId?, index?)"
+                                                },
+                                                {
+                                                    "value": "remove",
+                                                    "description": "Remove a node (nodeId)"
+                                                },
+                                                {
+                                                    "value": "move",
+                                                    "description": "Move a node to a different container (nodeId, parent, index?)"
+                                                },
+                                                {
+                                                    "value": "connect",
+                                                    "description": "Connect a modulation source to a parameter (source, target, parameter, sourceOutput?)"
+                                                },
+                                                {
+                                                    "value": "disconnect",
+                                                    "description": "Disconnect a modulation source (source, target, parameter)"
+                                                },
+                                                {
+                                                    "value": "set",
+                                                    "description": "Set a parameter value or node property (nodeId, parameterId, value). When nodeId is the root network node, also supports network-level properties: AllowCompilation (bool), AllowPolyphonic (bool), CompileChannelAmount (int), HasTail (bool), SuspendOnSilence (bool), ModulationBlockSize (power-of-2 int or 0)"
+                                                },
+                                                {
+                                                    "value": "bypass",
+                                                    "description": "Set bypass state (nodeId, bypassed)"
+                                                },
+                                                {
+                                                    "value": "create_parameter",
+                                                    "description": "Create a dynamic parameter on a container (nodeId, parameterId, min?, max?, defaultValue?, stepSize?, middlePosition?, skewFactor?)"
+                                                },
+                                                {
+                                                    "value": "clear",
+                                                    "description": "Clear all nodes from the network"
+                                                }
+                                            ],
+                                            "description": "DSP operation object"
+                                        },
+                                        "description": "Non-empty array of operation objects"
+                                    }
+                                },
+                                "required": [
+                                    "networkId",
+                                    "operations"
+                                ]
+                            },
+                            "example": {
+                                "networkId": "MyDSP",
+                                "operations": [
+                                    {
+                                        "op": "add",
+                                        "factoryPath": "core.oscillator",
+                                        "parent": "MyDSP",
+                                        "nodeId": "Osc1",
+                                        "index": 0
+                                    },
+                                    {
+                                        "op": "set",
+                                        "nodeId": "Osc1",
+                                        "parameterId": "Frequency",
+                                        "value": 880
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Successful response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "description": "Whether the request completed successfully"
+                                        },
+                                        "scope": {
+                                            "type": "string",
+                                            "enum": [
+                                                "group",
+                                                "root"
+                                            ],
+                                            "description": "Scope level"
+                                        },
+                                        "groupName": {
+                                            "type": "string",
+                                            "description": "Active group name"
+                                        },
+                                        "diff": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "object",
+                                                "properties": {
+                                                    "target": {
+                                                        "type": "string",
+                                                        "description": "Node ID affected"
+                                                    },
+                                                    "action": {
+                                                        "type": "string",
+                                                        "enum": [
+                                                            "+",
+                                                            "-",
+                                                            "*"
+                                                        ],
+                                                        "description": "Net action symbol"
+                                                    },
+                                                    "domain": {
+                                                        "type": "string",
+                                                        "description": "Operation domain",
+                                                        "example": "dsp"
+                                                    }
+                                                },
+                                                "required": [
+                                                    "target",
+                                                    "action",
+                                                    "domain"
+                                                ],
+                                                "description": "Diff entry"
+                                            },
+                                            "description": "Array of diff entries"
+                                        },
+                                        "logs": {
+                                            "type": "array",
+                                            "description": "Console.print() output captured during request processing",
+                                            "items": {
+                                                "type": "string"
+                                            }
+                                        },
+                                        "errors": {
+                                            "type": "array",
+                                            "description": "Script errors captured during request processing",
+                                            "items": {
+                                                "type": "object",
+                                                "properties": {
+                                                    "errorMessage": {
+                                                        "type": "string",
+                                                        "description": "The error message"
+                                                    },
+                                                    "callstack": {
+                                                        "type": "array",
+                                                        "description": "Call stack frames (e.g. \"myFunction() at Scripts/main.js:15:8\")",
+                                                        "items": {
+                                                            "type": "string"
+                                                        }
+                                                    }
+                                                },
+                                                "required": [
+                                                    "errorMessage",
+                                                    "callstack"
+                                                ]
+                                            }
+                                        }
+                                    },
+                                    "required": [
+                                        "success",
+                                        "logs",
+                                        "errors"
+                                    ]
+                                },
+                                "example": {
+                                    "success": true,
+                                    "scope": "group",
+                                    "groupName": "root",
+                                    "diff": [
+                                        {
+                                            "target": "Osc1",
+                                            "action": "+",
+                                            "domain": "dsp"
+                                        }
+                                    ],
+                                    "logs": [],
+                                    "errors": []
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad request - invalid or missing parameters"
+                    },
+                    "404": {
+                        "description": "Not found - unknown module or resource"
                     }
                 }
             }

@@ -1244,6 +1244,162 @@ struct RestApiEndpoints
 			.withRequestExample(R"({"messages": [{"type": "note", "noteNumber": 60, "velocity": 0.8, "duration": 1000, "timestamp": 0}, {"type": "note", "noteNumber": 64, "velocity": 0.8, "duration": 1000, "timestamp": 0}]})")
 			.withResponseExample(R"({"success": true, "isPlaying": true, "durationMs": 1000, "activeNotes": 2, "eventsInSequence": 2, "playedEvents": 0, "progress": 0.0, "logs": [], "errors": []})"));
 	}
+
+	// ========================================================================
+	// DSP (scriptnode) endpoints
+	// ========================================================================
+
+	static void dspList(Array<RouteMetadata>& m)
+	{
+		m.add(RouteMetadata(ApiRoute::DspList, "api/dsp/list")
+			.withCategory("dsp")
+			.withSummary("List available DspNetwork names")
+			.withDescription("Scans the project's DspNetworks/ folder for .xml files and "
+				"returns their names (without extension). Also includes any in-memory "
+				"networks that have been created via dsp/init.")
+			.withReturns("Array of network name strings")
+			.withResponseField(RouteParameter(RestApiIds::networks, "Array of available network names")
+				.withType(ParamType::Array)
+				.withArrayItems(RouteParameter(Identifier("name"), "Network name")))
+			.withResponseExample(R"({"success": true, "networks": ["MyDSP", "MyEffect", "Reverb"], "logs": [], "errors": []})"));
+	}
+
+	static void dspInit(Array<RouteMetadata>& m)
+	{
+		m.add(RouteMetadata(ApiRoute::DspInit, "api/dsp/init")
+			.withMethod(RestServer::POST)
+			.withCategory("dsp")
+			.withSummary("Create or load a DspNetwork")
+			.withDescription("Creates a new DspNetwork or loads an existing one. If the network "
+				"XML file does not exist, it is created. If it already exists, it is loaded. "
+				"Returns the initial tree in the result field (same shape as GET /api/dsp/tree) "
+				"plus filePath (absolute path to the .xml file, empty for embedded networks) "
+				"and embedded (whether the network is embedded). "
+				"The name is sanitized to a valid C++ identifier.")
+			.withReturns("Initial network tree plus filePath and embedded flag")
+			.withBodyParam(RouteParameter(RestApiIds::networkId, "Network name")
+				.withExample("MyDSP"))
+			.withBodyParam(RouteParameter(RestApiIds::embedded,
+				"Create as embedded network rather than file-based")
+				.withType(ParamType::Bool).withDefault("false"))
+			.withResponseField(RouteParameter(RestApiIds::filePath, "Absolute path to the network .xml file (empty for embedded networks)"))
+			.withResponseField(RouteParameter(RestApiIds::embedded, "Whether the network is embedded")
+				.withType(ParamType::Bool))
+			.withErrorCodes({ 400, 404 })
+			.withRequestExample(R"({"networkId": "MyDSP"})")
+			.withResponseExample("{\"success\": true, \"result\": {\"networkId\": \"MyDSP\", \"factoryPath\": \"container.chain\", \"bypassed\": false, \"parameters\": [], \"connections\": [], \"children\": []}, \"filePath\": \"D:/Projects/MyPlugin/DspNetworks/MyDSP.xml\", \"embedded\": false, \"logs\": [], \"errors\": []}"));
+	}
+
+	static void dspTree(Array<RouteMetadata>& m)
+	{
+		m.add(RouteMetadata(ApiRoute::DspTree, "api/dsp/tree")
+			.withCategory("dsp")
+			.withSummary("Get scriptnode network hierarchy")
+			.withDescription("Returns the nested JSON tree of the scriptnode network. Each node "
+				"contains its nodeId, factoryPath, bypass state, parameters, modulation connections, "
+				"and child nodes. The root node's nodeId matches the networkId. "
+				"Use verbose=true to include full parameter range metadata "
+				"(min, max, stepSize, middlePosition, defaultValue).")
+			.withReturns("Recursive node tree with parameters, connections, and children")
+			.withQueryParam(RouteParameter(RestApiIds::networkId, "DspNetwork name")
+				.withExample("MyDSP"))
+			.withQueryParam(RouteParameter(RestApiIds::verbose,
+				"Include full parameter range metadata")
+				.withType(ParamType::Bool).withDefault("false"))
+			.withErrorCodes({ 404 })
+			.withRequestExample(R"(GET /api/dsp/tree?networkId=MyDSP)")
+			.withResponseExample(R"({"success": true, "result": {"nodeId": "MyDSP", "factoryPath": "container.chain", "bypassed": false, "parameters": [], "connections": [], "children": [{"nodeId": "Osc1", "factoryPath": "core.oscillator", "bypassed": false, "parameters": [{"parameterId": "Frequency", "value": 440}], "connections": [], "children": []}]}, "logs": [], "errors": []})"));
+	}
+
+	static void dspApply(Array<RouteMetadata>& m)
+	{
+		auto opItem = RouteParameter(RestApiIds::op, "DSP operation object")
+			.withType(ParamType::Object)
+			.withDiscriminator("op")
+			.withVariant("add", "Add a node (factoryPath, parent, nodeId?, index?)")
+			.withVariant("remove", "Remove a node (nodeId)")
+			.withVariant("move", "Move a node to a different container (nodeId, parent, index?)")
+			.withVariant("connect", "Connect a modulation source to a parameter (source, target, parameter, sourceOutput?)")
+			.withVariant("disconnect", "Disconnect a modulation source (source, target, parameter)")
+			.withVariant("set", "Set a parameter value or node property (nodeId, parameterId, value). "
+				"When nodeId is the root network node, also supports network-level properties: "
+				"AllowCompilation (bool), AllowPolyphonic (bool), CompileChannelAmount (int), "
+				"HasTail (bool), SuspendOnSilence (bool), ModulationBlockSize (power-of-2 int or 0)")
+			.withVariant("bypass", "Set bypass state (nodeId, bypassed)")
+			.withVariant("create_parameter", "Create a dynamic parameter on a container (nodeId, parameterId, min?, max?, defaultValue?, stepSize?, middlePosition?, skewFactor?)")
+			.withVariant("clear", "Clear all nodes from the network")
+			// All possible properties (union of all variants)
+			.withProperty(RouteParameter(RestApiIds::op, "Operation type")
+				.withEnumValues({ "add", "remove", "move", "connect", "disconnect", "set", "bypass", "create_parameter", "clear" }))
+			.withProperty(RouteParameter(RestApiIds::factoryPath, "Factory path for add op (e.g. core.oscillator, filters.svf)")
+				.asOptional())
+			.withProperty(RouteParameter(RestApiIds::parent, "Parent container node ID for add/move ops")
+				.asOptional())
+			.withProperty(RouteParameter(RestApiIds::nodeId, "Node instance ID")
+				.asOptional())
+			.withProperty(RouteParameter(RestApiIds::parameterId, "Parameter name for set/create_parameter ops")
+				.asOptional())
+			.withProperty(RouteParameter(RestApiIds::index, "Position within parent container")
+				.withType(ParamType::Int).asOptional())
+			.withProperty(RouteParameter(RestApiIds::source, "Source node ID for connect/disconnect ops")
+				.asOptional())
+			.withProperty(RouteParameter(RestApiIds::target, "Target node ID for connect/disconnect ops")
+				.asOptional())
+			.withProperty(RouteParameter(RestApiIds::parameter, "Target parameter name for connect/disconnect ops")
+				.asOptional())
+			.withProperty(RouteParameter(RestApiIds::sourceOutput, "Source output name for connect op")
+				.asOptional())
+			.withProperty(RouteParameter(RestApiIds::value, "New value for set op")
+				.asOptional())
+			.withProperty(RouteParameter(RestApiIds::bypassed, "Bypass state for bypass op")
+				.withType(ParamType::Bool).asOptional())
+			.withProperty(RouteParameter(RestApiIds::min, "Minimum value for create_parameter")
+				.withType(ParamType::Float).asOptional())
+			.withProperty(RouteParameter(RestApiIds::max, "Maximum value for create_parameter")
+				.withType(ParamType::Float).asOptional())
+			.withProperty(RouteParameter(RestApiIds::defaultValue, "Default value for create_parameter")
+				.withType(ParamType::Float).asOptional())
+			.withProperty(RouteParameter(RestApiIds::stepSize, "Step size for create_parameter (0 = continuous)")
+				.withType(ParamType::Float).asOptional())
+			.withProperty(RouteParameter(RestApiIds::middlePosition,
+				"Value at 50% of range for create_parameter (computes skew internally, mutually exclusive with skewFactor)")
+				.withType(ParamType::Float).asOptional())
+			.withProperty(RouteParameter(RestApiIds::skewFactor,
+				"Raw skew factor for create_parameter (mutually exclusive with middlePosition)")
+				.withType(ParamType::Float).asOptional());
+
+		auto diffEntry = RouteParameter(Identifier("entry"), "Diff entry")
+			.withType(ParamType::Object)
+			.withProperty(RouteParameter(RestApiIds::target, "Node ID affected"))
+			.withProperty(RouteParameter(RestApiIds::action, "Net action symbol")
+				.withEnumValues({ "+", "-", "*" }))
+			.withProperty(RouteParameter(RestApiIds::domain, "Operation domain")
+				.withExample("dsp"));
+
+		m.add(RouteMetadata(ApiRoute::DspApply, "api/dsp/apply")
+			.withMethod(RestServer::POST)
+			.withCategory("dsp")
+			.withSummary("Apply batched operations to a scriptnode graph")
+			.withDescription("Apply one or more scriptnode operations in a single batch. "
+				"Operations are pre-validated before execution; invalid operations return 400 "
+				"with detailed error info. All operations are undoable via the undo API. "
+				"When called inside an undo group (after push_group), the diff accumulates "
+				"all operations in the group so far. The response contains a diff summary "
+				"with the net effect. Partial failure rolls back the entire batch.")
+			.withReturns("Diff summary showing the net effect of all operations")
+			.withBodyParam(RouteParameter(RestApiIds::networkId, "DspNetwork name")
+				.withExample("MyDSP"))
+			.withBodyParam(RouteParameter(RestApiIds::operations, "Non-empty array of operation objects")
+				.withArrayItems(opItem))
+			.withResponseField(RouteParameter(RestApiIds::scope, "Scope level")
+				.withEnumValues({ "group", "root" }))
+			.withResponseField(RouteParameter(RestApiIds::groupName, "Active group name"))
+			.withResponseField(RouteParameter(RestApiIds::diff, "Array of diff entries")
+				.withArrayItems(diffEntry))
+			.withErrorCodes({ 400, 404 })
+			.withRequestExample(R"({"networkId": "MyDSP", "operations": [{"op": "add", "factoryPath": "core.oscillator", "parent": "MyDSP", "nodeId": "Osc1", "index": 0}, {"op": "set", "nodeId": "Osc1", "parameterId": "Frequency", "value": 880}]})")
+			.withResponseExample(R"({"success": true, "scope": "group", "groupName": "root", "diff": [{"target": "Osc1", "action": "+", "domain": "dsp"}], "logs": [], "errors": []})"));
+	}
 };
 
 const Array<RestHelpers::RouteMetadata>& RestHelpers::getRouteMetadata()
@@ -1289,6 +1445,10 @@ const Array<RestHelpers::RouteMetadata>& RestHelpers::getRouteMetadata()
 			RestApiEndpoints::uiTree(m);
 			RestApiEndpoints::uiApply(m);
 			RestApiEndpoints::testingSequence(m);
+			RestApiEndpoints::dspList(m);
+			RestApiEndpoints::dspInit(m);
+			RestApiEndpoints::dspTree(m);
+			RestApiEndpoints::dspApply(m);
 
 			// Verify count matches enum
 			jassert(m.size() == (int)ApiRoute::numRoutes);

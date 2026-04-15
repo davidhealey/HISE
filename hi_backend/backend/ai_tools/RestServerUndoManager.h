@@ -299,6 +299,7 @@ struct RestServerUndoManager
 		Undefined  = 0x0,
 		Builder    = 0x01, // modify the module tree
 		UI         = 0x02, // modify the script components
+		DSP        = 0x03, // modify the scriptnode graph
 		numDomains
 	};
 
@@ -501,7 +502,8 @@ struct RestServerUndoManager
 		return {
 			"*",
 			"builder",
-			"ui"
+			"ui",
+			"dsp"
 		};
 	}
 

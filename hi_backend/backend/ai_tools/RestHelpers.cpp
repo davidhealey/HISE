@@ -4822,4 +4822,32 @@ RestServer::Response RestHelpers::handleTestingSequence(BackendProcessor* bp,
 	return RestServer::Response::ok(var(result.get()));
 }
 
+// ============================================================================
+// DSP (scriptnode) endpoint stubs
+// ============================================================================
+
+RestServer::Response RestHelpers::handleDspList(MainController* mc,
+                                                 RestServer::AsyncRequest::Ptr req)
+{
+	return req->fail(501, "not yet implemented");
+}
+
+RestServer::Response RestHelpers::handleDspInit(MainController* mc,
+                                                 RestServer::AsyncRequest::Ptr req)
+{
+	return req->fail(501, "not yet implemented");
+}
+
+RestServer::Response RestHelpers::handleDspTree(MainController* mc,
+                                                 RestServer::AsyncRequest::Ptr req)
+{
+	return req->fail(501, "not yet implemented");
+}
+
+RestServer::Response RestHelpers::handleDspApply(MainController* mc,
+                                                  RestServer::AsyncRequest::Ptr req)
+{
+	return req->fail(501, "not yet implemented");
+}
+
 } // namespace hise

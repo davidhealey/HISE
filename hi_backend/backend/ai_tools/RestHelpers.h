@@ -89,6 +89,10 @@ struct RestHelpers
         UITree,                 ///< GET  /api/ui/tree - Get UI component tree hierarchy
         UIApply,                ///< POST /api/ui/apply - Apply operations to UI component tree
         TestingSequence,        ///< POST /api/testing/sequence - Run timed test sequence (MIDI, attributes, REPL, signals)
+        DspList,                ///< GET  /api/dsp/list - List available DspNetwork names
+        DspInit,                ///< POST /api/dsp/init - Create/load a DspNetwork
+        DspTree,                ///< GET  /api/dsp/tree - Get scriptnode network hierarchy
+        DspApply,               ///< POST /api/dsp/apply - Apply operations to scriptnode graph
         numRoutes
     };
     
@@ -775,6 +779,22 @@ struct RestHelpers
     /** Handler for POST /api/testing/sequence - Run timed test sequence */
     static RestServer::Response handleTestingSequence(BackendProcessor* bp,
                                                        RestServer::AsyncRequest::Ptr req);
+
+    /** Handler for GET /api/dsp/list - List available DspNetwork names */
+    static RestServer::Response handleDspList(MainController* mc,
+                                              RestServer::AsyncRequest::Ptr req);
+
+    /** Handler for POST /api/dsp/init - Create/load a DspNetwork */
+    static RestServer::Response handleDspInit(MainController* mc,
+                                              RestServer::AsyncRequest::Ptr req);
+
+    /** Handler for GET /api/dsp/tree - Get scriptnode network hierarchy */
+    static RestServer::Response handleDspTree(MainController* mc,
+                                              RestServer::AsyncRequest::Ptr req);
+
+    /** Handler for POST /api/dsp/apply - Apply operations to scriptnode graph */
+    static RestServer::Response handleDspApply(MainController* mc,
+                                               RestServer::AsyncRequest::Ptr req);
 
 #if HISE_INCLUDE_PROFILING_TOOLKIT
     /** Query options for filtering and summarizing profiling results. */

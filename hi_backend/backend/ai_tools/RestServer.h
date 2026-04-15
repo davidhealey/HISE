@@ -286,6 +286,19 @@ namespace RestApiIds
     DECLARE_ID(endFrequency);         // Sweep end frequency in Hz
     DECLARE_ID(recordOutput);         // File path to record audio output to WAV
 
+    // dsp (scriptnode)
+    DECLARE_ID(networkId);            // DspNetwork name
+    DECLARE_ID(nodeId);               // Node instance ID within a network
+    DECLARE_ID(factoryPath);          // Node factory path (e.g. core.oscillator)
+    DECLARE_ID(embedded);             // Whether network is embedded (vs file-based)
+    DECLARE_ID(networks);             // Array of network names
+    DECLARE_ID(connections);          // Array of connection objects in tree
+    DECLARE_ID(sourceOutput);         // Connection source output name
+    DECLARE_ID(parameter);            // Parameter ID for connect/disconnect
+    DECLARE_ID(stepSize);             // Parameter step size
+    DECLARE_ID(middlePosition);       // Parameter middle position
+    DECLARE_ID(skewFactor);           // Parameter skew factor
+
 }
 
 #undef DECLARE_ID
