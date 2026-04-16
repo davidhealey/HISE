@@ -70,6 +70,7 @@ namespace RestApiIds
     DECLARE_ID(name);
     DECLARE_ID(required);
     DECLARE_ID(defaultValue);
+    DECLARE_ID(inverted);
 
     // status response
     DECLARE_ID(server);
@@ -287,7 +288,6 @@ namespace RestApiIds
     DECLARE_ID(recordOutput);         // File path to record audio output to WAV
 
     // dsp (scriptnode)
-    DECLARE_ID(networkId);            // DspNetwork name
     DECLARE_ID(nodeId);               // Node instance ID within a network
     DECLARE_ID(factoryPath);          // Node factory path (e.g. core.oscillator)
     DECLARE_ID(embedded);             // Whether network is embedded (vs file-based)

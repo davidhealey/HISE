@@ -62,7 +62,7 @@ END_JUCE_MODULE_DECLARATION
 Set this to 1 to include the big base 64 database dump. 
 */
 #ifndef HISE_INCLUDE_SCRIPTNODE_DATABASE
-#define HISE_INCLUDE_SCRIPTNODE_DATABASE 0
+#define HISE_INCLUDE_SCRIPTNODE_DATABASE 1
 #endif
 
 

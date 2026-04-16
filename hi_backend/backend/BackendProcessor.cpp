@@ -398,6 +398,9 @@ RestServer::Response BackendProcessor::onAsyncRequest(RestServer::AsyncRequest::
 	case RestHelpers::ApiRoute::DspApply:
 		return RestHelpers::handleDspApply(this, req);
 
+	case RestHelpers::ApiRoute::DspSave:
+		return RestHelpers::handleDspSave(this, req);
+
 	default:
 		return req->fail(404, "Unknown API endpoint: " + subURL);
 	}

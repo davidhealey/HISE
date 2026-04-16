@@ -93,6 +93,7 @@ struct RestHelpers
         DspInit,                ///< POST /api/dsp/init - Create/load a DspNetwork
         DspTree,                ///< GET  /api/dsp/tree - Get scriptnode network hierarchy
         DspApply,               ///< POST /api/dsp/apply - Apply operations to scriptnode graph
+        DspSave,                ///< POST /api/dsp/save - Save DspNetwork to XML file
         numRoutes
     };
     
@@ -795,6 +796,10 @@ struct RestHelpers
     /** Handler for POST /api/dsp/apply - Apply operations to scriptnode graph */
     static RestServer::Response handleDspApply(MainController* mc,
                                                RestServer::AsyncRequest::Ptr req);
+
+    /** Handler for POST /api/dsp/save - Save DspNetwork to XML file */
+    static RestServer::Response handleDspSave(MainController* mc,
+                                              RestServer::AsyncRequest::Ptr req);
 
 #if HISE_INCLUDE_PROFILING_TOOLKIT
     /** Query options for filtering and summarizing profiling results. */

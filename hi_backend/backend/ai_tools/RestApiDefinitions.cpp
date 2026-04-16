@@ -801,7 +801,8 @@ struct RestApiEndpoints
 			.withDescription("Apply one or more operations to the module tree in a single batch. "
 				"When called inside an undo group (after push_group), the diff accumulates all operations in the group so far. "
 				"The response contains a diff summary with the net effect - if a module was added and then modified, it shows as '+'. "
-				"Operations are pre-validated before execution; invalid operations return 400 with detailed error info.")
+				"Operations are pre-validated before execution; invalid operations return 400 with detailed error info. "
+				"Partial failure rolls back the entire batch.")
 			.withReturns("Diff summary showing the net effect of all operations")
 			.withBodyParam(RouteParameter(RestApiIds::operations, "Non-empty array of operation objects")
 				.withArrayItems(opItem))
@@ -1133,6 +1134,7 @@ struct RestApiEndpoints
 			.withDescription("Apply one or more UI component operations (add, remove, set, move, rename) "
 				"in a single batch. Operations are pre-validated before execution; invalid operations "
 				"return 400 with detailed error info. All operations are undoable via the undo API. "
+				"Partial failure rolls back the entire batch. "
 				"Component types: ScriptButton, ScriptSlider, ScriptPanel, ScriptComboBox, ScriptLabel, "
 				"ScriptTable, ScriptImage, etc.")
 			.withReturns("Diff of changes with domain='ui', action symbols (+/-/*), and target component IDs")
@@ -1270,14 +1272,14 @@ struct RestApiEndpoints
 			.withMethod(RestServer::POST)
 			.withCategory("dsp")
 			.withSummary("Create or load a DspNetwork")
-			.withDescription("Creates a new DspNetwork or loads an existing one. If the network "
-				"XML file does not exist, it is created. If it already exists, it is loaded. "
-				"Returns the initial tree in the result field (same shape as GET /api/dsp/tree) "
-				"plus filePath (absolute path to the .xml file, empty for embedded networks) "
-				"and embedded (whether the network is embedded). "
+			.withDescription("Creates a new DspNetwork or loads an existing one via the module's "
+				"DspNetwork::Holder. If the network XML file does not exist, it is created. "
+				"If it already exists, it is loaded. Returns the initial tree in the result field "
+				"(same shape as GET /api/dsp/tree) plus filePath and embedded flag. "
 				"The name is sanitized to a valid C++ identifier.")
 			.withReturns("Initial network tree plus filePath and embedded flag")
-			.withBodyParam(RouteParameter(RestApiIds::networkId, "Network name")
+			.withModuleIdParam()
+			.withBodyParam(RouteParameter(RestApiIds::name, "Network name to create or load")
 				.withExample("MyDSP"))
 			.withBodyParam(RouteParameter(RestApiIds::embedded,
 				"Create as embedded network rather than file-based")
@@ -1286,8 +1288,8 @@ struct RestApiEndpoints
 			.withResponseField(RouteParameter(RestApiIds::embedded, "Whether the network is embedded")
 				.withType(ParamType::Bool))
 			.withErrorCodes({ 400, 404 })
-			.withRequestExample(R"({"networkId": "MyDSP"})")
-			.withResponseExample("{\"success\": true, \"result\": {\"networkId\": \"MyDSP\", \"factoryPath\": \"container.chain\", \"bypassed\": false, \"parameters\": [], \"connections\": [], \"children\": []}, \"filePath\": \"D:/Projects/MyPlugin/DspNetworks/MyDSP.xml\", \"embedded\": false, \"logs\": [], \"errors\": []}"));
+			.withRequestExample(R"({"moduleId": "Script FX1", "name": "MyDSP"})")
+			.withResponseExample("{\"success\": true, \"result\": {\"nodeId\": \"MyDSP\", \"factoryPath\": \"container.chain\", \"bypassed\": false, \"parameters\": [], \"connections\": [], \"children\": []}, \"filePath\": \"D:/Projects/MyPlugin/DspNetworks/MyDSP.xml\", \"embedded\": false, \"logs\": [], \"errors\": []}"));
 	}
 
 	static void dspTree(Array<RouteMetadata>& m)
@@ -1295,20 +1297,26 @@ struct RestApiEndpoints
 		m.add(RouteMetadata(ApiRoute::DspTree, "api/dsp/tree")
 			.withCategory("dsp")
 			.withSummary("Get scriptnode network hierarchy")
-			.withDescription("Returns the nested JSON tree of the scriptnode network. Each node "
-				"contains its nodeId, factoryPath, bypass state, parameters, modulation connections, "
-				"and child nodes. The root node's nodeId matches the networkId. "
+			.withDescription("Returns the nested JSON tree of the active DspNetwork for the given "
+				"module. Each node contains its nodeId, factoryPath, bypass state, parameters, "
+				"and child nodes. Container nodes also have a connections array listing all "
+				"modulation edges within that container (source, sourceOutput, target, parameter). "
 				"Use verbose=true to include full parameter range metadata "
-				"(min, max, stepSize, middlePosition, defaultValue).")
-			.withReturns("Recursive node tree with parameters, connections, and children")
-			.withQueryParam(RouteParameter(RestApiIds::networkId, "DspNetwork name")
-				.withExample("MyDSP"))
+				"(min, max, stepSize, middlePosition, defaultValue). "
+				"Use group=current inside an undo group (after push_group) to read the accumulated "
+				"plan-mode snapshot before the group is committed -- returns 400 if there is no "
+				"active DSP validation state, 501 for any group value other than 'current'.")
+			.withReturns("Recursive node tree with parameters, connections on containers, and children")
+			.withModuleIdParam()
 			.withQueryParam(RouteParameter(RestApiIds::verbose,
 				"Include full parameter range metadata")
 				.withType(ParamType::Bool).withDefault("false"))
-			.withErrorCodes({ 404 })
-			.withRequestExample(R"(GET /api/dsp/tree?networkId=MyDSP)")
-			.withResponseExample(R"({"success": true, "result": {"nodeId": "MyDSP", "factoryPath": "container.chain", "bypassed": false, "parameters": [], "connections": [], "children": [{"nodeId": "Osc1", "factoryPath": "core.oscillator", "bypassed": false, "parameters": [{"parameterId": "Frequency", "value": 440}], "connections": [], "children": []}]}, "logs": [], "errors": []})"));
+			.withQueryParam(RouteParameter(RestApiIds::group,
+				"Optional group selector. 'current' returns the active plan's validation tree "
+				"(accumulated state inside an undo group, before commit)").asOptional())
+			.withErrorCodes({ 400, 404, 501 })
+			.withRequestExample(R"(GET /api/dsp/tree?moduleId=Script%20FX1)")
+			.withResponseExample(R"({"success": true, "result": {"nodeId": "MyDSP", "factoryPath": "container.chain", "bypassed": false, "parameters": [], "connections": [{"source": "PMA1", "sourceOutput": 0, "target": "Osc1", "parameter": "Frequency"}], "children": [{"nodeId": "PMA1", "factoryPath": "control.pma", "bypassed": false, "parameters": [{"parameterId": "Value", "value": 0.0}], "children": []}, {"nodeId": "Osc1", "factoryPath": "core.oscillator", "bypassed": false, "parameters": [{"parameterId": "Frequency", "value": 440}], "children": []}]}, "logs": [], "errors": []})"));
 	}
 
 	static void dspApply(Array<RouteMetadata>& m)
@@ -1316,10 +1324,14 @@ struct RestApiEndpoints
 		auto opItem = RouteParameter(RestApiIds::op, "DSP operation object")
 			.withType(ParamType::Object)
 			.withDiscriminator("op")
-			.withVariant("add", "Add a node (factoryPath, parent, nodeId?, index?)")
+			.withVariant("add", "Add a node (factoryPath, parent, nodeId?, index?). "
+				"If nodeId is provided, it must be unique - returns error if a node with that ID already exists. "
+				"If nodeId is omitted, it is derived from the factory path suffix with a unique trailing index "
+				"(e.g. container.chain => chain1, core.oscillator => oscillator1)")
 			.withVariant("remove", "Remove a node (nodeId)")
 			.withVariant("move", "Move a node to a different container (nodeId, parent, index?)")
-			.withVariant("connect", "Connect a modulation source to a parameter (source, target, parameter, sourceOutput?)")
+			.withVariant("connect", "Connect a modulation source to a parameter (source, target, parameter, sourceOutput?). "
+				"sourceOutput is a parameter name (string) or output slot index (int) for multi-output mod nodes")
 			.withVariant("disconnect", "Disconnect a modulation source (source, target, parameter)")
 			.withVariant("set", "Set a parameter value or node property (nodeId, parameterId, value). "
 				"When nodeId is the root network node, also supports network-level properties: "
@@ -1347,7 +1359,8 @@ struct RestApiEndpoints
 				.asOptional())
 			.withProperty(RouteParameter(RestApiIds::parameter, "Target parameter name for connect/disconnect ops")
 				.asOptional())
-			.withProperty(RouteParameter(RestApiIds::sourceOutput, "Source output name for connect op")
+			.withProperty(RouteParameter(RestApiIds::sourceOutput,
+				"Source output for connect op: parameter name (string) or output slot index (int) for multi-output mod nodes")
 				.asOptional())
 			.withProperty(RouteParameter(RestApiIds::value, "New value for set op")
 				.asOptional())
@@ -1387,8 +1400,8 @@ struct RestApiEndpoints
 				"all operations in the group so far. The response contains a diff summary "
 				"with the net effect. Partial failure rolls back the entire batch.")
 			.withReturns("Diff summary showing the net effect of all operations")
-			.withBodyParam(RouteParameter(RestApiIds::networkId, "DspNetwork name")
-				.withExample("MyDSP"))
+			.withBodyParam(RouteParameter(RestApiIds::moduleId, "Module ID of the DspNetwork holder")
+				.withExample("Script FX1"))
 			.withBodyParam(RouteParameter(RestApiIds::operations, "Non-empty array of operation objects")
 				.withArrayItems(opItem))
 			.withResponseField(RouteParameter(RestApiIds::scope, "Scope level")
@@ -1397,8 +1410,25 @@ struct RestApiEndpoints
 			.withResponseField(RouteParameter(RestApiIds::diff, "Array of diff entries")
 				.withArrayItems(diffEntry))
 			.withErrorCodes({ 400, 404 })
-			.withRequestExample(R"({"networkId": "MyDSP", "operations": [{"op": "add", "factoryPath": "core.oscillator", "parent": "MyDSP", "nodeId": "Osc1", "index": 0}, {"op": "set", "nodeId": "Osc1", "parameterId": "Frequency", "value": 880}]})")
+			.withRequestExample(R"({"moduleId": "Script FX1", "operations": [{"op": "add", "factoryPath": "core.oscillator", "parent": "MyDSP", "nodeId": "Osc1", "index": 0}, {"op": "set", "nodeId": "Osc1", "parameterId": "Frequency", "value": 880}]})")
 			.withResponseExample(R"({"success": true, "scope": "group", "groupName": "root", "diff": [{"target": "Osc1", "action": "+", "domain": "dsp"}], "logs": [], "errors": []})"));
+	}
+
+	static void dspSave(Array<RouteMetadata>& m)
+	{
+		m.add(RouteMetadata(ApiRoute::DspSave, "api/dsp/save")
+			.withMethod(RestServer::POST)
+			.withCategory("dsp")
+			.withSummary("Save the active DspNetwork to its XML file")
+			.withDescription("Saves the current state of the active DspNetwork to its XML file "
+				"on disk. Fails if the network is embedded (embedded networks have no file-based "
+				"representation).")
+			.withReturns("File path of the saved network")
+			.withModuleIdParam()
+			.withResponseField(RouteParameter(RestApiIds::filePath, "Absolute path to the saved .xml file"))
+			.withErrorCodes({ 400, 404 })
+			.withRequestExample(R"({"moduleId": "Script FX"})")
+			.withResponseExample("{\"success\": true, \"filePath\": \"D:/Projects/MyPlugin/DspNetworks/Networks/MyDSP.xml\", \"logs\": [], \"errors\": []}"));
 	}
 };
 
@@ -1449,6 +1479,7 @@ const Array<RestHelpers::RouteMetadata>& RestHelpers::getRouteMetadata()
 			RestApiEndpoints::dspInit(m);
 			RestApiEndpoints::dspTree(m);
 			RestApiEndpoints::dspApply(m);
+			RestApiEndpoints::dspSave(m);
 
 			// Verify count matches enum
 			jassert(m.size() == (int)ApiRoute::numRoutes);

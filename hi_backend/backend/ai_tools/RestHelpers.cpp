@@ -4823,31 +4823,411 @@ RestServer::Response RestHelpers::handleTestingSequence(BackendProcessor* bp,
 }
 
 // ============================================================================
-// DSP (scriptnode) endpoint stubs
+// DSP (scriptnode) endpoints
 // ============================================================================
+
+using namespace scriptnode;
+
+static DspNetwork::Holder* getNetworkHolder(MainController* mc, const String& moduleId)
+{
+	auto p = ProcessorHelpers::getFirstProcessorWithName(mc->getMainSynthChain(), moduleId);
+
+	if (p == nullptr)
+		return nullptr;
+
+	return dynamic_cast<DspNetwork::Holder*>(p);
+}
+
+static DspNetwork* getActiveNetwork(MainController* mc, const String& moduleId)
+{
+	if (auto holder = getNetworkHolder(mc, moduleId))
+		return holder->getActiveOrDebuggedNetwork();
+
+	return nullptr;
+}
+
+static var buildDspNodeTree(const ValueTree& nodeTree, bool verbose, bool includeConnections)
+{
+	DynamicObject::Ptr obj = new DynamicObject();
+
+	obj->setProperty(RestApiIds::nodeId, nodeTree[PropertyIds::ID].toString());
+	obj->setProperty(RestApiIds::factoryPath, nodeTree[PropertyIds::FactoryPath].toString());
+	obj->setProperty(RestApiIds::bypassed, (bool)nodeTree[PropertyIds::Bypassed]);
+
+	// Parameters
+	Array<var> params;
+	auto paramTree = nodeTree.getChildWithName(PropertyIds::Parameters);
+
+	for (int i = 0; i < paramTree.getNumChildren(); i++)
+	{
+		auto p = paramTree.getChild(i);
+		DynamicObject::Ptr paramObj = new DynamicObject();
+		paramObj->setProperty(RestApiIds::parameterId, p[PropertyIds::ID].toString());
+		paramObj->setProperty(RestApiIds::value, p[PropertyIds::Value]);
+
+		if (verbose)
+		{
+			paramObj->setProperty(RestApiIds::min, p.getProperty(PropertyIds::MinValue, 0.0));
+			paramObj->setProperty(RestApiIds::max, p.getProperty(PropertyIds::MaxValue, 1.0));
+			paramObj->setProperty(RestApiIds::stepSize, p.getProperty(PropertyIds::StepSize, 0.0));
+			paramObj->setProperty(RestApiIds::defaultValue, p.getProperty(PropertyIds::DefaultValue, 0.0));
+
+			auto skew = (double)p.getProperty(PropertyIds::SkewFactor, 1.0);
+			if (skew != 1.0)
+			{
+				auto minVal = (double)p.getProperty(PropertyIds::MinValue, 0.0);
+				auto maxVal = (double)p.getProperty(PropertyIds::MaxValue, 1.0);
+				auto mid = minVal + (maxVal - minVal) * std::pow(0.5, skew);
+				paramObj->setProperty(RestApiIds::middlePosition, mid);
+			}
+		}
+
+		params.add(var(paramObj.get()));
+	}
+
+	obj->setProperty(RestApiIds::parameters, var(params));
+
+	if (includeConnections)
+	{
+		// Connections (modulation targets on parameters)
+		Array<var> connections;
+
+		valuetree::Helpers::forEach(nodeTree, [&](const ValueTree& c)
+			{
+				if (c.getType() == PropertyIds::Connection)
+				{
+					auto parentId = valuetree::Helpers::findParentWithType(c, PropertyIds::Node)[PropertyIds::ID].toString();
+
+					DynamicObject::Ptr np = new DynamicObject();
+					np->setProperty(RestApiIds::source, parentId);
+
+					auto pParent = valuetree::Helpers::findParentWithType(c, PropertyIds::Parameter);
+					auto mParent = valuetree::Helpers::findParentWithType(c, PropertyIds::ModulationTargets);
+					auto sParent = valuetree::Helpers::findParentWithType(c, PropertyIds::SwitchTarget);
+
+					if (pParent.isValid())
+						np->setProperty(RestApiIds::sourceOutput, pParent[PropertyIds::ID]);
+					else if (mParent.isValid())
+						np->setProperty(RestApiIds::sourceOutput, 0);
+					else
+						np->setProperty(RestApiIds::sourceOutput, sParent.getParent().indexOf(sParent));
+
+					np->setProperty(RestApiIds::target, c[PropertyIds::NodeId]);
+					np->setProperty(RestApiIds::parameter, c[PropertyIds::ParameterId]);
+
+					connections.add(var(np.get()));
+				}
+
+				return false;
+			});
+
+		obj->setProperty(RestApiIds::connections, var(connections));
+	}
+
+	// Children
+	Array<var> children;
+	auto nodesTree = nodeTree.getChildWithName(PropertyIds::Nodes);
+
+	for (int i = 0; i < nodesTree.getNumChildren(); i++)
+		children.add(buildDspNodeTree(nodesTree.getChild(i), verbose, false));
+
+	obj->setProperty(RestApiIds::children, var(children));
+
+	return var(obj.get());
+}
 
 RestServer::Response RestHelpers::handleDspList(MainController* mc,
                                                  RestServer::AsyncRequest::Ptr req)
 {
-	return req->fail(501, "not yet implemented");
+	StringArray networkNames;
+
+	// Scan on-disk .xml files
+	auto files = BackendDllManager::getNetworkFiles(mc, false);
+	for (auto& f : files)
+		networkNames.addIfNotAlreadyThere(f.getFileNameWithoutExtension());
+
+	// Also include in-memory networks from any holder
+	Processor::Iterator<JavascriptProcessor> iter(mc->getMainSynthChain());
+
+	while (auto jp = iter.getNextProcessor())
+	{
+		if (auto holder = dynamic_cast<DspNetwork::Holder*>(jp))
+		{
+			for (auto& id : holder->getIdList())
+				networkNames.addIfNotAlreadyThere(id);
+		}
+	}
+
+	Array<var> nameArray;
+	for (auto& n : networkNames)
+		nameArray.add(n);
+
+	DynamicObject::Ptr result = new DynamicObject();
+	result->setProperty(RestApiIds::success, true);
+	result->setProperty(RestApiIds::networks, var(nameArray));
+	result->setProperty(RestApiIds::logs, Array<var>());
+	result->setProperty(RestApiIds::errors, Array<var>());
+
+	req->complete(RestServer::Response::ok(var(result.get())));
+	return req->waitForResponse();
 }
 
 RestServer::Response RestHelpers::handleDspInit(MainController* mc,
                                                  RestServer::AsyncRequest::Ptr req)
 {
-	return req->fail(501, "not yet implemented");
+	auto obj = req->getRequest().getJsonBody();
+	auto mid = obj[RestApiIds::moduleId].toString();
+	auto networkName = obj[RestApiIds::name].toString();
+
+	if (mid.isEmpty())
+		return req->fail(400, "moduleId is required");
+
+	if (networkName.isEmpty())
+		return req->fail(400, "name is required");
+
+	bool embedded = (bool)obj.getProperty(RestApiIds::embedded, false);
+
+	auto holder = getNetworkHolder(mc, mid);
+	if (holder == nullptr)
+		return req->fail(404, "Module " + mid + " is not a DspNetwork holder");
+
+	auto network = holder->getOrCreate(networkName);
+	if (network == nullptr)
+		return req->fail(500, "Failed to create network " + networkName);
+
+	auto p = dynamic_cast<Processor*>(holder);
+
+	network->prepareToPlay(p->getSampleRate(), p->getLargestBlockSize());
+
+	auto tree = network->getValueTree();
+	auto rootNode = tree.getChild(0); // First child is the root container node
+
+	var treeJson = buildDspNodeTree(rootNode, false, true);
+
+	// Resolve file path (always return expected path, even if not yet saved)
+	String filePath;
+	if (!embedded)
+	{
+		auto networkFolder = BackendDllManager::getSubFolder(mc, BackendDllManager::FolderSubType::Networks);
+		filePath = networkFolder.getChildFile(networkName).withFileExtension("xml").getFullPathName();
+	}
+
+	DynamicObject::Ptr result = new DynamicObject();
+	result->setProperty(RestApiIds::success, true);
+	result->setProperty(RestApiIds::result, treeJson);
+	result->setProperty(RestApiIds::filePath, filePath);
+	result->setProperty(RestApiIds::embedded, embedded);
+	result->setProperty(RestApiIds::logs, Array<var>());
+	result->setProperty(RestApiIds::errors, Array<var>());
+
+	req->complete(RestServer::Response::ok(var(result.get())));
+	return req->waitForResponse();
 }
 
 RestServer::Response RestHelpers::handleDspTree(MainController* mc,
                                                  RestServer::AsyncRequest::Ptr req)
 {
-	return req->fail(501, "not yet implemented");
+	auto mid = req->getRequest()[RestApiIds::moduleId];
+
+	if (mid.isEmpty())
+		return req->fail(400, "moduleId query parameter is required");
+
+	bool verbose = req->getRequest().getTrueValue(RestApiIds::verbose);
+	auto group = req->getRequest()[RestApiIds::group];
+
+	ValueTree rootNode;
+
+	if (group.isNotEmpty())
+	{
+		if (group != "current")
+			return req->fail(501, "only 'current' group is supported");
+
+		auto um = RestServerUndoManager::Instance::getOrCreate(mc, ApiRoute::DspTree);
+		auto dspState = um->getCurrentDspValidationState();
+
+		if (dspState == nullptr || !dspState->networkTree.isValid())
+			return req->fail(400, "No current DSP validation state");
+
+		// networkTree is the Network-typed ValueTree; root Node is first child.
+		rootNode = dspState->networkTree.getChild(0);
+	}
+	else
+	{
+		auto network = getActiveNetwork(mc, mid);
+		if (network == nullptr)
+			return req->fail(404, "No active DspNetwork for module: " + mid);
+
+		auto tree = network->getValueTree();
+		rootNode = tree.getChild(0);
+	}
+
+	var treeJson = buildDspNodeTree(rootNode, verbose, true);
+
+	DynamicObject::Ptr result = new DynamicObject();
+	result->setProperty(RestApiIds::success, true);
+	result->setProperty(RestApiIds::result, treeJson);
+	result->setProperty(RestApiIds::logs, Array<var>());
+	result->setProperty(RestApiIds::errors, Array<var>());
+
+	req->complete(RestServer::Response::ok(var(result.get())));
+	return req->waitForResponse();
 }
 
 RestServer::Response RestHelpers::handleDspApply(MainController* mc,
                                                   RestServer::AsyncRequest::Ptr req)
 {
-	return req->fail(501, "not yet implemented");
+	static constexpr ApiRoute CurrentEndpoint = ApiRoute::DspApply;
+
+	std::vector<RestServerUndoManager::CallStack> errorCallstack;
+
+	req->setUseCustomErrors(true);
+	auto obj = req->getRequest().getJsonBody();
+
+	auto mid = obj[RestApiIds::moduleId].toString();
+	if (mid.isEmpty())
+		return req->fail(400, "moduleId is required");
+
+	auto network = getActiveNetwork(mc, mid);
+	if (network == nullptr)
+		return req->fail(404, "No active DspNetwork for module: " + mid);
+
+	auto ops = obj[RestApiIds::operations];
+	if (!ops.isArray())
+		return req->fail(400, "operations must be an array");
+
+	if (ops.size() == 0)
+		return req->fail(400, "operations array must not be empty");
+
+	// Inject moduleId into each operation so action classes can resolve the network
+	for (int i = 0; i < ops.size(); i++)
+	{
+		if (auto* opObj = ops[i].getDynamicObject())
+			opObj->setProperty(RestApiIds::moduleId, mid);
+	}
+
+	auto noErrors = true;
+	auto um = RestServerUndoManager::Instance::getOrCreate(mc, CurrentEndpoint);
+
+	// Phase 1: Validate required fields per operation type
+	for (int i = 0; i < ops.size(); i++)
+	{
+		auto ok = um->prevalidate(RestServerUndoManager::Domain::DSP, ops[i]);
+
+		if (!ok)
+		{
+			noErrors = false;
+
+			errorCallstack.push_back(RestServerUndoManager::CallStack(ok.getErrorMessage())
+				.withGroup(um->getCurrentGroupId())
+				.withPhase(RestServerUndoManager::CallStack::Phase::Prevalidation)
+				.withOperation(i, ops[i][RestApiIds::op].toString())
+				.withEndpoint(CurrentEndpoint));
+		}
+	}
+
+	if (!noErrors)
+	{
+		DynamicObject::Ptr result = new DynamicObject();
+		result->setProperty(RestApiIds::success, false);
+		result->setProperty(RestApiIds::result, var());
+		result->setProperty(RestApiIds::logs, Array<var>());
+		result->setProperty(RestApiIds::errors, RestServerUndoManager::CallStack::toJSONList(errorCallstack));
+		req->complete(RestServer::Response::ok(var(result.get())));
+		return req->waitForResponse();
+	}
+
+	// Phase 2: Create actions and validate semantics
+	using ActionBase = RestServerUndoManager::ActionBase;
+	ActionBase::List actions;
+
+	for (int i = 0; i < ops.size(); i++)
+	{
+		auto ad = um->createAction(RestServerUndoManager::Domain::DSP, ops[i]);
+		auto ok = ad->validate();
+
+		if (ok)
+			actions.add(ad);
+		else
+		{
+			errorCallstack.push_back(RestServerUndoManager::CallStack(ok.getErrorMessage())
+				.withGroup(um->getCurrentGroupId())
+				.withPhase(RestServerUndoManager::CallStack::Phase::Validation)
+				.withOperation(i, ad->getDescription())
+				.withEndpoint(CurrentEndpoint));
+
+			noErrors = false;
+		}
+	}
+
+	if (!noErrors)
+	{
+		DynamicObject::Ptr result = new DynamicObject();
+		result->setProperty(RestApiIds::success, false);
+		result->setProperty(RestApiIds::result, var());
+		result->setProperty(RestApiIds::logs, Array<var>());
+		result->setProperty(RestApiIds::errors, RestServerUndoManager::CallStack::toJSONList(errorCallstack));
+		req->complete(RestServer::Response::ok(var(result.get())));
+		return req->waitForResponse();
+	}
+
+	// Phase 3: Execute via undo manager
+	um->setValidationErrors(errorCallstack);
+
+	um->performAction(req, actions, [](ActionBase::List l, bool undo)
+	{
+		if (!l.isEmpty())
+		{
+			auto mc = l.getFirst()->getMainController();
+
+			for (auto a : l)
+				debugToConsole(mc->getMainSynthChain(), a->getHistoryMessage(undo));
+		}
+	});
+
+	return req->waitForResponse();
+}
+
+RestServer::Response RestHelpers::handleDspSave(MainController* mc,
+                                                 RestServer::AsyncRequest::Ptr req)
+{
+	auto obj = req->getRequest().getJsonBody();
+	auto mid = obj[RestApiIds::moduleId].toString();
+
+	if (mid.isEmpty())
+		return req->fail(400, "moduleId is required");
+
+	auto holder = getNetworkHolder(mc, mid);
+	if (holder == nullptr)
+		return req->fail(404, "Module " + mid + " is not a DspNetwork holder");
+
+	auto network = getActiveNetwork(mc, mid);
+	if (network == nullptr)
+		return req->fail(404, "No active DspNetwork for module: " + mid);
+
+	auto networkName = network->getId();
+	auto networkFolder = BackendDllManager::getSubFolder(mc, BackendDllManager::FolderSubType::Networks);
+	auto targetFile = networkFolder.getChildFile(networkName).withFileExtension("xml");
+
+	// Embedded networks have no file representation
+	if (!targetFile.getParentDirectory().isDirectory())
+		return req->fail(400, "Cannot save embedded network to file");
+
+	auto xml = network->getValueTree().createXml();
+
+	if (xml == nullptr)
+		return req->fail(500, "Failed to serialize network");
+
+	if (!xml->writeTo(targetFile))
+		return req->fail(500, "Failed to write to " + targetFile.getFullPathName());
+
+	DynamicObject::Ptr result = new DynamicObject();
+	result->setProperty(RestApiIds::success, true);
+	result->setProperty(RestApiIds::filePath, targetFile.getFullPathName());
+	result->setProperty(RestApiIds::logs, Array<var>());
+	result->setProperty(RestApiIds::errors, Array<var>());
+
+	req->complete(RestServer::Response::ok(var(result.get())));
+	return req->waitForResponse();
 }
 
 } // namespace hise

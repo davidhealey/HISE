@@ -119,6 +119,16 @@ void RestServerUndoManager::Factory::registerAllFunctions()
 	registerCreatorFunctionT<rest_undo::ui::set>(Domain::UI);
 	registerCreatorFunctionT<rest_undo::ui::move>(Domain::UI);
 	registerCreatorFunctionT<rest_undo::ui::rename>(Domain::UI);
+
+	registerCreatorFunctionT<rest_undo::dsp::add>(Domain::DSP);
+	registerCreatorFunctionT<rest_undo::dsp::remove>(Domain::DSP);
+	registerCreatorFunctionT<rest_undo::dsp::move>(Domain::DSP);
+	registerCreatorFunctionT<rest_undo::dsp::connect>(Domain::DSP);
+	registerCreatorFunctionT<rest_undo::dsp::disconnect>(Domain::DSP);
+	registerCreatorFunctionT<rest_undo::dsp::set>(Domain::DSP);
+	registerCreatorFunctionT<rest_undo::dsp::bypass>(Domain::DSP);
+	registerCreatorFunctionT<rest_undo::dsp::create_parameter>(Domain::DSP);
+	registerCreatorFunctionT<rest_undo::dsp::clear>(Domain::DSP);
 }
 
 hise::RestServerUndoManager::Instance* RestServerUndoManager::Instance::getOrCreate(MainController* mc, RestHelpers::ApiRoute endpoint)
@@ -190,6 +200,15 @@ bool RestServerUndoManager::Instance::killVoicesAndPerform(AsyncRequest::Ptr req
 
 		if ((a->getRebuildLevel(Domain::Builder, shouldUndo) & RebuildLevel::UpdateUI) != 0)
 			flushUI(getMainController()->getMainSynthChain());
+
+		if ((a->getRebuildLevel(Domain::Undefined, shouldUndo) & RebuildLevel::ParameterSlots) != 0)
+		{
+			auto moduleId = a->getModuleId();
+
+			if(auto p = ProcessorHelpers::getFirstProcessorWithName(getMainController()->getMainSynthChain(), moduleId))
+				p->updateParameterSlots(-1);
+		}
+			
 
 		if ((a->getRebuildLevel(Domain::UI, shouldUndo) & RebuildLevel::Recompile) != 0)
 		{
@@ -264,6 +283,14 @@ bool RestServerUndoManager::Instance::killVoicesAndPerform(AsyncRequest::Ptr req
 
 			if ((a->getRebuildLevel(Domain::Builder, shouldUndo) & RebuildLevel::UpdateUI) != 0)
 				flushUI(p);
+
+			if ((a->getRebuildLevel(Domain::Undefined, shouldUndo) & RebuildLevel::ParameterSlots) != 0)
+			{
+				auto moduleId = a->getModuleId();
+
+				if (auto p = ProcessorHelpers::getFirstProcessorWithName(getMainController()->getMainSynthChain(), moduleId))
+					p->updateParameterSlots(-1);
+			}
 
 			if ((a->getRebuildLevel(Domain::UI, shouldUndo) & RebuildLevel::Recompile) != 0)
 			{
@@ -403,6 +430,11 @@ void RestServerUndoManager::Instance::pushPlan(const String& name)
 
 	if (jp != nullptr)
 		ns->uiValidationState = new UIValidationState(getMainController());
+
+	// DspValidationState is created lazily from the first DSP action in the
+	// group (see createAction) -- unlike UIValidationState which hardcodes
+	// "Interface", DSP holders can have arbitrary module IDs, and a group may
+	// not always touch DSP. Lazy creation picks the moduleId from the action.
 
 	planStack.add(ns);
 }
@@ -609,6 +641,173 @@ const std::map<Identifier, std::vector<Identifier>>& RestServerUndoManager::UIVa
 	}
 
 	return map;
+}
+
+// ============================================================================
+// DspValidationState
+// ============================================================================
+
+RestServerUndoManager::DspValidationState::DspValidationState(MainController* mc, const String& moduleId_) :
+	ControlledObject(mc),
+	moduleId(moduleId_)
+{
+	auto p = ProcessorHelpers::getFirstProcessorWithName(mc->getMainSynthChain(), moduleId);
+
+	if (auto holder = dynamic_cast<scriptnode::DspNetwork::Holder*>(p))
+	{
+		if (auto network = holder->getActiveOrDebuggedNetwork())
+			networkTree = network->getValueTree().createCopy();
+	}
+}
+
+ValueTree RestServerUndoManager::DspValidationState::findNodeRecursive(const ValueTree& tree, const String& id)
+{
+	using namespace scriptnode;
+
+	if (tree[PropertyIds::ID].toString() == id)
+		return tree;
+
+	auto nodes = tree.getChildWithName(PropertyIds::Nodes);
+
+	for (int i = 0; i < nodes.getNumChildren(); i++)
+	{
+		auto result = findNodeRecursive(nodes.getChild(i), id);
+		if (result.isValid())
+			return result;
+	}
+
+	return {};
+}
+
+ValueTree RestServerUndoManager::DspValidationState::findNode(const String& nodeId) const
+{
+	using namespace scriptnode;
+
+	if (!networkTree.isValid())
+		return {};
+
+	// The root node is the first child of the Network ValueTree
+	auto rootNode = networkTree.getChild(0);
+	return findNodeRecursive(rootNode, nodeId);
+}
+
+bool RestServerUndoManager::DspValidationState::nodeExists(const String& nodeId) const
+{
+	return findNode(nodeId).isValid();
+}
+
+StringArray RestServerUndoManager::DspValidationState::getAllNodeIds() const
+{
+	using namespace scriptnode;
+
+	StringArray ids;
+
+	if (!networkTree.isValid())
+		return ids;
+
+	valuetree::Helpers::forEach(networkTree, [&](ValueTree& v)
+	{
+		if (v.getType() == PropertyIds::Node)
+		{
+			auto id = v[PropertyIds::ID].toString();
+			if (id.isNotEmpty())
+				ids.add(id);
+		}
+		return false;
+	});
+
+	return ids;
+}
+
+String RestServerUndoManager::DspValidationState::getFactoryPath(const String& nodeId) const
+{
+	using namespace scriptnode;
+
+	auto v = findNode(nodeId);
+	if (v.isValid())
+		return v[PropertyIds::FactoryPath].toString();
+	return {};
+}
+
+void RestServerUndoManager::DspValidationState::addNode(const String& parentId, const String& factoryPath,
+                                                         const String& nodeId, int index)
+{
+	using namespace scriptnode;
+
+	// Use the factory template so the snapshot node includes the real default
+	// Parameters / Properties children. Without this, subsequent ops in the
+	// same batch (set, connect, etc.) can't find parameters that the runtime
+	// would populate at perform time.
+	NodeDatabase db;
+	ValueTree newNode = db.getValueTree(factoryPath);
+
+	if (!newNode.isValid())
+		return;
+
+	newNode.setProperty(PropertyIds::ID, nodeId, nullptr);
+	newNode.setProperty(PropertyIds::Name, nodeId, nullptr);
+	newNode.setProperty(PropertyIds::Bypassed, false, nullptr);
+
+	auto parent = findNode(parentId);
+	if (parent.isValid())
+	{
+		auto nodesChild = parent.getChildWithName(PropertyIds::Nodes);
+		if (nodesChild.isValid())
+			nodesChild.addChild(newNode, index, nullptr);
+	}
+}
+
+void RestServerUndoManager::DspValidationState::removeNode(const String& nodeId)
+{
+	auto v = findNode(nodeId);
+	if (v.isValid())
+		v.getParent().removeChild(v, nullptr);
+}
+
+void RestServerUndoManager::DspValidationState::moveNode(const String& nodeId, const String& newParent, int index)
+{
+	using namespace scriptnode;
+
+	auto v = findNode(nodeId);
+	if (!v.isValid())
+		return;
+
+	v.getParent().removeChild(v, nullptr);
+
+	auto parent = findNode(newParent);
+	if (parent.isValid())
+	{
+		auto nodesChild = parent.getChildWithName(PropertyIds::Nodes);
+		if (nodesChild.isValid())
+			nodesChild.addChild(v, index, nullptr);
+	}
+}
+
+void RestServerUndoManager::DspValidationState::setNodeProperty(const String& nodeId, const Identifier& prop, const var& value)
+{
+	auto v = findNode(nodeId);
+	if (v.isValid())
+		v.setProperty(prop, value, nullptr);
+}
+
+void RestServerUndoManager::DspValidationState::setParameterValue(const String& nodeId, const String& parameterId, const var& value)
+{
+	using namespace scriptnode;
+
+	auto node = findNode(nodeId);
+	if (!node.isValid())
+		return;
+
+	auto params = node.getChildWithName(PropertyIds::Parameters);
+	for (int i = 0; i < params.getNumChildren(); i++)
+	{
+		auto p = params.getChild(i);
+		if (p[PropertyIds::ID].toString() == parameterId)
+		{
+			p.setProperty(PropertyIds::Value, value, nullptr);
+			return;
+		}
+	}
 }
 
 }

@@ -2210,5 +2210,1379 @@ struct rename : public ActionBase
 };
 
 } // ui
+
+namespace dsp {
+
+using namespace scriptnode;
+
+struct Helpers
+{
+	// Helper to resolve the active DspNetwork from a module ID
+	static DspNetwork* getNetworkFromModule(MainController* mc, const String& moduleId)
+	{
+		auto p = ProcessorHelpers::getFirstProcessorWithName(mc->getMainSynthChain(), moduleId);
+
+		if (auto holder = dynamic_cast<DspNetwork::Holder*>(p))
+			return holder->getActiveOrDebuggedNetwork();
+
+		return nullptr;
+	}
+
+	using Error = RestServerUndoManager::ActionBase::Error;
+
+	
+
+	static ValueTree findValueTree(const ValueTree& r, const std::function<bool(const ValueTree&)>& f)
+	{
+		ValueTree result;
+
+		valuetree::Helpers::forEach(r, [&](const ValueTree& c)
+		{
+			if (f(c))
+			{
+				result = c;
+				return true;
+			}
+
+			return false;
+		});
+
+		return result;
+	}
+
+	static ValueTree findNode(const ValueTree& r, const String& nodeId)
+	{
+		return findValueTree(r, [&](const ValueTree& c)
+		{
+			return c.getType() == PropertyIds::Node && c[PropertyIds::ID].toString() == nodeId;
+		});
+	}
+
+	static Error getErrorForModule404(MainController* mc, const String& moduleId)
+	{
+		auto l = ProcessorHelpers::getListOfAllProcessors<DspNetwork::Holder>(mc->getMainSynthChain());
+
+		StringArray moduleList;
+
+		for (auto h : l)
+			moduleList.add(dynamic_cast<Processor*>(h.get())->getId());
+
+		return Error().withError(moduleId + " not found. ").withHint(builder::Helpers::getHintForUnknownString(moduleId, moduleList));
+	}
+
+	static Error getErrorForNode404(const ValueTree& v, const String& nodeId)
+	{
+		StringArray nodeList;
+
+		valuetree::Helpers::forEach(v, [&](const ValueTree& c)
+		{
+			if (c.getType() == PropertyIds::Node)
+			{
+				nodeList.add(c[PropertyIds::ID].toString());
+			}
+
+			return false;
+		});
+
+		auto hint = builder::Helpers::getHintForUnknownString(nodeId, nodeList);
+		return Error().withError(nodeId + " not found. ").withHint(hint);
+	}
+
+	static Error getErrorForFactory404(const String& factoryPath)
+	{
+		scriptnode::NodeDatabase db;
+
+		StringArray list = db.getNodeIds(false);
+		list.addArray(db.getNodeIds(true));
+
+		auto hint = builder::Helpers::getHintForUnknownString(factoryPath, list);
+		return Error().withError(factoryPath + " not a valid node type. ").withHint(hint);
+	}
+
+	static Error getErrorForParameter404(const ValueTree& n, const String& parameterId)
+	{
+		StringArray ids;
+
+		for (auto p : n.getChildWithName(PropertyIds::Parameters))
+			ids.add(p[PropertyIds::ID].toString());
+
+		for (auto p : n.getChildWithName(PropertyIds::Properties))
+			ids.add(p[PropertyIds::ID].toString());
+
+		auto hint = builder::Helpers::getHintForUnknownString(parameterId, ids);
+		return Error().withError("Unknown parameter or property " + parameterId + ". ").withHint(hint);
+	}
+
+	static ValueTree getRootTree(const RestServerUndoManager::ActionBase* a, const String& moduleId)
+	{
+		if (a->dspValidation != nullptr)
+		{
+			jassert(moduleId == a->dspValidation->moduleId);
+			return a->dspValidation->networkTree;
+		}
+
+		auto mc = const_cast<RestServerUndoManager::ActionBase*>(a)->getMainController();
+
+		if (auto an = getNetworkFromModule(mc, moduleId))
+			return an->getValueTree();
+
+		return {};
+	}
+
+	static String makeUniqueId(const ValueTree& v, String id)
+	{
+		int trailingIndex = id.getTrailingIntValue();
+		auto idWithoutNumber = trailingIndex == 0 ? id : id.upToLastOccurrenceOf(String(trailingIndex), false, false);
+
+		trailingIndex++;
+
+		id = idWithoutNumber + String(trailingIndex);
+
+		auto findNode = [&](const ValueTree& c)
+		{
+			return c.getType() == PropertyIds::Node && c[PropertyIds::ID].toString() == id;
+		};
+
+		auto existingNode = findValueTree(v, findNode);
+
+		while (existingNode.isValid())
+		{
+			trailingIndex++;
+			id = idWithoutNumber + String(trailingIndex);
+			existingNode = findValueTree(v, findNode);
+		}
+
+		return id;
+	}
+
+	static void deleteNode(ActionBase* a, const String& moduleId, const ValueTree& nodeToDelete)
+	{
+		auto idToDelete = nodeToDelete[PropertyIds::ID].toString();
+
+		nodeToDelete.getParent().removeChild(nodeToDelete, nullptr);
+
+		if (a->dspValidation == nullptr)
+		{
+			if (auto an = getNetworkFromModule(a->getMainController(), moduleId))
+				an->deleteIfUnused(idToDelete);
+		}
+	}
+
+	static ValueTree findParameterOrProperty(const ValueTree& n, const String& id, bool searchProperties)
+	{
+		jassert(n.getType() == PropertyIds::Node);
+
+		if (id == PropertyIds::Bypassed.toString())
+			return n;
+
+		for (auto p : n.getChildWithName(PropertyIds::Parameters))
+		{
+			if (p[PropertyIds::ID].toString() == id)
+				return p;
+		}
+
+		if (searchProperties)
+		{
+			for (auto p : n.getChildWithName(PropertyIds::Properties))
+			{
+				if (p[PropertyIds::ID].toString() == id)
+					return p;
+			}
+
+			if (n.getParent().getType() == PropertyIds::Network)
+			{
+				if (n.getParent().hasProperty(id))
+					return n;
+			}
+		}
+
+		return {};
+	}
+
+	static bool addConnection(ValueTree conTree, const String& nodeId, const String& parameterId)
+	{
+		jassert(conTree.getType() == PropertyIds::Connections ||
+			conTree.getType() == PropertyIds::ModulationTargets ||
+			conTree.getType() == PropertyIds::SwitchTarget);
+
+		for (auto& c : conTree)
+		{
+			if (c[PropertyIds::NodeId].toString() == nodeId &&
+				c[PropertyIds::ParameterId].toString() == parameterId)
+				return false;
+		}
+
+		ValueTree cTree(PropertyIds::Connection);
+		cTree.setProperty(PropertyIds::NodeId, nodeId, nullptr);
+		cTree.setProperty(PropertyIds::ParameterId, parameterId, nullptr);
+
+		conTree.addChild(cTree, -1, nullptr);
+		return true;
+	}
+
+	static bool removeConnection(ValueTree conTree, const String& nodeId, const String& parameterId)
+	{
+		jassert(conTree.getType() == PropertyIds::Connections ||
+			conTree.getType() == PropertyIds::ModulationTargets ||
+			conTree.getType() == PropertyIds::SwitchTarget);
+
+		for (auto c : conTree)
+		{
+			if (c[PropertyIds::NodeId].toString() == nodeId &&
+				c[PropertyIds::ParameterId].toString() == parameterId)
+			{
+				c.getParent().removeChild(c, nullptr);
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	static String getSourceOutput(const ValueTree& conTree)
+	{
+		jassert(conTree.getType() == PropertyIds::Connection);
+
+		auto pTree = valuetree::Helpers::findParentWithType(conTree, PropertyIds::Parameter);
+		auto mTree = valuetree::Helpers::findParentWithType(conTree, PropertyIds::ModulationTargets);
+		auto sTree = valuetree::Helpers::findParentWithType(conTree, PropertyIds::SwitchTarget);
+
+		if (pTree.isValid())
+			return pTree[PropertyIds::ID].toString();
+		if (mTree.isValid())
+			return "0";
+		if (sTree.isValid())
+			return String(sTree.getParent().indexOf(sTree));
+		
+		jassertfalse;
+		return {};
+	}
+
+	static ValueTree getConnectionParent(const ValueTree& sn, const String& sourceOutput)
+	{
+		bool isParameterConnection = String(sourceOutput.getIntValue()) != sourceOutput;
+
+		if (isParameterConnection)
+		{
+			auto sp = Helpers::findParameterOrProperty(sn, sourceOutput, false);
+
+			if (!sp.isValid())
+				throw Helpers::getErrorForParameter404(sn, sourceOutput);
+
+			return sp.getOrCreateChildWithName(PropertyIds::Connections, nullptr);
+		}
+		else
+		{
+			auto switchTree = sn.getChildWithName(PropertyIds::SwitchTargets);
+
+			auto idx = sourceOutput.getIntValue();
+
+			if (switchTree.isValid())
+			{
+				auto conTree = switchTree.getChild(idx);
+
+				if (!conTree.isValid())
+					throw Error().withError("invalid modulation output index for node " + sn[PropertyIds::ID].toString())
+					.withHint("index: " + String(idx) + ", maxIndex: " + String(switchTree.getNumChildren()));
+
+				return conTree;
+			}
+			else
+			{
+				if (idx != 0)
+					throw Error().withError("invalid modulation output index for node " + sn[PropertyIds::ID].toString())
+					.withHint("index: " + String(idx) + ", maxIndex: 0");
+
+				return sn.getChildWithName(PropertyIds::ModulationTargets);
+			}
+		}
+	}
+};
+
+
+
+struct add : public ActionBase
+{
+	BUILDER_ID(add);
+
+	static Error prevalidate(MainController*, const var& op)
+	{
+		if (op[RestApiIds::factoryPath].toString().isEmpty())
+			return Error().withError("add requires 'factoryPath'");
+		if (op[RestApiIds::parent].toString().isEmpty())
+			return Error().withError("add requires 'parent'");
+		return {};
+	}
+
+	add(MainController* mc, const var& obj) :
+		ActionBase(mc),
+		moduleId(obj[RestApiIds::moduleId].toString()),
+		factoryPath(obj[RestApiIds::factoryPath].toString()),
+		parentId(obj[RestApiIds::parent].toString()),
+		nodeId(obj[RestApiIds::nodeId].toString()),
+		insertIndex(obj.getProperty(RestApiIds::index, -1))
+	{}
+
+	String moduleId;
+	String factoryPath;
+	String parentId;
+	String nodeId;
+	int insertIndex;
+
+	int getRebuildLevel(Domain, bool) const override { return 0; }
+	bool needsKillVoice() const override { return false; }
+
+	void addToDiffList(std::vector<Diff>& diffList, bool) override
+	{
+		Diff d;
+		d.target = nodeId.isNotEmpty() ? nodeId : factoryPath;
+		d.domain = Domain::DSP;
+		d.type = Diff::Type::Add;
+		diffList.push_back(d);
+	}
+
+	String getHistoryMessage(bool undo) const override
+	{
+		return (undo ? "Remove " : "Add ") + factoryPath + " as " + nodeId;
+	}
+
+	String getDescription() const override
+	{
+		return "add " + factoryPath + " to " + parentId;
+	}
+
+	scriptnode::NodeDatabase db;
+
+	Error validate() override
+	{
+		auto rn = Helpers::getRootTree(this, moduleId);
+
+		// check module & network exists
+		if (!rn.isValid())
+			return Helpers::getErrorForModule404(getMainController(), moduleId);
+
+		// check factory path is valid
+		if (!db.getValueTree(factoryPath).isValid())
+			return Helpers::getErrorForFactory404(factoryPath);
+
+		if (nodeId.isNotEmpty())
+		{
+			// check node doesn't exist
+			auto en = Helpers::findValueTree(rn, [&](const ValueTree& c)
+			{
+				return c.getType() == PropertyIds::Node && c[PropertyIds::ID].toString() == nodeId;
+			});
+
+			if (en.isValid())
+				return Error().withError("node with ID " + nodeId + " already exists. Tip: omit nodeId to auto-generate a unique ID");
+		}
+
+		// omit the parent ID check at validation, might be created in a op before that
+		if (dspValidation != nullptr)
+		{
+			auto pe = validateParent(rn);
+			if (!pe)
+				return pe;
+
+			// Mirror the perform on the plan snapshot so subsequent ops in the
+			// same group (and mid-group GET /api/dsp/tree?group=current reads)
+			// see the accumulated state. Auto-ID generation is deferred to
+			// perform() at commit time; we only mirror nodes with explicit IDs.
+			if (nodeId.isNotEmpty())
+				dspValidation->addNode(parentId, factoryPath, nodeId, insertIndex);
+		}
+
+		return {};
+	}
+
+	Error validateParent(const ValueTree& rn)
+	{
+		// check parent node exists
+		auto pn = Helpers::findValueTree(rn, [&](const ValueTree& c)
+		{
+			return c.getType() == PropertyIds::Node && c[PropertyIds::ID].toString() == parentId;
+		});
+
+		auto childList = pn.getChildWithName(PropertyIds::Nodes);
+
+		if (!childList.isValid())
+			return Error().withError(parentId + " is not a container node");
+
+		if (!pn.isValid())
+			return Helpers::getErrorForNode404(rn, parentId);
+
+		return {};
+	}
+
+	void perform() override
+	{
+		auto rn = Helpers::getRootTree(this, moduleId);
+
+		if(!rn.isValid())
+			throw Helpers::getErrorForModule404(getMainController(), moduleId);
+
+		auto pe = validateParent(rn);
+
+		if (!pe)
+			throw pe;
+
+		ValueTree nodeToAdd = db.getValueTree(factoryPath);
+
+		if(!nodeToAdd.isValid())
+			throw Helpers::getErrorForFactory404(factoryPath);
+
+		if (nodeId.isEmpty())
+		{
+			nodeId = factoryPath.fromFirstOccurrenceOf(".", false, false);
+			nodeToAdd.setProperty(PropertyIds::Name, nodeId, nullptr);
+			nodeId = Helpers::makeUniqueId(rn, nodeId);
+		}
+		else
+			nodeToAdd.setProperty(PropertyIds::Name, nodeId, nullptr);
+		
+		nodeToAdd.setProperty(PropertyIds::ID, nodeId, nullptr);
+		
+
+		auto pn = Helpers::findValueTree(rn, [&](const ValueTree& c)
+		{
+			return c.getType() == PropertyIds::Node && c[PropertyIds::ID].toString() == parentId;
+		});
+
+		auto childList = pn.getChildWithName(PropertyIds::Nodes);
+		childList.addChild(nodeToAdd, insertIndex, nullptr);
+	}
+
+	void undo() override
+	{
+		auto rn = Helpers::getRootTree(this, moduleId);
+
+		if (!rn.isValid())
+			throw Helpers::getErrorForModule404(getMainController(), moduleId);
+
+		auto nodeToDelete = Helpers::findValueTree(rn, [&](const ValueTree& c)
+		{
+			return c.getType() == PropertyIds::Node && c[PropertyIds::ID].toString() == nodeId;
+		});
+
+		if (!nodeToDelete.isValid())
+			throw Helpers::getErrorForNode404(rn, nodeId);
+
+		Helpers::deleteNode(this, moduleId, nodeToDelete);
+	}
+};
+
+struct remove : public ActionBase
+{
+	BUILDER_ID(remove);
+
+	static Error prevalidate(MainController*, const var& op)
+	{
+		if (op[RestApiIds::nodeId].toString().isEmpty())
+			return Error().withError("remove requires 'nodeId'");
+		return {};
+	}
+
+	remove(MainController* mc, const var& obj) :
+		ActionBase(mc),
+		moduleId(obj[RestApiIds::moduleId].toString()),
+		nodeId(obj[RestApiIds::nodeId].toString())
+	{}
+
+	String moduleId;
+	String nodeId;
+
+	ValueTree removedTree;
+	String parentId;
+	int oldIndex;
+
+	int getRebuildLevel(Domain, bool) const override { return 0; }
+	bool needsKillVoice() const override { return false; }
+
+	void addToDiffList(std::vector<Diff>& diffList, bool) override
+	{
+		Diff d;
+		d.target = nodeId;
+		d.domain = Domain::DSP;
+		d.type = Diff::Type::Remove;
+		diffList.push_back(d);
+	}
+
+	String getHistoryMessage(bool undo) const override
+	{
+		return (undo ? "Restore " : "Remove ") + nodeId;
+	}
+
+	String getDescription() const override
+	{
+		return "remove " + nodeId;
+	}
+
+	Error validate() override
+	{
+		auto rv = Helpers::getRootTree(this, moduleId);
+
+		if (dspValidation != nullptr)
+		{
+			if (!Helpers::findNode(rv, nodeId).isValid())
+				return Helpers::getErrorForNode404(rv, nodeId);
+		}
+		
+		return {};
+	}
+
+	void perform() override
+	{
+		auto rv = Helpers::getRootTree(this, moduleId);
+		removedTree = Helpers::findNode(rv, nodeId);
+
+		if (removedTree.isValid())
+		{
+			oldIndex = removedTree.getParent().indexOf(removedTree);
+			parentId = removedTree.getParent().getParent()[PropertyIds::ID].toString();
+			Helpers::deleteNode(this, moduleId, removedTree);
+		}
+		else
+			throw Helpers::getErrorForNode404(Helpers::getRootTree(this, moduleId), nodeId);
+	}
+
+	void undo() override
+	{
+		auto rv = Helpers::getRootTree(this, moduleId);
+
+		if (removedTree.isValid())
+		{
+			auto parentNode = Helpers::findNode(rv, parentId);
+
+			parentNode.getChildWithName(PropertyIds::Nodes).addChild(removedTree.createCopy(), oldIndex, nullptr);
+		}
+	}
+};
+
+struct move : public ActionBase
+{
+	BUILDER_ID(move);
+
+	static Error prevalidate(MainController*, const var& op)
+	{
+		if (op[RestApiIds::nodeId].toString().isEmpty())
+			return Error().withError("move requires 'nodeId'");
+		if (op[RestApiIds::parent].toString().isEmpty())
+			return Error().withError("move requires 'parent'");
+		return {};
+	}
+
+	move(MainController* mc, const var& obj) :
+		ActionBase(mc),
+		moduleId(obj[RestApiIds::moduleId].toString()),
+		nodeId(obj[RestApiIds::nodeId].toString()),
+		newParentId(obj[RestApiIds::parent].toString()),
+		insertIndex(obj.getProperty(RestApiIds::index, -1))
+	{}
+
+	String moduleId;
+	String nodeId;
+	String newParentId;
+	int insertIndex;
+
+	// Stored for undo
+	String oldParentId;
+	int oldIndex = -1;
+
+	int getRebuildLevel(Domain, bool) const override { return 0; }
+	bool needsKillVoice() const override { return false; }
+
+	void addToDiffList(std::vector<Diff>& diffList, bool) override
+	{
+		Diff d;
+		d.target = nodeId;
+		d.domain = Domain::DSP;
+		d.type = Diff::Type::Modify;
+		diffList.push_back(d);
+	}
+
+	String getHistoryMessage(bool undo) const override
+	{
+		return (undo ? "Restore " : "Move ") + nodeId + " to " + (undo ? oldParentId : newParentId);
+	}
+
+	String getDescription() const override
+	{
+		return "move " + nodeId + " to " + newParentId;
+	}
+
+	Error validate() override
+	{
+		auto rv = Helpers::getRootTree(this, moduleId);
+
+		if (!rv.isValid())
+			return Helpers::getErrorForModule404(getMainController(), moduleId);
+
+		if (dspValidation != nullptr)
+		{
+			auto n = Helpers::findNode(rv, nodeId);
+
+			if (!n.isValid())
+				return Helpers::getErrorForNode404(rv, nodeId);
+
+			auto np = Helpers::findNode(rv, newParentId);
+
+			if (!np.isValid())
+				return Helpers::getErrorForNode404(rv, newParentId);
+
+			if (!np.getChildWithName(PropertyIds::Nodes).isValid())
+				return Error().withError(newParentId + " is not a container");
+		}
+
+		return {};
+	}
+
+	void perform() override
+	{
+		auto rv = Helpers::getRootTree(this, moduleId);
+		auto n = Helpers::findNode(rv, nodeId);
+
+		if (!n.isValid())
+			throw Helpers::getErrorForNode404(rv, nodeId);
+
+		auto np = Helpers::findNode(rv, newParentId);
+
+		if (!np.isValid())
+			throw Helpers::getErrorForNode404(rv, newParentId);
+
+		if (!np.getChildWithName(PropertyIds::Nodes).isValid())
+			throw Error().withError(newParentId + " is not a container");
+
+		oldIndex = n.getParent().indexOf(n);
+		oldParentId = n.getParent().getParent()[PropertyIds::ID].toString();
+
+		n.getParent().removeChild(n, nullptr);
+		np.getChildWithName(PropertyIds::Nodes).addChild(n, insertIndex, nullptr);
+
+		
+	}
+
+	void undo() override
+	{
+		auto rv = Helpers::getRootTree(this, moduleId);
+		auto n = Helpers::findNode(rv, nodeId);
+
+		if (!n.isValid())
+			throw Helpers::getErrorForNode404(rv, nodeId);
+
+		auto op = Helpers::findNode(rv, oldParentId);
+
+		if (!op.isValid())
+			throw Helpers::getErrorForNode404(rv, oldParentId);
+
+		if (!op.getChildWithName(PropertyIds::Nodes).isValid())
+			throw Error().withError(newParentId + " is not a container");
+
+		n.getParent().removeChild(n, nullptr);
+		op.getChildWithName(PropertyIds::Nodes).addChild(n, oldIndex, nullptr);
+	}
+};
+
+struct connect : public ActionBase
+{
+	BUILDER_ID(connect);
+
+	static Error prevalidate(MainController*, const var& op)
+	{
+		if (op[RestApiIds::source].toString().isEmpty())
+			return Error().withError("connect requires 'source'");
+		if (op[RestApiIds::target].toString().isEmpty())
+			return Error().withError("connect requires 'target'");
+		if (op[RestApiIds::parameter].toString().isEmpty())
+			return Error().withError("connect requires 'parameter'");
+		return {};
+	}
+
+	connect(MainController* mc, const var& obj) :
+		ActionBase(mc),
+		moduleId(obj[RestApiIds::moduleId].toString()),
+		sourceId(obj[RestApiIds::source].toString()),
+		targetId(obj[RestApiIds::target].toString()),
+		parameterName(obj[RestApiIds::parameter].toString()),
+		sourceOutput(obj.getProperty(RestApiIds::sourceOutput, 0).toString())
+	{}
+
+	String moduleId;
+	String sourceId;
+	String targetId;
+	String parameterName;
+	String sourceOutput;
+
+	int getRebuildLevel(Domain, bool) const override { return 0; }
+	bool needsKillVoice() const override { return false; }
+
+	void addToDiffList(std::vector<Diff>& diffList, bool) override
+	{
+		Diff d;
+		d.target = targetId;
+		d.domain = Domain::DSP;
+		d.type = Diff::Type::Modify;
+		diffList.push_back(d);
+	}
+
+	String getHistoryMessage(bool undo) const override
+	{
+		return (undo ? "Disconnect " : "Connect ") + sourceId + "." + sourceOutput + " -> " + targetId + "." + parameterName;
+	}
+
+	String getDescription() const override
+	{
+		return "connect " + sourceId + "." + sourceOutput + " -> " + targetId + "." + parameterName;
+	}
+
+	Error validate() override
+	{
+		auto rv = Helpers::getRootTree(this, moduleId);
+
+		if (!rv.isValid())
+			return Helpers::getErrorForModule404(getMainController(), moduleId);
+
+		if (dspValidation != nullptr)
+		{
+			auto sn = Helpers::findNode(rv, sourceId);
+
+			if (!sn.isValid())
+				throw Helpers::getErrorForNode404(rv, sourceId);
+
+			auto tn = Helpers::findNode(rv, targetId);
+
+			if (!tn.isValid())
+				throw Helpers::getErrorForNode404(rv, targetId);
+
+			auto pn = Helpers::findParameterOrProperty(tn, parameterName, false);
+
+			if (!pn.isValid())
+				throw Helpers::getErrorForParameter404(tn, parameterName);
+
+			try
+			{
+				auto conTree = Helpers::getConnectionParent(sn, sourceOutput);
+
+				if (!conTree.isValid())
+					return Error().withError("illegal connection source node");
+
+				return {};
+			}
+			catch (Error& e)
+			{
+				return e;
+			}
+		}
+		
+		return {};
+	}
+
+	void perform() override
+	{
+		auto rv = Helpers::getRootTree(this, moduleId);
+		auto sn = Helpers::findNode(rv, sourceId);
+
+		if (!sn.isValid())
+			throw Helpers::getErrorForNode404(rv, sourceId);
+
+		auto tn = Helpers::findNode(rv, targetId);
+
+		if (!tn.isValid())
+			throw Helpers::getErrorForNode404(rv, targetId);
+
+		auto pn = Helpers::findParameterOrProperty(tn, parameterName, false);
+
+		if (!pn.isValid())
+			throw Helpers::getErrorForParameter404(tn, parameterName);
+
+		auto conTree = Helpers::getConnectionParent(sn, sourceOutput);
+
+		if(!Helpers::addConnection(conTree, targetId, parameterName))
+			throw Error().withError("Connection already exists");
+	}
+
+	void undo() override
+	{
+		auto rv = Helpers::getRootTree(this, moduleId);
+		auto sn = Helpers::findNode(rv, sourceId);
+
+		if (!sn.isValid())
+			throw Helpers::getErrorForNode404(rv, sourceId);
+
+		auto tn = Helpers::findNode(rv, targetId);
+
+		if (!tn.isValid())
+			throw Helpers::getErrorForNode404(rv, targetId);
+
+		auto pn = Helpers::findParameterOrProperty(tn, parameterName, false);
+
+		if (!pn.isValid())
+			throw Helpers::getErrorForParameter404(tn, parameterName);
+
+		auto conTree = Helpers::getConnectionParent(sn, sourceOutput);
+
+		if (!Helpers::removeConnection(conTree, targetId, parameterName))
+			throw Error().withError("Connection doesn't exist");
+	}
+};
+
+struct disconnect : public ActionBase
+{
+	BUILDER_ID(disconnect);
+
+	static Error prevalidate(MainController*, const var& op)
+	{
+		if (op[RestApiIds::source].toString().isEmpty())
+			return Error().withError("disconnect requires 'source'");
+		if (op[RestApiIds::target].toString().isEmpty())
+			return Error().withError("disconnect requires 'target'");
+		if (op[RestApiIds::parameter].toString().isEmpty())
+			return Error().withError("disconnect requires 'parameter'");
+		return {};
+	}
+
+	disconnect(MainController* mc, const var& obj) :
+		ActionBase(mc),
+		moduleId(obj[RestApiIds::moduleId].toString()),
+		sourceId(obj[RestApiIds::source].toString()),
+		targetId(obj[RestApiIds::target].toString()),
+		parameterName(obj[RestApiIds::parameter].toString())
+	{}
+
+	String moduleId;
+	String sourceId;
+	String targetId;
+	String parameterName;
+	String oldSourceOutput;
+
+	int getRebuildLevel(Domain, bool) const override { return 0; }
+	bool needsKillVoice() const override { return false; }
+
+	void addToDiffList(std::vector<Diff>& diffList, bool) override
+	{
+		Diff d;
+		d.target = targetId;
+		d.domain = Domain::DSP;
+		d.type = Diff::Type::Modify;
+		diffList.push_back(d);
+	}
+
+	String getHistoryMessage(bool undo) const override
+	{
+		return (undo ? "Reconnect " : "Disconnect ") + sourceId + " -> " + targetId + "." + parameterName;
+	}
+
+	String getDescription() const override
+	{
+		return "disconnect " + sourceId + " -> " + targetId + "." + parameterName;
+	}
+
+	Error validate() override
+	{
+		auto rv = Helpers::getRootTree(this, moduleId);
+
+		if (!rv.isValid())
+			return Helpers::getErrorForModule404(getMainController(), moduleId);
+
+		if (dspValidation != nullptr)
+		{
+			auto sn = Helpers::findNode(rv, sourceId);
+
+			if (!sn.isValid())
+				return Helpers::getErrorForNode404(rv, sourceId);
+
+			auto con = Helpers::findValueTree(sn, [&](const ValueTree& c)
+			{
+				return c.getType() == PropertyIds::Connection &&
+					c[PropertyIds::NodeId] == targetId &&
+					c[PropertyIds::ParameterId] == parameterName;
+			});
+
+			if (!con.isValid())
+				return Error().withError("Connection not found");
+		}
+
+		return {};
+	}
+
+	void perform() override
+	{
+		auto rv = Helpers::getRootTree(this, moduleId);
+		auto sn = Helpers::findNode(rv, sourceId);
+
+		if (!sn.isValid())
+			throw Helpers::getErrorForNode404(rv, sourceId);
+
+		auto con = Helpers::findValueTree(sn, [&](const ValueTree& c)
+		{
+			return c.getType() == PropertyIds::Connection &&
+				c[PropertyIds::NodeId] == targetId &&
+				c[PropertyIds::ParameterId] == parameterName;
+		});
+
+		if (!con.isValid())
+			throw Error().withError("Connection not found");
+
+		oldSourceOutput = Helpers::getSourceOutput(con);
+
+		con.getParent().removeChild(con, nullptr);
+	}
+
+	void undo() override
+	{
+		auto rv = Helpers::getRootTree(this, moduleId);
+		auto sn = Helpers::findNode(rv, sourceId);
+
+		if (!sn.isValid())
+			throw Helpers::getErrorForNode404(rv, sourceId);
+
+		auto tn = Helpers::findNode(rv, targetId);
+
+		if (!tn.isValid())
+			throw Helpers::getErrorForNode404(rv, targetId);
+
+		auto pn = Helpers::findParameterOrProperty(tn, parameterName, false);
+
+		if (!pn.isValid())
+			throw Helpers::getErrorForParameter404(tn, parameterName);
+
+		auto conTree = Helpers::getConnectionParent(sn, oldSourceOutput);
+
+		if (!Helpers::addConnection(conTree, targetId, parameterName))
+			throw Error().withError("Connection already exists");
+	}
+};
+
+struct set : public ActionBase
+{
+	BUILDER_ID(set);
+
+	static Error prevalidate(MainController*, const var& op)
+	{
+		if (op[RestApiIds::nodeId].toString().isEmpty())
+			return Error().withError("set requires 'nodeId'");
+		if (op[RestApiIds::parameterId].toString().isEmpty())
+			return Error().withError("set requires 'parameterId'");
+		auto v = op[RestApiIds::value];
+		if (v.isVoid() || v.isUndefined())
+			return Error().withError("set requires 'value'");
+		return {};
+	}
+
+	set(MainController* mc, const var& obj) :
+		ActionBase(mc),
+		moduleId(obj[RestApiIds::moduleId].toString()),
+		nodeId(obj[RestApiIds::nodeId].toString()),
+		parameterId(obj[RestApiIds::parameterId].toString()),
+		newValue(obj[RestApiIds::value])
+	{}
+
+	String moduleId;
+	String nodeId;
+	String parameterId;
+	var newValue;
+	var oldValue;
+
+	int getRebuildLevel(Domain, bool) const override { return 0; }
+	bool needsKillVoice() const override { return false; }
+
+	void addToDiffList(std::vector<Diff>& diffList, bool) override
+	{
+		Diff d;
+		d.target = nodeId;
+		d.domain = Domain::DSP;
+		d.type = Diff::Type::Modify;
+		diffList.push_back(d);
+	}
+
+	String getHistoryMessage(bool undo) const override
+	{
+		return (undo ? "Restore " : "Set ") + nodeId + "." + parameterId +
+			(undo ? "" : (" to " + newValue.toString()));
+	}
+
+	String getDescription() const override
+	{
+		return "set " + nodeId + "." + parameterId + " to " + newValue.toString();
+	}
+
+	Error validate() override
+	{
+		auto rv = Helpers::getRootTree(this, moduleId);
+
+		if (!rv.isValid())
+			return Helpers::getErrorForModule404(getMainController(), moduleId);
+
+		if (dspValidation != nullptr)
+		{
+			auto n = Helpers::findNode(rv, nodeId);
+
+			if (!n.isValid())
+				return Helpers::getErrorForNode404(rv, nodeId);
+
+			auto p = Helpers::findParameterOrProperty(n, parameterId, true);
+
+			if (!p.isValid())
+				return Helpers::getErrorForParameter404(n, parameterId);
+		}
+
+		return {};
+	}
+
+	void perform() override
+	{
+		auto rv = Helpers::getRootTree(this, moduleId);
+
+		if (!rv.isValid())
+			throw Helpers::getErrorForModule404(getMainController(), moduleId);
+
+		auto n = Helpers::findNode(rv, nodeId);
+
+		if (!n.isValid())
+			throw Helpers::getErrorForNode404(rv, nodeId);
+
+		auto p = Helpers::findParameterOrProperty(n, parameterId, true);
+
+		if (!p.isValid())
+			throw Helpers::getErrorForParameter404(n, parameterId);
+
+		if (p.getType() == PropertyIds::Network)
+		{
+			oldValue = p[parameterId];
+			p.setProperty(parameterId, newValue, nullptr);
+		}
+		else
+		{
+			oldValue = p[PropertyIds::Value];
+			p.setProperty(PropertyIds::Value, newValue, nullptr);
+		}
+	}
+
+	void undo() override
+	{
+		auto rv = Helpers::getRootTree(this, moduleId);
+
+		if (!rv.isValid())
+			throw Helpers::getErrorForModule404(getMainController(), moduleId);
+
+		auto n = Helpers::findNode(rv, nodeId);
+
+		if (!n.isValid())
+			throw Helpers::getErrorForNode404(rv, nodeId);
+
+		auto p = Helpers::findParameterOrProperty(n, parameterId, true);
+
+		if (!p.isValid())
+			throw Helpers::getErrorForParameter404(n, parameterId);
+
+		if (p.getType() == PropertyIds::Network)
+			p.setProperty(parameterId, oldValue, nullptr);
+		else
+			p.setProperty(PropertyIds::Value, oldValue, nullptr);
+
+	}
+};
+
+struct bypass : public ActionBase
+{
+	BUILDER_ID(bypass);
+
+	static Error prevalidate(MainController*, const var& op)
+	{
+		if (op[RestApiIds::nodeId].toString().isEmpty())
+			return Error().withError("bypass requires 'nodeId'");
+		auto bypassVal = op[RestApiIds::bypassed];
+		if (bypassVal.isVoid() || bypassVal.isUndefined())
+			return Error().withError("bypass requires 'bypassed'");
+		return {};
+	}
+
+	bypass(MainController* mc, const var& obj) :
+		ActionBase(mc),
+		moduleId(obj[RestApiIds::moduleId].toString()),
+		nodeId(obj[RestApiIds::nodeId].toString()),
+		bypassed((bool)obj[RestApiIds::bypassed])
+	{}
+
+	String moduleId;
+	String nodeId;
+	bool bypassed;
+	bool previousBypassed = false;
+
+	int getRebuildLevel(Domain, bool) const override { return 0; }
+	bool needsKillVoice() const override { return false; }
+
+	void addToDiffList(std::vector<Diff>& diffList, bool) override
+	{
+		Diff d;
+		d.target = nodeId;
+		d.domain = Domain::DSP;
+		d.type = Diff::Type::Modify;
+		diffList.push_back(d);
+	}
+
+	String getHistoryMessage(bool undo) const override
+	{
+		return (undo ? "Restore " : (bypassed ? "Bypass " : "Unbypass ")) + nodeId;
+	}
+
+	String getDescription() const override
+	{
+		return String(bypassed ? "bypass " : "unbypass ") + nodeId;
+	}
+
+	Error validate() override
+	{
+		
+		return {};
+	}
+
+	void perform() override
+	{
+		auto ok = validate();
+
+		if (!ok)
+			throw ok;
+
+		auto rv = Helpers::getRootTree(this, moduleId);
+		auto n = Helpers::findNode(rv, nodeId);
+		previousBypassed = n[PropertyIds::Bypassed];
+		n.setProperty(PropertyIds::Bypassed, bypassed, nullptr);
+	}
+
+	void undo() override
+	{
+		auto rv = Helpers::getRootTree(this, moduleId);
+
+		auto n = Helpers::findNode(rv, nodeId);
+
+		if (!n.isValid())
+			throw Helpers::getErrorForNode404(rv, nodeId);
+
+		n.setProperty(PropertyIds::Bypassed, previousBypassed, nullptr);
+	}
+};
+
+struct create_parameter : public ActionBase
+{
+	BUILDER_ID(create_parameter);
+
+	static Error prevalidate(MainController*, const var& op)
+	{
+		if (op[RestApiIds::nodeId].toString().isEmpty())
+			return Error().withError("create_parameter requires 'nodeId'");
+		if (op[RestApiIds::parameterId].toString().isEmpty())
+			return Error().withError("create_parameter requires 'parameterId'");
+		return {};
+	}
+
+	create_parameter(MainController* mc, const var& obj) :
+		ActionBase(mc),
+		moduleId(obj[RestApiIds::moduleId].toString()),
+		nodeId(obj[RestApiIds::nodeId].toString()),
+		parameterId(obj[RestApiIds::parameterId].toString()),
+		defaultValue(obj.getProperty(RestApiIds::defaultValue, 0.0))
+	{
+		auto minValue = (obj.getProperty(RestApiIds::min, 0.0));
+		auto maxValue = (obj.getProperty(RestApiIds::max, 1.0));
+		auto stepSize = (obj.getProperty(RestApiIds::stepSize, 0.0));
+
+		range = { minValue, maxValue, stepSize };
+
+		if (obj.hasProperty(RestApiIds::skewFactor))
+			range.rng.skew = (double)obj[RestApiIds::skewFactor];
+
+		if(obj.hasProperty(RestApiIds::middlePosition))
+			range.rng.setSkewForCentre((double)obj[RestApiIds::middlePosition]);
+		
+		range.inv = (obj.getProperty(RestApiIds::inverted, false));
+	}
+
+	scriptnode::InvertableParameterRange range;
+
+	String moduleId;
+	String nodeId;
+	String parameterId;
+	double defaultValue;
+
+	int getRebuildLevel(Domain d, bool undo) const override 
+	{ 
+		auto rv = Helpers::getRootTree(this, moduleId);
+		auto sn = Helpers::findNode(rv, nodeId);
+
+		if (sn.getParent() == rv)
+			return RestServerUndoManager::RebuildLevel::ParameterSlots;
+		
+		return 0; 
+	}
+	bool needsKillVoice() const override { return false; }
+
+	void addToDiffList(std::vector<Diff>& diffList, bool) override
+	{
+		Diff d;
+		d.target = nodeId;
+		d.domain = Domain::DSP;
+		d.type = Diff::Type::Modify;
+		diffList.push_back(d);
+	}
+
+	String getHistoryMessage(bool undo) const override
+	{
+		return (undo ? "Remove parameter " : "Create parameter ") + parameterId + " on " + nodeId;
+	}
+
+	String getDescription() const override
+	{
+		return "create parameter " + parameterId + " on " + nodeId;
+	}
+
+	Error validate() override
+	{
+		auto rv = Helpers::getRootTree(this, moduleId);
+		auto sn = Helpers::findNode(rv, nodeId);
+
+		if (dspValidation != nullptr)
+		{
+			if (!sn.isValid())
+				return Helpers::getErrorForNode404(rv, nodeId);
+
+			if (!sn[PropertyIds::FactoryPath].toString().startsWith("container"))
+				return Error().withError("Can't add parameters to non-container nodes");
+
+			auto pn = Helpers::findParameterOrProperty(sn, parameterId, false);
+
+			if (pn.isValid())
+				return Error().withError("Parameter " + nodeId + "." + parameterId + " already exists");
+		}
+		
+		return {};
+	}
+
+	void perform() override
+	{
+		auto rv = Helpers::getRootTree(this, moduleId);
+		auto sn = Helpers::findNode(rv, nodeId);
+
+		if (!sn.isValid())
+			throw Helpers::getErrorForNode404(rv, nodeId);
+
+		if (!sn[PropertyIds::FactoryPath].toString().startsWith("container"))
+			throw Error().withError("Can't add parameters to non-container nodes");
+
+		auto pn = Helpers::findParameterOrProperty(sn, parameterId, false);
+
+		if (pn.isValid())
+			throw Error().withError("Parameter " + nodeId + "." + parameterId + " already exists");
+
+		auto pTree = sn.getChildWithName(PropertyIds::Parameters);
+
+		ValueTree np(PropertyIds::Parameter);
+
+		np.setProperty(PropertyIds::ID, parameterId, nullptr);
+		scriptnode::RangeHelpers::storeDoubleRange(np, range, nullptr);
+		np.setProperty(PropertyIds::DefaultValue, defaultValue, nullptr);
+		np.setProperty(PropertyIds::Value, defaultValue, nullptr);
+
+		pTree.addChild(np, -1, nullptr);
+	}
+
+	void undo() override
+	{
+		auto rv = Helpers::getRootTree(this, moduleId);
+		auto sn = Helpers::findNode(rv, nodeId);
+
+		if (!sn.isValid())
+			throw Helpers::getErrorForNode404(rv, nodeId);
+
+		auto pn = Helpers::findParameterOrProperty(sn, parameterId, false);
+
+		if (!pn.isValid())
+			throw Helpers::getErrorForParameter404(sn, parameterId);
+
+		pn.getParent().removeChild(pn, nullptr);
+	}
+};
+
+struct clear : public ActionBase
+{
+	BUILDER_ID(clear);
+
+	static Error prevalidate(MainController*, const var&)
+	{
+		return {};
+	}
+
+	clear(MainController* mc, const var& obj) :
+		ActionBase(mc),
+		moduleId(obj[RestApiIds::moduleId].toString())
+	{}
+
+	String moduleId;
+	ValueTree savedState; // For undo: snapshot before clearing
+
+	int getRebuildLevel(Domain, bool) const override 
+	{ 
+		return RebuildLevel::ParameterSlots; 
+	}
+
+	bool needsKillVoice() const override { return false; }
+
+	void addToDiffList(std::vector<Diff>& diffList, bool) override
+	{
+		Diff d;
+		d.target = moduleId;
+		d.domain = Domain::DSP;
+		d.type = Diff::Type::Remove;
+		diffList.push_back(d);
+	}
+
+	String getHistoryMessage(bool undo) const override
+	{
+		return undo ? ("Restore network " + moduleId) : ("Clear network " + moduleId);
+	}
+
+	String getDescription() const override
+	{
+		return "clear network " + moduleId;
+	}
+
+	Error validate() override
+	{
+		auto rv = Helpers::getRootTree(this, moduleId);
+
+		if (!rv.isValid())
+			return Helpers::getErrorForModule404(getMainController(), moduleId);
+
+		return {};
+	}
+
+	void perform() override
+	{
+		auto ok = validate();
+
+		if (!ok)
+			throw ok;
+
+		auto p = ProcessorHelpers::getFirstProcessorWithName(getMainController()->getMainSynthChain(), moduleId);
+
+		if (auto h = dynamic_cast<DspNetwork::Holder*>(p))
+		{
+			savedState = Helpers::getRootTree(this, moduleId);
+			h->clearAllNetworks();
+		}			
+	}
+
+	void undo() override
+	{
+		auto p = ProcessorHelpers::getFirstProcessorWithName(getMainController()->getMainSynthChain(), moduleId);
+
+		if (auto h = dynamic_cast<DspNetwork::Holder*>(p))
+		{
+			h->getOrCreate(savedState);
+			p->prepareToPlay(p->getSampleRate(), p->getLargestBlockSize());
+		}
+	}
+};
+
+} // dsp
 } // rest_undo
 } // hise
