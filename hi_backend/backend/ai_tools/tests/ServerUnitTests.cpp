@@ -177,6 +177,14 @@ public:
         testDspGroupSingleOpsVariety();
         testDspGroupMultiOpsBatched();
         testDspGroupMixedOpsWorkflow();
+        testDspGroupMirrorSet();
+        testDspGroupMirrorBypass();
+        testDspGroupMirrorRemove();
+        testDspGroupMirrorMove();
+        testDspGroupMirrorCreateParameter();
+        testDspGroupMirrorConnect();
+        testDspGroupMirrorDisconnect();
+        testDspGroupMirrorClear();
         testDspApplyAdd();
         testDspApplyRemove();
         testDspApplyMove();
@@ -6867,6 +6875,398 @@ private:
             "DryWet restored after redo");
         expect(findNodeInTree(tree[RestApiIds::result], "Rev").isObject(),
             "Rev restored after redo");
+    }
+
+    //==========================================================================
+    /** Read the current DSP group snapshot via ?group=current and return the
+     *  parsed result object. Used by testDspGroupMirror* tests to assert that
+     *  a DSP action's validate() mirrored its mutation onto the plan snapshot.
+     */
+    var getDspGroupCurrent(const String& moduleId = "DspTestFX")
+    {
+        auto url = "/api/dsp/tree?moduleId=" + URL::addEscapeChars(moduleId, true)
+                 + "&group=current";
+        return ctx->parseJson(ctx->httpGet(url));
+    }
+
+    /** Find a parameter by id in a parameters array. */
+    var findParamInArray(const var& params, const String& parameterId)
+    {
+        if (!params.isArray())
+            return {};
+
+        for (int i = 0; i < params.size(); i++)
+        {
+            if (params[i][RestApiIds::parameterId].toString() == parameterId)
+                return params[i];
+        }
+
+        return {};
+    }
+
+    //==========================================================================
+    /** Setup: In a DSP plan group, add Osc then set Osc.Frequency=880.
+     *  Scenario: Mid-group GET /api/dsp/tree?group=current.
+     *  Expected: Osc.Frequency is 880 in the snapshot (mirrored by set::validate).
+     */
+    void testDspGroupMirrorSet()
+    {
+        beginTest("DSP plan group - set mirrors onto snapshot");
+
+        resetDspState();
+
+        dspPushGroup("mirror_set");
+
+        Array<var> ops;
+        ops.add(makeDspAddOp("core.oscillator", "test_network", "Osc"));
+        ops.add(makeDspSetOp("Osc", "Frequency", 880.0));
+        expectDspSuccess(postDspOps(ops));
+
+        // Mid-group read: set::validate should have mirrored Frequency=880.
+        auto mid = getDspGroupCurrent();
+        expect((bool)mid[RestApiIds::success], "Mid-group read should succeed");
+
+        auto midOsc = findNodeInTree(mid[RestApiIds::result], "Osc");
+        expect(midOsc.isObject(), "Osc visible mid-group");
+
+        auto midFreq = findParamInArray(midOsc[RestApiIds::parameters], "Frequency");
+        expect(midFreq.isObject(), "Frequency param visible mid-group");
+        expectEquals((double)midFreq[RestApiIds::value], 880.0,
+            "Osc.Frequency mirrored to 880 mid-group");
+
+        dspPopGroupCommit();
+
+        auto tree = getDspTree();
+        auto osc = findNodeInTree(tree[RestApiIds::result], "Osc");
+        expect(osc.isObject(), "Osc committed");
+        auto freq = findParamInArray(osc[RestApiIds::parameters], "Frequency");
+        expectEquals((double)freq[RestApiIds::value], 880.0,
+            "Osc.Frequency committed to 880");
+    }
+
+    //==========================================================================
+    /** Setup: In a DSP plan group, add Osc then bypass Osc true.
+     *  Scenario: Mid-group read.
+     *  Expected: Osc.bypassed is true in snapshot (mirrored by bypass::validate).
+     */
+    void testDspGroupMirrorBypass()
+    {
+        beginTest("DSP plan group - bypass mirrors onto snapshot");
+
+        resetDspState();
+
+        dspPushGroup("mirror_bypass");
+
+        Array<var> ops;
+        ops.add(makeDspAddOp("core.oscillator", "test_network", "Osc"));
+        ops.add(makeDspBypassOp("Osc", true));
+        expectDspSuccess(postDspOps(ops));
+
+        auto mid = getDspGroupCurrent();
+        expect((bool)mid[RestApiIds::success], "Mid-group read should succeed");
+
+        auto midOsc = findNodeInTree(mid[RestApiIds::result], "Osc");
+        expect(midOsc.isObject(), "Osc visible mid-group");
+        expect((bool)midOsc[RestApiIds::bypassed], "Osc bypassed mirrored true mid-group");
+
+        dspPopGroupCommit();
+
+        auto tree = getDspTree();
+        auto osc = findNodeInTree(tree[RestApiIds::result], "Osc");
+        expect((bool)osc[RestApiIds::bypassed], "Osc bypassed committed");
+    }
+
+    //==========================================================================
+    /** Setup: In a DSP plan group, add A, add B, remove A.
+     *  Scenario: Mid-group read.
+     *  Expected: Only B visible mid-group; A absent.
+     */
+    void testDspGroupMirrorRemove()
+    {
+        beginTest("DSP plan group - remove mirrors onto snapshot");
+
+        resetDspState();
+
+        dspPushGroup("mirror_remove");
+
+        Array<var> ops;
+        ops.add(makeDspAddOp("core.oscillator", "test_network", "OscA"));
+        ops.add(makeDspAddOp("core.oscillator", "test_network", "OscB"));
+        ops.add(makeDspRemoveOp("OscA"));
+        expectDspSuccess(postDspOps(ops));
+
+        auto mid = getDspGroupCurrent();
+        expect((bool)mid[RestApiIds::success], "Mid-group read should succeed");
+
+        expect(!findNodeInTree(mid[RestApiIds::result], "OscA").isObject(),
+            "OscA removed in snapshot mid-group");
+        expect(findNodeInTree(mid[RestApiIds::result], "OscB").isObject(),
+            "OscB still visible mid-group");
+
+        dspPopGroupCommit();
+
+        auto tree = getDspTree();
+        expect(!findNodeInTree(tree[RestApiIds::result], "OscA").isObject(),
+            "OscA absent after commit");
+        expect(findNodeInTree(tree[RestApiIds::result], "OscB").isObject(),
+            "OscB present after commit");
+    }
+
+    //==========================================================================
+    /** Setup: In a DSP plan group, add Chain, add Osc at root, move Osc into Chain.
+     *  Scenario: Mid-group read.
+     *  Expected: Chain has child Osc; root has no direct Osc.
+     */
+    void testDspGroupMirrorMove()
+    {
+        beginTest("DSP plan group - move mirrors onto snapshot");
+
+        resetDspState();
+
+        dspPushGroup("mirror_move");
+
+        Array<var> ops;
+        ops.add(makeDspAddOp("container.chain", "test_network", "Chain"));
+        ops.add(makeDspAddOp("core.oscillator", "test_network", "Osc"));
+        ops.add(makeDspMoveOp("Osc", "Chain"));
+        expectDspSuccess(postDspOps(ops));
+
+        auto mid = getDspGroupCurrent();
+        expect((bool)mid[RestApiIds::success], "Mid-group read should succeed");
+
+        auto midChain = findNodeInTree(mid[RestApiIds::result], "Chain");
+        expect(midChain.isObject(), "Chain visible mid-group");
+
+        // Check Osc is a direct child of Chain, not at root.
+        auto chainChildren = midChain[RestApiIds::children];
+        bool oscInChain = false;
+        if (chainChildren.isArray())
+        {
+            for (int i = 0; i < chainChildren.size(); i++)
+            {
+                if (chainChildren[i][RestApiIds::nodeId].toString() == "Osc")
+                    oscInChain = true;
+            }
+        }
+        expect(oscInChain, "Osc is direct child of Chain mid-group");
+
+        // Check Osc is NOT a direct child of the root container.
+        auto rootChildren = mid[RestApiIds::result][RestApiIds::children];
+        bool oscAtRoot = false;
+        if (rootChildren.isArray())
+        {
+            for (int i = 0; i < rootChildren.size(); i++)
+            {
+                if (rootChildren[i][RestApiIds::nodeId].toString() == "Osc")
+                    oscAtRoot = true;
+            }
+        }
+        expect(!oscAtRoot, "Osc not at root mid-group (moved into Chain)");
+
+        dspPopGroupCommit();
+
+        auto tree = getDspTree();
+        auto chain = findNodeInTree(tree[RestApiIds::result], "Chain");
+        auto chainKids = chain[RestApiIds::children];
+        bool oscInChainCommitted = false;
+        if (chainKids.isArray())
+        {
+            for (int i = 0; i < chainKids.size(); i++)
+            {
+                if (chainKids[i][RestApiIds::nodeId].toString() == "Osc")
+                    oscInChainCommitted = true;
+            }
+        }
+        expect(oscInChainCommitted, "Osc committed inside Chain");
+    }
+
+    //==========================================================================
+    /** Setup: In a DSP plan group, add Chain, create_parameter on Chain "Gain".
+     *  Scenario: Mid-group read.
+     *  Expected: Chain has parameter Gain in parameters[].
+     */
+    void testDspGroupMirrorCreateParameter()
+    {
+        beginTest("DSP plan group - create_parameter mirrors onto snapshot");
+
+        resetDspState();
+
+        dspPushGroup("mirror_create_parameter");
+
+        Array<var> ops;
+        ops.add(makeDspAddOp("container.chain", "test_network", "Chain"));
+        ops.add(makeDspCreateParameterOp("Chain", "Gain", 0.0, 2.0, 1.0));
+        expectDspSuccess(postDspOps(ops));
+
+        auto mid = getDspGroupCurrent();
+        expect((bool)mid[RestApiIds::success], "Mid-group read should succeed");
+
+        auto midChain = findNodeInTree(mid[RestApiIds::result], "Chain");
+        expect(midChain.isObject(), "Chain visible mid-group");
+
+        auto midGain = findParamInArray(midChain[RestApiIds::parameters], "Gain");
+        expect(midGain.isObject(), "Gain parameter mirrored onto Chain mid-group");
+
+        dspPopGroupCommit();
+
+        auto tree = getDspTree();
+        auto chain = findNodeInTree(tree[RestApiIds::result], "Chain");
+        auto gain = findParamInArray(chain[RestApiIds::parameters], "Gain");
+        expect(gain.isObject(), "Gain parameter committed on Chain");
+    }
+
+    //==========================================================================
+    /** Setup: In a DSP plan group, add Mod (control.pma), add Osc (core.oscillator),
+     *  connect Mod -> Osc.Frequency.
+     *  Scenario: Mid-group read.
+     *  Expected: connections[] on root contains the Mod -> Osc.Frequency edge.
+     */
+    void testDspGroupMirrorConnect()
+    {
+        beginTest("DSP plan group - connect mirrors onto snapshot");
+
+        resetDspState();
+
+        dspPushGroup("mirror_connect");
+
+        Array<var> ops;
+        ops.add(makeDspAddOp("control.pma", "test_network", "Mod"));
+        ops.add(makeDspAddOp("core.oscillator", "test_network", "Osc"));
+        ops.add(makeDspConnectOp("Mod", "Osc", "Frequency"));
+        expectDspSuccess(postDspOps(ops));
+
+        auto mid = getDspGroupCurrent();
+        expect((bool)mid[RestApiIds::success], "Mid-group read should succeed");
+
+        auto midConnections = mid[RestApiIds::result][RestApiIds::connections];
+        bool found = false;
+        if (midConnections.isArray())
+        {
+            for (int i = 0; i < midConnections.size(); i++)
+            {
+                if (midConnections[i][RestApiIds::source].toString() == "Mod"
+                    && midConnections[i][RestApiIds::target].toString() == "Osc"
+                    && midConnections[i][RestApiIds::parameter].toString() == "Frequency")
+                    found = true;
+            }
+        }
+        expect(found, "Mod -> Osc.Frequency present in snapshot mid-group");
+
+        dspPopGroupCommit();
+
+        auto tree = getDspTree();
+        auto rootConns = tree[RestApiIds::result][RestApiIds::connections];
+        bool committedFound = false;
+        if (rootConns.isArray())
+        {
+            for (int i = 0; i < rootConns.size(); i++)
+            {
+                if (rootConns[i][RestApiIds::source].toString() == "Mod"
+                    && rootConns[i][RestApiIds::target].toString() == "Osc"
+                    && rootConns[i][RestApiIds::parameter].toString() == "Frequency")
+                    committedFound = true;
+            }
+        }
+        expect(committedFound, "Mod -> Osc.Frequency committed");
+    }
+
+    //==========================================================================
+    /** Setup: In a DSP plan group, add Mod, add Osc, connect, then disconnect.
+     *  Scenario: Mid-group read.
+     *  Expected: connections[] on root is empty.
+     */
+    void testDspGroupMirrorDisconnect()
+    {
+        beginTest("DSP plan group - disconnect mirrors onto snapshot");
+
+        resetDspState();
+
+        dspPushGroup("mirror_disconnect");
+
+        Array<var> ops;
+        ops.add(makeDspAddOp("control.pma", "test_network", "Mod"));
+        ops.add(makeDspAddOp("core.oscillator", "test_network", "Osc"));
+        ops.add(makeDspConnectOp("Mod", "Osc", "Frequency"));
+        ops.add(makeDspDisconnectOp("Mod", "Osc", "Frequency"));
+        expectDspSuccess(postDspOps(ops));
+
+        auto mid = getDspGroupCurrent();
+        expect((bool)mid[RestApiIds::success], "Mid-group read should succeed");
+
+        auto midConnections = mid[RestApiIds::result][RestApiIds::connections];
+        bool found = false;
+        if (midConnections.isArray())
+        {
+            for (int i = 0; i < midConnections.size(); i++)
+            {
+                if (midConnections[i][RestApiIds::source].toString() == "Mod"
+                    && midConnections[i][RestApiIds::target].toString() == "Osc"
+                    && midConnections[i][RestApiIds::parameter].toString() == "Frequency")
+                    found = true;
+            }
+        }
+        expect(!found, "Mod -> Osc.Frequency removed from snapshot mid-group");
+
+        dspPopGroupCommit();
+
+        auto tree = getDspTree();
+        auto rootConns = tree[RestApiIds::result][RestApiIds::connections];
+        bool committedFound = false;
+        if (rootConns.isArray())
+        {
+            for (int i = 0; i < rootConns.size(); i++)
+            {
+                if (rootConns[i][RestApiIds::source].toString() == "Mod"
+                    && rootConns[i][RestApiIds::target].toString() == "Osc"
+                    && rootConns[i][RestApiIds::parameter].toString() == "Frequency")
+                    committedFound = true;
+            }
+        }
+        expect(!committedFound, "connection absent after commit");
+    }
+
+    //==========================================================================
+    /** Setup: Pre-group, add nodes to the network. Then enter group and clear.
+     *  Scenario: Mid-group read.
+     *  Expected: root children[] is empty.
+     */
+    void testDspGroupMirrorClear()
+    {
+        beginTest("DSP plan group - clear mirrors onto snapshot");
+
+        resetDspState();
+
+        // Seed the network with a node BEFORE entering the group.
+        {
+            Array<var> ops;
+            ops.add(makeDspAddOp("core.oscillator", "test_network", "PreOsc"));
+            expectDspSuccess(postDspOps(ops));
+        }
+
+        dspPushGroup("mirror_clear");
+
+        // An add op inside the group is needed to force lazy creation of the
+        // DspValidationState (createAction only populates it on a DSP action).
+        // clear alone with no prior DSP op in the group still triggers lazy
+        // creation via createAction, so this op is here just for realism.
+        Array<var> ops;
+        ops.add(makeDspClearOp());
+        expectDspSuccess(postDspOps(ops));
+
+        auto mid = getDspGroupCurrent();
+        expect((bool)mid[RestApiIds::success], "Mid-group read should succeed");
+
+        auto midChildren = mid[RestApiIds::result][RestApiIds::children];
+        expectEquals<int>(midChildren.size(), 0,
+            "root children empty in snapshot mid-group after clear");
+        expect(!findNodeInTree(mid[RestApiIds::result], "PreOsc").isObject(),
+            "PreOsc absent from snapshot after clear");
+
+        dspPopGroupCommit();
+
+        auto tree = getDspTree();
+        expectEquals<int>(tree[RestApiIds::result][RestApiIds::children].size(), 0,
+            "root children empty after commit of clear");
     }
 
     void testDspApplyBatchOps()

@@ -2725,8 +2725,11 @@ struct remove : public ActionBase
 		{
 			if (!Helpers::findNode(rv, nodeId).isValid())
 				return Helpers::getErrorForNode404(rv, nodeId);
+
+			// Mirror the removal onto the plan snapshot.
+			dspValidation->removeNode(nodeId);
 		}
-		
+
 		return {};
 	}
 
@@ -2831,6 +2834,9 @@ struct move : public ActionBase
 
 			if (!np.getChildWithName(PropertyIds::Nodes).isValid())
 				return Error().withError(newParentId + " is not a container");
+
+			// Mirror the move onto the plan snapshot.
+			dspValidation->moveNode(nodeId, newParentId, insertIndex);
 		}
 
 		return {};
@@ -2965,6 +2971,11 @@ struct connect : public ActionBase
 				if (!conTree.isValid())
 					return Error().withError("illegal connection source node");
 
+				// Mirror the connection onto the plan snapshot. conTree is already
+				// inside the snapshot via getRootTree, so addConnection mutates it.
+				if (!Helpers::addConnection(conTree, targetId, parameterName))
+					return Error().withError("Connection already exists");
+
 				return {};
 			}
 			catch (Error& e)
@@ -2972,7 +2983,7 @@ struct connect : public ActionBase
 				return e;
 			}
 		}
-		
+
 		return {};
 	}
 
@@ -3099,6 +3110,10 @@ struct disconnect : public ActionBase
 
 			if (!con.isValid())
 				return Error().withError("Connection not found");
+
+			// Mirror the disconnect onto the plan snapshot. con is already inside
+			// the snapshot via getRootTree; removing it mutates the snapshot.
+			con.getParent().removeChild(con, nullptr);
 		}
 
 		return {};
@@ -3223,6 +3238,14 @@ struct set : public ActionBase
 
 			if (!p.isValid())
 				return Helpers::getErrorForParameter404(n, parameterId);
+
+			// Mirror perform() onto the plan snapshot. rv here is the snapshot
+			// tree, so p is already inside it. The branch matches perform()'s
+			// (pre-existing) behavior for network-property vs regular paths.
+			if (p.getType() == PropertyIds::Network)
+				p.setProperty(parameterId, newValue, nullptr);
+			else
+				p.setProperty(PropertyIds::Value, newValue, nullptr);
 		}
 
 		return {};
@@ -3332,19 +3355,29 @@ struct bypass : public ActionBase
 
 	Error validate() override
 	{
-		
+		if (dspValidation != nullptr)
+		{
+			auto rv = Helpers::getRootTree(this, moduleId);
+
+			if (!Helpers::findNode(rv, nodeId).isValid())
+				return Helpers::getErrorForNode404(rv, nodeId);
+
+			// Mirror onto the plan snapshot so mid-group reads and later ops
+			// in the same group observe the accumulated state.
+			dspValidation->setNodeProperty(nodeId, PropertyIds::Bypassed, bypassed);
+		}
+
 		return {};
 	}
 
 	void perform() override
 	{
-		auto ok = validate();
-
-		if (!ok)
-			throw ok;
-
 		auto rv = Helpers::getRootTree(this, moduleId);
 		auto n = Helpers::findNode(rv, nodeId);
+
+		if (!n.isValid())
+			throw Helpers::getErrorForNode404(rv, nodeId);
+
 		previousBypassed = n[PropertyIds::Bypassed];
 		n.setProperty(PropertyIds::Bypassed, bypassed, nullptr);
 	}
@@ -3452,8 +3485,21 @@ struct create_parameter : public ActionBase
 
 			if (pn.isValid())
 				return Error().withError("Parameter " + nodeId + "." + parameterId + " already exists");
+
+			// Mirror the parameter creation onto the plan snapshot. sn is already
+			// inside the snapshot tree (via getRootTree), so we build and insert
+			// the Parameter subtree directly.
+			auto pTree = sn.getChildWithName(PropertyIds::Parameters);
+
+			ValueTree np(PropertyIds::Parameter);
+			np.setProperty(PropertyIds::ID, parameterId, nullptr);
+			scriptnode::RangeHelpers::storeDoubleRange(np, range, nullptr);
+			np.setProperty(PropertyIds::DefaultValue, defaultValue, nullptr);
+			np.setProperty(PropertyIds::Value, defaultValue, nullptr);
+
+			pTree.addChild(np, -1, nullptr);
 		}
-		
+
 		return {};
 	}
 
@@ -3552,15 +3598,27 @@ struct clear : public ActionBase
 		if (!rv.isValid())
 			return Helpers::getErrorForModule404(getMainController(), moduleId);
 
+		if (dspValidation != nullptr)
+		{
+			// Mirror the clear onto the plan snapshot. The snapshot root Node is
+			// the first child of the Network tree; its Nodes child holds all
+			// children. Removing them matches what a fresh network looks like for
+			// downstream ops (and for mid-group GET ?group=current reads).
+			auto rootNode = rv.getChild(0);
+			auto nodesChild = rootNode.getChildWithName(PropertyIds::Nodes);
+			if (nodesChild.isValid())
+				nodesChild.removeAllChildren(nullptr);
+		}
+
 		return {};
 	}
 
 	void perform() override
 	{
-		auto ok = validate();
+		auto rv = Helpers::getRootTree(this, moduleId);
 
-		if (!ok)
-			throw ok;
+		if (!rv.isValid())
+			throw Helpers::getErrorForModule404(getMainController(), moduleId);
 
 		auto p = ProcessorHelpers::getFirstProcessorWithName(getMainController()->getMainSynthChain(), moduleId);
 
@@ -3568,7 +3626,7 @@ struct clear : public ActionBase
 		{
 			savedState = Helpers::getRootTree(this, moduleId);
 			h->clearAllNetworks();
-		}			
+		}
 	}
 
 	void undo() override
