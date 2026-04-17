@@ -1183,9 +1183,13 @@ void BackendProcessor::setEditorData(var editorState)
 	editorInformation = editorState;
 }
 
+hise::ControlledObject* BackendProcessor::getRestWizardRunner()
+{
+	if (wizardRunner == nullptr)
+		wizardRunner = new RestHelpers::WizardExecutor::AsyncRunner(this);
 
-
-
+	return wizardRunner.get();
+}
 
 void BackendProcessor::pushToAnalyserBuffer(AnalyserInfo::Ptr info, bool post, const AudioSampleBuffer& buffer, int numSamples)
 {

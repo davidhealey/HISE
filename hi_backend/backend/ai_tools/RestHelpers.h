@@ -441,72 +441,239 @@ struct RestHelpers
     
     struct WizardExecutor: public ControlledObject
     {
-        WizardExecutor(MainController* mc):
-          ControlledObject(mc)
-        {};
-        
-        using InitFunction = std::function<var(MainController*)>;
-        using Executor = std::function<var(MainController*, const StringPairArray&)>;
+        struct WizardStateManager : public BaseStateManager
+        {
+            WizardStateManager(MainController* mc, const RestServer::Request& req_):
+              BaseStateManager(mc),
+              req(req_),
+              result(new DynamicObject())
+            {}
+
+            void initAnswers()
+            {
+				auto jsonBody = req.getJsonBody();
+				auto id = Identifier(jsonBody[RestApiIds::wizardId]);
+				answers = jsonBody[RestApiIds::answers];
+            }
+
+            void write(const Identifier& id, const var& newValue, NotificationType) override
+            {
+                result.getDynamicObject()->setProperty(id, newValue);
+            }
+
+            var read(const Identifier& id) const override
+            {
+                return answers[id];
+            }
+
+            void addToLog(const String& message) override
+            {
+                logs.add(message);
+            }
+
+            const RestServer::Request req;
+            var answers;
+            var result;
+
+            Array<var> logs;
+        };
      
         struct Item
         {
-            InitFunction init;
-            Executor     exec;
+            BaseStateManager::InitFunction init;
+            BaseStateManager::Executor     exec;
         };
         
+        
+
         RestServer::Response initialise(const RestServer::Request& req)
         {
-            auto id = Identifier(req["id"]);
-         
-            if(executors.find(id) != executors.end())
+            WizardStateManager ws(getMainController(), req);
+
+            if(executors.find(wizardId) != executors.end())
             {
-                auto result = executors.at(id).init(getMainController());
-                setResult(result);
+                executors.at(wizardId).init(&ws);
+                setResult(ws);
             }
             else
             {
-                setError("Can't find wizard with id " + id.toString());
+                setError("Can't find wizard with id " + wizardId.toString());
             }
                            
             return makeResponse();
         }
         
-        RestServer::Response execute(const RestServer::Request& req)
+        /** class stub for a wizard executor. */
+        struct DummyTask
         {
-            auto jsonBody = req.getJsonBody();
-            auto id = Identifier(jsonBody[RestApiIds::wizardId]);
-            
-            StringPairArray answers;
-            
-            auto a = jsonBody[RestApiIds::answers];
-            
-            if(auto obj = a.getDynamicObject())
+            /** Called before the dialog is shown, return a JSON with all default values. */
+            static void initialise(BaseStateManager*)
             {
-                for(const auto& nv: obj->getProperties())
-                    answers.set(nv.name.toString(), nv.value.toString());
+                throw Result::fail("unimplemented");
             }
-            
-            if(executors.find(id) != executors.end())
+
+            /** Called with the values from the wizard. Perform the operation and return. */
+            static void execute(BaseStateManager*) {}
+        };
+
+		struct AsyncRunner : public ControlledObject,
+                             public Thread,
+                             public juce::Logger
+		{
+            AsyncRunner(MainController* mc) :
+                ControlledObject(mc),
+                Thread("Async job execution")
+            {}
+
+            RestServer::Response add(const RestServer::Request& req)
             {
-                auto result = executors.at(id).exec(getMainController(), answers);
-                setResult(result);
-            }
+                if (pending)
+                {
+                    stopThread(1000);
+                }
+
+                currentLog = nullptr;
+                errors.clear();
+                result = var();
+                pending = true;
+                progress = 0.0;
                 
-            else
-            {
-                setError("Can't find wizard with id " + id.toString());
+				auto obj = req.getJsonBody();
+
+				auto wizardId = obj[RestApiIds::wizardId].toString();
+
+                jobId = wizardId + "_" + Time::getCurrentTime().formatted("%H_%M_%S");
+
+                currentResponse = {};
+                request = req;
+
+                startThread(5);
+
+                return makeResponse();
             }
-            
-            return makeResponse();
-        }
-        
+
+			RestServer::Response makeResponse()
+			{
+                auto o = new DynamicObject();
+
+				o->setProperty(RestApiIds::success, true);
+				o->setProperty(RestApiIds::finished, !pending);
+				o->setProperty(RestApiIds::jobId, jobId);
+				o->setProperty(RestApiIds::progress, progress);
+                o->setProperty(RestApiIds::result, result);
+
+                Array<var> thisLogs;
+
+                if(currentLog != nullptr)
+                    currentLog->swapWith(thisLogs);
+
+				o->setProperty(RestApiIds::logs, thisLogs);
+				o->setProperty(RestApiIds::errors, errors);
+
+				return RestServer::Response::ok(var(o));
+			}
+
+            String getActiveJobId() { return jobId; }
+
+
+			void logMessage(const String& message) override
+			{
+                if(currentLog != nullptr)
+                    currentLog->add(message);
+			}
+
+        private:
+
+            var result;
+            Array<var>* currentLog;
+            Array<var> finishedLogs;
+            Array<var> errors;
+
+            String jobId;
+
+			void run() override
+			{
+				auto obj = request.getJsonBody();
+
+				auto wizardId = obj[RestApiIds::wizardId].toString();
+				auto answers = obj[RestApiIds::answers];
+				auto tasks = obj[RestApiIds::tasks];
+
+                WizardExecutor e(getMainController(), wizardId);
+
+                currentLog = &e.logs;
+
+                auto prevLogger = Logger::getCurrentLogger();
+
+                Logger::setCurrentLogger(this);
+
+                e.execute(request, nullptr);
+
+                Logger::setCurrentLogger(prevLogger);
+
+                pending = false;
+                progress = 1.0;
+
+                finishedLogs.addArray(e.logs);
+
+                currentLog = &finishedLogs;
+
+                result = e.result;
+			}
+
+            double progress = 0.0;
+
+            RestServer::Request request;
+            bool pending = false;
+            RestServer::Response currentResponse;
+		};
+
         template <typename T> void registerExecutor(const Identifier& id)
         {
             executors[id] = { T::initialise, T::execute };
         }
         
+		WizardExecutor(MainController* mc, const Identifier& wizardId_) :
+			ControlledObject(mc),
+            wizardId(wizardId_)
+		{
+            registerExecutors();
+        };
+
+		RestServer::Response execute(const RestServer::Request& req, AsyncRunner* runner)
+		{
+			if (runner != nullptr)
+			{
+                return runner->add(req);
+			}
+			else
+			{
+				WizardStateManager ws(getMainController(), req);
+
+				ws.initAnswers();
+
+				if (executors.find(wizardId) != executors.end())
+				{
+					executors.at(wizardId).exec(&ws);
+					setResult(ws);
+                    logs.addArray(ws.logs);
+				}
+
+				else
+				{
+					setError("Can't find wizard with id " + wizardId.toString());
+				}
+
+				return makeResponse();
+			}
+		}
+
     private:
         
+        Identifier wizardId;
+
+        void registerExecutors();
+
         RestServer::Response makeResponse() const
         {
             auto o = new DynamicObject();
@@ -523,10 +690,10 @@ struct RestHelpers
             logs.add(var(message));
         }
         
-        void setResult(const var& r)
+        void setResult(const WizardStateManager& ws)
         {
             success = true;
-            result = r;
+            result = ws.result;
         }
         
         void setError(const String& error)
@@ -543,6 +710,8 @@ struct RestHelpers
         std::map<Identifier, Item> executors;
     };
     
+	
+
     /** Gets a JavascriptProcessor from the request's moduleId parameter.
         
         @param mc   The MainController

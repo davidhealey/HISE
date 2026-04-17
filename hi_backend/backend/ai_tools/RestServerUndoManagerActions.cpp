@@ -2402,8 +2402,7 @@ struct Helpers
 	static bool addConnection(ValueTree conTree, const String& nodeId, const String& parameterId)
 	{
 		jassert(conTree.getType() == PropertyIds::Connections ||
-			conTree.getType() == PropertyIds::ModulationTargets ||
-			conTree.getType() == PropertyIds::SwitchTarget);
+			conTree.getType() == PropertyIds::ModulationTargets);
 
 		for (auto& c : conTree)
 		{
@@ -2423,8 +2422,7 @@ struct Helpers
 	static bool removeConnection(ValueTree conTree, const String& nodeId, const String& parameterId)
 	{
 		jassert(conTree.getType() == PropertyIds::Connections ||
-			conTree.getType() == PropertyIds::ModulationTargets ||
-			conTree.getType() == PropertyIds::SwitchTarget);
+			conTree.getType() == PropertyIds::ModulationTargets);
 
 		for (auto c : conTree)
 		{
@@ -2485,7 +2483,7 @@ struct Helpers
 					throw Error().withError("invalid modulation output index for node " + sn[PropertyIds::ID].toString())
 					.withHint("index: " + String(idx) + ", maxIndex: " + String(switchTree.getNumChildren()));
 
-				return conTree;
+				return conTree.getChildWithName(PropertyIds::Connections);
 			}
 			else
 			{

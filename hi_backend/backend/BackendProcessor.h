@@ -41,6 +41,31 @@ class BackendProcessor;
 class InteractionTester;
 class MidiInjector;
 
+/** A base class that is used both by the HTTP wizards as well as the multipage dialog library.
+
+	This encapsulates the read / writing to the state as well as error reporting / logging.
+
+	In order to use that class, implement two static functions in your subclass that implement the logic
+	for initialisation and execution, then pass in a BaseStateManager that reads / writes the values.
+
+*/
+struct BaseStateManager : public ControlledObject
+{
+	using InitFunction = std::function<void(BaseStateManager*)>;
+	using Executor = std::function<void(BaseStateManager*)>;
+
+	BaseStateManager(MainController* mc) :
+		ControlledObject(mc)
+	{}
+
+	virtual ~BaseStateManager() {};
+	virtual void write(const Identifier& id, const var& newValue, NotificationType n=dontSendNotification) = 0;
+	virtual var read(const Identifier& id) const = 0;
+
+	virtual void addToLog(const String& message) = 0;
+};
+
+
 struct AnalyserInfo: public ReferenceCountedObject
 {
 	AnalyserInfo(SimpleRingBuffer::PropertyObject* o1, SimpleRingBuffer::PropertyObject* o2)
@@ -548,6 +573,7 @@ public:
 	
 	RestServer& getRestServer() { return restServer; }
 
+	ControlledObject* getRestWizardRunner();
 
 	simple_css::Animator& getCssParseAnimator() { return restServerAnimator; }
 
@@ -651,6 +677,7 @@ private:
 
 	AutoSaver autosaver;
 
+	ScopedPointer<ControlledObject> wizardRunner;
 	ScopedPointer<ControlledObject> buildUndoManager;
 
 	RestServer restServer;

@@ -3525,6 +3525,14 @@ namespace WizardIds
 		"compile_networks", "audio_export", "install_package_maker"
 	};
 
+	static bool isAsyncTask(const String& wizardId)
+	{
+		if (wizardId == "plugin_export")
+			return true;
+
+		return false;
+	}
+
 	static bool isValidTaskForWizard(const String& wizardId, const String& task)
 	{
 		if (wizardId == "new_project")
@@ -3560,6 +3568,19 @@ namespace WizardIds
 	}
 }
 
+void RestHelpers::WizardExecutor::registerExecutors()
+{
+	// prove that the API envelope matches
+	registerExecutor<DummyTask>("dummy");
+	executors.clear();
+
+	registerExecutor<multipage::library::NewProjectCreator>("new_project");
+
+	registerExecutor<multipage::library::CompileProjectDialog>("plugin_export");
+}
+
+
+
 RestServer::Response RestHelpers::handleWizardInitialise(MainController* mc,
                                                           RestServer::AsyncRequest::Ptr req)
 {
@@ -3572,8 +3593,8 @@ RestServer::Response RestHelpers::handleWizardInitialise(MainController* mc,
 		return req->fail(400, "Unknown wizard ID: " + wizardId +
 			". Valid IDs: " + WizardIds::validWizardIds.joinIntoString(", "));
 
-    WizardExecutor w(mc);
-    w.registerExecutor<multipage::library::NewProjectCreator>("new_project");
+    WizardExecutor w(mc, wizardId);
+    
     auto ok = w.initialise(req->getRequest());
 	req->complete(ok);
 	return req->waitForResponse();
@@ -3617,9 +3638,14 @@ RestServer::Response RestHelpers::handleWizardExecute(MainController* mc,
 	// 4. For sync tasks: return result directly
 	// 5. For async tasks (audio_export): start background job, return {jobId, async: true}
 
-    WizardExecutor w(mc);
-    w.registerExecutor<multipage::library::NewProjectCreator>("new_project");
-    auto ok = w.execute(req->getRequest());
+    WizardExecutor w(mc, wizardId);
+
+	auto async = WizardIds::isAsyncTask(wizardId);
+
+	auto bp = dynamic_cast<BackendProcessor*>(mc);
+	auto s = dynamic_cast<RestHelpers::WizardExecutor::AsyncRunner*>(bp->getRestWizardRunner());
+
+    auto ok = w.execute(req->getRequest(), async ? s : nullptr);
     req->complete(ok);
     return req->waitForResponse();
 }
@@ -3632,11 +3658,20 @@ RestServer::Response RestHelpers::handleWizardStatus(MainController* mc,
 	if (jobId.isEmpty())
 		return req->fail(400, "jobId query parameter is required");
 
+	auto bp = dynamic_cast<BackendProcessor*>(mc);
+	auto s = dynamic_cast<RestHelpers::WizardExecutor::AsyncRunner*>(bp->getRestWizardRunner());
+
+
 	// TODO (Christoph): Look up active async job by jobId.
 	// Return {finished, progress, message} from the job's current state.
 	// If jobId is unknown, return error.
 
-	return req->fail(404, "No active job with ID: " + jobId);
+	if(jobId != s->getActiveJobId())
+		return req->fail(404, "No active job with ID: " + jobId);
+
+	req->complete(s->makeResponse());
+	return req->waitForResponse();
+
 }
 
 // ============================================================================
@@ -4997,8 +5032,8 @@ RestServer::Response RestHelpers::handleDspInit(MainController* mc,
 
 	auto p = dynamic_cast<Processor*>(holder);
 
-	network->prepareToPlay(p->getSampleRate(), p->getLargestBlockSize());
-
+	p->prepareToPlay(p->getSampleRate(), p->getLargestBlockSize());
+	
 	auto tree = network->getValueTree();
 	auto rootNode = tree.getChild(0); // First child is the root container node
 

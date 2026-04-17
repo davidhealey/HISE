@@ -820,6 +820,9 @@ CompileExporter::ErrorCodes CompileExporter::exportInternal(TargetTypes type, Bu
 			if (result != ErrorCodes::OK) return result;
 		}
 
+		if (createProjectFilesOnly)
+			return result;
+
 		setProgress(0.5);
 
 		logMessage("> Launch system compiler...");

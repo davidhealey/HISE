@@ -287,8 +287,14 @@ void RestServer::AsyncRequest::mergeLogsIntoResponse()
             rootObj->setProperty(RestApiIds::result, response.body);
     }
     
-    // Build logs array
     Array<var> logsArray;
+
+    if (rootObj->hasProperty(RestApiIds::logs))
+    {
+        if (auto ar = rootObj->getProperty(RestApiIds::logs).getArray())
+            logsArray.addArray(*ar);
+    }
+
     for (const auto& log : logs)
         logsArray.add(log);
     
