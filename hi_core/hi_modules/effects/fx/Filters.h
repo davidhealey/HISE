@@ -142,6 +142,8 @@ private:
 	FilterBank voiceFilters;
 	FilterBank monoFilters;
 
+	float perVoiceGainMod[NUM_POLYPHONIC_VOICES];
+
 	mutable WeakReference<Processor> ownerSynthForCoefficients;
 
 	JUCE_DECLARE_WEAK_REFERENCEABLE(PolyFilterEffect)

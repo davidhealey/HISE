@@ -180,6 +180,7 @@ private:
 	LinearSmoothedValue<double> frequency = 10000.0;
 	LinearSmoothedValue<double> q = 1.0;
 	LinearSmoothedValue<double> gain = 1.0;
+	LinearSmoothedValue<double> gainMod = 1.0;
 
 	double currentFreq;
 	double currentGain;
