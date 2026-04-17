@@ -1267,6 +1267,7 @@ void PresetBrowser::showLoadedPreset()
 		categoryColumn->setSelectedFile(category, dontSendNotification);
 		presetColumn->setNewRootDirectory(category);
 		presetColumn->setSelectedFile(f, dontSendNotification);
+		presetColumn->updateButtonVisibility(isReadOnly(f));
 		saveButton->setEnabled(!isReadOnly(f));
 
 		if (expansionColumn != nullptr)
