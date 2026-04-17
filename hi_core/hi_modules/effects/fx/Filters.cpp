@@ -157,6 +157,8 @@ PolyFilterEffect::PolyFilterEffect(MainController *mc, const String &uid, int nu
 	voiceFilters.setMode((FilterBank::FilterMode)(int)getDefaultValue(PolyFilterEffect::Mode));
 	monoFilters.setMode((FilterBank::FilterMode)(int)getDefaultValue(PolyFilterEffect::Mode));
 
+	std::fill(perVoiceGainMod, perVoiceGainMod + NUM_POLYPHONIC_VOICES, 1.0f);
+
 	registerAtObject(getFilterData(0));
 }
 
@@ -467,13 +469,13 @@ void PolyFilterEffect::applyEffect(int voiceIndex, AudioSampleBuffer &b, int sta
 
 	FilterHelpers::RenderData r(b, startSample, numSamples);
 	r.voiceIndex = voiceIndex;
-	r.freqModValue = modChains[FrequencyChain].getOneModulationValue(startSample);
+	r.freqModValue = modChains[FrequencyChain].getOneModulationValue(voiceIndex, startSample);
 
 	auto bp = bipolarIntensity.getNextValue();
 
 	if (bp != 0.0f)
 	{
-		auto bipolarFMod = modChains[BipolarFrequencyChain].getOneModulationValue(startSample);
+		auto bipolarFMod = modChains[BipolarFrequencyChain].getOneModulationValue(voiceIndex, startSample);
 
 		if (!modChains[BipolarFrequencyChain].getChain()->shouldBeProcessedAtAll())
 			bipolarFMod = 0.0;
@@ -481,12 +483,17 @@ void PolyFilterEffect::applyEffect(int voiceIndex, AudioSampleBuffer &b, int sta
 		r.bipolarDelta = (double)(bp * bipolarFMod);
 	}
 
-	auto gainMod = (double)modChains[GainChain].getOneModulationValue(startSample);
-  
-	if(gainMod != 1.0f)
-	    r.gainModValue = (double)(Decibels::decibelsToGain(2.0 * gain * (gainMod - 1.0f)));
+	double gainMod;
 
-	r.qModValue = (double)modChains[ResonanceChain].getOneModulationValue(startSample);
+	if (modChains[GainChain].getChain()->hasOnlyVoiceStartMods() && isPositiveAndBelow(voiceIndex, NUM_POLYPHONIC_VOICES))
+		gainMod = (double)perVoiceGainMod[voiceIndex];
+	else
+		gainMod = (double)modChains[GainChain].getOneModulationValue(voiceIndex, startSample);
+
+	if(gainMod != 1.0)
+	    r.gainModValue = Decibels::decibelsToGain(2.0 * gain * (gainMod - 1.0));
+
+	r.qModValue = (double)modChains[ResonanceChain].getOneModulationValue(voiceIndex, startSample);
 
     voiceFilters.setDisplayModValues(voiceIndex, (float)r.applyModValue(frequency), (float)r.gainModValue, (float)r.qModValue);
 	voiceFilters.renderPoly(r);
@@ -499,14 +506,17 @@ void PolyFilterEffect::startVoice(int voiceIndex, const HiseEvent& e)
 	VoiceEffectProcessor::startVoice(voiceIndex, e);
 
 	voiceFilters.reset(voiceIndex);
+	voiceFilters.setDisplayVoiceIndex(voiceIndex);
+
+	if (isPositiveAndBelow(voiceIndex, NUM_POLYPHONIC_VOICES))
+		perVoiceGainMod[voiceIndex] = modChains[GainChain].getChain()->getConstantVoiceValue(voiceIndex);
 
 	if (!polyMode && !blockIsActive)
 	{
-		
 		monoFilters.reset();
 		polyWatchdog = 32;
 	}
-	
+
 	blockIsActive = true;
 }
 

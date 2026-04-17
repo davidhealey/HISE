@@ -388,6 +388,8 @@ private:
 	double q;
 	int numBands;
 
+	float perVoiceXFadeMod[NUM_POLYPHONIC_VOICES];
+
 	FixedVoiceAmountArray<PeakFilterBand> filterBanks;
 };
 
