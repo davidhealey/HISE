@@ -80,6 +80,7 @@ void MultiChannelFilter<FilterSubType>::setSampleRate(double newSampleRate)
 	frequency.reset(newSampleRate / 64.0, smoothingTimeSeconds);
 	q.reset(newSampleRate / 64.0, smoothingTimeSeconds);
 	gain.reset(newSampleRate / 64.0, smoothingTimeSeconds);
+	gainMod.reset(newSampleRate / 64.0, smoothingTimeSeconds);
 
 	reset();
 	clearCoefficients();
@@ -194,6 +195,7 @@ void MultiChannelFilter<FilterSubType>::reset(int unused/*=0*/)
 	frequency.setValueWithoutSmoothing(targetFreq);
 	gain.setValueWithoutSmoothing(targetGain);
 	q.setValueWithoutSmoothing(targetQ);
+	gainMod.setValueWithoutSmoothing(1.0);
 
 	processed = false;
 
@@ -290,7 +292,8 @@ void MultiChannelFilter<FilterSubType>::update(FilterHelpers::RenderData& render
 	const auto f = renderData.applyModValue(frequency.getNextValue());
 
 	auto thisFreq = FilterLimits::limitFrequency(f);
-	auto thisGain = renderData.gainModValue * gain.getNextValue();
+	gainMod.setValue(renderData.gainModValue, !processed);
+	auto thisGain = gainMod.getNextValue() * gain.getNextValue();
 	auto thisQ = FilterLimits::limitQ(q.getNextValue() * renderData.qModValue);
 
 	dirty |= compareAndSet(currentFreq, thisFreq);

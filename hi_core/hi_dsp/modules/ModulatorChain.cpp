@@ -1242,6 +1242,36 @@ float ModulatorChain::ModChainWithBuffer::getOneModulationValue(int startSample)
 	return currentVoiceData[downsampledOffset];
 }
 
+float ModulatorChain::ModChainWithBuffer::getOneModulationValue(int voiceIndex, int startSample) const
+{
+	if(numActiveVoices == 0)
+	{
+		ModIterator<Modulator> iter(c);
+
+		float m = 1.0f;
+
+		while(auto mod = iter.next())
+		{
+			auto mv = mod->getInactiveModValue();
+			m *= mv;
+		}
+
+		return m;
+	}
+
+	jassert(!options.expandToAudioRate);
+
+	if (currentVoiceData == nullptr)
+	{
+		if (isPositiveAndBelow(voiceIndex, NUM_POLYPHONIC_VOICES))
+			return currentConstantVoiceValues[voiceIndex];
+		return getConstantModulationValue();
+	}
+
+	const int downsampledOffset = startSample / HISE_CONTROL_RATE_DOWNSAMPLING_FACTOR;
+	return currentVoiceData[downsampledOffset];
+}
+
 float* ModulatorChain::ModChainWithBuffer::getScratchBuffer()
 {
 	return modBuffer.scratchBuffer;
