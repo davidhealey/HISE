@@ -59,6 +59,8 @@ filterBanks(numVoices_)
 	dataB->setRange(-24.0, 24.0, 0.1);
 	dataMix->setRange(-24.0, 24.0, 0.1);
 
+	std::fill(perVoiceXFadeMod, perVoiceXFadeMod + NUM_POLYPHONIC_VOICES, 0.5f);
+
 	setNumFilterBands(filterBandIndex);
 
 	setQ((float)q);
@@ -167,14 +169,23 @@ void HarmonicFilter::startVoice(int voiceIndex, const HiseEvent& e)
 
 	filterBanks[voiceIndex].reset();
 	filterBanks[voiceIndex].updateBaseFrequency(freq);
+
+	if (isPositiveAndBelow(voiceIndex, NUM_POLYPHONIC_VOICES))
+		perVoiceXFadeMod[voiceIndex] = modChains[XFadeChain].getChain()->getConstantVoiceValue(voiceIndex);
 }
 
 void HarmonicFilter::applyEffect(int voiceIndex, AudioSampleBuffer &b, int startSample, int numSamples)
 {
 	const bool useModulation = modChains[XFadeChain].getChain()->shouldBeProcessedAtAll();
 
-	const float xModValue = useModulation ? modChains[XFadeChain].getOneModulationValue(startSample) : currentCrossfadeValue;
-	
+	float xModValue;
+	if (!useModulation)
+		xModValue = currentCrossfadeValue;
+	else if (modChains[XFadeChain].getChain()->hasOnlyVoiceStartMods() && isPositiveAndBelow(voiceIndex, NUM_POLYPHONIC_VOICES))
+		xModValue = perVoiceXFadeMod[voiceIndex];
+	else
+		xModValue = modChains[XFadeChain].getOneModulationValue(voiceIndex, startSample);
+
 	if (voiceIndex == modChains[XFadeChain].getChain()->polyManager.getLastStartedVoice())
 		setCrossfadeValue(xModValue);
 
