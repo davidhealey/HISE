@@ -277,6 +277,7 @@ public:
 		double tonality = 0.0;
 		bool synchronousSkip = false;
 		double numQuarters = 0.0;
+		double sourceBpm = 0.0;
 		Identifier engineId;
 
 		void reset()
@@ -285,6 +286,7 @@ public:
 			tonality = 0.0;
 			synchronousSkip = false;
 			numQuarters = 0.0;
+			sourceBpm = 0.0;
 			engineId = {};
 		}
 
@@ -297,6 +299,7 @@ public:
 			obj->setProperty("SkipLatency", synchronousSkip);
 			obj->setProperty("Mode", modes[static_cast<int>(mode)]);
 			obj->setProperty("NumQuarters", numQuarters);
+			obj->setProperty("SourceBPM", sourceBpm);
 			obj->setProperty("PreferredEngine", engineId.toString());
 
 			return {obj.get()};
@@ -310,6 +313,7 @@ public:
 			synchronousSkip = json.getProperty("SkipLatency", false);
 			mode = static_cast<TimestretchMode>(modes.indexOf(json.getProperty("Mode", "Disabled").toString()));
 			numQuarters = json.getProperty("NumQuarters", 0.0);
+			sourceBpm = jmax(0.0, static_cast<double>(json.getProperty("SourceBPM", 0.0)));
 
 			auto id = json.getProperty("PreferredEngine", "").toString();
 
