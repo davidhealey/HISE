@@ -245,10 +245,10 @@
                        optimisation="1" osxArchitecture="arm64" libraryPath="../../../../tools/faust/fakelib"
                        defines="HISE_INCLUDE_FAUST=0&#10;HISE_FAUST_USE_LLVM_JIT=1&#10;HISE_INCLUDE_FAUST_JIT=0&#10;HISE_INCLUDE_LORIS=0&#10;HISE_INCLUDE_RLOTTIE=0&#10;HISE_INCLUDE_RT_NEURAL=0"
                        targetName="HISE Debug"/>
-        <CONFIGURATION isDebug="0" name="Debug with Faust" targetName="HISE Debug" binaryPath="Builds/MacOSX/build/Debug"
+        <CONFIGURATION isDebug="0" name="DebugwithFaust" targetName="HISE Debug" binaryPath="Builds/MacOSX/build/Debug"
                        headerPath="../../../../tools/faust/include" libraryPath="../../../../tools/faust/lib"
                        defines="HISE_INCLUDE_FAUST=1&#10;HISE_FAUST_USE_LLVM_JIT=1&#10;HISE_INCLUDE_FAUST_JIT=1"/>
-        <CONFIGURATION isDebug="0" name="Release with Faust" targetName="HISE" libraryPath="../../../../tools/faust/lib"
+        <CONFIGURATION isDebug="0" name="ReleasewithFaust" targetName="HISE" libraryPath="../../../../tools/faust/lib"
                        headerPath="../../../../tools/faust/include" binaryPath="Builds/MacOSX/build/Release"
                        defines="HISE_INCLUDE_FAUST=1&#10;HISE_FAUST_USE_LLVM_JIT=1&#10;HISE_INCLUDE_FAUST_JIT=1"/>
         <CONFIGURATION isDebug="0" name="CI" targetName="HISE" headerPath="../../../../tools/faust/fakelib&#10;"

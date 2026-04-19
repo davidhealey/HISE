@@ -99,27 +99,23 @@
         <MODULEPATH id="juce_audio_processors_headless" path="../../JUCE/modules"/>
       </MODULEPATHS>
     </XCODE_MAC>
-    <MACOSX_MAKE targetFolder="Builds/MacOSXMakefile"
-                 extraLinkerFlags="-Wl,-ld_new"
+    <MACOSX_MAKE targetFolder="Builds/MacOSXMakefile" extraLinkerFlags="-Wl,-ld_new"
                  extraCompilerFlags="-Wno-reorder -Wno-inconsistent-missing-override -faligned-allocation -Wno-switch -ffp-contract=off"
                  pchSkipModulePatterns="juce_*, melatonin_blur, hi_rlottie_*, hi_loris_*, hi_snex_*"
                  compileFirstPatterns="*hi_scripting_01*, *hi_tools_01*, *hi_scripting_03*"
                  featureGatedModules="hi_rlottie:HISE_INCLUDE_RLOTTIE, hi_loris:HISE_INCLUDE_LORIS">
       <CONFIGURATIONS>
         <CONFIGURATION name="Debug" isDebug="1" optimisation="1" targetName="HISE Debug"
-                       headerPath="../../../../tools/SDK/VST3 SDK"
-                       enablePluginBinaryCopyStep="0"/>
+                       headerPath="../../../../tools/SDK/VST3 SDK" enablePluginBinaryCopyStep="0"/>
         <CONFIGURATION name="Release" isDebug="0" optimisation="3" targetName="HISE"
                        linkTimeOptimisation="1" headerPath="../../../../tools/SDK/VST3 SDK"
                        enablePluginBinaryCopyStep="0"/>
-        <CONFIGURATION name="Debug MultiChannel" isDebug="1" optimisation="1" targetName="HISE Debug 16 Out"
-                       headerPath="../../../../tools/SDK/VST3 SDK"
-                       defines="HISE_NUM_PLUGIN_CHANNELS=8"
+        <CONFIGURATION name="DebugMultiChannel" isDebug="1" optimisation="1" targetName="HISE Debug 16 Out"
+                       headerPath="../../../../tools/SDK/VST3 SDK" defines="HISE_NUM_PLUGIN_CHANNELS=8"
                        enablePluginBinaryCopyStep="0"/>
-        <CONFIGURATION name="Release MultiChannel" isDebug="0" optimisation="3" targetName="HISE 16 Out"
+        <CONFIGURATION name="ReleaseMultiChannel" isDebug="0" optimisation="3" targetName="HISE 16 Out"
                        linkTimeOptimisation="1" headerPath="../../../../tools/SDK/VST3 SDK"
-                       defines="HISE_NUM_PLUGIN_CHANNELS=8"
-                       enablePluginBinaryCopyStep="0"/>
+                       defines="HISE_NUM_PLUGIN_CHANNELS=8" enablePluginBinaryCopyStep="0"/>
       </CONFIGURATIONS>
       <MODULEPATHS>
         <MODULEPATH id="juce_gui_extra" path="../../JUCE/modules"/>
