@@ -45,22 +45,19 @@
                        targetName="HISE" linkTimeOptimisation="0" cppLibType="libc++"
                        enablePluginBinaryCopyStep="1" stripLocalSymbols="1" defines="HISE_CI=1&#10;HI_RUN_UNIT_TESTS=1"
                        macOSDeploymentTarget="11.0" libraryPath="../../../../tools/faust/fakelib&#10;"/>
-        <CONFIGURATION name="Release with Faust" osxCompatibility="11.0 SDK" isDebug="0"
+        <CONFIGURATION name="ReleaseWithFaust" osxCompatibility="11.0 SDK" isDebug="0"
                        optimisation="3" targetName="HISE" linkTimeOptimisation="1" cppLibType="libc++"
                        enablePluginBinaryCopyStep="1" macOSDeploymentTarget="11.0" libraryPath="../../../../tools/faust/lib"
-                       binaryPath="Builds/MacOSX/build/Release" headerPath="../../../../tools/faust/include"
-                       defines="HISE_INCLUDE_FAUST=1&#10;HISE_FAUST_USE_LLVM_JIT=1&#10;HISE_INCLUDE_FAUST_JIT=1"/>
-        <CONFIGURATION name="Debug with Faust" osxCompatibility="11.0 SDK" isDebug="1"
+                       headerPath="../../../../tools/faust/include" defines="HISE_INCLUDE_FAUST=1&#10;HISE_FAUST_USE_LLVM_JIT=1&#10;HISE_INCLUDE_FAUST_JIT=1"/>
+        <CONFIGURATION name="DebugWithFaust" osxCompatibility="11.0 SDK" isDebug="1"
                        optimisation="1" targetName="HISE Debug" linkTimeOptimisation="0"
                        cppLibType="libc++" enablePluginBinaryCopyStep="1" macOSDeploymentTarget="11.0"
                        headerPath="../../../../tools/faust/include" libraryPath="../../../../tools/faust/lib"
-                       defines="HISE_INCLUDE_FAUST=1&#10;HISE_FAUST_USE_LLVM_JIT=1&#10;HISE_INCLUDE_FAUST_JIT=1"
-                       binaryPath="Builds/MacOSX/build/Debug"/>
-        <CONFIGURATION name="Minimal Build" osxCompatibility="11.0 SDK" isDebug="1"
-                       optimisation="1" targetName="HISE Debug" linkTimeOptimisation="0"
-                       cppLanguageStandard="c++11" cppLibType="libc++" enablePluginBinaryCopyStep="1"
-                       macOSDeploymentTarget="11.0" libraryPath="../../../../tools/faust/fakelib"
-                       defines="HISE_INCLUDE_FAUST=0&#10;HISE_FAUST_USE_LLVM_JIT=1&#10;HISE_INCLUDE_FAUST_JIT=0&#10;HISE_INCLUDE_LORIS=0&#10;HISE_INCLUDE_RLOTTIE=0&#10;HISE_INCLUDE_RT_NEURAL=0"/>
+                       defines="HISE_INCLUDE_FAUST=1&#10;HISE_FAUST_USE_LLVM_JIT=1&#10;HISE_INCLUDE_FAUST_JIT=1"/>
+        <CONFIGURATION name="Minimal" osxCompatibility="11.0 SDK" isDebug="1" optimisation="1"
+                       targetName="HISE Debug" linkTimeOptimisation="0" cppLanguageStandard="c++11"
+                       cppLibType="libc++" enablePluginBinaryCopyStep="1" macOSDeploymentTarget="11.0"
+                       libraryPath="../../../../tools/faust/fakelib" defines="HISE_INCLUDE_FAUST=0&#10;HISE_FAUST_USE_LLVM_JIT=1&#10;HISE_INCLUDE_FAUST_JIT=0&#10;HISE_INCLUDE_LORIS=0&#10;HISE_INCLUDE_RLOTTIE=0&#10;HISE_INCLUDE_RT_NEURAL=0"/>
       </CONFIGURATIONS>
       <MODULEPATHS>
         <MODULEPATH id="juce_gui_extra" path="../../JUCE/modules"/>
@@ -117,21 +114,21 @@
                        useRuntimeLibDLL="0" debugInformationFormat="ProgramDatabase"
                        enablePluginBinaryCopyStep="0" linkTimeOptimisation="0" defines="HISE_CI=1&#10;HI_RUN_UNIT_TESTS=1"
                        libraryPath="../../../../tools/fftw/windows"/>
-        <CONFIGURATION name="Debug with Faust" generateManifest="1" winArchitecture="x64"
+        <CONFIGURATION name="DebugWithFaust" generateManifest="1" winArchitecture="x64"
                        isDebug="1" optimisation="1" targetName="HISE Debug" headerPath="../../../../tools/SDK/ASIOSDK2.3/common&#10;../../../../tools/fftw&#10;C:\Program Files\Faust\include"
                        useRuntimeLibDLL="0" debugInformationFormat="ProgramDatabase"
                        enablePluginBinaryCopyStep="0" libraryPath="../../../../tools/fftw/windows&#10;C:\Program Files\Faust\lib"
                        postbuildCommand="copy /Y &quot;C:\Program Files\Faust\lib\faust.dll&quot;  &quot;$(TargetDir)faust.dll&quot;"
                        defines="HISE_INCLUDE_FAUST=1&#10;HISE_FAUST_USE_LLVM_JIT=1&#10;HISE_INCLUDE_FAUST_JIT=1"/>
-        <CONFIGURATION name="Release with Faust" generateManifest="1" winArchitecture="x64"
+        <CONFIGURATION name="ReleaseWithFaust" generateManifest="1" winArchitecture="x64"
                        isDebug="0" targetName="HISE" headerPath="../../../../tools/SDK/ASIOSDK2.3/common&#10;../../../../tools/fftw&#10;C:\Program Files\Faust\include"
                        useRuntimeLibDLL="0" enableIncrementalLinking="1" alwaysGenerateDebugSymbols="1"
                        debugInformationFormat="ProgramDatabase" enablePluginBinaryCopyStep="0"
                        linkTimeOptimisation="1" libraryPath="../../../../tools/fftw/windows&#10;C:\Program Files\Faust\lib"
                        postbuildCommand="copy /Y &quot;C:\Program Files\Faust\lib\faust.dll&quot;  &quot;$(TargetDir)faust.dll&quot;"
                        defines="HISE_INCLUDE_FAUST=1&#10;HISE_FAUST_USE_LLVM_JIT=1&#10;HISE_INCLUDE_FAUST_JIT=1&#10;"/>
-        <CONFIGURATION name="Minimal Build" generateManifest="1" winArchitecture="x64"
-                       isDebug="1" optimisation="1" targetName="HISE Debug" headerPath="../../../../tools/SDK/ASIOSDK2.3/common&#10;../../../../tools/fftw&#10;C:\Program Files\Faust\include"
+        <CONFIGURATION name="Minimal" generateManifest="1" winArchitecture="x64" isDebug="1"
+                       optimisation="1" targetName="HISE Debug" headerPath="../../../../tools/SDK/ASIOSDK2.3/common&#10;../../../../tools/fftw&#10;C:\Program Files\Faust\include"
                        useRuntimeLibDLL="0" debugInformationFormat="ProgramDatabase"
                        enablePluginBinaryCopyStep="0" libraryPath="../../../../tools/fftw/windows&#10;C:\Program Files\Faust\lib&#10;"
                        defines="HISE_INCLUDE_FAUST=0&#10;HISE_FAUST_USE_LLVM_JIT=1&#10;HISE_INCLUDE_FAUST_JIT=0&#10;HISE_INCLUDE_LORIS=0&#10;HISE_INCLUDE_RLOTTIE=0&#10;HISE_INCLUDE_RT_NEURAL=0&#10;JUCE_ALLOW_EXTERNAL_UNLOCK=1&#10;"
@@ -178,18 +175,18 @@
                 extraLinkerFlags="-no-pie&#10;-flto=auto&#10;-fuse-ld=gold" extraCompilerFlags="-fno-strict-aliasing"
                 externalLibraries="faust">
       <CONFIGURATIONS>
-        <CONFIGURATION name="Debug" isDebug="1" optimisation="1" targetName="HISE Standalone"
+        <CONFIGURATION name="Debug" isDebug="1" optimisation="1" targetName="HISE Debug"
                        headerPath="/usr/include/freetype2&#10;/usr/include/gtk-3.0/gtk"
                        libraryPath="../../../../tools/faust/fakelib_linux"/>
-        <CONFIGURATION name="Release" isDebug="0" optimisation="3" targetName="HISE Standalone"
+        <CONFIGURATION name="Release" isDebug="0" optimisation="3" targetName="HISE"
                        linkTimeOptimisation="1" headerPath="/usr/include/freetype2&#10;/usr/include/gtk-3.0/gtk"
                        libraryPath="../../../../tools/faust/fakelib_linux"/>
         <CONFIGURATION isDebug="1" name="DebugWithFaust" headerPath="/usr/include/freetype2&#10;/usr/include/gtk-3.0/gtk"
                        defines="HISE_INCLUDE_FAUST=1&#10;HISE_FAUST_USE_LLVM_JIT=1&#10;HISE_INCLUDE_FAUST_JIT=1"
-                       targetName="HISE Standalone" optimisation="1"/>
+                       targetName="HISE Debug" optimisation="1"/>
         <CONFIGURATION isDebug="0" name="ReleaseWithFaust" headerPath="/usr/include/freetype2&#10;/usr/include/gtk-3.0/gtk"
                        defines="HISE_INCLUDE_FAUST=1&#10;HISE_FAUST_USE_LLVM_JIT=1&#10;HISE_INCLUDE_FAUST_JIT=1"
-                       targetName="HISE Standalone" linkTimeOptimisation="1" optimisation="3"/>
+                       targetName="HISE" linkTimeOptimisation="1" optimisation="3"/>
       </CONFIGURATIONS>
       <MODULEPATHS>
         <MODULEPATH id="juce_gui_extra" path="../../JUCE/modules"/>
@@ -245,12 +242,10 @@
                        optimisation="1" osxArchitecture="arm64" libraryPath="../../../../tools/faust/fakelib"
                        defines="HISE_INCLUDE_FAUST=0&#10;HISE_FAUST_USE_LLVM_JIT=1&#10;HISE_INCLUDE_FAUST_JIT=0&#10;HISE_INCLUDE_LORIS=0&#10;HISE_INCLUDE_RLOTTIE=0&#10;HISE_INCLUDE_RT_NEURAL=0"
                        targetName="HISE Debug"/>
-        <CONFIGURATION isDebug="0" name="DebugwithFaust" targetName="HISE Debug" binaryPath="Builds/MacOSX/build/Debug"
-                       headerPath="../../../../tools/faust/include" libraryPath="../../../../tools/faust/lib"
-                       defines="HISE_INCLUDE_FAUST=1&#10;HISE_FAUST_USE_LLVM_JIT=1&#10;HISE_INCLUDE_FAUST_JIT=1"/>
-        <CONFIGURATION isDebug="0" name="ReleasewithFaust" targetName="HISE" libraryPath="../../../../tools/faust/lib"
-                       headerPath="../../../../tools/faust/include" binaryPath="Builds/MacOSX/build/Release"
-                       defines="HISE_INCLUDE_FAUST=1&#10;HISE_FAUST_USE_LLVM_JIT=1&#10;HISE_INCLUDE_FAUST_JIT=1"/>
+        <CONFIGURATION isDebug="1" name="DebugWithFaust" targetName="HISE Debug" headerPath="../../../../tools/faust/include"
+                       libraryPath="../../../../tools/faust/lib" defines="HISE_INCLUDE_FAUST=1&#10;HISE_FAUST_USE_LLVM_JIT=1&#10;HISE_INCLUDE_FAUST_JIT=1"/>
+        <CONFIGURATION isDebug="0" name="ReleaseWithFaust" targetName="HISE" libraryPath="../../../../tools/faust/lib"
+                       headerPath="../../../../tools/faust/include" defines="HISE_INCLUDE_FAUST=1&#10;HISE_FAUST_USE_LLVM_JIT=1&#10;HISE_INCLUDE_FAUST_JIT=1"/>
         <CONFIGURATION isDebug="0" name="CI" targetName="HISE" headerPath="../../../../tools/faust/fakelib&#10;"
                        defines="HISE_CI=1&#10;HI_RUN_UNIT_TESTS=1" optimisation="4"/>
       </CONFIGURATIONS>
