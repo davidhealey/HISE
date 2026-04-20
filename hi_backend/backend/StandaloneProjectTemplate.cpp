@@ -145,7 +145,8 @@ static const unsigned char projectStandaloneTemplate_jucer_lines[] = R"(
 		%LORIS_MODULEPATH%
       </MODULEPATHS>
     </XCODE_MAC>
-    <MACOSX_MAKE targetFolder="Builds/MacOSXMakefile" vstLegacyFolder="%VSTSDK_FOLDER%"
+)"
+R"(    <MACOSX_MAKE targetFolder="Builds/MacOSXMakefile" vstLegacyFolder="%VSTSDK_FOLDER%"
                  extraCompilerFlags="-Wno-reorder -Wno-inconsistent-missing-override  -faligned-allocation -ffp-contract=off"
                  extraLinkerFlags="%OSX_STATIC_LIBS% -Wl,-ld_new"
                  extraDefs="%EXTRA_DEFINES_OSX%&#10;HISE_INCLUDE_LORIS=0"
