@@ -351,8 +351,12 @@ void DspNetwork::createAllNodesOnce()
 
 			Namespace nh(header, "ScriptnodeDataBase", false);
 			
-			String hl1 = "static constexpr int scriptnode_database_datSize = " + String(compressed.getSize()) << ";";
-			String hl2 = "extern const char* scriptnode_database_dat;";
+			String hl1;
+			
+			hl1 << "static constexpr int scriptnode_database_datSize = " << String(compressed.getSize()) << ";";
+			String hl2;
+			
+			hl2 << "extern const char* scriptnode_database_dat;";
 
 			header << hl1;
 			header << hl2;
