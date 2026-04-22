@@ -418,7 +418,11 @@ void MainController::clearPreset(NotificationType sendPresetLoadMessage)
 		SUSPEND_GLOBAL_DISPATCH(mc, "reset main controller");
 		LockHelpers::freeToGo(mc);
 
+		mc->getMainSynthChain()->rebuildMacroControlsAfterProjectSwitch();
 		mc->rebuildPluginParameters();
+
+		
+
 		mc->getMacroManager().getMidiControlAutomationHandler()->getMPEData().clear();
 		mc->getScriptComponentEditBroadcaster()->getUndoManager().clearUndoHistory();
 		mc->getControlUndoManager()->clearUndoHistory();

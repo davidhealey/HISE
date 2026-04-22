@@ -44,6 +44,11 @@ namespace hise { using namespace juce;
 
 		auto content = getScriptingContent();
 
+		if (content->getNumComponents() == 0 && this->restoredContentValues.getNumChildren() != 0)
+		{
+			content->resetContentProperties();
+		}
+
 		for (int i = 0; i < content->getNumComponents(); i++)
 		{
 			auto sc = content->getComponent(i);
@@ -450,6 +455,8 @@ void ProcessorWithScriptingContent::restoreContent(const ValueTree &restoredStat
 		if (content.get() != nullptr)
 			content->restoreFromValueTree(restoredContentValues);
 	}
+
+	dynamic_cast<Processor*>(this)->updateParameterSlots(-1);
 }
 
 void ProcessorWithScriptingContent::saveContent(ValueTree &savedState) const

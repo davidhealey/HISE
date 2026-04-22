@@ -225,12 +225,17 @@ void ModulatorSynthChain::compileAllScripts()
 	{
 		auto scriptProcessors = ProcessorHelpers::getListOfAllProcessors<JavascriptProcessor>(this);
 
+		for (auto sp : scriptProcessors)
+		{
+			auto c = sp->getContent();
+			ValueTreeUpdateWatcher::ScopedDelayer sd(c->getUpdateWatcher());
+			sp->getContent()->resetContentProperties();
+		}
+
 		for (auto& sp : scriptProcessors)
 		{
 			auto c = sp->getContent();
-
 			ValueTreeUpdateWatcher::ScopedDelayer sd(c->getUpdateWatcher());
-			sp->getContent()->resetContentProperties();
 			sp->compileScript();
 		}
 

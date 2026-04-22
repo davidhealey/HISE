@@ -179,7 +179,7 @@ struct ProcessorMetadata
 		ParameterMetadata withDescription(const String& desc) const
 		{
 			auto copy = *this;
-			copy.description = desc;
+			BACKEND_ONLY(copy.description = desc);
 			return copy;
 		}
 
@@ -329,7 +329,7 @@ struct ProcessorMetadata
 		ModulationMetadata withDescription(const String& desc) const
 		{
 			auto copy = *this;
-			copy.description = desc;
+			BACKEND_ONLY(copy.description = desc);
 			return copy;
 		}
 
@@ -473,7 +473,7 @@ struct ProcessorMetadata
 	ProcessorMetadata withDescription(const String& desc) const
 	{
 		auto copy = *this;
-		copy.description = desc;
+		BACKEND_ONLY(copy.description = desc);
 		return copy;
 	}
 

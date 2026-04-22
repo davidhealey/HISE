@@ -73,7 +73,7 @@ static const unsigned char projectDllTemplate_jucer_lines[] =
 "        <CONFIGURATION isDebug=\"0\" name=\"CI\" osxArchitecture=\"%MACOS_MAKE_ARCHITECTURE%\" headerPath=\"%FAUST_HEADER_PATH%\"\r\n"
 "                       libraryPath=\"\" binaryPath=\"dll\" optimisation=\"4\" linkTimeOptimisation=\"0\" targetName=\"%CI_DLL_NAME%\"/>\r\n"
 "        <CONFIGURATION isDebug=\"0\" name=\"Release\" osxArchitecture=\"%MACOS_MAKE_ARCHITECTURE%\" headerPath=\"%FAUST_HEADER_PATH%\"\r\n"
-"                       libraryPath=\"%OSC_STATIC_LIB_FOLDER_RELEASE%\" binaryPath=\"dll\" targetName=\"%RELEASE_DLL_NAME%\" %STRIP_SYMBOLS_MACOS%/>\r\n"
+"                       libraryPath=\"%OSC_STATIC_LIB_FOLDER_RELEASE%\" binaryPath=\"dll\" targetName=\"%RELEASE_DLL_NAME%\"/>\r\n"
 "      </CONFIGURATIONS>\r\n"
 "      <MODULEPATHS>\r\n"
 "        <MODULEPATH id=\"juce_gui_basics\" path=\"%JUCE_PATH%\"/>\r\n"
