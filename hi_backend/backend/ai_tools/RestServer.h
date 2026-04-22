@@ -287,6 +287,26 @@ namespace RestApiIds
     DECLARE_ID(endFrequency);         // Sweep end frequency in Hz
     DECLARE_ID(recordOutput);         // File path to record audio output to WAV
 
+    // project endpoints
+    DECLARE_ID(projects);             // Array of available HISE projects
+    DECLARE_ID(active);               // Name of currently active project
+    DECLARE_ID(projectName);          // Project name for tree response
+    DECLARE_ID(root);                 // Root node of project file tree
+    DECLARE_ID(modified);             // ISO8601 timestamp of last modification
+    DECLARE_ID(masterChainRenamed);   // True if HIP save renamed the master chain
+    DECLARE_ID(newName);              // New master chain name after rename
+    DECLARE_ID(snippet);              // HISE snippet string
+    DECLARE_ID(settings);             // Flat object of project_info.xml settings
+    DECLARE_ID(key);                  // Setting key name
+    DECLARE_ID(format);               // Save format ("xml" or "hip")
+    DECLARE_ID(file);                 // Relative path to XML or HIP file
+    DECLARE_ID(filename);             // Relative path to XML or HIP file
+    DECLARE_ID(referenced);           // True if file is actively referenced by HISE runtime
+    DECLARE_ID(OS);                   // Target operating system (Windows, macOS, Linux, all)
+    DECLARE_ID(preprocessor);         // Preprocessor macro name
+    DECLARE_ID(preprocessors);        // Array of preprocessor entries
+    DECLARE_ID(skipDefaults);         // If true, omit preprocessors whose runtime value equals the default
+
     // dsp (scriptnode)
     DECLARE_ID(nodeId);               // Node instance ID within a network
     DECLARE_ID(factoryPath);          // Node factory path (e.g. core.oscillator)

@@ -225,7 +225,7 @@ public:
 	ModulatorSynthChain* getMainSynthChain() { return owner->getMainSynthChain(); }
 	const ModulatorSynthChain* getMainSynthChain() const { return owner->getMainSynthChain(); }
 
-	void loadNewContainer(ValueTree & v);
+	void loadNewContainer(const ValueTree & v);
 
 	void loadNewContainer(const File &f);
 	
@@ -315,6 +315,11 @@ public:
 		projectIsBeingExtracted = true;
 	}
 
+	void setOnetimeCallbackAfterPresetLoad(const std::function<void(void)>& f)
+	{
+		postPresetLoadCallback = f;
+	}
+
 	Array<Component::SafePointer<BackendRootWindow>> allWindowsAndBrowsers;
 
 	void userTriedToCloseWindow() override;
@@ -326,6 +331,8 @@ public:
     BackendProcessorEditor* getEditor() { return mainEditor.getComponent(); }
     
 private:
+
+	std::function<void(void)> postPresetLoadCallback;
 
 	mcl::TokenCollection::Ptr javascriptTokens;
 

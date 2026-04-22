@@ -56,6 +56,7 @@ struct RestHelpers
     {
         ListMethods,            ///< GET  /           - List all available API methods
         Status,                 ///< GET  /api/status - Get project status
+        StatusPreprocessors,    ///< GET  /api/status/preprocessors - List preprocessor catalogue with runtime values
         GetScript,              ///< GET  /api/get_script - Read script content
         SetScript,              ///< POST /api/set_script - Update script content
         EvaluateREPL,           ///< POST /api/repl - Evaluate an expression and get the result
@@ -94,6 +95,18 @@ struct RestHelpers
         DspTree,                ///< GET  /api/dsp/tree - Get scriptnode network hierarchy
         DspApply,               ///< POST /api/dsp/apply - Apply operations to scriptnode graph
         DspSave,                ///< POST /api/dsp/save - Save DspNetwork to XML file
+        ProjectList,            ///< GET  /api/project/list - List available HISE projects
+        ProjectTree,            ///< GET  /api/project/tree - Project file tree with referenced flags
+        ProjectFiles,           ///< GET  /api/project/files - List saveable project files
+        ProjectSettingsList,    ///< GET  /api/project/settings/list - All project_info.xml settings
+        ProjectSettingsSet,     ///< POST /api/project/settings/set - Update a project setting
+        ProjectSave,            ///< POST /api/project/save - Save current state as XML or HIP
+        ProjectLoad,            ///< POST /api/project/load - Load an XML or HIP file
+        ProjectSwitch,          ///< POST /api/project/switch - Switch active project
+        ProjectExportSnippet,   ///< GET  /api/project/export_snippet - Export current project as HISE snippet
+        ProjectImportSnippet,   ///< POST /api/project/import_snippet - Import a HISE snippet
+        ProjectPreprocessorList,///< GET  /api/project/preprocessor/list - List preprocessor defines
+        ProjectPreprocessorSet, ///< POST /api/project/preprocessor/set - Set or clear a preprocessor define
         numRoutes
     };
     
@@ -768,8 +781,15 @@ struct RestHelpers
                                                   RestServer::AsyncRequest::Ptr req);
     
     /** Handler for GET /api/status - Get project status. */
-    static RestServer::Response handleStatus(MainController* mc, 
+    static RestServer::Response handleStatus(MainController* mc,
                                              RestServer::AsyncRequest::Ptr req);
+
+    /** Handler for GET /api/status/preprocessors - List preprocessor catalogue with runtime values.
+     *  verbose=false (default): flat { name: int } map.
+     *  verbose=true: full Entry metadata per preprocessor, with 'value' overridden to the runtime value.
+     */
+    static RestServer::Response handleStatusPreprocessors(MainController* mc,
+                                                          RestServer::AsyncRequest::Ptr req);
     
     /** Handler for GET /api/get_script - Read script content. */
     static RestServer::Response handleGetScript(MainController* mc, 
@@ -969,6 +989,54 @@ struct RestHelpers
     /** Handler for POST /api/dsp/save - Save DspNetwork to XML file */
     static RestServer::Response handleDspSave(MainController* mc,
                                               RestServer::AsyncRequest::Ptr req);
+
+    /** Handler for GET /api/project/list - List available HISE projects */
+    static RestServer::Response handleProjectList(MainController* mc,
+                                                  RestServer::AsyncRequest::Ptr req);
+
+    /** Handler for GET /api/project/tree - Project file tree with runtime reference flags */
+    static RestServer::Response handleProjectTree(MainController* mc,
+                                                  RestServer::AsyncRequest::Ptr req);
+
+    /** Handler for GET /api/project/files - List saveable project files */
+    static RestServer::Response handleProjectFiles(MainController* mc,
+                                                   RestServer::AsyncRequest::Ptr req);
+
+    /** Handler for GET /api/project/settings/list - All project_info.xml settings */
+    static RestServer::Response handleProjectSettingsList(MainController* mc,
+                                                          RestServer::AsyncRequest::Ptr req);
+
+    /** Handler for POST /api/project/settings/set - Update a project setting */
+    static RestServer::Response handleProjectSettingsSet(MainController* mc,
+                                                         RestServer::AsyncRequest::Ptr req);
+
+    /** Handler for POST /api/project/save - Save current state as XML or HIP */
+    static RestServer::Response handleProjectSave(MainController* mc,
+                                                  RestServer::AsyncRequest::Ptr req);
+
+    /** Handler for POST /api/project/load - Load an XML or HIP file */
+    static RestServer::Response handleProjectLoad(MainController* mc,
+                                                  RestServer::AsyncRequest::Ptr req);
+
+    /** Handler for POST /api/project/switch - Switch active project */
+    static RestServer::Response handleProjectSwitch(MainController* mc,
+                                                    RestServer::AsyncRequest::Ptr req);
+
+    /** Handler for GET /api/project/export_snippet - Export current project as HISE snippet */
+    static RestServer::Response handleProjectExportSnippet(MainController* mc,
+                                                           RestServer::AsyncRequest::Ptr req);
+
+    /** Handler for POST /api/project/import_snippet - Import a HISE snippet */
+    static RestServer::Response handleProjectImportSnippet(MainController* mc,
+                                                           RestServer::AsyncRequest::Ptr req);
+
+    /** Handler for GET /api/project/preprocessor/list - List preprocessor defines */
+    static RestServer::Response handleProjectPreprocessorList(MainController* mc,
+                                                              RestServer::AsyncRequest::Ptr req);
+
+    /** Handler for POST /api/project/preprocessor/set - Upsert or clear a preprocessor define */
+    static RestServer::Response handleProjectPreprocessorSet(MainController* mc,
+                                                             RestServer::AsyncRequest::Ptr req);
 
 #if HISE_INCLUDE_PROFILING_TOOLKIT
     /** Query options for filtering and summarizing profiling results. */

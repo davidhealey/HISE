@@ -2372,7 +2372,17 @@ struct Helpers
 	{
 		jassert(n.getType() == PropertyIds::Node);
 
-		if (id == PropertyIds::Bypassed.toString())
+		static const Array<Identifier> nodeIds({
+			PropertyIds::Bypassed,
+			PropertyIds::NodeColour,
+			PropertyIds::Folded,
+			PropertyIds::Name,
+			PropertyIds::Comment,
+			PropertyIds::ShowParameters,
+			PropertyIds::IsVertical
+		});
+
+		if (nodeIds.contains(Identifier(id)))
 			return n;
 
 		for (auto p : n.getChildWithName(PropertyIds::Parameters))
@@ -3240,7 +3250,7 @@ struct set : public ActionBase
 			// Mirror perform() onto the plan snapshot. rv here is the snapshot
 			// tree, so p is already inside it. The branch matches perform()'s
 			// (pre-existing) behavior for network-property vs regular paths.
-			if (p.getType() == PropertyIds::Network)
+			if (p.getType() == PropertyIds::Network || p.getType() == PropertyIds::Node)
 				p.setProperty(parameterId, newValue, nullptr);
 			else
 				p.setProperty(PropertyIds::Value, newValue, nullptr);
@@ -3266,10 +3276,13 @@ struct set : public ActionBase
 		if (!p.isValid())
 			throw Helpers::getErrorForParameter404(n, parameterId);
 
-		if (p.getType() == PropertyIds::Network)
+		if (p.getType() == PropertyIds::Network || p.getType() == PropertyIds::Node)
 		{
 			oldValue = p[parameterId];
 			p.setProperty(parameterId, newValue, nullptr);
+
+			if (parameterId == PropertyIds::Comment.toString())
+				rv.setProperty(PropertyIds::ShowComments, true, nullptr);
 		}
 		else
 		{

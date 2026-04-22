@@ -67,6 +67,7 @@
 
 #include "backend/PostDebugComponents.cpp"
 
+#include "backend/PreprocessorDatabase.cpp"
 #include "backend/ai_tools/RestHelpers.h"
 
 #include "backend/ai_tools/InteractionParser.h"

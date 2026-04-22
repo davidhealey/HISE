@@ -97,6 +97,40 @@ struct RestApiEndpoints
 			.withResponseExample(R"({"success": true, "server": {"version": "1.0.0", "compileTimeout": 10}, "project": {"name": "My Project", "projectFolder": "D:/Projects/MyPlugin", "scriptsFolder": "D:/Projects/MyPlugin/Scripts"}, "scriptProcessors": [{"moduleId": "Interface", "isMainInterface": true, "externalFiles": ["utils.js"], "callbacks": [{"id": "onInit", "empty": false}]}], "logs": [], "errors": []})"));
 	}
 
+	/* GET /api/status/preprocessors */
+	static void statusPreprocessors(Array<RouteMetadata>& m)
+	{
+		m.add(RouteMetadata(ApiRoute::StatusPreprocessors, "api/status/preprocessors")
+			.withMethod(RestServer::GET)
+			.withCategory("status")
+			.withSummary("List HISE preprocessor macros with their current runtime values")
+			.withDescription("Returns the catalogue of HISE preprocessor macros tracked by "
+				"PreprocessorDataBase. Each entry's 'value' is the runtime value, which honours "
+				"hot-reloadable overrides sourced from MainController's extra definitions and can "
+				"therefore differ from the compile-time default that is baked into the binary. "
+				"Use verbose=false (default) for a compact {name: value} map suited to quick "
+				"inspection; verbose=true returns the full per-entry metadata (category, brief, "
+				"description, defaults, flags, cross-references) with 'value' overridden to the "
+				"runtime value.")
+			.withReturns("Object mapping preprocessor macro name to its runtime integer value "
+				"(verbose=false) or to the full entry metadata (verbose=true).")
+			.withQueryParam(RouteParameter(RestApiIds::verbose,
+					"If true, return full per-entry metadata. If false, return a flat {name: value} map.")
+				.withType(ParamType::Bool)
+				.withDefault("false"))
+			.withQueryParam(RouteParameter(RestApiIds::skipDefaults,
+					"If true, omit preprocessors whose runtime value equals the entry's default. "
+					"Useful for spotting explicitly configured overrides.")
+				.withType(ParamType::Bool)
+				.withDefault("false"))
+			.withResponseField(RouteParameter(RestApiIds::preprocessors,
+					"Object keyed by preprocessor macro name. Values are integers (verbose=false) "
+					"or full Entry objects (verbose=true).")
+				.withType(ParamType::Object))
+			.withRequestExample("GET /api/status/preprocessors?verbose=false")
+			.withResponseExample(R"({"success": true, "preprocessors": {"HISE_USE_EXTENDED_TEMPO_VALUES": 0, "USE_MOD2_WAVETABLESIZE": 1}, "logs": [], "errors": []})"));
+	}
+
 	/* GET /api/get_script */
 	static void getScript(Array<RouteMetadata>& m)
 	{
@@ -1430,6 +1464,304 @@ struct RestApiEndpoints
 			.withRequestExample(R"({"moduleId": "Script FX"})")
 			.withResponseExample("{\"success\": true, \"filePath\": \"D:/Projects/MyPlugin/DspNetworks/Networks/MyDSP.xml\", \"logs\": [], \"errors\": []}"));
 	}
+
+	/* GET /api/project/list */
+	static void projectList(Array<RouteMetadata>& m)
+	{
+		auto projectEntry = RouteParameter(Identifier("entry"), "Project entry")
+			.withType(ParamType::Object)
+			.withProperty(RouteParameter(RestApiIds::name, "Project name from project_info.xml"))
+			.withProperty(RouteParameter(RestApiIds::path, "Absolute path to project folder"));
+
+		m.add(RouteMetadata(ApiRoute::ProjectList, "api/project/list")
+			.withCategory("project")
+			.withSummary("List available HISE projects")
+			.withDescription("Returns the merged, deduplicated union of HISE's recent projects "
+				"list and a filesystem scan of the configured projects root. Each entry parses "
+				"project_info.xml to extract the project Name. The active field holds the name "
+				"of the currently loaded project.")
+			.withReturns("Array of projects and the active project name")
+			.withResponseField(RouteParameter(RestApiIds::projects, "Array of available projects")
+				.withArrayItems(projectEntry))
+			.withResponseField(RouteParameter(RestApiIds::active, "Name of the currently active project"))
+			.withErrorCodes({})
+			.withResponseExample(R"({"success": true, "projects": [{"name": "MyPlugin", "path": "/Users/foo/HISE Projects/MyPlugin"}, {"name": "TestSynth", "path": "/Users/foo/HISE Projects/TestSynth"}], "active": "MyPlugin", "logs": [], "errors": []})"));
+	}
+
+	/* GET /api/project/tree */
+	static void projectTree(Array<RouteMetadata>& m)
+	{
+		auto treeNode = RouteParameter(Identifier("node"), "File or folder node")
+			.withType(ParamType::Object)
+			.withProperty(RouteParameter(RestApiIds::name, "File or folder name"))
+			.withProperty(RouteParameter(RestApiIds::type, "Node type")
+				.withEnumValues({ "file", "folder" }))
+			.withProperty(RouteParameter(RestApiIds::referenced,
+				"True if file is actively referenced by the runtime (file nodes only)")
+				.withType(ParamType::Bool).asOptional())
+			.withProperty(RouteParameter(RestApiIds::children,
+				"Child nodes (folder nodes only)")
+				.withType(ParamType::Array).asOptional());
+
+		m.add(RouteMetadata(ApiRoute::ProjectTree, "api/project/tree")
+			.withCategory("project")
+			.withSummary("Get project file tree with runtime reference flags")
+			.withDescription("Walks the active project folder and returns its Scripts, SampleMaps, "
+				"Images, DspNetworks and UserPresets subfolders. Any Binaries folder is excluded "
+				"at any depth (build output). Inside Scripts, the ScriptProcessors subfolder is "
+				"excluded and only source files with a .js, .glsl or .css extension are listed. "
+				"Each file node carries a referenced flag indicating whether HISE's runtime "
+				"actively uses the file (included scripts, loaded samplemaps, images in the "
+				"pool, active DSP networks, currently loaded user preset).")
+			.withReturns("projectName and the root tree node")
+			.withResponseField(RouteParameter(RestApiIds::projectName, "Name of the project"))
+			.withResponseField(RouteParameter(RestApiIds::root, "Root folder node")
+				.withType(ParamType::Object))
+			.withErrorCodes({ 500 })
+			.withResponseExample(R"({"success": true, "projectName": "MyPlugin", "root": {"name": "MyPlugin", "type": "folder", "children": [{"name": "Scripts", "type": "folder", "children": [{"name": "Interface.js", "type": "file", "referenced": true}]}]}, "logs": [], "errors": []})"));
+	}
+
+	/* GET /api/project/files */
+	static void projectFiles(Array<RouteMetadata>& m)
+	{
+		auto fileEntry = RouteParameter(Identifier("entry"), "Saveable file entry")
+			.withType(ParamType::Object)
+			.withProperty(RouteParameter(RestApiIds::name, "File name"))
+			.withProperty(RouteParameter(RestApiIds::type, "File type")
+				.withEnumValues({ "xml", "hip" }))
+			.withProperty(RouteParameter(RestApiIds::path, "Path relative to the project root"))
+			.withProperty(RouteParameter(RestApiIds::modified, "ISO8601 modification timestamp"));
+
+		m.add(RouteMetadata(ApiRoute::ProjectFiles, "api/project/files")
+			.withCategory("project")
+			.withSummary("List saveable project files (XML and HIP)")
+			.withDescription("Enumerates the XmlPresetBackups folder (xml) and the project root "
+				"for HIP archives. Returns one entry per file, sorted by modification time "
+				"(newest first).")
+			.withReturns("Array of saveable file entries")
+			.withResponseField(RouteParameter(RestApiIds::files, "Array of saveable file entries")
+				.withArrayItems(fileEntry))
+			.withErrorCodes({ 500 })
+			.withResponseExample(R"({"success": true, "files": [{"name": "MyPlugin.xml", "type": "xml", "path": "XmlPresetBackups/MyPlugin.xml", "modified": "2026-04-09T14:30:00Z"}, {"name": "MyPlugin.hip", "type": "hip", "path": "MyPlugin.hip", "modified": "2026-04-10T09:15:00Z"}], "logs": [], "errors": []})"));
+	}
+
+	/* GET /api/project/settings/list */
+	static void projectSettingsList(Array<RouteMetadata>& m)
+	{
+		auto settingEntry = RouteParameter(Identifier("entry"), "Setting entry")
+			.withType(ParamType::Object)
+			.withProperty(RouteParameter(RestApiIds::value,
+				"Current value. Strings pass through; \"Yes\"/\"No\" become true/false booleans."))
+			.withProperty(RouteParameter(RestApiIds::description,
+				"Markdown-formatted help text describing the setting"))
+			.withProperty(RouteParameter(RestApiIds::options,
+				"Allowed values when the setting is an enum or boolean flag")
+				.withType(ParamType::Array).asOptional());
+
+		m.add(RouteMetadata(ApiRoute::ProjectSettingsList, "api/project/settings/list")
+			.withCategory("project")
+			.withSummary("Get all project settings with metadata")
+			.withDescription("Returns every project setting (covering the Project and User "
+				"namespaces in HiseSettings) as an object keyed by setting name. Each entry is "
+				"an object carrying the current value, a markdown description of what the "
+				"setting does, and (when applicable) the allowed values as an options array. "
+				"Boolean flags stored in project_info.xml as \"Yes\"/\"No\" are normalised to "
+				"JSON true/false.")
+			.withReturns("settings object keyed by setting name, with value + description + optional options per entry")
+			.withResponseField(RouteParameter(RestApiIds::settings,
+				"Object keyed by setting name; each entry holds value, description and optional options")
+				.withType(ParamType::Object)
+				.withProperty(settingEntry))
+			.withErrorCodes({ 500 })
+			.withResponseExample(R"({"success": true, "settings": {"Name": {"value": "MyPlugin", "description": "The name of the project..."}, "VST3Support": {"value": true, "description": "If enabled, the exported plugins will use VST3...", "options": [true, false]}, "AAXCategoryFX": {"value": "AAX_ePlugInCategory_Modulation", "description": "AAX effect category...", "options": ["AAX_ePlugInCategory_EQ", "AAX_ePlugInCategory_Modulation"]}}, "logs": [], "errors": []})"));
+	}
+
+	/* POST /api/project/settings/set */
+	static void projectSettingsSet(Array<RouteMetadata>& m)
+	{
+		m.add(RouteMetadata(ApiRoute::ProjectSettingsSet, "api/project/settings/set")
+			.withMethod(RestServer::POST)
+			.withCategory("project")
+			.withSummary("Update a project setting")
+			.withDescription("Sets a single project setting in project_info.xml. The key must be "
+				"one of the known project settings (see /api/project/settings/list). Writes are "
+				"atomic: the file is replaced on success.")
+			.withReturns("Status message")
+			.withBodyParam(RouteParameter(RestApiIds::key, "Setting key (e.g. Version, PluginCode)")
+				.withExample("Version"))
+			.withBodyParam(RouteParameter(RestApiIds::value, "New value (sent as string)")
+				.withExample("1.1.0"))
+			.withErrorCodes({ 400, 501 })
+			.withRequestExample(R"({"key": "Version", "value": "1.1.0"})")
+			.withResponseExample(R"({"success": true, "logs": ["Updated Version to 1.1.0"], "errors": []})"));
+	}
+
+	/* POST /api/project/save */
+	static void projectSave(Array<RouteMetadata>& m)
+	{
+		m.add(RouteMetadata(ApiRoute::ProjectSave, "api/project/save")
+			.withMethod(RestServer::POST)
+			.withCategory("project")
+			.withSummary("Save the current state as XML or HIP")
+			.withDescription("Serializes the main synth chain. Format xml writes a human-readable "
+				"XML file to XmlPresetBackups. Format hip writes a binary archive to the Presets "
+				"subfolder. An optional filename overrides the default (the current chain id). "
+				"When filename differs from the current chain id, HISE renames the master chain "
+				"to match the filename before saving (applies to both formats); the response "
+				"reports masterChainRenamed=true and the newName in that case.")
+			.withReturns("path of the saved file; masterChainRenamed/newName when a rename happened")
+			.withBodyParam(RouteParameter(RestApiIds::format, "Save format")
+				.withEnumValues({ "xml", "hip" }))
+			.withBodyParam(RouteParameter(Identifier("filename"),
+				"Override filename without extension")
+				.asOptional())
+			.withResponseField(RouteParameter(RestApiIds::path,
+				"Path of the saved file relative to the project root"))
+			.withResponseField(RouteParameter(RestApiIds::masterChainRenamed,
+				"True if the master chain was renamed to match the filename")
+				.withType(ParamType::Bool).asOptional())
+			.withResponseField(RouteParameter(RestApiIds::newName,
+				"New master chain name after rename")
+				.asOptional())
+			.withErrorCodes({ 400, 500 })
+			.withRequestExample(R"({"format": "xml", "filename": "MyPlugin_v2"})")
+			.withResponseExample(R"({"success": true, "path": "XmlPresetBackups/MyPlugin_v2.xml", "logs": ["Saved as MyPlugin_v2.xml"], "errors": []})"));
+	}
+
+	/* POST /api/project/load */
+	static void projectLoad(Array<RouteMetadata>& m)
+	{
+		m.add(RouteMetadata(ApiRoute::ProjectLoad, "api/project/load")
+			.withMethod(RestServer::POST)
+			.withCategory("project")
+			.withSummary("Load an XML or HIP file into the current project")
+			.withDescription("Loads a previously saved XML or HIP file. The path is relative to "
+				"the project root. Loading replaces the current chain and triggers the voice "
+				"kill coordinator.")
+			.withReturns("Status message")
+			.withBodyParam(RouteParameter(RestApiIds::file,
+				"Relative path to the XML or HIP file to load")
+				.withExample("XmlPresetBackups/MyPlugin.xml"))
+			.withErrorCodes({ 400, 404, 500, 501 })
+			.withRequestExample(R"({"file": "XmlPresetBackups/MyPlugin.xml"})")
+			.withResponseExample(R"({"success": true, "logs": ["Loaded MyPlugin.xml"], "errors": []})"));
+	}
+
+	/* POST /api/project/switch */
+	static void projectSwitch(Array<RouteMetadata>& m)
+	{
+		m.add(RouteMetadata(ApiRoute::ProjectSwitch, "api/project/switch")
+			.withMethod(RestServer::POST)
+			.withCategory("project")
+			.withSummary("Switch the active HISE project")
+			.withDescription("Switches the active project to the folder at the given absolute "
+				"filesystem path. The path must point at a valid project folder (one containing "
+				"project_info.xml); otherwise the request is rejected with 400. Use "
+				"/api/project/list to enumerate known projects and copy the corresponding path.")
+			.withReturns("Status message")
+			.withBodyParam(RouteParameter(RestApiIds::project,
+				"Absolute filesystem path to the target project folder")
+				.withExample("/Users/foo/HISE Projects/TestSynth"))
+			.withErrorCodes({ 400 })
+			.withRequestExample(R"({"project": "/Users/foo/HISE Projects/TestSynth"})")
+			.withResponseExample(R"({"success": true, "logs": ["Switched to TestSynth"], "errors": []})"));
+	}
+
+	/* GET /api/project/export_snippet */
+	static void projectExportSnippet(Array<RouteMetadata>& m)
+	{
+		m.add(RouteMetadata(ApiRoute::ProjectExportSnippet, "api/project/export_snippet")
+			.withCategory("project")
+			.withSummary("Export the current project as a HISE snippet string")
+			.withDescription("Serializes the main synth chain into a gzip-compressed, "
+				"base64-encoded HISE snippet prefixed with \"HiseSnippet \". Snippets embed "
+				"script and network resources so they are self-contained and can be shared or "
+				"pasted into another HISE session.")
+			.withReturns("snippet string starting with HiseSnippet")
+			.withResponseField(RouteParameter(RestApiIds::snippet, "HISE snippet string"))
+			.withErrorCodes({ 500 })
+			.withResponseExample(R"({"success": true, "snippet": "HiseSnippet 1234.abc...", "logs": [], "errors": []})"));
+	}
+
+	/* GET /api/project/preprocessor/list */
+	static void projectPreprocessorList(Array<RouteMetadata>& m)
+	{
+		m.add(RouteMetadata(ApiRoute::ProjectPreprocessorList, "api/project/preprocessor/list")
+			.withCategory("project")
+			.withSummary("List preprocessor defines grouped by shared scope")
+			.withDescription("Returns the active project's ExtraDefinitions preprocessor macros, "
+				"cross-referenced across the build targets (Project, Dll) and operating systems "
+				"(Windows, macOS, Linux). The response's preprocessors object is keyed by scope:\n"
+				"  - \"*.*\": macros with identical value across all targets and OSes.\n"
+				"  - \"Project.*\" / \"Dll.*\": macros with identical value across all OSes for "
+				"that target (only emitted when the macro is not already lifted to \"*.*\").\n"
+				"  - \"Project.Windows\" / \"Project.macOS\" / ... : macros unique to that "
+				"(target, OS) slot (only emitted when the macro is not already lifted).\n"
+				"Each scope entry is an object keyed by macro name with the raw value. The OS "
+				"and target query parameters narrow which per-slot sections are emitted; the "
+				"shared scopes (\"*.*\", \"target.*\") are always included when their scope "
+				"intersects the filter.")
+			.withReturns("preprocessors object keyed by scope; values are {macro: value} maps")
+			.withQueryParam(RouteParameter(RestApiIds::OS, "Filter by operating system (default 'all')")
+				.withEnumValues({ "Windows", "macOS", "Linux", "all" })
+				.withDefault("all"))
+			.withQueryParam(RouteParameter(RestApiIds::target, "Filter by build target (default 'all')")
+				.withEnumValues({ "Project", "Dll", "all" })
+				.withDefault("all"))
+			.withResponseField(RouteParameter(RestApiIds::preprocessors,
+				"Object keyed by scope ('*.*', 'target.*', 'target.OS'); each value is a "
+				"{macro: value} object. Empty scopes are omitted.")
+				.withType(ParamType::Object))
+			.withErrorCodes({ 400 })
+			.withRequestExample(R"(GET /api/project/preprocessor/list?OS=Windows&target=Project)")
+			.withResponseExample(R"({"success": true, "preprocessors": {"*.*": {"SHARED_FLAG": 1}, "Project.*": {"HAS_LICENSE_KEY": 1}, "Project.Windows": {"WIN_ONLY_FLAG": 2}}, "logs": [], "errors": []})"));
+	}
+
+	/* POST /api/project/preprocessor/set */
+	static void projectPreprocessorSet(Array<RouteMetadata>& m)
+	{
+		m.add(RouteMetadata(ApiRoute::ProjectPreprocessorSet, "api/project/preprocessor/set")
+			.withMethod(RestServer::POST)
+			.withCategory("project")
+			.withSummary("Upsert or clear a preprocessor define")
+			.withDescription("Sets a preprocessor macro for the given OS / target combination. "
+				"Passing 'all' for OS or target fans the write out across every matching slot. "
+				"Set value to the literal string \"default\" to remove the override and fall "
+				"back to HISE's built-in default; any other value must parse as an integer and "
+				"is written as MACRO=N.")
+			.withReturns("Status envelope (success, logs, errors)")
+			.withBodyParam(RouteParameter(RestApiIds::OS, "Target operating system")
+				.withEnumValues({ "Windows", "macOS", "Linux", "all" }))
+			.withBodyParam(RouteParameter(RestApiIds::target, "Build target")
+				.withEnumValues({ "Project", "Dll", "all" }))
+			.withBodyParam(RouteParameter(RestApiIds::preprocessor, "Macro name (e.g. ENABLE_FOO)")
+				.withExample("ENABLE_FOO"))
+			.withBodyParam(RouteParameter(RestApiIds::value,
+				"Integer value (as string) or the literal \"default\" to clear the override")
+				.withExample("1"))
+			.withErrorCodes({ 400, 501 })
+			.withRequestExample(R"({"OS": "Windows", "target": "Project", "preprocessor": "ENABLE_FOO", "value": "1"})")
+			.withResponseExample(R"({"success": true, "logs": [], "errors": []})"));
+	}
+
+	/* POST /api/project/import_snippet */
+	static void projectImportSnippet(Array<RouteMetadata>& m)
+	{
+		m.add(RouteMetadata(ApiRoute::ProjectImportSnippet, "api/project/import_snippet")
+			.withMethod(RestServer::POST)
+			.withCategory("project")
+			.withSummary("Import a HISE snippet string")
+			.withDescription("Decodes a HISE snippet string (base64-decode, gunzip) and loads the "
+				"resulting ValueTree into the current project, replacing the current chain. "
+				"Returns 400 when the snippet prefix is missing or the payload fails to decode.")
+			.withReturns("Status message")
+			.withBodyParam(RouteParameter(RestApiIds::snippet,
+				"HISE snippet string starting with HiseSnippet")
+				.withExample("HiseSnippet 1234.abc..."))
+			.withErrorCodes({ 400 })
+			.withRequestExample(R"({"snippet": "HiseSnippet 1234.abc..."})")
+			.withResponseExample(R"({"success": true, "logs": ["Imported snippet"], "errors": []})"));
+	}
 };
 
 const Array<RestHelpers::RouteMetadata>& RestHelpers::getRouteMetadata()
@@ -1442,6 +1774,7 @@ const Array<RestHelpers::RouteMetadata>& RestHelpers::getRouteMetadata()
 
 			RestApiEndpoints::listMethods(m);
 			RestApiEndpoints::status(m);
+			RestApiEndpoints::statusPreprocessors(m);
 			RestApiEndpoints::getScript(m);
 			RestApiEndpoints::setScript(m);
 			RestApiEndpoints::evaluateRepl(m);
@@ -1480,6 +1813,18 @@ const Array<RestHelpers::RouteMetadata>& RestHelpers::getRouteMetadata()
 			RestApiEndpoints::dspTree(m);
 			RestApiEndpoints::dspApply(m);
 			RestApiEndpoints::dspSave(m);
+			RestApiEndpoints::projectList(m);
+			RestApiEndpoints::projectTree(m);
+			RestApiEndpoints::projectFiles(m);
+			RestApiEndpoints::projectSettingsList(m);
+			RestApiEndpoints::projectSettingsSet(m);
+			RestApiEndpoints::projectSave(m);
+			RestApiEndpoints::projectLoad(m);
+			RestApiEndpoints::projectSwitch(m);
+			RestApiEndpoints::projectExportSnippet(m);
+			RestApiEndpoints::projectImportSnippet(m);
+			RestApiEndpoints::projectPreprocessorList(m);
+			RestApiEndpoints::projectPreprocessorSet(m);
 
 			// Verify count matches enum
 			jassert(m.size() == (int)ApiRoute::numRoutes);

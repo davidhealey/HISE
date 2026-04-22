@@ -1,1 +1,1 @@
-#define PREVIOUS_HISE_COMMIT "c4cac7fea8af8ce24110ca356dfefbc3bc0edc65" 
+#define PREVIOUS_HISE_COMMIT "c1ce58f44441a3ccd3b07f154497e7ea50ad86b4" 

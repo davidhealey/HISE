@@ -577,6 +577,8 @@ public:
 
 	simple_css::Animator& getCssParseAnimator() { return restServerAnimator; }
 
+	BackendRootWindow* currentRootWindow = nullptr;
+
 	LambdaBroadcaster<bool> pluginParameterRefreshBroadcaster;
 
 	ScriptUnlocker scriptUnlocker;

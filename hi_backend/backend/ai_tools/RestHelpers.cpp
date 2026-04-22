@@ -1101,6 +1101,26 @@ RestServer::Response RestHelpers::handleStatus(MainController* mc, RestServer::A
 	return req->waitForResponse();
 }
 
+RestServer::Response RestHelpers::handleStatusPreprocessors(MainController* mc,
+                                                            RestServer::AsyncRequest::Ptr req)
+{
+	const bool verbose      = req->getRequest().getTrueValue(RestApiIds::verbose);
+	const bool skipDefaults = req->getRequest().getTrueValue(RestApiIds::skipDefaults);
+
+	PreprocessorDataBase db;
+
+	auto preprocessors = db.toJSON(mc, verbose, skipDefaults);
+
+	DynamicObject::Ptr result = new DynamicObject();
+	result->setProperty(RestApiIds::success, true);
+	result->setProperty(RestApiIds::preprocessors, preprocessors);
+	result->setProperty(RestApiIds::logs, Array<var>());
+	result->setProperty(RestApiIds::errors, Array<var>());
+
+	req->complete(RestServer::Response::ok(var(result.get())));
+	return req->waitForResponse();
+}
+
 RestServer::Response RestHelpers::handleGetScript(MainController* mc, RestServer::AsyncRequest::Ptr req)
 {
 	if (auto jp = getScriptProcessor(mc, req))
@@ -5047,6 +5067,14 @@ RestServer::Response RestHelpers::handleDspInit(MainController* mc,
 		filePath = networkFolder.getChildFile(networkName).withFileExtension("xml").getFullPathName();
 	}
 
+	auto brw = dynamic_cast<BackendProcessor*>(mc)->currentRootWindow;
+
+	MessageManager::callAsync([brw, p]()
+	{
+		brw->gotoIfWorkspace(p);
+	});
+	
+
 	DynamicObject::Ptr result = new DynamicObject();
 	result->setProperty(RestApiIds::success, true);
 	result->setProperty(RestApiIds::result, treeJson);
@@ -5262,6 +5290,1042 @@ RestServer::Response RestHelpers::handleDspSave(MainController* mc,
 	result->setProperty(RestApiIds::errors, Array<var>());
 
 	req->complete(RestServer::Response::ok(var(result.get())));
+	return req->waitForResponse();
+}
+
+//==============================================================================
+// Project category
+
+namespace
+{
+	// Parse {projectRoot}/project_info.xml and return the Name attribute, or
+	// fall back to the folder basename when the file is missing or malformed.
+	static String readProjectDisplayName(const File& projectRoot)
+	{
+		auto xmlFile = projectRoot.getChildFile("project_info.xml");
+
+		if (xmlFile.existsAsFile())
+		{
+			if (auto xml = XmlDocument::parse(xmlFile))
+			{
+				if (auto nameEl = xml->getChildByName("Name"))
+				{
+					auto n = nameEl->getStringAttribute("value");
+					if (n.isNotEmpty())
+						return n;
+				}
+			}
+		}
+
+		return projectRoot.getFileName();
+	}
+
+	static bool isValidProjectFolder(const File& f)
+	{
+		return f.isDirectory() && f.getChildFile("project_info.xml").existsAsFile();
+	}
+}
+
+RestServer::Response RestHelpers::handleProjectList(MainController* mc,
+                                                    RestServer::AsyncRequest::Ptr req)
+{
+	Array<File> folders;
+
+	// Recent projects tracked by HISE
+	for (const auto& s : ProjectHandler::getRecentWorkDirectories())
+	{
+		File f(s);
+		if (isValidProjectFolder(f))
+			folders.addIfNotAlreadyThere(f);
+	}
+
+	// Filesystem scan of the configured projects root
+	if (auto gsm = dynamic_cast<GlobalSettingManager*>(mc))
+	{
+		auto rootSetting = gsm->getSettingsObject()
+		                      .getSetting(HiseSettings::Compiler::DefaultProjectFolder);
+		File projectsRoot(rootSetting.toString());
+
+		if (projectsRoot.isDirectory())
+		{
+			Array<File> children;
+			projectsRoot.findChildFiles(children, File::findDirectories, false);
+
+			for (const auto& c : children)
+			{
+				if (isValidProjectFolder(c))
+					folders.addIfNotAlreadyThere(c);
+			}
+		}
+	}
+
+	Array<var> projects;
+	for (const auto& f : folders)
+	{
+		DynamicObject::Ptr entry = new DynamicObject();
+		entry->setProperty(RestApiIds::name, readProjectDisplayName(f));
+		entry->setProperty(RestApiIds::path, f.getFullPathName());
+		projects.add(var(entry.get()));
+	}
+
+	auto activeRoot = mc->getSampleManager().getProjectHandler().getRootFolder();
+	String active = activeRoot.isDirectory() ? readProjectDisplayName(activeRoot) : String();
+
+	DynamicObject::Ptr result = new DynamicObject();
+	result->setProperty(RestApiIds::success, true);
+	result->setProperty(RestApiIds::projects, var(projects));
+	result->setProperty(RestApiIds::active, active);
+	result->setProperty(RestApiIds::logs, Array<var>());
+	result->setProperty(RestApiIds::errors, Array<var>());
+
+	req->complete(RestServer::Response::ok(var(result.get())));
+	return req->waitForResponse();
+}
+
+RestServer::Response RestHelpers::handleProjectTree(MainController* mc,
+                                                    RestServer::AsyncRequest::Ptr req)
+{
+	auto& ph = mc->getSampleManager().getProjectHandler();
+	auto projectRoot = ph.getRootFolder();
+
+	if (!projectRoot.isDirectory())
+		return req->fail(500, "No active project");
+
+	// Collect referenced file paths per category (absolute paths, set for O(1) lookup).
+	std::set<String> refScripts, refSampleMaps, refImages, refDspNetworks, refUserPresets;
+
+	{
+		Processor::Iterator<JavascriptProcessor> iter(mc->getMainSynthChain());
+
+		while (auto jp = iter.getNextProcessor())
+		{
+			for (int i = 0; i < jp->getNumWatchedFiles(); ++i)
+				refScripts.insert(jp->getWatchedFile(i).getFullPathName());
+		}
+	}
+
+	{
+		Processor::Iterator<ModulatorSampler> iter(mc->getMainSynthChain());
+
+		while (auto ms = iter.getNextProcessor())
+		{
+			if (auto smap = ms->getSampleMap())
+			{
+				auto f = smap->getReference().getFile();
+				if (f.existsAsFile())
+					refSampleMaps.insert(f.getFullPathName());
+			}
+		}
+	}
+
+	if (auto pool = mc->getCurrentImagePool())
+	{
+		for (const auto& ref : pool->getListOfAllReferences(false))
+			refImages.insert(ref.getFile().getFullPathName());
+	}
+
+	{
+		Processor::Iterator<Processor> iter(mc->getMainSynthChain());
+
+		while (auto p = iter.getNextProcessor())
+		{
+			if (auto holder = dynamic_cast<scriptnode::DspNetwork::Holder*>(p))
+			{
+				if (auto net = holder->getActiveOrDebuggedNetwork())
+				{
+					auto networksFolder = BackendDllManager::getSubFolder(
+						mc, BackendDllManager::FolderSubType::Networks);
+					auto f = networksFolder.getChildFile(net->getId())
+						.withFileExtension("xml");
+					refDspNetworks.insert(f.getFullPathName());
+				}
+			}
+		}
+	}
+
+	{
+		auto currentPreset = mc->getUserPresetHandler().getCurrentlyLoadedFile();
+		if (currentPreset.existsAsFile())
+			refUserPresets.insert(currentPreset.getFullPathName());
+	}
+
+	enum class RefCategory { None, Scripts, SampleMaps, Images, DspNetworks, UserPresets };
+
+	auto isReferenced = [&](const File& f, RefCategory cat) -> bool
+	{
+		auto p = f.getFullPathName();
+		switch (cat)
+		{
+			case RefCategory::Scripts:     return refScripts.count(p) > 0;
+			case RefCategory::SampleMaps:  return refSampleMaps.count(p) > 0;
+			case RefCategory::Images:      return refImages.count(p) > 0;
+			case RefCategory::DspNetworks: return refDspNetworks.count(p) > 0;
+			case RefCategory::UserPresets: return refUserPresets.count(p) > 0;
+			default:                       return false;
+		}
+	};
+
+	// Per-category child filter. Runs before recursion so excluded folders are
+	// never visited (cheaper than building nodes and discarding them).
+	auto shouldInclude = [](const File& f, RefCategory cat) -> bool
+	{
+		// Any "Binaries" subfolder, at any depth, is build output noise.
+		if (f.isDirectory() && f.getFileName() == "Binaries")
+			return false;
+
+		if (cat == RefCategory::Scripts)
+		{
+			if (f.isDirectory())
+				return f.getFileName() != "ScriptProcessors";
+
+			auto ext = f.getFileExtension().toLowerCase();
+			return ext == ".js" || ext == ".glsl" || ext == ".css";
+		}
+
+		return true;
+	};
+
+	std::function<var(const File&, RefCategory)> buildNode =
+		[&](const File& f, RefCategory cat) -> var
+	{
+		DynamicObject::Ptr node = new DynamicObject();
+		node->setProperty(RestApiIds::name, f.getFileName());
+
+		if (f.isDirectory())
+		{
+			node->setProperty(RestApiIds::type, String("folder"));
+
+			Array<File> kids;
+			f.findChildFiles(kids, File::findFilesAndDirectories, false);
+
+			// Folders first, then files; alphabetical within each group.
+			std::sort(kids.begin(), kids.end(), [](const File& a, const File& b)
+			{
+				if (a.isDirectory() != b.isDirectory())
+					return a.isDirectory();
+				return a.getFileName().compareIgnoreCase(b.getFileName()) < 0;
+			});
+
+			Array<var> children;
+			for (const auto& c : kids)
+			{
+				if (shouldInclude(c, cat))
+					children.add(buildNode(c, cat));
+			}
+
+			node->setProperty(RestApiIds::children, children);
+		}
+		else
+		{
+			node->setProperty(RestApiIds::type, String("file"));
+			node->setProperty(RestApiIds::referenced, isReferenced(f, cat));
+		}
+
+		return var(node.get());
+	};
+
+	struct FolderSpec { const char* name; RefCategory cat; };
+
+	static const FolderSpec folders[] = {
+		{ "Scripts",     RefCategory::Scripts     },
+		{ "SampleMaps",  RefCategory::SampleMaps  },
+		{ "Images",      RefCategory::Images      },
+		{ "DspNetworks", RefCategory::DspNetworks },
+		{ "UserPresets", RefCategory::UserPresets },
+	};
+
+	DynamicObject::Ptr rootNode = new DynamicObject();
+	rootNode->setProperty(RestApiIds::name, projectRoot.getFileName());
+	rootNode->setProperty(RestApiIds::type, String("folder"));
+
+	Array<var> rootChildren;
+	for (const auto& fs : folders)
+	{
+		auto folder = projectRoot.getChildFile(fs.name);
+		if (folder.isDirectory())
+			rootChildren.add(buildNode(folder, fs.cat));
+	}
+	rootNode->setProperty(RestApiIds::children, rootChildren);
+
+	DynamicObject::Ptr result = new DynamicObject();
+	result->setProperty(RestApiIds::success, true);
+	result->setProperty(RestApiIds::projectName, readProjectDisplayName(projectRoot));
+	result->setProperty(RestApiIds::root, var(rootNode.get()));
+	result->setProperty(RestApiIds::logs, Array<var>());
+	result->setProperty(RestApiIds::errors, Array<var>());
+
+	req->complete(RestServer::Response::ok(var(result.get())));
+	return req->waitForResponse();
+}
+
+RestServer::Response RestHelpers::handleProjectFiles(MainController* mc,
+                                                     RestServer::AsyncRequest::Ptr req)
+{
+	auto& ph = mc->getSampleManager().getProjectHandler();
+	auto projectRoot = ph.getRootFolder();
+
+	if (!projectRoot.isDirectory())
+		return req->fail(500, "No active project");
+
+	Array<var> files;
+
+	auto addEntry = [&](const File& f, const String& typeStr)
+	{
+		DynamicObject::Ptr e = new DynamicObject();
+		e->setProperty(RestApiIds::name, f.getFileName());
+		e->setProperty(RestApiIds::type, typeStr);
+		e->setProperty(RestApiIds::path,
+			f.getRelativePathFrom(projectRoot).replaceCharacter('\\', '/'));
+		e->setProperty(RestApiIds::modified, f.getLastModificationTime().toISO8601(true));
+		files.add(var(e.get()));
+	};
+
+	for (const auto& f : ph.getFileList(FileHandlerBase::XMLPresetBackups, true, false))
+	{
+		if (f.hasFileExtension("xml"))
+			addEntry(f, "xml");
+	}
+
+	for (const auto& f : ph.getFileList(FileHandlerBase::Presets, true, false))
+	{
+		if (f.hasFileExtension("hip"))
+			addEntry(f, "hip");
+	}
+
+	DynamicObject::Ptr result = new DynamicObject();
+	result->setProperty(RestApiIds::success, true);
+	result->setProperty(RestApiIds::files, var(files));
+	result->setProperty(RestApiIds::logs, Array<var>());
+	result->setProperty(RestApiIds::errors, Array<var>());
+
+	req->complete(RestServer::Response::ok(var(result.get())));
+	return req->waitForResponse();
+}
+
+RestServer::Response RestHelpers::handleProjectSettingsList(MainController* mc,
+                                                            RestServer::AsyncRequest::Ptr req)
+{
+	auto& obj = dynamic_cast<GlobalSettingManager*>(mc)->getSettingsObject();
+
+	DynamicObject::Ptr settings = new DynamicObject();
+
+	auto addSetting = [&](const Identifier& id)
+	{
+		DynamicObject::Ptr v = new DynamicObject();
+		v->setProperty(RestApiIds::value, obj.getSetting(id));
+		auto sa = obj.getOptionsFor(id);
+
+		auto desc = StringArray::fromLines(HiseSettings::SettingDescription::getDescription(id));
+		desc.remove(0);
+		v->setProperty(RestApiIds::description, desc.joinIntoString("\n"));
+
+		if (!sa.isEmpty())
+		{
+			Array<var> o;
+
+			if (sa.contains("Yes"))
+			{
+				o.add(true);
+				o.add(false);
+			}
+			else
+			{
+				for (auto& s : sa)
+					o.add(s);
+			}
+
+			v->setProperty(RestApiIds::options, var(o));
+		}
+
+		settings->setProperty(id, var(v.get()));
+	};
+
+	for (auto id : HiseSettings::Project::getAllIds())
+	{
+		if (id.toString().startsWith("ExtraDefinitions"))
+			continue;
+
+		addSetting(id);
+	}
+	
+	for (auto id : HiseSettings::User::getAllIds())
+		addSetting(id);
+
+	DynamicObject::Ptr result = new DynamicObject();
+	result->setProperty(RestApiIds::success, true);
+	result->setProperty(RestApiIds::settings, var(settings.get()));
+	result->setProperty(RestApiIds::logs, Array<var>());
+	result->setProperty(RestApiIds::errors, Array<var>());
+
+	req->complete(RestServer::Response::ok(var(result.get())));
+	return req->waitForResponse();
+}
+
+RestServer::Response RestHelpers::handleProjectSettingsSet(MainController* mc,
+                                                           RestServer::AsyncRequest::Ptr req)
+{
+	auto obj = req->getRequest().getJsonBody();
+	auto key = obj[RestApiIds::key].toString();
+	auto value = obj[RestApiIds::value];
+
+	if (key.isEmpty())
+		return req->fail(400, "key is required");
+
+	if (!obj.hasProperty(RestApiIds::value))
+		return req->fail(400, "value is required");
+
+	if (key.startsWith("ExtraDef"))
+		return req->fail(400, "use /api/project/preprocessor/set for preprocessor modification");
+
+	auto& settings = dynamic_cast<GlobalSettingManager*>(mc)->getSettingsObject();
+	auto id = Identifier(key);
+
+	const bool isProjectId = HiseSettings::Project::getAllIds().contains(id);
+	const bool isUserId    = HiseSettings::User::getAllIds().contains(id);
+
+	if (!isProjectId && !isUserId)
+	{
+		StringArray keys;
+		for (auto& pid : HiseSettings::Project::getAllIds())
+			keys.add(pid.toString());
+
+		for (auto& uid : HiseSettings::User::getAllIds())
+			keys.add(uid.toString());
+
+		String errorMessage;
+		errorMessage << "invalid key " << key;
+
+		auto correct = FuzzySearcher::suggestCorrection(key, keys);
+		if (correct.isNotEmpty())
+			errorMessage << ". Did you mean: " << correct;
+
+		return req->fail(400, errorMessage);
+	}
+
+	auto ok = settings.checkInput(id, value);
+
+	if (!ok.wasOk())
+		return req->fail(400, ok.getErrorMessage());
+
+	settings.writeSetting(isProjectId ? HiseSettings::SettingFiles::ProjectSettings
+	                                  : HiseSettings::SettingFiles::UserSettings,
+	                      id, value);
+
+	DynamicObject::Ptr result = new DynamicObject();
+	result->setProperty(RestApiIds::success, true);
+
+	Array<var> logs;
+	logs.add("Updated " + key + " to " + value.toString());
+	result->setProperty(RestApiIds::logs, logs);
+	result->setProperty(RestApiIds::errors, Array<var>());
+
+	req->complete(RestServer::Response::ok(var(result.get())));
+	return req->waitForResponse();
+}
+
+RestServer::Response RestHelpers::handleProjectSave(MainController* mc,
+                                                    RestServer::AsyncRequest::Ptr req)
+{
+	auto obj = req->getRequest().getJsonBody();
+	auto format = obj[RestApiIds::format].toString();
+	auto filename = obj[RestApiIds::filename].toString();
+
+	if (format != "xml" && format != "hip")
+		return req->fail(400, "format must be 'xml' or 'hip'");
+
+	DynamicObject::Ptr result = new DynamicObject();
+
+	Array<var> logs;
+
+	result->setProperty(RestApiIds::masterChainRenamed, false);
+
+	if (filename.isEmpty())
+		filename = mc->getMainSynthChain()->getId();
+	else
+	{
+		if (filename != mc->getMainSynthChain()->getId())
+		{
+			mc->getMainSynthChain()->setId(filename, sendNotificationAsync);
+			logs.add("Renamed master chain to " + filename);
+			result->setProperty(RestApiIds::masterChainRenamed, true);
+			result->setProperty(RestApiIds::newName, filename);
+		}	
+	}
+	
+	
+
+	auto bpe = dynamic_cast<BackendProcessor*>(mc)->currentRootWindow;
+
+	if (format == "xml")
+	{
+		auto d = GET_PROJECT_HANDLER(mc->getMainSynthChain()).getSubDirectory(ProjectHandler::XMLPresetBackups);
+		auto f = d.getChildFile(filename).withFileExtension(format);
+
+		if(!f.isAChildOf(d))
+			return req->fail(400, f.getFullPathName() + " not in project folder");
+
+		BackendCommandTarget::Actions::saveFileAsXml(bpe, f);
+		result->setProperty(RestApiIds::path, f.getFullPathName());
+	}
+	if (format == "hip")
+	{
+		auto d = GET_PROJECT_HANDLER(mc->getMainSynthChain()).getSubDirectory(ProjectHandler::Presets);
+		auto f = d.getChildFile(filename).withFileExtension(format);
+		
+		if (!f.isAChildOf(d))
+			return req->fail(400, f.getFullPathName() + " not in project folder");
+
+		PresetHandler::saveProcessorAsPreset(mc->getMainSynthChain());
+		result->setProperty(RestApiIds::path, f.getFullPathName());
+	}
+	
+	result->setProperty(RestApiIds::success, true);
+	result->setProperty(RestApiIds::logs, logs);
+	result->setProperty(RestApiIds::errors, Array<var>());
+
+	req->complete(RestServer::Response::ok(var(result.get())));
+	return req->waitForResponse();
+
+}
+
+RestServer::Response RestHelpers::handleProjectLoad(MainController* mc,
+                                                    RestServer::AsyncRequest::Ptr req)
+{
+	auto obj = req->getRequest().getJsonBody();
+	auto file = obj[RestApiIds::file].toString();
+
+	if (file.isEmpty())
+		return req->fail(400, "file is required");
+
+	auto projectRoot = GET_PROJECT_HANDLER(mc->getMainSynthChain()).getRootFolder();
+
+	auto bpe = dynamic_cast<BackendProcessor*>(mc)->currentRootWindow;
+
+	auto f = projectRoot.getChildFile(file);
+
+	if (!f.existsAsFile())
+		return req->fail(404, f.getFullPathName() + " is not a file");
+
+	if (!f.isAChildOf(projectRoot))
+		return req->fail(400, f.getFullPathName() + " not in project folder");
+
+
+
+	if (f.getFileExtension() == ".xml")
+	{
+		auto xml = XmlDocument::parse(f);
+
+		if (xml != nullptr)
+		{
+			XmlBackupFunctions::addContentFromSubdirectory(*xml, f);
+			String newId = xml->getStringAttribute("ID");
+
+			auto v = ValueTree::fromXml(*xml);
+
+			if (!(v.getType() == Identifier("Processor")
+				&& v.getProperty("Type", var::undefined()).toString() == "SynthChain"))
+				return req->fail(400, "XML is not a valid HISE preset (SynthChain)");
+
+			XmlBackupFunctions::restoreAllScripts(v, bpe->getMainSynthChain(), newId);
+
+			bpe->setOnetimeCallbackAfterPresetLoad([req, f]()
+			{
+				DynamicObject::Ptr r = new DynamicObject();
+				r->setProperty(RestApiIds::success, true);
+
+				Array<var> logs;
+
+				logs.add("Loaded " + f.getFullPathName());
+
+				r->setProperty(RestApiIds::logs, logs);
+				r->setProperty(RestApiIds::errors, Array<var>());
+				req->complete(RestServer::Response::ok(var(r.get())));
+			});
+
+			MessageManager::callAsync([bpe, v]()
+			{
+				bpe->loadNewContainer(v);
+			});
+		}
+		else
+		{
+			return req->fail(500, "The XML file is not valid. Loading aborted");
+		}
+	}
+	else if (f.getFileExtension() == ".hip")
+	{
+		bpe->setOnetimeCallbackAfterPresetLoad([req, f]()
+		{
+			DynamicObject::Ptr r = new DynamicObject();
+			r->setProperty(RestApiIds::success, true);
+
+			Array<var> logs;
+
+			logs.add("Loaded " + f.getFullPathName());
+
+			r->setProperty(RestApiIds::logs, logs);
+			r->setProperty(RestApiIds::errors, Array<var>());
+			req->complete(RestServer::Response::ok(var(r.get())));
+		});
+
+		MessageManager::callAsync([bpe, f]()
+		{
+			bpe->loadNewContainer(f);
+		});
+	}
+	else
+	{
+		return req->fail(400, "file extension must be .xml or .hip");
+	}
+		
+	return req->waitForResponse();
+}
+
+RestServer::Response RestHelpers::handleProjectSwitch(MainController* mc,
+                                                      RestServer::AsyncRequest::Ptr req)
+{
+	auto obj = req->getRequest().getJsonBody();
+	auto project = obj[RestApiIds::project].toString();
+
+	if (project.isEmpty())
+		return req->fail(400, "project is required");
+
+	auto valid = isValidProjectFolder(File(project));
+
+	if (!valid)
+		return req->fail(400, project + " is not a valid project folder");
+
+	
+	
+
+	auto oldProject = GET_HISE_SETTING(mc->getMainSynthChain(), HiseSettings::Project::Name).toString();
+
+	bool done = false;
+
+	auto r = Result::fail("timeout at project switch");
+
+	MessageManager::callAsync([mc, project, &done, &r]()
+	{
+		auto bpe = dynamic_cast<BackendProcessor*>(mc)->currentRootWindow;
+		auto& handler = GET_PROJECT_HANDLER(bpe->getMainSynthChain());
+		r = handler.setWorkingProject(File(project));
+		bpe->getBackendProcessor()->getSettingsObject().refreshProjectData();
+		
+		mc->clearExtraDefinitionCache();
+
+		done = true;
+	});
+
+	int safeCounter = 0;
+
+	while (!done && ++safeCounter < 3000)
+		Thread::sleep(10);
+	
+	if (r.failed())
+	{
+		return req->fail(400, r.getErrorMessage());
+	}
+	else
+	{
+		
+		auto um = RestServerUndoManager::Instance::getOrCreate(mc, RestHelpers::ApiRoute::ProjectSwitch);
+
+		mc->getKillStateHandler().killVoicesAndCall(mc->getMainSynthChain(), [um, oldProject, req](Processor* p)
+		{
+			p->getMainController()->clearPreset(sendNotificationAsync);
+			dynamic_cast<BackendProcessor*>(p->getMainController())->createInterface(600, 500);
+
+			DynamicObject::Ptr result = new DynamicObject();
+			result->setProperty(RestApiIds::success, true);
+
+			auto newProject = GET_HISE_SETTING(p, HiseSettings::Project::Name);
+
+			Array<var> logs;
+			logs.add("Switched project from " + oldProject + " to " + newProject);
+
+			result->setProperty(RestApiIds::logs, logs);
+			result->setProperty(RestApiIds::errors, Array<var>());
+
+			um->clearUndoHistory();
+			um->flushUI(p);
+
+			req->complete(RestServer::Response::ok(var(result.get())));
+
+			return SafeFunctionCall::OK;
+		}, MainController::KillStateHandler::TargetThread::SampleLoadingThread);
+	}
+
+	return req->waitForResponse();
+}
+
+RestServer::Response RestHelpers::handleProjectExportSnippet(MainController* mc,
+                                                             RestServer::AsyncRequest::Ptr req)
+{
+	auto brw = dynamic_cast<BackendProcessor*>(mc)->currentRootWindow;
+
+	auto snippet = BackendCommandTarget::Actions::exportFileAsSnippet(brw, false);
+
+	DynamicObject::Ptr r = new DynamicObject();
+	r->setProperty(RestApiIds::success, true);
+	r->setProperty(RestApiIds::snippet, snippet);
+	r->setProperty(RestApiIds::logs, Array<var>());
+	r->setProperty(RestApiIds::errors, Array<var>());
+
+	req->complete(RestServer::Response::ok(var(r.get())));
+
+	return req->waitForResponse();
+}
+
+RestServer::Response RestHelpers::handleProjectImportSnippet(MainController* mc,
+                                                             RestServer::AsyncRequest::Ptr req)
+{
+	auto obj = req->getRequest().getJsonBody();
+	auto snippet = obj[RestApiIds::snippet].toString();
+
+	if (snippet.isEmpty())
+		return req->fail(400, "snippet is required");
+
+	if (!snippet.startsWith("HiseSnippet "))
+		return req->fail(400, "snippet must start with 'HiseSnippet '");
+
+	auto data = snippet.fromFirstOccurrenceOf("HiseSnippet ", false, false);
+
+	MemoryBlock mb;
+	if (!mb.fromBase64Encoding(data))
+		return req->fail(400, "Failed to base64-decode snippet data");
+
+	auto vt = ValueTree::readFromGZIPData(mb.getData(), mb.getSize());
+
+	if (!vt.isValid())
+		return req->fail(400, "Failed to decompress snippet ValueTree");
+
+	const bool isExtended = vt.getType() == Identifier("extended_snippet");
+	const bool isPreset = (vt.getType() == Identifier("Processor")
+	                     && vt.getProperty("Type", var::undefined()).toString() == "SynthChain");
+
+	if (!isExtended && !isPreset)
+		return req->fail(400, "Snippet does not contain a valid SynthChain or extended_snippet");
+
+	auto brw = dynamic_cast<BackendProcessor*>(mc)->currentRootWindow;
+
+	brw->setOnetimeCallbackAfterPresetLoad([req]()
+	{
+		DynamicObject::Ptr r = new DynamicObject();
+		r->setProperty(RestApiIds::success, true);
+		r->setProperty(RestApiIds::logs, Array<var>());
+		r->setProperty(RestApiIds::errors, Array<var>());
+		req->complete(RestServer::Response::ok(var(r.get())));
+	});
+
+	MessageManager::callAsync([brw, vt]()
+	{
+		brw->loadNewContainer(vt);
+	});
+
+	return req->waitForResponse();
+}
+
+//==============================================================================
+// Preprocessor endpoints (Phase 1 stubs)
+
+struct PreprocessorHelpers
+{
+	static const StringArray& getPlatforms()
+	{
+		static const StringArray p = { "Windows", "macOS", "Linux" };
+		return p;
+	}
+
+	static const StringArray& getTargets()
+	{
+		static const StringArray t = { "Project", "Dll" };
+		return t;
+	}
+
+	static bool isValidPreprocessorOS(const String& s, bool acceptAll)
+	{
+		return getPlatforms().contains(s) || (acceptAll && s == "all");
+	}
+
+	static bool isValidPreprocessorTarget(const String& s, bool acceptAll)
+	{
+		return getTargets().contains(s) || (acceptAll && s == "all");
+	}
+};
+
+RestServer::Response RestHelpers::handleProjectPreprocessorList(MainController* mc,
+                                                                RestServer::AsyncRequest::Ptr req)
+{
+	auto os = req->getRequest()[RestApiIds::OS];
+	if (os.isEmpty())
+		os = "all";
+
+	auto target = req->getRequest()[RestApiIds::target];
+	if (target.isEmpty())
+		target = "all";
+
+	if (!PreprocessorHelpers::isValidPreprocessorOS(os, true))
+		return req->fail(400, "OS must be one of: Windows, macOS, Linux, all");
+
+	if (!PreprocessorHelpers::isValidPreprocessorTarget(target, true))
+		return req->fail(400, "target must be one of: Project, Dll, all");
+
+	auto& settings = dynamic_cast<GlobalSettingManager*>(mc)->getSettingsObject();
+
+	const auto& platforms = PreprocessorHelpers::getPlatforms();
+	const auto& targets = PreprocessorHelpers::getTargets();
+
+	// Collect every (target, OS) slot with its full macro map so we can
+	// cross-reference below. Run over the full matrix (filters are applied
+	// later, at emit time) because sharing detection requires the full data.
+	struct Slot { String t; String pl; var obj; };
+	Array<Slot> slots;
+
+	for (const auto& t : targets)
+		for (const auto& pl : platforms)
+			slots.add({ t, pl, settings.getExtraDefinitionsAsObject(pl, t) });
+
+	StringArray macros;
+	for (const auto& s : slots)
+		if (auto* d = s.obj.getDynamicObject())
+			for (const auto& nv : d->getProperties())
+				macros.addIfNotAlreadyThere(nv.name.toString());
+
+	auto getValue = [&](const String& t, const String& pl, const String& macro) -> var
+	{
+		for (const auto& s : slots)
+		{
+			if (s.t == t && s.pl == pl)
+			{
+				if (auto* d = s.obj.getDynamicObject())
+				{
+					Identifier id(macro);
+					if (d->hasProperty(id))
+						return d->getProperty(id);
+				}
+				return var::undefined();
+			}
+		}
+		return var::undefined();
+	};
+
+	// Returns {true, commonValue} when the macro has the same value in every
+	// (t in tsubset, pl in pls) pair and is present in all of them.
+	auto sharedAcross = [&](const String& macro,
+	                        const StringArray& tsubset,
+	                        const StringArray& pls)
+	{
+		var ref;
+		bool seen = false;
+
+		for (const auto& t : tsubset)
+		{
+			for (const auto& pl : pls)
+			{
+				auto v = getValue(t, pl, macro);
+
+				if (v.isUndefined())
+					return std::make_pair(false, var());
+
+				if (!seen) { ref = v; seen = true; }
+				else if (v != ref) return std::make_pair(false, var());
+			}
+		}
+
+		return std::make_pair(seen, ref);
+	};
+
+	// juce::HashMap is non-copyable so nested containers don't work; flatten
+	// the (target, OS) leaf map to a single HashMap keyed by "target.OS".
+	DynamicObject::Ptr starStar = new DynamicObject();
+	HashMap<String, DynamicObject::Ptr> targetStar;
+	HashMap<String, DynamicObject::Ptr> leaf;
+
+	for (const auto& t : targets)
+	{
+		targetStar.set(t, new DynamicObject());
+
+		for (const auto& pl : platforms)
+			leaf.set(t + "." + pl, new DynamicObject());
+	}
+
+	for (const auto& m : macros)
+	{
+		auto global = sharedAcross(m, targets, platforms);
+
+		if (global.first)
+		{
+			starStar->setProperty(Identifier(m), global.second);
+			continue;
+		}
+
+		for (const auto& t : targets)
+		{
+			auto shared = sharedAcross(m, { t }, platforms);
+
+			if (shared.first)
+			{
+				targetStar[t]->setProperty(Identifier(m), shared.second);
+			}
+			else
+			{
+				for (const auto& pl : platforms)
+				{
+					auto v = getValue(t, pl, m);
+
+					if (!v.isUndefined())
+						leaf[t + "." + pl]->setProperty(Identifier(m), v);
+				}
+			}
+		}
+	}
+
+	// Emit sections filtered by the query parameters. A cross-reference section
+	// is emitted when its scope intersects the filter: "*.*" is always
+	// relevant; "T.*" is relevant when filter.target includes T; "T.OS" when
+	// both filter.target includes T and filter.os includes OS.
+	DynamicObject::Ptr fullObj = new DynamicObject();
+
+	auto emit = [&](const String& key, DynamicObject::Ptr obj)
+	{
+		if (obj != nullptr && obj->getProperties().size() > 0)
+			fullObj->setProperty(Identifier(key), var(obj.get()));
+	};
+
+	emit("*.*", starStar);
+
+	for (const auto& t : targets)
+	{
+		if (target != "all" && t != target)
+			continue;
+
+		emit(t + ".*", targetStar[t]);
+
+		for (const auto& pl : platforms)
+		{
+			if (os != "all" && pl != os)
+				continue;
+
+			emit(t + "." + pl, leaf[t + "." + pl]);
+		}
+	}
+
+	DynamicObject::Ptr r = new DynamicObject();
+	r->setProperty(RestApiIds::success, true);
+	r->setProperty(RestApiIds::logs, Array<var>());
+	r->setProperty(RestApiIds::preprocessors, var(fullObj.get()));
+	r->setProperty(RestApiIds::errors, Array<var>());
+	req->complete(RestServer::Response::ok(var(r.get())));
+	return req->waitForResponse();
+}
+
+RestServer::Response RestHelpers::handleProjectPreprocessorSet(MainController* mc,
+                                                               RestServer::AsyncRequest::Ptr req)
+{
+	auto obj = req->getRequest().getJsonBody();
+
+	auto os = obj[RestApiIds::OS].toString();
+	auto target = obj[RestApiIds::target].toString();
+	auto preprocessor = obj[RestApiIds::preprocessor].toString();
+	auto value = obj[RestApiIds::value].toString();
+
+	if (!PreprocessorHelpers::isValidPreprocessorOS(os, true))
+		return req->fail(400, "OS must be one of: Windows, macOS, Linux, all");
+
+	if (!PreprocessorHelpers::isValidPreprocessorTarget(target, true))
+		return req->fail(400, "target must be one of: Project, Dll, all");
+
+	if (preprocessor.isEmpty())
+		return req->fail(400, "preprocessor is required");
+
+	if (value.isEmpty())
+		return req->fail(400, "value is required");
+
+	if (value != "default" && !value.containsOnly("-0123456789"))
+		return req->fail(400, "value must be an integer or the literal string 'default'");
+
+	auto pf = [os, target, preprocessor, value, req](Processor* p)
+	{
+		const auto& platforms = PreprocessorHelpers::getPlatforms();
+		const auto& targets = PreprocessorHelpers::getTargets();
+
+		auto mc = p->getMainController();
+		auto& settings = dynamic_cast<GlobalSettingManager*>(mc)->getSettingsObject();
+
+		Array<var> logs;
+
+		for (auto t : targets)
+		{
+			if (target != "all" && t != target)
+				continue;
+
+			for (auto pl : platforms)
+			{
+				if (os != "all" && pl != os)
+					continue;
+
+				String log;
+				log << t << "." << pl << ":";
+
+				auto s = settings.getExtraDefinitionsAsObject(pl, t, false);
+
+				bool didSomething = false;
+
+				if (auto obj = s.getDynamicObject())
+				{
+					if (value == "default")
+					{
+						if (obj->hasProperty(preprocessor))
+						{
+							logs.add(log + " removed " + preprocessor);
+							didSomething = true;
+							obj->removeProperty(preprocessor);
+						}
+						else
+							logs.add(log + " " + preprocessor + " not set. skip.");
+					}
+					else
+					{
+						if (obj->hasProperty(preprocessor))
+						{
+							auto prevValue = obj->getProperty(preprocessor).toString();
+
+							if (prevValue == value)
+							{
+								logs.add(log + " " + preprocessor + " already set. skip");
+							}
+							else
+							{
+								logs.add(log + " changed " + preprocessor + " from " + prevValue + " to " + value);
+								didSomething = true;
+								obj->setProperty(preprocessor, value);
+							}
+						}
+						else
+						{
+							logs.add(log + " set " + preprocessor + " to " + value);
+							didSomething = true;
+							obj->setProperty(preprocessor, value);
+						}
+					}
+				}
+
+				if(didSomething)
+					settings.setExtraDefinitionsFromObject(pl, t, s);
+			}
+		}
+
+		DynamicObject::Ptr r = new DynamicObject();
+		r->setProperty(RestApiIds::success, true);
+		r->setProperty(RestApiIds::logs, logs);
+		r->setProperty(RestApiIds::errors, Array<var>());
+		req->complete(RestServer::Response::ok(var(r.get())));
+
+		return SafeFunctionCall::OK;
+	};
+
+	mc->getKillStateHandler().killVoicesAndCall(mc->getMainSynthChain(), pf, MainController::KillStateHandler::TargetThread::SampleLoadingThread);
+
 	return req->waitForResponse();
 }
 

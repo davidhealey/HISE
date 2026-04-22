@@ -849,7 +849,7 @@ var NewProjectCreator::onTemplateSelector(const var::NativeFunctionArgs& args)
 
 void NewProjectCreator::initialise(BaseStateManager* bp)
 {
-	auto& sd = dynamic_cast<GlobalSettingManager*>(bp)->getSettingsObject();
+	auto& sd = dynamic_cast<GlobalSettingManager*>(bp->getMainController())->getSettingsObject();
 	auto s = sd.getSetting(HiseSettings::Compiler::DefaultProjectFolder).toString();
 	jassert(s.isNotEmpty());
 	bp->write("DefaultProjectFolder", s);

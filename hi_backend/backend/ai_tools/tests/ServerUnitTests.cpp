@@ -54,6 +54,7 @@ public:
         testServerStartStop();
         testListMethods();
         testStatusEndpoint();
+        testStatusPreprocessors();
         testListComponentsFlat();
         testListComponentsHierarchy();
         testListComponentsWithLaf();
@@ -498,9 +499,24 @@ private:
 
         // Endpoints intentionally skipped in automated tests.
         // /api/dsp/save would modify the project's DspNetworks folder on disk,
-        // which would pollute the test fixture.
+        // which would pollute the test fixture. All /api/project/* endpoints
+        // mutate live project state (loaded preset, project_info.xml, on-disk
+        // files, or the active project root) and likewise cannot be exercised
+        // in-process without side effects on the user's current project.
         StringArray skipList;
         skipList.add("/api/dsp/save");
+        skipList.add("/api/project/list");
+        skipList.add("/api/project/tree");
+        skipList.add("/api/project/files");
+        skipList.add("/api/project/settings/list");
+        skipList.add("/api/project/settings/set");
+        skipList.add("/api/project/save");
+        skipList.add("/api/project/load");
+        skipList.add("/api/project/switch");
+        skipList.add("/api/project/export_snippet");
+        skipList.add("/api/project/import_snippet");
+        skipList.add("/api/project/preprocessor/list");
+        skipList.add("/api/project/preprocessor/set");
 
         // Verify metadata count matches enum
         const auto& metadata = RestHelpers::getRouteMetadata();
@@ -637,7 +653,66 @@ private:
         }
         expect(hasInterface, "Should have Interface processor");
     }
-    
+
+    //==========================================================================
+    void testStatusPreprocessors()
+    {
+        beginTest("GET /api/status/preprocessors");
+
+        // Non-verbose: flat { name: int } map
+        {
+            auto response = ctx->httpGet("/api/status/preprocessors");
+            expect(response.isNotEmpty(), "Should return response");
+
+            var json = ctx->parseJson(response);
+            expect((bool)json["success"], "success should be true: " + response);
+
+            auto pre = json["preprocessors"];
+            expect(pre.isObject(), "preprocessors should be an object");
+
+            auto* obj = pre.getDynamicObject();
+            expect(obj != nullptr && obj->getProperties().size() > 0,
+                   "Should expose at least one preprocessor");
+
+            // HISE_USE_EXTENDED_TEMPO_VALUES is always registered by the database ctor
+            expect(obj != nullptr && obj->hasProperty(Identifier("HISE_USE_EXTENDED_TEMPO_VALUES")),
+                   "Should include HISE_USE_EXTENDED_TEMPO_VALUES");
+
+            // Values in non-verbose mode should be integers, not nested objects
+            auto sample = pre["HISE_USE_EXTENDED_TEMPO_VALUES"];
+            expect(!sample.isObject(), "Non-verbose values should not be objects");
+        }
+
+        // Verbose: per-entry objects carrying the runtime value
+        {
+            auto response = ctx->httpGet("/api/status/preprocessors?verbose=true");
+            var json = ctx->parseJson(response);
+            expect((bool)json["success"], "success should be true (verbose): " + response);
+
+            auto pre = json["preprocessors"];
+            expect(pre.isObject(), "preprocessors should be an object (verbose)");
+
+            auto entry = pre["HISE_USE_EXTENDED_TEMPO_VALUES"];
+            expect(entry.isObject(), "Verbose entry should be an object");
+            expect(entry.hasProperty("value"), "Verbose entry should carry 'value'");
+        }
+
+        // skipDefaults=true should never return more entries than the unfiltered call
+        {
+            auto baseline = ctx->parseJson(ctx->httpGet("/api/status/preprocessors"));
+            auto filtered = ctx->parseJson(
+                ctx->httpGet("/api/status/preprocessors?skipDefaults=true"));
+
+            auto* baseObj     = baseline["preprocessors"].getDynamicObject();
+            auto* filteredObj = filtered["preprocessors"].getDynamicObject();
+            expect(baseObj != nullptr && filteredObj != nullptr,
+                   "Both responses should have a preprocessors object");
+
+            expect(filteredObj->getProperties().size() <= baseObj->getProperties().size(),
+                   "skipDefaults must not add entries");
+        }
+    }
+
     //==========================================================================
     void testListComponentsFlat()
     {
@@ -7441,6 +7516,7 @@ private:
         expect(!sa.isObject(), "UndoSanityA must be removed by batch undo");
         expect(!sb.isObject(), "UndoSanityB must be removed by batch undo");
     }
+
 
 };
 

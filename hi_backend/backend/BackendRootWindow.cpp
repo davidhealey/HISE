@@ -202,6 +202,9 @@ BackendRootWindow::BackendRootWindow(AudioProcessor *ownerProcessor, var editorS
 	BackendCommandTarget(static_cast<BackendProcessor*>(ownerProcessor)),
 	owner(static_cast<BackendProcessor*>(ownerProcessor))
 {
+	if (owner->currentRootWindow == nullptr)
+		owner->currentRootWindow = this;
+
 	funkytooltips.setLookAndFeel(&ttlaf);
 
 	if (!owner->isSnippetBrowser())
@@ -540,6 +543,9 @@ BackendRootWindow::BackendRootWindow(AudioProcessor *ownerProcessor, var editorS
 
 BackendRootWindow::~BackendRootWindow()
 {
+	if(owner->currentRootWindow == this)
+		owner->currentRootWindow = nullptr;
+
 	auto isSnippetBrowser = owner->isSnippetBrowser();
 
 	if(!isSnippetBrowser)
@@ -1064,7 +1070,7 @@ bool BackendRootWindow::toggleRotate()
 
 }
 
-void BackendRootWindow::loadNewContainer(ValueTree & v)
+void BackendRootWindow::loadNewContainer(const ValueTree & v)
 {
 	getBackendProcessor()->getJavascriptThreadPool().cancelAllJobs(false);
 
@@ -1134,14 +1140,20 @@ void BackendRootWindow::newHisePresetLoaded()
 		}, 500);
 	}
 
+	if (postPresetLoadCallback)
+	{
+		postPresetLoadCallback();
+		postPresetLoadCallback = {};
+	}
+
 	if(currentCategory == SnippetBrowserHelpers::Category::UI)
-		{
+	{
 		Component::callRecursive<MainTopBar>(this, [](MainTopBar* t)
 		{
 			t->togglePopup(MainTopBar::PopupType::PluginPreview, true);
 			return true;
 		});
-		}
+	}
 }
 
 void BackendRootWindow::gotoIfWorkspace(Processor* p)

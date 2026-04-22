@@ -286,7 +286,10 @@ RestServer::Response BackendProcessor::onAsyncRequest(RestServer::AsyncRequest::
 			
 		case RestHelpers::ApiRoute::Status:
 			return RestHelpers::handleStatus(this, req);
-			
+
+		case RestHelpers::ApiRoute::StatusPreprocessors:
+			return RestHelpers::handleStatusPreprocessors(this, req);
+
 		case RestHelpers::ApiRoute::GetScript:
 			return RestHelpers::handleGetScript(this, req);
 			
@@ -400,6 +403,42 @@ RestServer::Response BackendProcessor::onAsyncRequest(RestServer::AsyncRequest::
 
 	case RestHelpers::ApiRoute::DspSave:
 		return RestHelpers::handleDspSave(this, req);
+
+	case RestHelpers::ApiRoute::ProjectList:
+		return RestHelpers::handleProjectList(this, req);
+
+	case RestHelpers::ApiRoute::ProjectTree:
+		return RestHelpers::handleProjectTree(this, req);
+
+	case RestHelpers::ApiRoute::ProjectFiles:
+		return RestHelpers::handleProjectFiles(this, req);
+
+	case RestHelpers::ApiRoute::ProjectSettingsList:
+		return RestHelpers::handleProjectSettingsList(this, req);
+
+	case RestHelpers::ApiRoute::ProjectSettingsSet:
+		return RestHelpers::handleProjectSettingsSet(this, req);
+
+	case RestHelpers::ApiRoute::ProjectSave:
+		return RestHelpers::handleProjectSave(this, req);
+
+	case RestHelpers::ApiRoute::ProjectLoad:
+		return RestHelpers::handleProjectLoad(this, req);
+
+	case RestHelpers::ApiRoute::ProjectSwitch:
+		return RestHelpers::handleProjectSwitch(this, req);
+
+	case RestHelpers::ApiRoute::ProjectExportSnippet:
+		return RestHelpers::handleProjectExportSnippet(this, req);
+
+	case RestHelpers::ApiRoute::ProjectImportSnippet:
+		return RestHelpers::handleProjectImportSnippet(this, req);
+
+	case RestHelpers::ApiRoute::ProjectPreprocessorList:
+		return RestHelpers::handleProjectPreprocessorList(this, req);
+
+	case RestHelpers::ApiRoute::ProjectPreprocessorSet:
+		return RestHelpers::handleProjectPreprocessorSet(this, req);
 
 	default:
 		return req->fail(404, "Unknown API endpoint: " + subURL);

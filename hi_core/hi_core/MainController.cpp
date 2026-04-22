@@ -414,6 +414,7 @@ void MainController::clearPreset(NotificationType sendPresetLoadMessage)
 	auto f = [sendPresetLoadMessage](Processor* p)
 	{
 		auto mc = p->getMainController();
+		mc->clearExtraDefinitionCache();
 		SUSPEND_GLOBAL_DISPATCH(mc, "reset main controller");
 		LockHelpers::freeToGo(mc);
 
