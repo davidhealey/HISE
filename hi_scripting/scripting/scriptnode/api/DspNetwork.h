@@ -613,6 +613,8 @@ public:
 
 	NodeBase::List getSelection() const { return selection.getItemArray(); }
 
+	static Image createScreenshot(Component* root, float scaleFactor);
+
     void zoomToSelection(Component* c);
 
 	void fillSnexObjects(StringArray& indexList);

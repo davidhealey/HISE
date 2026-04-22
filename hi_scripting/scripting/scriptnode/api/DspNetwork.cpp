@@ -1216,6 +1216,23 @@ void DspNetwork::addToSelection(NodeBase* node, ModifierKeys mods)
 }
 
 
+juce::Image DspNetwork::createScreenshot(Component* root, float scaleFactor)
+{
+	Image img;
+
+#if USE_BACKEND
+	jassert(MessageManager::getInstance()->isThisTheMessageThread());
+
+	Component::callRecursive<scriptnode::DspNetworkGraph>(root, [&](scriptnode::DspNetworkGraph* ng)
+	{
+		img = ng->createComponentSnapshot(ng->getLocalBounds(), true, scaleFactor);
+		return true;
+	});
+#endif
+
+	return img;
+}
+
 void DspNetwork::zoomToSelection(Component* c)
 {
     using ButtonBase = DspNetworkGraph::ActionButton;

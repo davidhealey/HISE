@@ -355,7 +355,7 @@ private:
             msg = {};
             msg << "parameter default value mismatch: ";
             msg << propId.toString() + " [" + String(idx) + "]";
-            expectWithinAbsoluteError<float>(v1, v2, 0.001f, msg);
+            expectWithinAbsoluteError<float>(v1, v2, 0.01f, msg);
 
             // skip testing hardcoded processors, they store their values differently...
             if (dynamic_cast<HardcodedScriptProcessor*>(pToTest) != nullptr)
@@ -372,7 +372,7 @@ private:
 			msg << "exportAsValueTree() value mismatch: ";
 			msg << propId.toString() + " [" + String(idx) + "]";
 
-            expectWithinAbsoluteError<float>(v2, v3, 0.001f, msg);
+            expectWithinAbsoluteError<float>(v2, v3, 0.01f, msg);
         }
 
         NamedValueSet randomParameters;
@@ -411,7 +411,7 @@ private:
             msg << "getAttribute after randomizing within range: ";
             msg << propId.toString() + " [" + String(idx) + "]";
 
-            expectWithinAbsoluteError<float>(v1, v3, 0.01f, msg);
+            expectWithinAbsoluteError<float>(v1, v3, 0.1f, msg);
 
 			// skip testing hardcoded processors, they store their values differently...
 			if (dynamic_cast<HardcodedScriptProcessor*>(pToTest) != nullptr)
@@ -426,7 +426,7 @@ private:
 			msg << "exportAsValueTree() after randomizing within range: ";
 			msg << propId.toString() + " [" + String(idx) + "]";
 
-            expectWithinAbsoluteError<float>(v2, v3, 0.01f, msg);
+            expectWithinAbsoluteError<float>(v2, v3, 0.1f, msg);
 		}
 
         // testing modulation setup

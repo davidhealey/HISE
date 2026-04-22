@@ -404,6 +404,9 @@ RestServer::Response BackendProcessor::onAsyncRequest(RestServer::AsyncRequest::
 	case RestHelpers::ApiRoute::DspSave:
 		return RestHelpers::handleDspSave(this, req);
 
+	case RestHelpers::ApiRoute::DspScreenshot:
+		return RestHelpers::handleDspScreenshot(this, req);
+
 	case RestHelpers::ApiRoute::ProjectList:
 		return RestHelpers::handleProjectList(this, req);
 

@@ -1465,6 +1465,44 @@ struct RestApiEndpoints
 			.withResponseExample("{\"success\": true, \"filePath\": \"D:/Projects/MyPlugin/DspNetworks/Networks/MyDSP.xml\", \"logs\": [], \"errors\": []}"));
 	}
 
+	/* GET /api/dsp/screenshot */
+	static void dspScreenshot(Array<RouteMetadata>& m)
+	{
+		m.add(RouteMetadata(ApiRoute::DspScreenshot, "api/dsp/screenshot")
+			.withCategory("dsp")
+			.withSummary("Capture screenshot of currently edited DspNetwork graph to PNG file")
+			.withDescription("Renders the DspNetworkGraph of the active (or debugged) DspNetwork "
+				"belonging to the given module and writes a PNG file to outputPath. "
+				"\n\n"
+				"The DspNetworkGraph only exists inside the HISE IDE's BackendRootWindow, so "
+				"this endpoint requires HISE to be running with the UI open (returns 503 in "
+				"headless contexts). As a side effect of locating the graph, the call switches "
+				"the active workspace to the requested module if it is not already shown. "
+				"\n\n"
+				"outputPath may be either an absolute path or a path relative to the project's "
+				"Images folder; it must end with .png. If the file already exists it is "
+				"overwritten.")
+			.withReturns("File path of the saved PNG plus image dimensions")
+			.withModuleIdParam()
+			.withQueryParam(RouteParameter(RestApiIds::scale, "Scale factor (0.5, 1.0 or 2.0)")
+				.withType(ParamType::Float).withDefault("1.0"))
+			.withQueryParam(RouteParameter(RestApiIds::outputPath,
+				"Absolute path or path relative to the project's Images folder "
+				"(must end with .png). Existing files are overwritten."))
+			.withResponseField(RouteParameter(RestApiIds::moduleId, "The script processor's module ID"))
+			.withResponseField(RouteParameter(RestApiIds::width, "Width of captured image in pixels")
+				.withType(ParamType::Int))
+			.withResponseField(RouteParameter(RestApiIds::height, "Height of captured image in pixels")
+				.withType(ParamType::Int))
+			.withResponseField(RouteParameter(RestApiIds::scale, "Scale factor that was applied")
+				.withType(ParamType::Float))
+			.withResponseField(RouteParameter(RestApiIds::filePath,
+				"Absolute path to the saved PNG file"))
+			.withErrorCodes({ 400, 404, 500, 503 })
+			.withRequestExample(R"(GET /api/dsp/screenshot?moduleId=Script FX&scale=1.0&outputPath=graph.png)")
+			.withResponseExample(R"({"success": true, "moduleId": "Script FX", "width": 800, "height": 600, "scale": 1.0, "filePath": "D:/Projects/MyPlugin/Images/graph.png", "logs": [], "errors": []})"));
+	}
+
 	/* GET /api/project/list */
 	static void projectList(Array<RouteMetadata>& m)
 	{
@@ -1813,6 +1851,7 @@ const Array<RestHelpers::RouteMetadata>& RestHelpers::getRouteMetadata()
 			RestApiEndpoints::dspTree(m);
 			RestApiEndpoints::dspApply(m);
 			RestApiEndpoints::dspSave(m);
+			RestApiEndpoints::dspScreenshot(m);
 			RestApiEndpoints::projectList(m);
 			RestApiEndpoints::projectTree(m);
 			RestApiEndpoints::projectFiles(m);

@@ -95,6 +95,7 @@ struct RestHelpers
         DspTree,                ///< GET  /api/dsp/tree - Get scriptnode network hierarchy
         DspApply,               ///< POST /api/dsp/apply - Apply operations to scriptnode graph
         DspSave,                ///< POST /api/dsp/save - Save DspNetwork to XML file
+        DspScreenshot,          ///< GET  /api/dsp/screenshot - Capture screenshot of current DspNetwork graph
         ProjectList,            ///< GET  /api/project/list - List available HISE projects
         ProjectTree,            ///< GET  /api/project/tree - Project file tree with referenced flags
         ProjectFiles,           ///< GET  /api/project/files - List saveable project files
@@ -989,6 +990,10 @@ struct RestHelpers
     /** Handler for POST /api/dsp/save - Save DspNetwork to XML file */
     static RestServer::Response handleDspSave(MainController* mc,
                                               RestServer::AsyncRequest::Ptr req);
+
+    /** Handler for GET /api/dsp/screenshot - Capture screenshot of current DspNetwork graph */
+    static RestServer::Response handleDspScreenshot(MainController* mc,
+                                                    RestServer::AsyncRequest::Ptr req);
 
     /** Handler for GET /api/project/list - List available HISE projects */
     static RestServer::Response handleProjectList(MainController* mc,

@@ -5067,13 +5067,13 @@ RestServer::Response RestHelpers::handleDspInit(MainController* mc,
 		filePath = networkFolder.getChildFile(networkName).withFileExtension("xml").getFullPathName();
 	}
 
-	auto brw = dynamic_cast<BackendProcessor*>(mc)->currentRootWindow;
-
-	MessageManager::callAsync([brw, p]()
+	if (auto brw = dynamic_cast<BackendProcessor*>(mc)->currentRootWindow)
 	{
-		brw->gotoIfWorkspace(p);
-	});
-	
+		MessageManager::callAsync([brw, p]()
+		{
+			brw->gotoIfWorkspace(p);
+		});
+	}
 
 	DynamicObject::Ptr result = new DynamicObject();
 	result->setProperty(RestApiIds::success, true);
@@ -5286,6 +5286,108 @@ RestServer::Response RestHelpers::handleDspSave(MainController* mc,
 	DynamicObject::Ptr result = new DynamicObject();
 	result->setProperty(RestApiIds::success, true);
 	result->setProperty(RestApiIds::filePath, targetFile.getFullPathName());
+	result->setProperty(RestApiIds::logs, Array<var>());
+	result->setProperty(RestApiIds::errors, Array<var>());
+
+	req->complete(RestServer::Response::ok(var(result.get())));
+	return req->waitForResponse();
+}
+
+RestServer::Response RestHelpers::handleDspScreenshot(MainController* mc,
+                                                       RestServer::AsyncRequest::Ptr req)
+{
+	// Parse parameters (same shape as /api/testing/screenshot)
+	auto moduleId = req->getRequest()[RestApiIds::moduleId];
+	if (moduleId.isEmpty())
+		return req->fail(400, "moduleId is required");
+
+	auto scaleStr = req->getRequest()[RestApiIds::scale];
+	float scale = scaleStr.isNotEmpty() ? scaleStr.getFloatValue() : 1.0f;
+
+	if (scale != 0.5f && scale != 1.0f && scale != 2.0f)
+		scale = 1.0f;
+
+	auto outputPath = req->getRequest()[RestApiIds::outputPath];
+
+	if (outputPath.isEmpty())
+		return req->fail(400, "outputPath is required");
+
+	if (!outputPath.endsWithIgnoreCase(".png"))
+		return req->fail(400, "outputPath must end with .png extension");
+
+	File outputFile;
+
+	if (File::isAbsolutePath(outputPath))
+		outputFile = File(outputPath);
+	else
+	{
+		auto imgFolder = GET_PROJECT_HANDLER(mc->getMainSynthChain()).getSubDirectory(ProjectHandler::Images);
+		outputFile = imgFolder.getChildFile(outputPath);
+	}
+
+	// Resolve active DspNetwork for the module
+	auto holder = getNetworkHolder(mc, moduleId);
+	if (holder == nullptr)
+		return req->fail(404, "Module " + moduleId + " is not a DspNetwork holder");
+
+	auto network = getActiveNetwork(mc, moduleId);
+	if (network == nullptr)
+		return req->fail(404, "No active DspNetwork for module: " + moduleId);
+
+	auto holderProcessor = dynamic_cast<Processor*>(holder);
+	if (holderProcessor == nullptr)
+		return req->fail(500, "DspNetwork holder is not a Processor");
+
+	// The DspNetworkGraph only exists inside the BackendRootWindow, so this
+	// endpoint requires the HISE backend IDE to be running. Headless contexts
+	// (unit tests, CLI) have no root window and cannot capture the graph.
+	auto backendProcessor = dynamic_cast<BackendProcessor*>(mc);
+	if (backendProcessor == nullptr || backendProcessor->currentRootWindow == nullptr)
+		return req->fail(503, "No BackendRootWindow available -- dsp/screenshot requires the HISE IDE to be running");
+
+	Image capturedImage;
+	bool captureSuccess = false;
+	WaitableEvent captureComplete;
+
+	SafeAsyncCall::callAsyncIfNotOnMessageThread<Processor>(*holderProcessor, [&](Processor& p)
+	{
+		auto bpe = backendProcessor->currentRootWindow;
+
+		if (bpe != nullptr && bpe->getCurrentWorkspaceProcessor() != &p)
+			bpe->gotoIfWorkspace(&p);
+
+		if (bpe != nullptr)
+		{
+			capturedImage = scriptnode::DspNetwork::createScreenshot(bpe, scale);
+			captureSuccess = capturedImage.isValid();
+		}
+
+		captureComplete.signal();
+	});
+
+	if (!captureComplete.wait(1000))
+		return req->fail(500, "screenshot capture timed out");
+
+	if (!captureSuccess)
+		return req->fail(500, "failed to capture screenshot");
+
+	outputFile.deleteFile();
+	FileOutputStream fos(outputFile);
+
+	if (fos.failedToOpen())
+		return req->fail(500, "failed to open output file: " + outputFile.getFullPathName());
+
+	PNGImageFormat pngFormat;
+	if (!pngFormat.writeImageToStream(capturedImage, fos))
+		return req->fail(500, "failed to write PNG to file");
+
+	DynamicObject::Ptr result = new DynamicObject();
+	result->setProperty(RestApiIds::success, true);
+	result->setProperty(RestApiIds::moduleId, moduleId);
+	result->setProperty(RestApiIds::filePath, outputFile.getFullPathName());
+	result->setProperty(RestApiIds::width, capturedImage.getWidth());
+	result->setProperty(RestApiIds::height, capturedImage.getHeight());
+	result->setProperty(RestApiIds::scale, scale);
 	result->setProperty(RestApiIds::logs, Array<var>());
 	result->setProperty(RestApiIds::errors, Array<var>());
 

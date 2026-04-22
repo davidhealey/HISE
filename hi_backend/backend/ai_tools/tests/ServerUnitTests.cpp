@@ -198,6 +198,7 @@ public:
         testDspApplyValidation();
         
         testDspApplyBatchOps();
+        testDspScreenshot();
 
         testBatchRollback();
 
@@ -7396,6 +7397,42 @@ private:
         auto firstNode = findNodeInTree(tree[RestApiIds::result], "FirstNode");
         expect(!firstNode.isObject(),
             "FirstNode must be rolled back when a later op fails at perform()");
+    }
+
+    //==========================================================================
+    /** Setup: headless test context (no BackendRootWindow, no active DspNetwork)
+     *  Scenario: GET /api/dsp/screenshot with a series of invalid parameter
+     *            combinations that all bail before any image is captured or
+     *            written to disk.
+     *  Expected: Each call returns a well-formed fail envelope (success=false
+     *            with an errors array and a specific errorMessage), the
+     *            endpoint is marked touched for coverage, and no PNG file is
+     *            created anywhere.
+     *
+     *  The success path is not exercised here because it requires a live
+     *  BackendRootWindow and an active DspNetwork with a workspace -- neither
+     *  exists in the headless unit-test context. Full envelope validation of
+     *  the success response is therefore out of scope for this test.
+     */
+    void testDspScreenshot()
+    {
+        beginTest("GET /api/dsp/screenshot (parameter validation)");
+
+        // Missing moduleId -- endpoint must reject before resolving anything.
+        auto r1 = ctx->httpGet("/api/dsp/screenshot");
+        var j1 = ctx->parseJson(r1);
+        expectErrorMessageContains(j1, "moduleId");
+
+        // Missing outputPath -- endpoint must reject without touching the
+        // DspNetwork holder or the filesystem.
+        auto r2 = ctx->httpGet("/api/dsp/screenshot?moduleId=Interface");
+        var j2 = ctx->parseJson(r2);
+        expectErrorMessageContains(j2, "outputPath");
+
+        // Non-.png extension -- extension check happens before any I/O.
+        auto r3 = ctx->httpGet("/api/dsp/screenshot?moduleId=Interface&outputPath=foo.jpg");
+        var j3 = ctx->parseJson(r3);
+        expectErrorMessageContains(j3, ".png");
     }
 
     //==========================================================================
