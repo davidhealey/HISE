@@ -2372,6 +2372,15 @@ struct Helpers
 	{
 		jassert(n.getType() == PropertyIds::Node);
 
+		if (id.isEmpty())
+		{
+			auto fp = n[PropertyIds::FactoryPath].toString();
+
+			// special path for allowing "connect SEND to RECEIVE"
+			if (fp == "routing.receive")
+				return n;
+		}
+
 		static const Array<Identifier> nodeIds({
 			PropertyIds::Bypassed,
 			PropertyIds::NodeColour,
@@ -2384,6 +2393,8 @@ struct Helpers
 
 		if (nodeIds.contains(Identifier(id)))
 			return n;
+
+		
 
 		for (auto p : n.getChildWithName(PropertyIds::Parameters))
 		{
@@ -2411,10 +2422,31 @@ struct Helpers
 
 	static bool addConnection(ValueTree conTree, const String& nodeId, const String& parameterId)
 	{
+		if (parameterId.isEmpty())
+		{
+			jassert(conTree.getType() == PropertyIds::Property);
+
+			auto connections = conTree[PropertyIds::Value].toString();
+
+			if (connections.isEmpty())
+			{
+				conTree.setProperty(PropertyIds::Value, nodeId, nullptr);
+				return true;
+			}
+			
+			if (connections.contains(nodeId))
+				return false;
+
+			connections << ";" << nodeId;
+
+			conTree.setProperty(PropertyIds::Value, connections, nullptr);
+			return true;
+		}
+
 		jassert(conTree.getType() == PropertyIds::Connections ||
 			conTree.getType() == PropertyIds::ModulationTargets);
 
-		for (auto& c : conTree)
+		for (const auto& c : conTree)
 		{
 			if (c[PropertyIds::NodeId].toString() == nodeId &&
 				c[PropertyIds::ParameterId].toString() == parameterId)
@@ -2431,6 +2463,24 @@ struct Helpers
 
 	static bool removeConnection(ValueTree conTree, const String& nodeId, const String& parameterId)
 	{
+		if (parameterId.isEmpty())
+		{
+			jassert(conTree.getType() == PropertyIds::Property);
+
+			auto connections = conTree[PropertyIds::Value].toString();
+
+			if (!connections.contains(nodeId))
+				return false;
+
+			connections.replace(nodeId, "");
+
+			if (connections == ";")
+				connections = {};
+
+			conTree.setProperty(PropertyIds::Value, connections, nullptr);
+			return true;
+		}
+
 		jassert(conTree.getType() == PropertyIds::Connections ||
 			conTree.getType() == PropertyIds::ModulationTargets);
 
@@ -2468,6 +2518,20 @@ struct Helpers
 
 	static ValueTree getConnectionParent(const ValueTree& sn, const String& sourceOutput)
 	{
+		auto fp = sn[PropertyIds::FactoryPath].toString();
+
+		if (fp == "routing.send")
+		{
+			for (auto p : sn.getChildWithName(PropertyIds::Properties))
+			{
+				if (p[PropertyIds::ID].toString() == PropertyIds::Connection.toString())
+					return p;
+			}
+
+			jassertfalse;
+			return {};
+		}
+
 		bool isParameterConnection = String(sourceOutput.getIntValue()) != sourceOutput;
 
 		if (isParameterConnection)
@@ -2906,8 +2970,10 @@ struct connect : public ActionBase
 			return Error().withError("connect requires 'source'");
 		if (op[RestApiIds::target].toString().isEmpty())
 			return Error().withError("connect requires 'target'");
-		if (op[RestApiIds::parameter].toString().isEmpty())
-			return Error().withError("connect requires 'parameter'");
+
+		// send / receive can be used without parameter
+		//if (op[RestApiIds::parameter].toString().isEmpty())
+		//	return Error().withError("connect requires 'parameter'");
 		return {};
 	}
 
@@ -3525,10 +3591,14 @@ struct create_parameter : public ActionBase
 		if (!sn[PropertyIds::FactoryPath].toString().startsWith("container"))
 			throw Error().withError("Can't add parameters to non-container nodes");
 
+		
+
 		auto pn = Helpers::findParameterOrProperty(sn, parameterId, false);
 
 		if (pn.isValid())
 			throw Error().withError("Parameter " + nodeId + "." + parameterId + " already exists");
+
+		sn.setProperty(PropertyIds::ShowParameters, true, nullptr);
 
 		auto pTree = sn.getChildWithName(PropertyIds::Parameters);
 

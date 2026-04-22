@@ -5372,6 +5372,7 @@ RestServer::Response RestHelpers::handleDspScreenshot(MainController* mc,
 		return req->fail(500, "failed to capture screenshot");
 
 	outputFile.deleteFile();
+	outputFile.create();
 	FileOutputStream fos(outputFile);
 
 	if (fos.failedToOpen())
@@ -6040,7 +6041,7 @@ RestServer::Response RestHelpers::handleProjectSwitch(MainController* mc,
 			DynamicObject::Ptr result = new DynamicObject();
 			result->setProperty(RestApiIds::success, true);
 
-			auto newProject = GET_HISE_SETTING(p, HiseSettings::Project::Name);
+			auto newProject = GET_HISE_SETTING(p, HiseSettings::Project::Name).toString();
 
 			Array<var> logs;
 			logs.add("Switched project from " + oldProject + " to " + newProject);
