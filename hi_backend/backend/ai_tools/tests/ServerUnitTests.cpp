@@ -5784,8 +5784,8 @@ private:
     void testDspInit()
     {
         /** Setup: Fresh builder with ScriptFX module
-         *  Scenario: POST /api/dsp/init to create a network
-         *  Expected: Returns tree with root container, filePath, and embedded flag
+         *  Scenario: POST /api/dsp/init with each mode value (auto, create, load)
+         *  Expected: auto/create/load gate correctly against XML file presence
          */
         beginTest("POST /api/dsp/init");
 
@@ -5802,7 +5802,7 @@ private:
         ops.add(var(addOp.get()));
         postBuilderOps(ops);
 
-        // Init network
+        // Baseline: mode omitted (defaults to auto)
         DynamicObject::Ptr initBody = new DynamicObject();
         initBody->setProperty(RestApiIds::moduleId, "InitTestFX");
         initBody->setProperty(RestApiIds::name, "init_test");
@@ -5811,7 +5811,7 @@ private:
             JSON::toString(var(initBody.get())));
         var json = ctx->parseJson(response);
 
-        expect((bool)json[RestApiIds::success], "Should succeed");
+        expect((bool)json[RestApiIds::success], "Should succeed (default mode=auto)");
 
         // Check tree in result
         auto result = json[RestApiIds::result];
@@ -5824,12 +5824,16 @@ private:
         expect(result[RestApiIds::parameters].isArray(), "Should have parameters array");
         expect(result[RestApiIds::connections].isArray(), "Should have connections array");
 
-        // Check filePath and embedded
+        // Check filePath
         expect(json.hasProperty(RestApiIds::filePath), "Should have filePath");
-        expect(json[RestApiIds::filePath].toString().isNotEmpty(), "filePath should not be empty");
-        expect(json[RestApiIds::filePath].toString().endsWith("init_test.xml"),
+        auto baseFilePath = json[RestApiIds::filePath].toString();
+        expect(baseFilePath.isNotEmpty(), "filePath should not be empty");
+        expect(baseFilePath.endsWith("init_test.xml"),
             "filePath should end with network name.xml");
-        expect(!(bool)json[RestApiIds::embedded], "embedded should be false");
+
+        // Derive Networks folder from baseline filePath for direct file manipulation
+        File networkFolder = File(baseFilePath).getParentDirectory();
+        networkFolder.createDirectory();
 
         // Error: missing moduleId
         auto errResponse = ctx->httpPost("/api/dsp/init", R"({"name": "foo"})");
@@ -5841,6 +5845,65 @@ private:
             R"({"moduleId": "InitTestFX"})");
         var errJson2 = ctx->parseJson(errResponse2);
         expect(!(bool)errJson2[RestApiIds::success], "Should fail without name");
+
+        // Error: invalid mode string
+        DynamicObject::Ptr badModeBody = new DynamicObject();
+        badModeBody->setProperty(RestApiIds::moduleId, "InitTestFX");
+        badModeBody->setProperty(RestApiIds::name, "init_test_bad");
+        badModeBody->setProperty(RestApiIds::mode, "bogus");
+        auto badModeResp = ctx->httpPost("/api/dsp/init",
+            JSON::toString(var(badModeBody.get())));
+        var badModeJson = ctx->parseJson(badModeResp);
+        expect(!(bool)badModeJson[RestApiIds::success], "Should fail with invalid mode");
+
+        // mode=create on fresh name -> success
+        File createFile = networkFolder.getChildFile("init_test_create.xml");
+        createFile.deleteFile();
+
+        DynamicObject::Ptr createBody = new DynamicObject();
+        createBody->setProperty(RestApiIds::moduleId, "InitTestFX");
+        createBody->setProperty(RestApiIds::name, "init_test_create");
+        createBody->setProperty(RestApiIds::mode, "create");
+        auto createResp = ctx->httpPost("/api/dsp/init",
+            JSON::toString(var(createBody.get())));
+        var createJson = ctx->parseJson(createResp);
+        expect((bool)createJson[RestApiIds::success],
+            "mode=create on fresh name should succeed");
+
+        // mode=create when XML already exists -> fail
+        createFile.replaceWithText("<empty/>");
+        auto createAgainResp = ctx->httpPost("/api/dsp/init",
+            JSON::toString(var(createBody.get())));
+        var createAgainJson = ctx->parseJson(createAgainResp);
+        expect(!(bool)createAgainJson[RestApiIds::success],
+            "mode=create with existing XML should fail");
+
+        // mode=load when XML exists -> success
+        DynamicObject::Ptr loadBody = new DynamicObject();
+        loadBody->setProperty(RestApiIds::moduleId, "InitTestFX");
+        loadBody->setProperty(RestApiIds::name, "init_test_create");
+        loadBody->setProperty(RestApiIds::mode, "load");
+        auto loadResp = ctx->httpPost("/api/dsp/init",
+            JSON::toString(var(loadBody.get())));
+        var loadJson = ctx->parseJson(loadResp);
+        expect((bool)loadJson[RestApiIds::success],
+            "mode=load with existing XML should succeed");
+
+        createFile.deleteFile();
+
+        // mode=load when no XML -> fail
+        File missingFile = networkFolder.getChildFile("init_test_missing.xml");
+        missingFile.deleteFile();
+
+        DynamicObject::Ptr missBody = new DynamicObject();
+        missBody->setProperty(RestApiIds::moduleId, "InitTestFX");
+        missBody->setProperty(RestApiIds::name, "init_test_missing");
+        missBody->setProperty(RestApiIds::mode, "load");
+        auto missResp = ctx->httpPost("/api/dsp/init",
+            JSON::toString(var(missBody.get())));
+        var missJson = ctx->parseJson(missResp);
+        expect(!(bool)missJson[RestApiIds::success],
+            "mode=load with no XML should fail");
     }
 
     void testDspTree()
