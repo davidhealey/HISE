@@ -74,6 +74,7 @@ struct RestApiEndpoints
 		auto serverObj = RouteParameter(RestApiIds::server, "Server info")
 			.withType(ParamType::Object)
 			.withProperty(RouteParameter(RestApiIds::version, "REST API version string"))
+			.withProperty(RouteParameter(RestApiIds::commitHash, "Git commit hash embedded at build time (PREVIOUS_HISE_COMMIT)"))
 			.withProperty(RouteParameter(RestApiIds::compileTimeout, "Compile timeout in seconds")
 				.withType(ParamType::Int));
 
@@ -94,7 +95,7 @@ struct RestApiEndpoints
 			.withResponseField(projectObj)
 			.withResponseField(RouteParameter(RestApiIds::scriptProcessors, "Array of script processor entries")
 				.withArrayItems(processorEntry))
-			.withResponseExample(R"({"success": true, "server": {"version": "1.0.0", "compileTimeout": 10}, "project": {"name": "My Project", "projectFolder": "D:/Projects/MyPlugin", "scriptsFolder": "D:/Projects/MyPlugin/Scripts"}, "scriptProcessors": [{"moduleId": "Interface", "isMainInterface": true, "externalFiles": ["utils.js"], "callbacks": [{"id": "onInit", "empty": false}]}], "logs": [], "errors": []})"));
+			.withResponseExample(R"({"success": true, "server": {"version": "1.0.0", "commitHash": "cf2cb9d33a6958c5aa67aa237b60adc5f2e9f7b5", "compileTimeout": 10}, "project": {"name": "My Project", "projectFolder": "D:/Projects/MyPlugin", "scriptsFolder": "D:/Projects/MyPlugin/Scripts"}, "scriptProcessors": [{"moduleId": "Interface", "isMainInterface": true, "externalFiles": ["utils.js"], "callbacks": [{"id": "onInit", "empty": false}]}], "logs": [], "errors": []})"));
 	}
 
 	/* GET /api/status/preprocessors */

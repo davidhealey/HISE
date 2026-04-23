@@ -1039,6 +1039,7 @@ RestServer::Response RestHelpers::handleStatus(MainController* mc, RestServer::A
 	// Server info
 	DynamicObject::Ptr server = new DynamicObject();
 	server->setProperty(RestApiIds::version, PresetHandler::getVersionString());
+	server->setProperty(RestApiIds::commitHash, String(PREVIOUS_HISE_COMMIT));
 	server->setProperty(RestApiIds::compileTimeout, GET_HISE_SETTING(mc->getMainSynthChain(), HiseSettings::Scripting::CompileTimeout));
 	result->setProperty(RestApiIds::server, var(server.get()));
 
