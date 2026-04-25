@@ -189,6 +189,9 @@ Array<juce::Identifier> HiseSettings::Other::getAllIds()
 	ids.add(AutosaveInterval);
 	ids.add(AudioThreadGuardEnabled);
 	ids.add(ExternalEditorPath);
+#if JUCE_LINUX
+	ids.add(LinuxTerminalCommand);
+#endif
     ids.add(AutoShowWorkspace);
 	ids.add(EnableShaderLineNumbers);
 	ids.add(ShowWelcomeScreen);
@@ -699,6 +702,12 @@ Array<juce::Identifier> HiseSettings::SnexWorkbench::getAllIds()
 		P(HiseSettings::Other::ExternalEditorPath);
 		D("You can specifiy the executable of an audio editor here and then use the button in the sample editor to open the currently selected files in the editor");
 		D("> You can use any editor that accepts filenames as command-line argument");
+		P_();
+
+		P(HiseSettings::Other::LinuxTerminalCommand);
+		D("Linux only. Optional override for the terminal launched by `Tools -> Launch HISE CLI in Terminal`.");
+		D("Leave empty to let HISE auto-detect (gnome-terminal, konsole, xfce4-terminal, alacritty, kitty, xterm, x-terminal-emulator).");
+		D("If set, provide a full command template using `{cwd}` and `{cmd}` placeholders, e.g. `gnome-terminal --working-directory={cwd} -- {cmd}`.");
 		P_();
 
 		P(HiseSettings::Other::EnableAutosave);
@@ -1304,6 +1313,7 @@ var HiseSettings::Data::getDefaultSetting(const Identifier& id) const
 	else if (id == Other::AudioThreadGuardEnabled)  return "Yes";
     else if (id == Other::AutoShowWorkspace)        return "Yes";
 	else if (id == Other::ExternalEditorPath)		return "";
+	else if (id == Other::LinuxTerminalCommand)		return "";
 	else if (id == Other::ShowWelcomeScreen)	    return "Yes";
 	else if (id == Other::GlobalHiseScaleFactor)    return "100%";
 	else if (id == Documentation::DocRepository)	return "";
