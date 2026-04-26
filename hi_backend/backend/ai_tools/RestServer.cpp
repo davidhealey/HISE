@@ -383,13 +383,14 @@ public:
     }
 
     //==============================================================================
-    bool startServer(int port, const String& bindAddress)
+    bool startServer(int port, const String& bindAddress, const String& corsOrigins)
     {
         if (isThreadRunning())
             return false;
 
         currentPort = port;
         currentBindAddress = bindAddress;
+        currentCorsOrigins = corsOrigins.trim();
 
         server = std::make_unique<httplib::Server>();
 
@@ -415,6 +416,14 @@ public:
                 case DELETE: server->Delete(pathStr, wrappedHandler); break;
             }
         }
+
+        // Wildcard CORS preflight handler. httplib dispatches OPTIONS through its own
+        // handler list, so the actual route handlers above never run for preflight.
+        server->Options(R"(.*)", [this](const httplib::Request& req, httplib::Response& res)
+        {
+            applyCorsHeaders(res, req);
+            res.status = 204;
+        });
 
         // Start the server thread
         startThread();
@@ -546,6 +555,57 @@ private:
         // Send response
         res.status = response.statusCode;
         res.set_content(response.body.toStdString(), response.contentType.toStdString());
+        applyCorsHeaders(res, req);
+    }
+
+    //==============================================================================
+    /** Resolve the configured CORS policy and write the matching headers onto `res`.
+
+        Policy interpretation (`currentCorsOrigins`):
+        - `"*"`        : always emit `Access-Control-Allow-Origin: *`.
+        - empty        : emit no CORS headers (legacy behavior, lets the user opt out).
+        - origin list  : comma-separated. Echo the request's `Origin` header iff it
+                         appears in the list; otherwise emit no CORS headers.
+    */
+    void applyCorsHeaders(httplib::Response& res, const httplib::Request& req) const
+    {
+        if (currentCorsOrigins.isEmpty())
+            return;
+
+        String allowOrigin;
+        bool echoingSpecificOrigin = false;
+
+        if (currentCorsOrigins == "*")
+        {
+            allowOrigin = "*";
+        }
+        else
+        {
+            auto requestOriginIt = req.headers.find("Origin");
+            if (requestOriginIt == req.headers.end())
+                return;
+
+            String requestOrigin(requestOriginIt->second);
+
+            StringArray allowed;
+            allowed.addTokens(currentCorsOrigins, ",", {});
+            allowed.trim();
+            allowed.removeEmptyStrings();
+
+            if (! allowed.contains(requestOrigin))
+                return;
+
+            allowOrigin = requestOrigin;
+            echoingSpecificOrigin = true;
+        }
+
+        res.set_header("Access-Control-Allow-Origin", allowOrigin.toStdString());
+        res.set_header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+        res.set_header("Access-Control-Allow-Headers", "Content-Type, Authorization");
+        res.set_header("Access-Control-Max-Age", "86400");
+
+        if (echoingSpecificOrigin)
+            res.set_header("Vary", "Origin");
     }
 
     //==============================================================================
@@ -554,6 +614,7 @@ private:
     
     int currentPort = 0;
     String currentBindAddress;
+    String currentCorsOrigins;
     std::atomic<bool> running{false};
 
     CriticalSection requestSerializationLock;
@@ -592,9 +653,9 @@ void RestServer::addAsyncRoute(Method method, const URL& routeUrl, AsyncRouteHan
     });
 }
 
-bool RestServer::start(int port, const String& bindAddress)
+bool RestServer::start(int port, const String& bindAddress, const String& corsAllowedOrigins)
 {
-    return pimpl->startServer(port, bindAddress);
+    return pimpl->startServer(port, bindAddress, corsAllowedOrigins);
 }
 
 void RestServer::stop()

@@ -698,12 +698,15 @@ public:
 
     //==============================================================================
     /** Start listening for connections.
-        
-        @param port         Port number to listen on
-        @param bindAddress  Address to bind to. Default "127.0.0.1" for localhost only.
-        @returns            true if server started successfully
+
+        @param port                 Port number to listen on
+        @param bindAddress          Address to bind to. Default "127.0.0.1" for localhost only.
+        @param corsAllowedOrigins   CORS policy for the `Access-Control-Allow-Origin` header.
+                                    `"*"` (default) allows any origin, `""` disables CORS entirely,
+                                    or a comma-separated origin list to whitelist specific origins.
+        @returns                    true if server started successfully
     */
-    bool start(int port, const String& bindAddress = "127.0.0.1");
+    bool start(int port, const String& bindAddress = "127.0.0.1", const String& corsAllowedOrigins = "*");
 
     /** Stop the server. 
         

@@ -162,6 +162,7 @@ DECLARE_ID(RecompileOnFileChange);
 DECLARE_ID(EnableMousePositioning);
 DECLARE_ID(RestApiPort);
 DECLARE_ID(AutoStartRestServer);
+DECLARE_ID(CorsAllowedOrigins);
 
 Array<Identifier> getAllIds();
 

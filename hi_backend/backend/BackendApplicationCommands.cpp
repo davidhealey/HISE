@@ -804,8 +804,10 @@ bool BackendCommandTarget::perform(const InvocationInfo &info)
 		}
 		else
 		{
-			int port = (int)bpe->getBackendProcessor()->getSettingsObject().getSetting(HiseSettings::Scripting::RestApiPort);
-			server.start(port);
+			auto& settings = bpe->getBackendProcessor()->getSettingsObject();
+			int port = (int)settings.getSetting(HiseSettings::Scripting::RestApiPort);
+			String corsOrigins = settings.getSetting(HiseSettings::Scripting::CorsAllowedOrigins).toString();
+			server.start(port, "127.0.0.1", corsOrigins);
 		}
 		updateCommands();
 		return true;
@@ -817,8 +819,10 @@ bool BackendCommandTarget::perform(const InvocationInfo &info)
 		auto& server = mc->getRestServer();
 		if (!server.isRunning())
 		{
-			int port = (int)mc->getSettingsObject().getSetting(HiseSettings::Scripting::RestApiPort);
-			server.start(port);
+			auto& settings = mc->getSettingsObject();
+			int port = (int)settings.getSetting(HiseSettings::Scripting::RestApiPort);
+			String corsOrigins = settings.getSetting(HiseSettings::Scripting::CorsAllowedOrigins).toString();
+			server.start(port, "127.0.0.1", corsOrigins);
 			updateCommands();
 		}
 

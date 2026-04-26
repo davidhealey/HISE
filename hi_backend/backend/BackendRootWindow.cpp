@@ -989,15 +989,17 @@ void BackendRootWindow::resized()
 	{
 		restServerInitialised = true;
 
+		String corsOrigins = bp->getSettingsObject().getSetting(HiseSettings::Scripting::CorsAllowedOrigins).toString();
+
 		if (BackendProcessor::isUsingCommandLineServerMode())
 		{
-			restServer.start(bp->commandLineServerPort);
+			restServer.start(bp->commandLineServerPort, "127.0.0.1", corsOrigins);
 		}
 		else if (bp->getSettingsObject().getSetting(HiseSettings::Scripting::AutoStartRestServer).toString() == "Yes")
 		{
 			// Auto-start REST API server if enabled in settings
 			int port = (int)bp->getSettingsObject().getSetting(HiseSettings::Scripting::RestApiPort);
-			restServer.start(port);
+			restServer.start(port, "127.0.0.1", corsOrigins);
 		}
 	}
 

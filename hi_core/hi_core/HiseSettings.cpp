@@ -175,6 +175,7 @@ Array<juce::Identifier> HiseSettings::Scripting::getAllIds()
     ids.add(WarnIfUndefinedParameters);
 	ids.add(RestApiPort);
 	ids.add(AutoStartRestServer);
+	ids.add(CorsAllowedOrigins);
 
 	return ids;
 }
@@ -687,6 +688,16 @@ Array<juce::Identifier> HiseSettings::SnexWorkbench::getAllIds()
 		P(HiseSettings::Scripting::AutoStartRestServer);
 		D("If enabled, the REST API server will automatically start when HISE is launched.");
 		D("> This is useful for AI agent integration workflows where you want the server always available.");
+		P_();
+
+		P(HiseSettings::Scripting::CorsAllowedOrigins);
+		D("Controls the `Access-Control-Allow-Origin` (CORS) header emitted by the REST API server.");
+		D("Use this to allow browser-based clients hosted on a different origin to call the API.");
+		D("- `*` (default): allow any origin. Convenient for development.");
+		D("- empty string: emit no CORS headers (matches the legacy behavior before this setting existed).");
+		D("- comma-separated origin list (e.g. `https://app.example.com,https://other.com`): the server only echoes the request's `Origin` header back if it appears in this list.");
+		D("> A wildcard preflight (HTTP `OPTIONS`) handler is automatically registered while CORS is enabled.");
+		D("> Restart the REST server after changing this setting for it to take effect.");
 		P_();
 
 		P(HiseSettings::Other::UseOpenGL);
@@ -1327,6 +1338,7 @@ var HiseSettings::Data::getDefaultSetting(const Identifier& id) const
 	else if (id == Scripting::SaveConnectedFilesOnCompile) return "No";
 	else if (id == Scripting::RestApiPort)			return 1900;
 	else if (id == Scripting::AutoStartRestServer)	return "No";
+	else if (id == Scripting::CorsAllowedOrigins)	return "*";
 #if HISE_USE_VS2022
 	else if (id == Compiler::VisualStudioVersion)	return "Visual Studio 2022";
 #else
