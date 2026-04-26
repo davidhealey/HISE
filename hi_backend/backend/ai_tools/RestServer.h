@@ -320,6 +320,10 @@ namespace RestApiIds
     DECLARE_ID(middlePosition);       // Parameter middle position
     DECLARE_ID(skewFactor);           // Parameter skew factor
 
+    // snippet browser
+    DECLARE_ID(exists);               // Whether a snippet browser instance is alive
+    DECLARE_ID(activeIsSnippetBrowser);  // /api/status: is the active BP the snippet browser?
+
 }
 
 #undef DECLARE_ID

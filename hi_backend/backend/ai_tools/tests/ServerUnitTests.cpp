@@ -132,6 +132,8 @@ public:
         testParseCSSFromFile();
         testParseCSSEmptyCode();
         testShutdown();
+        testSnippetBrowser();
+        testSnippetBrowserRejectionMetadata();
         testBuilderTree();
         testBuilderApply();
         testBuilderCloneNestedModules();
@@ -638,6 +640,8 @@ private:
         expect(json.hasProperty("project"), "Should have project info");
         expect(json.hasProperty("scriptProcessors"), "Should have processors");
         expect(json.hasProperty("server"), "Should have server info");
+        expect(json.hasProperty("activeIsSnippetBrowser"), "Should have activeIsSnippetBrowser");
+        expect(!(bool)json["activeIsSnippetBrowser"], "activeIsSnippetBrowser should be false in unit test (no snippet launched)");
         
         // Check server info
         auto server = json["server"];
@@ -3436,7 +3440,99 @@ private:
         }
         expect(found, "shutdown should exist in route metadata");
     }
-    
+
+    void testSnippetBrowserRejectionMetadata()
+    {
+        /** Setup: Static route metadata.
+         *  Scenario: Verify the rejectInSnippetBrowser flag is set on every project/* route
+         *            (except the snippet import/export pair) and on every wizard/* route.
+         *            The dispatcher consults this flag to return 409 while the snippet
+         *            browser is the active BackendProcessor.
+         *  Expected: Flagged set matches the policy; export_snippet/import_snippet are exempt.
+         */
+        beginTest("Snippet browser rejection metadata");
+
+        StringArray expectFlagged {
+            "api/project/list",
+            "api/project/tree",
+            "api/project/files",
+            "api/project/settings/list",
+            "api/project/settings/set",
+            "api/project/save",
+            "api/project/load",
+            "api/project/switch",
+            "api/project/preprocessor/list",
+            "api/project/preprocessor/set",
+            "api/wizard/initialise",
+            "api/wizard/execute",
+            "api/wizard/status"
+        };
+
+        StringArray expectExempt {
+            "api/project/export_snippet",
+            "api/project/import_snippet"
+        };
+
+        for (const auto& route : RestHelpers::getRouteMetadata())
+        {
+            if (expectFlagged.contains(route.path))
+            {
+                expect(route.rejectInSnippetBrowser,
+                       route.path + " should reject in snippet browser mode");
+            }
+            else if (expectExempt.contains(route.path))
+            {
+                expect(!route.rejectInSnippetBrowser,
+                       route.path + " should NOT reject in snippet browser mode");
+            }
+        }
+    }
+
+    void testSnippetBrowser()
+    {
+        /** Setup: Headless test BackendProcessor (no UI root window).
+         *  Scenario: Validate input handling and the headless 501 path.
+         *  Expected:
+         *   - Missing action returns 400 with helpful error message.
+         *   - Invalid action returns 400.
+         *   - Any valid action returns 501 because currentRootWindow is nullptr
+         *     in unit tests (the snippet browser requires a real UI root).
+         *  Note: Full launch/shutdown/enable/disable lifecycle requires a real
+         *  desktop window and is covered by manual smoke testing, not unit tests.
+         */
+        beginTest("POST /api/snippet_browser");
+
+        ctx->reset();
+
+        // Missing action
+        {
+            auto json = ctx->parseJson(ctx->httpPost("/api/snippet_browser", "{}"));
+            expect(!(bool)json[RestApiIds::success], "Missing action should fail");
+            expectErrorMessageContains(json, "action");
+        }
+
+        // Invalid action
+        {
+            DynamicObject::Ptr body = new DynamicObject();
+            body->setProperty("action", "garbage");
+            auto json = ctx->parseJson(ctx->httpPost("/api/snippet_browser",
+                                                     JSON::toString(var(body.get()))));
+            expect(!(bool)json[RestApiIds::success], "Invalid action should fail");
+            expectErrorMessageContains(json, "launch");
+        }
+
+        // Valid action in headless: returns 501. The body has success=false
+        // and a 501-style error, since the test BP has no UI root window.
+        {
+            DynamicObject::Ptr body = new DynamicObject();
+            body->setProperty("action", "launch");
+            auto json = ctx->parseJson(ctx->httpPost("/api/snippet_browser",
+                                                     JSON::toString(var(body.get()))));
+            expect(!(bool)json[RestApiIds::success], "Headless launch should fail with 501");
+            expectErrorMessageContains(json, "UI root window");
+        }
+    }
+
     void testBuilderTree()
     {
         /** Setup: Fresh project with default module tree

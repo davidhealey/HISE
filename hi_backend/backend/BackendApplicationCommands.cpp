@@ -797,6 +797,11 @@ bool BackendCommandTarget::perform(const InvocationInfo &info)
     }
 	case MenuToolsToggleRestServer:
 	{
+		// Snippet browser instances share the main BP's REST server and must
+		// not start or stop a second one on the same port.
+		if (bpe->getBackendProcessor()->isSnippetBrowser())
+			return true;
+
 		auto& server = bpe->getBackendProcessor()->getRestServer();
 		if (server.isRunning())
 		{
@@ -1184,7 +1189,6 @@ PopupMenu BackendCommandTarget::getMenuForIndex(int topLevelMenuIndex, const Str
             ADD_MENU_ITEM(MenuToolsRecompile);
             ADD_MENU_ITEM(MenuToolsConvertSVGToPathData);
             ADD_MENU_ITEM(MenuToolsBroadcasterWizard);
-            ADD_MENU_ITEM(MenuToolsToggleRestServer);
             ADD_MENU_ITEM(MenuToolsLaunchHiseCli);
             ADD_MENU_ITEM(MenuToolsShowInteractionTestWindow);
             p.addSeparator();
@@ -3477,8 +3481,8 @@ void BackendCommandTarget::Actions::showExampleBrowser(BackendRootWindow* bpe)
 
 	auto bp = new BackendProcessor(dm, cb);
 
-	bp->setIsSnippetBrowser();
-	
+	bp->setIsSnippetBrowser(bpe->getBackendProcessor()->getMainInstance());
+
 	auto nw = dynamic_cast<BackendRootWindow*>(bp->createEditor());
 
 	for(auto w: bpe->allWindowsAndBrowsers)
