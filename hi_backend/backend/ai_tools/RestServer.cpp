@@ -44,9 +44,36 @@
 namespace hise { using namespace juce;
 
 //==============================================================================
-// Helper to convert var to JSON string
+/** Serialize a var to JSON, normalizing API envelopes on the way out.
+
+    A var is treated as an envelope iff its root is a DynamicObject carrying
+    the `success` marker. For envelopes this:
+
+      - stamps `apiVersion` with the compile-time HISE_REST_API_VERSION,
+      - guarantees `logs` and `errors` arrays exist so consumers can iterate
+        them unconditionally without hasProperty() guards.
+
+    Non-envelope values (OpenAPI doc, raw arrays, primitives) pass through
+    untouched. Mutating the underlying DynamicObject is safe because every
+    envelope is built fresh by the handler/factory immediately before being
+    serialized; no caller observes the var afterwards.
+*/
 static String varToJsonString(const var& v)
 {
+    if (auto* obj = v.getDynamicObject())
+    {
+        if (obj->hasProperty(RestApiIds::success))
+        {
+            if (!obj->hasProperty(RestApiIds::apiVersion))
+                obj->setProperty(RestApiIds::apiVersion, HISE_REST_API_VERSION);
+
+            if (!obj->hasProperty(RestApiIds::logs))
+                obj->setProperty(RestApiIds::logs, var(Array<var>{}));
+
+            if (!obj->hasProperty(RestApiIds::errors))
+                obj->setProperty(RestApiIds::errors, var(Array<var>{}));
+        }
+    }
     return JSON::toString(v, false);
 }
 
@@ -334,9 +361,10 @@ void RestServer::AsyncRequest::mergeLogsIntoResponse()
     // Normalize floating point values for clean JSON output (4 decimal places)
     var rootVar(rootObj.get());
     normalizeFloatsInVar(rootVar);
-    
-    // Update response
-    response.body = JSON::toString(rootVar, false);
+
+    // Route through varToJsonString so the envelope normalization (apiVersion
+    // stamp, default logs/errors arrays) is applied here too.
+    response.body = varToJsonString(rootVar);
     response.contentType = "application/json";
 }
 
@@ -551,6 +579,9 @@ private:
             listeners.call(&RestServer::Listener::serverError, errorMsg);
             response = Response::internalError(errorMsg);
         }
+
+        // Note: envelope normalization (apiVersion stamp, logs/errors arrays)
+        // happens inside varToJsonString at construction time, not here.
 
         // Send response
         res.status = response.statusCode;

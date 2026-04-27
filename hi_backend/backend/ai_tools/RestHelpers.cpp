@@ -750,6 +750,16 @@ static var buildResponseSchema(const RestHelpers::RouteMetadata& route)
 	successProp->setProperty("description", "Whether the request completed successfully");
 	envProps->setProperty("success", var(successProp.get()));
 
+	// apiVersion (auto-injected by RestServer; semver, bump on envelope/contract changes)
+	DynamicObject::Ptr versionProp = new DynamicObject();
+	versionProp->setProperty("type", "string");
+	versionProp->setProperty("description",
+		"REST API contract version (semver). Bumped when the envelope or any "
+		"route contract changes - clients should compare against the version "
+		"they were built for.");
+	versionProp->setProperty("example", String(HISE_REST_API_VERSION));
+	envProps->setProperty("apiVersion", var(versionProp.get()));
+
 	// Endpoint-specific response fields (flat, alongside success/logs/errors)
 	if (!route.responseFields.isEmpty())
 	{
@@ -809,7 +819,7 @@ static var buildResponseSchema(const RestHelpers::RouteMetadata& route)
 	envProps->setProperty("errors", var(errorsProp.get()));
 
 	envelope->setProperty("properties", var(envProps.get()));
-	envelope->setProperty("required", var(Array<var>{ var("success"), var("logs"), var("errors") }));
+	envelope->setProperty("required", var(Array<var>{ var("success"), var("apiVersion"), var("logs"), var("errors") }));
 
 	return var(envelope.get());
 }
@@ -828,7 +838,7 @@ RestServer::Response RestHelpers::handleListMethods(MainController* mc, RestServ
 	DynamicObject::Ptr info = new DynamicObject();
 	info->setProperty("title", "HISE REST API");
 	info->setProperty("description", "REST API for AI-assisted development in HISE");
-	info->setProperty("version", "1.0.0");
+	info->setProperty("version", String(HISE_REST_API_VERSION));
 	root->setProperty("info", var(info.get()));
 
 	// Servers
@@ -3170,17 +3180,19 @@ RestServer::Response RestHelpers::handleSnippetBrowser(MainController* mc,
 	auto main = bp != nullptr ? bp->getMainInstance() : nullptr;
 	auto mainBrw = main != nullptr ? main->currentRootWindow : nullptr;
 
-	if (mainBrw == nullptr)
-		return req->fail(501, "snippet browser is not available without a UI root window");
-
 	auto obj = req->getRequest().getJsonBody();
 	auto action = obj[RestApiIds::action].toString();
 
+	// Validate input before checking UI availability, so 400-class errors
+	// (missing/invalid action) win over the headless 501 path.
 	if (action.isEmpty())
 		return req->fail(400, "action is required (launch|shutdown|enable|disable)");
 
 	if (action != "launch" && action != "shutdown" && action != "enable" && action != "disable")
 		return req->fail(400, "action must be one of: launch, shutdown, enable, disable");
+
+	if (mainBrw == nullptr)
+		return req->fail(501, "snippet browser is not available without a UI root window");
 
 	MessageManager::callAsync([main, mainBrw, action, req]()
 	{

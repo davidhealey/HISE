@@ -461,6 +461,7 @@ All responses follow this structure:
 ```json
 {
   "success": true,
+  "apiVersion": "1.0.0",
   "logs": ["Console.print output line 1", "line 2"],
   "errors": [
     {
@@ -473,6 +474,22 @@ All responses follow this structure:
 ```
 
 The `logs` and `errors` arrays are populated by `ScopedConsoleHandler` which captures all `Console.print()` calls and error messages during request processing.
+
+### `apiVersion` (auto-injected)
+
+Every JSON envelope - success and error - carries an `apiVersion` field at the root. It is **not** set per-handler. The chokepoint is `varToJsonString()` in `RestServer.cpp`, which every envelope flows through (factories like `Response::ok(var)` / `createErrorJson()` call it directly, and `mergeLogsIntoResponse()` finalizes the body through it). When the root var is a `DynamicObject` carrying a `success` property, the serializer stamps `apiVersion` and also guarantees `logs` and `errors` arrays exist so consumers can iterate them unconditionally. There is no extra parse/serialize round trip.
+
+The OpenAPI document at `GET /` has no `success` marker, so it is skipped automatically; binary and plain-text responses bypass the serializer entirely.
+
+The version is a compile-time `#define HISE_REST_API_VERSION "x.y.z"` in `RestServer.h`. The same macro is used for the OpenAPI document's `info.version`, so there is one source of truth and zero runtime plumbing. Bump it whenever the response envelope or any route's request/response contract changes:
+
+| Change | Bump |
+|--------|------|
+| Breaking change to envelope or route schema (renamed/removed field, type change) | MAJOR |
+| Additive field on envelope or route response | MINOR |
+| Doc/example fix only | PATCH |
+
+Consumers can read it from any response or from `/api/status` for an explicit handshake. The OpenAPI envelope schema marks `apiVersion` as required so generated clients pick it up automatically.
 
 ---
 

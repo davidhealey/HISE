@@ -502,6 +502,23 @@ private:
         // Verify builder/apply has examples
         auto applyExample = applyPost["requestBody"]["content"]["application/json"]["example"];
         expect(applyExample.isObject(), "should have request example");
+
+        // OpenAPI doc itself is not an envelope - apiVersion must NOT be injected at root.
+        expect(!json.hasProperty("apiVersion"),
+               "apiVersion auto-inject must skip OpenAPI document (no `success` marker)");
+
+        // The envelope schema for /api/status must declare apiVersion as a required field.
+        auto statusOk = json["paths"]["/api/status"]["get"]["responses"]["200"];
+        auto statusEnv = statusOk["content"]["application/json"]["schema"];
+        expect(statusEnv["properties"]["apiVersion"].isObject(),
+               "Envelope schema should describe apiVersion");
+        bool requiresApiVersion = false;
+        if (auto* requiredArr = statusEnv["required"].getArray())
+        {
+            for (const auto& v : *requiredArr)
+                if (v.toString() == "apiVersion") { requiresApiVersion = true; break; }
+        }
+        expect(requiresApiVersion, "Envelope schema should mark apiVersion as required");
     }
     
     //==========================================================================
@@ -589,6 +606,7 @@ private:
                 // 2. Build set of allowed top-level keys
                 StringArray allowed;
                 allowed.add("success");
+                allowed.add("apiVersion");
                 allowed.add("logs");
                 allowed.add("errors");
                 allowed.add("result");
@@ -641,6 +659,11 @@ private:
         expect(json.hasProperty("scriptProcessors"), "Should have processors");
         expect(json.hasProperty("server"), "Should have server info");
         expect(json.hasProperty("activeIsSnippetBrowser"), "Should have activeIsSnippetBrowser");
+
+        // Auto-injected envelope version (compile-time HISE_REST_API_VERSION)
+        expect(json.hasProperty("apiVersion"), "Envelope should carry apiVersion");
+        expect(json["apiVersion"].toString() == HISE_REST_API_VERSION,
+               "apiVersion should match HISE_REST_API_VERSION");
         expect(!(bool)json["activeIsSnippetBrowser"], "activeIsSnippetBrowser should be false in unit test (no snippet launched)");
         
         // Check server info
@@ -1319,10 +1342,15 @@ private:
         
         auto response = ctx->httpPost("/api/repl", JSON::toString(var(bodyObj.get())));
         var json = ctx->parseJson(response);
-        
+
         expectErrorMessageContains(json, "expression");
+
+        // Error envelopes also flow through the auto-injection path.
+        expect(json.hasProperty("apiVersion"), "Error envelope should also carry apiVersion");
+        expect(json["apiVersion"].toString() == HISE_REST_API_VERSION,
+               "Error apiVersion should match HISE_REST_API_VERSION");
     }
-    
+
     //==========================================================================
     void testEvaluateREPLMissingModuleId()
     {

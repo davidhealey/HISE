@@ -50,7 +50,7 @@ struct RestHelpers
 {
     //==========================================================================
     // Route types (nested to avoid polluting hise namespace)
-    
+
     /** Identifies REST API endpoints. The enum value is the index into getRouteMetadata(). */
     enum class ApiRoute
     {

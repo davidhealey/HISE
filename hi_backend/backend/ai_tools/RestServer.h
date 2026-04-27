@@ -32,6 +32,16 @@
 
 #pragma once
 
+//==============================================================================
+/** REST API contract version - stamped onto every JSON envelope as `apiVersion`.
+
+    Bump (semver) whenever the response envelope or any route's request/response
+    schema changes. Compile-time constant: there is no setter, no init call, no
+    runtime field. Consumers read it off any response (or `/api/status`) to
+    verify they are talking to a HISE build that matches their expected schema.
+*/
+#define HISE_REST_API_VERSION "0.5.0"
+
 namespace hise { using namespace juce;
 
 //==============================================================================
@@ -57,6 +67,7 @@ namespace RestApiIds
     DECLARE_ID(errors);
     DECLARE_ID(errorMessage);
     DECLARE_ID(callstack);
+    DECLARE_ID(apiVersion);  // Auto-injected envelope version (see HISE_REST_API_VERSION)
 
     // list_methods response
     DECLARE_ID(methods);
