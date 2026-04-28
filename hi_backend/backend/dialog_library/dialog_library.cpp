@@ -1658,7 +1658,9 @@ void NetworkCompiler::execute(BaseStateManager* state)
 
 	state->write("vsVersion", String(vs));
 
-#if JUCE_DEBUG
+#if HISE_CI
+	state->write("configuration", "CI");
+#elif JUCE_DEBUG
 	state->write("configuration", "Debug");
 #else
 	state->write("configuration", "Release");
