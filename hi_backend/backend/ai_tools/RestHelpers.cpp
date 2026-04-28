@@ -3727,6 +3727,7 @@ void RestHelpers::WizardExecutor::registerExecutors()
 	registerExecutor<multipage::library::NewProjectCreator>("new_project");
 
 	registerExecutor<multipage::library::CompileProjectDialog>("plugin_export");
+	registerExecutor<multipage::library::NetworkCompiler>("compile_networks");
 }
 
 
