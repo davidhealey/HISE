@@ -32,9 +32,7 @@
 
 #if HI_RUN_UNIT_TESTS
 
-// Header-only HTTP client used by the CORS tests below to inspect raw response
-// headers (JUCE's URL::createInputStream does not expose them conveniently).
-#include "../httplib.h"
+
 
 namespace hise {
 
@@ -7748,53 +7746,58 @@ private:
         auto sb = findNodeInTree(sanityTree[RestApiIds::result], "UndoSanityB");
         expect(!sa.isObject(), "UndoSanityA must be removed by batch undo");
         expect(!sb.isObject(), "UndoSanityB must be removed by batch undo");
+    
     }
 
     //==========================================================================
-    /** Captures status, headers, and body from a raw HTTP request. */
+    /** Captures status code, response headers, and body from a raw HTTP request.
+        StringPairArray is case-insensitive by default, matching HTTP header semantics.
+    */
     struct RawHttpResponse
     {
         int status = 0;
-        std::map<std::string, std::string, std::less<>> headers;
-        std::string body;
+        StringPairArray headers;
+        String body;
         bool succeeded = false;
     };
 
-    /** Issue an HTTP request via cpp-httplib on a background thread while pumping
-        the JUCE message loop. Mirrors the pattern in TestContext::httpGet but
-        gives access to status code and response headers (which JUCE's URL
-        wrapper does not expose).
+    /** Issue an HTTP request via juce::URL on a background thread while pumping
+        the JUCE message loop. Uses URL::InputStreamOptions to capture the status
+        code and response headers that the regular httpGet/httpPost helpers drop.
+
+        Implemented on JUCE rather than cpp-httplib so this TU does not pull in
+        httplib.h (which leaks windows.h into the hi_backend unity build and
+        breaks juce::Rectangle resolution).
     */
     RawHttpResponse doRawHttpRequest(const String& method,
                                      const String& path,
-                                     const httplib::Headers& extraHeaders = {})
+                                     const StringPairArray& extraHeaders = {})
     {
         RawHttpResponse out;
         std::atomic<bool> done{false};
 
         Thread::launch([&]()
         {
-            httplib::Client cli("localhost", TEST_PORT);
-            cli.set_connection_timeout(2, 0);
-            cli.set_read_timeout(5, 0);
+            URL url("http://127.0.0.1:" + String(TEST_PORT) + path);
 
-            httplib::Result res;
+            String headerLines;
+            for (int i = 0; i < extraHeaders.size(); i++)
+                headerLines << extraHeaders.getAllKeys()[i] << ": "
+                            << extraHeaders.getAllValues()[i] << "\r\n";
 
-            if (method == "GET")
-                res = cli.Get(path.toStdString(), extraHeaders);
-            else if (method == "OPTIONS")
-                res = cli.Options(path.toStdString(), extraHeaders);
-            else
-                res = cli.Post(path.toStdString(), extraHeaders, std::string(), "application/json");
+            auto options = URL::InputStreamOptions(URL::ParameterHandling::inAddress)
+                .withHttpRequestCmd(method)
+                .withExtraHeaders(headerLines)
+                .withStatusCode(&out.status)
+                .withResponseHeaders(&out.headers)
+                .withConnectionTimeoutMs(2000);
 
-            if (res)
-            {
-                out.status = res->status;
-                out.body = res->body;
-                for (const auto& h : res->headers)
-                    out.headers[h.first] = h.second;
-                out.succeeded = true;
-            }
+            if (auto stream = url.createInputStream(options))
+                out.body = stream->readEntireStreamAsString();
+
+            // status/headers are populated by createInputStream even when the
+            // stream itself is nullptr (e.g. 204 or non-2xx with empty body).
+            out.succeeded = (out.status > 0);
 
             done.store(true);
         });
@@ -7813,38 +7816,33 @@ private:
         expect(res.succeeded, "GET /api/status must reach the server");
         expect(res.status == 200, "GET /api/status should return 200");
 
-        auto it = res.headers.find("Access-Control-Allow-Origin");
-        expect(it != res.headers.end(), "Access-Control-Allow-Origin header must be present");
-        if (it != res.headers.end())
-            expect(it->second == "*", "Default policy must echo wildcard, got: " + String(it->second));
+        expect(res.headers.containsKey("Access-Control-Allow-Origin"),
+               "Access-Control-Allow-Origin header must be present");
+        expect(res.headers.getValue("Access-Control-Allow-Origin", {}) == "*",
+               "Default policy must echo wildcard, got: "
+                   + res.headers.getValue("Access-Control-Allow-Origin", {}));
     }
 
     void testCorsPreflightOptions()
     {
         beginTest("CORS: OPTIONS preflight returns 204 with full header set");
 
-        httplib::Headers preflight = {
-            {"Origin", "https://example.test"},
-            {"Access-Control-Request-Method", "POST"},
-            {"Access-Control-Request-Headers", "Content-Type"}
-        };
+        StringPairArray preflight;
+        preflight.set("Origin", "https://example.test");
+        preflight.set("Access-Control-Request-Method", "POST");
+        preflight.set("Access-Control-Request-Headers", "Content-Type");
 
         auto res = doRawHttpRequest("OPTIONS", "/api/status", preflight);
         expect(res.succeeded, "OPTIONS /api/status must reach the server");
         expect(res.status == 204, "Preflight should return 204, got " + String(res.status));
 
-        auto allowOrigin = res.headers.find("Access-Control-Allow-Origin");
-        expect(allowOrigin != res.headers.end() && allowOrigin->second == "*",
+        expect(res.headers.getValue("Access-Control-Allow-Origin", {}) == "*",
                "Preflight must echo wildcard origin");
 
-        auto allowMethods = res.headers.find("Access-Control-Allow-Methods");
-        expect(allowMethods != res.headers.end()
-               && String(allowMethods->second).contains("POST"),
+        expect(res.headers.getValue("Access-Control-Allow-Methods", {}).contains("POST"),
                "Preflight must advertise POST in allowed methods");
 
-        auto allowHeaders = res.headers.find("Access-Control-Allow-Headers");
-        expect(allowHeaders != res.headers.end()
-               && String(allowHeaders->second).contains("Content-Type"),
+        expect(res.headers.getValue("Access-Control-Allow-Headers", {}).contains("Content-Type"),
                "Preflight must advertise Content-Type in allowed headers");
     }
 
@@ -7857,18 +7855,18 @@ private:
         expect(server.start(TEST_PORT, "127.0.0.1", "https://app.example.com,https://other.com"),
                "Server must restart with whitelist policy");
 
-        auto allowed = doRawHttpRequest("GET", "/api/status",
-                                        {{"Origin", "https://app.example.com"}});
+        StringPairArray allowedHdr;
+        allowedHdr.set("Origin", "https://app.example.com");
+        auto allowed = doRawHttpRequest("GET", "/api/status", allowedHdr);
         expect(allowed.succeeded && allowed.status == 200, "Allowed-origin GET should succeed");
-        auto allowedOrigin = allowed.headers.find("Access-Control-Allow-Origin");
-        expect(allowedOrigin != allowed.headers.end()
-               && allowedOrigin->second == "https://app.example.com",
+        expect(allowed.headers.getValue("Access-Control-Allow-Origin", {}) == "https://app.example.com",
                "Server must echo the request's origin when whitelisted");
 
-        auto blocked = doRawHttpRequest("GET", "/api/status",
-                                       {{"Origin", "https://evil.example"}});
+        StringPairArray blockedHdr;
+        blockedHdr.set("Origin", "https://evil.example");
+        auto blocked = doRawHttpRequest("GET", "/api/status", blockedHdr);
         expect(blocked.succeeded && blocked.status == 200, "Blocked-origin GET still receives 200 body");
-        expect(blocked.headers.find("Access-Control-Allow-Origin") == blocked.headers.end(),
+        expect(! blocked.headers.containsKey("Access-Control-Allow-Origin"),
                "Server must omit Allow-Origin for non-whitelisted origins");
 
         // Restore the default wildcard policy so any subsequent verification stays clean.
@@ -7884,12 +7882,13 @@ private:
         server.stop();
         expect(server.start(TEST_PORT, "127.0.0.1", ""), "Server must restart with empty CORS policy");
 
-        auto res = doRawHttpRequest("GET", "/api/status",
-                                    {{"Origin", "https://anywhere.test"}});
+        StringPairArray hdr;
+        hdr.set("Origin", "https://anywhere.test");
+        auto res = doRawHttpRequest("GET", "/api/status", hdr);
         expect(res.succeeded && res.status == 200, "GET /api/status must still succeed");
-        expect(res.headers.find("Access-Control-Allow-Origin") == res.headers.end(),
+        expect(! res.headers.containsKey("Access-Control-Allow-Origin"),
                "No Access-Control-Allow-Origin header should be emitted when CORS is disabled");
-        expect(res.headers.find("Access-Control-Allow-Methods") == res.headers.end(),
+        expect(! res.headers.containsKey("Access-Control-Allow-Methods"),
                "No Access-Control-Allow-Methods header should be emitted when CORS is disabled");
 
         // Restore the default wildcard policy.
