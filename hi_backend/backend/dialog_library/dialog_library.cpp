@@ -1570,84 +1570,74 @@ var NetworkCompiler::onInit(const var::NativeFunctionArgs& args)
 
 namespace
 {
-struct MessageThreadDspNetworkCompileExporter
+// Lightweight non-UI CompileExporter used by NetworkCompiler::execute on the
+// multipage worker thread. Provides a real CompileExporter pointer for the
+// helpers inside DspNetworkCompileExporter::createProjucerFile that need one
+// (handleAdditionalStaticLibs, GET_SETTING via dataObject), without dragging
+// in the DialogWindowWithBackgroundThread base that would force message-thread
+// construction.
+class HeadlessDspExporter : public CompileExporter,
+                            public ControlledObject
 {
-	MessageThreadDspNetworkCompileExporter(BackendProcessor* bp)
+public:
+	HeadlessDspExporter(BackendProcessor* bp)
+		: CompileExporter(bp->getMainSynthChain()),
+		  ControlledObject(bp)
+	{}
+
+	File getBuildFolder() const override
 	{
-		CreateArgs args { bp, nullptr };
-		MessageManager::getInstance()->callFunctionOnMessageThread(create, &args);
-		exporter = args.exporter;
+		return BackendDllManager::getSubFolder(getMainController(), BackendDllManager::FolderSubType::Binaries);
 	}
 
-	~MessageThreadDspNetworkCompileExporter()
-	{
-		reset();
-	}
-
-	DspNetworkCompileExporter* operator->() const noexcept { return exporter; }
-	DspNetworkCompileExporter* get() const noexcept { return exporter; }
-
-	void reset()
-	{
-		if(exporter != nullptr)
-		{
-			DeleteArgs args { exporter };
-			MessageManager::getInstance()->callFunctionOnMessageThread(destroy, &args);
-			exporter = nullptr;
-		}
-	}
-
-private:
-
-	struct CreateArgs
-	{
-		BackendProcessor* bp;
-		DspNetworkCompileExporter* exporter;
-	};
-
-	struct DeleteArgs
-	{
-		DspNetworkCompileExporter* exporter;
-	};
-
-	static void* create(void* data)
-	{
-		auto args = static_cast<CreateArgs*>(data);
-		args->exporter = new DspNetworkCompileExporter(nullptr, args->bp, true);
-		return nullptr;
-	}
-
-	static void* destroy(void* data)
-	{
-		auto args = static_cast<DeleteArgs*>(data);
-		delete args->exporter;
-		return nullptr;
-	}
-
-	DspNetworkCompileExporter* exporter = nullptr;
-
-	JUCE_DECLARE_NON_COPYABLE(MessageThreadDspNetworkCompileExporter)
+	using CompileExporter::setupHisePath;
 };
 }
 
 void NetworkCompiler::execute(BaseStateManager* state)
 {
 	auto bp = dynamic_cast<BackendProcessor*>(state->getMainController());
-	bp->currentRootWindow;
 
-	MessageThreadDspNetworkCompileExporter exp(bp);
+	// Adding a JavascriptMasterEffect to the synth chain triggers UI listener
+	// registrations (NodeComponent / PropertyListener for NodeColour etc).
+	// Doing that on the multipage worker thread races with async listener
+	// callbacks - by the time they fire the temp nodes from createAllNodesOnce
+	// are already destroyed, leading to bad-function-call crashes. Run the
+	// effect/network/createAllNodesOnce step on the message thread instead.
+	struct PrepArgs
+	{
+		BackendProcessor* bp;
+	};
 
-	raw::Builder builder(bp);
+	PrepArgs prepArgs { bp };
 
-	auto jsfx = builder.create<JavascriptMasterEffect>(bp->getMainSynthChain(), raw::IDs::Chains::FX);
-	auto network = jsfx->getOrCreate("dsp");
+	auto prepFn = [](void* data) -> void*
+	{
+		auto args = static_cast<PrepArgs*>(data);
+		raw::Builder builder(args->bp);
+		auto jsfx = builder.create<JavascriptMasterEffect>(args->bp->getMainSynthChain(), raw::IDs::Chains::FX);
+		auto network = jsfx->getOrCreate("dsp");
+		network->createAllNodesOnce();
+		return nullptr;
+	};
 
-	network->createAllNodesOnce();
+	MessageManager::getInstance()->callFunctionOnMessageThread(prepFn, &prepArgs);
 
-	exp->run();
+	HeadlessDspExporter exporter(bp);
 
-	auto ok = exp->getCompilationResult();
-	exp.reset();
+	auto pathOk = exporter.setupHisePath();
+
+	if (pathOk != CompileExporter::ErrorCodes::OK)
+		throw Result::fail("Can't find HISE path");
+
+	DspNetworkCompileExporter::Context ctx;
+	ctx.bp = bp;
+	ctx.exporter = &exporter;
+	ctx.skipCompilation = true;
+
+	DspNetworkCompileExporter::runStatic(ctx);
+
+	auto ok = ctx.getCompilationResult();
 
 	if (!ok.wasOk())
 		throw ok;
