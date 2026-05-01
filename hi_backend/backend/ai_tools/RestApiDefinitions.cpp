@@ -1389,8 +1389,10 @@ struct RestApiEndpoints
 				"When nodeId is the root network node, also supports network-level properties: "
 				"AllowCompilation (bool), AllowPolyphonic (bool), CompileChannelAmount (int), "
 				"HasTail (bool), SuspendOnSilence (bool), ModulationBlockSize (power-of-2 int or 0). "
-				"Range-write variant: when min and max are present (with optional skewFactor/middlePosition/stepSize), "
-				"overrides the parameter's declared range without changing its value. Mutually exclusive with value")
+				"Range-write variant: any subset of min/max/skewFactor/middlePosition/stepSize "
+				"may be sent without `value` to override individual range fields; omitted fields "
+				"keep their current value. skewFactor and middlePosition are mutually exclusive "
+				"(sending one clears the other). Mutually exclusive with value.")
 			.withVariant("bypass", "Set bypass state (nodeId, bypassed)")
 			.withVariant("create_parameter", "Create a dynamic parameter on a container (nodeId, parameterId, min?, max?, defaultValue?, stepSize?, middlePosition?, skewFactor?)")
 			.withVariant("clear", "Clear all nodes from the network")

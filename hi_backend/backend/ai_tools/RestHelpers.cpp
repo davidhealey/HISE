@@ -5049,7 +5049,7 @@ static var buildDspNodeTree(const ValueTree& nodeTree, bool verbose, bool includ
 		auto p = paramTree.getChild(i);
 		DynamicObject::Ptr paramObj = new DynamicObject();
 		paramObj->setProperty(RestApiIds::parameterId, p[PropertyIds::ID].toString());
-		paramObj->setProperty(RestApiIds::value, p[PropertyIds::Value]);
+		paramObj->setProperty(RestApiIds::value, p.getProperty(PropertyIds::Value, 0.0));
 
 		if (verbose)
 		{

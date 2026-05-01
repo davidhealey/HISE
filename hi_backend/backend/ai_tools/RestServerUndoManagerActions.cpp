@@ -2381,7 +2381,6 @@ struct Helpers
 		if (includeContainer)
 		{
 			ids.add(PropertyIds::ShowParameters);
-			ids.add(PropertyIds::IsVertical);
 		}
 		    
 		return ids;
@@ -3303,7 +3302,12 @@ struct set : public ActionBase
 
 	static bool isRangeWrite(const var& op)
 	{
-		return op.hasProperty(RestApiIds::min) || op.hasProperty(RestApiIds::max);
+		return op.hasProperty(RestApiIds::min) || 
+			   op.hasProperty(RestApiIds::max) || 
+			   op.hasProperty(RestApiIds::middlePosition) ||
+			   op.hasProperty(RestApiIds::stepSize) ||
+			   op.hasProperty(RestApiIds::skewFactor) ||
+			   op.hasProperty(RestApiIds::defaultValue);
 	}
 
 	static Error prevalidate(MainController*, const var& op)
@@ -3321,14 +3325,18 @@ struct set : public ActionBase
 		{
 			if (hasValue)
 				return Error().withError("set op cannot combine 'value' with range fields (min/max) - use two separate ops");
-			if (!op.hasProperty(RestApiIds::min) || !op.hasProperty(RestApiIds::max))
-				return Error().withError("set range-write requires both 'min' and 'max'");
+
 			if (op.hasProperty(RestApiIds::skewFactor) && op.hasProperty(RestApiIds::middlePosition))
 				return Error().withError("set range-write: 'skewFactor' and 'middlePosition' are mutually exclusive");
-			const double mn = (double)op[RestApiIds::min];
-			const double mx = (double)op[RestApiIds::max];
-			if (!(mn < mx))
-				return Error().withError("set range-write: 'min' must be less than 'max'");
+
+			if (op.hasProperty(RestApiIds::min) && op.hasProperty(RestApiIds::max))
+			{
+				const double mn = (double)op[RestApiIds::min];
+				const double mx = (double)op[RestApiIds::max];
+				if (!(mn < mx))
+					return Error().withError("set range-write: 'min' must be less than 'max'");
+			}
+
 			return {};
 		}
 
@@ -3347,14 +3355,22 @@ struct set : public ActionBase
 	{
 		if (rangeWrite)
 		{
-			newMin = (double)obj[RestApiIds::min];
-			newMax = (double)obj[RestApiIds::max];
+			hasMin = obj.hasProperty(RestApiIds::min);
+			if(hasMin)
+				newMin = (double)obj[RestApiIds::min];
+
+			hasMax = obj.hasProperty(RestApiIds::max);
+			if(hasMax)
+				newMax = (double)obj[RestApiIds::max];
+
 			hasSkewFactor = obj.hasProperty(RestApiIds::skewFactor);
 			if (hasSkewFactor)
 				newSkewFactor = (double)obj[RestApiIds::skewFactor];
+
 			hasMiddlePosition = obj.hasProperty(RestApiIds::middlePosition);
 			if (hasMiddlePosition)
 				newMiddlePosition = (double)obj[RestApiIds::middlePosition];
+
 			hasStepSize = obj.hasProperty(RestApiIds::stepSize);
 			if (hasStepSize)
 				newStepSize = (double)obj[RestApiIds::stepSize];
@@ -3370,19 +3386,25 @@ struct set : public ActionBase
 	// Range-write state
 	bool rangeWrite = false;
 	double newMin = 0.0;
+	bool hasMin = false;
 	double newMax = 1.0;
-	bool hasSkewFactor = false;
+	bool hasMax = false;
+	
 	double newSkewFactor = 1.0;
-	bool hasMiddlePosition = false;
+	bool hasSkewFactor = false;
+	
 	double newMiddlePosition = 0.5;
-	bool hasStepSize = false;
+	bool hasMiddlePosition = false;
+	
 	double newStepSize = 0.0;
+	bool hasStepSize = false;
 
 	// Captured previous range for undo
 	double oldMin = 0.0;
 	double oldMax = 1.0;
 	double oldSkewFactor = 1.0;
 	double oldStepSize = 0.0;
+	double oldMiddlePosition = 0.5;
 
 	int getRebuildLevel(Domain, bool) const override { return 0; }
 	bool needsKillVoice() const override { return false; }
@@ -3408,8 +3430,28 @@ struct set : public ActionBase
 	String getDescription() const override
 	{
 		if (rangeWrite)
-			return "set range " + nodeId + "." + parameterId +
-				" to [" + String(newMin) + ", " + String(newMax) + "]";
+		{
+			String msg;
+			msg << "set range " + nodeId + "." + parameterId < " to [";
+
+			if (hasMin)
+				msg << "min:" << String(newMin) << " ";
+
+			if (hasMax)
+				msg << "min:" << String(newMax) << " ";
+
+			if (hasSkewFactor)
+				msg << "min:" << String(newSkewFactor) << " ";
+
+			if (hasMiddlePosition)
+				msg << "min:" << String(newMiddlePosition) << " ";
+
+			if (hasStepSize)
+				msg << "step:" << String(newStepSize) << " ";
+
+			msg << "]";
+			return msg;
+		}
 
 		return "set " + nodeId + "." + parameterId + " to " + newValue.toString();
 	}
@@ -3455,24 +3497,37 @@ struct set : public ActionBase
 
 	Error writeParameterRange(ValueTree& v, bool oldValues)
 	{
-		jassertfalse;
-
 		if (v.getType() != PropertyIds::Parameter)
 			return Error().withError("range only settable on parameters");
 
 		auto r = RangeHelpers::getDoubleRange(v, scriptnode::RangeHelpers::IdSet::scriptnode);
 
-		if (oldValues)
+		if (!oldValues)
 		{
-			// TODO: restore oldMin/oldMax/oldSkewFactor/oldStepSize onto p.
-		}
-		else
-		{
-			// TODO: capture previous min/max/skew/step into oldMin/oldMax/oldSkewFactor/oldStepSize,
-		//       then write new range (min, max, and skewFactor OR middlePosition, and stepSize if present).
-		//       Reject non-range-capable parameters with Error().withError("parameter does not support range override").
+			oldMin = r.rng.start;
+			oldMax = r.rng.start;
+			oldStepSize = r.rng.start;
+			oldSkewFactor = r.rng.start;
+			oldMiddlePosition = r.convertFrom0to1(0.5, false);
 		}
 
+		if (hasMin)
+			r.rng.start = oldValues ? oldMin : newMin;
+
+		if (hasMax)
+			r.rng.end = oldValues ? oldMax : newMax;
+
+		if (hasStepSize)
+			r.rng.interval = oldValues ? oldStepSize : newStepSize;
+
+		if (hasSkewFactor)
+			r.rng.skew = oldValues ? oldSkewFactor : newSkewFactor;
+
+		if (hasMiddlePosition)
+			r.rng.setSkewForCentre(oldValues ? oldMiddlePosition : newMiddlePosition);
+
+		RangeHelpers::storeDoubleRange(v, r, nullptr);
+		
 		return {};
 	}
 
