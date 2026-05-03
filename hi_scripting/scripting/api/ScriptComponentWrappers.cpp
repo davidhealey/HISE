@@ -3013,6 +3013,11 @@ ScriptCreatedComponentWrappers::FloatingTileWrapper::FloatingTileWrapper(ScriptC
 	for (const auto& c : floatingTile->getMouseListeners())
 		mouseCallbacks.add(new AdditionalMouseCallback(floatingTile, component, c));
 
+	// Replace the base class repaint listener with one that recursively repaints
+	// all child components, ensuring the full floating tile content is refreshed.
+	floatingTile->repaintBroadcaster.removeListener(*this);
+	floatingTile->repaintBroadcaster.addListener(*this, repaintFloatingTileComponent, false);
+
     updateLookAndFeel();
 }
 

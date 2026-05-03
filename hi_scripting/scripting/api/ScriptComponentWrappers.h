@@ -1009,7 +1009,19 @@ public:
 		void updateValue(var newValue) override;
 
         void updateLookAndFeel();
-        
+
+		static void repaintFloatingTileComponent(ScriptCreatedComponentWrapper& w, bool unused)
+		{
+			if (auto c = w.getComponent())
+			{
+				Component::callRecursive<Component>(c, [](Component* child)
+				{
+					child->repaint();
+					return false;
+				});
+			}
+		}
+
 		JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(FloatingTileWrapper)
 	};
 
