@@ -306,6 +306,21 @@ struct ParameterProperties
 
 	Colour getModulationColour(int16 parameterIndex) const;
 
+	HiseModulationColours::ColourId getModulationColourRaw(int16 parameterIndex) const;
+
+	void swapParameterIndexes(int16 oldIndex, int16 newIndex)
+	{
+		auto oldModIndex = getModulationChainIndex(oldIndex);
+		auto newModIndex = getModulationChainIndex(newIndex);
+		std::swap(parameterInfo[oldIndex], parameterInfo[newIndex]);
+
+		if (oldModIndex != -1)
+			modInfo[oldModIndex].parameterIndex = newIndex;
+
+		if (newModIndex != -1)
+			modInfo[newModIndex].parameterIndex = oldIndex;
+	}
+
 private:
 
 	friend class ParameterPropertiesTest;
