@@ -1053,6 +1053,17 @@ void PresetBrowser::lookAndFeelChanged()
 {
 	Component::lookAndFeelChanged();
 	updateFavoriteButton();
+
+	// Re-apply colour options to the new LAF so that scripted look and feel
+	// functions receive up-to-date colour values after the LAF is replaced.
+	auto& laf = getPresetBrowserLookAndFeel();
+	laf.backgroundColour = currentOptions.backgroundColour;
+	laf.highlightColour = currentOptions.highlightColour;
+	laf.font = currentOptions.font;
+	laf.fontName = currentOptions.fontName;
+	laf.textColour = currentOptions.textColour;
+	laf.modalBackgroundColour = currentOptions.modalBackgroundColour;
+	laf.itemColour3 = currentOptions.itemColour3;
 }
 
 void PresetBrowser::loadPresetDatabase(const File& rootDirectory)
@@ -1280,6 +1291,7 @@ void PresetBrowser::showLoadedPreset()
 
 void PresetBrowser::setOptions(const Options& newOptions)
 {
+	currentOptions = newOptions;
 	if (newOptions.showExpansions)
 	{
 		auto expRoot = getMainController()->getExpansionHandler().getExpansionFolder();

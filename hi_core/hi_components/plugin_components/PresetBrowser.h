@@ -253,6 +253,7 @@ public:
 private:
 
 	DefaultPresetBrowserLookAndFeel laf;
+	Options currentOptions;
 
 	void setShowFavorites(bool shouldShowFavorites);
 	void setFavoriteIconOffset(int xOffset);
