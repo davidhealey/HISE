@@ -112,6 +112,7 @@ void RestServerUndoManager::Factory::registerAllFunctions()
 	registerCreatorFunctionT<rest_undo::builder::set_id>(Domain::Builder);
 	registerCreatorFunctionT<rest_undo::builder::set_bypassed>(Domain::Builder);
 	registerCreatorFunctionT<rest_undo::builder::set_effect>(Domain::Builder);
+	registerCreatorFunctionT<rest_undo::builder::set_routing>(Domain::Builder);
 	registerCreatorFunctionT<rest_undo::builder::set_complex_data>(Domain::Builder);
 
 	registerCreatorFunctionT<rest_undo::ui::add>(Domain::UI);

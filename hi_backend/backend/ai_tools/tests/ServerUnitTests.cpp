@@ -133,7 +133,12 @@ public:
         testSnippetBrowser();
         testSnippetBrowserRejectionMetadata();
         testBuilderTree();
+        testBuilderTreeRouting();
         testBuilderApply();
+        testBuilderSetRoutingPreset();
+        testBuilderSetRoutingMatrix();
+        testBuilderSetRoutingSend();
+        testBuilderSetRoutingErrors();
         testBuilderCloneNestedModules();
         
         testBuilderChildOpsFailAfterParentDeleted();
@@ -3566,15 +3571,98 @@ private:
          *  Expected: Returns tree structure with master chain
          */
         beginTest("GET /api/builder/tree");
-        
+
         ctx->reset();
-        
+
         auto response = ctx->httpGet("/api/builder/tree");
         var json = ctx->parseJson(response);
-        
+
         expect((bool)json[RestApiIds::success], "Should succeed");
         expect(json[RestApiIds::errors].isArray(), "errors should be array");
         expectEquals<int>(json[RestApiIds::errors].size(), 0, "Should have no errors");
+    }
+
+    void testBuilderTreeRouting()
+    {
+        /** Setup: Fresh project; default Master Chain is a RoutableProcessor
+         *  Scenario: GET /api/builder/tree and inspect the routing field
+         *  Expected: Master Chain node has routing object with matrix/send/resizable/routable/numDestinationChannels
+         */
+        beginTest("GET /api/builder/tree (routing field)");
+
+        ctx->reset();
+
+        auto response = ctx->httpGet("/api/builder/tree");
+        var json = ctx->parseJson(response);
+        expect((bool)json[RestApiIds::success], "Should succeed");
+
+        auto result = json[RestApiIds::result];
+        auto routing = result["routing"];
+        expect(routing.isObject(), "Master Chain should expose routing object");
+        if (!routing.isObject()) return;
+
+        auto matrix = routing["matrix"];
+        auto send = routing["send"];
+        expect(matrix.isArray(), "routing.matrix should be array");
+        expect(send.isArray(), "routing.send should be array");
+
+        auto liveMatrix = getRoutingMatrix("Master Chain");
+        if (liveMatrix == nullptr) return;
+        const int numSrc = liveMatrix->getNumSourceChannels();
+        expectEquals<int>(matrix.size(), numSrc, "matrix length matches numSourceChannels");
+        expectEquals<int>(send.size(), numSrc, "send length matches numSourceChannels");
+
+        for (int i = 0; i < numSrc; i++)
+        {
+            expectEquals<int>((int)matrix[i], liveMatrix->getConnectionForSourceChannel(i),
+                "matrix[" + String(i) + "] mirrors live state");
+            expectEquals<int>((int)send[i], liveMatrix->getSendForSourceChannel(i),
+                "send[" + String(i) + "] mirrors live state");
+        }
+
+        expectEquals<bool>((bool)routing["resizable"], liveMatrix->resizingIsAllowed(),
+            "resizable mirrors resizingIsAllowed");
+        expectEquals<bool>((bool)routing["routable"], !liveMatrix->onlyEnablingAllowed(),
+            "routable mirrors !onlyEnablingAllowed");
+        expectEquals<int>((int)routing["numDestinationChannels"], liveMatrix->getNumDestinationChannels(),
+            "numDestinationChannels mirrors live state");
+
+        // Non-RoutableProcessor (LFO modulator) should NOT carry routing field
+        Array<var> seedOps;
+        seedOps.add(makeAddOp("LFO", "TreeRoutingTestLFO", "Master Chain", 1));
+        auto seedJson = postBuilderOps(seedOps);
+        expectNoBuilderError(seedJson);
+
+        var refreshed = ctx->parseJson(ctx->httpGet("/api/builder/tree"));
+        bool foundLfo = false;
+        std::function<void(const var&)> walk = [&](const var& node)
+        {
+            if (!node.isObject()) return;
+            if (node["processorId"].toString() == "TreeRoutingTestLFO")
+            {
+                foundLfo = true;
+                expect(!node["routing"].isObject(), "Non-RoutableProcessor should not have routing field");
+                return;
+            }
+            for (auto field : { "midi", "fx", "children" })
+            {
+                auto arr = node[field];
+                if (arr.isArray())
+                    for (auto& c : *arr.getArray()) walk(c);
+            }
+            auto modArr = node["modulation"];
+            if (modArr.isArray())
+            {
+                for (auto& mc : *modArr.getArray())
+                {
+                    auto kids = mc["children"];
+                    if (kids.isArray())
+                        for (auto& c : *kids.getArray()) walk(c);
+                }
+            }
+        };
+        walk(refreshed[RestApiIds::result]);
+        expect(foundLfo, "LFO node should be reachable in refreshed tree");
     }
     
     /** Directly deletes the processor - this can be used to simulate data model drift from an external operation. */
@@ -3676,6 +3764,74 @@ private:
         op->setProperty(RestApiIds::source, source);
         op->setProperty(RestApiIds::count, count);
         return var(op.get());
+    }
+
+    var makeSetRoutingPresetOp(const String& target, const String& preset)
+    {
+        DynamicObject::Ptr op = new DynamicObject();
+        op->setProperty(RestApiIds::op, "set_routing");
+        op->setProperty(RestApiIds::target, target);
+        op->setProperty(RestApiIds::preset, preset);
+        return var(op.get());
+    }
+
+    var makeSetRoutingArrayOp(const String& target, const Identifier& fieldId, const Array<int>& entries)
+    {
+        Array<var> arr;
+        for (auto e : entries)
+            arr.add(e);
+
+        DynamicObject::Ptr op = new DynamicObject();
+        op->setProperty(RestApiIds::op, "set_routing");
+        op->setProperty(RestApiIds::target, target);
+        op->setProperty(fieldId, var(arr));
+        return var(op.get());
+    }
+
+    var makeSetRoutingMatrixOp(const String& target, const Array<int>& entries)
+    {
+        return makeSetRoutingArrayOp(target, RestApiIds::matrix, entries);
+    }
+
+    var makeSetRoutingSendOp(const String& target, const Array<int>& entries)
+    {
+        return makeSetRoutingArrayOp(target, RestApiIds::send, entries);
+    }
+
+    RoutableProcessor::MatrixData* getRoutingMatrix(const String& moduleName)
+    {
+        auto p = ProcessorHelpers::getFirstProcessorWithName(ctx->mc->getMainSynthChain(), moduleName);
+        expect(p != nullptr, moduleName + " not found");
+        auto rp = dynamic_cast<RoutableProcessor*>(p);
+        expect(rp != nullptr, moduleName + " is not a RoutableProcessor");
+        return rp != nullptr ? &rp->getMatrix() : nullptr;
+    }
+
+    void expectMatrixConnection(const String& moduleName, int sourceChannel, int expectedDest)
+    {
+        auto m = getRoutingMatrix(moduleName);
+        if (m == nullptr) return;
+        const int actual = m->getConnectionForSourceChannel(sourceChannel);
+        String msg;
+        msg << moduleName << ".matrix[" << String(sourceChannel) << "] expected=" << String(expectedDest) << " actual=" << String(actual);
+        expectEquals<int>(actual, expectedDest, msg);
+    }
+
+    void expectSendConnection(const String& moduleName, int sourceChannel, int expectedDest)
+    {
+        auto m = getRoutingMatrix(moduleName);
+        if (m == nullptr) return;
+        const int actual = m->getSendForSourceChannel(sourceChannel);
+        String msg;
+        msg << moduleName << ".send[" << String(sourceChannel) << "] expected=" << String(expectedDest) << " actual=" << String(actual);
+        expectEquals<int>(actual, expectedDest, msg);
+    }
+
+    void expectMatrixSourceChannels(const String& moduleName, int expected)
+    {
+        auto m = getRoutingMatrix(moduleName);
+        if (m == nullptr) return;
+        expectEquals<int>(m->getNumSourceChannels(), expected, moduleName + " numSourceChannels");
     }
 
     var makeSetAttributesOp(const String& target, const NamedValueSet& kv)
@@ -3839,6 +3995,171 @@ private:
         expectNoBuilderError(redoJson);
         expectBuilderProcessorAttribute("MySineRenamed", "SaturationAmount", 0.25f);
 
+    }
+
+    void testBuilderSetRoutingPreset()
+    {
+        /** Setup: Fresh project with default Master Chain (RoutableProcessor, allows resize)
+         *  Scenario: Apply preset 'all_to_stereo' on Master Chain
+         *  Expected: Connections updated to stereo fan-down, undo restores original matrix
+         */
+        beginTest("POST /api/builder/apply (set_routing preset)");
+
+        resetBuilderState();
+
+        auto matrix = getRoutingMatrix("Master Chain");
+        if (matrix == nullptr) return;
+
+        const auto originalSrc = matrix->getNumSourceChannels();
+
+        Array<var> ops;
+        ops.add(makeSetRoutingPresetOp("Master Chain", "all_to_stereo"));
+
+        auto json = postBuilderOps(ops);
+        expectNoBuilderError(json);
+        expectDiffEntry(json, 0, "*", "Master Chain");
+
+        // all_to_stereo: even sources -> 0, odd sources -> 1
+        for (int i = 0; i < matrix->getNumSourceChannels(); i++)
+            expectMatrixConnection("Master Chain", i, (i % 2 == 0) ? 0 : 1);
+
+        auto undoJson = ctx->parseJson(ctx->httpPost("/api/undo/back", "{}"));
+        expectNoBuilderError(undoJson);
+        expectMatrixSourceChannels("Master Chain", originalSrc);
+    }
+
+    void testBuilderSetRoutingMatrix()
+    {
+        /** Setup: Fresh project with default Master Chain
+         *  Scenario: Apply 4-entry matrix array (resize + connect)
+         *  Expected: Source channel count grows to 4, channel connections match the array
+         */
+        beginTest("POST /api/builder/apply (set_routing matrix)");
+
+        resetBuilderState();
+
+        auto matrix = getRoutingMatrix("Master Chain");
+        if (matrix == nullptr) return;
+        const auto originalSrc = matrix->getNumSourceChannels();
+
+        Array<var> ops;
+        ops.add(makeSetRoutingMatrixOp("Master Chain", { 0, 1, -1, -1 }));
+
+        auto json = postBuilderOps(ops);
+        expectNoBuilderError(json);
+        expectMatrixSourceChannels("Master Chain", 4);
+        expectMatrixConnection("Master Chain", 0, 0);
+        expectMatrixConnection("Master Chain", 1, 1);
+        expectMatrixConnection("Master Chain", 2, -1);
+        expectMatrixConnection("Master Chain", 3, -1);
+
+        auto undoJson = ctx->parseJson(ctx->httpPost("/api/undo/back", "{}"));
+        expectNoBuilderError(undoJson);
+        expectMatrixSourceChannels("Master Chain", originalSrc);
+    }
+
+    void testBuilderSetRoutingSend()
+    {
+        /** Setup: Fresh project, resize Master Chain to 4 channels first
+         *  Scenario: Apply send array (length must equal numSourceChannels)
+         *  Expected: Send connections set; matrix connections untouched
+         */
+        beginTest("POST /api/builder/apply (set_routing send)");
+
+        resetBuilderState();
+
+        Array<var> resizeOps;
+        resizeOps.add(makeSetRoutingMatrixOp("Master Chain", { 0, 1, -1, -1 }));
+        auto resizeJson = postBuilderOps(resizeOps);
+        expectNoBuilderError(resizeJson);
+
+        Array<var> ops;
+        ops.add(makeSetRoutingSendOp("Master Chain", { -1, -1, 2, 3 }));
+
+        auto json = postBuilderOps(ops);
+        expectNoBuilderError(json);
+        expectDiffEntry(json, 0, "*", "Master Chain");
+
+        expectSendConnection("Master Chain", 0, -1);
+        expectSendConnection("Master Chain", 1, -1);
+        expectSendConnection("Master Chain", 2, 2);
+        expectSendConnection("Master Chain", 3, 3);
+
+        // matrix connections still intact
+        expectMatrixConnection("Master Chain", 0, 0);
+        expectMatrixConnection("Master Chain", 1, 1);
+    }
+
+    void testBuilderSetRoutingErrors()
+    {
+        /** Setup: Fresh project
+         *  Scenario: Each error path: unknown preset, mutually-exclusive fields, OOB destination,
+         *            send-length mismatch, target is not RoutableProcessor
+         *  Expected: Each request fails with informative error
+         */
+        beginTest("POST /api/builder/apply (set_routing errors)");
+
+        resetBuilderState();
+
+        // unknown preset
+        {
+            Array<var> ops;
+            ops.add(makeSetRoutingPresetOp("Master Chain", "bogus_preset"));
+            auto json = postBuilderOps(ops);
+            expectErrorMessageContains(json, "preset");
+        }
+
+        // mutually exclusive: matrix + preset
+        {
+            DynamicObject::Ptr op = new DynamicObject();
+            op->setProperty(RestApiIds::op, "set_routing");
+            op->setProperty(RestApiIds::target, "Master Chain");
+            op->setProperty(RestApiIds::preset, "stereo");
+            Array<var> arr; arr.add(0); arr.add(1);
+            op->setProperty(RestApiIds::matrix, var(arr));
+
+            Array<var> ops;
+            ops.add(var(op.get()));
+            auto json = postBuilderOps(ops);
+            expectErrorMessageContains(json, "mutually exclusive");
+        }
+
+        // out-of-range destination
+        {
+            auto matrix = getRoutingMatrix("Master Chain");
+            if (matrix != nullptr)
+            {
+                const int numDst = matrix->getNumDestinationChannels();
+                Array<int> entries;
+                for (int i = 0; i < matrix->getNumSourceChannels(); i++)
+                    entries.add(numDst + 5);
+                Array<var> ops;
+                ops.add(makeSetRoutingMatrixOp("Master Chain", entries));
+                auto json = postBuilderOps(ops);
+                expectErrorMessageContains(json, "out of range");
+            }
+        }
+
+        // send length mismatch
+        {
+            Array<var> ops;
+            ops.add(makeSetRoutingSendOp("Master Chain", { -1 }));
+            auto json = postBuilderOps(ops);
+            expectErrorMessageContains(json, "numSourceChannels");
+        }
+
+        // target not a RoutableProcessor: add a Modulator (LFO) to Master Chain's gain mod chain
+        {
+            Array<var> seedOps;
+            seedOps.add(makeAddOp("LFO", "RoutingTestLFO", "Master Chain", 1));
+            auto seedJson = postBuilderOps(seedOps);
+            expectNoBuilderError(seedJson);
+
+            Array<var> ops;
+            ops.add(makeSetRoutingPresetOp("RoutingTestLFO", "stereo"));
+            auto json = postBuilderOps(ops);
+            expectErrorMessageContains(json, "RoutableProcessor");
+        }
     }
 
     void testBuilderCloneNestedModules()
