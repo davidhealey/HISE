@@ -3229,6 +3229,7 @@
                                                     "enum": [
                                                         "add",
                                                         "remove",
+                                                        "move",
                                                         "clone",
                                                         "set_attributes",
                                                         "set_id",
@@ -3265,6 +3266,10 @@
                                                 "count": {
                                                     "type": "integer",
                                                     "description": "Number of clones"
+                                                },
+                                                "index": {
+                                                    "type": "integer",
+                                                    "description": "Insertion index within target chain (move only). -1 = append. ModulatorSynthGroup ignores this and always appends."
                                                 },
                                                 "template": {
                                                     "type": "string",
@@ -3334,6 +3339,10 @@
                                                 {
                                                     "value": "remove",
                                                     "description": "Remove a module (target)"
+                                                },
+                                                {
+                                                    "value": "move",
+                                                    "description": "Move a module to a different parent/chain (target, parent, chain, index?) or reorder within current chain (target, index)"
                                                 },
                                                 {
                                                     "value": "clone",
@@ -6013,7 +6022,7 @@
                                                 },
                                                 "source": {
                                                     "type": "string",
-                                                    "description": "Source node ID for connect/disconnect ops"
+                                                    "description": "Source node ID for connect op (disconnect resolves the source automatically)"
                                                 },
                                                 "target": {
                                                     "type": "string",
@@ -6089,7 +6098,7 @@
                                                 },
                                                 {
                                                     "value": "disconnect",
-                                                    "description": "Disconnect a modulation source (source, target, parameter)"
+                                                    "description": "Disconnect a modulation connection (target, parameter). The source is resolved automatically by searching the network for the unique connection that targets target.parameter. Errors if more than one match is found."
                                                 },
                                                 {
                                                     "value": "set",

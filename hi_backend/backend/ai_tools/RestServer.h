@@ -40,7 +40,7 @@
     runtime field. Consumers read it off any response (or `/api/status`) to
     verify they are talking to a HISE build that matches their expected schema.
 */
-#define HISE_REST_API_VERSION "0.6.0"
+#define HISE_REST_API_VERSION "0.6.1"
 
 namespace hise { using namespace juce;
 

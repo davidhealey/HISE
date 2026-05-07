@@ -135,6 +135,7 @@ public:
         testBuilderTree();
         testBuilderTreeRouting();
         testBuilderApply();
+        testBuilderApplyMove();
         testBuilderSetRoutingPreset();
         testBuilderSetRoutingMatrix();
         testBuilderSetRoutingSend();
@@ -3620,9 +3621,9 @@ private:
                 "send[" + String(i) + "] mirrors live state");
         }
 
-        expectEquals<bool>((bool)routing["resizable"], liveMatrix->resizingIsAllowed(),
+        expect((bool)routing["resizable"] == liveMatrix->resizingIsAllowed(),
             "resizable mirrors resizingIsAllowed");
-        expectEquals<bool>((bool)routing["routable"], !liveMatrix->onlyEnablingAllowed(),
+        expect((bool)routing["routable"] == !liveMatrix->onlyEnablingAllowed(),
             "routable mirrors !onlyEnablingAllowed");
         expectEquals<int>((int)routing["numDestinationChannels"], liveMatrix->getNumDestinationChannels(),
             "numDestinationChannels mirrors live state");
@@ -3754,6 +3755,27 @@ private:
         DynamicObject::Ptr op = new DynamicObject();
         op->setProperty(RestApiIds::op, "remove");
         op->setProperty(RestApiIds::target, target);
+        return var(op.get());
+    }
+
+    var makeMoveOp(const String& target, const String& parent, int chain, int index = -1)
+    {
+        DynamicObject::Ptr op = new DynamicObject();
+        op->setProperty(RestApiIds::op, "move");
+        op->setProperty(RestApiIds::target, target);
+        op->setProperty(RestApiIds::parent, parent);
+        op->setProperty(RestApiIds::chain, chain);
+        if (index >= 0)
+            op->setProperty(RestApiIds::index, index);
+        return var(op.get());
+    }
+
+    var makeReorderOp(const String& target, int index)
+    {
+        DynamicObject::Ptr op = new DynamicObject();
+        op->setProperty(RestApiIds::op, "move");
+        op->setProperty(RestApiIds::target, target);
+        op->setProperty(RestApiIds::index, index);
         return var(op.get());
     }
 
@@ -3995,6 +4017,101 @@ private:
         expectNoBuilderError(redoJson);
         expectBuilderProcessorAttribute("MySineRenamed", "SaturationAmount", 0.25f);
 
+    }
+
+    void testBuilderApplyMove()
+    {
+        /** Setup: Two SynthChain containers with one SineSynth nested under the first
+         *  Scenario: Cross-parent move + in-place reorder + undo
+         *  Expected: Module reparented correctly, position respected, undo restores both
+         */
+        beginTest("POST /api/builder/apply (move)");
+
+        resetBuilderState();
+
+        Array<var> seedOps;
+        seedOps.add(makeAddOp("SynthChain", "MoveContainerA"));
+        seedOps.add(makeAddOp("SynthChain", "MoveContainerB"));
+        seedOps.add(makeAddOp("SineSynth", "MoveSineA", "MoveContainerA", -1));
+        auto seedJson = postBuilderOps(seedOps);
+        expectNoBuilderError(seedJson);
+        expectHasNestedChild("MoveContainerA", "MoveSineA");
+
+        // Cross-parent move
+        Array<var> moveOps;
+        moveOps.add(makeMoveOp("MoveSineA", "MoveContainerB", -1));
+        auto moveJson = postBuilderOps(moveOps);
+        expectNoBuilderError(moveJson);
+        expectDiffEntry(moveJson, 0, "*", "MoveSineA");
+        expectHasNestedChild("MoveContainerB", "MoveSineA");
+
+        {
+            auto a = ProcessorHelpers::getFirstProcessorWithName(ctx->mc->getMainSynthChain(), "MoveContainerA");
+            expect(a != nullptr, "MoveContainerA should exist");
+            if (a != nullptr)
+                expect(ProcessorHelpers::getFirstProcessorWithName(a, "MoveSineA") == nullptr,
+                       "MoveSineA should no longer be under MoveContainerA after move");
+        }
+
+        // Undo restores parent
+        auto undoJson = ctx->parseJson(ctx->httpPost("/api/undo/back", "{}"));
+        expectNoBuilderError(undoJson);
+        expectHasNestedChild("MoveContainerA", "MoveSineA");
+
+        // Add two more siblings and exercise in-place reorder
+        Array<var> ops;
+        ops.add(makeAddOp("SineSynth", "MoveSineB", "MoveContainerA", -1));
+        ops.add(makeAddOp("SineSynth", "MoveSineC", "MoveContainerA", -1));
+        auto seed2Json = postBuilderOps(ops);
+        expectNoBuilderError(seed2Json);
+
+        auto containerChain = [this]() -> Chain*
+        {
+            return dynamic_cast<Chain*>(ProcessorHelpers::getFirstProcessorWithName(ctx->mc->getMainSynthChain(), "MoveContainerA"));
+        };
+
+        if (auto c = containerChain())
+        {
+            auto h = c->getHandler();
+            expect(h->getNumProcessors() >= 3, "MoveContainerA should have 3 children");
+            if (h->getNumProcessors() >= 3)
+            {
+                expectEquals(h->getProcessor(0)->getId(), String("MoveSineA"));
+                expectEquals(h->getProcessor(1)->getId(), String("MoveSineB"));
+                expectEquals(h->getProcessor(2)->getId(), String("MoveSineC"));
+            }
+        }
+
+        Array<var> reorderOps;
+        reorderOps.add(makeReorderOp("MoveSineC", 0));
+        auto reorderJson = postBuilderOps(reorderOps);
+        expectNoBuilderError(reorderJson);
+
+        if (auto c = containerChain())
+        {
+            auto h = c->getHandler();
+            if (h->getNumProcessors() >= 3)
+            {
+                expectEquals(h->getProcessor(0)->getId(), String("MoveSineC"));
+                expectEquals(h->getProcessor(1)->getId(), String("MoveSineA"));
+                expectEquals(h->getProcessor(2)->getId(), String("MoveSineB"));
+            }
+        }
+
+        // Undo reorder
+        auto u2 = ctx->parseJson(ctx->httpPost("/api/undo/back", "{}"));
+        expectNoBuilderError(u2);
+
+        if (auto c = containerChain())
+        {
+            auto h = c->getHandler();
+            if (h->getNumProcessors() >= 3)
+            {
+                expectEquals(h->getProcessor(0)->getId(), String("MoveSineA"));
+                expectEquals(h->getProcessor(1)->getId(), String("MoveSineB"));
+                expectEquals(h->getProcessor(2)->getId(), String("MoveSineC"));
+            }
+        }
     }
 
     void testBuilderSetRoutingPreset()
@@ -4568,6 +4685,26 @@ private:
         op7->setProperty(RestApiIds::op, "clone");
         op7->setProperty(RestApiIds::count, 0);
         ops.add(var(op7.get()));
+
+        // move missing target
+        DynamicObject::Ptr op8 = new DynamicObject();
+        op8->setProperty(RestApiIds::op, "move");
+        op8->setProperty(RestApiIds::parent, "Master Chain");
+        op8->setProperty(RestApiIds::chain, -1);
+        ops.add(var(op8.get()));
+
+        // move with parent but no chain (partial)
+        DynamicObject::Ptr op9 = new DynamicObject();
+        op9->setProperty(RestApiIds::op, "move");
+        op9->setProperty(RestApiIds::target, "Anything");
+        op9->setProperty(RestApiIds::parent, "Master Chain");
+        ops.add(var(op9.get()));
+
+        // move with target but neither parent/chain nor index
+        DynamicObject::Ptr op10 = new DynamicObject();
+        op10->setProperty(RestApiIds::op, "move");
+        op10->setProperty(RestApiIds::target, "Anything");
+        ops.add(var(op10.get()));
         
         DynamicObject::Ptr bodyObj = new DynamicObject();
         bodyObj->setProperty(RestApiIds::operations, var(ops));
@@ -4577,7 +4714,7 @@ private:
         var json = ctx->parseJson(response);
         
         expect(!(bool)json[RestApiIds::success], "Should fail validation");
-        expectEquals<int>(json[RestApiIds::errors].size(), 7, "Should have one error per bad operation");
+        expectEquals<int>(json[RestApiIds::errors].size(), 10, "Should have one error per bad operation");
 
         for (int i = 0; i < json[RestApiIds::errors].size(); i++)
         {
@@ -4597,6 +4734,9 @@ private:
         expectEquals(json[RestApiIds::errors][4][RestApiIds::callstack][0].toString(), String("op[4]: set_bypassed"));
         expectEquals(json[RestApiIds::errors][5][RestApiIds::callstack][0].toString(), String("op[5]: set_effect"));
         expectEquals(json[RestApiIds::errors][6][RestApiIds::callstack][0].toString(), String("op[6]: clone"));
+        expectEquals(json[RestApiIds::errors][7][RestApiIds::callstack][0].toString(), String("op[7]: move"));
+        expectEquals(json[RestApiIds::errors][8][RestApiIds::callstack][0].toString(), String("op[8]: move"));
+        expectEquals(json[RestApiIds::errors][9][RestApiIds::callstack][0].toString(), String("op[9]: move"));
 
         // Validate-only branch: existing module with unknown parameter
         Array<var> validateOps;
@@ -5988,12 +6128,10 @@ private:
         return var(op.get());
     }
 
-    var makeDspDisconnectOp(const String& source, const String& target,
-                            const String& parameter)
+    var makeDspDisconnectOp(const String& target, const String& parameter)
     {
         DynamicObject::Ptr op = new DynamicObject();
         op->setProperty(RestApiIds::op, "disconnect");
-        op->setProperty(RestApiIds::source, source);
         op->setProperty(RestApiIds::target, target);
         op->setProperty(RestApiIds::parameter, parameter);
         return var(op.get());
@@ -6852,7 +6990,7 @@ private:
 
         // Disconnect
         ops.clear();
-        ops.add(makeDspDisconnectOp("DisPMA", "DisOsc", "Frequency"));
+        ops.add(makeDspDisconnectOp("DisOsc", "Frequency"));
         auto json = postDspOps(ops);
         expectDspSuccess(json);
 
@@ -6862,23 +7000,22 @@ private:
         expectEquals<int>(osc[RestApiIds::connections].size(), 0,
             "Should have no connections after disconnect");
 
-        // Error: missing required fields
+        // Error: missing required fields (target + parameter)
         DynamicObject::Ptr badOp = new DynamicObject();
         badOp->setProperty(RestApiIds::op, "disconnect");
-        badOp->setProperty(RestApiIds::source, "DisPMA");
         ops.clear();
         ops.add(var(badOp.get()));
         json = postDspOps(ops);
         expect(!(bool)json[RestApiIds::success], "Missing target/parameter should fail");
 
         // Regression: batch {add source, add target, connect, disconnect} must succeed.
-        // disconnect::validate() must defer the source existence check so it
-        // accepts nodes created earlier in the same batch.
+        // disconnect resolves the source by walking the network plan snapshot,
+        // so it must accept connections created earlier in the same batch.
         ops.clear();
         ops.add(makeDspAddOp("control.pma", "test_network", "BatchDisSrc"));
         ops.add(makeDspAddOp("core.oscillator", "test_network", "BatchDisTgt"));
         ops.add(makeDspConnectOp("BatchDisSrc", "BatchDisTgt", "Frequency"));
-        ops.add(makeDspDisconnectOp("BatchDisSrc", "BatchDisTgt", "Frequency"));
+        ops.add(makeDspDisconnectOp("BatchDisTgt", "Frequency"));
         json = postDspOps(ops);
         expectDspSuccess(json);
     }
@@ -7778,7 +7915,7 @@ private:
         ops.add(makeDspAddOp("control.pma", "test_network", "Mod"));
         ops.add(makeDspAddOp("core.oscillator", "test_network", "Osc"));
         ops.add(makeDspConnectOp("Mod", "Osc", "Frequency"));
-        ops.add(makeDspDisconnectOp("Mod", "Osc", "Frequency"));
+        ops.add(makeDspDisconnectOp("Osc", "Frequency"));
         expectDspSuccess(postDspOps(ops));
 
         auto mid = getDspGroupCurrent();

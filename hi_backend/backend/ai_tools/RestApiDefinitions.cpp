@@ -806,6 +806,7 @@ struct RestApiEndpoints
 			.withDiscriminator("op")
 			.withVariant("add", "Add a new module (type, parent, chain, name)")
 			.withVariant("remove", "Remove a module (target)")
+			.withVariant("move", "Move a module to a different parent/chain (target, parent, chain, index?) or reorder within current chain (target, index)")
 			.withVariant("clone", "Clone a module (source, count, template?)")
 			.withVariant("set_attributes", "Set parameter values (target, attributes, mode?)")
 			.withVariant("set_id", "Rename a module (target, name)")
@@ -813,7 +814,7 @@ struct RestApiEndpoints
 			.withVariant("set_effect", "Set effect/network (target, effect)")
 			.withVariant("set_routing", "Set routing on a RoutableProcessor (target, one of: matrix, send, preset)")
 			.withProperty(RouteParameter(RestApiIds::op, "Operation type")
-				.withEnumValues({ "add","remove","clone","set_attributes","set_id","set_bypassed","set_effect","set_routing" }))
+				.withEnumValues({ "add","remove","move","clone","set_attributes","set_id","set_bypassed","set_effect","set_routing" }))
 			.withProperty(RouteParameter(RestApiIds::type, "Module type ID").asOptional())
 			.withProperty(RouteParameter(RestApiIds::parent, "Parent module name").asOptional())
 			.withProperty(RouteParameter(RestApiIds::chain, "Chain index (-1=direct, 0=midi, 1=gain, 2=pitch, 3=fx)")
@@ -822,6 +823,8 @@ struct RestApiEndpoints
 			.withProperty(RouteParameter(RestApiIds::target, "Target module name").asOptional())
 			.withProperty(RouteParameter(RestApiIds::source, "Source module to clone").asOptional())
 			.withProperty(RouteParameter(RestApiIds::count, "Number of clones")
+				.withType(ParamType::Int).asOptional())
+			.withProperty(RouteParameter(RestApiIds::index, "Insertion index within target chain (move only). -1 = append. ModulatorSynthGroup ignores this and always appends.")
 				.withType(ParamType::Int).asOptional())
 			.withProperty(RouteParameter(Identifier("template"), "Name template with {n} placeholder").asOptional())
 			.withProperty(RouteParameter(RestApiIds::attributes, "Parameter values {paramName: value}")
@@ -1406,7 +1409,7 @@ struct RestApiEndpoints
 				"sourceOutput is a parameter name (string) or output slot index (int) for multi-output mod nodes. "
 				"If matchRange is true, copies target parameter's range (min/max/skew/step) onto source after wiring "
 				"(mirrors the IDE normalize button: target is canonical, source adopts target's units, no remap occurs)")
-			.withVariant("disconnect", "Disconnect a modulation source (source, target, parameter)")
+			.withVariant("disconnect", "Disconnect a modulation connection (target, parameter). The source is resolved automatically by searching the network for the unique connection that targets target.parameter. Errors if more than one match is found.")
 			.withVariant("set", "Set a parameter value or node property (nodeId, parameterId, value). "
 				"When nodeId is the root network node, also supports network-level properties: "
 				"AllowCompilation (bool), AllowPolyphonic (bool), CompileChannelAmount (int), "
@@ -1431,7 +1434,7 @@ struct RestApiEndpoints
 				.asOptional())
 			.withProperty(RouteParameter(RestApiIds::index, "Position within parent container")
 				.withType(ParamType::Int).asOptional())
-			.withProperty(RouteParameter(RestApiIds::source, "Source node ID for connect/disconnect ops")
+			.withProperty(RouteParameter(RestApiIds::source, "Source node ID for connect op (disconnect resolves the source automatically)")
 				.asOptional())
 			.withProperty(RouteParameter(RestApiIds::target, "Target node ID for connect/disconnect ops")
 				.asOptional())
