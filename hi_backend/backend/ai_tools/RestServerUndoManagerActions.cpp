@@ -1288,6 +1288,226 @@ struct set_effect : public ActionBase
 	}
 };
 
+struct set_routing : public ActionBase
+{
+	BUILDER_ID(set_routing);
+
+	static int presetFromString(const String& s)
+	{
+		if (s == "stereo")        return (int)RoutableProcessor::Presets::FirstStereo;
+		if (s == "stereo_2")      return (int)RoutableProcessor::Presets::SecondStereo;
+		if (s == "stereo_3")      return (int)RoutableProcessor::Presets::ThirdStereo;
+		if (s == "all")           return (int)RoutableProcessor::Presets::AllChannels;
+		if (s == "all_to_stereo") return (int)RoutableProcessor::Presets::AllChannelsToStereo;
+		return -1;
+	}
+
+	static StringArray getPresetNames()
+	{
+		return { "stereo", "stereo_2", "stereo_3", "all", "all_to_stereo" };
+	}
+
+	static Error prevalidate(MainController*, const var& op)
+	{
+		if (op[RestApiIds::target].toString().isEmpty())
+			return Error().withError("set_routing requires 'target'");
+
+		const bool hasMatrix = op[RestApiIds::matrix].isArray();
+		const bool hasSend   = op[RestApiIds::send].isArray();
+		const bool hasPreset = op[RestApiIds::preset].toString().isNotEmpty();
+
+		const int payloadCount = (int)hasMatrix + (int)hasSend + (int)hasPreset;
+
+		if (payloadCount == 0)
+			return Error().withError("set_routing requires one of 'matrix', 'send', or 'preset'");
+		if (payloadCount > 1)
+			return Error().withError("set_routing fields 'matrix', 'send', and 'preset' are mutually exclusive");
+
+		if (hasPreset)
+		{
+			const auto p = op[RestApiIds::preset].toString();
+			if (presetFromString(p) == -1)
+				return Error().withError("Unknown preset '" + p + "'")
+					.withHint(Helpers::getHintForUnknownString(p, getPresetNames()));
+		}
+
+		return {};
+	}
+
+	set_routing(MainController* mc, const var& obj) :
+		ActionBase(mc),
+		target(obj["target"].toString()),
+		matrixVar(obj[RestApiIds::matrix]),
+		sendVar(obj[RestApiIds::send]),
+		presetStr(obj[RestApiIds::preset].toString())
+	{}
+
+	ProcessorReference target;
+	var matrixVar;
+	var sendVar;
+	String presetStr;
+	ValueTree previousState;
+
+	int getRebuildLevel(Domain d, bool undo) const override { return 0; }
+
+	void addToDiffList(std::vector<Diff>& diffList, bool undo) override
+	{
+		Diff d;
+		d.target = target.getId();
+		d.domain = Domain::Builder;
+		d.type = Diff::Type::Modify;
+		diffList.push_back(d);
+	}
+
+	RoutableProcessor* getRoutable() const
+	{
+		return dynamic_cast<RoutableProcessor*>(target.get());
+	}
+
+	static void applyMatrixArray(RoutableProcessor::MatrixData& m, const Array<var>& entries, bool isSend)
+	{
+		const int newLen = entries.size();
+
+		if (!isSend)
+		{
+			if (newLen != m.getNumSourceChannels())
+				m.setNumSourceChannels(newLen, sendNotification);
+
+			m.clearAllConnections();
+		}
+		else
+		{
+			for (int i = 0; i < m.getNumSourceChannels(); i++)
+			{
+				const int existing = m.getSendForSourceChannel(i);
+				if (existing != -1)
+					m.removeSendConnection(i, existing);
+			}
+		}
+
+		for (int i = 0; i < newLen; i++)
+		{
+			const int dst = (int)entries[i];
+			if (dst >= 0)
+			{
+				if (isSend)
+					m.addSendConnection(i, dst);
+				else
+					m.addConnection(i, dst);
+			}
+		}
+	}
+
+	void perform() override
+	{
+		if (!target.initAtPerform(getMainController()))
+			Helpers::throwProcessorDeleted(target.getId());
+
+		auto rp = getRoutable();
+		if (rp == nullptr)
+			Helpers::throwRuntimeError(target.getId() + " is not a RoutableProcessor");
+
+		auto& m = rp->getMatrix();
+		previousState = m.exportAsValueTree();
+
+		if (matrixVar.isArray())
+			applyMatrixArray(m, *matrixVar.getArray(), false);
+		else if (sendVar.isArray())
+			applyMatrixArray(m, *sendVar.getArray(), true);
+		else
+			m.loadPreset((RoutableProcessor::Presets)presetFromString(presetStr));
+	}
+
+	void undo() override
+	{
+		if (!target.initAtPerform(getMainController()))
+			Helpers::throwProcessorDeleted(target.getId());
+
+		auto rp = getRoutable();
+		if (rp == nullptr)
+			Helpers::throwRuntimeError(target.getId() + " is not a RoutableProcessor");
+
+		rp->getMatrix().restoreFromValueTree(previousState);
+	}
+
+	bool needsKillVoice() const override { return true; }
+
+	String getHistoryMessage(bool undo) const override
+	{
+		return (undo ? "Restore routing on " : "Set routing on ") + target.getId();
+	}
+
+	String getDescription() const override
+	{
+		if (matrixVar.isArray()) return "set_routing matrix on " + target.getId();
+		if (sendVar.isArray())   return "set_routing send on " + target.getId();
+		return "set_routing preset=" + presetStr + " on " + target.getId();
+	}
+
+	Error validate() override
+	{
+		if (!target.initAtValidation(planValidation, getMainController()))
+			return Error().withError("Can't find module with ID " + target.getId());
+
+		// Routing state requires the live module; defer to perform-time when only a plan exists.
+		if (!target.existsInRuntime())
+			return {};
+
+		auto rp = getRoutable();
+		if (rp == nullptr)
+			return Error().withError(target.getId() + " is not a RoutableProcessor");
+
+		auto& m = rp->getMatrix();
+		const int numDst = m.getNumDestinationChannels();
+		const int numSrc = m.getNumSourceChannels();
+		const int allowedConn = m.getNumAllowedConnections();
+		const bool resizeOk = m.resizingIsAllowed();
+		const bool enableOnly = m.onlyEnablingAllowed();
+
+		auto validateArray = [&](const Array<var>& entries, bool isSend) -> Error
+		{
+			const int len = entries.size();
+
+			if (isSend)
+			{
+				if (len != numSrc)
+					return Error().withError("send length " + String(len) + " does not match numSourceChannels " + String(numSrc));
+			}
+			else
+			{
+				if (!resizeOk && len != numSrc)
+					return Error().withError(target.getId() + " does not allow resizing (matrix length must equal " + String(numSrc) + ")");
+			}
+
+			int activeCount = 0;
+			for (int i = 0; i < len; i++)
+			{
+				const int dst = (int)entries[i];
+				if (dst < -1 || dst >= numDst)
+					return Error().withError("entry " + String(i) + " value " + String(dst) + " out of range [-1.." + String(numDst - 1) + "]");
+				if (dst >= 0)
+				{
+					if (enableOnly && dst != i)
+						return Error().withError(target.getId() + " only allows enable-style routing; entry " + String(i) + " maps to " + String(dst));
+					activeCount++;
+				}
+			}
+
+			if (allowedConn > 0 && activeCount > allowedConn)
+				return Error().withError("active connection count " + String(activeCount) + " exceeds allowed " + String(allowedConn));
+
+			return {};
+		};
+
+		if (matrixVar.isArray())
+			return validateArray(*matrixVar.getArray(), false);
+		if (sendVar.isArray())
+			return validateArray(*sendVar.getArray(), true);
+
+		return {};
+	}
+};
+
 struct set_complex_data : public ActionBase
 {
 	BUILDER_ID(set_complex_data);

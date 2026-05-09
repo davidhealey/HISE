@@ -4239,6 +4239,33 @@ var RestHelpers::buildModuleTree(const ProcessorOrValueTree& root, const TreeOpt
 		}
 	}
 
+	if (root.isRuntimeData())
+	{
+		if (auto rp = dynamic_cast<RoutableProcessor*>(root.p))
+		{
+			auto& matrixData = rp->getMatrix();
+			const int numSrc = matrixData.getNumSourceChannels();
+
+			Array<var> matrixArr;
+			Array<var> sendArr;
+
+			for (int i = 0; i < numSrc; i++)
+			{
+				matrixArr.add(matrixData.getConnectionForSourceChannel(i));
+				sendArr.add(matrixData.getSendForSourceChannel(i));
+			}
+
+			DynamicObject::Ptr routing = new DynamicObject();
+			routing->setProperty("matrix", var(matrixArr));
+			routing->setProperty("send", var(sendArr));
+			routing->setProperty("resizable", matrixData.resizingIsAllowed());
+			routing->setProperty("routable", !matrixData.onlyEnablingAllowed());
+			routing->setProperty("numDestinationChannels", matrixData.getNumDestinationChannels());
+
+			obj->setProperty("routing", var(routing.get()));
+		}
+	}
+
 	auto modData = obj->getProperty("modulation");
 
 	if (auto md = modData.getArray())

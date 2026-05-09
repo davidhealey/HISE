@@ -777,8 +777,12 @@ struct RestApiEndpoints
 			.withDescription("Returns the nested JSON module tree with metadata, modulation, and children. "
 				"Without group parameter, returns the live runtime tree. "
 				"With group=current, returns the active validation tree (400 when no active group). "
-				"Other group values return 501.")
-			.withReturns("Nested JSON tree with metadata / modulation / children")
+				"Other group values return 501. "
+				"Modules implementing RoutableProcessor (synth chains, samplers, noise synth, hardcoded modules) include a 'routing' object: "
+				"{matrix:int[], send:int[], resizable:bool, routable:bool, numDestinationChannels:int}. "
+				"matrix/send arrays have length = numSourceChannels; index = source channel, value = destination channel (-1 = none). "
+				"routable mirrors !onlyEnablingAllowed(). Routing only emitted in runtime mode (no group filter).")
+			.withReturns("Nested JSON tree with metadata / modulation / children / routing")
 			.withQueryParam(RouteParameter(RestApiIds::moduleId,
 				"Optional root module ID to return a subtree").asOptional())
 			.withQueryParam(RouteParameter(RestApiIds::group,
@@ -791,7 +795,7 @@ struct RestApiEndpoints
 				.withType(ParamType::Bool).withDefault("false"))
 			.withErrorCodes({ 400, 404, 501 })
 			.withRequestExample(R"(GET /api/builder/tree)")
-			.withResponseExample(R"({"success": true, "result": {"id": "SynthChain", "processorId": "Master Chain", "type": "SoundGenerator", "bypassed": false}, "logs": [], "errors": []})"));
+			.withResponseExample(R"({"success": true, "result": {"id": "SynthChain", "processorId": "Master Chain", "type": "SoundGenerator", "bypassed": false, "routing": {"matrix": [0, 1], "send": [-1, -1], "resizable": true, "routable": true, "numDestinationChannels": 2}}, "logs": [], "errors": []})"));
 	}
 
 	/* /api/builder/apply */
@@ -807,8 +811,9 @@ struct RestApiEndpoints
 			.withVariant("set_id", "Rename a module (target, name)")
 			.withVariant("set_bypassed", "Set bypass state (target, bypassed)")
 			.withVariant("set_effect", "Set effect/network (target, effect)")
+			.withVariant("set_routing", "Set routing on a RoutableProcessor (target, one of: matrix, send, preset)")
 			.withProperty(RouteParameter(RestApiIds::op, "Operation type")
-				.withEnumValues({ "add","remove","clone","set_attributes","set_id","set_bypassed","set_effect" }))
+				.withEnumValues({ "add","remove","clone","set_attributes","set_id","set_bypassed","set_effect","set_routing" }))
 			.withProperty(RouteParameter(RestApiIds::type, "Module type ID").asOptional())
 			.withProperty(RouteParameter(RestApiIds::parent, "Parent module name").asOptional())
 			.withProperty(RouteParameter(RestApiIds::chain, "Chain index (-1=direct, 0=midi, 1=gain, 2=pitch, 3=fx)")
@@ -825,7 +830,20 @@ struct RestApiEndpoints
 				.withEnumValues({ "value", "normalized", "raw" }).withDefault("value"))
 			.withProperty(RouteParameter(RestApiIds::bypassed, "Bypass state")
 				.withType(ParamType::Bool).asOptional())
-			.withProperty(RouteParameter(RestApiIds::effect, "Effect/network name").asOptional());
+			.withProperty(RouteParameter(RestApiIds::effect, "Effect/network name").asOptional())
+			.withProperty(RouteParameter(RestApiIds::matrix, "Routing matrix array (set_routing): index=source channel, value=destination channel (-1=none). Length sets numSourceChannels (requires resizingIsAllowed). Mutually exclusive with send/preset.")
+				.withType(ParamType::Array)
+				.withArrayItems(RouteParameter(Identifier("dest"), "Destination channel index, or -1")
+					.withType(ParamType::Int))
+				.asOptional())
+			.withProperty(RouteParameter(RestApiIds::send, "Send connection array (set_routing): same shape as matrix; length must equal current numSourceChannels. Mutually exclusive with matrix/preset.")
+				.withType(ParamType::Array)
+				.withArrayItems(RouteParameter(Identifier("dest"), "Destination channel index, or -1")
+					.withType(ParamType::Int))
+				.asOptional())
+			.withProperty(RouteParameter(RestApiIds::preset, "Routing preset name (set_routing). Mutually exclusive with matrix/send.")
+				.withEnumValues({ "stereo", "stereo_2", "stereo_3", "all", "all_to_stereo" })
+				.asOptional());
 
 		auto diffEntry = RouteParameter(Identifier("entry"), "Diff entry")
 			.withType(ParamType::Object)
@@ -843,7 +861,11 @@ struct RestApiEndpoints
 				"When called inside an undo group (after push_group), the diff accumulates all operations in the group so far. "
 				"The response contains a diff summary with the net effect - if a module was added and then modified, it shows as '+'. "
 				"Operations are pre-validated before execution; invalid operations return 400 with detailed error info. "
-				"Partial failure rolls back the entire batch.")
+				"Partial failure rolls back the entire batch. "
+				"The 'set_routing' op targets modules implementing RoutableProcessor (synth chains, samplers, noise synth, hardcoded modules) and accepts exactly one of: "
+				"'matrix' (flat array, index=source channel, value=destination channel or -1; length sets numSourceChannels if resizing is allowed), "
+				"'send' (same shape, configures parallel send connections; length must equal current numSourceChannels), or "
+				"'preset' (one of stereo, stereo_2, stereo_3, all, all_to_stereo).")
 			.withReturns("Diff summary showing the net effect of all operations")
 			.withBodyParam(RouteParameter(RestApiIds::operations, "Non-empty array of operation objects")
 				.withArrayItems(opItem))
@@ -853,7 +875,7 @@ struct RestApiEndpoints
 			.withResponseField(RouteParameter(RestApiIds::diff, "Array of diff entries")
 				.withArrayItems(diffEntry))
 			.withErrorCodes({ 400, 404, 409 })
-			.withRequestExample(R"({"operations": [{"op": "add", "type": "SineSynth", "parent": "Master Chain", "chain": -1, "name": "MySine"}, {"op": "set_bypassed", "target": "MySine", "bypassed": true}]})")
+			.withRequestExample(R"({"operations": [{"op": "add", "type": "SineSynth", "parent": "Master Chain", "chain": -1, "name": "MySine"}, {"op": "set_bypassed", "target": "MySine", "bypassed": true}, {"op": "set_routing", "target": "MySine", "preset": "stereo"}]})")
 			.withResponseExample(R"({"success": true, "scope": "group", "groupName": "root", "diff": [{"target": "MySine", "action": "+", "domain": "builder"}], "logs": [], "errors": []})"));
 	}
 

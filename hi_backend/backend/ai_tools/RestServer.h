@@ -40,7 +40,7 @@
     runtime field. Consumers read it off any response (or `/api/status`) to
     verify they are talking to a HISE build that matches their expected schema.
 */
-#define HISE_REST_API_VERSION "0.5.0"
+#define HISE_REST_API_VERSION "0.6.0"
 
 namespace hise { using namespace juce;
 
@@ -270,6 +270,9 @@ namespace RestApiIds
     DECLARE_ID(op);                   // Operation type (add, remove, clone, set_attributes, etc.)
     DECLARE_ID(attributes);           // Parameter values object {paramName: value}
     DECLARE_ID(effect);               // Effect/network name for HotswappableEffect modules
+    DECLARE_ID(matrix);               // Routing matrix array: index=source channel, value=destination (-1 = none); length sets numSourceChannels
+    DECLARE_ID(send);                 // Send connection array (parallel sends); same shape as matrix, length must match numSourceChannels
+    DECLARE_ID(preset);               // Routing preset name (stereo, stereo_2, stereo_3, all, all_to_stereo)
 
     // UI component endpoints
     DECLARE_ID(componentType);        // Component type (ScriptButton, ScriptPanel, etc.)
