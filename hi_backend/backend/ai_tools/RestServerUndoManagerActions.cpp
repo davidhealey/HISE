@@ -3712,7 +3712,7 @@ struct disconnect : public ActionBase
 			Error ambiguityErr;
 			auto con = findUniqueConnection(rv, targetId, parameterName, ambiguityErr);
 
-			if (ambiguityErr)
+			if (!ambiguityErr)
 				return ambiguityErr;
 
 			if (!con.isValid())
@@ -3733,7 +3733,7 @@ struct disconnect : public ActionBase
 		Error ambiguityErr;
 		auto con = findUniqueConnection(rv, targetId, parameterName, ambiguityErr);
 
-		if (ambiguityErr)
+		if (!ambiguityErr)
 			throw ambiguityErr;
 
 		if (!con.isValid())
