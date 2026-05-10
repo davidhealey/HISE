@@ -236,11 +236,11 @@ Identifier HiseJavascriptEngine::CyclicReferenceCheckBase::Reference::ListHelper
 {
 	if (isObject)
 	{
-		return Identifier(parentId.toString() + "." + name);
+		return Identifier(parentId.toString() + "_" + name);
 	}
 	else
 	{
-		return Identifier(parentId.toString() + "[" + name + "]");
+		return Identifier(parentId.toString() + "_" + name + "_");
 	}
 }
 
@@ -327,7 +327,7 @@ bool HiseJavascriptEngine::RootObject::updateCyclicReferenceList(ThreadData& dat
 
 bool HiseJavascriptEngine::RootObject::JavascriptNamespace::updateCyclicReferenceList(ThreadData& data, const Identifier& parentId)
 {
-	auto nsString = id.toString() + ".";
+	auto nsString = id.toString() + "_";
 
 	data.thread->showStatusMessage("Checking namespace " + parentId.toString());
 
@@ -419,7 +419,7 @@ bool ScriptingApi::Content::ScriptPanel::updateCyclicReferenceList(ThreadData& d
 {
 	var thisAsVar(this);
 
-	auto pString = id.toString() + ".";
+	auto pString = id.toString() + "_";
 
 	auto pDataId = Identifier(pString + "data");
 	auto pJsonId = Identifier(pString + "popupData");
@@ -452,7 +452,7 @@ bool HiseJavascriptEngine::RootObject::InlineFunction::Object::updateCyclicRefer
 {
 	for (int i = 0; i < localProperties->size(); i++)
 	{
-		auto lId = Identifier(id.toString() + "." + localProperties->getName(i).toString());
+		auto lId = Identifier(id.toString() + "_" + localProperties->getName(i).toString());
 
 		if (!updateList(data, localProperties->getValueAt(i), lId))
 		{
