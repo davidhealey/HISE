@@ -712,12 +712,23 @@ public:
 		columnWidthRatio
 	};
 
+	enum SpecialPanelIds
+	{
+		RowHeight = (int)FloatingTileContent::PanelPropertyId::numPropertyIds,
+		numSpecialPanelIds
+	};
+
 	TableFloatingTileBase(FloatingTile* parent);
 	void initTable(bool addChannelColumn=false);
 
 	virtual ~TableFloatingTileBase() {};
 
+	int getNumDefaultableProperties() const override { return (int)numSpecialPanelIds; }
+	Identifier getDefaultablePropertyId(int i) const override;
+	var getDefaultProperty(int i) const override;
+
 	void updateContent();
+	var toDynamicObject() const override;
 	void fromDynamicObject(const var& object);
 	void paintRowBackground(Graphics& g, int /*rowNumber*/, int /*width*/, int /*height*/, bool rowIsSelected) override;
 
@@ -771,6 +782,8 @@ public:
 	}
 
 protected:
+
+	int customRowHeight = 0;
 
 	Colour textColour;
 	Colour itemColour1;

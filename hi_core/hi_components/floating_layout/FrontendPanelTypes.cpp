@@ -1733,6 +1733,35 @@ void TableFloatingTileBase::ValueSliderColumn::sliderValueChanged(Slider *)
 		slider->setValue(actualValue, dontSendNotification);
 }
 
+Identifier TableFloatingTileBase::getDefaultablePropertyId(int index) const
+{
+	if (index < (int)PanelPropertyId::numPropertyIds)
+		return FloatingTileContent::getDefaultablePropertyId(index);
+
+	RETURN_DEFAULT_PROPERTY_ID(index, SpecialPanelIds::RowHeight, "RowHeight");
+
+	jassertfalse;
+	return {};
+}
+
+var TableFloatingTileBase::getDefaultProperty(int index) const
+{
+	if (index < (int)PanelPropertyId::numPropertyIds)
+		return FloatingTileContent::getDefaultProperty(index);
+
+	RETURN_DEFAULT_PROPERTY(index, SpecialPanelIds::RowHeight, 0);
+
+	jassertfalse;
+	return {};
+}
+
+var TableFloatingTileBase::toDynamicObject() const
+{
+	auto obj = FloatingTileContent::toDynamicObject();
+	storePropertyInObject(obj, (int)SpecialPanelIds::RowHeight, customRowHeight, 0);
+	return obj;
+}
+
 TableFloatingTileBase::TableFloatingTileBase(FloatingTile* parent) :
 	FloatingTileContent(parent),
 	font(GLOBAL_FONT())
@@ -1793,6 +1822,8 @@ void TableFloatingTileBase::updateContent()
 void TableFloatingTileBase::fromDynamicObject(const var& object)
 {
 	FloatingTileContent::fromDynamicObject(object);
+
+	customRowHeight = (int)getPropertyWithDefault(object, (int)SpecialPanelIds::RowHeight);
 
 	table.setColour(ListBox::backgroundColourId, findPanelColour(FloatingTileContent::PanelColourId::bgColour));
 
@@ -1939,15 +1970,18 @@ void TableFloatingTileBase::resized()
 			auto ma = ss->getArea(getLocalBounds().toFloat(), {"margin", 0});
 			ma = ss->getArea(ma, {"padding", 0} );
 			table.setBounds(ma.toNearestInt());
+			if (customRowHeight > 0)
+				table.setRowHeight(customRowHeight);
 			return;
 		}
 
-		
+
 
 	}
 
-	
-	
+	if (customRowHeight > 0)
+		table.setRowHeight(customRowHeight);
+
 	table.setBounds(getLocalBounds());
 }
 
