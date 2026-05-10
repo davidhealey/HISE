@@ -91,7 +91,10 @@ bool MacroControlledObject::checkLearnMode()
 		if(auto asSlider = dynamic_cast<Slider*>(this))
 			suffix = asSlider->getTextValueSuffix();
 
-		GET_MACROCHAIN()->addControlledParameter(currentlyActiveLearnIndex, getProcessor()->getId(), parameter, name, getValueToTextConverter(), getRange());
+		auto prettyName = ProcessorHelpers::getPrettyNameForAutomatedParameter(getProcessor(), parameter);
+		if (prettyName.isEmpty())
+			prettyName = name;
+		GET_MACROCHAIN()->addControlledParameter(currentlyActiveLearnIndex, getProcessor()->getId(), parameter, prettyName, getValueToTextConverter(), getRange());
 			
 		return true;
 	}
