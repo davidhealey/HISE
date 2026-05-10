@@ -240,30 +240,18 @@ void MacroControlledObject::enableMidiLearnWithPopup()
 			auto title = useMacrosAsParameter ? "Assign Automation" : "Assign Macro";
 
 			PopupMenu sub;
-			auto mToUse = &m;
 
-			static bool useSubMenu = numMacros > 8;
-
-			if (useSubMenu)
-				mToUse = &sub;
-			else
-				m.addSectionHeader(title);
-				
 			for (int i = 0; i < numMacros; i++)
 			{
 				auto name = macroChain->getMacroControlData(i)->getMacroName();
 
 				if (name.isNotEmpty())
 				{
-					mToUse->addItem((int)AddMacroControlOffset + i, "Connect to " + name);
+					sub.addItem((int)AddMacroControlOffset + i, "Connect to " + name);
 				}
 			}
 
-			if (useSubMenu)
-			{
-				m.addSeparator();
-				m.addSubMenu(title, sub);
-			}
+			m.addSubMenu(title, sub);
 		}
 	}
 
