@@ -375,7 +375,7 @@ void MPEPanel::resized()
 		enableMPEButton.setBounds(ar.removeFromTop(32).reduced(margin));
 	}
 
-	const bool enabled = hideEnableMPEButton || enableMPEButton.getToggleState();
+	const bool enabled = enableMPEButton.getToggleState();
 
 	listbox.setVisible(enabled);
 	currentTable.setVisible(enabled);
@@ -417,10 +417,17 @@ void MPEPanel::updateRectangles()
 	auto ar = getParentShell()->getContentBounds();
 
 	if (!hideEnableMPEButton)
+	{
 		ar.removeFromTop(32);
+		topArea = ar.removeFromTop(ar.getHeight() / 2);
+		topBar = topArea.removeFromTop(30);
+	}
+	else
+	{
+		topArea = ar.removeFromTop(ar.getHeight() / 2);
+		topBar = {};
+	}
 
-	topArea = ar.removeFromTop(ar.getHeight() / 2);
-	topBar = topArea.removeFromTop(30);
 	tableHeader = topArea.removeFromTop(30);
 
 	bottomArea = ar;
@@ -490,7 +497,7 @@ void MPEPanel::paint(Graphics& g)
 			g.drawText("Plot", bottomBar.removeFromLeft(getWidth() / 2), Justification::centred);
 		}
 	}
-	else
+	else if (!hideEnableMPEButton)
 	{
 		updateRectangles();
 
