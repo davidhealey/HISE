@@ -328,6 +328,37 @@ void MPEPanel::updateTableColours()
 	listbox.getViewport()->getVerticalScrollBar().setColour(ScrollBar::ColourIds::thumbColourId, laf.fillColour);
 }
 
+Identifier MPEPanel::getDefaultablePropertyId(int id) const
+{
+	if (id < (int)FloatingTileContent::PanelPropertyId::numPropertyIds)
+		return FloatingTileContent::getDefaultablePropertyId(id);
+
+	RETURN_DEFAULT_PROPERTY_ID(id, Properties::ShowTable, "ShowTable");
+	RETURN_DEFAULT_PROPERTY_ID(id, Properties::ShowPlotter, "ShowPlotter");
+	RETURN_DEFAULT_PROPERTY_ID(id, Properties::ShowPlotterPopup, "ShowPlotterPopup");
+
+	jassertfalse;
+	return {};
+}
+
+var MPEPanel::getDefaultProperty(int id) const
+{
+	switch (id)
+	{
+	case Properties::ShowTable:       return true;
+	case Properties::ShowPlotter:     return true;
+	case Properties::ShowPlotterPopup: return true;
+	default: return FloatingTileContent::getDefaultProperty(id);
+	}
+}
+
+var MPEPanel::toDynamicObject() const
+{
+	var obj = FloatingTileContent::toDynamicObject();
+	storePropertyInObject(obj, Properties::ShowPlotterPopup, showPlotterPopup, true);
+	return obj;
+}
+
 void MPEPanel::fromDynamicObject(const var& object)
 {
 	FloatingTileContent::fromDynamicObject(object);
@@ -338,6 +369,11 @@ void MPEPanel::fromDynamicObject(const var& object)
 	laf.fillColour = findPanelColour(FloatingTileContent::PanelColourId::itemColour2);
 
 	laf.font = getFont();
+
+	showPlotterPopup = getPropertyWithDefault(object, Properties::ShowPlotterPopup);
+
+	if (currentPlotter != nullptr)
+		currentPlotter->setPopupEnabled(showPlotterPopup);
 
 	listbox.setRowHeight(roundToInt(getFont().getHeight() * 2.2f));
 
@@ -514,6 +550,7 @@ void MPEPanel::setCurrentMod(MPEModulator* newMod)
 			currentPlotter->setColour(Plotter::ColourIds::pathColour, laf.fillColour.withMultipliedAlpha(1.05f));
 			currentPlotter->setColour(Plotter::ColourIds::pathColour2, laf.fillColour);
 			currentPlotter->setColour(Plotter::ColourIds::backgroundColour, laf.fillColour.withAlpha(0.05f));
+			currentPlotter->setPopupEnabled(showPlotterPopup);
 			currentTable.setColour(TableEditor::ColourIds::bgColour, laf.fillColour.withAlpha(0.05f));
 		}
 
