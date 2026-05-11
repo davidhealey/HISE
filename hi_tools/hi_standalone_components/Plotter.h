@@ -96,6 +96,8 @@ public:
 
 	void setYConverter(const Table::ValueTextConverter& newYConverter);
 
+	void setPopupEnabled(bool shouldBeEnabled) { popupEnabled = shouldBeEnabled; }
+
 	String getCornerText(bool top) const
 	{
 		if (top)
@@ -133,6 +135,7 @@ private:
 
 	Point<int> popupPosition;
 	bool stickPopup = false;
+	bool popupEnabled = true;
 
 	Table::ValueTextConverter yConverter;
 

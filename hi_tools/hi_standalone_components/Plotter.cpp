@@ -185,7 +185,7 @@ void Plotter::paint (Graphics& g)
 		g.fillPath(drawPath);
 	}
 
-	if (!popupPosition.isOrigin() && !tc.isTransparent())
+	if (popupEnabled && !popupPosition.isOrigin() && !tc.isTransparent())
 	{
 		Font f = font;
 
