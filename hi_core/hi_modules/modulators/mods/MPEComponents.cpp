@@ -332,6 +332,8 @@ void MPEPanel::fromDynamicObject(const var& object)
 {
 	FloatingTileContent::fromDynamicObject(object);
 
+	hideEnableMPEButton = (bool)object.getProperty("HideEnableMPEButton", false);
+
 	laf.bgColour = findPanelColour(FloatingTileContent::PanelColourId::bgColour);
 	laf.lineColour = findPanelColour(FloatingTileContent::PanelColourId::itemColour1);
 	laf.textColour = findPanelColour(FloatingTileContent::PanelColourId::textColour);
@@ -363,9 +365,17 @@ void MPEPanel::resized()
 
 	const int margin = 2;
 
-	enableMPEButton.setBounds(ar.removeFromTop(32).reduced(margin));
+	if (hideEnableMPEButton)
+	{
+		enableMPEButton.setVisible(false);
+	}
+	else
+	{
+		enableMPEButton.setVisible(true);
+		enableMPEButton.setBounds(ar.removeFromTop(32).reduced(margin));
+	}
 
-	const bool enabled = enableMPEButton.getToggleState();
+	const bool enabled = hideEnableMPEButton || enableMPEButton.getToggleState();
 
 	listbox.setVisible(enabled);
 	currentTable.setVisible(enabled);
@@ -406,7 +416,8 @@ void MPEPanel::updateRectangles()
 {
 	auto ar = getParentShell()->getContentBounds();
 
-	ar.removeFromTop(32);
+	if (!hideEnableMPEButton)
+		ar.removeFromTop(32);
 
 	topArea = ar.removeFromTop(ar.getHeight() / 2);
 	topBar = topArea.removeFromTop(30);
