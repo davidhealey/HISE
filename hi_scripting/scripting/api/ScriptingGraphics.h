@@ -1360,7 +1360,10 @@ namespace ScriptingObjects
 	                                                   int& idealHeight,
 	                                                   const PopupMenu::Options& options) override
 			{
-				css.getIdealPopupMenuItemSizeWithOptions(text, isSeparator, standardMenuItemHeight, idealWidth, idealHeight, options);
+				if(functionDefined("getIdealPopupMenuItemSize"))
+					Laf::getIdealPopupMenuItemSize(text, isSeparator, standardMenuItemHeight, idealWidth, idealHeight);
+				else
+					css.getIdealPopupMenuItemSizeWithOptions(text, isSeparator, standardMenuItemHeight, idealWidth, idealHeight, options);
 			}
 
 			/** Uses the selector ".popup and .popup-item". */

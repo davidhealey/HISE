@@ -683,7 +683,9 @@ Component* MPEPanel::Model::refreshComponentForRow(int rowNumber, bool /*isRowSe
 	}
 	if (auto expectedMod = data.getModulator(rowNumber))
 	{
-		return new Row(expectedMod, parent.laf);
+		auto* row = new Row(expectedMod, parent.laf);
+		row->setLookAndFeel(&parent.getLookAndFeel());
+		return row;
 	}
 	else
 	{
@@ -723,7 +725,7 @@ void MPEPanel::Model::listBoxItemClicked(int row, const MouseEvent& e)
 	{
 		PopupMenu menu;
 
-		menu.setLookAndFeel(&parent.laf);
+		menu.setLookAndFeel(&parent.getLookAndFeel());
 
 		menu.addItem(1, "Reset");
 
@@ -818,7 +820,7 @@ void MPEPanel::Model::LastRow::resized()
 void MPEPanel::Model::LastRow::buttonClicked(Button*)
 {
 	PopupMenu menu;
-	menu.setLookAndFeel(&parent.laf);
+	menu.setLookAndFeel(&parent.getLookAndFeel());
 
 	auto& mpeData = parent.getMainController()->getMacroManager().getMidiControlAutomationHandler()->getMPEData();
 
@@ -921,6 +923,7 @@ MPEPanel::Model::Row::Row(MPEModulator* mod_, LookAndFeel& laf_) :
 	deleteButton.addListener(this);
 
 	selector.setup(mod, MPEModulator::SpecialParameters::GestureCC, "Gesture");
+	selector.setLookAndFeel(nullptr);
 
 	selector.addItem("Press", MPEModulator::Gesture::Press);
 	selector.addItem("Slide", MPEModulator::Gesture::Slide);
@@ -1003,13 +1006,11 @@ MPEPanel::Model::Row::Row(MPEModulator* mod_, LookAndFeel& laf_) :
 
 	output.setRange(0.0, 1.0, 0.01);
 
-	selector.setLookAndFeel(&laf_);
 	deleteButton.setLookAndFeel(&laf_);
 	smoothingTime.setLookAndFeel(&laf_);
 	curvePreview.setLookAndFeel(&laf_);
 	output.setLookAndFeel(&laf_);
 	intensity.setLookAndFeel(&laf_);
-	modeSelector.setLookAndFeel(&laf_);
 	defaultValue.setLookAndFeel(&laf_);
 
 	otherChange(mod);
@@ -1032,7 +1033,7 @@ void MPEPanel::Model::Row::resized()
 	ar.removeFromLeft(100);
 
 	
-	selector.setBounds(ar.removeFromLeft(80));
+	selector.setBounds(ar.removeFromLeft(80).reduced(margin));
 	modeSelector.setBounds(ar.removeFromLeft(100).reduced(margin));
 	curvePreview.setBounds(ar.removeFromLeft(50).reduced(margin));
 	intensity.setBounds(ar.removeFromLeft(100).reduced(margin));
