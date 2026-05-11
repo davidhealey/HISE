@@ -520,7 +520,8 @@ StringArray ScriptingApi::Content::ScriptComponent::getOptionsFor(const Identifi
 		StringArray sa;
 
 		sa.add("No MacroControl");
-		for (int i = 0; i < 8; i++)
+		auto numMacros = HISE_GET_PREPROCESSOR(getScriptProcessor()->getMainController_(), HISE_NUM_MACROS);
+		for (int i = 0; i < numMacros; i++)
 		{
 			sa.add("Macro " + String(i + 1));
 		}
