@@ -1859,6 +1859,7 @@ var TableFloatingTileBase::toDynamicObject() const
 {
 	auto obj = FloatingTileContent::toDynamicObject();
 	storePropertyInObject(obj, SpecialPanelIds::ColumnWidthRatio, var(columnWidthRatios));
+	storePropertyInObject(obj, SpecialPanelIds::RowHeight, rowHeight);
 	return obj;
 }
 
@@ -1868,6 +1869,7 @@ Identifier TableFloatingTileBase::getDefaultablePropertyId(int index) const
 		return FloatingTileContent::getDefaultablePropertyId(index);
 
 	RETURN_DEFAULT_PROPERTY_ID(index, SpecialPanelIds::ColumnWidthRatio, "ColumnWidthRatio");
+	RETURN_DEFAULT_PROPERTY_ID(index, SpecialPanelIds::RowHeight, "RowHeight");
 
 	return {};
 }
@@ -1879,6 +1881,7 @@ var TableFloatingTileBase::getDefaultProperty(int index) const
 
 	Array<var> defaultRatios;
 	RETURN_DEFAULT_PROPERTY(index, SpecialPanelIds::ColumnWidthRatio, var(defaultRatios));
+	RETURN_DEFAULT_PROPERTY(index, SpecialPanelIds::RowHeight, 0);
 
 	return {};
 }
@@ -1893,6 +1896,11 @@ void TableFloatingTileBase::fromDynamicObject(const var& object)
 		columnWidthRatios.clear();
 		columnWidthRatios.addArray(*ratios.getArray());
 	}
+
+	rowHeight = (int)getPropertyWithDefault(object, SpecialPanelIds::RowHeight);
+
+	if (rowHeight > 0)
+		table.setRowHeight(rowHeight);
 
 	table.setColour(ListBox::backgroundColourId, findPanelColour(FloatingTileContent::PanelColourId::bgColour));
 
