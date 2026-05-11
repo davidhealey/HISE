@@ -96,6 +96,14 @@ public:
 
 	void setYConverter(const Table::ValueTextConverter& newYConverter);
 
+	String getCornerText(bool top) const
+	{
+		if (top)
+			return yConverter(1.0f);
+
+		return yConverter(currentMode == PanMode ? -1.0f : 0.0f);
+	}
+
 	void setCleanupFunction(const CleanupFunction& cf)
 	{
 		cleanupFunction = cf;
