@@ -1859,6 +1859,8 @@ var TableFloatingTileBase::toDynamicObject() const
 {
 	auto obj = FloatingTileContent::toDynamicObject();
 	storePropertyInObject(obj, SpecialPanelIds::ColumnWidthRatio, var(columnWidthRatios));
+	storePropertyInObject(obj, SpecialPanelIds::RowHeight, rowHeight);
+	storePropertyInObject(obj, SpecialPanelIds::HeaderHeight, headerHeight);
 	return obj;
 }
 
@@ -1868,6 +1870,8 @@ Identifier TableFloatingTileBase::getDefaultablePropertyId(int index) const
 		return FloatingTileContent::getDefaultablePropertyId(index);
 
 	RETURN_DEFAULT_PROPERTY_ID(index, SpecialPanelIds::ColumnWidthRatio, "ColumnWidthRatio");
+	RETURN_DEFAULT_PROPERTY_ID(index, SpecialPanelIds::RowHeight, "RowHeight");
+	RETURN_DEFAULT_PROPERTY_ID(index, SpecialPanelIds::HeaderHeight, "HeaderHeight");
 
 	return {};
 }
@@ -1879,6 +1883,8 @@ var TableFloatingTileBase::getDefaultProperty(int index) const
 
 	Array<var> defaultRatios;
 	RETURN_DEFAULT_PROPERTY(index, SpecialPanelIds::ColumnWidthRatio, var(defaultRatios));
+	RETURN_DEFAULT_PROPERTY(index, SpecialPanelIds::RowHeight, 0);
+	RETURN_DEFAULT_PROPERTY(index, SpecialPanelIds::HeaderHeight, 0);
 
 	return {};
 }
@@ -1893,6 +1899,9 @@ void TableFloatingTileBase::fromDynamicObject(const var& object)
 		columnWidthRatios.clear();
 		columnWidthRatios.addArray(*ratios.getArray());
 	}
+
+	rowHeight = (int)getPropertyWithDefault(object, SpecialPanelIds::RowHeight);
+	headerHeight = (int)getPropertyWithDefault(object, SpecialPanelIds::HeaderHeight);
 
 	table.setColour(ListBox::backgroundColourId, findPanelColour(FloatingTileContent::PanelColourId::bgColour));
 
@@ -1910,7 +1919,12 @@ void TableFloatingTileBase::paintRowBackground(Graphics& g, int rowNumber, int w
 {
 	using namespace simple_css;
 
-	auto& rootDialog = *CSSRootComponent::find(*this);
+	auto rootPtr = CSSRootComponent::find(*this);
+
+	if (rootPtr == nullptr)
+		return;
+
+	auto& rootDialog = *rootPtr;
 
 	if(auto ss = rootDialog.css.getWithAllStates(this, (Selector(ElementType::TableRow))))
 	{
@@ -2076,6 +2090,12 @@ void TableFloatingTileBase::resized()
 
 	table.setBounds(getLocalBounds());
 
+	if (rowHeight > 0)
+		table.setRowHeight(rowHeight);
+
+	if (headerHeight > 0)
+		table.setHeaderHeight(headerHeight);
+
 	if (columnWidthRatios.size() > 0)
 	{
 		auto numCols = table.getHeader().getNumColumns(true);
@@ -2198,9 +2218,8 @@ Component* TableFloatingTileBase::refreshComponentForCell(int rowNumber, int col
 		{
 			slider = new ValueSliderColumn(*this);
 
-			auto& root = *simple_css::CSSRootComponent::find(*this);
-
-			if(auto ss = root.css.getWithAllStates(this, simple_css::Selector(".range-slider")))
+			if(auto root = simple_css::CSSRootComponent::find(*this))
+			if(auto ss = root->css.getWithAllStates(this, simple_css::Selector(".range-slider")))
 			{
 				simple_css::FlexboxComponent::Helpers::writeClassSelectors(*slider->slider, { simple_css::Selector(".range-slider")}, true);
 				slider->slider->setLookAndFeel(css_laf.get());
@@ -2238,9 +2257,9 @@ Component* TableFloatingTileBase::refreshComponentForCell(int rowNumber, int col
 		if (b == nullptr)
 			b = new InvertedButton(*this);
 
-		auto& root = *simple_css::CSSRootComponent::find(*this);
-
-		if(css_laf != nullptr && root.css.getWithAllStates(this, simple_css::Selector("button")))
+		if(css_laf != nullptr)
+		if(auto root = simple_css::CSSRootComponent::find(*this))
+		if(root->css.getWithAllStates(this, simple_css::Selector("button")))
 		{
 			b->t->setLookAndFeel(css_laf.get());
 		}
@@ -2265,24 +2284,27 @@ void TableFloatingTileBase::paintCell(Graphics& g, int rowNumber, int columnId, 
 {
 	using namespace simple_css;
 
-	auto& rootDialog = *CSSRootComponent::find(*this);
 	auto text = getCellText(rowNumber, columnId);
 
-	if(auto ss = rootDialog.css.getWithAllStates(this, Selector(ElementType::TableCell)))
+	if (auto rootPtr = CSSRootComponent::find(*this))
 	{
-		Renderer r(nullptr, rootDialog.stateWatcher);
-		auto state = r.getPseudoClassFromComponent(this);
+		if(auto ss = rootPtr->css.getWithAllStates(this, Selector(ElementType::TableCell)))
+		{
+			Renderer r(nullptr, rootPtr->stateWatcher);
+			auto state = r.getPseudoClassFromComponent(this);
 
-		if(rowIsSelected)
-			state |= (int)PseudoClassType::Focus;
+			if(rowIsSelected)
+				state |= (int)PseudoClassType::Focus;
 
-		Rectangle<float> b(0.0, 0.0, (float)width, (float)height);
+			Rectangle<float> b(0.0, 0.0, (float)width, (float)height);
 
-		r.setPseudoClassState(state);
-		r.drawBackground(g, b, ss);
-		r.renderText(g, b, text, ss);
+			r.setPseudoClassState(state);
+			r.drawBackground(g, b, ss);
+			r.renderText(g, b, text, ss);
+			return;
+		}
 	}
-	else
+
 	{
 		auto point = table.getMouseXYRelative();
 		auto hoverRow = table.getRowContainingPosition(point.getX(), point.getY());

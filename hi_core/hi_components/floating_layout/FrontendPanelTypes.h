@@ -719,6 +719,8 @@ public:
 	enum SpecialPanelIds
 	{
 		ColumnWidthRatio = (int)FloatingTileContent::PanelPropertyId::numPropertyIds,
+		RowHeight,
+		HeaderHeight,
 		numSpecialPanelIds
 	};
 
@@ -883,6 +885,8 @@ protected:
 	Font font;
 	int numRows;            // The number of rows of data we've got
 	Array<var> columnWidthRatios;
+	int rowHeight = 0;
+	int headerHeight = 0;
 	bool hasChannelColumn = false;
 	ScopedPointer<TableHeaderLookAndFeel> laf;
 	ScopedPointer<simple_css::StyleSheetLookAndFeel> css_laf;
