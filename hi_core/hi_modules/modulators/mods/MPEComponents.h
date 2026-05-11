@@ -258,6 +258,8 @@ private:
 
 	ScopedPointer<MarkdownHelpButton> helpButton;
 
+	bool showTable = true;
+	bool showPlotter = true;
 	bool showPlotterPopup = true;
 
 	TableEditor currentTable;

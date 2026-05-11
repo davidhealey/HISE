@@ -355,6 +355,8 @@ var MPEPanel::getDefaultProperty(int id) const
 var MPEPanel::toDynamicObject() const
 {
 	var obj = FloatingTileContent::toDynamicObject();
+	storePropertyInObject(obj, Properties::ShowTable,        showTable,        true);
+	storePropertyInObject(obj, Properties::ShowPlotter,      showPlotter,      true);
 	storePropertyInObject(obj, Properties::ShowPlotterPopup, showPlotterPopup, true);
 	return obj;
 }
@@ -370,6 +372,8 @@ void MPEPanel::fromDynamicObject(const var& object)
 
 	laf.font = getFont();
 
+	showTable       = getPropertyWithDefault(object, Properties::ShowTable);
+	showPlotter     = getPropertyWithDefault(object, Properties::ShowPlotter);
 	showPlotterPopup = getPropertyWithDefault(object, Properties::ShowPlotterPopup);
 
 	if (currentPlotter != nullptr)
@@ -417,11 +421,19 @@ void MPEPanel::resized()
 		{
 			auto r = bottomArea;
 
-			currentTable.setVisible(true);
+			const bool showBoth = showTable && showPlotter;
 
-			currentTable.setBounds(r.removeFromLeft(r.getWidth() / 2).reduced(margin));
+			currentTable.setVisible(showTable);
+
+			if (showTable)
+				currentTable.setBounds((showBoth ? r.removeFromLeft(r.getWidth() / 2) : r).reduced(margin));
+
 			if (currentPlotter)
-				currentPlotter->setBounds(r.reduced(margin));
+			{
+				currentPlotter->setVisible(showPlotter && enabled);
+				if (showPlotter)
+					currentPlotter->setBounds(r.reduced(margin));
+			}
 		}
 		else
 		{
@@ -429,7 +441,12 @@ void MPEPanel::resized()
 		}
 
 
-		listbox.setBounds(topArea.reduced(margin));
+		auto listboxBounds = topArea;
+
+		if (!showTable && !showPlotter)
+			listboxBounds = listboxBounds.withBottom(bottomArea.getBottom());
+
+		listbox.setBounds(listboxBounds.reduced(margin));
 	}
 
 
@@ -506,13 +523,18 @@ void MPEPanel::paint(Graphics& g)
 			g.drawText("No Active Modulations", tableHeader, Justification::centred);
 		}
 
-		if (currentlyEditedMod != nullptr)
+		if (currentlyEditedMod != nullptr && (showTable || showPlotter))
 		{
 			g.setColour(laf.textColour);
 			g.setFont(laf.font);
 
-			g.drawText("Curve", bottomBar.removeFromLeft(getWidth() / 2), Justification::centred);
-			g.drawText("Plot", bottomBar.removeFromLeft(getWidth() / 2), Justification::centred);
+			const bool showBoth = showTable && showPlotter;
+
+			if (showTable)
+				g.drawText("Curve", showBoth ? bottomBar.removeFromLeft(getWidth() / 2) : bottomBar, Justification::centred);
+
+			if (showPlotter)
+				g.drawText("Plot", bottomBar, Justification::centred);
 		}
 	}
 	else
