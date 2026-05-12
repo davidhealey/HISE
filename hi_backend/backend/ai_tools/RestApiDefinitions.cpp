@@ -167,6 +167,75 @@ struct RestApiEndpoints
 			.withResponseExample("{\"success\": true, \"moduleId\": \"Interface\", \"callbacks\": {\"onInit\": \"Content.makeFrontInterface(600, 500);\"}, \"externalFiles\": [{\"name\": \"utils.js\", \"path\": \"D:/Projects/Scripts/utils.js\"}], \"logs\": [], \"errors\": []}"));
 	}
 
+	/* GET /api/script/tree */
+	static void scriptTree(Array<RouteMetadata>& m)
+	{
+		auto locationEntry = RouteParameter(RestApiIds::location, "Jump-to-definition location")
+			.withType(ParamType::Object)
+			.withProperty(RouteParameter(RestApiIds::file, "External file path, or empty for callback source"))
+			.withProperty(RouteParameter(RestApiIds::charNumber, "Character offset in the source document")
+				.withType(ParamType::Int))
+			.withProperty(RouteParameter(RestApiIds::available, "True if a usable source location is available")
+				.withType(ParamType::Bool));
+
+		auto nodeEntry = RouteParameter(Identifier("entry"), "Script symbol tree node")
+			.withType(ParamType::Object)
+			.withProperty(RouteParameter(RestApiIds::id, "Local symbol ID"))
+			.withProperty(RouteParameter(RestApiIds::type, "HiseScript symbol type")
+				.withEnumValues({ "const var", "reg", "namespace", "inline function", "var", "global",
+					"function", "undefined" }))
+			.withProperty(RouteParameter(RestApiIds::expression, "Fully qualified expression usable in REPL calls").asOptional())
+			.withProperty(RouteParameter(RestApiIds::dataType, "HiseScript / debug data type").asOptional())
+			.withProperty(RouteParameter(RestApiIds::value, "Watch-table debug value").asOptional())
+			.withProperty(locationEntry.asOptional())
+			.withProperty(RouteParameter(RestApiIds::children, "Nested script symbols")
+				.withType(ParamType::Array));
+
+		m.add(RouteMetadata(ApiRoute::ScriptTree, "api/script/tree")
+			.withCategory("scripting")
+			.withSummary("Get the compiled script symbol tree")
+			.withDescription("Returns the currently compiled script debug model as a hierarchical tree. "
+				"The response excludes built-in API classes and callbacks, and exposes local ids, "
+				"HiseScript token types, REPL expressions, debug values, and jump-to-definition locations. "
+				"Use compact=true for a cheap id/type/expression/dataType hierarchy, namespace to scope to a namespace, "
+				"search to match id/expression/dataType, and format=flat for flat search results. "
+				"Unknown namespaces return success with an empty tree.")
+			.withReturns("Script symbol tree with result counts and truncation metadata")
+			.withModuleIdParam()
+			.withQueryParam(RouteParameter(RestApiIds::namespace_, "Optional namespace expression to scope the tree").asOptional())
+			.withQueryParam(RouteParameter(RestApiIds::search, "Case-insensitive match against id, expression, and dataType").asOptional())
+			.withQueryParam(RouteParameter(RestApiIds::type, "Comma-separated HiseScript symbol type filter")
+				.withEnumValues({ "const var", "reg", "namespace", "inline function", "var", "global",
+					"function", "undefined" })
+				.asOptional())
+			.withQueryParam(RouteParameter(RestApiIds::dataType, "Comma-separated exact dataType filter").asOptional())
+			.withQueryParam(RouteParameter(RestApiIds::format, "Response shape")
+				.withEnumValues({ "tree", "flat" }).withDefault("tree"))
+			.withQueryParam(RouteParameter(RestApiIds::compact, "If true, omit value and location but keep id, type, expression, dataType, and children")
+				.withType(ParamType::Bool).withDefault("false"))
+			.withQueryParam(RouteParameter(RestApiIds::maxDepth, "Maximum recursion depth")
+				.withType(ParamType::Int).withDefault("4"))
+			.withQueryParam(RouteParameter(RestApiIds::limit, "Maximum returned matching nodes")
+				.withType(ParamType::Int).withDefault("1000"))
+			.withResponseField(RouteParameter(RestApiIds::moduleId, "The script processor's module ID"))
+			.withResponseField(RouteParameter(RestApiIds::namespace_, "Namespace filter used").asOptional())
+			.withResponseField(RouteParameter(RestApiIds::format, "Response format")
+				.withEnumValues({ "tree", "flat" }))
+			.withResponseField(RouteParameter(RestApiIds::compact, "Whether compact mode was used")
+				.withType(ParamType::Bool))
+			.withResponseField(RouteParameter(RestApiIds::totalMatches, "Number of matched nodes before limiting")
+				.withType(ParamType::Int))
+			.withResponseField(RouteParameter(RestApiIds::returned, "Number of returned nodes after limiting")
+				.withType(ParamType::Int))
+			.withResponseField(RouteParameter(RestApiIds::truncated, "True if limit clipped the result")
+				.withType(ParamType::Bool))
+			.withResponseField(RouteParameter(RestApiIds::tree, "Returned script symbol nodes")
+				.withArrayItems(nodeEntry))
+			.withErrorCodes({ 400, 404 })
+			.withRequestExample(R"(GET /api/script/tree?moduleId=Interface&compact=true&maxDepth=2)")
+			.withResponseExample(R"({"success": true, "moduleId": "Interface", "format": "tree", "compact": true, "totalMatches": 2, "returned": 2, "truncated": false, "tree": [{"id": "Theme", "type": "namespace", "expression": "Theme", "dataType": "Namespace", "children": [{"id": "colour", "type": "const var", "expression": "Theme.colour", "dataType": "int", "children": []}]}], "logs": [], "errors": []})"));
+	}
+
 	/* POST /api/set_script */
 	static void setScript(Array<RouteMetadata>& m)
 	{
@@ -1903,6 +1972,7 @@ const Array<RestHelpers::RouteMetadata>& RestHelpers::getRouteMetadata()
 			RestApiEndpoints::status(m);
 			RestApiEndpoints::statusPreprocessors(m);
 			RestApiEndpoints::getScript(m);
+			RestApiEndpoints::scriptTree(m);
 			RestApiEndpoints::setScript(m);
 			RestApiEndpoints::evaluateRepl(m);
 			RestApiEndpoints::recompile(m);

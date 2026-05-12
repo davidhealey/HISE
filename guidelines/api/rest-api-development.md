@@ -524,6 +524,7 @@ expectEquals<int>(json["count"], 5, "Should have 5 items");
 | `/api/status` | GET | status | `status` |
 | `/api/shutdown` | POST | status | `shutdown` |
 | `/api/get_script` | GET | scripting | `getScript` |
+| `/api/script/tree` | GET | scripting | `scriptTree` |
 | `/api/set_script` | POST | scripting | `setScript` |
 | `/api/repl` | POST | scripting | `evaluateRepl` |
 | `/api/recompile` | POST | scripting | `recompile` |

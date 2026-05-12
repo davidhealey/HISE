@@ -419,6 +419,7 @@ static void addLafRenderWarningIfNeeded(MainController* mc,
 		elapsed += pollIntervalMs;
 	}
 	
+#if 0 // nice idea, but just noise...
 	auto unrendered = registry->getUnrenderedComponents();
 	
 	if (!unrendered.isEmpty())
@@ -440,6 +441,7 @@ static void addLafRenderWarningIfNeeded(MainController* mc,
 		
 		result->setProperty(RestApiIds::lafRenderWarning, var(warning.get()));
 	}
+#endif
 }
 
 RestServer::Response RestHelpers::handleRecompile(MainController* mc, RestServer::AsyncRequest::Ptr req)
@@ -1210,6 +1212,396 @@ RestServer::Response RestHelpers::handleGetScript(MainController* mc, RestServer
 		return req->waitForResponse();
 	}
 	
+	return req->fail(404, "moduleId is not a valid script processor");
+}
+
+namespace
+{
+struct ScriptTreeBuilder
+{
+	struct Options
+	{
+		String namespaceFilter;
+		String search;
+		String format = "tree";
+		StringArray typeFilters;
+		StringArray dataTypeFilters;
+		bool compact = false;
+		int maxDepth = 4;
+		int limit = 1000;
+	};
+
+	ScriptTreeBuilder(const Options& options_):
+		options(options_)
+	{}
+
+	static StringArray parseCsv(String s)
+	{
+		StringArray tokens;
+		tokens.addTokens(s, ",", "");
+		tokens.trim();
+		tokens.removeEmptyStrings();
+		return tokens;
+	}
+
+	static bool isValidTypeFilter(const String& type)
+	{
+		static const StringArray validTypes = { "const var", "reg", "namespace", "inline function",
+			"var", "global", "function", "undefined" };
+		return validTypes.contains(type);
+	}
+
+	static String getLocalId(const String& expression)
+	{
+		if (expression.containsChar('.'))
+			return expression.fromLastOccurrenceOf(".", false, false);
+
+		return expression;
+	}
+
+	static String getTypeName(DebugInformationBase::Ptr info)
+	{
+		if (auto typed = dynamic_cast<DebugInformation*>(info.get()))
+		{
+			switch ((DebugInformation::Type)typed->getType())
+			{
+				case DebugInformation::Type::RegisterVariable: return "reg";
+				case DebugInformation::Type::Variables:        return "var";
+				case DebugInformation::Type::Constant:         return "const var";
+				case DebugInformation::Type::InlineFunction:   return "inline function";
+				case DebugInformation::Type::Globals:          return "global";
+				case DebugInformation::Type::ExternalFunction: return "function";
+				case DebugInformation::Type::Namespace:        return "namespace";
+				case DebugInformation::Type::ApiClass:
+				case DebugInformation::Type::Callback:
+				case DebugInformation::Type::numTypes:         break;
+			}
+		}
+
+		return "undefined";
+	}
+
+	static bool shouldExclude(DebugInformationBase::Ptr info)
+	{
+		if (info == nullptr || !info->isWatchable())
+			return true;
+
+		static const StringArray defaultSymbols = { "isNaN", "isFinite", "AsyncNotification",
+			"AsyncHiPriorityNotification", "SyncNotification" };
+
+		if (defaultSymbols.contains(info->getTextForName()))
+			return true;
+
+		if (auto typed = dynamic_cast<DebugInformation*>(info.get()))
+		{
+			auto t = (DebugInformation::Type)typed->getType();
+			return t == DebugInformation::Type::ApiClass || t == DebugInformation::Type::Callback;
+		}
+
+		return false;
+	}
+
+	static DynamicObject::Ptr createLocation(DebugInformationBase::Ptr info)
+	{
+		auto loc = info->getLocation();
+
+		DynamicObject::Ptr o = new DynamicObject();
+		o->setProperty(RestApiIds::file, loc.fileName.replace("\\", "/"));
+		o->setProperty(RestApiIds::charNumber, loc.charNumber);
+		o->setProperty(RestApiIds::available, loc.fileName.isNotEmpty() || loc.charNumber != 0);
+		return o;
+	}
+
+	bool passesOwnFilters(const String& expression, const String& typeName, const String& dataType) const
+	{
+		if (options.typeFilters.size() != 0 && !options.typeFilters.contains(typeName))
+			return false;
+
+		if (options.dataTypeFilters.size() != 0)
+		{
+			bool found = false;
+
+			for (const auto& dt : options.dataTypeFilters)
+			{
+				if (dataType.equalsIgnoreCase(dt))
+				{
+					found = true;
+					break;
+				}
+			}
+
+			if (!found)
+				return false;
+		}
+
+		if (options.search.isNotEmpty())
+		{
+			auto id = getLocalId(expression);
+
+			if (!id.containsIgnoreCase(options.search) &&
+				!expression.containsIgnoreCase(options.search) &&
+				!dataType.containsIgnoreCase(options.search))
+				return false;
+		}
+
+		return true;
+	}
+
+	DynamicObject::Ptr createNode(DebugInformationBase::Ptr info, const String& expression, const String& typeName,
+		const String& dataType, const Array<var>& children) const
+	{
+		DynamicObject::Ptr o = new DynamicObject();
+		o->setProperty(RestApiIds::id, getLocalId(expression));
+		o->setProperty(RestApiIds::type, typeName);
+		o->setProperty(RestApiIds::expression, expression);
+		o->setProperty(RestApiIds::dataType, dataType);
+
+		if (!options.compact)
+		{
+			o->setProperty(RestApiIds::value, info->getTextForValue());
+			o->setProperty(RestApiIds::location, var(createLocation(info).get()));
+		}
+
+		o->setProperty(RestApiIds::children, children);
+		return o;
+	}
+
+	bool appendFlatNode(DebugInformationBase::Ptr info, const String& expression, const String& typeName,
+		const String& dataType)
+	{
+		if (!passesOwnFilters(expression, typeName, dataType))
+			return false;
+
+		totalMatches++;
+
+		if (returned >= options.limit)
+		{
+			truncated = true;
+			return true;
+		}
+
+		flatResult.add(var(createNode(info, expression, typeName, dataType, {}).get()));
+		returned++;
+		return true;
+	}
+
+	bool hasMatchingNode(DebugInformationBase::Ptr info, int depth, const String& parentExpression) const
+	{
+		if (info == nullptr || shouldExclude(info))
+			return false;
+
+		auto expression = info->getTextForName();
+		expression = DebugInformationBase::replaceParentWildcard(expression, parentExpression);
+
+		if (passesOwnFilters(expression, getTypeName(info), info->getTextForDataType()))
+			return true;
+
+		if (depth >= options.maxDepth)
+			return false;
+
+		for (int i = 0; i < info->getNumChildElements(); i++)
+		{
+			if (hasMatchingNode(info->getChildElement(i), depth + 1, expression))
+				return true;
+		}
+
+		return false;
+	}
+
+	DynamicObject::Ptr buildTreeNode(DebugInformationBase::Ptr info, int depth, bool forceInclude,
+		const String& parentExpression)
+	{
+		if (info == nullptr || shouldExclude(info))
+			return nullptr;
+
+		auto expression = info->getTextForName();
+		expression = DebugInformationBase::replaceParentWildcard(expression, parentExpression);
+		auto typeName = getTypeName(info);
+		auto dataType = info->getTextForDataType();
+		const bool ownMatch = passesOwnFilters(expression, typeName, dataType);
+		bool childMatch = false;
+
+		if (!ownMatch && !forceInclude && depth < options.maxDepth)
+		{
+			for (int i = 0; i < info->getNumChildElements(); i++)
+			{
+				if (hasMatchingNode(info->getChildElement(i), depth + 1, expression))
+				{
+					childMatch = true;
+					break;
+				}
+			}
+		}
+
+		if (!forceInclude && !ownMatch && !childMatch)
+			return nullptr;
+
+		totalMatches++;
+
+		if (returned >= options.limit)
+		{
+			truncated = true;
+			return nullptr;
+		}
+
+		returned++;
+		Array<var> children;
+
+		if (depth < options.maxDepth)
+		{
+			for (int i = 0; i < info->getNumChildElements(); i++)
+			{
+				auto child = info->getChildElement(i);
+
+				if (auto childObject = buildTreeNode(child, depth + 1, false, expression))
+					children.add(var(childObject.get()));
+			}
+		}
+		return createNode(info, expression, typeName, dataType, children);
+	}
+
+	void buildFlat(DebugInformationBase::Ptr info, int depth, const String& parentExpression)
+	{
+		if (info == nullptr || shouldExclude(info))
+			return;
+
+		auto expression = info->getTextForName();
+		expression = DebugInformationBase::replaceParentWildcard(expression, parentExpression);
+		auto typeName = getTypeName(info);
+		auto dataType = info->getTextForDataType();
+
+		appendFlatNode(info, expression, typeName, dataType);
+
+		if (depth >= options.maxDepth)
+			return;
+
+		for (int i = 0; i < info->getNumChildElements(); i++)
+			buildFlat(info->getChildElement(i), depth + 1, expression);
+	}
+
+	DebugInformationBase::Ptr findNamespace(DebugInformationBase::Ptr info, const String& namespaceId, int depth)
+	{
+		if (info == nullptr || shouldExclude(info) || depth > 64)
+			return nullptr;
+
+		if (getTypeName(info) == "namespace" && info->getTextForName() == namespaceId)
+			return info;
+
+		for (int i = 0; i < info->getNumChildElements(); i++)
+		{
+			if (auto match = findNamespace(info->getChildElement(i), namespaceId, depth + 1))
+				return match;
+		}
+
+		return nullptr;
+	}
+
+	Options options;
+	Array<var> flatResult;
+	int totalMatches = 0;
+	int returned = 0;
+	bool truncated = false;
+};
+}
+
+RestServer::Response RestHelpers::handleScriptTree(MainController* mc, RestServer::AsyncRequest::Ptr req)
+{
+	if (auto jp = getScriptProcessor(mc, req))
+	{
+		ScriptTreeBuilder::Options options;
+		options.namespaceFilter = req->getRequest()[RestApiIds::namespace_];
+		options.search = req->getRequest()[RestApiIds::search];
+		options.format = req->getRequest()[RestApiIds::format];
+
+		if (options.format.isEmpty())
+			options.format = "tree";
+
+		if (options.format != "tree" && options.format != "flat")
+			return req->fail(400, "format must be 'tree' or 'flat'");
+
+		options.compact = req->getRequest().getTrueValue(RestApiIds::compact);
+
+		if (auto maxDepthValue = req->getRequest()[RestApiIds::maxDepth]; maxDepthValue.isNotEmpty())
+			options.maxDepth = jlimit(0, 64, maxDepthValue.getIntValue());
+
+		if (auto limitValue = req->getRequest()[RestApiIds::limit]; limitValue.isNotEmpty())
+			options.limit = jlimit(0, 100000, limitValue.getIntValue());
+
+		options.typeFilters = ScriptTreeBuilder::parseCsv(req->getRequest()[RestApiIds::type]);
+		options.dataTypeFilters = ScriptTreeBuilder::parseCsv(req->getRequest()[RestApiIds::dataType]);
+
+		for (const auto& t : options.typeFilters)
+		{
+			if (!ScriptTreeBuilder::isValidTypeFilter(t))
+				return req->fail(400, "invalid type filter: " + t);
+		}
+
+		ScriptTreeBuilder builder(options);
+		Array<var> tree;
+
+		if (auto provider = jp->getProviderBase())
+		{
+			ScopedReadLock sl(jp->getDebugLock());
+
+			Array<DebugInformationBase::Ptr> roots;
+
+			if (options.namespaceFilter.isNotEmpty())
+			{
+				for (int i = 0; i < provider->getNumDebugObjects(); i++)
+				{
+					if (auto ns = builder.findNamespace(provider->getDebugInformation(i), options.namespaceFilter, 0))
+					{
+						roots.add(ns);
+						break;
+					}
+				}
+			}
+			else
+			{
+				for (int i = 0; i < provider->getNumDebugObjects(); i++)
+					roots.add(provider->getDebugInformation(i));
+			}
+
+			if (options.format == "flat")
+			{
+				for (auto r : roots)
+					builder.buildFlat(r, 0, {});
+
+				tree = builder.flatResult;
+			}
+			else
+			{
+				const bool forceNamespaceRoot = options.namespaceFilter.isNotEmpty();
+
+				for (auto r : roots)
+				{
+					if (auto node = builder.buildTreeNode(r, 0, forceNamespaceRoot, {}))
+						tree.add(var(node.get()));
+				}
+			}
+		}
+
+		auto processor = dynamic_cast<Processor*>(jp);
+		DynamicObject::Ptr result = new DynamicObject();
+		result->setProperty(RestApiIds::success, true);
+		result->setProperty(RestApiIds::moduleId, processor->getId());
+
+		if (options.namespaceFilter.isNotEmpty())
+			result->setProperty(RestApiIds::namespace_, options.namespaceFilter);
+
+		result->setProperty(RestApiIds::format, options.format);
+		result->setProperty(RestApiIds::compact, options.compact);
+		result->setProperty(RestApiIds::totalMatches, builder.totalMatches);
+		result->setProperty(RestApiIds::returned, builder.returned);
+		result->setProperty(RestApiIds::truncated, builder.truncated);
+		result->setProperty(RestApiIds::tree, tree);
+		result->setProperty(RestApiIds::logs, Array<var>());
+		result->setProperty(RestApiIds::errors, Array<var>());
+
+		req->complete(RestServer::Response::ok(var(result.get())));
+		return req->waitForResponse();
+	}
+
 	return req->fail(404, "moduleId is not a valid script processor");
 }
 

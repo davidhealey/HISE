@@ -70,6 +70,9 @@ public:
         testSetScriptEmptyCallbacks();
         testGetScript();
         testGetScriptExternalFiles();
+        testScriptTreeBasic();
+        testScriptTreeCompactNamespace();
+        testScriptTreeFiltersAndEmptyNamespace();
         testRecompile();
         testEvaluateREPLSuccess();
         testEvaluateREPLArithmetic();
@@ -411,6 +414,33 @@ private:
     };
     
     std::unique_ptr<TestContext> ctx;
+
+    static var findNodeById(const var& nodes, const String& id)
+    {
+        if (auto a = nodes.getArray())
+        {
+            for (const auto& node : *a)
+            {
+                if (node[RestApiIds::id].toString() == id)
+                    return node;
+
+                auto child = findNodeById(node[RestApiIds::children], id);
+
+                if (!child.isVoid())
+                    return child;
+            }
+        }
+
+        return var();
+    }
+
+    static int getArraySize(const var& v)
+    {
+        if (auto a = v.getArray())
+            return a->size();
+
+        return 0;
+    }
     
     //==========================================================================
     void testServerStartStop()
@@ -1500,6 +1530,127 @@ private:
         expect(externalFiles.isArray(), "externalFiles should be array");
         // With no includes, array should be empty
         expect(externalFiles.size() == 0, "Should have no external files when no includes used");
+    }
+    
+    //==========================================================================
+    void testScriptTreeBasic()
+    {
+        beginTest("GET /api/script/tree");
+
+        ctx->reset();
+
+        ctx->compile("Content.makeFrontInterface(600, 400);\n"
+                     "namespace Theme\n"
+                     "{\n"
+                     "    const var colour = 42;\n"
+                     "    inline function getColour()\n"
+                     "    {\n"
+                     "        return colour;\n"
+                     "    }\n"
+                     "}\n"
+                     "const var MyKnob = Content.addKnob(\"MyKnob\", 10, 10);\n"
+                     "reg cachedValue = 12;");
+
+        auto response = ctx->httpGet("/api/script/tree?moduleId=Interface&maxDepth=2");
+        var json = ctx->parseJson(response);
+
+        expect((bool)json["success"], "Should succeed");
+        expect(json["moduleId"].toString() == "Interface", "Should return moduleId");
+        expect(json["format"].toString() == "tree", "Default format should be tree");
+        expect(!(bool)json["compact"], "Default compact should be false");
+        expect(json["tree"].isArray(), "Should return tree array");
+        expect((int)json["returned"] > 0, "Should return script symbols");
+
+        auto theme = findNodeById(json["tree"], "Theme");
+        expect(!theme.isVoid(), "Should include namespace node");
+        expect(theme["type"].toString() == "namespace", "Theme should be namespace");
+        expect(theme.hasProperty("expression"), "Full nodes should include expression");
+        expect(theme.hasProperty("location"), "Full nodes should include location");
+
+        auto colour = findNodeById(theme["children"], "colour");
+        expect(!colour.isVoid(), "Should include namespace child");
+        expect(colour["expression"].toString() == "Theme.colour", "Should expose REPL expression");
+        expect(colour["type"].toString() == "const var", "Should expose HiseScript type");
+        expect(colour.hasProperty("value"), "Full nodes should include value");
+        expect(colour["location"].hasProperty("charNumber"), "Location should include charNumber");
+
+        auto knob = findNodeById(json["tree"], "MyKnob");
+        expect(!knob.isVoid(), "Should include root const var");
+        expect(knob["dataType"].toString().isNotEmpty(), "Should include dataType");
+
+        expect(findNodeById(json["tree"], "isNaN").isVoid(), "Should filter default isNaN symbol");
+        expect(findNodeById(json["tree"], "isFinite").isVoid(), "Should filter default isFinite symbol");
+        expect(findNodeById(json["tree"], "AsyncNotification").isVoid(), "Should filter default notification symbol");
+        expect(findNodeById(json["tree"], "AsyncHiPriorityNotification").isVoid(), "Should filter default notification symbol");
+        expect(findNodeById(json["tree"], "SyncNotification").isVoid(), "Should filter default notification symbol");
+    }
+
+    //==========================================================================
+    void testScriptTreeCompactNamespace()
+    {
+        beginTest("GET /api/script/tree (compact namespace)");
+
+        ctx->reset();
+
+        ctx->compile("Content.makeFrontInterface(600, 400);\n"
+                     "namespace Theme\n"
+                     "{\n"
+                     "    const var colour = 42;\n"
+                     "}\n"
+                     "const var RootValue = 1;");
+
+        auto response = ctx->httpGet("/api/script/tree?moduleId=Interface&namespace=Theme&compact=true");
+        var json = ctx->parseJson(response);
+
+        expect((bool)json["success"], "Should succeed");
+        expect(json["namespace"].toString() == "Theme", "Should echo namespace filter");
+        expect((bool)json["compact"], "Should use compact mode");
+        expect(getArraySize(json["tree"]) == 1, "Namespace query should return one root");
+
+        auto theme = findNodeById(json["tree"], "Theme");
+        expect(!theme.isVoid(), "Should include requested namespace");
+        expect(theme["type"].toString() == "namespace", "Should keep type in compact mode");
+        expect(theme["expression"].toString() == "Theme", "Compact nodes should include expression");
+        expect(theme["dataType"].toString() == "Namespace", "Compact nodes should include dataType");
+        expect(!theme.hasProperty("value"), "Compact nodes should omit value");
+        expect(!theme.hasProperty("location"), "Compact nodes should omit location");
+
+        auto colour = findNodeById(theme["children"], "colour");
+        expect(!colour.isVoid(), "Should include namespace child");
+        expect(colour["expression"].toString() == "Theme.colour", "Compact children should include expression");
+        expect(colour["dataType"].toString().isNotEmpty(), "Compact children should include dataType");
+    }
+
+    //==========================================================================
+    void testScriptTreeFiltersAndEmptyNamespace()
+    {
+        beginTest("GET /api/script/tree (filters and empty namespace)");
+
+        ctx->reset();
+
+        ctx->compile("Content.makeFrontInterface(600, 400);\n"
+                     "const var MyKnob = Content.addKnob(\"MyKnob\", 10, 10);\n"
+                     "const var MyButton = Content.addButton(\"MyButton\", 20, 20);\n"
+                     "reg cachedValue = 12;");
+
+        auto filteredResponse = ctx->httpGet("/api/script/tree?moduleId=Interface&format=flat"
+                                             "&search=knob&type=const%20var&limit=1");
+        var filtered = ctx->parseJson(filteredResponse);
+
+        expect((bool)filtered["success"], "Filtered query should succeed");
+        expect(filtered["format"].toString() == "flat", "Should use flat format");
+        expect((int)filtered["returned"] == 1, "Limit should return one node");
+        expect(getArraySize(filtered["tree"]) == 1, "Flat result should contain one node");
+        expect(filtered["tree"][0]["id"].toString() == "MyKnob", "Search should match knob id");
+        expect(filtered["tree"][0]["children"].isArray(), "Flat nodes should keep children array");
+
+        auto missingResponse = ctx->httpGet("/api/script/tree?moduleId=Interface&namespace=DoesNotExist");
+        var missing = ctx->parseJson(missingResponse);
+
+        expect((bool)missing["success"], "Missing namespace should succeed");
+        expect(missing["namespace"].toString() == "DoesNotExist", "Should echo missing namespace");
+        expect(getArraySize(missing["tree"]) == 0, "Missing namespace should return empty tree");
+        expect((int)missing["totalMatches"] == 0, "Missing namespace should have no matches");
     }
     
     //==========================================================================

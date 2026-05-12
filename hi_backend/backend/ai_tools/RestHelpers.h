@@ -58,6 +58,7 @@ struct RestHelpers
         Status,                 ///< GET  /api/status - Get project status
         StatusPreprocessors,    ///< GET  /api/status/preprocessors - List preprocessor catalogue with runtime values
         GetScript,              ///< GET  /api/get_script - Read script content
+        ScriptTree,             ///< GET  /api/script/tree - Get compiled script symbol tree
         SetScript,              ///< POST /api/set_script - Update script content
         EvaluateREPL,           ///< POST /api/repl - Evaluate an expression and get the result
         Recompile,              ///< POST /api/recompile - Recompile a processor
@@ -807,6 +808,10 @@ struct RestHelpers
     /** Handler for GET /api/get_script - Read script content. */
     static RestServer::Response handleGetScript(MainController* mc, 
                                                 RestServer::AsyncRequest::Ptr req);
+
+    /** Handler for GET /api/script/tree - Get compiled script symbol tree. */
+    static RestServer::Response handleScriptTree(MainController* mc,
+                                                 RestServer::AsyncRequest::Ptr req);
     
     /** Handler for POST /api/set_script - Update script content. */
     static RestServer::Response handleSetScript(MainController* mc, 

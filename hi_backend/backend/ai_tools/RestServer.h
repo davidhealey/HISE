@@ -40,7 +40,7 @@
     runtime field. Consumers read it off any response (or `/api/status`) to
     verify they are talking to a HISE build that matches their expected schema.
 */
-#define HISE_REST_API_VERSION "0.6.1"
+#define HISE_REST_API_VERSION "0.7.0"
 
 namespace hise { using namespace juce;
 
@@ -185,6 +185,19 @@ namespace RestApiIds
     // get_included_files
     DECLARE_ID(files);                // Array of included file entries
     DECLARE_ID(processor);            // Owning processor ID for an included file
+
+    // script/tree
+    DECLARE_ID(tree);                 // Hierarchical script symbol tree
+    DECLARE_ID(dataType);             // HiseScript / debug data type
+    DECLARE_ID(search);               // Text search filter
+    DECLARE_ID(available);            // Whether a location can be used for jump-to-definition
+    DECLARE_ID(charNumber);           // Character offset for jump-to-definition
+    DECLARE_ID(maxDepth);             // Maximum tree recursion depth
+    DECLARE_ID(compact);              // If true, omit extended node metadata
+    DECLARE_ID(totalMatches);         // Number of matched nodes before limiting
+    DECLARE_ID(returned);             // Number of returned nodes after limiting
+    DECLARE_ID(truncated);            // True if limit clipped the result
+    const Identifier namespace_("namespace"); // Namespace filter parameter / response value
 
     // profile / attachable profiling
     DECLARE_ID(durationMs);           // Profiling duration in milliseconds

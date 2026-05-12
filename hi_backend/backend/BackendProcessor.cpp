@@ -313,6 +313,9 @@ RestServer::Response BackendProcessor::onAsyncRequest(RestServer::AsyncRequest::
 
 		case RestHelpers::ApiRoute::GetScript:
 			return RestHelpers::handleGetScript(active, req);
+
+		case RestHelpers::ApiRoute::ScriptTree:
+			return RestHelpers::handleScriptTree(active, req);
 			
 		case RestHelpers::ApiRoute::SetScript:
 			return RestHelpers::handleSetScript(active, req);
