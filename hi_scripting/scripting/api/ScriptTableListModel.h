@@ -69,15 +69,7 @@ struct ScriptTableListModel : public juce::TableListBoxModel,
 		numCellTypes
 	};
 
-	struct LookAndFeelData
-	{
-		int sortColumnId = 0;
-		bool sortForward = true;
-
-		Font f = GLOBAL_BOLD_FONT();
-		Justification c = Justification::centredLeft;
-		Colour textColour, bgColour, itemColour1, itemColour2;
-	};
+	using LookAndFeelData = GlobalHiseLookAndFeel::TableListLookAndFeelData;
 
 	struct LookAndFeelMethods
 	{

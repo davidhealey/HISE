@@ -301,6 +301,18 @@ MPEPanel::MPEPanel(FloatingTile* parent) :
 	addAndMakeVisible(currentTable);
 	addAndMakeVisible(listbox);
 
+	tableHeaderComp = new TableHeaderComponent();
+	tableHeaderComp->addColumn("Target",    1, 100, 100, 100, TableHeaderComponent::visible);
+	tableHeaderComp->addColumn("Gesture",   2,  80,  80,  80, TableHeaderComponent::visible);
+	tableHeaderComp->addColumn("Mode",      3, 100, 100, 100, TableHeaderComponent::visible);
+	tableHeaderComp->addColumn("Curve",     4,  50,  50,  50, TableHeaderComponent::visible);
+	tableHeaderComp->addColumn("Intensity", 5, 100, 100, 100, TableHeaderComponent::visible);
+	tableHeaderComp->addColumn("Smoothing", 6, 100, 100, 100, TableHeaderComponent::visible);
+	tableHeaderComp->addColumn("Default",   7, 100, 100, 100, TableHeaderComponent::visible);
+	tableHeaderComp->addColumn("Meter",     8,  80,  80,  80, TableHeaderComponent::visible);
+	tableHeaderComp->setVisible(false);
+	addAndMakeVisible(tableHeaderComp);
+
 	
 
 #if USE_BACKEND
@@ -326,6 +338,13 @@ void MPEPanel::updateTableColours()
 	currentTable.setColour(TableEditor::ColourIds::fillColour, laf.fillColour);
 	currentTable.setColour(TableEditor::ColourIds::lineColour, laf.lineColour);
 	listbox.getViewport()->getVerticalScrollBar().setColour(ScrollBar::ColourIds::thumbColourId, laf.fillColour);
+
+	if (tableHeaderComp != nullptr)
+	{
+		tableHeaderComp->setColour(TableHeaderComponent::textColourId, laf.textColour);
+		tableHeaderComp->setColour(TableHeaderComponent::highlightColourId, laf.fillColour.withAlpha(0.1f));
+		tableHeaderComp->setColour(TableHeaderComponent::backgroundColourId, laf.fillColour.withAlpha(0.05f));
+	}
 }
 
 Identifier MPEPanel::getDefaultablePropertyId(int id) const
@@ -409,6 +428,7 @@ void MPEPanel::resized()
 
 	listbox.setVisible(enabled);
 	currentTable.setVisible(enabled);
+	tableHeaderComp->setVisible(false);
 
 	if (currentPlotter)
 		currentPlotter->setVisible(enabled);
@@ -416,6 +436,12 @@ void MPEPanel::resized()
 	if (enabled)
 	{
 		updateRectangles();
+
+		auto& mpeData = getMainController()->getMacroManager().getMidiControlAutomationHandler()->getMPEData();
+		const bool showHeader = mpeData.size() > 0;
+		tableHeaderComp->setVisible(showHeader);
+		if (showHeader)
+			tableHeaderComp->setBounds(tableHeader);
 
 		if (currentlyEditedMod != nullptr)
 		{
@@ -479,43 +505,7 @@ void MPEPanel::paint(Graphics& g)
 
 		const bool empty = getMainController()->getMacroManager().getMidiControlAutomationHandler()->getMPEData().size() == 0;
 
-		if (!empty)
-		{
-			Rectangle<int> rectangles[9] = { tableHeader.removeFromLeft(100),
-				tableHeader.removeFromLeft(80),
-				tableHeader.removeFromLeft(100),
-				tableHeader.removeFromLeft(50),
-				tableHeader.removeFromLeft(100),
-				tableHeader.removeFromLeft(100),
-				tableHeader.removeFromLeft(100),
-				tableHeader.removeFromLeft(80),
-				tableHeader };
-
-			g.setColour(laf.fillColour.withAlpha(0.1f));
-
-			for (int i = 0; i < 9; i++)
-			{
-				g.fillRect(rectangles[i].reduced(1));
-			}
-
-
-			g.setColour(laf.textColour);
-			g.setFont(laf.font);
-
-
-			g.drawText("Target", rectangles[0], Justification::centred);
-			
-			g.drawText("Gesture", rectangles[1], Justification::centred);
-			
-			g.drawText("Mode", rectangles[2], Justification::centred);
-			
-			g.drawText("Curve", rectangles[3], Justification::centred);
-			g.drawText("Intensity", rectangles[4], Justification::centred);
-			g.drawText("Smoothing", rectangles[5], Justification::centred);
-			g.drawText("Default", rectangles[6], Justification::centred);
-			g.drawText("Meter", rectangles[7], Justification::centred);
-		}
-		else
+		if (empty)
 		{
 			g.setColour(laf.textColour.withMultipliedAlpha(0.4f));
 			g.setFont(laf.font);
@@ -662,13 +652,15 @@ int MPEPanel::Model::getNumRows()
 	else return data.size();
 }
 
-void MPEPanel::Model::paintListBoxItem(int /*rowNumber*/, Graphics& g, int width, int height, bool rowIsSelected)
+void MPEPanel::Model::paintListBoxItem(int rowNumber, Graphics& g, int width, int height, bool rowIsSelected)
 {
-	if (rowIsSelected)
+	if (auto* glaf = dynamic_cast<GlobalHiseLookAndFeel*>(&parent.getLookAndFeel()))
 	{
-		g.setColour(parent.laf.fillColour.withAlpha(0.05f));
-
-		g.fillRect(0, 0, width, height);
+		GlobalHiseLookAndFeel::TableListLookAndFeelData d;
+		d.textColour = parent.laf.textColour;
+		d.itemColour1 = parent.laf.fillColour;
+		d.bgColour = parent.laf.bgColour;
+		glaf->drawTableRowBackground(g, d, rowNumber, width, height, rowIsSelected, false);
 	}
 }
 
@@ -684,6 +676,7 @@ Component* MPEPanel::Model::refreshComponentForRow(int rowNumber, bool /*isRowSe
 	if (auto expectedMod = data.getModulator(rowNumber))
 	{
 		auto* row = new Row(expectedMod, parent.laf);
+		row->rowIndex = rowNumber;
 		row->setLookAndFeel(&parent.getLookAndFeel());
 		return row;
 	}
@@ -932,12 +925,15 @@ MPEPanel::Model::Row::Row(MPEModulator* mod_, LookAndFeel& laf_) :
 	selector.addItem("Lift", MPEModulator::Gesture::Lift);
 
 	smoothingTime.setup(mod, MPEModulator::SpecialParameters::SmoothingTime, "Smoothing");
+	smoothingTime.setLookAndFeel(nullptr);
 	smoothingTime.setMode(HiSlider::Time, NormalisableRange(0.0, 2000.0, 0.1).withCentreSkew(200.0));
 
 	defaultValue.setup(mod, MPEModulator::SpecialParameters::DefaultValue, "Default");
+	defaultValue.setLookAndFeel(nullptr);
 	defaultValue.setMode(HiSlider::NormalizedPercentage);
 
 	intensity.setup(mod, MPEModulator::SpecialParameters::SmoothedIntensity, "Intensity");
+	intensity.setLookAndFeel(nullptr);
 
 	auto mode = mod->getMode();
 
@@ -1007,11 +1003,7 @@ MPEPanel::Model::Row::Row(MPEModulator* mod_, LookAndFeel& laf_) :
 	output.setRange(0.0, 1.0, 0.01);
 
 	deleteButton.setLookAndFeel(&laf_);
-	smoothingTime.setLookAndFeel(&laf_);
 	curvePreview.setLookAndFeel(&laf_);
-	output.setLookAndFeel(&laf_);
-	intensity.setLookAndFeel(&laf_);
-	defaultValue.setLookAndFeel(&laf_);
 
 	otherChange(mod);
 }
@@ -1080,20 +1072,22 @@ void MPEPanel::Model::Row::updateEnableState()
 
 void MPEPanel::Model::Row::paint(Graphics& g)
 {
-	auto ar = getLocalBounds();
-	ar = ar.removeFromLeft(100);
+	auto ar = getLocalBounds().removeFromLeft(100);
 
 	if (mod)
 	{
-		g.setFont(laf.getFont());
-
 		auto enabled = !mod->isBypassed();
+		auto textColour = enabled ? laf.textColour : laf.textColour.withMultipliedAlpha(0.4f);
 
-		Colour on = laf.textColour;
-		Colour off = on.withMultipliedAlpha(0.4f);
-
-		g.setColour(enabled ? on : off);
-		g.drawText(data.getPrettyName(mod->getId()), ar, Justification::centred);
+		if (auto* glaf = dynamic_cast<GlobalHiseLookAndFeel*>(&getLookAndFeel()))
+		{
+			GlobalHiseLookAndFeel::TableListLookAndFeelData d;
+			d.f = laf.getFont();
+			d.textColour = textColour;
+			d.bgColour = laf.bgColour;
+			d.itemColour1 = laf.fillColour;
+			glaf->drawTableCell(g, d, data.getPrettyName(mod->getId()), rowIndex, 1, ar.getWidth(), ar.getHeight(), false, false, false);
+		}
 	}
 }
 

@@ -594,6 +594,22 @@ Point<float> GlobalHiseLookAndFeel::paintCable(Graphics& g, Rectangle<float> sta
 	return {};
 }
 
+void GlobalHiseLookAndFeel::drawTableRowBackground(Graphics& g, const TableListLookAndFeelData& d, int /*rowNumber*/, int width, int height, bool isSelected, bool /*isHovered*/)
+{
+	if (isSelected)
+	{
+		g.setColour(d.itemColour1.withAlpha(0.05f));
+		g.fillRect(0, 0, width, height);
+	}
+}
+
+void GlobalHiseLookAndFeel::drawTableCell(Graphics& g, const TableListLookAndFeelData& d, const String& text, int /*rowNumber*/, int /*columnId*/, int width, int height, bool /*isSelected*/, bool /*cellIsClicked*/, bool /*cellIsHovered*/)
+{
+	g.setFont(d.f);
+	g.setColour(d.textColour);
+	g.drawText(text, 0, 0, width, height, Justification::centred);
+}
+
 void GlobalHiseLookAndFeel::setTextEditorColours(TextEditor& ed)
 {
 	ed.setColour(TextEditor::ColourIds::textColourId, Colours::black);

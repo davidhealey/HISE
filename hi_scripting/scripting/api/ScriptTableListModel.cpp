@@ -715,8 +715,12 @@ ScriptTableListModel::LookAndFeelData ScriptTableListModel::LookAndFeelMethods::
 			return st->d;
 		}
 	}
-	
-	return {};
+
+	LookAndFeelData d;
+	d.textColour = h.findColour(TableHeaderComponent::textColourId);
+	d.itemColour1 = h.findColour(TableHeaderComponent::highlightColourId);
+	d.itemColour2 = h.findColour(TableHeaderComponent::backgroundColourId);
+	return d;
 }
 
 void ScriptTableListModel::DefaultLookAndFeel::drawTableHeaderColumn(Graphics& g, TableHeaderComponent& h, const String& columnName, int columnId, int width, int height, bool isMouseOver, bool isMouseDown, int columnFlags)

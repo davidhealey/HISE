@@ -570,8 +570,22 @@ public:
 	
 
 	void drawToggleButton (Graphics &g, ToggleButton &b, bool isMouseOverButton, bool /*isButtonDown*/) override;
-    
+
 	static void setDefaultColours(Component& c);
+
+	struct TableListLookAndFeelData
+	{
+		int sortColumnId = 0;
+		bool sortForward = true;
+
+		Font f = GLOBAL_BOLD_FONT();
+		Justification c = Justification::centredLeft;
+		Colour textColour, bgColour, itemColour1, itemColour2;
+	};
+
+	virtual void drawTableRowBackground(Graphics& g, const TableListLookAndFeelData& d, int rowNumber, int width, int height, bool rowIsSelected, bool rowIsHovered);
+
+	virtual void drawTableCell(Graphics& g, const TableListLookAndFeelData& d, const String& text, int rowNumber, int columnId, int width, int height, bool rowIsSelected, bool cellIsClicked, bool cellIsHovered);
 
 private:
     
