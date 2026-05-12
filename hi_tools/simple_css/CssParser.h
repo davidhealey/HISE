@@ -349,6 +349,11 @@ public:
 		return isPixelResolvable;
 	}
 
+	void setAddAllStyleSheet(bool shouldAddAllStyleSheet)
+	{
+		addAllStyleSheet = shouldAddAllStyleSheet;
+	}
+
 private:
 
 	String getLocation(String::CharPointerType p=String::CharPointerType(nullptr)) const;
@@ -426,6 +431,8 @@ private:
 	String::CharPointerType ptr, end;
 
 	StringArray warnings;
+
+	bool addAllStyleSheet = false;
 };
 
 	
