@@ -1567,6 +1567,88 @@ struct RestApiEndpoints
 			.withResponseExample(R"({"success": true, "scope": "group", "groupName": "root", "diff": [{"target": "Osc1", "action": "+", "domain": "dsp"}], "logs": [], "errors": []})"));
 	}
 
+	static void dspProbe(Array<RouteMetadata>& m)
+	{
+		auto channelEntry = RouteParameter(Identifier("entry"), "Per-channel probe report")
+			.withType(ParamType::Object)
+			.withProperty(RouteParameter(RestApiIds::channelIndex, "Channel number")
+				.withType(ParamType::Int))
+			.withProperty(RouteParameter(RestApiIds::min, "Minimum sample value in the probed block")
+				.withType(ParamType::Float))
+			.withProperty(RouteParameter(RestApiIds::max, "Maximum sample value in the probed block")
+				.withType(ParamType::Float))
+			.withProperty(RouteParameter(RestApiIds::avg, "Average sample value across the probed block")
+				.withType(ParamType::Float))
+			.withProperty(RouteParameter(RestApiIds::peakIndex, "Sample index of the positive peak")
+				.withType(ParamType::Int))
+			.withProperty(RouteParameter(RestApiIds::silence, "Whether the probed block was silent")
+				.withType(ParamType::Bool));
+
+		auto signalReport = RouteParameter(RestApiIds::signal, "Measured probe report")
+			.withType(ParamType::Object)
+			.withProperty(RouteParameter(RestApiIds::sampleRate, "Processing sample rate used for the report")
+				.withType(ParamType::Float))
+			.withProperty(RouteParameter(RestApiIds::numChannels, "Number of processed channels")
+				.withType(ParamType::Int))
+			.withProperty(RouteParameter(RestApiIds::blockSize, "Processed block size")
+				.withType(ParamType::Int))
+			.withProperty(RouteParameter(RestApiIds::polyphonic, "True when the network was running with an enabled voice index")
+				.withType(ParamType::Bool))
+			.withProperty(RouteParameter(RestApiIds::processMidi, "True if the target container was in a MIDI-processing context")
+				.withType(ParamType::Bool))
+			.withProperty(RouteParameter(RestApiIds::channels, "Per-channel measurement objects")
+				.withArrayItems(channelEntry));
+
+		m.add(RouteMetadata(ApiRoute::DspProbe, "api/dsp/probe")
+			.withMethod(RestServer::POST)
+			.withCategory("dsp")
+			.withSummary("Inject a test signal and return a probe report")
+			.withDescription("Queues a one-shot signal injection into a supported scriptnode container and waits until the requested probe point has processed a buffer. injectId and probeId override injectIndex and probeIndex when present. Injection resolves before a child node, probing resolves after a child node, and probeIndex=-1 targets the container output after the last child. The request blocks until the report is available or until the fixed timeout of delayMs + 200ms expires.")
+			.withReturns("Resolved probe configuration plus a nested signal report with per-channel measurements")
+			.withBodyParam(RouteParameter(RestApiIds::moduleId, "Module ID of the DspNetwork holder")
+				.withExample("DspTestFX"))
+			.withBodyParam(RouteParameter(RestApiIds::parent, "ID of the supported container node that receives the probe request")
+				.withExample("test_network"))
+			.withBodyParam(RouteParameter(RestApiIds::injectId, "Child node ID to inject before. Overrides injectIndex if present")
+				.asOptional())
+			.withBodyParam(RouteParameter(RestApiIds::injectIndex, "Child node index to inject before")
+				.withType(ParamType::Int).withDefault("0"))
+			.withBodyParam(RouteParameter(RestApiIds::probeId, "Child node ID to probe after. Overrides probeIndex if present")
+				.asOptional())
+			.withBodyParam(RouteParameter(RestApiIds::probeIndex, "Child node index to probe after. Use -1 or omit it to probe the container output")
+				.withType(ParamType::Int).withDefault("-1"))
+			.withBodyParam(RouteParameter(RestApiIds::signalType, "Test signal to inject")
+				.withEnumValues({ "silence", "dirac", "noise", "dc" }).withDefault("silence"))
+			.withBodyParam(RouteParameter(RestApiIds::gain, "Signal level used for the injected test signal")
+				.withType(ParamType::Float).withDefault("1.0"))
+			.withBodyParam(RouteParameter(RestApiIds::seed, "Random seed used when signalType is noise")
+				.withType(ParamType::Int).asOptional())
+			.withBodyParam(RouteParameter(RestApiIds::delayMs, "Extra time to wait before capturing the probe result")
+				.withType(ParamType::Float).withDefault("0.0"))
+			.withResponseField(RouteParameter(RestApiIds::moduleId, "Module ID of the DspNetwork holder"))
+			.withResponseField(RouteParameter(RestApiIds::parent, "ID of the container node that handled the probe"))
+			.withResponseField(RouteParameter(RestApiIds::injectId, "Injected child ID when the request used ID-based targeting")
+				.asOptional())
+			.withResponseField(RouteParameter(RestApiIds::probeId, "Probed child ID when the request used ID-based targeting")
+				.asOptional())
+			.withResponseField(RouteParameter(RestApiIds::delayMs, "Remaining delay value after processing")
+				.withType(ParamType::Float))
+			.withResponseField(RouteParameter(RestApiIds::injectIndex, "Resolved internal checkpoint index where the signal was injected")
+				.withType(ParamType::Int))
+			.withResponseField(RouteParameter(RestApiIds::probeIndex, "Resolved internal checkpoint index where probing occurred")
+				.withType(ParamType::Int))
+			.withResponseField(RouteParameter(RestApiIds::signalType, "Injected signal type")
+				.withEnumValues({ "silence", "dirac", "noise", "dc" }))
+			.withResponseField(RouteParameter(RestApiIds::gain, "Injected signal level")
+				.withType(ParamType::Float))
+			.withResponseField(RouteParameter(RestApiIds::seed, "Random seed used for noise generation")
+				.withType(ParamType::Int))
+			.withResponseField(signalReport)
+			.withErrorCodes({ 400, 404, 409, 504 })
+			.withRequestExample(R"({"moduleId": "DspTestFX", "parent": "test_network", "injectIndex": 0, "probeIndex": -1, "signalType": "dirac", "gain": 1.0})")
+			.withResponseExample(R"({"success": true, "moduleId": "DspTestFX", "parent": "test_network", "delayMs": 0.0, "injectIndex": 0, "probeIndex": 1, "signalType": "dirac", "gain": 1.0, "seed": 1234, "signal": {"sampleRate": 44100.0, "numChannels": 2, "blockSize": 512, "polyphonic": false, "processMidi": false, "channels": [{"channelIndex": 0, "min": 0.0, "max": 1.0, "avg": 0.00195, "peakIndex": 0, "silence": false}, {"channelIndex": 1, "min": 0.0, "max": 1.0, "avg": 0.00195, "peakIndex": 0, "silence": false}]}, "logs": [], "errors": []})"));
+	}
+
 	static void dspSave(Array<RouteMetadata>& m)
 	{
 		m.add(RouteMetadata(ApiRoute::DspSave, "api/dsp/save")
@@ -2009,6 +2091,7 @@ const Array<RestHelpers::RouteMetadata>& RestHelpers::getRouteMetadata()
 			RestApiEndpoints::dspInit(m);
 			RestApiEndpoints::dspTree(m);
 			RestApiEndpoints::dspApply(m);
+			RestApiEndpoints::dspProbe(m);
 			RestApiEndpoints::dspSave(m);
 			RestApiEndpoints::dspScreenshot(m);
 			RestApiEndpoints::projectList(m);

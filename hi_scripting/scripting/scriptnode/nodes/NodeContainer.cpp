@@ -35,7 +35,7 @@ namespace scriptnode
 using namespace juce;
 using namespace hise;
 
-juce::var NodeContainer::InjectData::Report::toJSON(var& baseJSON, bool processMidi) const
+juce::var InjectHelpers::InjectData::Report::toJSON(var& baseJSON, bool processMidi) const
 {
 	DynamicObject::Ptr signal = new DynamicObject();
 
@@ -65,7 +65,7 @@ juce::var NodeContainer::InjectData::Report::toJSON(var& baseJSON, bool processM
 	return baseJSON;
 }
 
-NodeContainer::InjectData::InjectData(const var& data) :
+InjectHelpers::InjectData::InjectData(const var& data) :
 	injectIndex(data.getProperty("injectIndex", 0)),
 	probeIndex(data.getProperty("probeIndex", -1)),
 	signal((TestSignal)(int)getTestSignalNames().indexOf(data.getProperty("signalType", "silence").toString())),
@@ -76,7 +76,7 @@ NodeContainer::InjectData::InjectData(const var& data) :
 
 }
 
-juce::var NodeContainer::InjectData::toVar(const String& parentId) const
+juce::var InjectHelpers::InjectData::toVar(const String& parentId) const
 {
 	DynamicObject::Ptr obj = new DynamicObject();
 
@@ -183,13 +183,13 @@ void NodeContainer::InjectData::process(ProcessDataDyn& data, int currentIndex)
 #endif
 }
 
-bool NodeContainer::InjectData::reportReady() const
+bool InjectHelpers::InjectData::reportReady() const
 {
 	jassert(MessageManager::getInstance()->isThisTheMessageThread());
 	return currentState == State::WaitingForReport;
 }
 
-var NodeContainer::InjectData::poll(const String& parentId)
+var InjectHelpers::InjectData::poll(const String& parentId)
 {
 	currentState = State::Done;
 	currentSpecs = {};
@@ -198,12 +198,12 @@ var NodeContainer::InjectData::poll(const String& parentId)
 	return v;
 }
 
-void NodeContainer::InjectData::prepare(PrepareSpecs specs)
+void InjectHelpers::InjectData::prepare(PrepareSpecs specs)
 {
 	currentSpecs = specs;
 }
 
-NodeContainer::InjectChecker::InjectChecker(DspNetwork* parent_, const var& data, const var& reportCallback) :
+InjectHelpers::InjectChecker::InjectChecker(DspNetwork* parent_, const var& data, const var& reportCallback) :
 	parent(parent_),
 	d(data),
 	scriptCallback(parent_->getScriptProcessor(), parent_, reportCallback, 1),
@@ -301,12 +301,12 @@ NodeContainer::InjectChecker::InjectChecker(DspNetwork* parent_, const var& data
 		startTimer(15);
 }
 
-NodeContainer::InjectChecker::~InjectChecker()
+InjectHelpers::InjectChecker::~InjectChecker()
 {
 	cleanup();
 }
 
-void NodeContainer::InjectChecker::cleanup()
+void InjectHelpers::InjectChecker::cleanup()
 {
 	stopTimer();
 
@@ -314,7 +314,7 @@ void NodeContainer::InjectChecker::cleanup()
 	nativeCallback = var();
 }
 
-void NodeContainer::InjectChecker::timerCallback()
+void InjectHelpers::InjectChecker::timerCallback()
 {
 	if (auto nc = dynamic_cast<NodeContainer*>(container.get()))
 	{

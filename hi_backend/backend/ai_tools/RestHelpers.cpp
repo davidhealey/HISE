@@ -5451,6 +5451,17 @@ static DspNetwork* getActiveNetwork(MainController* mc, const String& moduleId)
 	return nullptr;
 }
 
+static int getDspProbeErrorStatusCode(const String& message)
+{
+	if (message == "another inject call is pending")
+		return 409;
+
+	if (message.startsWith("Can't find container with id ") || message.startsWith("child with id `"))
+		return 404;
+
+	return 400;
+}
+
 static var buildDspNodeTree(const ValueTree& nodeTree, bool verbose, bool includeConnections)
 {
 	DynamicObject::Ptr obj = new DynamicObject();
@@ -5861,6 +5872,94 @@ RestServer::Response RestHelpers::handleDspApply(MainController* mc,
 				debugToConsole(mc->getMainSynthChain(), a->getHistoryMessage(undo));
 		}
 	});
+
+	return req->waitForResponse();
+}
+
+RestServer::Response RestHelpers::handleDspProbe(MainController* mc,
+	                                             RestServer::AsyncRequest::Ptr req)
+{
+	auto obj = req->getRequest().getJsonBody();
+	auto moduleId = obj[RestApiIds::moduleId].toString();
+
+	if (moduleId.isEmpty())
+		return req->fail(400, "moduleId is required");
+
+	if (obj[RestApiIds::parent].toString().isEmpty())
+		return req->fail(400, "parent is required");
+
+	auto signalType = obj.getProperty(RestApiIds::signalType, "silence").toString();
+	auto signalTypes = InjectHelpers::InjectData::getTestSignalNames();
+
+	if (!signalTypes.contains(signalType))
+		return req->fail(400, "signalType must be one of: silence, dirac, noise, dc");
+
+	if (getNetworkHolder(mc, moduleId) == nullptr)
+		return req->fail(404, "Module " + moduleId + " is not a DspNetwork holder");
+
+	auto network = getActiveNetwork(mc, moduleId);
+	if (network == nullptr)
+		return req->fail(404, "No active DspNetwork for module: " + moduleId);
+
+	auto injectId = obj.getProperty(RestApiIds::injectId, var()).toString();
+	auto probeId = obj.getProperty(RestApiIds::probeId, var()).toString();
+	auto hasInjectId = injectId.isNotEmpty();
+	auto hasProbeId = probeId.isNotEmpty();
+	auto delayMs = (double)obj.getProperty(RestApiIds::delayMs, 0.0);
+	auto timeoutMs = jmax(200, roundToInt(delayMs + 200.0));
+	auto finished = std::make_shared<std::atomic<bool>>(false);
+
+	auto completeSuccess = [req, finished, moduleId, hasInjectId, injectId, hasProbeId, probeId](const var::NativeFunctionArgs& args) -> var
+	{
+		if (finished->exchange(true))
+			return var();
+
+		auto report = args.numArguments > 0 ? args.arguments[0] : var();
+		auto signal = report[RestApiIds::signal];
+
+		DynamicObject::Ptr result = new DynamicObject();
+		result->setProperty(RestApiIds::success, true);
+		result->setProperty(RestApiIds::moduleId, moduleId);
+		result->setProperty(RestApiIds::parent, report[RestApiIds::parent]);
+
+		if (hasInjectId)
+			result->setProperty(RestApiIds::injectId, injectId);
+
+		if (hasProbeId)
+			result->setProperty(RestApiIds::probeId, probeId);
+
+		result->setProperty(RestApiIds::delayMs, report[RestApiIds::delayMs]);
+		result->setProperty(RestApiIds::injectIndex, report[RestApiIds::injectIndex]);
+		result->setProperty(RestApiIds::probeIndex, report[RestApiIds::probeIndex]);
+		result->setProperty(RestApiIds::signalType, report[RestApiIds::signalType]);
+		result->setProperty(RestApiIds::gain, report[RestApiIds::gain]);
+		result->setProperty(RestApiIds::seed, report[RestApiIds::seed]);
+		result->setProperty(RestApiIds::signal, signal);
+		req->complete(RestServer::Response::ok(var(result.get())));
+		return var();
+	};
+
+	ReferenceCountedObjectPtr<InjectHelpers::InjectChecker> checker =
+		new InjectHelpers::InjectChecker(network, obj, var(var::NativeFunction(completeSuccess)));
+
+	if (!checker->injectOk.wasOk())
+		return req->fail(getDspProbeErrorStatusCode(checker->injectOk.getErrorMessage()), checker->injectOk.getErrorMessage());
+
+	auto start = Time::getMillisecondCounterHiRes();
+
+	while (!finished->load())
+	{
+		if (Time::getMillisecondCounterHiRes() - start > timeoutMs)
+			break;
+
+		Thread::sleep(10);
+	}
+
+	if (!finished->exchange(true))
+	{
+		checker->cleanup();
+		return RestServer::Response::error(504, "Probe timed out");
+	}
 
 	return req->waitForResponse();
 }

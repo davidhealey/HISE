@@ -40,7 +40,7 @@
     runtime field. Consumers read it off any response (or `/api/status`) to
     verify they are talking to a HISE build that matches their expected schema.
 */
-#define HISE_REST_API_VERSION "0.7.0"
+#define HISE_REST_API_VERSION "0.8.0"
 
 namespace hise { using namespace juce;
 
@@ -347,6 +347,24 @@ namespace RestApiIds
     DECLARE_ID(middlePosition);       // Parameter middle position
     DECLARE_ID(skewFactor);           // Parameter skew factor
     DECLARE_ID(matchRange);           // connect op flag: copy target range onto source after wiring
+    DECLARE_ID(injectId);             // Child node ID to inject before
+    DECLARE_ID(probeId);              // Child node ID to probe after
+    DECLARE_ID(injectIndex);          // Resolved injection checkpoint index
+    DECLARE_ID(probeIndex);           // Resolved probe checkpoint index
+    DECLARE_ID(signalType);           // Probe signal type
+    DECLARE_ID(gain);                 // Probe signal gain
+    DECLARE_ID(seed);                 // Probe noise seed
+    DECLARE_ID(delayMs);              // Probe delay before capture
+    DECLARE_ID(sampleRate);           // Processing sample rate
+    DECLARE_ID(numChannels);          // Processed channel count
+    DECLARE_ID(blockSize);            // Processing block size
+    DECLARE_ID(polyphonic);           // Whether voice processing was enabled
+    DECLARE_ID(processMidi);          // Whether container was in MIDI context
+    DECLARE_ID(channels);             // Array of channel reports
+    DECLARE_ID(channelIndex);         // Channel report index
+    DECLARE_ID(avg);                  // Channel average sample value
+    DECLARE_ID(peakIndex);            // Sample index of positive peak
+    DECLARE_ID(silence);              // Whether the channel block was silent
 
     // snippet browser
     DECLARE_ID(exists);               // Whether a snippet browser instance is alive

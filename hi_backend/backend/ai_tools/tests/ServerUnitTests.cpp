@@ -211,6 +211,11 @@ public:
         testDspApplyValidation();
         
         testDspApplyBatchOps();
+        testDspProbeSuccess();
+        testDspProbeIdTargeting();
+        testDspProbeValidation();
+        testDspProbePendingConflict();
+        testDspProbeTimeout();
         testDspScreenshot();
 
         testBatchRollback();
@@ -6336,6 +6341,28 @@ private:
         return ctx->parseJson(response);
     }
 
+    var postDspProbeWhileProcessing(const var& body, int maxPumpMs = 1000)
+    {
+        auto stopProcessing = std::make_shared<std::atomic<bool>>(false);
+
+        Thread::launch([this, stopProcessing, maxPumpMs]()
+        {
+            auto start = Time::getMillisecondCounter();
+
+            while (!stopProcessing->load() && (Time::getMillisecondCounter() - start) < (uint32)maxPumpMs)
+            {
+                AudioSampleBuffer ab(2, 512);
+                MidiBuffer mb;
+                ctx->bp->processBlock(ab, mb);
+                Thread::sleep(5);
+            }
+        });
+
+        auto response = ctx->httpPost("/api/dsp/probe", JSON::toString(body));
+        stopProcessing->store(true);
+        return ctx->parseJson(response);
+    }
+
     /** Find a node by nodeId in a tree result (recursive). */
     var findNodeInTree(const var& node, const String& nodeId)
     {
@@ -8200,6 +8227,174 @@ private:
         auto firstNode = findNodeInTree(tree[RestApiIds::result], "FirstNode");
         expect(!firstNode.isObject(),
             "FirstNode must be rolled back when a later op fails at perform()");
+    }
+
+    void testDspProbeSuccess()
+    {
+        beginTest("POST /api/dsp/probe - success");
+
+        resetDspState();
+
+        Array<var> ops;
+        ops.add(makeDspAddOp("core.gain", "test_network", "ProbeGain"));
+        expectDspSuccess(postDspOps(ops));
+
+        DynamicObject::Ptr body = new DynamicObject();
+        body->setProperty(RestApiIds::moduleId, "DspTestFX");
+        body->setProperty(RestApiIds::parent, "test_network");
+        body->setProperty(RestApiIds::injectIndex, 0);
+        body->setProperty(RestApiIds::probeIndex, -1);
+        body->setProperty(RestApiIds::signalType, "dirac");
+        body->setProperty(RestApiIds::gain, 1.0);
+
+        auto json = postDspProbeWhileProcessing(var(body.get()));
+
+        expect((bool)json[RestApiIds::success], "Probe request should succeed");
+        expectEquals(json[RestApiIds::moduleId].toString(), String("DspTestFX"), "Should echo moduleId");
+        expectEquals(json[RestApiIds::parent].toString(), String("test_network"), "Should echo parent");
+        expectEquals<int>((int)json[RestApiIds::injectIndex], 0, "injectIndex should resolve before the first child");
+        expectEquals<int>((int)json[RestApiIds::probeIndex], 1, "probeIndex should resolve to the container output");
+        expectEquals(json[RestApiIds::signalType].toString(), String("dirac"), "Should echo signalType");
+
+        auto signal = json[RestApiIds::signal];
+        expect(signal.isObject(), "signal should be nested object");
+        expectEquals<int>((int)signal[RestApiIds::numChannels], 2, "Should report stereo processing");
+        expectEquals<int>((int)signal[RestApiIds::blockSize], 512, "Should report block size");
+        expect((double)signal[RestApiIds::sampleRate] > 0.0, "Should report sample rate");
+        expect(signal[RestApiIds::channels].isArray(), "signal.channels should be array");
+        expectEquals<int>(signal[RestApiIds::channels].size(), 2, "Should contain two channel reports");
+    }
+
+    void testDspProbeIdTargeting()
+    {
+        beginTest("POST /api/dsp/probe - id targeting");
+
+        resetDspState();
+
+        Array<var> ops;
+        ops.add(makeDspAddOp("core.gain", "test_network", "ProbeGain"));
+        expectDspSuccess(postDspOps(ops));
+
+        DynamicObject::Ptr body = new DynamicObject();
+        body->setProperty(RestApiIds::moduleId, "DspTestFX");
+        body->setProperty(RestApiIds::parent, "test_network");
+        body->setProperty(RestApiIds::injectId, "ProbeGain");
+        body->setProperty(RestApiIds::probeId, "ProbeGain");
+        body->setProperty(RestApiIds::signalType, "dc");
+        body->setProperty(RestApiIds::gain, 0.25);
+
+        auto json = postDspProbeWhileProcessing(var(body.get()));
+
+        expect((bool)json[RestApiIds::success], "Probe request should succeed");
+        expectEquals(json[RestApiIds::injectId].toString(), String("ProbeGain"), "Should echo injectId");
+        expectEquals(json[RestApiIds::probeId].toString(), String("ProbeGain"), "Should echo probeId");
+        expectEquals<int>((int)json[RestApiIds::injectIndex], 0, "injectId should resolve before the child");
+        expectEquals<int>((int)json[RestApiIds::probeIndex], 1, "probeId should resolve after the child");
+        expectEquals((double)json[RestApiIds::gain], 0.25, "Should echo gain");
+        expect(json[RestApiIds::signal].isObject(), "Should include nested signal report");
+    }
+
+    void testDspProbeValidation()
+    {
+        beginTest("POST /api/dsp/probe - validation");
+
+        resetDspState();
+
+        Array<var> ops;
+        ops.add(makeDspAddOp("core.gain", "test_network", "ProbeGain"));
+        ops.add(makeDspAddOp("core.gain", "test_network", "ProbeGain2"));
+        expectDspSuccess(postDspOps(ops));
+
+        auto invalidParent = ctx->parseJson(ctx->httpPost("/api/dsp/probe",
+            R"({"moduleId": "DspTestFX", "parent": "missing", "injectIndex": 0, "probeIndex": -1, "signalType": "dirac"})"));
+        expectErrorMessageContains(invalidParent, "container");
+
+        auto invalidChild = ctx->parseJson(ctx->httpPost("/api/dsp/probe",
+            R"({"moduleId": "DspTestFX", "parent": "test_network", "injectId": "NoSuchChild", "probeIndex": -1, "signalType": "dirac"})"));
+        expectErrorMessageContains(invalidChild, "not found");
+
+        auto invalidIndex = ctx->parseJson(ctx->httpPost("/api/dsp/probe",
+            R"({"moduleId": "DspTestFX", "parent": "test_network", "injectIndex": 5, "probeIndex": -1, "signalType": "dirac"})"));
+        expectErrorMessageContains(invalidIndex, "out of range");
+
+        auto reversed = ctx->parseJson(ctx->httpPost("/api/dsp/probe",
+            R"({"moduleId": "DspTestFX", "parent": "test_network", "injectIndex": 1, "probeIndex": 0, "signalType": "dirac"})"));
+        expectErrorMessageContains(reversed, "before probe position");
+
+        auto invalidSignal = ctx->parseJson(ctx->httpPost("/api/dsp/probe",
+            R"({"moduleId": "DspTestFX", "parent": "test_network", "injectIndex": 0, "probeIndex": -1, "signalType": "sine"})"));
+        expectErrorMessageContains(invalidSignal, "signalType");
+    }
+
+    void testDspProbePendingConflict()
+    {
+        beginTest("POST /api/dsp/probe - pending conflict");
+
+        resetDspState();
+
+        Array<var> ops;
+        ops.add(makeDspAddOp("core.gain", "test_network", "ProbeGain"));
+        expectDspSuccess(postDspOps(ops));
+
+        DynamicObject::Ptr body = new DynamicObject();
+        body->setProperty(RestApiIds::moduleId, "DspTestFX");
+        body->setProperty(RestApiIds::parent, "test_network");
+        body->setProperty(RestApiIds::injectIndex, 0);
+        body->setProperty(RestApiIds::probeIndex, -1);
+        body->setProperty(RestApiIds::signalType, "dirac");
+        body->setProperty(RestApiIds::delayMs, 300.0);
+
+        String response1;
+        std::atomic<bool> done1 { false };
+
+        Thread::launch([&response1, &done1, body]()
+        {
+            URL url = URL("http://localhost:" + String(TEST_PORT) + "/api/dsp/probe")
+                .withPOSTData(JSON::toString(var(body.get())));
+
+            URL::InputStreamOptions options(URL::ParameterHandling::inAddress);
+
+            if (auto stream = url.createInputStream(options.withExtraHeaders("Content-Type: application/json")))
+                response1 = stream->readEntireStreamAsString();
+
+            done1.store(true);
+        });
+
+        MessageManager::getInstance()->runDispatchLoopUntil(50);
+
+        auto json2 = ctx->parseJson(ctx->httpPost("/api/dsp/probe", JSON::toString(var(body.get()))));
+        expectErrorMessageContains(json2, "pending");
+
+        auto start = Time::getMillisecondCounter();
+
+        while (!done1.load() && (Time::getMillisecondCounter() - start) < 2000)
+        {
+            AudioSampleBuffer ab(2, 512);
+            MidiBuffer mb;
+            ctx->bp->processBlock(ab, mb);
+            MessageManager::getInstance()->runDispatchLoopUntil(10);
+        }
+
+        while (!done1.load())
+            MessageManager::getInstance()->runDispatchLoopUntil(10);
+
+        auto json1 = ctx->parseJson(response1);
+        expect((bool)json1[RestApiIds::success], "First probe request should eventually succeed");
+    }
+
+    void testDspProbeTimeout()
+    {
+        beginTest("POST /api/dsp/probe - timeout");
+
+        resetDspState();
+
+        Array<var> ops;
+        ops.add(makeDspAddOp("core.gain", "test_network", "ProbeGain"));
+        expectDspSuccess(postDspOps(ops));
+
+        auto json = ctx->parseJson(ctx->httpPost("/api/dsp/probe",
+            R"({"moduleId": "DspTestFX", "parent": "test_network", "injectIndex": 0, "probeIndex": -1, "signalType": "dirac"})"));
+        expectErrorMessageContains(json, "timed out");
     }
 
     //==========================================================================
