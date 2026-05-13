@@ -1970,27 +1970,15 @@ Array<HiseJavascriptEngine::RootObject::ApiDiagnostic> HiseJavascriptEngine::sha
 				}
 			}
 
-			// --- Collect CallScope warnings from inline function bodies ---
-			// Only re-analyze functions that were registered to callback contexts
-			// during the last F5 compile (analyzed == true). Uses the same
-			// performLazyCallScopeAnalysis() as normal compilation, which handles
-			// recursive callee analysis (so newly defined helper functions called
-			// from an analyzed function get picked up automatically).
+			// --- Collect CallScope warnings from static realtime callbacks ---
 			{
-				// Phase 1: Collect all previously-analyzed inline functions and
-				// reset their analyzed flag so performLazy... re-runs on the
-				// fresh shadow-parsed bodies. Reset ALL first so cross-calls
-				// between analyzed functions trigger re-analysis of callees
-				// rather than inheriting stale data.
-				Array<RootObject::InlineFunction::Object*> analyzedFunctions;
-
-				auto collectAnalyzed = [&](ReferenceCountedObject* ifo)
+				auto resetInlineInfo = [](ReferenceCountedObject* ifo)
 				{
 					if (auto* obj = dynamic_cast<RootObject::InlineFunction::Object*>(ifo))
 					{
-						if (obj->realtimeSafetyInfoData.analyzed && obj->body != nullptr)
+						if (obj->body != nullptr)
 						{
-							analyzedFunctions.add(obj);
+							obj->realtimeSafetyInfoData.items.clear();
 							obj->realtimeSafetyInfoData.analyzed = false;
 						}
 					}
@@ -1998,26 +1986,29 @@ Array<HiseJavascriptEngine::RootObject::ApiDiagnostic> HiseJavascriptEngine::sha
 
 				for (auto ns : root->hiseSpecialData.namespaces)
 					for (auto ifo : ns->inlineFunctions)
-						collectAnalyzed(ifo);
+						resetInlineInfo(ifo);
 
 				for (auto ifo : root->hiseSpecialData.inlineFunctions)
-					collectAnalyzed(ifo);
+					resetInlineInfo(ifo);
 
-				// Phase 2: Re-analyze each function on its shadow-parsed body.
-				// performLazyCallScopeAnalysis() recursively analyzes unanalyzed
-				// callees first, so dependency order is handled automatically.
-				for (auto* obj : analyzedFunctions)
+				for (auto c : root->hiseSpecialData.callbackNEW)
 				{
-					if (!obj->realtimeSafetyInfoData.analyzed)
-						obj->performLazyCallScopeAnalysis();
-				}
+					if (c == nullptr || c->statements == nullptr)
+						continue;
 
-				// Phase 3: Convert warnings to diagnostics.
-				for (auto* obj : analyzedFunctions)
-				{
+					if (!isStaticRealtimeCallbackName(c->getName()))
+						continue;
+
+					c->realtimeSafetyInfoData.items.clear();
+					c->realtimeSafetyInfoData.analyzed = false;
+
+					CallScopeAnalyzer analyzer;
+					CallScopeAnalyzer::ScopedHolderSetter svs(&analyzer, c);
+					analyzer.executePass(c->statements);
+
 					using RSW = RootObject::RealtimeSafetyWarning;
 
-					for (auto item : obj->realtimeSafetyInfoData.items)
+					for (auto item : c->realtimeSafetyInfoData.items)
 					{
 						RootObject::ApiDiagnostic d;
 						d.severity = ApiClass::DiagnosticResult::Severity::Warning;
@@ -2081,5 +2072,4 @@ Array<HiseJavascriptEngine::RootObject::ApiDiagnostic> HiseJavascriptEngine::sha
 #endif // USE_BACKEND
 
 } // namespace hise
-
 

@@ -38,6 +38,10 @@ namespace hise { using namespace juce;
 class JavascriptProcessor;
 class DialogWindowWithBackgroundThread;
 
+#if USE_BACKEND
+bool isStaticRealtimeCallbackName(const Identifier& id);
+#endif
+
 
 class HiseJavascriptPreprocessor: public ReferenceCountedObject
 {
