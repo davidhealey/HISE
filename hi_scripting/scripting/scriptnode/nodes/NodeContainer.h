@@ -61,6 +61,107 @@ struct NodeContainer : public AssignableObject
 		JUCE_DECLARE_WEAK_REFERENCEABLE(MacroParameter);
 	};
 
+	struct InjectData
+	{
+		enum class State
+		{
+			WaitingForInjection,
+			WaitingForProbe,
+			WaitingForReport,
+			Done
+		};
+
+		enum class TestSignal
+		{
+			Silence = 0,
+			Dirac,
+			Noise,
+			DC,
+			numTestSignals
+		};
+
+		static StringArray getTestSignalNames()
+		{
+			return
+			{
+				"silence",
+				"dirac",
+				"noise",
+				"dc"
+			};
+		}
+
+		struct Report
+		{
+			Report() = default;
+
+			operator bool() const { return specs; }
+
+			var toJSON(var& baseJSON, bool processMidi) const;
+
+			PrepareSpecs specs;
+
+			std::array<int, NUM_MAX_CHANNELS> indexOfPeak;
+			std::array<Range<float>, NUM_MAX_CHANNELS> peaks;
+			std::array<float, NUM_MAX_CHANNELS> avg;
+			std::array<bool, NUM_MAX_CHANNELS> silence;
+		};
+
+		using ReportFunction = std::function<void(const Report& r)>;
+
+		InjectData() = default;
+
+		InjectData(const var& data);
+
+		var toVar(const String& parentId) const;
+
+		void process(ProcessDataDyn& data, int currentIndex);
+
+		bool reportReady() const;
+
+		var poll(const String& parentId);
+
+		bool isActive() const { return currentSpecs && currentState != State::Done; };
+
+		void prepare(PrepareSpecs specs);
+
+		TestSignal signal = TestSignal::Silence;
+		int injectIndex = 0;
+		int probeIndex = -1;
+		float gain = 1.0f;
+		int64 seed = -1;
+		double delayMs = 0.0;
+		bool processMidi = false;
+
+	private:
+
+		String errorMessage;
+		PrepareSpecs currentSpecs;
+		Report internalReport;
+		State currentState = State::WaitingForInjection;
+	};
+
+	struct InjectChecker : public Timer,
+						   public ReferenceCountedObject
+	{
+		InjectChecker(DspNetwork* parent_, const var& data, const var& reportCallback);
+
+		~InjectChecker();
+
+		void cleanup();
+
+		void timerCallback() override;
+
+		WeakCallbackHolder scriptCallback;
+		var nativeCallback;
+
+		Result injectOk;
+		NodeContainer::InjectData d;
+		NodeBase::Ptr container;
+		
+		WeakReference<DspNetwork> parent;
+	};
+
 	NodeContainer();
 
 	template <int P> static void setParameterStatic(void* obj, double v)
@@ -127,6 +228,14 @@ struct NodeContainer : public AssignableObject
 
 	bool forEachNode(const std::function<bool(NodeBase::Ptr)> & f);
 
+	/** Override this and call DynamicSerialProcessor::inject in each subclass if possible. */
+	virtual Result injectNextBuffer(const InjectData& d) { return Result::fail("container not supported for inject tool"); }
+
+	/** Override this and call DynamicSerialProcessor::poll. */
+	virtual var pollInjectedBuffer() { return {}; };
+
+	virtual void prepareInjectData(PrepareSpecs ps) {};
+
 	// ===================================================================================
 
 	void clear();
@@ -168,6 +277,8 @@ struct NodeContainer : public AssignableObject
 			return {};
 		}
 	}
+
+	
 
 protected:
 
@@ -220,13 +331,62 @@ public:
 		void reset();
 		void prepare(PrepareSpecs);
 
+		hise::SimpleReadWriteLock injectLock;
+		InjectData injectData;
+		PrepareSpecs injectSpecs;
+
+		Result injectNextBuffer(const InjectData& d)
+		{
+			auto numNodes = parent->getNodeList().size();
+
+			SimpleReadWriteLock::ScopedWriteLock sl(injectLock);
+
+			if (injectData.isActive())
+				return Result::fail("another inject call is pending");
+			
+			injectData = d;
+			injectData.prepare(injectSpecs);
+
+			if (injectData.probeIndex == -1)
+				injectData.probeIndex = numNodes;
+
+			return Result::ok();
+		}
+
+		var poll()
+		{
+			InjectData nd;
+			bool ready = false;
+
+			{
+				SimpleReadWriteLock::ScopedWriteLock sl(injectLock);
+
+				ready = injectData.reportReady();
+
+				if (ready)
+					std::swap(nd, injectData);
+			}
+
+			if (ready)
+				return nd.poll(dynamic_cast<NodeBase*>(parent)->getId());
+
+			return var();
+		}
+
 		template <typename ProcessDataType> void process(ProcessDataType& data) noexcept
 		{
+			int index = 0;
+			auto& dd = data.template as<ProcessDataDyn>();
+
+			SimpleReadWriteLock::ScopedReadLock sl(injectLock, USE_BACKEND);
+
 			for (auto n : parent->getNodeList())
 			{
-				auto& dd = data.template as<ProcessDataDyn>();
+				injectData.process(dd, index++);
 				n->process(dd);
 			}
+
+			injectData.process(dd, index);
 		}
 
 		template <typename FrameDataType> void processFrame(FrameDataType& data) noexcept

@@ -35,6 +35,310 @@ namespace scriptnode
 using namespace juce;
 using namespace hise;
 
+juce::var NodeContainer::InjectData::Report::toJSON(var& baseJSON, bool processMidi) const
+{
+	DynamicObject::Ptr signal = new DynamicObject();
+
+	signal->setProperty("sampleRate", specs.sampleRate);
+	signal->setProperty("numChannels", specs.numChannels);
+	signal->setProperty("blockSize", specs.blockSize);
+	signal->setProperty("polyphonic", specs.voiceIndex != nullptr && specs.voiceIndex->isEnabled());
+	signal->setProperty("processMidi", processMidi);
+
+	Array<var> channels;
+
+	for (int i = 0; i < specs.numChannels; i++)
+	{
+		DynamicObject::Ptr ch = new DynamicObject();
+		ch->setProperty("channelIndex", i);
+		ch->setProperty("min", peaks[i].getStart());
+		ch->setProperty("max", peaks[i].getEnd());
+		ch->setProperty("avg", avg[i]);
+		ch->setProperty("peakIndex", indexOfPeak[i]);
+		ch->setProperty("silence", silence[i]);
+		channels.add(ch.get());
+	}
+
+	signal->setProperty("channels", var(channels));
+
+	baseJSON.getDynamicObject()->setProperty("signal", var(signal.get()));
+	return baseJSON;
+}
+
+NodeContainer::InjectData::InjectData(const var& data) :
+	injectIndex(data.getProperty("injectIndex", 0)),
+	probeIndex(data.getProperty("probeIndex", -1)),
+	signal((TestSignal)(int)getTestSignalNames().indexOf(data.getProperty("signalType", "silence").toString())),
+	gain((float)data.getProperty("gain", 1.0f)),
+	seed((int64)data.getProperty("seed", Random::getSystemRandom().nextInt64())),
+	delayMs(data.getProperty("delayMs", 0.0))
+{
+
+}
+
+juce::var NodeContainer::InjectData::toVar(const String& parentId) const
+{
+	DynamicObject::Ptr obj = new DynamicObject();
+
+	obj->setProperty("ok", currentState == State::Done);
+	obj->setProperty("error", errorMessage);
+	obj->setProperty("parent", parentId);
+	obj->setProperty("injectIndex", injectIndex);
+	obj->setProperty("probeIndex", probeIndex);
+	obj->setProperty("delayMs", delayMs);
+	obj->setProperty("signalType", getTestSignalNames()[(int)signal]);
+	obj->setProperty("gain", gain);
+	obj->setProperty("seed", seed);
+
+	return var(obj.get());
+}
+
+void NodeContainer::InjectData::process(ProcessDataDyn& data, int currentIndex)
+{
+#if USE_BACKEND
+	if (!isActive())
+		return;
+
+	if (currentState == State::WaitingForInjection && currentIndex == injectIndex)
+	{
+		if (signal != TestSignal::Silence)
+		{
+			Random r(seed);
+
+			// inject test signal
+			for (int i = 0; i < data.getNumChannels(); i++)
+			{
+				auto ptr = data[i];
+
+				switch (signal)
+				{
+				case TestSignal::Dirac:
+					ptr[0] = gain;
+					break;
+				case TestSignal::Noise:
+					for (auto& s : ptr)
+						s = gain * (r.nextFloat() * 2.0f - 1.0f);
+
+					break;
+				case TestSignal::DC:
+					hmath::vmovs(ptr, gain);
+					break;
+				case TestSignal::Silence:
+				case TestSignal::numTestSignals:
+				default:
+					break;
+				}
+			}
+		}
+
+		currentState = State::WaitingForProbe;
+	}
+
+	if (currentState == State::WaitingForProbe && currentIndex == probeIndex)
+	{
+		if (delayMs > 0.0)
+		{
+			auto numThisTime = data.getNumSamples();
+			auto thisTimeMs = numThisTime / currentSpecs.sampleRate * 1000.0;
+			delayMs -= thisTimeMs;
+			return;
+		}
+
+		currentState = State::WaitingForReport;
+
+		for (int i = 0; i < currentSpecs.numChannels; i++)
+		{
+			auto ptr = data.getRawDataPointers()[i];
+			ProcessData<1> pd(&ptr, data.getNumSamples());
+
+			float sum = 0.0f;
+
+			float maxValue = 0.0f;
+			int maxIndex = 0;
+
+			for (int j = 0; j < data.getNumSamples(); j++)
+			{
+				auto sample = ptr[j];
+
+				if (sample > maxValue)
+				{
+					maxIndex = j;
+					maxValue = sample;
+				}
+
+				sum += sample;
+			}
+
+			sum /= (float)data.getNumSamples();
+
+			internalReport.indexOfPeak[i] = maxIndex;
+			internalReport.peaks[i] = FloatVectorOperations::findMinAndMax(ptr, data.getNumSamples());
+			internalReport.avg[i] = sum;
+			internalReport.silence[i] = pd.isSilent();
+		}
+
+		// fill peaks & silence
+		internalReport.specs = currentSpecs;
+	}
+#endif
+}
+
+bool NodeContainer::InjectData::reportReady() const
+{
+	jassert(MessageManager::getInstance()->isThisTheMessageThread());
+	return currentState == State::WaitingForReport;
+}
+
+var NodeContainer::InjectData::poll(const String& parentId)
+{
+	currentState = State::Done;
+	currentSpecs = {};
+	auto v = toVar(parentId);
+	internalReport.toJSON(v, processMidi);
+	return v;
+}
+
+void NodeContainer::InjectData::prepare(PrepareSpecs specs)
+{
+	currentSpecs = specs;
+}
+
+NodeContainer::InjectChecker::InjectChecker(DspNetwork* parent_, const var& data, const var& reportCallback) :
+	parent(parent_),
+	d(data),
+	scriptCallback(parent_->getScriptProcessor(), parent_, reportCallback, 1),
+	injectOk(Result::ok())
+{
+	if (scriptCallback)
+		scriptCallback.incRefCount();
+	else
+		nativeCallback = reportCallback;
+
+	auto resolveIdToIndex = [](NodeContainer* nc, const var& value, bool after)
+	{
+		auto list = nc->getNodeList();
+		auto numNodes = list.size();
+
+		if (value.isString())
+		{
+			auto id = value.toString();
+			int childIndex = 0;
+
+			for (auto n : list)
+			{
+				if (n->getId() == id)
+					return after ? childIndex + 1 : childIndex;
+
+				childIndex++;
+			}
+
+			throw String("child with id `" + value.toString() + "` not found.");
+		}
+
+		auto idx = (int)value;
+
+		if (after)
+		{
+			if (idx == -1)
+				return numNodes;
+
+			if (!isPositiveAndBelow(idx, numNodes))
+				throw String("probeIndex out of range.");
+
+			return idx + 1;
+		}
+		else
+		{
+			if (!isPositiveAndBelow(idx, numNodes))
+				throw String("injectIndex out of range.");
+
+			return idx;
+		}
+	};
+
+
+	auto rn = parent->getRootNode();
+	auto id = data["parent"].toString();
+
+	if (id.isEmpty())
+	{
+		injectOk = Result::fail("inject data: no `parent` supplied");
+	}
+	else if (auto cn = dynamic_cast<NodeContainer*>(parent->getNodeWithId(id)))
+	{
+		try
+		{
+			ScriptnodeExceptionHandler::validateMidiProcessingContext(dynamic_cast<NodeBase*>(cn));
+			d.processMidi = true;
+		}
+		catch (scriptnode::Error&)
+		{
+			d.processMidi = false;
+		}
+
+		try
+		{
+			d.probeIndex = resolveIdToIndex(cn, data.getProperty("probeId", d.probeIndex), true);
+			d.injectIndex = resolveIdToIndex(cn, data.getProperty("injectId", d.injectIndex), false);
+
+			if (d.injectIndex >= d.probeIndex)
+				injectOk = Result::fail("inject position must be before probe position");
+			else
+			{
+				injectOk = cn->injectNextBuffer(d);
+				container = dynamic_cast<NodeBase*>(cn);
+			}
+		}
+		catch (String& s)
+		{
+			injectOk = Result::fail(s);
+		}
+	}
+	else
+		injectOk = Result::fail("Can't find container with id " + id);
+
+	if(injectOk.wasOk())
+		startTimer(15);
+}
+
+NodeContainer::InjectChecker::~InjectChecker()
+{
+	cleanup();
+}
+
+void NodeContainer::InjectChecker::cleanup()
+{
+	stopTimer();
+
+	scriptCallback.clear();
+	nativeCallback = var();
+}
+
+void NodeContainer::InjectChecker::timerCallback()
+{
+	if (auto nc = dynamic_cast<NodeContainer*>(container.get()))
+	{
+		auto report = nc->pollInjectedBuffer();
+
+		if (report.getDynamicObject() != nullptr)
+		{
+			var::NativeFunctionArgs args(report, &report, 1);
+			args.arguments = &report;
+			args.numArguments = 1;
+
+			if (scriptCallback)
+				scriptCallback.call(args);
+			else if (auto f = nativeCallback.getNativeFunction())
+				f(args);
+
+			cleanup();
+		}
+	}
+	else
+	{
+		cleanup();
+	}
+}
 
 NodeContainer::NodeContainer()
 {
@@ -128,6 +432,8 @@ void NodeContainer::prepareContainer(PrepareSpecs& ps)
 void NodeContainer::prepareNodes(PrepareSpecs ps)
 {
 	prepareContainer(ps);
+
+	prepareInjectData(ps);
 
 	for (auto n : nodes)
 	{
@@ -716,11 +1022,10 @@ void SerialNode::DynamicSerialProcessor::reset()
 		n->reset();
 }
 
-void SerialNode::DynamicSerialProcessor::prepare(PrepareSpecs)
+void SerialNode::DynamicSerialProcessor::prepare(PrepareSpecs ps)
 {
-	// do nothing here, the container inits the child nodes.
+	// do nothing here, the container inits the child nodes.	
 }
-
 
 Rectangle<int> SerialNode::getPositionInCanvas(Point<int> topLeft) const
 {
@@ -831,6 +1136,8 @@ void NodeContainer::MacroParameter::updateInputRange(Identifier, var)
 {
 	rebuildCallback();
 }
+
+
 
 
 }

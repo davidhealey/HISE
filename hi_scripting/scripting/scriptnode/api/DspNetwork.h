@@ -557,6 +557,9 @@ public:
 	/** Sets the parameters of this node according to the JSON data. */
 	bool setParameterDataFromJSON(var jsonData);
 
+	/** Injects a test signal to the given container and executes a callback when the next buffer was processed. */
+	bool injectAndProbe(const var& injectData, const var& reportCallback);
+
 	Array<Parameter*> getListOfProbedParameters();
 
 	String getId() const { return data[PropertyIds::ID].toString(); }
@@ -727,7 +730,7 @@ public:
 
 	static void initKeyPresses(Component* root);
 
-
+	
 
     bool isSignalDisplayEnabled() const { return signalDisplayEnabled; }
     
@@ -738,6 +741,8 @@ public:
 	const modulation::ParameterProperties& getParameterProperties() const noexcept { return dynamicParameterProperties.data; }
 
 private:
+
+	var lastInjector;
 
 	struct DynamicParameterModulationProperties
 	{
