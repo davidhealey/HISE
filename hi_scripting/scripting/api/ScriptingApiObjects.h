@@ -3021,6 +3021,12 @@ namespace ScriptingObjects
 		/** Sets whether a automated MIDI CC message should be consumed by the automation handler (default is enabled). */
 		void setConsumeAutomatedControllers(bool shouldBeConsumed);
 
+		/** Adds the MPE modulator with the given ID to the active MPE connections (equivalent to "Add MPE Gesture" in the context menu). */
+		void addMPEConnection(String modulatorId);
+
+		/** Removes the MPE modulator with the given ID from the active MPE connections (equivalent to "Remove MPE Gesture" in the context menu). */
+		void removeMPEConnection(String modulatorId);
+
 		// ============================================================================================================ End of API Methods
 
 	private:
