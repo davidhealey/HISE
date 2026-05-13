@@ -3027,6 +3027,9 @@ namespace ScriptingObjects
 		/** Removes the MPE modulator with the given ID from the active MPE connections (equivalent to "Remove MPE Gesture" in the context menu). */
 		void removeMPEConnection(String modulatorId);
 
+		/** Returns true if the MPE modulator with the given ID is actively connected. */
+		bool isMPEConnected(String modulatorId);
+
 		// ============================================================================================================ End of API Methods
 
 	private:
