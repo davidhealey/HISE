@@ -1139,6 +1139,7 @@ struct ScriptExpansionHandler::Wrapper
 	API_METHOD_WRAPPER_1(ScriptExpansionHandler, getExpansionForInstallPackage);
 	API_METHOD_WRAPPER_0(ScriptExpansionHandler, getUninitialisedExpansions);
 	API_METHOD_WRAPPER_1(ScriptExpansionHandler, getMetaDataFromPackage);
+	API_METHOD_WRAPPER_2(ScriptExpansionHandler, removeExpansion);
 };
 
 ScriptExpansionHandler::ScriptExpansionHandler(JavascriptProcessor* jp_) :
@@ -1173,6 +1174,7 @@ ScriptExpansionHandler::ScriptExpansionHandler(JavascriptProcessor* jp_) :
 	ADD_API_METHOD_1(getMetaDataFromPackage);
 	ADD_API_METHOD_1(getExpansionForInstallPackage);
 	ADD_API_METHOD_0(getUninitialisedExpansions);
+	ADD_API_METHOD_2(removeExpansion);
 
 	
 
@@ -1415,6 +1417,23 @@ var ScriptExpansionHandler::getExpansionForInstallPackage(var packageFile)
 
 	reportScriptError("getExpansionForInstallPackage requires a file as parameter");
 	RETURN_IF_NO_THROW(var());
+}
+
+bool ScriptExpansionHandler::removeExpansion(var expansion, bool removeUserPresets)
+{
+	Expansion* e = nullptr;
+
+	if (auto se = dynamic_cast<ScriptExpansionReference*>(expansion.getObject()))
+		e = se->exp;
+
+	if (e == nullptr)
+	{
+		reportScriptError("removeExpansion requires a valid expansion object");
+		RETURN_IF_NO_THROW(false);
+	}
+
+	getMainController()->getExpansionHandler().removeExpansion(e, removeUserPresets);
+	return true;
 }
 
 void ScriptExpansionHandler::setAllowedExpansionTypes(var typeList)
@@ -2520,6 +2539,17 @@ struct PublicIconProvider : public PoolBase::DataProvider
 
 	MemoryBlock mb;
 };
+
+void FullInstrumentExpansion::populateSampleMapPool()
+{
+	if (!pool->getSampleMapPool().getListOfAllReferences(true).isEmpty())
+		return;
+
+	auto allData = getValueTreeFromFile(getExpansionType());
+
+	if (allData.isValid())
+		initialiseFromValueTree(allData);
+}
 
 juce::Result FullInstrumentExpansion::initialise()
 {
