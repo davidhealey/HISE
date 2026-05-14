@@ -1207,7 +1207,12 @@ void ScriptExpansionHandler::setInstallFullDynamics(bool shouldInstallFullDynami
 void ScriptExpansionHandler::setErrorFunction(var newErrorFunction)
 {
 	if (HiseJavascriptEngine::isJavascriptFunction(newErrorFunction))
-		errorFunction = WeakCallbackHolder(getScriptProcessor(), this, newErrorFunction, 1);
+	{
+		errorFunction = WeakCallbackHolder(getScriptProcessor(), this, newErrorFunction, 2);
+		errorFunction.incRefCount();
+		errorFunction.addAsSource(this, "onExpansionError");
+		errorFunction.setThisObject(this);
+	}
 
 	errorFunction.setHighPriority();
 }
