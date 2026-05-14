@@ -2679,7 +2679,7 @@ Result FullInstrumentExpansion::lazyLoad()
 
 			if(missing1.isNotEmpty() && missing2.isNotEmpty())
 			{
-				return Result::fail("Error at loading samples: " + missing1);
+				return Result::fail("Error at loading samples: " + missing2);
 			}
 		}
 	}
