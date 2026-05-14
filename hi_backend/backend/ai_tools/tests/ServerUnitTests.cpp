@@ -213,6 +213,7 @@ public:
         testDspApplyBatchOps();
         testDspProbeSuccess();
         testDspProbeIdTargeting();
+        testDspProbeRecursiveFilter();
         testDspProbeValidation();
         testDspProbePendingConflict();
         testDspProbeTimeout();
@@ -8253,16 +8254,18 @@ private:
         expectEquals(json[RestApiIds::moduleId].toString(), String("DspTestFX"), "Should echo moduleId");
         expectEquals(json[RestApiIds::parent].toString(), String("test_network"), "Should echo parent");
         expectEquals<int>((int)json[RestApiIds::injectIndex], 0, "injectIndex should resolve before the first child");
-        expectEquals<int>((int)json[RestApiIds::probeIndex], 1, "probeIndex should resolve to the container output");
+        expectEquals<int>((int)json[RestApiIds::probeIndex], 0, "probeIndex should resolve after the last child");
         expectEquals(json[RestApiIds::signalType].toString(), String("dirac"), "Should echo signalType");
 
+        auto specs = json[RestApiIds::specs];
+        expect(specs.isObject(), "specs should be nested object");
+        expectEquals<int>((int)specs[RestApiIds::numChannels], 2, "Should report stereo processing");
+        expectEquals<int>((int)specs[RestApiIds::blockSize], 512, "Should report block size");
+        expect((double)specs[RestApiIds::sampleRate] > 0.0, "Should report sample rate");
+
         auto signal = json[RestApiIds::signal];
-        expect(signal.isObject(), "signal should be nested object");
-        expectEquals<int>((int)signal[RestApiIds::numChannels], 2, "Should report stereo processing");
-        expectEquals<int>((int)signal[RestApiIds::blockSize], 512, "Should report block size");
-        expect((double)signal[RestApiIds::sampleRate] > 0.0, "Should report sample rate");
-        expect(signal[RestApiIds::channels].isArray(), "signal.channels should be array");
-        expectEquals<int>(signal[RestApiIds::channels].size(), 2, "Should contain two channel reports");
+        expect(signal.isArray(), "signal should be an array");
+        expectEquals<int>(signal.size(), 2, "Should contain two channel reports");
     }
 
     void testDspProbeIdTargeting()
@@ -8289,9 +8292,44 @@ private:
         expectEquals(json[RestApiIds::injectId].toString(), String("ProbeGain"), "Should echo injectId");
         expectEquals(json[RestApiIds::probeId].toString(), String("ProbeGain"), "Should echo probeId");
         expectEquals<int>((int)json[RestApiIds::injectIndex], 0, "injectId should resolve before the child");
-        expectEquals<int>((int)json[RestApiIds::probeIndex], 1, "probeId should resolve after the child");
+        expectEquals<int>((int)json[RestApiIds::probeIndex], 0, "probeId should resolve after the child");
         expectEquals((double)json[RestApiIds::gain], 0.25, "Should echo gain");
-        expect(json[RestApiIds::signal].isObject(), "Should include nested signal report");
+        expect(json[RestApiIds::specs].isObject(), "Should include specs report");
+        expect(json[RestApiIds::signal].isArray(), "Should include signal report");
+    }
+
+    void testDspProbeRecursiveFilter()
+    {
+        beginTest("POST /api/dsp/probe - recursive filter");
+
+        resetDspState();
+
+        Array<var> ops;
+        ops.add(makeDspAddOp("container.chain", "test_network", "ProbeChain"));
+        ops.add(makeDspAddOp("core.gain", "ProbeChain", "NestedGain"));
+        expectDspSuccess(postDspOps(ops));
+
+        DynamicObject::Ptr filter = new DynamicObject();
+        filter->setProperty(RestApiIds::compact, true);
+        filter->setProperty(RestApiIds::tree, true);
+
+        DynamicObject::Ptr body = new DynamicObject();
+        body->setProperty(RestApiIds::moduleId, "DspTestFX");
+        body->setProperty(RestApiIds::parent, "test_network");
+        body->setProperty(RestApiIds::recursive, true);
+        body->setProperty(RestApiIds::signalType, "dirac");
+        body->setProperty(RestApiIds::filter, var(filter.get()));
+
+        auto json = postDspProbeWhileProcessing(var(body.get()));
+
+        expect((bool)json[RestApiIds::success], "Recursive probe request should succeed");
+        expect((bool)json[RestApiIds::recursive], "Should echo recursive mode");
+        expect(json[RestApiIds::containers].isObject(), "Should include recursive containers object");
+        expect(json[RestApiIds::tree].isObject(), "Should include recursive topology tree");
+
+        auto rootReport = json[RestApiIds::containers]["test_network"];
+        expect(rootReport.isObject(), "Root container should be reported");
+        expect(rootReport[RestApiIds::children].isArray(), "Root container should include child reports");
     }
 
     void testDspProbeValidation()

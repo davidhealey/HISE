@@ -106,6 +106,8 @@ class ScriptnodeExceptionHandler
 
 public:
 
+	static bool isInMidiProcessingContext(NodeBase* b);
+
 	static void validateMidiProcessingContext(NodeBase* b);
 
 	bool isOk() const noexcept;
@@ -923,7 +925,10 @@ struct InjectHelpers
 
 			operator bool() const { return specs; }
 
-			var toJSON(var& baseJSON, bool processMidi) const;
+			// Creates a DynamicObject with "specs" and "signal" fields
+			var toJSON(bool processMidi) const;
+
+			void process(ProcessDataDyn& data);
 
 			PrepareSpecs specs;
 
@@ -939,17 +944,27 @@ struct InjectHelpers
 
 		InjectData(const var& data);
 
-		var toVar(const String& parentId) const;
+		var toVar(NodeBase* parent) const;
 
-		void process(ProcessDataDyn& data, int currentIndex);
+		void processInject(ProcessDataDyn& data, int currentIndex);
+		void processProbe(ProcessDataDyn& data, int currentIndex);
+
+		void checkEmpty(ProcessDataDyn& data);
 
 		bool reportReady() const;
 
-		var poll(const String& parentId);
+		var poll(NodeBase* parent);
 
 		bool isActive() const { return currentSpecs && currentState != State::Done; };
 
 		void prepare(PrepareSpecs specs);
+
+		void ensureStorageAllocated(int numNodes);
+
+		void reset()
+		{
+			currentState = State::Done;
+		}
 
 		TestSignal signal = TestSignal::Silence;
 		int injectIndex = 0;
@@ -958,13 +973,42 @@ struct InjectHelpers
 		int64 seed = -1;
 		double delayMs = 0.0;
 		bool processMidi = false;
+		bool recursive = false;
 
 	private:
 
 		String errorMessage;
 		PrepareSpecs currentSpecs;
-		Report internalReport;
+		std::vector<Report> reports;
+		int maxIndex = -1;
+
 		State currentState = State::WaitingForInjection;
+	};
+
+	struct JSONFilter
+	{
+		JSONFilter(const var& filterData) :
+			specs(filterData.getProperty("specs", true)),
+			signal(filterData.getProperty("signal", true)),
+			compact(filterData.getProperty("compact", false)),
+			tree(filterData.getProperty("tree", false)),
+			wildcard(filterData.getProperty("wildcard", "*").toString())
+		{}
+
+		static var createTree(const ValueTree& root);
+
+		bool isNonStandard() const
+		{
+			return !specs && !signal && !compact && !tree && (wildcard != "*");
+		}
+
+		var apply(const var& fullData) const;
+
+		const bool specs = true; // include specs (samplerate, etc)
+		const bool signal = true; // include channel signals
+		const bool compact = false; // reduce verbosity (channels become array of peak)
+		const bool tree = true; // include dense topology tree
+		const String wildcard;
 	};
 
 	struct InjectChecker : public Timer,
@@ -984,9 +1028,16 @@ struct InjectHelpers
 		Result injectOk;
 		InjectData d;
 		NodeBase::Ptr container;
+		NodeBase::List recursiveContainers;
+		NodeBase::List recursiveReadyContainers;
+		DynamicObject::Ptr recursiveReportData;
+
+		JSONFilter filter;
 
 		WeakReference<DspNetwork> parent;
 	};
+
+	
 };
 
 

@@ -5915,12 +5915,17 @@ RestServer::Response RestHelpers::handleDspProbe(MainController* mc,
 			return var();
 
 		auto report = args.numArguments > 0 ? args.arguments[0] : var();
-		auto signal = report[RestApiIds::signal];
 
 		DynamicObject::Ptr result = new DynamicObject();
+
+		if (auto reportObject = report.getDynamicObject())
+		{
+			for (const auto& p : reportObject->getProperties())
+				result->setProperty(p.name, p.value);
+		}
+
 		result->setProperty(RestApiIds::success, true);
 		result->setProperty(RestApiIds::moduleId, moduleId);
-		result->setProperty(RestApiIds::parent, report[RestApiIds::parent]);
 
 		if (hasInjectId)
 			result->setProperty(RestApiIds::injectId, injectId);
@@ -5928,13 +5933,6 @@ RestServer::Response RestHelpers::handleDspProbe(MainController* mc,
 		if (hasProbeId)
 			result->setProperty(RestApiIds::probeId, probeId);
 
-		result->setProperty(RestApiIds::delayMs, report[RestApiIds::delayMs]);
-		result->setProperty(RestApiIds::injectIndex, report[RestApiIds::injectIndex]);
-		result->setProperty(RestApiIds::probeIndex, report[RestApiIds::probeIndex]);
-		result->setProperty(RestApiIds::signalType, report[RestApiIds::signalType]);
-		result->setProperty(RestApiIds::gain, report[RestApiIds::gain]);
-		result->setProperty(RestApiIds::seed, report[RestApiIds::seed]);
-		result->setProperty(RestApiIds::signal, signal);
 		req->complete(RestServer::Response::ok(var(result.get())));
 		return var();
 	};

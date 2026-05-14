@@ -2810,18 +2810,20 @@ void DspNetworkListeners::DspNetworkGraphRootListener::onChangeStatic(DspNetwork
 #endif
 
 
-void ScriptnodeExceptionHandler::validateMidiProcessingContext(NodeBase* b)
+bool ScriptnodeExceptionHandler::isInMidiProcessingContext(NodeBase* b)
 {
+	auto isInMidiChain = false;
+
 	if (b != nullptr)
 	{
 		auto pp = b;
-		auto isInMidiChain = b->getRootNetwork()->isPolyphonic();
+		isInMidiChain = b->getRootNetwork()->isPolyphonic();
 
 		while (pp != nullptr)
 		{
 			isInMidiChain |= pp->getValueTree()[PropertyIds::FactoryPath].toString().contains("midichain");
 
-			if(pp->getValueTree()[PropertyIds::FactoryPath].toString().contains("no_midi"))
+			if (pp->getValueTree()[PropertyIds::FactoryPath].toString().contains("no_midi"))
 			{
 				isInMidiChain = false;
 				break;
@@ -2829,8 +2831,16 @@ void ScriptnodeExceptionHandler::validateMidiProcessingContext(NodeBase* b)
 
 			pp = pp->getParentNode();
 		}
+	}
 
-		if (!isInMidiChain)
+	return isInMidiChain;
+}
+
+void ScriptnodeExceptionHandler::validateMidiProcessingContext(NodeBase* b)
+{
+	if (b != nullptr)
+	{
+		if (!isInMidiProcessingContext(b))
 		{
 			Error e;
 			e.error = Error::NoMatchingParent;
@@ -3217,7 +3227,6 @@ void DspNetwork::FaustManager::sendCompileMessage(const File& f, NotificationTyp
 	processor->getMainController()->getKillStateHandler().killVoicesAndCall(processor, pf, 
 		MainController::KillStateHandler::TargetThread::SampleLoadingThread);
 }
-
 
 
 

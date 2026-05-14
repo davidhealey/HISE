@@ -40,7 +40,7 @@
     runtime field. Consumers read it off any response (or `/api/status`) to
     verify they are talking to a HISE build that matches their expected schema.
 */
-#define HISE_REST_API_VERSION "0.8.0"
+#define HISE_REST_API_VERSION "0.8.1"
 
 namespace hise { using namespace juce;
 
@@ -351,10 +351,14 @@ namespace RestApiIds
     DECLARE_ID(probeId);              // Child node ID to probe after
     DECLARE_ID(injectIndex);          // Resolved injection checkpoint index
     DECLARE_ID(probeIndex);           // Resolved probe checkpoint index
+    DECLARE_ID(recursive);            // Probe all child containers recursively
     DECLARE_ID(signalType);           // Probe signal type
     DECLARE_ID(gain);                 // Probe signal gain
     DECLARE_ID(seed);                 // Probe noise seed
     DECLARE_ID(delayMs);              // Probe delay before capture
+    DECLARE_ID(specs);                // Probe processing specs
+    DECLARE_ID(containers);           // Recursive probe container reports
+    DECLARE_ID(numChildren);          // Number of child nodes in a container report
     DECLARE_ID(sampleRate);           // Processing sample rate
     DECLARE_ID(numChannels);          // Processed channel count
     DECLARE_ID(blockSize);            // Processing block size

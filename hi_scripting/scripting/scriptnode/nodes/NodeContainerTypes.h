@@ -59,21 +59,6 @@ public:
 
 	String getNodeDescription() const override { return "A container for serial processing of nodes"; }
 
-	var pollInjectedBuffer() override
-	{
-		return wrapper.getWrappedObject().poll();
-	}
-
-	Result injectNextBuffer(const InjectData& d) override
-	{
-		return wrapper.getWrappedObject().injectNextBuffer(d);
-	}
-
-	void prepareInjectData(PrepareSpecs ps) override
-	{
-		wrapper.getWrappedObject().injectSpecs = ps;
-	}
-	
 private:
 
 	InternalWrapper wrapper;
@@ -105,21 +90,6 @@ public:
 
 	String getNodeDescription() const override { return "a serial chain optimized for modulation sources"; }
 
-	var pollInjectedBuffer() override
-	{
-		return obj.getWrappedObject().poll();
-	}
-
-	Result injectNextBuffer(const InjectData& d) override
-	{
-		return obj.getWrappedObject().injectNextBuffer(d);
-	}
-
-	void prepareInjectData(PrepareSpecs ps) override
-	{
-		obj.getWrappedObject().injectSpecs = ps;
-	}
-
 private:
 
 	bool isProcessingFrame = false;
@@ -147,21 +117,6 @@ public:
     
 	String getNodeDescription() const override { return "Sends MIDI events to child nodes"; }
 
-	var pollInjectedBuffer() override
-	{
-		return obj.getWrappedObject().poll();
-	}
-
-	Result injectNextBuffer(const InjectData& d) override
-	{
-		return obj.getWrappedObject().injectNextBuffer(d);
-	}
-
-	void prepareInjectData(PrepareSpecs ps) override
-	{
-		obj.getWrappedObject().injectSpecs = ps;
-	}
-
 private:
 
 	wrap::event<SerialNode::DynamicSerialProcessor> obj;
@@ -182,21 +137,6 @@ public:
 	void reset() final override;
 
 	String getNodeDescription() const override { return "Prevents child nodes from processing MIDI events"; }
-
-	var pollInjectedBuffer() override
-	{
-		return obj.getWrappedObject().poll();
-	}
-
-	Result injectNextBuffer(const InjectData& d) override
-	{
-		return obj.getWrappedObject().injectNextBuffer(d);
-	}
-
-	void prepareInjectData(PrepareSpecs ps) override
-	{
-		obj.getWrappedObject().injectSpecs = ps;
-	}
 
 private:
 
@@ -223,21 +163,6 @@ public:
 	String getNodeDescription() const override { return "Allows soft bypassing without clicks"; }
 
 	void updateSmoothingTime(Identifier id, var newValue);
-
-	var pollInjectedBuffer() override
-	{
-		return obj.getWrappedObject().poll();
-	}
-
-	Result injectNextBuffer(const InjectData& d) override
-	{
-		return obj.getWrappedObject().injectNextBuffer(d);
-	}
-
-	void prepareInjectData(PrepareSpecs ps) override
-	{
-		obj.getWrappedObject().injectSpecs = ps;
-	}
 
 private:
 
@@ -613,21 +538,6 @@ public:
 	void process(ProcessDataDyn& d) noexcept final override;
 	void processFrame(FrameType& data) noexcept final override { jassertfalse; }
 
-	var pollInjectedBuffer() override
-	{
-		return obj.getWrappedObject().poll();
-	}
-
-	Result injectNextBuffer(const InjectData& d) override
-	{
-		return obj.getWrappedObject().injectNextBuffer(d);
-	}
-
-	void prepareInjectData(PrepareSpecs ps) override
-	{
-		obj.getWrappedObject().injectSpecs = ps;
-	}
-
 	wrap::oversample<OversampleFactor, SerialNode::DynamicSerialProcessor> obj;
 };
 
@@ -727,21 +637,6 @@ public:
 
 	void setBypassed(bool shouldBeBypassed) override;
 
-	var pollInjectedBuffer() override
-	{
-		return obj.getWrappedObject().poll();
-	}
-
-	Result injectNextBuffer(const InjectData& d) override
-	{
-		return obj.getWrappedObject().injectNextBuffer(d);
-	}
-
-	void prepareInjectData(PrepareSpecs ps) override
-	{
-		obj.getWrappedObject().injectSpecs = ps;
-	}
-
 	wrap::fix_block<FixedBlockSize, DynamicSerialProcessor> obj;
 };
 
@@ -832,21 +727,6 @@ public:
 
 	void setBypassed(bool shouldBeBypassed) override;
 
-	var pollInjectedBuffer() override
-	{
-		return obj.getWrappedObject().poll();
-	}
-
-	Result injectNextBuffer(const InjectData& d) override
-	{
-		return obj.getWrappedObject().injectNextBuffer(d);
-	}
-
-	void prepareInjectData(PrepareSpecs ps) override
-	{
-		obj.getWrappedObject().injectSpecs = ps;
-	}
-
 	wrap::fix_blockx<DynamicSerialProcessor, DynamicBlockProperty> obj;
 };
 
@@ -892,21 +772,6 @@ public:
     bool hasFixedParameters() const override { return true; }
     
     ParameterDataList createInternalParameterList() override;
-
-	var pollInjectedBuffer() override
-	{
-		return obj.getWrappedObject().poll();
-	}
-
-	Result injectNextBuffer(const InjectData& d) override
-	{
-		return obj.getWrappedObject().injectNextBuffer(d);
-	}
-
-	void prepareInjectData(PrepareSpecs ps) override
-	{
-		obj.getWrappedObject().injectSpecs = ps;
-	}
 
 private:
 
@@ -1085,21 +950,6 @@ public:
     int getBlockSizeForChildNodes() const override;;
     int getNumChannelsToDisplay() const override { return lastSpecs.numChannels * 2; };
     void handleHiseEvent(HiseEvent& e) override;
-
-	var pollInjectedBuffer() override
-	{
-		return obj.getWrappedObject().poll();
-	}
-
-	Result injectNextBuffer(const InjectData& d) override
-	{
-		return obj.getWrappedObject().injectNextBuffer(d);
-	}
-
-	void prepareInjectData(PrepareSpecs ps) override
-	{
-		obj.getWrappedObject().injectSpecs = ps;
-	}
 
     wrap::sidechain<SerialNode::DynamicSerialProcessor> obj;
 };

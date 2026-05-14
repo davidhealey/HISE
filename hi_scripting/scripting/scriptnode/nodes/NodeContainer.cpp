@@ -35,15 +35,45 @@ namespace scriptnode
 using namespace juce;
 using namespace hise;
 
-juce::var InjectHelpers::InjectData::Report::toJSON(var& baseJSON, bool processMidi) const
+void InjectHelpers::InjectData::Report::process(ProcessDataDyn& data)
 {
-	DynamicObject::Ptr signal = new DynamicObject();
+	for (int i = 0; i < specs.numChannels; i++)
+	{
+		auto ptr = data.getRawDataPointers()[i];
+		ProcessData<1> pd(&ptr, data.getNumSamples());
 
-	signal->setProperty("sampleRate", specs.sampleRate);
-	signal->setProperty("numChannels", specs.numChannels);
-	signal->setProperty("blockSize", specs.blockSize);
-	signal->setProperty("polyphonic", specs.voiceIndex != nullptr && specs.voiceIndex->isEnabled());
-	signal->setProperty("processMidi", processMidi);
+		float sum = 0.0f;
+
+		float maxValue = 0.0f;
+		int maxIndex = 0;
+
+		for (int j = 0; j < data.getNumSamples(); j++)
+		{
+			auto sample = ptr[j];
+
+			if (sample > maxValue)
+			{
+				maxIndex = j;
+				maxValue = sample;
+			}
+
+			sum += sample;
+		}
+
+		sum /= (float)data.getNumSamples();
+
+		indexOfPeak[i] = maxIndex;
+		peaks[i] = FloatVectorOperations::findMinAndMax(ptr, data.getNumSamples());
+		avg[i] = sum;
+		silence[i] = pd.isSilent();
+	}
+}
+
+
+
+juce::var InjectHelpers::InjectData::Report::toJSON(bool processMidi) const
+{
+	DynamicObject::Ptr obj = new DynamicObject();
 
 	Array<var> channels;
 
@@ -59,10 +89,18 @@ juce::var InjectHelpers::InjectData::Report::toJSON(var& baseJSON, bool processM
 		channels.add(ch.get());
 	}
 
-	signal->setProperty("channels", var(channels));
+	DynamicObject::Ptr specsObject = new DynamicObject();
 
-	baseJSON.getDynamicObject()->setProperty("signal", var(signal.get()));
-	return baseJSON;
+	specsObject->setProperty("sampleRate", specs.sampleRate);
+	specsObject->setProperty("numChannels", specs.numChannels);
+	specsObject->setProperty("blockSize", specs.blockSize);
+	specsObject->setProperty("polyphonic", specs.voiceIndex != nullptr && specs.voiceIndex->isEnabled());
+	specsObject->setProperty("processMidi", processMidi);
+	
+	obj->setProperty("specs", specsObject.get());
+	obj->setProperty("signal", var(channels));
+
+	return var(obj.get());
 }
 
 InjectHelpers::InjectData::InjectData(const var& data) :
@@ -71,114 +109,132 @@ InjectHelpers::InjectData::InjectData(const var& data) :
 	signal((TestSignal)(int)getTestSignalNames().indexOf(data.getProperty("signalType", "silence").toString())),
 	gain((float)data.getProperty("gain", 1.0f)),
 	seed((int64)data.getProperty("seed", Random::getSystemRandom().nextInt64())),
-	delayMs(data.getProperty("delayMs", 0.0))
+	delayMs(data.getProperty("delayMs", 0.0)),
+	recursive(data.getProperty("recursive", false))
 {
 
 }
 
-juce::var InjectHelpers::InjectData::toVar(const String& parentId) const
+juce::var InjectHelpers::InjectData::toVar(NodeBase* parent) const
 {
 	DynamicObject::Ptr obj = new DynamicObject();
 
 	obj->setProperty("ok", currentState == State::Done);
 	obj->setProperty("error", errorMessage);
-	obj->setProperty("parent", parentId);
+	obj->setProperty("parent", parent->getId());
+	obj->setProperty("factoryPath", parent->getValueTree()[PropertyIds::FactoryPath]);
 	obj->setProperty("injectIndex", injectIndex);
 	obj->setProperty("probeIndex", probeIndex);
 	obj->setProperty("delayMs", delayMs);
 	obj->setProperty("signalType", getTestSignalNames()[(int)signal]);
 	obj->setProperty("gain", gain);
 	obj->setProperty("seed", seed);
+	obj->setProperty("recursive", recursive);
 
 	return var(obj.get());
 }
 
-void NodeContainer::InjectData::process(ProcessDataDyn& data, int currentIndex)
+void InjectHelpers::InjectData::processInject(ProcessDataDyn& data, int currentIndex)
 {
 #if USE_BACKEND
 	if (!isActive())
 		return;
 
-	if (currentState == State::WaitingForInjection && currentIndex == injectIndex)
+	if (currentState == State::WaitingForInjection)
 	{
-		if (signal != TestSignal::Silence)
+		auto indexMatch = recursive ? (currentIndex == 0) : (currentIndex == injectIndex);
+
+		if (indexMatch)
 		{
-			Random r(seed);
-
-			// inject test signal
-			for (int i = 0; i < data.getNumChannels(); i++)
+			if (signal != TestSignal::Silence)
 			{
-				auto ptr = data[i];
+				Random r(seed);
 
-				switch (signal)
+				// inject test signal
+				for (int i = 0; i < data.getNumChannels(); i++)
 				{
-				case TestSignal::Dirac:
-					ptr[0] = gain;
-					break;
-				case TestSignal::Noise:
-					for (auto& s : ptr)
-						s = gain * (r.nextFloat() * 2.0f - 1.0f);
+					auto ptr = data[i];
 
-					break;
-				case TestSignal::DC:
-					hmath::vmovs(ptr, gain);
-					break;
-				case TestSignal::Silence:
-				case TestSignal::numTestSignals:
-				default:
-					break;
+					switch (signal)
+					{
+					case TestSignal::Dirac:
+						ptr[0] = gain;
+						break;
+					case TestSignal::Noise:
+						for (auto& s : ptr)
+							s = gain * (r.nextFloat() * 2.0f - 1.0f);
+
+						break;
+					case TestSignal::DC:
+						hmath::vmovs(ptr, gain);
+						break;
+					case TestSignal::Silence:
+					case TestSignal::numTestSignals:
+					default:
+						break;
+					}
 				}
 			}
-		}
 
-		currentState = State::WaitingForProbe;
+			currentState = State::WaitingForProbe;
+		}
 	}
+#endif
+}
 
-	if (currentState == State::WaitingForProbe && currentIndex == probeIndex)
+void InjectHelpers::InjectData::processProbe(ProcessDataDyn& data, int currentIndex)
+{
+#if USE_BACKEND
+	if (!isActive())
+		return;
+
+	if (currentState == State::WaitingForProbe)
 	{
-		if (delayMs > 0.0)
+		if (recursive)
 		{
-			auto numThisTime = data.getNumSamples();
-			auto thisTimeMs = numThisTime / currentSpecs.sampleRate * 1000.0;
-			delayMs -= thisTimeMs;
-			return;
-		}
-
-		currentState = State::WaitingForReport;
-
-		for (int i = 0; i < currentSpecs.numChannels; i++)
-		{
-			auto ptr = data.getRawDataPointers()[i];
-			ProcessData<1> pd(&ptr, data.getNumSamples());
-
-			float sum = 0.0f;
-
-			float maxValue = 0.0f;
-			int maxIndex = 0;
-
-			for (int j = 0; j < data.getNumSamples(); j++)
+			if (currentIndex == 0)
 			{
-				auto sample = ptr[j];
-
-				if (sample > maxValue)
+				if (delayMs > 0.0)
 				{
-					maxIndex = j;
-					maxValue = sample;
+					auto numThisTime = data.getNumSamples();
+					auto thisTimeMs = numThisTime / currentSpecs.sampleRate * 1000.0;
+					delayMs -= thisTimeMs;
 				}
-
-				sum += sample;
 			}
 
-			sum /= (float)data.getNumSamples();
+			if (delayMs > 0.0)
+				return;
 
-			internalReport.indexOfPeak[i] = maxIndex;
-			internalReport.peaks[i] = FloatVectorOperations::findMinAndMax(ptr, data.getNumSamples());
-			internalReport.avg[i] = sum;
-			internalReport.silence[i] = pd.isSilent();
+			auto reportIndex = currentIndex;
+
+			if (isPositiveAndBelow(reportIndex, reports.size()))
+			{
+				reports[reportIndex].specs = currentSpecs;
+				reports[reportIndex].process(data);
+			}
+
+			if (currentIndex == maxIndex || maxIndex == -1)
+			{
+				currentState = State::WaitingForReport;
+			}
 		}
+		else if (currentIndex == probeIndex)
+		{
+			if (delayMs > 0.0)
+			{
+				auto numThisTime = data.getNumSamples();
+				auto thisTimeMs = numThisTime / currentSpecs.sampleRate * 1000.0;
+				delayMs -= thisTimeMs;
+				return;
+			}
 
-		// fill peaks & silence
-		internalReport.specs = currentSpecs;
+			currentState = State::WaitingForReport;
+
+			auto& internalReport = reports[0];
+
+			internalReport.specs = currentSpecs;
+			internalReport.process(data);
+		}
 	}
 #endif
 }
@@ -189,12 +245,72 @@ bool InjectHelpers::InjectData::reportReady() const
 	return currentState == State::WaitingForReport;
 }
 
-var InjectHelpers::InjectData::poll(const String& parentId)
+var InjectHelpers::InjectData::poll(NodeBase* parent)
 {
+	const String& parentId = parent->getId();
+
 	currentState = State::Done;
+	
+
+	auto v = toVar(parent);
+	
+	
+
+	if (recursive)
+	{
+		Array<var> recursiveData;
+
+		var specs;
+
+		int index = 0;
+
+		auto list = dynamic_cast<NodeContainer*>(parent)->getNodeList();
+
+		v.getDynamicObject()->setProperty("numChildren", list.size());
+
+		if (list.isEmpty())
+		{
+			Report r;
+			r.specs = currentSpecs;
+			auto cd = r.toJSON(processMidi);
+			v.getDynamicObject()->setProperty("specs", cd["specs"]);
+			v.getDynamicObject()->setProperty("signal", cd["signal"]);
+		}
+
+		for (const auto& r : reports)
+		{
+			
+
+			auto id = list[index]->getId();
+			auto fp = list[index]->getValueTree()[PropertyIds::FactoryPath].toString();
+
+			index++;
+
+			auto cd = r.toJSON(processMidi);
+			
+			DynamicObject* child = new DynamicObject();
+
+			child->setProperty("id", id);
+			child->setProperty("factoryPath", fp);
+			child->setProperty("signal", cd["signal"]);
+
+			// move specs to outer report
+			v.getDynamicObject()->setProperty("specs", cd["specs"]);
+			
+			recursiveData.add(child);
+		}
+
+		v.getDynamicObject()->setProperty("children", recursiveData);
+	}
+	else
+	{
+		auto cd = reports[0].toJSON(processMidi);
+
+		v.getDynamicObject()->setProperty("specs", cd["specs"]);
+		v.getDynamicObject()->setProperty("signal", cd["signal"]);
+	}
+
 	currentSpecs = {};
-	auto v = toVar(parentId);
-	internalReport.toJSON(v, processMidi);
 	return v;
 }
 
@@ -203,11 +319,41 @@ void InjectHelpers::InjectData::prepare(PrepareSpecs specs)
 	currentSpecs = specs;
 }
 
+void InjectHelpers::InjectData::ensureStorageAllocated(int numNodes)
+{
+	maxIndex = numNodes - 1;
+
+	if (recursive)
+	{
+		reports.reserve(numNodes);
+
+		for (int i = 0; i < numNodes; i++)
+			reports.push_back({});
+	}
+	else
+	{
+		reports.push_back({});
+	}
+}
+
+void InjectHelpers::InjectData::checkEmpty(ProcessDataDyn& data)
+{
+	auto isEmpty = maxIndex < 0;
+
+	if (isEmpty)
+	{
+		processInject(data, 0);
+		processProbe(data, 0);
+	}
+}
+
 InjectHelpers::InjectChecker::InjectChecker(DspNetwork* parent_, const var& data, const var& reportCallback) :
 	parent(parent_),
 	d(data),
+	recursiveReportData(new DynamicObject()),
 	scriptCallback(parent_->getScriptProcessor(), parent_, reportCallback, 1),
-	injectOk(Result::ok())
+	injectOk(Result::ok()),
+	filter(data["filter"])
 {
 	if (scriptCallback)
 		scriptCallback.incRefCount();
@@ -219,6 +365,9 @@ InjectHelpers::InjectChecker::InjectChecker(DspNetwork* parent_, const var& data
 		auto list = nc->getNodeList();
 		auto numNodes = list.size();
 
+		if (numNodes == 0)
+			return 0;
+
 		if (value.isString())
 		{
 			auto id = value.toString();
@@ -227,7 +376,7 @@ InjectHelpers::InjectChecker::InjectChecker(DspNetwork* parent_, const var& data
 			for (auto n : list)
 			{
 				if (n->getId() == id)
-					return after ? childIndex + 1 : childIndex;
+					return after ? childIndex : childIndex;
 
 				childIndex++;
 			}
@@ -240,12 +389,12 @@ InjectHelpers::InjectChecker::InjectChecker(DspNetwork* parent_, const var& data
 		if (after)
 		{
 			if (idx == -1)
-				return numNodes;
+				return numNodes-1;
 
 			if (!isPositiveAndBelow(idx, numNodes))
 				throw String("probeIndex out of range.");
 
-			return idx + 1;
+			return idx;
 		}
 		else
 		{
@@ -256,7 +405,6 @@ InjectHelpers::InjectChecker::InjectChecker(DspNetwork* parent_, const var& data
 		}
 	};
 
-
 	auto rn = parent->getRootNode();
 	auto id = data["parent"].toString();
 
@@ -266,27 +414,33 @@ InjectHelpers::InjectChecker::InjectChecker(DspNetwork* parent_, const var& data
 	}
 	else if (auto cn = dynamic_cast<NodeContainer*>(parent->getNodeWithId(id)))
 	{
-		try
-		{
-			ScriptnodeExceptionHandler::validateMidiProcessingContext(dynamic_cast<NodeBase*>(cn));
-			d.processMidi = true;
-		}
-		catch (scriptnode::Error&)
-		{
-			d.processMidi = false;
-		}
+		container = cn->asNode();
 
 		try
 		{
 			d.probeIndex = resolveIdToIndex(cn, data.getProperty("probeId", d.probeIndex), true);
 			d.injectIndex = resolveIdToIndex(cn, data.getProperty("injectId", d.injectIndex), false);
 
-			if (d.injectIndex >= d.probeIndex)
+			if (d.injectIndex > d.probeIndex)
 				injectOk = Result::fail("inject position must be before probe position");
 			else
 			{
 				injectOk = cn->injectNextBuffer(d);
-				container = dynamic_cast<NodeBase*>(cn);
+
+				if (d.recursive)
+				{
+					cn->forEachNode([&](NodeBase::Ptr n)
+					{
+						if (dynamic_cast<NodeContainer*>(n.get()) != nullptr)
+							recursiveContainers.add(n);
+
+						return false;
+					});
+				}
+				else
+				{
+					container = dynamic_cast<NodeBase*>(cn);
+				}
 			}
 		}
 		catch (String& s)
@@ -297,6 +451,7 @@ InjectHelpers::InjectChecker::InjectChecker(DspNetwork* parent_, const var& data
 	else
 		injectOk = Result::fail("Can't find container with id " + id);
 
+	
 	if(injectOk.wasOk())
 		startTimer(15);
 }
@@ -310,20 +465,80 @@ void InjectHelpers::InjectChecker::cleanup()
 {
 	stopTimer();
 
+	recursiveContainers.clear();
+	container = nullptr;
+
 	scriptCallback.clear();
 	nativeCallback = var();
 }
 
 void InjectHelpers::InjectChecker::timerCallback()
 {
-	if (auto nc = dynamic_cast<NodeContainer*>(container.get()))
+	if (d.recursive)
 	{
-		auto report = nc->pollInjectedBuffer();
-
-		if (report.getDynamicObject() != nullptr)
+		for (auto c : recursiveContainers)
 		{
-			var::NativeFunctionArgs args(report, &report, 1);
-			args.arguments = &report;
+			if (recursiveReadyContainers.contains(c))
+				continue;
+
+			auto nc = dynamic_cast<NodeContainer*>(c.get());
+
+			auto report = nc->pollInjectedBuffer();
+
+			if (report.getDynamicObject() != nullptr)
+			{
+				auto id = report["parent"].toString();
+				report.getDynamicObject()->removeProperty("parent");
+				report.getDynamicObject()->setProperty("factoryPath", c->getValueTree()[PropertyIds::FactoryPath]);
+				recursiveReportData->setProperty(id, report);
+				recursiveReadyContainers.add(c);
+			}
+		}
+
+		if (recursiveReadyContainers.size() == recursiveContainers.size())
+		{
+			auto moveProperty = [](DynamicObject::Ptr objectList, DynamicObject::Ptr target, const Identifier& id, bool firstOnly=false)
+			{
+				var value;
+
+				auto isFirst = true;
+
+				for (auto& v : objectList->getProperties())
+				{
+					if(!firstOnly || isFirst)
+						value = v.value[id];
+
+					isFirst = false;
+
+					if (auto obj = v.value.getDynamicObject())
+						obj->removeProperty(id);
+				}
+
+				target->setProperty(id, value);
+			};
+
+			DynamicObject::Ptr newRoot = new DynamicObject();
+
+			moveProperty(recursiveReportData, newRoot, "ok");
+			moveProperty(recursiveReportData, newRoot, "error");
+			moveProperty(recursiveReportData, newRoot, "injectIndex", true);
+			moveProperty(recursiveReportData, newRoot, "probeIndex");
+			moveProperty(recursiveReportData, newRoot, "delayMs", true);
+			moveProperty(recursiveReportData, newRoot, "signalType", true);
+			moveProperty(recursiveReportData, newRoot, "gain", true);
+			moveProperty(recursiveReportData, newRoot, "seed", true);
+			moveProperty(recursiveReportData, newRoot, "recursive");
+
+			var report(recursiveReportData.get());
+
+			newRoot->setProperty("containers", report);
+
+			newRoot->setProperty("tree", filter.createTree(container->getValueTree()));
+
+			auto x = filter.apply(var(newRoot.get()));
+
+			var::NativeFunctionArgs args(x, &x, 1);
+			args.arguments = &x;
 			args.numArguments = 1;
 
 			if (scriptCallback)
@@ -336,20 +551,160 @@ void InjectHelpers::InjectChecker::timerCallback()
 	}
 	else
 	{
-		cleanup();
+		if (auto nc = dynamic_cast<NodeContainer*>(container.get()))
+		{
+			auto report = nc->pollInjectedBuffer();
+
+			if (report.getDynamicObject() != nullptr)
+			{
+				report = filter.apply(report);
+
+				var::NativeFunctionArgs args(report, &report, 1);
+				args.arguments = &report;
+				args.numArguments = 1;
+
+				if (scriptCallback)
+					scriptCallback.call(args);
+				else if (auto f = nativeCallback.getNativeFunction())
+					f(args);
+
+				cleanup();
+			}
+		}
+		else
+		{
+			cleanup();
+		}
 	}
 }
 
-NodeContainer::NodeContainer()
+juce::var InjectHelpers::JSONFilter::createTree(const ValueTree& root)
+{
+	auto cn = root[PropertyIds::FactoryPath].toString();
+
+	if (cn.startsWith("container."))
+	{
+		DynamicObject::Ptr tree = new DynamicObject();
+
+		for (auto n : root.getChildWithName(PropertyIds::Nodes))
+		{
+			tree->setProperty(n[PropertyIds::ID].toString(), createTree(n));
+		}
+
+		return var(tree.get());
+	}
+	else
+	{
+		return cn;
+	}
+}
+
+juce::var InjectHelpers::JSONFilter::apply(const var& fullData) const
+{
+	if (isNonStandard())
+		return fullData;
+
+	auto removeIfDefault = [&](const var& obj, const Identifier& id, const var& value)
+	{
+		if (compact && obj.hasProperty(id) && obj[id] == value)
+		{
+			obj.getDynamicObject()->removeProperty(id);
+		}
+	};
+
+	auto collapseChannelData = [&](const var& signalData)
+	{
+		if (compact)
+		{
+			auto ch = signalData["signal"];
+
+			if (ch.isArray())
+			{
+				Array<var> simple;
+
+				for (auto& s : *ch.getArray())
+				{
+					if (s["silence"])
+						simple.add(0.0f);
+					else
+					{
+						auto min = (float)s["min"];
+						auto max = (float)s["max"];
+
+						if (std::abs(min) > std::abs(max))
+							max = min;
+
+						simple.add(max);
+					}
+				}
+
+				signalData.getDynamicObject()->setProperty("signal", var(simple));
+			}
+		}
+	};
+
+	removeIfDefault(fullData, "ok", true);
+	removeIfDefault(fullData, "error", "");
+	removeIfDefault(fullData, "injectIndex", 0);
+	removeIfDefault(fullData, "probeIndex", -1);
+	removeIfDefault(fullData, "delayMs", 0.0);
+	removeIfDefault(fullData, "signalType", "silence");
+	removeIfDefault(fullData, "gain", 1.0f);
+	removeIfDefault(fullData, "seed", fullData["seed"]);
+	
+	if (fullData["recursive"])
+	{
+		if (!tree)
+			fullData.getDynamicObject()->removeProperty("tree");
+
+		auto ar = fullData["containers"];
+
+		if (auto list = ar.getDynamicObject())
+		{
+			for (const auto& report : list->getProperties())
+			{
+				if (!specs)
+					report.value.getDynamicObject()->removeProperty("specs");
+
+				if (!signal)
+					report.value.getDynamicObject()->removeProperty("children");
+				else if (compact)
+				{
+					auto children = report.value["children"];
+
+					for(auto& c: *children.getArray())
+						collapseChannelData(c);
+				}
+			}
+		}
+	}
+	else
+	{
+		if (!specs)
+			fullData.getDynamicObject()->removeProperty("specs");
+		if (!signal)
+			fullData.getDynamicObject()->removeProperty("signal");
+		else if (compact)
+		{
+			collapseChannelData(fullData);
+		}
+	}
+
+	return fullData;
+}
+
+NodeContainer::NodeContainer():
+  injector(*this)
 {
 
 }
 
 void NodeContainer::resetNodes()
 {
-
 	for (auto n : nodes)
 		n->reset();
+
+	injector.reset();
 }
 
 scriptnode::ParameterDataList NodeContainer::createInternalParametersForMacros()
@@ -433,7 +788,7 @@ void NodeContainer::prepareNodes(PrepareSpecs ps)
 {
 	prepareContainer(ps);
 
-	prepareInjectData(ps);
+	injector.prepare(ps);
 
 	for (auto n : nodes)
 	{
