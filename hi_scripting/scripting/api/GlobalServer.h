@@ -146,11 +146,14 @@ struct GlobalServer: public ControlledObject,
 
     void setInitialised();
 
-	/** Starts native OS network connectivity monitoring. Called automatically from setInitialised(). */
+	/** Starts the connectivity polling timer. Called from setConnectivityCallback() the first time a script registers interest. */
 	void startConnectivityMonitoring();
 
-	/** Returns the last known network connection type without querying the OS. */
+	/** Returns the last cached network type (fast, no OS call). */
 	NetworkConnectivityChecker::NetworkType getLastKnownNetworkType() const;
+
+	/** Queries the OS immediately and returns the current type (used by getConnectionType()). */
+	NetworkConnectivityChecker::NetworkType queryCurrentNetworkType();
 
 private:
 

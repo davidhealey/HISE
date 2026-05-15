@@ -8292,13 +8292,15 @@ void ScriptingApi::Server::setServerCallback(var callback)
 
 String ScriptingApi::Server::getConnectionType()
 {
-	return networkTypeToString (globalServer.getLastKnownNetworkType());
+	// Always do a live OS query — the timer may not be running if no callback is registered.
+	return networkTypeToString (globalServer.queryCurrentNetworkType());
 }
 
 void ScriptingApi::Server::setConnectivityCallback(var callback)
 {
 	connectivityCallback = WeakCallbackHolder(getScriptProcessor(), this, callback, 1);
 	connectivityCallback.incRefCount();
+	globalServer.startConnectivityMonitoring();
 }
 
 bool ScriptingApi::Server::isEmailAddress(String email)
