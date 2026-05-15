@@ -67,10 +67,9 @@ NetworkConnectivityChecker::NetworkType NetworkConnectivityChecker::getCurrentNe
 
 void NetworkConnectivityChecker::timerCallback()
 {
+    // Only query network type here — getRSSI() triggers an active WiFi scan on
+    // Windows (WlanScan) which is expensive and should only run on explicit request.
     const auto newType = getCurrentSystemNetworkType();
-    const auto newRSSI = getCurrentSystemRSSI();
-
-    lastKnownRSSI = newRSSI;
 
     if (newType != lastKnownType)
     {
