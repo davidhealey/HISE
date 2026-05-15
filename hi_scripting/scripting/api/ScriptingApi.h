@@ -1700,7 +1700,13 @@ private:
 
 		/** Returns true if the system is connected to the internet. */
 		bool isOnline();
-		
+
+		/** Returns the current network connection type as a string: "wifi", "wired", "mobile", "other", or "none". */
+		String getConnectionType();
+
+		/** Sets a callback that fires when the network connection type changes. The callback receives the new type string. */
+		void setConnectivityCallback(var callback);
+
 		/** Removes all finished downloads from the list. */
 		void cleanFinishedDownloads();
 
@@ -1719,9 +1725,12 @@ private:
 			}
 		}
 
-		void downloadQueueChanged(int) override
-		{
+		void downloadQueueChanged(int) override {}
 
+		void networkConnectivityChanged (NetworkConnectivityChecker::NetworkType newType) override
+		{
+			if (connectivityCallback)
+				connectivityCallback.call1 (networkTypeToString (newType));
 		}
 
 		juce::URL getWithParameters(String subURL, var parameters)
@@ -1747,9 +1756,22 @@ private:
 
 	private:
 
+		static String networkTypeToString (NetworkConnectivityChecker::NetworkType t)
+		{
+			switch (t)
+			{
+				case NetworkConnectivityChecker::NetworkType::wifi:   return "wifi";
+				case NetworkConnectivityChecker::NetworkType::wired:  return "wired";
+				case NetworkConnectivityChecker::NetworkType::mobile: return "mobile";
+				case NetworkConnectivityChecker::NetworkType::other:  return "other";
+				default:                                               return "none";
+			}
+		}
+
 		GlobalServer& globalServer;
 
 		WeakCallbackHolder serverCallback;
+		WeakCallbackHolder connectivityCallback;
 
 		JavascriptProcessor* jp;
 
