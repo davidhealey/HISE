@@ -324,6 +324,10 @@ void ConvolutionEffectBase::resetBase()
 	smoothInputBuffer = false;
 	rampFlag = false;
 
+	fadeOutConvolverL = nullptr;
+	fadeOutConvolverR = nullptr;
+	fadeValue = 0.0f;
+	
 	if (predelayMs > 0)
 	{
 		leftPredelay.clear();
