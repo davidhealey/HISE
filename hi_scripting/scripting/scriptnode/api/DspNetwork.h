@@ -887,17 +887,78 @@ struct HostHelpers
 	static void setNumDataObjectsFromValueTree(OpaqueNode& on, const ValueTree& v);
 };
 
+struct Parameter;
+
 struct InjectHelpers
 {
+	enum class State
+	{
+		WaitingForInjection,
+		WaitingForProbe,
+		WaitingForReport,
+		Done
+	};
+
+	struct ParameterInjector: public ReferenceCountedObject
+	{
+		using Ptr = ReferenceCountedObjectPtr<ParameterInjector>;
+
+		ParameterInjector(DspNetwork* n, const var& parameterData);
+
+		~ParameterInjector()
+		{
+			cleanUp();
+		}
+
+		void cleanUp();
+
+		bool isActive() const { return injectParameters.size() > 0 && currentState == State::WaitingForInjection; }
+
+		void processInject(ProcessDataDyn& data);
+
+		void processProbe(ProcessDataDyn& data);
+
+		bool reportReady() const
+		{
+			jassert(MessageManager::getInstance()->isThisTheMessageThread());
+			return currentState == State::WaitingForReport;
+		}
+
+		struct Report
+		{
+			Report(int numParameters)
+			{
+				for (int i = 0; i < numParameters; i++)
+				{
+					parameterValues.push_back({ nullptr, 0.0 });
+				}
+			}
+
+			var toJSON() const;
+
+			std::vector<std::pair<ReferenceCountedObject*, double>> parameterValues;
+		};
+
+		Parameter* getParameter(const String& path);
+
+		WeakReference<DspNetwork> network;
+
+		var poll(bool compact);
+
+		std::vector<std::pair<var, double>> injectParameters;
+		std::vector<var> probeParameters;
+		std::vector<Report> reports;
+
+		std::vector<std::pair<var, double>> cleanupValues;
+
+		bool probeAll;
+		Result injectOk;
+		State currentState = State::WaitingForInjection;
+	};
+
 	struct InjectData
 	{
-		enum class State
-		{
-			WaitingForInjection,
-			WaitingForProbe,
-			WaitingForReport,
-			Done
-		};
+		
 
 		enum class TestSignal
 		{
@@ -975,6 +1036,8 @@ struct InjectHelpers
 		bool processMidi = false;
 		bool recursive = false;
 
+		ParameterInjector::Ptr parameterInjector;
+
 	private:
 
 		String errorMessage;
@@ -984,6 +1047,8 @@ struct InjectHelpers
 
 		State currentState = State::WaitingForInjection;
 	};
+
+	
 
 	struct JSONFilter
 	{
@@ -1033,6 +1098,9 @@ struct InjectHelpers
 		DynamicObject::Ptr recursiveReportData;
 
 		JSONFilter filter;
+
+		ParameterInjector::Ptr paramInjector;
+		var parameterData;
 
 		WeakReference<DspNetwork> parent;
 	};

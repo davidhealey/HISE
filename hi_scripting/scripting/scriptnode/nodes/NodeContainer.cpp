@@ -35,6 +35,369 @@ namespace scriptnode
 using namespace juce;
 using namespace hise;
 
+
+InjectHelpers::ParameterInjector::ParameterInjector(DspNetwork* n, const var& parameterData):
+  injectOk(Result::ok()),
+  network(n),
+  probeAll(false)
+{
+	if (auto obj = parameterData.getDynamicObject())
+	{
+		auto inj = obj->getProperty("inject");
+		auto pro = obj->getProperty("probe");
+
+		auto findParameter = [&](const String& path)
+		{
+			if(auto p = getParameter(path))
+				return var(p);
+
+			throw String("Can't find parameter " + path);
+			return var();
+		};
+
+		try
+		{
+			if (auto obj = inj.getDynamicObject())
+			{
+				for (auto& nv : obj->getProperties())
+					injectParameters.push_back({ findParameter(nv.name.toString()), (double)nv.value });
+			}
+
+			if (auto ar = pro.getArray())
+			{
+				for (auto& v : *ar)
+					probeParameters.push_back(findParameter(v.toString()));
+
+				reports.push_back(Report(probeParameters.size()));
+			}
+			else if (pro.toString() == "*")
+			{
+				probeAll = true;
+				reports.push_back(Report(0));
+
+				n->getRootNode()->forEach([&](NodeBase::Ptr n)
+				{
+					for (int i = 0; i < n->getNumParameters(); i++)
+					{
+						auto p = n->getParameterFromIndex(i);
+						reports[0].parameterValues.push_back({ p, p->getValue() });
+					}
+
+					return false;
+				});
+			}
+		}
+		catch (String& s)
+		{
+			injectOk = Result::fail(s);
+		}
+	}
+}
+
+Parameter* InjectHelpers::ParameterInjector::getParameter(const String& path)
+{
+	auto nodeId = path.upToFirstOccurrenceOf(".", false, false);
+	auto paramId = path.fromFirstOccurrenceOf(".", false, false);
+
+	if (auto node = network->getNodeWithId(nodeId))
+	{
+		return node->getParameterFromName(paramId);
+	}
+
+	return nullptr;
+}
+
+void InjectHelpers::ParameterInjector::cleanUp()
+{
+	for (auto& c : cleanupValues)
+	{
+		auto param = dynamic_cast<Parameter*>(c.first.getObject());
+
+		if (param != nullptr)
+			param->setValueAsync(c.second);
+	}
+
+	cleanupValues.clear();
+}
+
+
+
+void InjectHelpers::ParameterInjector::processInject(ProcessDataDyn& data)
+{
+	if (currentState == State::WaitingForInjection)
+	{
+		for (auto& p : injectParameters)
+		{
+			auto param = dynamic_cast<Parameter*>(p.first.getObject());
+
+			if (param != nullptr)
+			{
+				auto currentValue = param->getValue();
+
+				cleanupValues.push_back({ p.first, currentValue });
+				param->setValueAsync(p.second);
+				p.second = currentValue;
+			}
+		}
+
+		currentState = (probeAll || probeParameters.size() > 0) ? State::WaitingForProbe : State::WaitingForReport;
+	}
+}
+
+void InjectHelpers::ParameterInjector::processProbe(ProcessDataDyn& data)
+{
+	if (currentState == State::WaitingForProbe)
+	{
+		int idx = 0;
+
+		if (probeAll)
+		{
+			
+			for (auto& p : reports[0].parameterValues)
+			{
+				auto param = static_cast<Parameter*>(p.first);
+				
+				auto thisValue = param->getValue();
+				auto prevValue = p.second;
+
+				if (thisValue == prevValue)
+					p.first = nullptr;
+				else
+					p.second = thisValue;
+			}
+		}
+		else
+		{
+			for (auto& p : probeParameters)
+			{
+				auto param = dynamic_cast<Parameter*>(p.getObject());
+				auto& v = reports[0].parameterValues[idx++];
+				v.first = param;
+				v.second = param->getValue();
+			}
+		}
+
+		currentState = State::WaitingForReport;
+	}
+}
+
+
+
+juce::var InjectHelpers::ParameterInjector::poll(bool compact)
+{
+	if (currentState == State::WaitingForReport)
+	{
+		currentState = State::Done;
+		
+		auto obj = new DynamicObject();
+
+		auto inj = new DynamicObject();
+		auto pro = new DynamicObject();
+		
+		// cleanup to the prev value
+		for (auto& p : injectParameters)
+		{
+			auto param = dynamic_cast<Parameter*>(p.first.getObject());
+
+			String key;
+
+			key << param->parent->getId();
+			key << ".";
+			key << param->getId();
+
+			if (compact)
+			{
+				inj->setProperty(key, param->getValue());
+			}
+			else
+			{
+				DynamicObject::Ptr v = new DynamicObject();
+				auto r = scriptnode::RangeHelpers::getDoubleRange(param->data);
+				scriptnode::RangeHelpers::storeDoubleRange(var(v.get()), r, RangeHelpers::IdSet::ScriptComponents);
+
+				if (r.inv)
+					v->setProperty("inverted", true);
+				else
+					v->setProperty("inverted", false);
+
+				v->removeProperty("Inverted");
+
+				v->setProperty("testValue", param->getValue());
+				v->setProperty("originalValue", p.second);
+				inj->setProperty(key, var(v.get()));
+			}
+		}
+
+		obj->setProperty("injected", inj);
+
+		if (reports.size() > 0)
+		{
+			for (auto p : reports[0].parameterValues)
+			{
+				auto param = dynamic_cast<Parameter*>(p.first);
+
+				if (param != nullptr)
+				{
+					String key;
+
+					key << param->parent->getId();
+					key << ".";
+					key << param->getId();
+
+					if (compact)
+					{
+						pro->setProperty(key, p.second);
+					}
+					else
+					{
+						DynamicObject::Ptr v = new DynamicObject();
+						auto r = scriptnode::RangeHelpers::getDoubleRange(param->data);
+
+						auto unscaled = cppgen::CustomNodeProperties::isUnscaledParameter(param->data);
+
+						v->setProperty("value", p.second);
+
+						if (!unscaled)
+						{
+							scriptnode::RangeHelpers::storeDoubleRange(var(v.get()), r, RangeHelpers::IdSet::ScriptComponents);
+
+							if (r.inv)
+								v->setProperty("inverted", true);
+							else
+								v->setProperty("inverted", false);
+
+							v->removeProperty("Inverted");
+
+							if (!unscaled)
+							{
+								v->setProperty("normalizedValue", r.convertTo0to1(p.second, true));
+								v->setProperty("outOfRange", !r.getRange().contains(p.second));
+							}
+						}
+
+						pro->setProperty(key, var(v.get()));
+					}
+				}
+			}
+
+			obj->setProperty("probed", pro);
+
+			if (probeAll)
+			{
+				DynamicObject::Ptr edges = new DynamicObject();
+
+				auto root = network->getValueTree();
+
+				valuetree::Helpers::forEach(root, [&](ValueTree& v)
+				{
+					if (v.getType() == PropertyIds::Connection)
+					{
+						String sourceKey, targetKey;
+
+						auto sourceParam = valuetree::Helpers::findParentWithType(v, PropertyIds::Parameter);
+						auto sourceNode = valuetree::Helpers::findParentWithType(v, PropertyIds::Node);
+
+						sourceKey << sourceNode[PropertyIds::ID].toString() << ".";
+
+						targetKey << v[PropertyIds::NodeId].toString() << "." << v[PropertyIds::ParameterId].toString();
+
+						if (sourceParam.isValid())
+							sourceKey << sourceParam[PropertyIds::ID].toString();
+						else
+						{
+							auto isMod = valuetree::Helpers::findParentWithType(v, PropertyIds::ModulationTargets).isValid();
+
+							if (isMod)
+								sourceKey << "mod";
+
+							auto switchTarget = valuetree::Helpers::findParentWithType(v, PropertyIds::SwitchTarget);
+
+							if (switchTarget.isValid())
+								sourceKey << "mod[" << String(switchTarget.getParent().indexOf(switchTarget)) << "]";
+						}
+
+						Identifier sid(sourceKey);
+
+						Identifier tid(targetKey);
+
+						if (!pro->hasProperty(tid))
+							return false;
+
+						DynamicObject::Ptr con = new DynamicObject();
+						con->setProperty("target", targetKey);
+
+						String mode;
+
+
+
+						if (auto p = getParameter(targetKey))
+						{
+							auto unscaledTarget = cppgen::CustomNodeProperties::isUnscaledParameter(p->data);
+							auto unscaledSource = cppgen::CustomNodeProperties::nodeHasProperty(sourceNode, PropertyIds::UseUnnormalisedModulation);
+
+							if (unscaledTarget || unscaledSource)
+								mode << "unscaled";
+							else
+							{
+								auto rng2 = RangeHelpers::getDoubleRange(p->data);
+
+								if (auto sp = getParameter(sourceKey))
+								{
+									con->setProperty("sourceValue", sp->getValue());
+									auto rng1 = RangeHelpers::getDoubleRange(sp->data);
+									auto matched = RangeHelpers::isEqual(rng1, rng2);
+
+									mode << (matched ? "matched" : "scaled");
+								}
+								else
+								{
+									if (auto modNode = dynamic_cast<ModulationSourceNode*>(network->getNodeForValueTree(sourceNode)))
+									{
+										con->setProperty("sourceValue", modNode->getParameterHolder()->getDisplayValue());
+									}
+									
+									mode << (RangeHelpers::isIdentity(rng2) ? "matched" : "scaled");
+								}
+							}
+
+							con->setProperty("targetValue", p->getValue());
+						}
+
+						con->setProperty("connectionMode", mode);
+
+						if (edges->hasProperty(sid))
+						{
+							auto v = edges->getProperty(sid);
+							v.append(var(con.get()));
+						}
+						else
+						{
+							Array<var> targets;
+							targets.add(con.get());
+							edges->setProperty(sid, targets);
+						}
+					}
+
+					return false;
+				});
+
+				obj->setProperty("touchedEdges", edges.get());
+			}
+		}
+		else
+		{
+			obj->setProperty("probed", new DynamicObject());
+			obj->setProperty("touchedEdges", new DynamicObject());
+		}
+
+		cleanUp();
+
+		return var(obj);
+	}
+
+	return var(false);
+}
+
 void InjectHelpers::InjectData::Report::process(ProcessDataDyn& data)
 {
 	for (int i = 0; i < specs.numChannels; i++)
@@ -142,6 +505,9 @@ void InjectHelpers::InjectData::processInject(ProcessDataDyn& data, int currentI
 
 	if (currentState == State::WaitingForInjection)
 	{
+		if (parameterInjector != nullptr && currentIndex == 0)
+			parameterInjector->processInject(data);
+
 		auto indexMatch = recursive ? (currentIndex == 0) : (currentIndex == injectIndex);
 
 		if (indexMatch)
@@ -215,6 +581,9 @@ void InjectHelpers::InjectData::processProbe(ProcessDataDyn& data, int currentIn
 
 			if (currentIndex == maxIndex || maxIndex == -1)
 			{
+				if (parameterInjector != nullptr)
+					parameterInjector->processProbe(data);
+
 				currentState = State::WaitingForReport;
 			}
 		}
@@ -227,6 +596,9 @@ void InjectHelpers::InjectData::processProbe(ProcessDataDyn& data, int currentIn
 				delayMs -= thisTimeMs;
 				return;
 			}
+
+			if (parameterInjector != nullptr)
+				parameterInjector->processProbe(data);
 
 			currentState = State::WaitingForReport;
 
@@ -414,6 +786,19 @@ InjectHelpers::InjectChecker::InjectChecker(DspNetwork* parent_, const var& data
 	}
 	else if (auto cn = dynamic_cast<NodeContainer*>(parent->getNodeWithId(id)))
 	{
+		if (data["parameters"].isObject())
+		{
+			paramInjector = new ParameterInjector(parent_, data["parameters"]);
+
+			if (paramInjector->injectOk.failed())
+			{
+				injectOk = paramInjector->injectOk;
+				return;
+			}
+
+			d.parameterInjector = paramInjector;
+		}
+
 		container = cn->asNode();
 
 		try
@@ -452,6 +837,7 @@ InjectHelpers::InjectChecker::InjectChecker(DspNetwork* parent_, const var& data
 		injectOk = Result::fail("Can't find container with id " + id);
 
 	
+
 	if(injectOk.wasOk())
 		startTimer(15);
 }
@@ -467,6 +853,8 @@ void InjectHelpers::InjectChecker::cleanup()
 
 	recursiveContainers.clear();
 	container = nullptr;
+	paramInjector = nullptr;
+	d.parameterInjector = nullptr;
 
 	scriptCallback.clear();
 	nativeCallback = var();
@@ -474,6 +862,11 @@ void InjectHelpers::InjectChecker::cleanup()
 
 void InjectHelpers::InjectChecker::timerCallback()
 {
+	if (paramInjector != nullptr && paramInjector->reportReady() && !parameterData.isObject())
+	{
+		parameterData = paramInjector->poll(filter.compact);
+	}
+
 	if (d.recursive)
 	{
 		for (auto c : recursiveContainers)
@@ -529,11 +922,15 @@ void InjectHelpers::InjectChecker::timerCallback()
 			moveProperty(recursiveReportData, newRoot, "seed", true);
 			moveProperty(recursiveReportData, newRoot, "recursive");
 
+
 			var report(recursiveReportData.get());
 
 			newRoot->setProperty("containers", report);
 
 			newRoot->setProperty("tree", filter.createTree(container->getValueTree()));
+
+			if (parameterData.isObject())
+				newRoot->setProperty("parameters", parameterData);
 
 			auto x = filter.apply(var(newRoot.get()));
 
@@ -555,8 +952,13 @@ void InjectHelpers::InjectChecker::timerCallback()
 		{
 			auto report = nc->pollInjectedBuffer();
 
+			
+
 			if (report.getDynamicObject() != nullptr)
 			{
+				if (parameterData.isObject())
+					report.getDynamicObject()->setProperty("parameters", parameterData);
+
 				report = filter.apply(report);
 
 				var::NativeFunctionArgs args(report, &report, 1);

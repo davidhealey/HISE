@@ -3814,6 +3814,10 @@ RestServer::Response RestHelpers::handleBuilderApply(MainController* mc,
 	
 	using ActionBase = RestServerUndoManager::ActionBase;
 	ActionBase::List actions;
+	RestServerUndoManager::PlanValidationState::Ptr batchValidationState;
+
+	if (um->getCurrentValidationState() == nullptr)
+		batchValidationState = new RestServerUndoManager::PlanValidationState(mc);
 	
 	for (int i = 0; i < ops.size(); i++)
 	{
@@ -3821,6 +3825,19 @@ RestServer::Response RestHelpers::handleBuilderApply(MainController* mc,
 
 		auto ad = um->createAction(RestServerUndoManager::Domain::Builder, op);
 		auto ok = ad->validate();
+
+		if (batchValidationState != nullptr)
+		{
+			const auto liveError = ok.getErrorMessage();
+			const auto canRetryWithBatchState = liveError.startsWith("Can't find parent") ||
+				liveError.startsWith("Can't find module");
+
+			if (ok || canRetryWithBatchState)
+			{
+				ad->planValidation = batchValidationState;
+				ok = ad->validate();
+			}
+		}
 
 		if (ok)
 			actions.add(ad);

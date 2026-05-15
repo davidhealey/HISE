@@ -40,7 +40,7 @@
     runtime field. Consumers read it off any response (or `/api/status`) to
     verify they are talking to a HISE build that matches their expected schema.
 */
-#define HISE_REST_API_VERSION "0.8.1"
+#define HISE_REST_API_VERSION "0.8.2"
 
 namespace hise { using namespace juce;
 
@@ -369,6 +369,16 @@ namespace RestApiIds
     DECLARE_ID(avg);                  // Channel average sample value
     DECLARE_ID(peakIndex);            // Sample index of positive peak
     DECLARE_ID(silence);              // Whether the channel block was silent
+    DECLARE_ID(injected);             // Parameter values injected during a DSP probe
+    DECLARE_ID(probed);               // Parameter values captured during a DSP probe
+    DECLARE_ID(touchedEdges);         // Parameter connections touched by a wildcard probe
+    DECLARE_ID(testValue);            // Injected parameter value after processing
+    DECLARE_ID(originalValue);        // Parameter value before injection
+    DECLARE_ID(normalizedValue);      // Normalised parameter value
+    DECLARE_ID(outOfRange);           // Whether a parameter value is outside its range
+    DECLARE_ID(connectionMode);        // Parameter connection scaling mode
+    DECLARE_ID(sourceValue);          // Captured connection source value
+    DECLARE_ID(targetValue);          // Captured connection target value
 
     // snippet browser
     DECLARE_ID(exists);               // Whether a snippet browser instance is alive

@@ -238,12 +238,12 @@ struct NodeContainer : public AssignableObject
 			injector.reset();
 			return ok;
 		}
-			
 
 		if (d.recursive)
 		{
 			copy.signal = InjectHelpers::InjectData::TestSignal::Silence;
 			copy.injectIndex = 0;
+			copy.parameterInjector = nullptr;
 
 			for (auto n : nodes)
 			{

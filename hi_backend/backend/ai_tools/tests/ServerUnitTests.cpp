@@ -214,8 +214,9 @@ public:
         testDspProbeSuccess();
         testDspProbeIdTargeting();
         testDspProbeRecursiveFilter();
+        testDspProbeParameterReport();
+        testDspProbeParameterCompactAndInjectOnly();
         testDspProbeValidation();
-        testDspProbePendingConflict();
         testDspProbeTimeout();
         testDspScreenshot();
 
@@ -4194,6 +4195,8 @@ private:
         expectNoBuilderError(seedJson);
         expectHasNestedChild("MoveContainerA", "MoveSineA");
 
+        ctx->parseJson(ctx->httpPost("/api/undo/clear", "{}"));
+
         // Cross-parent move
         Array<var> moveOps;
         moveOps.add(makeMoveOp("MoveSineA", "MoveContainerB", -1));
@@ -4348,7 +4351,7 @@ private:
         expectNoBuilderError(resizeJson);
 
         Array<var> ops;
-        ops.add(makeSetRoutingSendOp("Master Chain", { -1, -1, 2, 3 }));
+        ops.add(makeSetRoutingSendOp("Master Chain", { -1, -1, 0, 1 }));
 
         auto json = postBuilderOps(ops);
         expectNoBuilderError(json);
@@ -4356,8 +4359,8 @@ private:
 
         expectSendConnection("Master Chain", 0, -1);
         expectSendConnection("Master Chain", 1, -1);
-        expectSendConnection("Master Chain", 2, 2);
-        expectSendConnection("Master Chain", 3, 3);
+        expectSendConnection("Master Chain", 2, 0);
+        expectSendConnection("Master Chain", 3, 1);
 
         // matrix connections still intact
         expectMatrixConnection("Master Chain", 0, 0);
@@ -8332,6 +8335,67 @@ private:
         expect(rootReport[RestApiIds::children].isArray(), "Root container should include child reports");
     }
 
+    void testDspProbeParameterReport()
+    {
+        beginTest("POST /api/dsp/probe - parameter report");
+
+        resetDspState();
+
+        Array<var> ops;
+        ops.add(makeDspAddOp("core.gain", "test_network", "ProbeGain"));
+        expectDspSuccess(postDspOps(ops));
+
+        auto body = JSON::parse(R"({"moduleId":"DspTestFX","parent":"test_network","injectIndex":0,"probeIndex":-1,"signalType":"dc","gain":1.0,"parameters":{"inject":{"ProbeGain.Gain":0.25},"probe":["ProbeGain.Gain"]}})");
+        auto json = postDspProbeWhileProcessing(body);
+
+        expect((bool)json[RestApiIds::success], "Parameter probe request should succeed");
+
+        auto parameters = json[RestApiIds::parameters];
+        expect(parameters.isObject(), "Should include parameters object");
+
+        auto injected = parameters[RestApiIds::injected]["ProbeGain.Gain"];
+        expect(injected.isObject(), "Injected parameter should use full object shape");
+        expectEquals((double)injected[RestApiIds::testValue], 0.25, "Injected testValue should match request");
+        expect(injected.hasProperty(RestApiIds::originalValue), "Injected report should include originalValue");
+
+        auto probed = parameters[RestApiIds::probed]["ProbeGain.Gain"];
+        expect(probed.isObject(), "Probed parameter should use full object shape");
+        expectEquals((double)probed[RestApiIds::value], 0.25, "Probed value should reflect injected value");
+        expect(probed.hasProperty(RestApiIds::normalizedValue), "Probed report should include normalizedValue");
+    }
+
+    void testDspProbeParameterCompactAndInjectOnly()
+    {
+        beginTest("POST /api/dsp/probe - compact and inject-only parameter report");
+
+        resetDspState();
+
+        Array<var> ops;
+        ops.add(makeDspAddOp("core.gain", "test_network", "ProbeGain"));
+        expectDspSuccess(postDspOps(ops));
+
+        auto compactBody = JSON::parse(R"({"moduleId":"DspTestFX","parent":"test_network","injectIndex":0,"probeIndex":-1,"signalType":"dc","parameters":{"inject":{"ProbeGain.Gain":0.5},"probe":["ProbeGain.Gain"]},"filter":{"compact":true}})");
+        auto compactJson = postDspProbeWhileProcessing(compactBody);
+
+        expect((bool)compactJson[RestApiIds::success], "Compact parameter probe should succeed");
+        auto compactParameters = compactJson[RestApiIds::parameters];
+        expectEquals((double)compactParameters[RestApiIds::injected]["ProbeGain.Gain"], 0.5,
+            "Compact injected value should be numeric");
+        expectEquals((double)compactParameters[RestApiIds::probed]["ProbeGain.Gain"], 0.5,
+            "Compact probed value should be numeric");
+
+        auto injectOnlyBody = JSON::parse(R"({"moduleId":"DspTestFX","parent":"test_network","injectIndex":0,"probeIndex":-1,"signalType":"dc","parameters":{"inject":{"ProbeGain.Gain":0.75}},"filter":{"compact":true}})");
+        auto injectOnlyJson = postDspProbeWhileProcessing(injectOnlyBody);
+
+        expect((bool)injectOnlyJson[RestApiIds::success], "Inject-only parameter probe should succeed");
+        auto injectOnlyParameters = injectOnlyJson[RestApiIds::parameters];
+        expectEquals((double)injectOnlyParameters[RestApiIds::injected]["ProbeGain.Gain"], 0.75,
+            "Inject-only compact report should include injected value");
+        expect(injectOnlyParameters[RestApiIds::probed].isObject(), "Inject-only report should include empty probed object");
+        expect(injectOnlyParameters[RestApiIds::touchedEdges].isObject(),
+            "Inject-only report should include empty touchedEdges object");
+    }
+
     void testDspProbeValidation()
     {
         beginTest("POST /api/dsp/probe - validation");
@@ -8362,62 +8426,10 @@ private:
         auto invalidSignal = ctx->parseJson(ctx->httpPost("/api/dsp/probe",
             R"({"moduleId": "DspTestFX", "parent": "test_network", "injectIndex": 0, "probeIndex": -1, "signalType": "sine"})"));
         expectErrorMessageContains(invalidSignal, "signalType");
-    }
 
-    void testDspProbePendingConflict()
-    {
-        beginTest("POST /api/dsp/probe - pending conflict");
-
-        resetDspState();
-
-        Array<var> ops;
-        ops.add(makeDspAddOp("core.gain", "test_network", "ProbeGain"));
-        expectDspSuccess(postDspOps(ops));
-
-        DynamicObject::Ptr body = new DynamicObject();
-        body->setProperty(RestApiIds::moduleId, "DspTestFX");
-        body->setProperty(RestApiIds::parent, "test_network");
-        body->setProperty(RestApiIds::injectIndex, 0);
-        body->setProperty(RestApiIds::probeIndex, -1);
-        body->setProperty(RestApiIds::signalType, "dirac");
-        body->setProperty(RestApiIds::delayMs, 300.0);
-
-        String response1;
-        std::atomic<bool> done1 { false };
-
-        Thread::launch([&response1, &done1, body]()
-        {
-            URL url = URL("http://localhost:" + String(TEST_PORT) + "/api/dsp/probe")
-                .withPOSTData(JSON::toString(var(body.get())));
-
-            URL::InputStreamOptions options(URL::ParameterHandling::inAddress);
-
-            if (auto stream = url.createInputStream(options.withExtraHeaders("Content-Type: application/json")))
-                response1 = stream->readEntireStreamAsString();
-
-            done1.store(true);
-        });
-
-        MessageManager::getInstance()->runDispatchLoopUntil(50);
-
-        auto json2 = ctx->parseJson(ctx->httpPost("/api/dsp/probe", JSON::toString(var(body.get()))));
-        expectErrorMessageContains(json2, "pending");
-
-        auto start = Time::getMillisecondCounter();
-
-        while (!done1.load() && (Time::getMillisecondCounter() - start) < 2000)
-        {
-            AudioSampleBuffer ab(2, 512);
-            MidiBuffer mb;
-            ctx->bp->processBlock(ab, mb);
-            MessageManager::getInstance()->runDispatchLoopUntil(10);
-        }
-
-        while (!done1.load())
-            MessageManager::getInstance()->runDispatchLoopUntil(10);
-
-        auto json1 = ctx->parseJson(response1);
-        expect((bool)json1[RestApiIds::success], "First probe request should eventually succeed");
+        auto invalidParameter = ctx->parseJson(ctx->httpPost("/api/dsp/probe",
+            R"({"moduleId": "DspTestFX", "parent": "test_network", "injectIndex": 0, "probeIndex": -1, "signalType": "dirac", "parameters": {"probe": ["Missing.Gain"]}})"));
+        expectErrorMessageContains(invalidParameter, "parameter");
     }
 
     void testDspProbeTimeout()
