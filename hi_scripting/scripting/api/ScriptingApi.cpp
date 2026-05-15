@@ -8300,7 +8300,12 @@ void ScriptingApi::Server::setConnectivityCallback(var callback)
 {
 	connectivityCallback = WeakCallbackHolder(getScriptProcessor(), this, callback, 1);
 	connectivityCallback.incRefCount();
-	globalServer.startConnectivityMonitoring();
+
+	if (!hasConnectivityCallback)
+	{
+		hasConnectivityCallback = true;
+		globalServer.startConnectivityMonitoring();
+	}
 }
 
 bool ScriptingApi::Server::isEmailAddress(String email)
