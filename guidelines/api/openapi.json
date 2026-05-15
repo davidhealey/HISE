@@ -40,6 +40,661 @@
             "name": "wizard"
         }
     ],
+    "components": {
+        "schemas": {
+            "DspProbeChannelReport": {
+                "type": "object",
+                "properties": {
+                    "channelIndex": {
+                        "type": "integer",
+                        "description": "Channel number"
+                    },
+                    "min": {
+                        "type": "number",
+                        "description": "Minimum sample value in the probed block"
+                    },
+                    "max": {
+                        "type": "number",
+                        "description": "Maximum sample value in the probed block"
+                    },
+                    "avg": {
+                        "type": "number",
+                        "description": "Average sample value across the probed block"
+                    },
+                    "peakIndex": {
+                        "type": "integer",
+                        "description": "Sample index of the positive peak"
+                    },
+                    "silence": {
+                        "type": "boolean",
+                        "description": "Whether the probed block was silent"
+                    }
+                },
+                "required": [
+                    "channelIndex",
+                    "min",
+                    "max",
+                    "avg",
+                    "peakIndex",
+                    "silence"
+                ],
+                "description": "Per-channel probe report"
+            },
+            "DspProbeSpecsReport": {
+                "type": "object",
+                "properties": {
+                    "sampleRate": {
+                        "type": "number",
+                        "description": "Processing sample rate used for the report"
+                    },
+                    "numChannels": {
+                        "type": "integer",
+                        "description": "Number of processed channels"
+                    },
+                    "blockSize": {
+                        "type": "integer",
+                        "description": "Processed block size"
+                    },
+                    "polyphonic": {
+                        "type": "boolean",
+                        "description": "True when the network was running with an enabled voice index"
+                    },
+                    "processMidi": {
+                        "type": "boolean",
+                        "description": "True if the target container was in a MIDI-processing context"
+                    }
+                },
+                "required": [
+                    "sampleRate",
+                    "numChannels",
+                    "blockSize",
+                    "polyphonic",
+                    "processMidi"
+                ],
+                "description": "Processing specs for the captured report"
+            },
+            "DspProbeChildReport": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "description": "Child node ID"
+                    },
+                    "factoryPath": {
+                        "type": "string",
+                        "description": "Child node factory path"
+                    },
+                    "signal": {
+                        "oneOf": [
+                            {
+                                "type": "array",
+                                "items": {
+                                    "$ref": "#/components/schemas/DspProbeChannelReport"
+                                },
+                                "description": "Full per-channel signal measurements"
+                            },
+                            {
+                                "type": "array",
+                                "items": {
+                                    "type": "number",
+                                    "description": "Compact per-channel peak value"
+                                },
+                                "description": "Compact per-channel peak values"
+                            }
+                        ],
+                        "description": "Full or compact per-channel signal measurements"
+                    }
+                },
+                "required": [
+                    "id",
+                    "factoryPath",
+                    "signal"
+                ],
+                "description": "Recursive child probe report"
+            },
+            "DspProbeContainerReport": {
+                "type": "object",
+                "properties": {
+                    "factoryPath": {
+                        "type": "string",
+                        "description": "Container factory path"
+                    },
+                    "numChildren": {
+                        "type": "integer",
+                        "description": "Number of direct child nodes in the container"
+                    },
+                    "specs": {
+                        "$ref": "#/components/schemas/DspProbeSpecsReport"
+                    },
+                    "children": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/DspProbeChildReport"
+                        },
+                        "description": "Per-child probe reports for this container"
+                    }
+                },
+                "required": [
+                    "factoryPath",
+                    "numChildren",
+                    "specs",
+                    "children"
+                ],
+                "description": "Recursive container report"
+            },
+            "DspProbeParameterReport": {
+                "type": "object",
+                "properties": {
+                    "value": {
+                        "type": "number",
+                        "description": "Captured parameter value"
+                    },
+                    "testValue": {
+                        "type": "number",
+                        "description": "Injected test parameter value"
+                    },
+                    "originalValue": {
+                        "type": "number",
+                        "description": "Value before the test injection"
+                    },
+                    "normalizedValue": {
+                        "type": "number",
+                        "description": "Normalised parameter value. Omitted for unscaled/raw parameter reports."
+                    },
+                    "outOfRange": {
+                        "type": "boolean",
+                        "description": "Whether the captured value is outside the inclusive parameter range."
+                    },
+                    "inverted": {
+                        "type": "boolean",
+                        "description": "Whether the parameter range is inverted"
+                    },
+                    "min": {
+                        "type": "number",
+                        "description": "Minimum parameter value"
+                    },
+                    "max": {
+                        "type": "number",
+                        "description": "Maximum parameter value"
+                    },
+                    "stepSize": {
+                        "type": "number",
+                        "description": "Parameter step size"
+                    },
+                    "middlePosition": {
+                        "type": "number",
+                        "description": "Middle position after skew mapping"
+                    }
+                },
+                "description": "Full parameter report. Range fields are omitted for unscaled/raw reports."
+            },
+            "DspProbeTouchedEdge": {
+                "type": "object",
+                "properties": {
+                    "target": {
+                        "type": "string",
+                        "description": "Target parameter path in nodeId.parameterId format"
+                    },
+                    "connectionMode": {
+                        "type": "string",
+                        "enum": [
+                            "matched",
+                            "scaled",
+                            "unscaled"
+                        ],
+                        "description": "Connection scaling mode"
+                    },
+                    "sourceValue": {
+                        "type": "number",
+                        "description": "Captured source value, omitted when unavailable"
+                    },
+                    "targetValue": {
+                        "type": "number",
+                        "description": "Captured target value"
+                    }
+                },
+                "required": [
+                    "target",
+                    "connectionMode"
+                ],
+                "description": "Touched parameter connection report"
+            },
+            "ScriptTreeLocation": {
+                "type": "object",
+                "properties": {
+                    "file": {
+                        "type": "string",
+                        "description": "External file path, or empty for callback source"
+                    },
+                    "charNumber": {
+                        "type": "integer",
+                        "description": "Character offset in the source document"
+                    },
+                    "available": {
+                        "type": "boolean",
+                        "description": "True if a usable source location is available"
+                    }
+                },
+                "required": [
+                    "file",
+                    "charNumber",
+                    "available"
+                ],
+                "description": "Jump-to-definition location"
+            },
+            "ScriptTreeNode": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "description": "Local symbol ID"
+                    },
+                    "type": {
+                        "type": "string",
+                        "enum": [
+                            "const var",
+                            "reg",
+                            "namespace",
+                            "inline function",
+                            "var",
+                            "global",
+                            "function",
+                            "undefined"
+                        ],
+                        "description": "HiseScript symbol type"
+                    },
+                    "expression": {
+                        "type": "string",
+                        "description": "Fully qualified expression usable in REPL calls"
+                    },
+                    "dataType": {
+                        "type": "string",
+                        "description": "HiseScript / debug data type"
+                    },
+                    "value": {
+                        "type": "string",
+                        "description": "Watch-table debug value, omitted in compact mode"
+                    },
+                    "location": {
+                        "$ref": "#/components/schemas/ScriptTreeLocation"
+                    },
+                    "children": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/ScriptTreeNode"
+                        },
+                        "description": "Nested script symbols"
+                    }
+                },
+                "required": [
+                    "id",
+                    "type",
+                    "expression",
+                    "dataType",
+                    "children"
+                ],
+                "description": "Script symbol tree node"
+            },
+            "BuilderRouting": {
+                "type": "object",
+                "properties": {
+                    "matrix": {
+                        "type": "array",
+                        "items": {
+                            "type": "integer",
+                            "description": "Destination channel index, or -1"
+                        },
+                        "description": "Routing matrix array, index=source channel, value=destination channel or -1"
+                    },
+                    "send": {
+                        "type": "array",
+                        "items": {
+                            "type": "integer",
+                            "description": "Destination channel index, or -1"
+                        },
+                        "description": "Parallel send connection array, index=source channel, value=destination channel or -1"
+                    },
+                    "resizable": {
+                        "type": "boolean",
+                        "description": "True if source channel count can be resized"
+                    },
+                    "routable": {
+                        "type": "boolean",
+                        "description": "True if arbitrary routing is allowed"
+                    },
+                    "numDestinationChannels": {
+                        "type": "integer",
+                        "description": "Number of destination channels"
+                    }
+                },
+                "required": [
+                    "matrix",
+                    "send",
+                    "resizable",
+                    "routable",
+                    "numDestinationChannels"
+                ],
+                "description": "RoutableProcessor routing metadata"
+            },
+            "BuilderTreeNode": {
+                "type": "object",
+                "properties": {
+                    "processorId": {
+                        "type": "string",
+                        "description": "Runtime processor ID"
+                    },
+                    "id": {
+                        "type": "string",
+                        "description": "Metadata ID, when supplied by processor metadata"
+                    },
+                    "type": {
+                        "type": "string",
+                        "description": "Processor metadata type"
+                    },
+                    "bypassed": {
+                        "type": "boolean",
+                        "description": "Current bypass state"
+                    },
+                    "colour": {
+                        "type": "string",
+                        "description": "Processor colour as #RRGGBB"
+                    },
+                    "parameters": {
+                        "type": "array",
+                        "description": "Processor parameter metadata"
+                    },
+                    "modulation": {
+                        "type": "array",
+                        "description": "Modulation chain metadata"
+                    },
+                    "midi": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/BuilderTreeNode"
+                        },
+                        "description": "MIDI processor chain children"
+                    },
+                    "fx": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/BuilderTreeNode"
+                        },
+                        "description": "FX chain children"
+                    },
+                    "children": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/BuilderTreeNode"
+                        },
+                        "description": "Nested module children"
+                    },
+                    "routing": {
+                        "$ref": "#/components/schemas/BuilderRouting"
+                    }
+                },
+                "required": [
+                    "processorId",
+                    "bypassed",
+                    "colour"
+                ],
+                "description": "Runtime module tree node"
+            },
+            "UiTreeNode": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "description": "Component ID"
+                    },
+                    "type": {
+                        "type": "string",
+                        "description": "Component type"
+                    },
+                    "visible": {
+                        "type": "boolean",
+                        "description": "Visibility flag"
+                    },
+                    "enabled": {
+                        "type": "boolean",
+                        "description": "Enabled flag"
+                    },
+                    "saveInPreset": {
+                        "type": "boolean",
+                        "description": "Whether value is saved in preset"
+                    },
+                    "x": {
+                        "type": "integer",
+                        "description": "X position"
+                    },
+                    "y": {
+                        "type": "integer",
+                        "description": "Y position"
+                    },
+                    "width": {
+                        "type": "integer",
+                        "description": "Width"
+                    },
+                    "height": {
+                        "type": "integer",
+                        "description": "Height"
+                    },
+                    "childComponents": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/UiTreeNode"
+                        },
+                        "description": "Nested child components"
+                    }
+                },
+                "required": [
+                    "id",
+                    "type",
+                    "visible",
+                    "enabled",
+                    "saveInPreset",
+                    "x",
+                    "y",
+                    "width",
+                    "height",
+                    "childComponents"
+                ],
+                "description": "UI component tree node"
+            },
+            "DspTreeParameter": {
+                "type": "object",
+                "properties": {
+                    "parameterId": {
+                        "type": "string",
+                        "description": "Parameter ID"
+                    },
+                    "value": {
+                        "type": "number",
+                        "description": "Current parameter value"
+                    },
+                    "min": {
+                        "type": "number",
+                        "description": "Minimum value, verbose mode only"
+                    },
+                    "max": {
+                        "type": "number",
+                        "description": "Maximum value, verbose mode only"
+                    },
+                    "stepSize": {
+                        "type": "number",
+                        "description": "Step size, verbose mode only"
+                    },
+                    "defaultValue": {
+                        "type": "number",
+                        "description": "Default value, verbose mode only"
+                    },
+                    "middlePosition": {
+                        "type": "number",
+                        "description": "Middle position after skew mapping, verbose mode only"
+                    }
+                },
+                "required": [
+                    "parameterId",
+                    "value"
+                ],
+                "description": "DSP node parameter entry"
+            },
+            "DspTreeProperty": {
+                "type": "object",
+                "properties": {
+                    "propertyId": {
+                        "type": "string",
+                        "description": "Property ID"
+                    },
+                    "value": {
+                        "oneOf": [
+                            {
+                                "type": "string",
+                                "description": "String property value"
+                            },
+                            {
+                                "type": "number",
+                                "description": "Numeric property value"
+                            },
+                            {
+                                "type": "boolean",
+                                "description": "Boolean property value"
+                            }
+                        ],
+                        "description": "Property value"
+                    }
+                },
+                "required": [
+                    "propertyId",
+                    "value"
+                ],
+                "description": "DSP node property entry"
+            },
+            "DspTreeConnection": {
+                "type": "object",
+                "properties": {
+                    "source": {
+                        "type": "string",
+                        "description": "Source node ID"
+                    },
+                    "sourceOutput": {
+                        "oneOf": [
+                            {
+                                "type": "string",
+                                "description": "Source output parameter name"
+                            },
+                            {
+                                "type": "integer",
+                                "description": "Source output slot index"
+                            }
+                        ],
+                        "description": "Source output, parameter name, or output slot index"
+                    },
+                    "target": {
+                        "type": "string",
+                        "description": "Target node ID"
+                    },
+                    "parameter": {
+                        "type": "string",
+                        "description": "Target parameter ID"
+                    }
+                },
+                "required": [
+                    "source",
+                    "sourceOutput",
+                    "target",
+                    "parameter"
+                ],
+                "description": "DSP modulation connection entry"
+            },
+            "DspTreeNode": {
+                "type": "object",
+                "properties": {
+                    "nodeId": {
+                        "type": "string",
+                        "description": "Node instance ID"
+                    },
+                    "factoryPath": {
+                        "type": "string",
+                        "description": "Node factory path"
+                    },
+                    "bypassed": {
+                        "type": "boolean",
+                        "description": "Current bypass state"
+                    },
+                    "parameters": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/DspTreeParameter"
+                        },
+                        "description": "Node parameters"
+                    },
+                    "properties": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/DspTreeProperty"
+                        },
+                        "description": "Node properties"
+                    },
+                    "connections": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/DspTreeConnection"
+                        },
+                        "description": "Container modulation connections"
+                    },
+                    "children": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/DspTreeNode"
+                        },
+                        "description": "Nested DSP nodes"
+                    }
+                },
+                "required": [
+                    "nodeId",
+                    "factoryPath",
+                    "bypassed",
+                    "parameters",
+                    "properties",
+                    "children"
+                ],
+                "description": "Scriptnode DSP tree node"
+            },
+            "ProjectTreeNode": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "description": "File or folder name"
+                    },
+                    "type": {
+                        "type": "string",
+                        "enum": [
+                            "file",
+                            "folder"
+                        ],
+                        "description": "Node type"
+                    },
+                    "referenced": {
+                        "type": "boolean",
+                        "description": "True if a file is actively referenced by the runtime"
+                    },
+                    "children": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/ProjectTreeNode"
+                        },
+                        "description": "Child nodes for folder entries"
+                    }
+                },
+                "required": [
+                    "name",
+                    "type"
+                ],
+                "description": "Project file or folder tree node"
+            }
+        }
+    },
     "paths": {
         "/": {
             "get": {
@@ -733,72 +1388,7 @@
                                         "tree": {
                                             "type": "array",
                                             "items": {
-                                                "type": "object",
-                                                "properties": {
-                                                    "id": {
-                                                        "type": "string",
-                                                        "description": "Local symbol ID"
-                                                    },
-                                                    "type": {
-                                                        "type": "string",
-                                                        "enum": [
-                                                            "const var",
-                                                            "reg",
-                                                            "namespace",
-                                                            "inline function",
-                                                            "var",
-                                                            "global",
-                                                            "function",
-                                                            "undefined"
-                                                        ],
-                                                        "description": "HiseScript symbol type"
-                                                    },
-                                                    "expression": {
-                                                        "type": "string",
-                                                        "description": "Fully qualified expression usable in REPL calls"
-                                                    },
-                                                    "dataType": {
-                                                        "type": "string",
-                                                        "description": "HiseScript / debug data type"
-                                                    },
-                                                    "value": {
-                                                        "type": "string",
-                                                        "description": "Watch-table debug value"
-                                                    },
-                                                    "location": {
-                                                        "type": "object",
-                                                        "properties": {
-                                                            "file": {
-                                                                "type": "string",
-                                                                "description": "External file path, or empty for callback source"
-                                                            },
-                                                            "charNumber": {
-                                                                "type": "integer",
-                                                                "description": "Character offset in the source document"
-                                                            },
-                                                            "available": {
-                                                                "type": "boolean",
-                                                                "description": "True if a usable source location is available"
-                                                            }
-                                                        },
-                                                        "required": [
-                                                            "file",
-                                                            "charNumber",
-                                                            "available"
-                                                        ],
-                                                        "description": "Jump-to-definition location"
-                                                    },
-                                                    "children": {
-                                                        "type": "array",
-                                                        "description": "Nested script symbols"
-                                                    }
-                                                },
-                                                "required": [
-                                                    "id",
-                                                    "type",
-                                                    "children"
-                                                ],
-                                                "description": "Script symbol tree node"
+                                                "$ref": "#/components/schemas/ScriptTreeNode"
                                             },
                                             "description": "Returned script symbol nodes"
                                         },
@@ -3441,8 +4031,7 @@
                                             "example": "0.8.2"
                                         },
                                         "result": {
-                                            "type": "string",
-                                            "description": "Nested JSON tree with metadata / modulation / children / routing"
+                                            "$ref": "#/components/schemas/BuilderTreeNode"
                                         },
                                         "logs": {
                                             "type": "array",
@@ -5189,8 +5778,7 @@
                                             "example": "0.8.2"
                                         },
                                         "result": {
-                                            "type": "string",
-                                            "description": "Recursive tree with component properties and nested childComponents"
+                                            "$ref": "#/components/schemas/UiTreeNode"
                                         },
                                         "logs": {
                                             "type": "array",
@@ -6168,8 +6756,7 @@
                                             "example": "0.8.2"
                                         },
                                         "result": {
-                                            "type": "string",
-                                            "description": "Recursive node tree with parameters, properties, connections on containers, and children"
+                                            "$ref": "#/components/schemas/DspTreeNode"
                                         },
                                         "logs": {
                                             "type": "array",
@@ -6598,8 +7185,8 @@
                 "tags": [
                     "dsp"
                 ],
-                "summary": "Inject a test signal and return a probe report",
-                "description": "Queues a one-shot signal injection into a supported scriptnode container and waits until the requested probe point has processed a buffer. injectId and probeId override injectIndex and probeIndex when present. Injection resolves before a child node and probing resolves after a child node, so injectIndex == probeIndex is valid. probeIndex=-1 or an omitted probeIndex resolves to the last child. If recursive is true, all child containers are probed and returned in a containers object. The optional parameters object can temporarily inject node parameters and capture parameter values at the probe point; parameter paths use nodeId.parameterId format and unknown paths fail immediately. parameters.probe accepts an array of paths, or '*' to report all changed parameters and touched parameter connections. The optional filter object can remove specs or signal data, compact signal arrays and parameter reports, and include the recursive topology tree. The request blocks until the report is available or until the fixed timeout of delayMs + 200ms expires.",
+                "summary": "Inject signal and/or parameter test stimuli and return a DSP probe report",
+                "description": "Queues a one-shot signal and/or parameter injection into a supported scriptnode container and waits until the requested probe point has processed a buffer. injectId and probeId override injectIndex and probeIndex when present. Signal injection resolves before a child node and signal probing resolves after a child node, so injectIndex == probeIndex is valid. probeIndex=-1 or an omitted probeIndex resolves to the container output after the last child. recursive=true returns containers keyed by container ID. parameters.inject temporarily injects parameter values keyed by nodeId.parameterId. parameters.probe accepts '*' or an array of parameter paths. touchedEdges reports runtime parameter/control connections reached by the probe, not static graph reachability. Full mixed trace example: {\"moduleId\":\"ReproFX\",\"parent\":\"repro_probe\",\"signalType\":\"silence\",\"probeId\":\"gain\",\"parameters\":{\"inject\":{\"repro_probe.Parameter\":1.0},\"probe\":[\"repro_probe.Parameter\",\"gain.Gain\"]},\"filter\":{\"compact\":false}}. Wildcard parameter trace example: {\"moduleId\":\"ReproNullControlFX\",\"parent\":\"repro_null_control\",\"signalType\":\"silence\",\"probeId\":\"gain\",\"parameters\":{\"inject\":{\"repro_null_control.Parameter\":0.25},\"probe\":\"*\"},\"filter\":{\"compact\":false}}. Compact trace example: {\"moduleId\":\"DspTestFX\",\"parent\":\"test_network\",\"signalType\":\"dirac\",\"probeId\":\"gain\",\"parameters\":{\"probe\":\"*\"},\"filter\":{\"compact\":true}}. The optional filter object can remove specs or signal data, compact signal arrays and parameter reports, and include the recursive topology tree. The request blocks until the report is available or until the fixed timeout of delayMs + 200ms expires.",
                 "operationId": "dsp_probe",
                 "requestBody": {
                     "required": true,
@@ -6659,7 +7246,8 @@
                                     },
                                     "seed": {
                                         "type": "integer",
-                                        "description": "Random seed used when signalType is noise"
+                                        "description": "Random seed used when signalType is noise",
+                                        "format": "int64"
                                     },
                                     "delayMs": {
                                         "type": "number",
@@ -6671,15 +7259,31 @@
                                         "properties": {
                                             "inject": {
                                                 "type": "object",
+                                                "additionalProperties": {
+                                                    "type": "number",
+                                                    "description": "Temporary parameter value"
+                                                },
                                                 "description": "Object keyed by nodeId.parameterId with temporary test values"
                                             },
                                             "probe": {
-                                                "type": "array",
-                                                "items": {
-                                                    "type": "string",
-                                                    "description": "Parameter path in nodeId.parameterId format"
-                                                },
-                                                "description": "Array of nodeId.parameterId paths to capture, or '*' to capture all changed parameters and touched edges"
+                                                "oneOf": [
+                                                    {
+                                                        "type": "string",
+                                                        "enum": [
+                                                            "*"
+                                                        ],
+                                                        "description": "Capture all changed parameters and touched parameter connections"
+                                                    },
+                                                    {
+                                                        "type": "array",
+                                                        "items": {
+                                                            "type": "string",
+                                                            "description": "Parameter path in nodeId.parameterId format"
+                                                        },
+                                                        "description": "Parameter paths to capture"
+                                                    }
+                                                ],
+                                                "description": "Parameter paths to capture, or '*' to capture all changed parameters and touched edges"
                                             }
                                         },
                                         "description": "Optional parameter injection and probe configuration"
@@ -6722,22 +7326,21 @@
                                 ]
                             },
                             "example": {
-                                "moduleId": "DspTestFX",
-                                "parent": "test_network",
-                                "injectIndex": 0,
-                                "probeIndex": -1,
-                                "signalType": "dirac",
-                                "gain": 1.0,
+                                "moduleId": "ReproFX",
+                                "parent": "repro_probe",
+                                "signalType": "silence",
+                                "probeId": "gain",
                                 "parameters": {
                                     "inject": {
-                                        "Gain1.Gain": 0.5
+                                        "repro_probe.Parameter": 1.0
                                     },
                                     "probe": [
-                                        "Gain1.Gain"
+                                        "repro_probe.Parameter",
+                                        "gain.Gain"
                                     ]
                                 },
                                 "filter": {
-                                    "compact": true
+                                    "compact": false
                                 }
                             }
                         }
@@ -6808,203 +7411,41 @@
                                         },
                                         "seed": {
                                             "type": "integer",
-                                            "description": "Random seed used for noise generation"
+                                            "description": "Random seed used for noise generation",
+                                            "format": "int64"
                                         },
                                         "recursive": {
                                             "type": "boolean",
                                             "description": "True when recursive container probing was used"
                                         },
                                         "specs": {
-                                            "type": "object",
-                                            "properties": {
-                                                "sampleRate": {
-                                                    "type": "number",
-                                                    "description": "Processing sample rate used for the report"
-                                                },
-                                                "numChannels": {
-                                                    "type": "integer",
-                                                    "description": "Number of processed channels"
-                                                },
-                                                "blockSize": {
-                                                    "type": "integer",
-                                                    "description": "Processed block size"
-                                                },
-                                                "polyphonic": {
-                                                    "type": "boolean",
-                                                    "description": "True when the network was running with an enabled voice index"
-                                                },
-                                                "processMidi": {
-                                                    "type": "boolean",
-                                                    "description": "True if the target container was in a MIDI-processing context"
-                                                }
-                                            },
-                                            "required": [
-                                                "sampleRate",
-                                                "numChannels",
-                                                "blockSize",
-                                                "polyphonic",
-                                                "processMidi"
-                                            ],
-                                            "description": "Processing specs for the captured report"
+                                            "$ref": "#/components/schemas/DspProbeSpecsReport"
                                         },
                                         "signal": {
-                                            "type": "array",
-                                            "items": {
-                                                "type": "object",
-                                                "properties": {
-                                                    "channelIndex": {
-                                                        "type": "integer",
-                                                        "description": "Channel number"
+                                            "oneOf": [
+                                                {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "$ref": "#/components/schemas/DspProbeChannelReport"
                                                     },
-                                                    "min": {
-                                                        "type": "number",
-                                                        "description": "Minimum sample value in the probed block"
-                                                    },
-                                                    "max": {
-                                                        "type": "number",
-                                                        "description": "Maximum sample value in the probed block"
-                                                    },
-                                                    "avg": {
-                                                        "type": "number",
-                                                        "description": "Average sample value across the probed block"
-                                                    },
-                                                    "peakIndex": {
-                                                        "type": "integer",
-                                                        "description": "Sample index of the positive peak"
-                                                    },
-                                                    "silence": {
-                                                        "type": "boolean",
-                                                        "description": "Whether the probed block was silent"
-                                                    }
+                                                    "description": "Full per-channel signal measurements"
                                                 },
-                                                "required": [
-                                                    "channelIndex",
-                                                    "min",
-                                                    "max",
-                                                    "avg",
-                                                    "peakIndex",
-                                                    "silence"
-                                                ],
-                                                "description": "Per-channel probe report"
-                                            },
-                                            "description": "Per-channel measurement objects for non-recursive probes"
+                                                {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "type": "number",
+                                                        "description": "Compact per-channel peak value"
+                                                    },
+                                                    "description": "Compact per-channel peak values"
+                                                }
+                                            ],
+                                            "description": "Full or compact per-channel signal measurements"
                                         },
                                         "containers": {
                                             "type": "object",
-                                            "properties": {
-                                                "factoryPath": {
-                                                    "type": "string",
-                                                    "description": "Container factory path"
-                                                },
-                                                "numChildren": {
-                                                    "type": "integer",
-                                                    "description": "Number of direct child nodes in the container"
-                                                },
-                                                "specs": {
-                                                    "type": "object",
-                                                    "properties": {
-                                                        "sampleRate": {
-                                                            "type": "number",
-                                                            "description": "Processing sample rate used for the report"
-                                                        },
-                                                        "numChannels": {
-                                                            "type": "integer",
-                                                            "description": "Number of processed channels"
-                                                        },
-                                                        "blockSize": {
-                                                            "type": "integer",
-                                                            "description": "Processed block size"
-                                                        },
-                                                        "polyphonic": {
-                                                            "type": "boolean",
-                                                            "description": "True when the network was running with an enabled voice index"
-                                                        },
-                                                        "processMidi": {
-                                                            "type": "boolean",
-                                                            "description": "True if the target container was in a MIDI-processing context"
-                                                        }
-                                                    },
-                                                    "required": [
-                                                        "sampleRate",
-                                                        "numChannels",
-                                                        "blockSize",
-                                                        "polyphonic",
-                                                        "processMidi"
-                                                    ],
-                                                    "description": "Processing specs for the captured report"
-                                                },
-                                                "children": {
-                                                    "type": "array",
-                                                    "items": {
-                                                        "type": "object",
-                                                        "properties": {
-                                                            "id": {
-                                                                "type": "string",
-                                                                "description": "Child node ID"
-                                                            },
-                                                            "factoryPath": {
-                                                                "type": "string",
-                                                                "description": "Child node factory path"
-                                                            },
-                                                            "signal": {
-                                                                "type": "array",
-                                                                "items": {
-                                                                    "type": "object",
-                                                                    "properties": {
-                                                                        "channelIndex": {
-                                                                            "type": "integer",
-                                                                            "description": "Channel number"
-                                                                        },
-                                                                        "min": {
-                                                                            "type": "number",
-                                                                            "description": "Minimum sample value in the probed block"
-                                                                        },
-                                                                        "max": {
-                                                                            "type": "number",
-                                                                            "description": "Maximum sample value in the probed block"
-                                                                        },
-                                                                        "avg": {
-                                                                            "type": "number",
-                                                                            "description": "Average sample value across the probed block"
-                                                                        },
-                                                                        "peakIndex": {
-                                                                            "type": "integer",
-                                                                            "description": "Sample index of the positive peak"
-                                                                        },
-                                                                        "silence": {
-                                                                            "type": "boolean",
-                                                                            "description": "Whether the probed block was silent"
-                                                                        }
-                                                                    },
-                                                                    "required": [
-                                                                        "channelIndex",
-                                                                        "min",
-                                                                        "max",
-                                                                        "avg",
-                                                                        "peakIndex",
-                                                                        "silence"
-                                                                    ],
-                                                                    "description": "Per-channel probe report"
-                                                                },
-                                                                "description": "Per-channel measurement objects"
-                                                            }
-                                                        },
-                                                        "required": [
-                                                            "id",
-                                                            "factoryPath",
-                                                            "signal"
-                                                        ],
-                                                        "description": "Recursive child probe report"
-                                                    },
-                                                    "description": "Per-child probe reports for this container"
-                                                }
+                                            "additionalProperties": {
+                                                "$ref": "#/components/schemas/DspProbeContainerReport"
                                             },
-                                            "required": [
-                                                "factoryPath",
-                                                "numChildren",
-                                                "specs",
-                                                "children"
-                                            ],
                                             "description": "Recursive container reports keyed by container ID"
                                         },
                                         "parameters": {
@@ -7012,157 +7453,46 @@
                                             "properties": {
                                                 "injected": {
                                                     "type": "object",
-                                                    "properties": {
-                                                        "parameterValue": {
-                                                            "type": "object",
-                                                            "properties": {
-                                                                "value": {
-                                                                    "type": "number",
-                                                                    "description": "Captured parameter value"
-                                                                },
-                                                                "testValue": {
-                                                                    "type": "number",
-                                                                    "description": "Value after the test injection has processed"
-                                                                },
-                                                                "originalValue": {
-                                                                    "type": "number",
-                                                                    "description": "Value before the test injection"
-                                                                },
-                                                                "normalizedValue": {
-                                                                    "type": "number",
-                                                                    "description": "Normalised parameter value, omitted for unscaled parameters"
-                                                                },
-                                                                "outOfRange": {
-                                                                    "type": "boolean",
-                                                                    "description": "Whether the captured value is outside the parameter range"
-                                                                },
-                                                                "inverted": {
-                                                                    "type": "boolean",
-                                                                    "description": "Whether the parameter range is inverted"
-                                                                },
-                                                                "min": {
-                                                                    "type": "number",
-                                                                    "description": "Minimum parameter value"
-                                                                },
-                                                                "max": {
-                                                                    "type": "number",
-                                                                    "description": "Maximum parameter value"
-                                                                },
-                                                                "stepSize": {
-                                                                    "type": "number",
-                                                                    "description": "Parameter step size"
-                                                                },
-                                                                "middlePosition": {
-                                                                    "type": "number",
-                                                                    "description": "Middle position after skew mapping"
-                                                                }
+                                                    "additionalProperties": {
+                                                        "oneOf": [
+                                                            {
+                                                                "type": "number",
+                                                                "description": "Compact numeric parameter value"
                                                             },
-                                                            "description": "Full parameter report value"
-                                                        }
+                                                            {
+                                                                "$ref": "#/components/schemas/DspProbeParameterReport"
+                                                            }
+                                                        ],
+                                                        "description": "Compact value or full parameter report"
                                                     },
-                                                    "required": [
-                                                        "parameterValue"
-                                                    ],
                                                     "description": "Injected parameter reports keyed by nodeId.parameterId. Compact mode returns numeric values"
                                                 },
                                                 "probed": {
                                                     "type": "object",
-                                                    "properties": {
-                                                        "parameterValue": {
-                                                            "type": "object",
-                                                            "properties": {
-                                                                "value": {
-                                                                    "type": "number",
-                                                                    "description": "Captured parameter value"
-                                                                },
-                                                                "testValue": {
-                                                                    "type": "number",
-                                                                    "description": "Value after the test injection has processed"
-                                                                },
-                                                                "originalValue": {
-                                                                    "type": "number",
-                                                                    "description": "Value before the test injection"
-                                                                },
-                                                                "normalizedValue": {
-                                                                    "type": "number",
-                                                                    "description": "Normalised parameter value, omitted for unscaled parameters"
-                                                                },
-                                                                "outOfRange": {
-                                                                    "type": "boolean",
-                                                                    "description": "Whether the captured value is outside the parameter range"
-                                                                },
-                                                                "inverted": {
-                                                                    "type": "boolean",
-                                                                    "description": "Whether the parameter range is inverted"
-                                                                },
-                                                                "min": {
-                                                                    "type": "number",
-                                                                    "description": "Minimum parameter value"
-                                                                },
-                                                                "max": {
-                                                                    "type": "number",
-                                                                    "description": "Maximum parameter value"
-                                                                },
-                                                                "stepSize": {
-                                                                    "type": "number",
-                                                                    "description": "Parameter step size"
-                                                                },
-                                                                "middlePosition": {
-                                                                    "type": "number",
-                                                                    "description": "Middle position after skew mapping"
-                                                                }
+                                                    "additionalProperties": {
+                                                        "oneOf": [
+                                                            {
+                                                                "type": "number",
+                                                                "description": "Compact numeric parameter value"
                                                             },
-                                                            "description": "Full parameter report value"
-                                                        }
+                                                            {
+                                                                "$ref": "#/components/schemas/DspProbeParameterReport"
+                                                            }
+                                                        ],
+                                                        "description": "Compact value or full parameter report"
                                                     },
-                                                    "required": [
-                                                        "parameterValue"
-                                                    ],
                                                     "description": "Captured parameter reports keyed by nodeId.parameterId. Empty when no parameter was reported"
                                                 },
                                                 "touchedEdges": {
                                                     "type": "object",
-                                                    "properties": {
-                                                        "sourcePath": {
-                                                            "type": "array",
-                                                            "items": {
-                                                                "type": "object",
-                                                                "properties": {
-                                                                    "target": {
-                                                                        "type": "string",
-                                                                        "description": "Target parameter path in nodeId.parameterId format"
-                                                                    },
-                                                                    "connectionMode": {
-                                                                        "type": "string",
-                                                                        "enum": [
-                                                                            "matched",
-                                                                            "scaled",
-                                                                            "unscaled"
-                                                                        ],
-                                                                        "description": "Connection scaling mode"
-                                                                    },
-                                                                    "sourceValue": {
-                                                                        "type": "number",
-                                                                        "description": "Captured source value"
-                                                                    },
-                                                                    "targetValue": {
-                                                                        "type": "number",
-                                                                        "description": "Captured target value"
-                                                                    }
-                                                                },
-                                                                "required": [
-                                                                    "target",
-                                                                    "connectionMode"
-                                                                ],
-                                                                "description": "Touched parameter connection report"
-                                                            },
-                                                            "description": "Array of touched target reports for this source"
-                                                        }
+                                                    "additionalProperties": {
+                                                        "type": "array",
+                                                        "items": {
+                                                            "$ref": "#/components/schemas/DspProbeTouchedEdge"
+                                                        },
+                                                        "description": "Array of touched target reports for this source"
                                                     },
-                                                    "required": [
-                                                        "sourcePath"
-                                                    ],
-                                                    "description": "Wildcard probe connection reports keyed by source parameter path"
+                                                    "description": "Touched parameter connection reports keyed by source parameter path"
                                                 }
                                             },
                                             "description": "Parameter injection and probe report"
@@ -7656,8 +7986,7 @@
                                             "description": "Name of the project"
                                         },
                                         "root": {
-                                            "type": "object",
-                                            "description": "Root folder node"
+                                            "$ref": "#/components/schemas/ProjectTreeNode"
                                         },
                                         "logs": {
                                             "type": "array",

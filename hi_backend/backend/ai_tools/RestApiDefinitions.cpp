@@ -170,27 +170,6 @@ struct RestApiEndpoints
 	/* GET /api/script/tree */
 	static void scriptTree(Array<RouteMetadata>& m)
 	{
-		auto locationEntry = RouteParameter(RestApiIds::location, "Jump-to-definition location")
-			.withType(ParamType::Object)
-			.withProperty(RouteParameter(RestApiIds::file, "External file path, or empty for callback source"))
-			.withProperty(RouteParameter(RestApiIds::charNumber, "Character offset in the source document")
-				.withType(ParamType::Int))
-			.withProperty(RouteParameter(RestApiIds::available, "True if a usable source location is available")
-				.withType(ParamType::Bool));
-
-		auto nodeEntry = RouteParameter(Identifier("entry"), "Script symbol tree node")
-			.withType(ParamType::Object)
-			.withProperty(RouteParameter(RestApiIds::id, "Local symbol ID"))
-			.withProperty(RouteParameter(RestApiIds::type, "HiseScript symbol type")
-				.withEnumValues({ "const var", "reg", "namespace", "inline function", "var", "global",
-					"function", "undefined" }))
-			.withProperty(RouteParameter(RestApiIds::expression, "Fully qualified expression usable in REPL calls").asOptional())
-			.withProperty(RouteParameter(RestApiIds::dataType, "HiseScript / debug data type").asOptional())
-			.withProperty(RouteParameter(RestApiIds::value, "Watch-table debug value").asOptional())
-			.withProperty(locationEntry.asOptional())
-			.withProperty(RouteParameter(RestApiIds::children, "Nested script symbols")
-				.withType(ParamType::Array));
-
 		m.add(RouteMetadata(ApiRoute::ScriptTree, "api/script/tree")
 			.withCategory("scripting")
 			.withSummary("Get the compiled script symbol tree")
@@ -230,7 +209,8 @@ struct RestApiEndpoints
 			.withResponseField(RouteParameter(RestApiIds::truncated, "True if limit clipped the result")
 				.withType(ParamType::Bool))
 			.withResponseField(RouteParameter(RestApiIds::tree, "Returned script symbol nodes")
-				.withArrayItems(nodeEntry))
+				.withArrayItems(RouteParameter(Identifier("node"), "Script symbol tree node")
+					.withRef("#/components/schemas/ScriptTreeNode")))
 			.withErrorCodes({ 400, 404 })
 			.withRequestExample(R"(GET /api/script/tree?moduleId=Interface&compact=true&maxDepth=2)")
 			.withResponseExample(R"({"success": true, "moduleId": "Interface", "format": "tree", "compact": true, "totalMatches": 2, "returned": 2, "truncated": false, "tree": [{"id": "Theme", "type": "namespace", "expression": "Theme", "dataType": "Namespace", "children": [{"id": "colour", "type": "const var", "expression": "Theme.colour", "dataType": "int", "children": []}]}], "logs": [], "errors": []})"));
@@ -862,6 +842,8 @@ struct RestApiEndpoints
 			.withQueryParam(RouteParameter(RestApiIds::verbose,
 				"If true, include verbose metadata in tree nodes")
 				.withType(ParamType::Bool).withDefault("false"))
+			.withResponseField(RouteParameter(RestApiIds::result, "Runtime module tree root")
+				.withRef("#/components/schemas/BuilderTreeNode"))
 			.withErrorCodes({ 400, 404, 501 })
 			.withRequestExample(R"(GET /api/builder/tree)")
 			.withResponseExample(R"({"success": true, "result": {"id": "SynthChain", "processorId": "Master Chain", "type": "SoundGenerator", "bypassed": false, "routing": {"matrix": [0, 1], "send": [-1, -1], "resizable": true, "routable": true, "numDestinationChannels": 2}}, "logs": [], "errors": []})"));
@@ -1215,6 +1197,8 @@ struct RestApiEndpoints
 			.withModuleIdParam()
 			.withQueryParam(RouteParameter(RestApiIds::group,
 				"Optional group selector. 'current' returns the active plan's validation tree").asOptional())
+			.withResponseField(RouteParameter(RestApiIds::result, "Recursive UI component tree root")
+				.withRef("#/components/schemas/UiTreeNode"))
 			.withErrorCodes({ 400, 404, 501 })
 			.withRequestExample(R"(GET /api/ui/tree?moduleId=Interface)")
 			.withResponseExample(R"({"success": true, "result": {"id": "Content", "type": "ScriptPanel", "x": 0, "y": 0, "width": 600, "height": 500, "visible": true, "enabled": true, "saveInPreset": false, "childComponents": []}, "logs": [], "errors": []})"));
@@ -1458,6 +1442,8 @@ struct RestApiEndpoints
 			.withQueryParam(RouteParameter(RestApiIds::group,
 				"Optional group selector. 'current' returns the active plan's validation tree "
 				"(accumulated state inside an undo group, before commit)").asOptional())
+			.withResponseField(RouteParameter(RestApiIds::result, "Recursive scriptnode tree root")
+				.withRef("#/components/schemas/DspTreeNode"))
 			.withErrorCodes({ 400, 404, 501 })
 			.withRequestExample(R"(GET /api/dsp/tree?moduleId=Script%20FX1)")
 			.withResponseExample(R"({"success": true, "result": {"nodeId": "MyDSP", "factoryPath": "container.chain", "bypassed": false, "parameters": [], "properties": [], "connections": [{"source": "PMA1", "sourceOutput": 0, "target": "Osc1", "parameter": "Frequency"}], "children": [{"nodeId": "PMA1", "factoryPath": "control.pma", "bypassed": false, "parameters": [{"parameterId": "Value", "value": 0.0}], "properties": [], "children": []}, {"nodeId": "Osc1", "factoryPath": "core.oscillator", "bypassed": false, "parameters": [{"parameterId": "Frequency", "value": 440}], "properties": [{"propertyId": "UseFreqInput", "value": false}], "children": []}]}, "logs": [], "errors": []})"));
@@ -1569,33 +1555,17 @@ struct RestApiEndpoints
 
 	static void dspProbe(Array<RouteMetadata>& m)
 	{
-		auto channelEntry = RouteParameter(Identifier("entry"), "Per-channel probe report")
-			.withType(ParamType::Object)
-			.withProperty(RouteParameter(RestApiIds::channelIndex, "Channel number")
-				.withType(ParamType::Int))
-			.withProperty(RouteParameter(RestApiIds::min, "Minimum sample value in the probed block")
-				.withType(ParamType::Float))
-			.withProperty(RouteParameter(RestApiIds::max, "Maximum sample value in the probed block")
-				.withType(ParamType::Float))
-			.withProperty(RouteParameter(RestApiIds::avg, "Average sample value across the probed block")
-				.withType(ParamType::Float))
-			.withProperty(RouteParameter(RestApiIds::peakIndex, "Sample index of the positive peak")
-				.withType(ParamType::Int))
-			.withProperty(RouteParameter(RestApiIds::silence, "Whether the probed block was silent")
-				.withType(ParamType::Bool));
+		auto signalReport = RouteParameter(RestApiIds::signal, "Full or compact per-channel signal measurements")
+			.withOneOf(
+				RouteParameter(Identifier("fullSignal"), "Full per-channel signal measurements")
+					.withArrayItems(RouteParameter(Identifier("channel"), "Per-channel probe report")
+						.withRef("#/components/schemas/DspProbeChannelReport")),
+				RouteParameter(Identifier("compactSignal"), "Compact per-channel peak values")
+					.withArrayItems(RouteParameter(Identifier("peak"), "Compact per-channel peak value")
+						.withType(ParamType::Float)));
 
 		auto specsReport = RouteParameter(RestApiIds::specs, "Processing specs for the captured report")
-			.withType(ParamType::Object)
-			.withProperty(RouteParameter(RestApiIds::sampleRate, "Processing sample rate used for the report")
-				.withType(ParamType::Float))
-			.withProperty(RouteParameter(RestApiIds::numChannels, "Number of processed channels")
-				.withType(ParamType::Int))
-			.withProperty(RouteParameter(RestApiIds::blockSize, "Processed block size")
-				.withType(ParamType::Int))
-			.withProperty(RouteParameter(RestApiIds::polyphonic, "True when the network was running with an enabled voice index")
-				.withType(ParamType::Bool))
-			.withProperty(RouteParameter(RestApiIds::processMidi, "True if the target container was in a MIDI-processing context")
-				.withType(ParamType::Bool));
+			.withRef("#/components/schemas/DspProbeSpecsReport");
 
 		auto filterParam = RouteParameter(RestApiIds::filter, "Optional response filter object")
 			.withType(ParamType::Object)
@@ -1610,80 +1580,54 @@ struct RestApiEndpoints
 			.withProperty(RouteParameter(Identifier("wildcard"), "Reserved wildcard filter. Leave at '*' for the built-in filter modes")
 				.withDefault("*"));
 
-		auto childReport = RouteParameter(Identifier("child"), "Recursive child probe report")
-			.withType(ParamType::Object)
-			.withProperty(RouteParameter(RestApiIds::id, "Child node ID"))
-			.withProperty(RouteParameter(RestApiIds::factoryPath, "Child node factory path"))
-			.withProperty(RouteParameter(RestApiIds::signal, "Per-channel measurement objects")
-				.withArrayItems(channelEntry));
-
 		auto containerReport = RouteParameter(RestApiIds::containers, "Recursive container reports keyed by container ID")
 			.withType(ParamType::Object)
-			.withProperty(RouteParameter(RestApiIds::factoryPath, "Container factory path"))
-			.withProperty(RouteParameter(RestApiIds::numChildren, "Number of direct child nodes in the container")
-				.withType(ParamType::Int))
-			.withProperty(specsReport)
-			.withProperty(RouteParameter(RestApiIds::children, "Per-child probe reports for this container")
-				.withArrayItems(childReport));
+			.withAdditionalProperties(RouteParameter(Identifier("container"), "Container report")
+				.withRef("#/components/schemas/DspProbeContainerReport"));
 
-		auto fullParameterValue = RouteParameter(Identifier("parameterValue"), "Full parameter report value")
-			.withType(ParamType::Object)
-			.withProperty(RouteParameter(RestApiIds::value, "Captured parameter value")
-				.withType(ParamType::Float).asOptional())
-			.withProperty(RouteParameter(RestApiIds::testValue, "Value after the test injection has processed")
-				.withType(ParamType::Float).asOptional())
-			.withProperty(RouteParameter(RestApiIds::originalValue, "Value before the test injection")
-				.withType(ParamType::Float).asOptional())
-			.withProperty(RouteParameter(RestApiIds::normalizedValue, "Normalised parameter value, omitted for unscaled parameters")
-				.withType(ParamType::Float).asOptional())
-			.withProperty(RouteParameter(RestApiIds::outOfRange, "Whether the captured value is outside the parameter range")
-				.withType(ParamType::Bool).asOptional())
-			.withProperty(RouteParameter(RestApiIds::inverted, "Whether the parameter range is inverted")
-				.withType(ParamType::Bool).asOptional())
-			.withProperty(RouteParameter(RestApiIds::min, "Minimum parameter value")
-				.withType(ParamType::Float).asOptional())
-			.withProperty(RouteParameter(RestApiIds::max, "Maximum parameter value")
-				.withType(ParamType::Float).asOptional())
-			.withProperty(RouteParameter(RestApiIds::stepSize, "Parameter step size")
-				.withType(ParamType::Float).asOptional())
-			.withProperty(RouteParameter(RestApiIds::middlePosition, "Middle position after skew mapping")
-				.withType(ParamType::Float).asOptional());
+		auto parameterMapValue = RouteParameter(Identifier("parameterValue"), "Compact value or full parameter report")
+			.withOneOf(
+				RouteParameter(Identifier("compactValue"), "Compact numeric parameter value")
+					.withType(ParamType::Float),
+				RouteParameter(Identifier("fullReport"), "Full parameter report")
+					.withRef("#/components/schemas/DspProbeParameterReport"));
 
-		auto edgeReport = RouteParameter(Identifier("edge"), "Touched parameter connection report")
-			.withType(ParamType::Object)
-			.withProperty(RouteParameter(RestApiIds::target, "Target parameter path in nodeId.parameterId format"))
-			.withProperty(RouteParameter(RestApiIds::connectionMode, "Connection scaling mode")
-				.withEnumValues({ "matched", "scaled", "unscaled" }))
-			.withProperty(RouteParameter(RestApiIds::sourceValue, "Captured source value")
-				.withType(ParamType::Float).asOptional())
-			.withProperty(RouteParameter(RestApiIds::targetValue, "Captured target value")
-				.withType(ParamType::Float).asOptional());
+		auto touchedEdgeArray = RouteParameter(Identifier("edgeArray"), "Array of touched target reports for this source")
+			.withArrayItems(RouteParameter(Identifier("edge"), "Touched parameter connection report")
+				.withRef("#/components/schemas/DspProbeTouchedEdge"));
 
 		auto parameterProbeRequest = RouteParameter(RestApiIds::parameters, "Optional parameter injection and probe configuration")
 			.withType(ParamType::Object)
 			.withProperty(RouteParameter(Identifier("inject"), "Object keyed by nodeId.parameterId with temporary test values")
-				.withType(ParamType::Object).asOptional())
-			.withProperty(RouteParameter(Identifier("probe"), "Array of nodeId.parameterId paths to capture, or '*' to capture all changed parameters and touched edges")
-				.withArrayItems(RouteParameter(Identifier("path"), "Parameter path in nodeId.parameterId format")).asOptional());
+				.withType(ParamType::Object)
+				.withAdditionalProperties(RouteParameter(Identifier("value"), "Temporary parameter value")
+					.withType(ParamType::Float))
+				.asOptional())
+			.withProperty(RouteParameter(Identifier("probe"), "Parameter paths to capture, or '*' to capture all changed parameters and touched edges")
+				.withOneOf(
+					RouteParameter(Identifier("wildcard"), "Capture all changed parameters and touched parameter connections")
+						.withEnumValues({ "*" }),
+					RouteParameter(Identifier("paths"), "Parameter paths to capture")
+						.withArrayItems(RouteParameter(Identifier("path"), "Parameter path in nodeId.parameterId format")))
+				.asOptional());
 
 		auto parameterProbeResponse = RouteParameter(RestApiIds::parameters, "Parameter injection and probe report")
 			.withType(ParamType::Object)
 			.withProperty(RouteParameter(RestApiIds::injected, "Injected parameter reports keyed by nodeId.parameterId. Compact mode returns numeric values")
 				.withType(ParamType::Object)
-				.withProperty(fullParameterValue).asOptional())
+				.withAdditionalProperties(parameterMapValue).asOptional())
 			.withProperty(RouteParameter(RestApiIds::probed, "Captured parameter reports keyed by nodeId.parameterId. Empty when no parameter was reported")
 				.withType(ParamType::Object)
-				.withProperty(fullParameterValue).asOptional())
-			.withProperty(RouteParameter(RestApiIds::touchedEdges, "Wildcard probe connection reports keyed by source parameter path")
+				.withAdditionalProperties(parameterMapValue).asOptional())
+			.withProperty(RouteParameter(RestApiIds::touchedEdges, "Touched parameter connection reports keyed by source parameter path")
 				.withType(ParamType::Object)
-				.withProperty(RouteParameter(Identifier("sourcePath"), "Array of touched target reports for this source")
-					.withArrayItems(edgeReport)).asOptional());
+				.withAdditionalProperties(touchedEdgeArray).asOptional());
 
 		m.add(RouteMetadata(ApiRoute::DspProbe, "api/dsp/probe")
 			.withMethod(RestServer::POST)
 			.withCategory("dsp")
-			.withSummary("Inject a test signal and return a probe report")
-			.withDescription("Queues a one-shot signal injection into a supported scriptnode container and waits until the requested probe point has processed a buffer. injectId and probeId override injectIndex and probeIndex when present. Injection resolves before a child node and probing resolves after a child node, so injectIndex == probeIndex is valid. probeIndex=-1 or an omitted probeIndex resolves to the last child. If recursive is true, all child containers are probed and returned in a containers object. The optional parameters object can temporarily inject node parameters and capture parameter values at the probe point; parameter paths use nodeId.parameterId format and unknown paths fail immediately. parameters.probe accepts an array of paths, or '*' to report all changed parameters and touched parameter connections. The optional filter object can remove specs or signal data, compact signal arrays and parameter reports, and include the recursive topology tree. The request blocks until the report is available or until the fixed timeout of delayMs + 200ms expires.")
+			.withSummary("Inject signal and/or parameter test stimuli and return a DSP probe report")
+			.withDescription("Queues a one-shot signal and/or parameter injection into a supported scriptnode container and waits until the requested probe point has processed a buffer. injectId and probeId override injectIndex and probeIndex when present. Signal injection resolves before a child node and signal probing resolves after a child node, so injectIndex == probeIndex is valid. probeIndex=-1 or an omitted probeIndex resolves to the container output after the last child. recursive=true returns containers keyed by container ID. parameters.inject temporarily injects parameter values keyed by nodeId.parameterId. parameters.probe accepts '*' or an array of parameter paths. touchedEdges reports runtime parameter/control connections reached by the probe, not static graph reachability. Full mixed trace example: {\"moduleId\":\"ReproFX\",\"parent\":\"repro_probe\",\"signalType\":\"silence\",\"probeId\":\"gain\",\"parameters\":{\"inject\":{\"repro_probe.Parameter\":1.0},\"probe\":[\"repro_probe.Parameter\",\"gain.Gain\"]},\"filter\":{\"compact\":false}}. Wildcard parameter trace example: {\"moduleId\":\"ReproNullControlFX\",\"parent\":\"repro_null_control\",\"signalType\":\"silence\",\"probeId\":\"gain\",\"parameters\":{\"inject\":{\"repro_null_control.Parameter\":0.25},\"probe\":\"*\"},\"filter\":{\"compact\":false}}. Compact trace example: {\"moduleId\":\"DspTestFX\",\"parent\":\"test_network\",\"signalType\":\"dirac\",\"probeId\":\"gain\",\"parameters\":{\"probe\":\"*\"},\"filter\":{\"compact\":true}}. The optional filter object can remove specs or signal data, compact signal arrays and parameter reports, and include the recursive topology tree. The request blocks until the report is available or until the fixed timeout of delayMs + 200ms expires.")
 			.withReturns("Resolved probe configuration plus signal, recursive container, and optional parameter reports")
 			.withBodyParam(RouteParameter(RestApiIds::moduleId, "Module ID of the DspNetwork holder")
 				.withExample("DspTestFX"))
@@ -1704,7 +1648,7 @@ struct RestApiEndpoints
 			.withBodyParam(RouteParameter(RestApiIds::gain, "Signal level used for the injected test signal")
 				.withType(ParamType::Float).withDefault("1.0"))
 			.withBodyParam(RouteParameter(RestApiIds::seed, "Random seed used when signalType is noise")
-				.withType(ParamType::Int).asOptional())
+				.withType(ParamType::Int).withFormat("int64").asOptional())
 			.withBodyParam(RouteParameter(RestApiIds::delayMs, "Extra time to wait before capturing the probe result")
 				.withType(ParamType::Float).withDefault("0.0"))
 			.withBodyParam(parameterProbeRequest.asOptional())
@@ -1727,18 +1671,17 @@ struct RestApiEndpoints
 			.withResponseField(RouteParameter(RestApiIds::gain, "Injected signal level")
 				.withType(ParamType::Float).asOptional())
 			.withResponseField(RouteParameter(RestApiIds::seed, "Random seed used for noise generation")
-				.withType(ParamType::Int).asOptional())
+				.withType(ParamType::Int).withFormat("int64").asOptional())
 			.withResponseField(RouteParameter(RestApiIds::recursive, "True when recursive container probing was used")
 				.withType(ParamType::Bool))
 			.withResponseField(specsReport.asOptional())
-			.withResponseField(RouteParameter(RestApiIds::signal, "Per-channel measurement objects for non-recursive probes")
-				.withArrayItems(channelEntry).asOptional())
+			.withResponseField(signalReport.asOptional())
 			.withResponseField(containerReport.asOptional())
 			.withResponseField(parameterProbeResponse.asOptional())
 			.withResponseField(RouteParameter(RestApiIds::tree, "Dense recursive topology tree when requested by filter.tree")
 				.withType(ParamType::Object).asOptional())
 			.withErrorCodes({ 400, 404, 409, 504 })
-			.withRequestExample(R"({"moduleId": "DspTestFX", "parent": "test_network", "injectIndex": 0, "probeIndex": -1, "signalType": "dirac", "gain": 1.0, "parameters": {"inject": {"Gain1.Gain": 0.5}, "probe": ["Gain1.Gain"]}, "filter": {"compact": true}})")
+			.withRequestExample(R"({"moduleId": "ReproFX", "parent": "repro_probe", "signalType": "silence", "probeId": "gain", "parameters": {"inject": {"repro_probe.Parameter": 1.0}, "probe": ["repro_probe.Parameter", "gain.Gain"]}, "filter": {"compact": false}})")
 			.withResponseExample(R"({"success": true, "moduleId": "DspTestFX", "parent": "test_network", "factoryPath": "container.chain", "injectIndex": 0, "probeIndex": 0, "signalType": "dirac", "gain": 1.0, "seed": 1234, "recursive": false, "specs": {"sampleRate": 44100.0, "numChannels": 2, "blockSize": 512, "polyphonic": false, "processMidi": false}, "signal": [{"channelIndex": 0, "min": 0.0, "max": 0.5, "avg": 0.001, "peakIndex": 0, "silence": false}], "parameters": {"injected": {"Gain1.Gain": 0.5}, "probed": {"Gain1.Gain": 0.5}, "touchedEdges": {}}, "logs": [], "errors": []})"));
 	}
 
@@ -1824,18 +1767,6 @@ struct RestApiEndpoints
 	/* GET /api/project/tree */
 	static void projectTree(Array<RouteMetadata>& m)
 	{
-		auto treeNode = RouteParameter(Identifier("node"), "File or folder node")
-			.withType(ParamType::Object)
-			.withProperty(RouteParameter(RestApiIds::name, "File or folder name"))
-			.withProperty(RouteParameter(RestApiIds::type, "Node type")
-				.withEnumValues({ "file", "folder" }))
-			.withProperty(RouteParameter(RestApiIds::referenced,
-				"True if file is actively referenced by the runtime (file nodes only)")
-				.withType(ParamType::Bool).asOptional())
-			.withProperty(RouteParameter(RestApiIds::children,
-				"Child nodes (folder nodes only)")
-				.withType(ParamType::Array).asOptional());
-
 		m.add(RouteMetadata(ApiRoute::ProjectTree, "api/project/tree")
 			.rejectsInSnippetBrowser()
 			.withCategory("project")
@@ -1850,7 +1781,7 @@ struct RestApiEndpoints
 			.withReturns("projectName and the root tree node")
 			.withResponseField(RouteParameter(RestApiIds::projectName, "Name of the project"))
 			.withResponseField(RouteParameter(RestApiIds::root, "Root folder node")
-				.withType(ParamType::Object))
+				.withRef("#/components/schemas/ProjectTreeNode"))
 			.withErrorCodes({ 500 })
 			.withResponseExample(R"({"success": true, "projectName": "MyPlugin", "root": {"name": "MyPlugin", "type": "folder", "children": [{"name": "Scripts", "type": "folder", "children": [{"name": "Interface.js", "type": "file", "referenced": true}]}]}, "logs": [], "errors": []})"));
 	}

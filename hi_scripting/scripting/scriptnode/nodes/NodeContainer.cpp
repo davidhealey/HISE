@@ -213,7 +213,10 @@ juce::var InjectHelpers::ParameterInjector::poll(bool compact)
 			{
 				DynamicObject::Ptr v = new DynamicObject();
 				auto r = scriptnode::RangeHelpers::getDoubleRange(param->data);
-				scriptnode::RangeHelpers::storeDoubleRange(var(v.get()), r, RangeHelpers::IdSet::ScriptComponents);
+
+				var vr(v.get());
+
+				scriptnode::RangeHelpers::storeDoubleRange(vr, r, RangeHelpers::IdSet::ScriptComponents);
 
 				if (r.inv)
 					v->setProperty("inverted", true);
@@ -259,7 +262,9 @@ juce::var InjectHelpers::ParameterInjector::poll(bool compact)
 
 						if (!unscaled)
 						{
-							scriptnode::RangeHelpers::storeDoubleRange(var(v.get()), r, RangeHelpers::IdSet::ScriptComponents);
+							var vr(v.get());
+
+							scriptnode::RangeHelpers::storeDoubleRange(vr, r, RangeHelpers::IdSet::ScriptComponents);
 
 							if (r.inv)
 								v->setProperty("inverted", true);
@@ -271,7 +276,11 @@ juce::var InjectHelpers::ParameterInjector::poll(bool compact)
 							if (!unscaled)
 							{
 								v->setProperty("normalizedValue", r.convertTo0to1(p.second, true));
-								v->setProperty("outOfRange", !r.getRange().contains(p.second));
+
+								auto pr = r.getRange();
+								auto withinRange = !pr.contains(p.second) && pr.getEnd() != p.second;
+
+								v->setProperty("outOfRange", withinRange);
 							}
 						}
 
@@ -400,10 +409,12 @@ juce::var InjectHelpers::ParameterInjector::poll(bool compact)
 
 void InjectHelpers::InjectData::Report::process(ProcessDataDyn& data)
 {
-	for (int i = 0; i < specs.numChannels; i++)
+	for (int i = 0; i < data.getNumChannels(); i++)
 	{
 		auto ptr = data.getRawDataPointers()[i];
 		ProcessData<1> pd(&ptr, data.getNumSamples());
+
+		FloatSanitizers::sanitizeArray(ptr, data.getNumSamples());
 
 		float sum = 0.0f;
 

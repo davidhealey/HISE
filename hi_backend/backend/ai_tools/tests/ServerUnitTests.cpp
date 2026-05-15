@@ -560,6 +560,75 @@ private:
                 if (v.toString() == "apiVersion") { requiresApiVersion = true; break; }
         }
         expect(requiresApiVersion, "Envelope schema should mark apiVersion as required");
+
+        auto schemas = json["components"]["schemas"];
+        expect(schemas["DspProbeParameterReport"].isObject(), "OpenAPI should include DspProbeParameterReport schema");
+        expect(schemas["DspProbeTouchedEdge"].isObject(), "OpenAPI should include DspProbeTouchedEdge schema");
+        expect(schemas["DspProbeContainerReport"].isObject(), "OpenAPI should include DspProbeContainerReport schema");
+        expect(schemas["ScriptTreeNode"].isObject(), "OpenAPI should include ScriptTreeNode schema");
+        expect(schemas["BuilderTreeNode"].isObject(), "OpenAPI should include BuilderTreeNode schema");
+        expect(schemas["UiTreeNode"].isObject(), "OpenAPI should include UiTreeNode schema");
+        expect(schemas["DspTreeNode"].isObject(), "OpenAPI should include DspTreeNode schema");
+        expect(schemas["ProjectTreeNode"].isObject(), "OpenAPI should include ProjectTreeNode schema");
+
+        expect(schemas["ScriptTreeNode"]["properties"]["children"]["items"]["$ref"].toString()
+               == "#/components/schemas/ScriptTreeNode",
+               "ScriptTreeNode children should be recursive refs");
+        expect(schemas["UiTreeNode"]["properties"]["childComponents"]["items"]["$ref"].toString()
+               == "#/components/schemas/UiTreeNode",
+               "UiTreeNode childComponents should be recursive refs");
+        expect(schemas["DspTreeNode"]["properties"]["children"]["items"]["$ref"].toString()
+               == "#/components/schemas/DspTreeNode",
+               "DspTreeNode children should be recursive refs");
+        expect(schemas["ProjectTreeNode"]["properties"]["children"]["items"]["$ref"].toString()
+               == "#/components/schemas/ProjectTreeNode",
+               "ProjectTreeNode children should be recursive refs");
+
+        auto scriptTreeResp = json["paths"]["/api/script/tree"]["get"]["responses"]["200"]["content"]["application/json"]["schema"];
+        expect(scriptTreeResp["properties"]["tree"]["items"]["$ref"].toString()
+               == "#/components/schemas/ScriptTreeNode",
+               "script/tree response tree should reference ScriptTreeNode");
+        auto builderTreeResp = json["paths"]["/api/builder/tree"]["get"]["responses"]["200"]["content"]["application/json"]["schema"];
+        expect(builderTreeResp["properties"]["result"]["$ref"].toString()
+               == "#/components/schemas/BuilderTreeNode",
+               "builder/tree result should reference BuilderTreeNode");
+        auto uiTreeResp = json["paths"]["/api/ui/tree"]["get"]["responses"]["200"]["content"]["application/json"]["schema"];
+        expect(uiTreeResp["properties"]["result"]["$ref"].toString()
+               == "#/components/schemas/UiTreeNode",
+               "ui/tree result should reference UiTreeNode");
+        auto dspTreeResp = json["paths"]["/api/dsp/tree"]["get"]["responses"]["200"]["content"]["application/json"]["schema"];
+        expect(dspTreeResp["properties"]["result"]["$ref"].toString()
+               == "#/components/schemas/DspTreeNode",
+               "dsp/tree result should reference DspTreeNode");
+        auto projectTreeResp = json["paths"]["/api/project/tree"]["get"]["responses"]["200"]["content"]["application/json"]["schema"];
+        expect(projectTreeResp["properties"]["root"]["$ref"].toString()
+               == "#/components/schemas/ProjectTreeNode",
+               "project/tree root should reference ProjectTreeNode");
+
+        auto dspProbePost = json["paths"]["/api/dsp/probe"]["post"];
+        expect(dspProbePost["summary"].toString().contains("parameter"), "dsp/probe summary should mention parameters");
+
+        auto dspProbeBody = dspProbePost["requestBody"]["content"]["application/json"]["schema"];
+        auto requestProbe = dspProbeBody["properties"]["parameters"]["properties"]["probe"];
+        expect(requestProbe["oneOf"].isArray(), "parameters.probe should be oneOf wildcard or path array");
+        expect(requestProbe["oneOf"][0]["enum"].isArray(), "parameters.probe wildcard option should be enum");
+
+        auto dspProbeResponse = dspProbePost["responses"]["200"]["content"]["application/json"]["schema"];
+        auto dspProbeProps = dspProbeResponse["properties"];
+        expect(dspProbeProps["seed"]["format"].toString() == "int64", "dsp/probe seed should be int64");
+        expect(dspProbeProps["signal"]["oneOf"].isArray(), "dsp/probe signal should describe full and compact shapes");
+        expect(dspProbeProps["containers"]["additionalProperties"]["$ref"].toString()
+               == "#/components/schemas/DspProbeContainerReport",
+               "dsp/probe containers should be a dynamic map of container reports");
+
+        auto responseParameters = dspProbeProps["parameters"]["properties"];
+        expect(responseParameters["injected"]["additionalProperties"]["oneOf"].isArray(),
+               "parameters.injected should be a dynamic map of compact or full reports");
+        expect(responseParameters["probed"]["additionalProperties"]["oneOf"].isArray(),
+               "parameters.probed should be a dynamic map of compact or full reports");
+        expect(responseParameters["touchedEdges"]["additionalProperties"]["items"]["$ref"].toString()
+               == "#/components/schemas/DspProbeTouchedEdge",
+               "parameters.touchedEdges should be a dynamic map of edge arrays");
     }
     
     //==========================================================================
