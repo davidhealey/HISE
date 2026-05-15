@@ -209,11 +209,6 @@ namespace hise { using namespace juce;
 		}
 	}
 
-	NetworkConnectivityChecker::NetworkType GlobalServer::getLastKnownNetworkType() const
-	{
-		return connectivityChecker.getLastKnownNetworkType();
-	}
-
 	NetworkConnectivityChecker::NetworkType GlobalServer::queryCurrentNetworkType()
 	{
 		return connectivityChecker.getCurrentNetworkType();

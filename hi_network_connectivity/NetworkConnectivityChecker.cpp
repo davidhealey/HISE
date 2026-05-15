@@ -61,7 +61,6 @@ void NetworkConnectivityChecker::stop()
 NetworkConnectivityChecker::NetworkType NetworkConnectivityChecker::getCurrentNetworkType()
 {
     lastKnownType = getCurrentSystemNetworkType();
-    lastKnownRSSI = getCurrentSystemRSSI();
     return lastKnownType;
 }
 

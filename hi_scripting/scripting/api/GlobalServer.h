@@ -32,6 +32,8 @@
 
 #pragma once
 
+#include "../../../hi_network_connectivity/NetworkConnectivityChecker.h"
+
 namespace hise { using namespace juce;
 
 /** This object will surpass the lifetime of a server API object. */
@@ -146,16 +148,11 @@ struct GlobalServer: public ControlledObject,
 
     void setInitialised();
 
-	/** Starts the connectivity polling timer. Called from setConnectivityCallback() the first time a script registers interest. */
 	void startConnectivityMonitoring();
 
-	/** Decrements the interest count and stops the timer when it reaches zero. */
 	void stopConnectivityMonitoring();
 
-	/** Returns the last cached network type (fast, no OS call). */
-	NetworkConnectivityChecker::NetworkType getLastKnownNetworkType() const;
-
-	/** Queries the OS immediately and returns the current type (used by getConnectionType()). */
+	/** Queries the OS immediately and returns the current network type. */
 	NetworkConnectivityChecker::NetworkType queryCurrentNetworkType();
 
 private:
