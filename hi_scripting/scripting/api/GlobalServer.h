@@ -35,7 +35,8 @@
 namespace hise { using namespace juce;
 
 /** This object will surpass the lifetime of a server API object. */
-struct GlobalServer: public ControlledObject
+struct GlobalServer: public ControlledObject,
+                    private NetworkConnectivityChecker::Listener
 {
 	enum class State
 	{
@@ -52,9 +53,12 @@ struct GlobalServer: public ControlledObject
 
 		/** This callback is being executed synchronously when the queue has changed. */
 		virtual void queueChanged(int numItemsInQueue) = 0;
-		
+
 		/** This callback is being executed synchronously when the download queue changed. */
 		virtual void downloadQueueChanged(int numItemsToDownload) = 0;
+
+		/** Called on the main thread when the network connection type changes. */
+		virtual void networkConnectivityChanged(NetworkConnectivityChecker::NetworkType) {}
 
 		JUCE_DECLARE_WEAK_REFERENCEABLE(Listener);
 	};
@@ -142,6 +146,12 @@ struct GlobalServer: public ControlledObject
 
     void setInitialised();
 
+	/** Starts native OS network connectivity monitoring. Called automatically from setInitialised(). */
+	void startConnectivityMonitoring();
+
+	/** Returns the last known network connection type without querying the OS. */
+	NetworkConnectivityChecker::NetworkType getLastKnownNetworkType() const;
+
 private:
 
 #if USE_BACKEND
@@ -181,6 +191,10 @@ private:
 	String extraHeader;
 
 	Array<WeakReference<Listener>> listeners;
+
+	NetworkConnectivityChecker connectivityChecker;
+
+	void networkStatusChanged (NetworkConnectivityChecker::NetworkType newType) override;
     
 public:
 
