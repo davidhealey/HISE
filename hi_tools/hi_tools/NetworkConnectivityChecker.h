@@ -46,7 +46,7 @@ using namespace juce;
     All methods must be called on the main thread.
 
     On Windows, add iphlpapi.lib and wlanapi.lib to your linker inputs.
-    On Apple platforms, link SystemConfiguration.framework (declared in the module header).
+    On Apple platforms, link SystemConfiguration.framework (declared in hi_tools.h).
 */
 class NetworkConnectivityChecker : private Timer
 {
@@ -77,7 +77,7 @@ public:
     /** Stops the polling timer. */
     void stop();
 
-    /** Returns the last type detected by the timer — no OS call, safe to call frequently. */
+    /** Returns the last type detected by the timer -- no OS call, safe to call frequently. */
     NetworkType getLastKnownNetworkType() const noexcept { return lastKnownType; }
 
     /** Queries the OS immediately and updates the cached state. */
@@ -86,7 +86,7 @@ public:
     /** Convenience wrapper around getLastKnownNetworkType(). */
     bool isConnectedToInternet() const noexcept { return lastKnownType != NetworkType::none; }
 
-    /** Returns a normalised (0.0 – 1.0) RSSI value.
+    /** Returns a normalised (0.0 to 1.0) RSSI value.
         Accuracy is platform-dependent; do not rely on the exact value. */
     double getRSSI() const noexcept { return lastKnownRSSI; }
 

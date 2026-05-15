@@ -95,7 +95,6 @@ static const unsigned char projectStandaloneTemplate_jucer_lines[] = R"(
         <MODULEPATH id="hi_streaming" path="%HISE_PATH%"/>
         <MODULEPATH id="hi_tools" path="%HISE_PATH%"/>
         <MODULEPATH id="hi_snex" path="%HISE_PATH%"/>
-        <MODULEPATH id="hi_network_connectivity" path="%HISE_PATH%"/>
 		<MODULEPATH id="melatonin_blur" path="%HISE_PATH%"/>
 		%LORIS_MODULEPATH%
       </MODULEPATHS>
@@ -142,7 +141,6 @@ static const unsigned char projectStandaloneTemplate_jucer_lines[] = R"(
         <MODULEPATH id="hi_streaming" path="%HISE_PATH%"/>
         <MODULEPATH id="hi_tools" path="%HISE_PATH%"/>
         <MODULEPATH id="hi_snex" path="%HISE_PATH%"/>
-        <MODULEPATH id="hi_network_connectivity" path="%HISE_PATH%"/>
 		<MODULEPATH id="melatonin_blur" path="%HISE_PATH%"/>
 		%LORIS_MODULEPATH%
       </MODULEPATHS>
@@ -197,7 +195,6 @@ R"(    <MACOSX_MAKE targetFolder="Builds/MacOSXMakefile" vstLegacyFolder="%VSTSD
         <MODULEPATH id="hi_streaming" path="%HISE_PATH%"/>
         <MODULEPATH id="hi_tools" path="%HISE_PATH%"/>
         <MODULEPATH id="hi_snex" path="%HISE_PATH%"/>
-        <MODULEPATH id="hi_network_connectivity" path="%HISE_PATH%"/>
         <MODULEPATH id="melatonin_blur" path="%HISE_PATH%"/>
         %LORIS_MODULEPATH%
       </MODULEPATHS>
@@ -237,7 +234,6 @@ R"(    <MACOSX_MAKE targetFolder="Builds/MacOSXMakefile" vstLegacyFolder="%VSTSD
         <MODULEPATH id="hi_core" path="%HISE_PATH%"/>
         <MODULEPATH id="hi_tools" path="%HISE_PATH%"/>
         <MODULEPATH id="hi_snex" path="%HISE_PATH%"/>
-        <MODULEPATH id="hi_network_connectivity" path="%HISE_PATH%"/>
 		<MODULEPATH id="melatonin_blur" path="%HISE_PATH%"/>
 		%LORIS_MODULEPATH%
       </MODULEPATHS>
@@ -249,7 +245,6 @@ R"(    <MACOSX_MAKE targetFolder="Builds/MacOSXMakefile" vstLegacyFolder="%VSTSD
     <MODULE id="hi_faust" showAllCode="1" useLocalCopy="0"/>
     <MODULE id="hi_faust_types" showAllCode="1" useLocalCopy="0"/>
     <MODULE id="hi_frontend" showAllCode="1" useLocalCopy="0"/>
-    <MODULE id="hi_network_connectivity" showAllCode="1" useLocalCopy="0"/>
     <MODULE id="hi_scripting" showAllCode="1" useLocalCopy="0"/>
     <MODULE id="hi_lac" showAllCode="1" useLocalCopy="0"/>
     <MODULE id="hi_zstd" showAllCode="1" useLocalCopy="0"/>

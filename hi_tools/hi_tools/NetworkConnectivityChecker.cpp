@@ -30,14 +30,50 @@
 *   ===========================================================================
 */
 
-#include "hi_network_connectivity.h"
+namespace hise {
 
-#include "NetworkConnectivityChecker.cpp"
+// Forward declarations -- each platform file provides these two free functions.
+NetworkConnectivityChecker::NetworkType getCurrentSystemNetworkType();
+double getCurrentSystemRSSI();
 
-#if JUCE_WINDOWS
- #include "NetworkConnectivityCheckerWindows.cpp"
-#elif JUCE_MAC || JUCE_IOS
- #include "NetworkConnectivityCheckerApple.cpp"
-#elif JUCE_LINUX || JUCE_ANDROID
- #include "NetworkConnectivityCheckerPosix.cpp"
-#endif
+NetworkConnectivityChecker::NetworkConnectivityChecker()
+{
+    lastKnownType = getCurrentSystemNetworkType();
+    lastKnownRSSI = getCurrentSystemRSSI();
+}
+
+NetworkConnectivityChecker::~NetworkConnectivityChecker()
+{
+    stop();
+}
+
+void NetworkConnectivityChecker::start()
+{
+    startTimer (TimerIntervalMs);
+}
+
+void NetworkConnectivityChecker::stop()
+{
+    stopTimer();
+}
+
+NetworkConnectivityChecker::NetworkType NetworkConnectivityChecker::getCurrentNetworkType()
+{
+    lastKnownType = getCurrentSystemNetworkType();
+    return lastKnownType;
+}
+
+void NetworkConnectivityChecker::timerCallback()
+{
+    // Only query network type here -- getRSSI() triggers an active WiFi scan on
+    // Windows (WlanScan) which is expensive and should only run on explicit request.
+    const auto newType = getCurrentSystemNetworkType();
+
+    if (newType != lastKnownType)
+    {
+        lastKnownType = newType;
+        listeners.call ([newType] (Listener& l) { l.networkStatusChanged (newType); });
+    }
+}
+
+} // namespace hise

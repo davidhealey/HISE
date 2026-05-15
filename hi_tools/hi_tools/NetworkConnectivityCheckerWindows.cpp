@@ -151,7 +151,7 @@ double getCurrentSystemRSSI()
         return 0.0;
     }
 
-    // Link quality is more reliable than raw RSSI on Windows — see:
+    // Link quality is more reliable than raw RSSI on Windows -- see:
     // https://www.syatech.com/blog/2017/12/05/windows-wifi-madness/
     return static_cast<double> (wlanBssList->wlanBssEntries[0].uLinkQuality) / 100.0;
 }
