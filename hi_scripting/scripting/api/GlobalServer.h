@@ -32,7 +32,7 @@
 
 #pragma once
 
-#include "../../../hi_network_connectivity/NetworkConnectivityChecker.h"
+#include "../../../hi_tools/hi_tools/NetworkConnectivityChecker.h"
 
 namespace hise { using namespace juce;
 

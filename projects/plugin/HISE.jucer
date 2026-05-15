@@ -95,7 +95,6 @@
         <MODULEPATH id="hi_faust_lib" path="../../"/>
         <MODULEPATH id="hi_faust_types" path="../../"/>
         <MODULEPATH id="hi_loris" path="../../../HISE"/>
-        <MODULEPATH id="hi_network_connectivity" path="../../"/>
         <MODULEPATH id="melatonin_blur" path="../../"/>
         <MODULEPATH id="juce_audio_processors_headless" path="../../JUCE/modules"/>
       </MODULEPATHS>
@@ -151,7 +150,6 @@
         <MODULEPATH id="hi_faust_lib" path="../../"/>
         <MODULEPATH id="hi_faust_types" path="../../"/>
         <MODULEPATH id="hi_loris" path="../../../HISE"/>
-        <MODULEPATH id="hi_network_connectivity" path="../../"/>
         <MODULEPATH id="melatonin_blur" path="../../"/>
         <MODULEPATH id="juce_audio_processors_headless" path="../../JUCE/modules"/>
       </MODULEPATHS>
@@ -216,7 +214,6 @@
         <MODULEPATH id="hi_faust_lib" path="../../"/>
         <MODULEPATH id="hi_faust_types" path="../../"/>
         <MODULEPATH id="hi_loris" path="../../../HISE"/>
-        <MODULEPATH id="hi_network_connectivity" path="../../"/>
         <MODULEPATH id="melatonin_blur" path="../../"/>
         <MODULEPATH id="juce_audio_processors_headless" path="../../JUCE/modules"/>
       </MODULEPATHS>
@@ -260,7 +257,6 @@
         <MODULEPATH id="hi_faust_lib" path="../../"/>
         <MODULEPATH id="hi_faust_types" path="../../"/>
         <MODULEPATH id="hi_loris" path="../../../HISE"/>
-        <MODULEPATH id="hi_network_connectivity" path="../../"/>
         <MODULEPATH id="melatonin_blur" path="../../"/>
         <MODULEPATH id="juce_audio_processors_headless" path="../../JUCE/modules"/>
       </MODULEPATHS>
@@ -277,7 +273,6 @@
     <MODULE id="hi_lac" showAllCode="1" useLocalCopy="0"/>
     <MODULE id="hi_loris" showAllCode="1" useLocalCopy="0" useGlobalPath="0"/>
     <MODULE id="hi_rlottie" showAllCode="1" useLocalCopy="0" useGlobalPath="0"/>
-    <MODULE id="hi_network_connectivity" showAllCode="1" useLocalCopy="0" useGlobalPath="0"/>
     <MODULE id="hi_scripting" showAllCode="1" useLocalCopy="0"/>
     <MODULE id="hi_snex" showAllCode="1" useLocalCopy="0" useGlobalPath="0"/>
     <MODULE id="hi_streaming" showAllCode="1" useLocalCopy="0"/>

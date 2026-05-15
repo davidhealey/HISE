@@ -16,7 +16,7 @@
     #undef __USE_MISC
     #include <net/if.h>
 
-    // Android doesn't expose getifaddrs — provide a stub so the code compiles.
+    // Android doesn't expose getifaddrs -- provide a stub so the code compiles.
     extern "C"
     {
         struct ifaddrs
