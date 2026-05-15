@@ -183,12 +183,11 @@ namespace hise { using namespace juce;
 	void GlobalServer::setInitialised()
 	{
 		initialised = true;
-		startConnectivityMonitoring();
+		connectivityChecker.addListener (this);
 	}
 
 	void GlobalServer::startConnectivityMonitoring()
 	{
-		connectivityChecker.addListener (this);
 		MessageManager::callAsync ([this]()
 		{
 			connectivityChecker.start();
@@ -198,6 +197,11 @@ namespace hise { using namespace juce;
 	NetworkConnectivityChecker::NetworkType GlobalServer::getLastKnownNetworkType() const
 	{
 		return connectivityChecker.getLastKnownNetworkType();
+	}
+
+	NetworkConnectivityChecker::NetworkType GlobalServer::queryCurrentNetworkType()
+	{
+		return connectivityChecker.getCurrentNetworkType();
 	}
 
 	void GlobalServer::networkStatusChanged (NetworkConnectivityChecker::NetworkType newType)
