@@ -1661,6 +1661,8 @@ private:
 		~Server()
 		{
 			globalServer.removeListener(this);
+			if (hasConnectivityCallback)
+				globalServer.stopConnectivityMonitoring();
 		}
 		
 		Identifier getObjectName() const override { RETURN_STATIC_IDENTIFIER("Server"); }
@@ -1772,6 +1774,8 @@ private:
 
 		WeakCallbackHolder serverCallback;
 		WeakCallbackHolder connectivityCallback;
+
+		bool hasConnectivityCallback = false;
 
 		JavascriptProcessor* jp;
 

@@ -188,10 +188,25 @@ namespace hise { using namespace juce;
 
 	void GlobalServer::startConnectivityMonitoring()
 	{
-		MessageManager::callAsync ([this]()
+		if (++connectivityMonitoringRefCount == 1)
 		{
-			connectivityChecker.start();
-		});
+			MessageManager::callAsync ([this]()
+			{
+				connectivityChecker.start();
+			});
+		}
+	}
+
+	void GlobalServer::stopConnectivityMonitoring()
+	{
+		if (--connectivityMonitoringRefCount <= 0)
+		{
+			connectivityMonitoringRefCount = 0;
+			MessageManager::callAsync ([this]()
+			{
+				connectivityChecker.stop();
+			});
+		}
 	}
 
 	NetworkConnectivityChecker::NetworkType GlobalServer::getLastKnownNetworkType() const

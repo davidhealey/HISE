@@ -149,6 +149,9 @@ struct GlobalServer: public ControlledObject,
 	/** Starts the connectivity polling timer. Called from setConnectivityCallback() the first time a script registers interest. */
 	void startConnectivityMonitoring();
 
+	/** Decrements the interest count and stops the timer when it reaches zero. */
+	void stopConnectivityMonitoring();
+
 	/** Returns the last cached network type (fast, no OS call). */
 	NetworkConnectivityChecker::NetworkType getLastKnownNetworkType() const;
 
@@ -196,6 +199,7 @@ private:
 	Array<WeakReference<Listener>> listeners;
 
 	NetworkConnectivityChecker connectivityChecker;
+	std::atomic<int> connectivityMonitoringRefCount { 0 };
 
 	void networkStatusChanged (NetworkConnectivityChecker::NetworkType newType) override;
     
