@@ -10014,6 +10014,7 @@ namespace MacroIds
 	DECLARE_ID(Processor);
 	DECLARE_ID(Attribute);
 	DECLARE_ID(CustomAutomation);
+	DECLARE_ID(ReadOnly);
 #undef DECLARE_ID
 }
 
@@ -10111,8 +10112,9 @@ void ScriptingObjects::ScriptedMacroHandler::setFromCallbackArg(const var& obj)
 				fr = nr;
 
 			auto converterString = obj["converter"].toString();
+			auto readOnly = obj.hasProperty(MacroIds::ReadOnly) ? (bool)obj[MacroIds::ReadOnly] : true;
 
-			mm.getMacroChain()->getMacroControlData(mIndex)->addParameter(p, parameterIndex, pString, ValueToTextConverter::fromString(converterString), fr.rng, true, isCustomId, dontSendNotification);
+			mm.getMacroChain()->getMacroControlData(mIndex)->addParameter(p, parameterIndex, pString, ValueToTextConverter::fromString(converterString), fr.rng, readOnly, isCustomId, dontSendNotification);
 
 			auto pd = mm.getMacroChain()->getMacroControlData(mIndex)->getParameterWithProcessorAndIndex(p, parameterIndex);
 
@@ -10179,6 +10181,8 @@ var ScriptingObjects::ScriptedMacroHandler::getCallbackArg(int macroIndex, Proce
 			
 			RangeHelpers::storeDoubleRange(v, fr, RangeHelpers::IdSet::MidiAutomationFull);
 			RangeHelpers::storeDoubleRange(v, nr, RangeHelpers::IdSet::MidiAutomation);
+
+			obj->setProperty(MacroIds::ReadOnly, md->getParameter(i)->isReadOnly());
 		}
 	}
 	
