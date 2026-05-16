@@ -1954,10 +1954,24 @@ StyleSheet::Collection Parser::getCSSValues() const
 {
 	StyleSheet::List list;
 
+	if (addAllStyleSheet)
+	{
+		bool found = false;
+
+		for (auto sel : getSelectors())
+		{
+			found |= sel.type == SelectorType::All;
+
+			if (found)
+				break;
+		}
+
+		if (!found)
+			list.add(new StyleSheet(Selector("*")));
+	}
+
 	for(const auto& rc: rawClasses)
 	{
-		
-
 		Array<PseudoState> thisStates;
 
 		ComplexSelector::List selectorList;

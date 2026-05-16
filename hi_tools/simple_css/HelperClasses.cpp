@@ -168,6 +168,10 @@ Selector::Selector(const String& s)
 		type = SelectorType::AtRule;
 		name = s.substring(1, 1000).trim();
 		break;
+	case '*':
+		type = SelectorType::All;
+		name = "*";
+		break;
 	default:
 		type = SelectorType::Type;
 		name = s;

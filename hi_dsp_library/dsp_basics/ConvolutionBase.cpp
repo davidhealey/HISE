@@ -323,6 +323,15 @@ void ConvolutionEffectBase::resetBase()
     fadeBuffer.clear();
 	smoothInputBuffer = false;
 	rampFlag = false;
+	fadeValue = 0.0f;
+
+	if(fadeOutConvolverL != nullptr || fadeOutConvolverR != nullptr)
+	{
+		SimpleReadWriteLock::ScopedWriteLock sl(swapLock);
+
+		backgroundThread.addConvolverToBeDeleted(fadeOutConvolverL);
+		backgroundThread.addConvolverToBeDeleted(fadeOutConvolverR);
+	}
 
 	if (predelayMs > 0)
 	{

@@ -107,6 +107,7 @@ void RestServerUndoManager::Factory::registerAllFunctions()
 {
 	registerCreatorFunctionT<rest_undo::builder::add>(Domain::Builder);
 	registerCreatorFunctionT<rest_undo::builder::remove>(Domain::Builder);
+	registerCreatorFunctionT<rest_undo::builder::move>(Domain::Builder);
 	registerCreatorFunctionT<rest_undo::builder::clone>(Domain::Builder);
 	registerCreatorFunctionT<rest_undo::builder::set_attributes>(Domain::Builder);
 	registerCreatorFunctionT<rest_undo::builder::set_id>(Domain::Builder);

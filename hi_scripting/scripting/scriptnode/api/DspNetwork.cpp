@@ -49,6 +49,7 @@ struct DspNetwork::Wrapper
 	API_METHOD_WRAPPER_3(DspNetwork, createAndAdd);
 	API_METHOD_WRAPPER_2(DspNetwork, createFromJSON);
 	API_METHOD_WRAPPER_0(DspNetwork, undo);
+	API_METHOD_WRAPPER_2(DspNetwork, injectAndProbe);
 	//API_VOID_METHOD_WRAPPER_0(DspNetwork, disconnectAll);
 	//API_VOID_METHOD_WRAPPER_3(DspNetwork, injectAfter);
 };
@@ -171,9 +172,9 @@ DspNetwork::DspNetwork(hise::ProcessorWithScriptingContent* p, ValueTree data_, 
 	ADD_API_METHOD_2(clear);
 	ADD_API_METHOD_2(createFromJSON);
 	ADD_API_METHOD_0(undo);
+	ADD_API_METHOD_2(injectAndProbe);
 	//ADD_API_METHOD_0(disconnectAll);
-	//ADD_API_METHOD_3(injectAfter);
-
+	
 	selectionUpdater = new SelectionUpdater(*this);
 
 	setEnableUndoManager(enableUndo);
@@ -241,11 +242,12 @@ DspNetwork::~DspNetwork()
 
 	stopTimer();
 
+	lastInjector = var();
 	root = nullptr;
 	selectionUpdater = nullptr;
 	nodes.clear();
     nodeFactories.clear();
-
+	
 	getMainController()->removeTempoListener(&tempoSyncer);
 }
 
@@ -1021,6 +1023,40 @@ bool DspNetwork::setParameterDataFromJSON(var jsonData)
 	}
 
 	return true;
+}
+
+bool DspNetwork::injectAndProbe(const var& injectData, const var& reportCallback)
+{
+#if USE_BACKEND
+	using IC = NodeContainer::InjectChecker;
+
+	ReferenceCountedObjectPtr<IC> ptr, keepAlive;
+
+	ptr = new IC(this, injectData, reportCallback);
+
+	if (auto existing = dynamic_cast<IC*>(lastInjector.getObject()))
+		keepAlive = existing;
+
+	if (ptr->injectOk.wasOk())
+		lastInjector = ptr.get();
+	
+	if (keepAlive != nullptr)
+	{
+		MessageManager::callAsync([keepAlive]()
+		{
+			keepAlive->cleanup();
+		});
+	}
+
+	auto ok = ptr->injectOk.wasOk();
+
+	if (!ok)
+		reportScriptError(ptr->injectOk.getErrorMessage());
+
+	return ok;
+#else
+	return false;
+#endif
 }
 
 juce::Array<Parameter*> DspNetwork::getListOfProbedParameters()
@@ -2774,18 +2810,20 @@ void DspNetworkListeners::DspNetworkGraphRootListener::onChangeStatic(DspNetwork
 #endif
 
 
-void ScriptnodeExceptionHandler::validateMidiProcessingContext(NodeBase* b)
+bool ScriptnodeExceptionHandler::isInMidiProcessingContext(NodeBase* b)
 {
+	auto isInMidiChain = false;
+
 	if (b != nullptr)
 	{
-		auto pp = b->getParentNode();
-		auto isInMidiChain = b->getRootNetwork()->isPolyphonic();
+		auto pp = b;
+		isInMidiChain = b->getRootNetwork()->isPolyphonic();
 
 		while (pp != nullptr)
 		{
 			isInMidiChain |= pp->getValueTree()[PropertyIds::FactoryPath].toString().contains("midichain");
 
-			if(pp->getValueTree()[PropertyIds::FactoryPath].toString().contains("no_midi"))
+			if (pp->getValueTree()[PropertyIds::FactoryPath].toString().contains("no_midi"))
 			{
 				isInMidiChain = false;
 				break;
@@ -2793,8 +2831,16 @@ void ScriptnodeExceptionHandler::validateMidiProcessingContext(NodeBase* b)
 
 			pp = pp->getParentNode();
 		}
+	}
 
-		if (!isInMidiChain)
+	return isInMidiChain;
+}
+
+void ScriptnodeExceptionHandler::validateMidiProcessingContext(NodeBase* b)
+{
+	if (b != nullptr)
+	{
+		if (!isInMidiProcessingContext(b))
 		{
 			Error e;
 			e.error = Error::NoMatchingParent;
@@ -3181,7 +3227,6 @@ void DspNetwork::FaustManager::sendCompileMessage(const File& f, NotificationTyp
 	processor->getMainController()->getKillStateHandler().killVoicesAndCall(processor, pf, 
 		MainController::KillStateHandler::TargetThread::SampleLoadingThread);
 }
-
 
 
 

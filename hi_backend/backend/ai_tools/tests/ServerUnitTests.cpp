@@ -70,6 +70,9 @@ public:
         testSetScriptEmptyCallbacks();
         testGetScript();
         testGetScriptExternalFiles();
+        testScriptTreeBasic();
+        testScriptTreeCompactNamespace();
+        testScriptTreeFiltersAndEmptyNamespace();
         testRecompile();
         testEvaluateREPLSuccess();
         testEvaluateREPLArithmetic();
@@ -135,6 +138,7 @@ public:
         testBuilderTree();
         testBuilderTreeRouting();
         testBuilderApply();
+        testBuilderApplyMove();
         testBuilderSetRoutingPreset();
         testBuilderSetRoutingMatrix();
         testBuilderSetRoutingSend();
@@ -207,6 +211,13 @@ public:
         testDspApplyValidation();
         
         testDspApplyBatchOps();
+        testDspProbeSuccess();
+        testDspProbeIdTargeting();
+        testDspProbeRecursiveFilter();
+        testDspProbeParameterReport();
+        testDspProbeParameterCompactAndInjectOnly();
+        testDspProbeValidation();
+        testDspProbeTimeout();
         testDspScreenshot();
 
         testBatchRollback();
@@ -410,6 +421,33 @@ private:
     };
     
     std::unique_ptr<TestContext> ctx;
+
+    static var findNodeById(const var& nodes, const String& id)
+    {
+        if (auto a = nodes.getArray())
+        {
+            for (const auto& node : *a)
+            {
+                if (node[RestApiIds::id].toString() == id)
+                    return node;
+
+                auto child = findNodeById(node[RestApiIds::children], id);
+
+                if (!child.isVoid())
+                    return child;
+            }
+        }
+
+        return var();
+    }
+
+    static int getArraySize(const var& v)
+    {
+        if (auto a = v.getArray())
+            return a->size();
+
+        return 0;
+    }
     
     //==========================================================================
     void testServerStartStop()
@@ -522,6 +560,75 @@ private:
                 if (v.toString() == "apiVersion") { requiresApiVersion = true; break; }
         }
         expect(requiresApiVersion, "Envelope schema should mark apiVersion as required");
+
+        auto schemas = json["components"]["schemas"];
+        expect(schemas["DspProbeParameterReport"].isObject(), "OpenAPI should include DspProbeParameterReport schema");
+        expect(schemas["DspProbeTouchedEdge"].isObject(), "OpenAPI should include DspProbeTouchedEdge schema");
+        expect(schemas["DspProbeContainerReport"].isObject(), "OpenAPI should include DspProbeContainerReport schema");
+        expect(schemas["ScriptTreeNode"].isObject(), "OpenAPI should include ScriptTreeNode schema");
+        expect(schemas["BuilderTreeNode"].isObject(), "OpenAPI should include BuilderTreeNode schema");
+        expect(schemas["UiTreeNode"].isObject(), "OpenAPI should include UiTreeNode schema");
+        expect(schemas["DspTreeNode"].isObject(), "OpenAPI should include DspTreeNode schema");
+        expect(schemas["ProjectTreeNode"].isObject(), "OpenAPI should include ProjectTreeNode schema");
+
+        expect(schemas["ScriptTreeNode"]["properties"]["children"]["items"]["$ref"].toString()
+               == "#/components/schemas/ScriptTreeNode",
+               "ScriptTreeNode children should be recursive refs");
+        expect(schemas["UiTreeNode"]["properties"]["childComponents"]["items"]["$ref"].toString()
+               == "#/components/schemas/UiTreeNode",
+               "UiTreeNode childComponents should be recursive refs");
+        expect(schemas["DspTreeNode"]["properties"]["children"]["items"]["$ref"].toString()
+               == "#/components/schemas/DspTreeNode",
+               "DspTreeNode children should be recursive refs");
+        expect(schemas["ProjectTreeNode"]["properties"]["children"]["items"]["$ref"].toString()
+               == "#/components/schemas/ProjectTreeNode",
+               "ProjectTreeNode children should be recursive refs");
+
+        auto scriptTreeResp = json["paths"]["/api/script/tree"]["get"]["responses"]["200"]["content"]["application/json"]["schema"];
+        expect(scriptTreeResp["properties"]["tree"]["items"]["$ref"].toString()
+               == "#/components/schemas/ScriptTreeNode",
+               "script/tree response tree should reference ScriptTreeNode");
+        auto builderTreeResp = json["paths"]["/api/builder/tree"]["get"]["responses"]["200"]["content"]["application/json"]["schema"];
+        expect(builderTreeResp["properties"]["result"]["$ref"].toString()
+               == "#/components/schemas/BuilderTreeNode",
+               "builder/tree result should reference BuilderTreeNode");
+        auto uiTreeResp = json["paths"]["/api/ui/tree"]["get"]["responses"]["200"]["content"]["application/json"]["schema"];
+        expect(uiTreeResp["properties"]["result"]["$ref"].toString()
+               == "#/components/schemas/UiTreeNode",
+               "ui/tree result should reference UiTreeNode");
+        auto dspTreeResp = json["paths"]["/api/dsp/tree"]["get"]["responses"]["200"]["content"]["application/json"]["schema"];
+        expect(dspTreeResp["properties"]["result"]["$ref"].toString()
+               == "#/components/schemas/DspTreeNode",
+               "dsp/tree result should reference DspTreeNode");
+        auto projectTreeResp = json["paths"]["/api/project/tree"]["get"]["responses"]["200"]["content"]["application/json"]["schema"];
+        expect(projectTreeResp["properties"]["root"]["$ref"].toString()
+               == "#/components/schemas/ProjectTreeNode",
+               "project/tree root should reference ProjectTreeNode");
+
+        auto dspProbePost = json["paths"]["/api/dsp/probe"]["post"];
+        expect(dspProbePost["summary"].toString().contains("parameter"), "dsp/probe summary should mention parameters");
+
+        auto dspProbeBody = dspProbePost["requestBody"]["content"]["application/json"]["schema"];
+        auto requestProbe = dspProbeBody["properties"]["parameters"]["properties"]["probe"];
+        expect(requestProbe["oneOf"].isArray(), "parameters.probe should be oneOf wildcard or path array");
+        expect(requestProbe["oneOf"][0]["enum"].isArray(), "parameters.probe wildcard option should be enum");
+
+        auto dspProbeResponse = dspProbePost["responses"]["200"]["content"]["application/json"]["schema"];
+        auto dspProbeProps = dspProbeResponse["properties"];
+        expect(dspProbeProps["seed"]["format"].toString() == "int64", "dsp/probe seed should be int64");
+        expect(dspProbeProps["signal"]["oneOf"].isArray(), "dsp/probe signal should describe full and compact shapes");
+        expect(dspProbeProps["containers"]["additionalProperties"]["$ref"].toString()
+               == "#/components/schemas/DspProbeContainerReport",
+               "dsp/probe containers should be a dynamic map of container reports");
+
+        auto responseParameters = dspProbeProps["parameters"]["properties"];
+        expect(responseParameters["injected"]["additionalProperties"]["oneOf"].isArray(),
+               "parameters.injected should be a dynamic map of compact or full reports");
+        expect(responseParameters["probed"]["additionalProperties"]["oneOf"].isArray(),
+               "parameters.probed should be a dynamic map of compact or full reports");
+        expect(responseParameters["touchedEdges"]["additionalProperties"]["items"]["$ref"].toString()
+               == "#/components/schemas/DspProbeTouchedEdge",
+               "parameters.touchedEdges should be a dynamic map of edge arrays");
     }
     
     //==========================================================================
@@ -1499,6 +1606,127 @@ private:
         expect(externalFiles.isArray(), "externalFiles should be array");
         // With no includes, array should be empty
         expect(externalFiles.size() == 0, "Should have no external files when no includes used");
+    }
+    
+    //==========================================================================
+    void testScriptTreeBasic()
+    {
+        beginTest("GET /api/script/tree");
+
+        ctx->reset();
+
+        ctx->compile("Content.makeFrontInterface(600, 400);\n"
+                     "namespace Theme\n"
+                     "{\n"
+                     "    const var colour = 42;\n"
+                     "    inline function getColour()\n"
+                     "    {\n"
+                     "        return colour;\n"
+                     "    }\n"
+                     "}\n"
+                     "const var MyKnob = Content.addKnob(\"MyKnob\", 10, 10);\n"
+                     "reg cachedValue = 12;");
+
+        auto response = ctx->httpGet("/api/script/tree?moduleId=Interface&maxDepth=2");
+        var json = ctx->parseJson(response);
+
+        expect((bool)json["success"], "Should succeed");
+        expect(json["moduleId"].toString() == "Interface", "Should return moduleId");
+        expect(json["format"].toString() == "tree", "Default format should be tree");
+        expect(!(bool)json["compact"], "Default compact should be false");
+        expect(json["tree"].isArray(), "Should return tree array");
+        expect((int)json["returned"] > 0, "Should return script symbols");
+
+        auto theme = findNodeById(json["tree"], "Theme");
+        expect(!theme.isVoid(), "Should include namespace node");
+        expect(theme["type"].toString() == "namespace", "Theme should be namespace");
+        expect(theme.hasProperty("expression"), "Full nodes should include expression");
+        expect(theme.hasProperty("location"), "Full nodes should include location");
+
+        auto colour = findNodeById(theme["children"], "colour");
+        expect(!colour.isVoid(), "Should include namespace child");
+        expect(colour["expression"].toString() == "Theme.colour", "Should expose REPL expression");
+        expect(colour["type"].toString() == "const var", "Should expose HiseScript type");
+        expect(colour.hasProperty("value"), "Full nodes should include value");
+        expect(colour["location"].hasProperty("charNumber"), "Location should include charNumber");
+
+        auto knob = findNodeById(json["tree"], "MyKnob");
+        expect(!knob.isVoid(), "Should include root const var");
+        expect(knob["dataType"].toString().isNotEmpty(), "Should include dataType");
+
+        expect(findNodeById(json["tree"], "isNaN").isVoid(), "Should filter default isNaN symbol");
+        expect(findNodeById(json["tree"], "isFinite").isVoid(), "Should filter default isFinite symbol");
+        expect(findNodeById(json["tree"], "AsyncNotification").isVoid(), "Should filter default notification symbol");
+        expect(findNodeById(json["tree"], "AsyncHiPriorityNotification").isVoid(), "Should filter default notification symbol");
+        expect(findNodeById(json["tree"], "SyncNotification").isVoid(), "Should filter default notification symbol");
+    }
+
+    //==========================================================================
+    void testScriptTreeCompactNamespace()
+    {
+        beginTest("GET /api/script/tree (compact namespace)");
+
+        ctx->reset();
+
+        ctx->compile("Content.makeFrontInterface(600, 400);\n"
+                     "namespace Theme\n"
+                     "{\n"
+                     "    const var colour = 42;\n"
+                     "}\n"
+                     "const var RootValue = 1;");
+
+        auto response = ctx->httpGet("/api/script/tree?moduleId=Interface&namespace=Theme&compact=true");
+        var json = ctx->parseJson(response);
+
+        expect((bool)json["success"], "Should succeed");
+        expect(json["namespace"].toString() == "Theme", "Should echo namespace filter");
+        expect((bool)json["compact"], "Should use compact mode");
+        expect(getArraySize(json["tree"]) == 1, "Namespace query should return one root");
+
+        auto theme = findNodeById(json["tree"], "Theme");
+        expect(!theme.isVoid(), "Should include requested namespace");
+        expect(theme["type"].toString() == "namespace", "Should keep type in compact mode");
+        expect(theme["expression"].toString() == "Theme", "Compact nodes should include expression");
+        expect(theme["dataType"].toString() == "Namespace", "Compact nodes should include dataType");
+        expect(!theme.hasProperty("value"), "Compact nodes should omit value");
+        expect(!theme.hasProperty("location"), "Compact nodes should omit location");
+
+        auto colour = findNodeById(theme["children"], "colour");
+        expect(!colour.isVoid(), "Should include namespace child");
+        expect(colour["expression"].toString() == "Theme.colour", "Compact children should include expression");
+        expect(colour["dataType"].toString().isNotEmpty(), "Compact children should include dataType");
+    }
+
+    //==========================================================================
+    void testScriptTreeFiltersAndEmptyNamespace()
+    {
+        beginTest("GET /api/script/tree (filters and empty namespace)");
+
+        ctx->reset();
+
+        ctx->compile("Content.makeFrontInterface(600, 400);\n"
+                     "const var MyKnob = Content.addKnob(\"MyKnob\", 10, 10);\n"
+                     "const var MyButton = Content.addButton(\"MyButton\", 20, 20);\n"
+                     "reg cachedValue = 12;");
+
+        auto filteredResponse = ctx->httpGet("/api/script/tree?moduleId=Interface&format=flat"
+                                             "&search=knob&type=const%20var&limit=1");
+        var filtered = ctx->parseJson(filteredResponse);
+
+        expect((bool)filtered["success"], "Filtered query should succeed");
+        expect(filtered["format"].toString() == "flat", "Should use flat format");
+        expect((int)filtered["returned"] == 1, "Limit should return one node");
+        expect(getArraySize(filtered["tree"]) == 1, "Flat result should contain one node");
+        expect(filtered["tree"][0]["id"].toString() == "MyKnob", "Search should match knob id");
+        expect(filtered["tree"][0]["children"].isArray(), "Flat nodes should keep children array");
+
+        auto missingResponse = ctx->httpGet("/api/script/tree?moduleId=Interface&namespace=DoesNotExist");
+        var missing = ctx->parseJson(missingResponse);
+
+        expect((bool)missing["success"], "Missing namespace should succeed");
+        expect(missing["namespace"].toString() == "DoesNotExist", "Should echo missing namespace");
+        expect(getArraySize(missing["tree"]) == 0, "Missing namespace should return empty tree");
+        expect((int)missing["totalMatches"] == 0, "Missing namespace should have no matches");
     }
     
     //==========================================================================
@@ -3620,9 +3848,9 @@ private:
                 "send[" + String(i) + "] mirrors live state");
         }
 
-        expectEquals<bool>((bool)routing["resizable"], liveMatrix->resizingIsAllowed(),
+        expect((bool)routing["resizable"] == liveMatrix->resizingIsAllowed(),
             "resizable mirrors resizingIsAllowed");
-        expectEquals<bool>((bool)routing["routable"], !liveMatrix->onlyEnablingAllowed(),
+        expect((bool)routing["routable"] == !liveMatrix->onlyEnablingAllowed(),
             "routable mirrors !onlyEnablingAllowed");
         expectEquals<int>((int)routing["numDestinationChannels"], liveMatrix->getNumDestinationChannels(),
             "numDestinationChannels mirrors live state");
@@ -3754,6 +3982,27 @@ private:
         DynamicObject::Ptr op = new DynamicObject();
         op->setProperty(RestApiIds::op, "remove");
         op->setProperty(RestApiIds::target, target);
+        return var(op.get());
+    }
+
+    var makeMoveOp(const String& target, const String& parent, int chain, int index = -1)
+    {
+        DynamicObject::Ptr op = new DynamicObject();
+        op->setProperty(RestApiIds::op, "move");
+        op->setProperty(RestApiIds::target, target);
+        op->setProperty(RestApiIds::parent, parent);
+        op->setProperty(RestApiIds::chain, chain);
+        if (index >= 0)
+            op->setProperty(RestApiIds::index, index);
+        return var(op.get());
+    }
+
+    var makeReorderOp(const String& target, int index)
+    {
+        DynamicObject::Ptr op = new DynamicObject();
+        op->setProperty(RestApiIds::op, "move");
+        op->setProperty(RestApiIds::target, target);
+        op->setProperty(RestApiIds::index, index);
         return var(op.get());
     }
 
@@ -3997,6 +4246,103 @@ private:
 
     }
 
+    void testBuilderApplyMove()
+    {
+        /** Setup: Two SynthChain containers with one SineSynth nested under the first
+         *  Scenario: Cross-parent move + in-place reorder + undo
+         *  Expected: Module reparented correctly, position respected, undo restores both
+         */
+        beginTest("POST /api/builder/apply (move)");
+
+        resetBuilderState();
+
+        Array<var> seedOps;
+        seedOps.add(makeAddOp("SynthChain", "MoveContainerA"));
+        seedOps.add(makeAddOp("SynthChain", "MoveContainerB"));
+        seedOps.add(makeAddOp("SineSynth", "MoveSineA", "MoveContainerA", -1));
+        auto seedJson = postBuilderOps(seedOps);
+        expectNoBuilderError(seedJson);
+        expectHasNestedChild("MoveContainerA", "MoveSineA");
+
+        ctx->parseJson(ctx->httpPost("/api/undo/clear", "{}"));
+
+        // Cross-parent move
+        Array<var> moveOps;
+        moveOps.add(makeMoveOp("MoveSineA", "MoveContainerB", -1));
+        auto moveJson = postBuilderOps(moveOps);
+        expectNoBuilderError(moveJson);
+        expectDiffEntry(moveJson, 0, "*", "MoveSineA");
+        expectHasNestedChild("MoveContainerB", "MoveSineA");
+
+        {
+            auto a = ProcessorHelpers::getFirstProcessorWithName(ctx->mc->getMainSynthChain(), "MoveContainerA");
+            expect(a != nullptr, "MoveContainerA should exist");
+            if (a != nullptr)
+                expect(ProcessorHelpers::getFirstProcessorWithName(a, "MoveSineA") == nullptr,
+                       "MoveSineA should no longer be under MoveContainerA after move");
+        }
+
+        // Undo restores parent
+        auto undoJson = ctx->parseJson(ctx->httpPost("/api/undo/back", "{}"));
+        expectNoBuilderError(undoJson);
+        expectHasNestedChild("MoveContainerA", "MoveSineA");
+
+        // Add two more siblings and exercise in-place reorder
+        Array<var> ops;
+        ops.add(makeAddOp("SineSynth", "MoveSineB", "MoveContainerA", -1));
+        ops.add(makeAddOp("SineSynth", "MoveSineC", "MoveContainerA", -1));
+        auto seed2Json = postBuilderOps(ops);
+        expectNoBuilderError(seed2Json);
+
+        auto containerChain = [this]() -> Chain*
+        {
+            return dynamic_cast<Chain*>(ProcessorHelpers::getFirstProcessorWithName(ctx->mc->getMainSynthChain(), "MoveContainerA"));
+        };
+
+        if (auto c = containerChain())
+        {
+            auto h = c->getHandler();
+            expect(h->getNumProcessors() >= 3, "MoveContainerA should have 3 children");
+            if (h->getNumProcessors() >= 3)
+            {
+                expectEquals(h->getProcessor(0)->getId(), String("MoveSineA"));
+                expectEquals(h->getProcessor(1)->getId(), String("MoveSineB"));
+                expectEquals(h->getProcessor(2)->getId(), String("MoveSineC"));
+            }
+        }
+
+        Array<var> reorderOps;
+        reorderOps.add(makeReorderOp("MoveSineC", 0));
+        auto reorderJson = postBuilderOps(reorderOps);
+        expectNoBuilderError(reorderJson);
+
+        if (auto c = containerChain())
+        {
+            auto h = c->getHandler();
+            if (h->getNumProcessors() >= 3)
+            {
+                expectEquals(h->getProcessor(0)->getId(), String("MoveSineC"));
+                expectEquals(h->getProcessor(1)->getId(), String("MoveSineA"));
+                expectEquals(h->getProcessor(2)->getId(), String("MoveSineB"));
+            }
+        }
+
+        // Undo reorder
+        auto u2 = ctx->parseJson(ctx->httpPost("/api/undo/back", "{}"));
+        expectNoBuilderError(u2);
+
+        if (auto c = containerChain())
+        {
+            auto h = c->getHandler();
+            if (h->getNumProcessors() >= 3)
+            {
+                expectEquals(h->getProcessor(0)->getId(), String("MoveSineA"));
+                expectEquals(h->getProcessor(1)->getId(), String("MoveSineB"));
+                expectEquals(h->getProcessor(2)->getId(), String("MoveSineC"));
+            }
+        }
+    }
+
     void testBuilderSetRoutingPreset()
     {
         /** Setup: Fresh project with default Master Chain (RoutableProcessor, allows resize)
@@ -4074,7 +4420,7 @@ private:
         expectNoBuilderError(resizeJson);
 
         Array<var> ops;
-        ops.add(makeSetRoutingSendOp("Master Chain", { -1, -1, 2, 3 }));
+        ops.add(makeSetRoutingSendOp("Master Chain", { -1, -1, 0, 1 }));
 
         auto json = postBuilderOps(ops);
         expectNoBuilderError(json);
@@ -4082,8 +4428,8 @@ private:
 
         expectSendConnection("Master Chain", 0, -1);
         expectSendConnection("Master Chain", 1, -1);
-        expectSendConnection("Master Chain", 2, 2);
-        expectSendConnection("Master Chain", 3, 3);
+        expectSendConnection("Master Chain", 2, 0);
+        expectSendConnection("Master Chain", 3, 1);
 
         // matrix connections still intact
         expectMatrixConnection("Master Chain", 0, 0);
@@ -4568,6 +4914,26 @@ private:
         op7->setProperty(RestApiIds::op, "clone");
         op7->setProperty(RestApiIds::count, 0);
         ops.add(var(op7.get()));
+
+        // move missing target
+        DynamicObject::Ptr op8 = new DynamicObject();
+        op8->setProperty(RestApiIds::op, "move");
+        op8->setProperty(RestApiIds::parent, "Master Chain");
+        op8->setProperty(RestApiIds::chain, -1);
+        ops.add(var(op8.get()));
+
+        // move with parent but no chain (partial)
+        DynamicObject::Ptr op9 = new DynamicObject();
+        op9->setProperty(RestApiIds::op, "move");
+        op9->setProperty(RestApiIds::target, "Anything");
+        op9->setProperty(RestApiIds::parent, "Master Chain");
+        ops.add(var(op9.get()));
+
+        // move with target but neither parent/chain nor index
+        DynamicObject::Ptr op10 = new DynamicObject();
+        op10->setProperty(RestApiIds::op, "move");
+        op10->setProperty(RestApiIds::target, "Anything");
+        ops.add(var(op10.get()));
         
         DynamicObject::Ptr bodyObj = new DynamicObject();
         bodyObj->setProperty(RestApiIds::operations, var(ops));
@@ -4577,7 +4943,7 @@ private:
         var json = ctx->parseJson(response);
         
         expect(!(bool)json[RestApiIds::success], "Should fail validation");
-        expectEquals<int>(json[RestApiIds::errors].size(), 7, "Should have one error per bad operation");
+        expectEquals<int>(json[RestApiIds::errors].size(), 10, "Should have one error per bad operation");
 
         for (int i = 0; i < json[RestApiIds::errors].size(); i++)
         {
@@ -4597,6 +4963,9 @@ private:
         expectEquals(json[RestApiIds::errors][4][RestApiIds::callstack][0].toString(), String("op[4]: set_bypassed"));
         expectEquals(json[RestApiIds::errors][5][RestApiIds::callstack][0].toString(), String("op[5]: set_effect"));
         expectEquals(json[RestApiIds::errors][6][RestApiIds::callstack][0].toString(), String("op[6]: clone"));
+        expectEquals(json[RestApiIds::errors][7][RestApiIds::callstack][0].toString(), String("op[7]: move"));
+        expectEquals(json[RestApiIds::errors][8][RestApiIds::callstack][0].toString(), String("op[8]: move"));
+        expectEquals(json[RestApiIds::errors][9][RestApiIds::callstack][0].toString(), String("op[9]: move"));
 
         // Validate-only branch: existing module with unknown parameter
         Array<var> validateOps;
@@ -5988,12 +6357,10 @@ private:
         return var(op.get());
     }
 
-    var makeDspDisconnectOp(const String& source, const String& target,
-                            const String& parameter)
+    var makeDspDisconnectOp(const String& target, const String& parameter)
     {
         DynamicObject::Ptr op = new DynamicObject();
         op->setProperty(RestApiIds::op, "disconnect");
-        op->setProperty(RestApiIds::source, source);
         op->setProperty(RestApiIds::target, target);
         op->setProperty(RestApiIds::parameter, parameter);
         return var(op.get());
@@ -6044,6 +6411,28 @@ private:
         if (verbose)
             url += "&verbose=true";
         auto response = ctx->httpGet(url);
+        return ctx->parseJson(response);
+    }
+
+    var postDspProbeWhileProcessing(const var& body, int maxPumpMs = 1000)
+    {
+        auto stopProcessing = std::make_shared<std::atomic<bool>>(false);
+
+        Thread::launch([this, stopProcessing, maxPumpMs]()
+        {
+            auto start = Time::getMillisecondCounter();
+
+            while (!stopProcessing->load() && (Time::getMillisecondCounter() - start) < (uint32)maxPumpMs)
+            {
+                AudioSampleBuffer ab(2, 512);
+                MidiBuffer mb;
+                ctx->bp->processBlock(ab, mb);
+                Thread::sleep(5);
+            }
+        });
+
+        auto response = ctx->httpPost("/api/dsp/probe", JSON::toString(body));
+        stopProcessing->store(true);
         return ctx->parseJson(response);
     }
 
@@ -6852,7 +7241,7 @@ private:
 
         // Disconnect
         ops.clear();
-        ops.add(makeDspDisconnectOp("DisPMA", "DisOsc", "Frequency"));
+        ops.add(makeDspDisconnectOp("DisOsc", "Frequency"));
         auto json = postDspOps(ops);
         expectDspSuccess(json);
 
@@ -6862,23 +7251,22 @@ private:
         expectEquals<int>(osc[RestApiIds::connections].size(), 0,
             "Should have no connections after disconnect");
 
-        // Error: missing required fields
+        // Error: missing required fields (target + parameter)
         DynamicObject::Ptr badOp = new DynamicObject();
         badOp->setProperty(RestApiIds::op, "disconnect");
-        badOp->setProperty(RestApiIds::source, "DisPMA");
         ops.clear();
         ops.add(var(badOp.get()));
         json = postDspOps(ops);
         expect(!(bool)json[RestApiIds::success], "Missing target/parameter should fail");
 
         // Regression: batch {add source, add target, connect, disconnect} must succeed.
-        // disconnect::validate() must defer the source existence check so it
-        // accepts nodes created earlier in the same batch.
+        // disconnect resolves the source by walking the network plan snapshot,
+        // so it must accept connections created earlier in the same batch.
         ops.clear();
         ops.add(makeDspAddOp("control.pma", "test_network", "BatchDisSrc"));
         ops.add(makeDspAddOp("core.oscillator", "test_network", "BatchDisTgt"));
         ops.add(makeDspConnectOp("BatchDisSrc", "BatchDisTgt", "Frequency"));
-        ops.add(makeDspDisconnectOp("BatchDisSrc", "BatchDisTgt", "Frequency"));
+        ops.add(makeDspDisconnectOp("BatchDisTgt", "Frequency"));
         json = postDspOps(ops);
         expectDspSuccess(json);
     }
@@ -7778,7 +8166,7 @@ private:
         ops.add(makeDspAddOp("control.pma", "test_network", "Mod"));
         ops.add(makeDspAddOp("core.oscillator", "test_network", "Osc"));
         ops.add(makeDspConnectOp("Mod", "Osc", "Frequency"));
-        ops.add(makeDspDisconnectOp("Mod", "Osc", "Frequency"));
+        ops.add(makeDspDisconnectOp("Osc", "Frequency"));
         expectDspSuccess(postDspOps(ops));
 
         auto mid = getDspGroupCurrent();
@@ -7912,6 +8300,220 @@ private:
         auto firstNode = findNodeInTree(tree[RestApiIds::result], "FirstNode");
         expect(!firstNode.isObject(),
             "FirstNode must be rolled back when a later op fails at perform()");
+    }
+
+    void testDspProbeSuccess()
+    {
+        beginTest("POST /api/dsp/probe - success");
+
+        resetDspState();
+
+        Array<var> ops;
+        ops.add(makeDspAddOp("core.gain", "test_network", "ProbeGain"));
+        expectDspSuccess(postDspOps(ops));
+
+        DynamicObject::Ptr body = new DynamicObject();
+        body->setProperty(RestApiIds::moduleId, "DspTestFX");
+        body->setProperty(RestApiIds::parent, "test_network");
+        body->setProperty(RestApiIds::injectIndex, 0);
+        body->setProperty(RestApiIds::probeIndex, -1);
+        body->setProperty(RestApiIds::signalType, "dirac");
+        body->setProperty(RestApiIds::gain, 1.0);
+
+        auto json = postDspProbeWhileProcessing(var(body.get()));
+
+        expect((bool)json[RestApiIds::success], "Probe request should succeed");
+        expectEquals(json[RestApiIds::moduleId].toString(), String("DspTestFX"), "Should echo moduleId");
+        expectEquals(json[RestApiIds::parent].toString(), String("test_network"), "Should echo parent");
+        expectEquals<int>((int)json[RestApiIds::injectIndex], 0, "injectIndex should resolve before the first child");
+        expectEquals<int>((int)json[RestApiIds::probeIndex], 0, "probeIndex should resolve after the last child");
+        expectEquals(json[RestApiIds::signalType].toString(), String("dirac"), "Should echo signalType");
+
+        auto specs = json[RestApiIds::specs];
+        expect(specs.isObject(), "specs should be nested object");
+        expectEquals<int>((int)specs[RestApiIds::numChannels], 2, "Should report stereo processing");
+        expectEquals<int>((int)specs[RestApiIds::blockSize], 512, "Should report block size");
+        expect((double)specs[RestApiIds::sampleRate] > 0.0, "Should report sample rate");
+
+        auto signal = json[RestApiIds::signal];
+        expect(signal.isArray(), "signal should be an array");
+        expectEquals<int>(signal.size(), 2, "Should contain two channel reports");
+    }
+
+    void testDspProbeIdTargeting()
+    {
+        beginTest("POST /api/dsp/probe - id targeting");
+
+        resetDspState();
+
+        Array<var> ops;
+        ops.add(makeDspAddOp("core.gain", "test_network", "ProbeGain"));
+        expectDspSuccess(postDspOps(ops));
+
+        DynamicObject::Ptr body = new DynamicObject();
+        body->setProperty(RestApiIds::moduleId, "DspTestFX");
+        body->setProperty(RestApiIds::parent, "test_network");
+        body->setProperty(RestApiIds::injectId, "ProbeGain");
+        body->setProperty(RestApiIds::probeId, "ProbeGain");
+        body->setProperty(RestApiIds::signalType, "dc");
+        body->setProperty(RestApiIds::gain, 0.25);
+
+        auto json = postDspProbeWhileProcessing(var(body.get()));
+
+        expect((bool)json[RestApiIds::success], "Probe request should succeed");
+        expectEquals(json[RestApiIds::injectId].toString(), String("ProbeGain"), "Should echo injectId");
+        expectEquals(json[RestApiIds::probeId].toString(), String("ProbeGain"), "Should echo probeId");
+        expectEquals<int>((int)json[RestApiIds::injectIndex], 0, "injectId should resolve before the child");
+        expectEquals<int>((int)json[RestApiIds::probeIndex], 0, "probeId should resolve after the child");
+        expectEquals((double)json[RestApiIds::gain], 0.25, "Should echo gain");
+        expect(json[RestApiIds::specs].isObject(), "Should include specs report");
+        expect(json[RestApiIds::signal].isArray(), "Should include signal report");
+    }
+
+    void testDspProbeRecursiveFilter()
+    {
+        beginTest("POST /api/dsp/probe - recursive filter");
+
+        resetDspState();
+
+        Array<var> ops;
+        ops.add(makeDspAddOp("container.chain", "test_network", "ProbeChain"));
+        ops.add(makeDspAddOp("core.gain", "ProbeChain", "NestedGain"));
+        expectDspSuccess(postDspOps(ops));
+
+        DynamicObject::Ptr filter = new DynamicObject();
+        filter->setProperty(RestApiIds::compact, true);
+        filter->setProperty(RestApiIds::tree, true);
+
+        DynamicObject::Ptr body = new DynamicObject();
+        body->setProperty(RestApiIds::moduleId, "DspTestFX");
+        body->setProperty(RestApiIds::parent, "test_network");
+        body->setProperty(RestApiIds::recursive, true);
+        body->setProperty(RestApiIds::signalType, "dirac");
+        body->setProperty(RestApiIds::filter, var(filter.get()));
+
+        auto json = postDspProbeWhileProcessing(var(body.get()));
+
+        expect((bool)json[RestApiIds::success], "Recursive probe request should succeed");
+        expect((bool)json[RestApiIds::recursive], "Should echo recursive mode");
+        expect(json[RestApiIds::containers].isObject(), "Should include recursive containers object");
+        expect(json[RestApiIds::tree].isObject(), "Should include recursive topology tree");
+
+        auto rootReport = json[RestApiIds::containers]["test_network"];
+        expect(rootReport.isObject(), "Root container should be reported");
+        expect(rootReport[RestApiIds::children].isArray(), "Root container should include child reports");
+    }
+
+    void testDspProbeParameterReport()
+    {
+        beginTest("POST /api/dsp/probe - parameter report");
+
+        resetDspState();
+
+        Array<var> ops;
+        ops.add(makeDspAddOp("core.gain", "test_network", "ProbeGain"));
+        expectDspSuccess(postDspOps(ops));
+
+        auto body = JSON::parse(R"({"moduleId":"DspTestFX","parent":"test_network","injectIndex":0,"probeIndex":-1,"signalType":"dc","gain":1.0,"parameters":{"inject":{"ProbeGain.Gain":0.25},"probe":["ProbeGain.Gain"]}})");
+        auto json = postDspProbeWhileProcessing(body);
+
+        expect((bool)json[RestApiIds::success], "Parameter probe request should succeed");
+
+        auto parameters = json[RestApiIds::parameters];
+        expect(parameters.isObject(), "Should include parameters object");
+
+        auto injected = parameters[RestApiIds::injected]["ProbeGain.Gain"];
+        expect(injected.isObject(), "Injected parameter should use full object shape");
+        expectEquals((double)injected[RestApiIds::testValue], 0.25, "Injected testValue should match request");
+        expect(injected.hasProperty(RestApiIds::originalValue), "Injected report should include originalValue");
+
+        auto probed = parameters[RestApiIds::probed]["ProbeGain.Gain"];
+        expect(probed.isObject(), "Probed parameter should use full object shape");
+        expectEquals((double)probed[RestApiIds::value], 0.25, "Probed value should reflect injected value");
+        expect(probed.hasProperty(RestApiIds::normalizedValue), "Probed report should include normalizedValue");
+    }
+
+    void testDspProbeParameterCompactAndInjectOnly()
+    {
+        beginTest("POST /api/dsp/probe - compact and inject-only parameter report");
+
+        resetDspState();
+
+        Array<var> ops;
+        ops.add(makeDspAddOp("core.gain", "test_network", "ProbeGain"));
+        expectDspSuccess(postDspOps(ops));
+
+        auto compactBody = JSON::parse(R"({"moduleId":"DspTestFX","parent":"test_network","injectIndex":0,"probeIndex":-1,"signalType":"dc","parameters":{"inject":{"ProbeGain.Gain":0.5},"probe":["ProbeGain.Gain"]},"filter":{"compact":true}})");
+        auto compactJson = postDspProbeWhileProcessing(compactBody);
+
+        expect((bool)compactJson[RestApiIds::success], "Compact parameter probe should succeed");
+        auto compactParameters = compactJson[RestApiIds::parameters];
+        expectEquals((double)compactParameters[RestApiIds::injected]["ProbeGain.Gain"], 0.5,
+            "Compact injected value should be numeric");
+        expectEquals((double)compactParameters[RestApiIds::probed]["ProbeGain.Gain"], 0.5,
+            "Compact probed value should be numeric");
+
+        auto injectOnlyBody = JSON::parse(R"({"moduleId":"DspTestFX","parent":"test_network","injectIndex":0,"probeIndex":-1,"signalType":"dc","parameters":{"inject":{"ProbeGain.Gain":0.75}},"filter":{"compact":true}})");
+        auto injectOnlyJson = postDspProbeWhileProcessing(injectOnlyBody);
+
+        expect((bool)injectOnlyJson[RestApiIds::success], "Inject-only parameter probe should succeed");
+        auto injectOnlyParameters = injectOnlyJson[RestApiIds::parameters];
+        expectEquals((double)injectOnlyParameters[RestApiIds::injected]["ProbeGain.Gain"], 0.75,
+            "Inject-only compact report should include injected value");
+        expect(injectOnlyParameters[RestApiIds::probed].isObject(), "Inject-only report should include empty probed object");
+        expect(injectOnlyParameters[RestApiIds::touchedEdges].isObject(),
+            "Inject-only report should include empty touchedEdges object");
+    }
+
+    void testDspProbeValidation()
+    {
+        beginTest("POST /api/dsp/probe - validation");
+
+        resetDspState();
+
+        Array<var> ops;
+        ops.add(makeDspAddOp("core.gain", "test_network", "ProbeGain"));
+        ops.add(makeDspAddOp("core.gain", "test_network", "ProbeGain2"));
+        expectDspSuccess(postDspOps(ops));
+
+        auto invalidParent = ctx->parseJson(ctx->httpPost("/api/dsp/probe",
+            R"({"moduleId": "DspTestFX", "parent": "missing", "injectIndex": 0, "probeIndex": -1, "signalType": "dirac"})"));
+        expectErrorMessageContains(invalidParent, "container");
+
+        auto invalidChild = ctx->parseJson(ctx->httpPost("/api/dsp/probe",
+            R"({"moduleId": "DspTestFX", "parent": "test_network", "injectId": "NoSuchChild", "probeIndex": -1, "signalType": "dirac"})"));
+        expectErrorMessageContains(invalidChild, "not found");
+
+        auto invalidIndex = ctx->parseJson(ctx->httpPost("/api/dsp/probe",
+            R"({"moduleId": "DspTestFX", "parent": "test_network", "injectIndex": 5, "probeIndex": -1, "signalType": "dirac"})"));
+        expectErrorMessageContains(invalidIndex, "out of range");
+
+        auto reversed = ctx->parseJson(ctx->httpPost("/api/dsp/probe",
+            R"({"moduleId": "DspTestFX", "parent": "test_network", "injectIndex": 1, "probeIndex": 0, "signalType": "dirac"})"));
+        expectErrorMessageContains(reversed, "before probe position");
+
+        auto invalidSignal = ctx->parseJson(ctx->httpPost("/api/dsp/probe",
+            R"({"moduleId": "DspTestFX", "parent": "test_network", "injectIndex": 0, "probeIndex": -1, "signalType": "sine"})"));
+        expectErrorMessageContains(invalidSignal, "signalType");
+
+        auto invalidParameter = ctx->parseJson(ctx->httpPost("/api/dsp/probe",
+            R"({"moduleId": "DspTestFX", "parent": "test_network", "injectIndex": 0, "probeIndex": -1, "signalType": "dirac", "parameters": {"probe": ["Missing.Gain"]}})"));
+        expectErrorMessageContains(invalidParameter, "parameter");
+    }
+
+    void testDspProbeTimeout()
+    {
+        beginTest("POST /api/dsp/probe - timeout");
+
+        resetDspState();
+
+        Array<var> ops;
+        ops.add(makeDspAddOp("core.gain", "test_network", "ProbeGain"));
+        expectDspSuccess(postDspOps(ops));
+
+        auto json = ctx->parseJson(ctx->httpPost("/api/dsp/probe",
+            R"({"moduleId": "DspTestFX", "parent": "test_network", "injectIndex": 0, "probeIndex": -1, "signalType": "dirac"})"));
+        expectErrorMessageContains(json, "timed out");
     }
 
     //==========================================================================

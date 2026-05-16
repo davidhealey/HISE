@@ -419,6 +419,7 @@ static void addLafRenderWarningIfNeeded(MainController* mc,
 		elapsed += pollIntervalMs;
 	}
 	
+#if 0 // nice idea, but just noise...
 	auto unrendered = registry->getUnrenderedComponents();
 	
 	if (!unrendered.isEmpty())
@@ -440,6 +441,7 @@ static void addLafRenderWarningIfNeeded(MainController* mc,
 		
 		result->setProperty(RestApiIds::lafRenderWarning, var(warning.get()));
 	}
+#endif
 }
 
 RestServer::Response RestHelpers::handleRecompile(MainController* mc, RestServer::AsyncRequest::Ptr req)
@@ -616,25 +618,31 @@ RestHelpers::ApiRoute RestHelpers::findRoute(const String& subURL)
 // Route handlers
 
 // Convert ParamType to OpenAPI type string
-static String paramTypeToOpenApi(RestHelpers::ParamType t)
+String RestHelpers::paramTypeToOpenApi(RestHelpers::ParamType t)
 {
 	switch (t)
 	{
-	case RestHelpers::ParamType::String: return "string";
-	case RestHelpers::ParamType::Int:    return "integer";
-	case RestHelpers::ParamType::Float:  return "number";
-	case RestHelpers::ParamType::Bool:   return "boolean";
-	case RestHelpers::ParamType::Array:  return "array";
-	case RestHelpers::ParamType::Object: return "object";
-	case RestHelpers::ParamType::Enum:   return "string";
+	case ParamType::String: return "string";
+	case ParamType::Int:    return "integer";
+	case ParamType::Float:  return "number";
+	case ParamType::Bool:   return "boolean";
+	case ParamType::Array:  return "array";
+	case ParamType::Object: return "object";
+	case ParamType::Enum:   return "string";
 	default: return "string";
 	}
 }
 
 // Recursively convert a RouteParameter to an OpenAPI schema object
-static var paramToOpenApiSchema(const RestHelpers::RouteParameter& p)
+var RestHelpers::paramToOpenApiSchema(const RestHelpers::RouteParameter& p)
 {
 	DynamicObject::Ptr schema = new DynamicObject();
+
+	if (p.schemaRef.isNotEmpty())
+	{
+		schema->setProperty("$ref", p.schemaRef);
+		return var(schema.get());
+	}
 
 	// Discriminated union → oneOf
 	if (!p.variants.isEmpty() && p.discriminator.isNotEmpty())
@@ -679,8 +687,18 @@ static var paramToOpenApiSchema(const RestHelpers::RouteParameter& p)
 
 		schema->setProperty("x-variants", var(variantArr));
 	}
+	// Untagged oneOf
+	else if (!p.oneOfSchemas.isEmpty())
+	{
+		Array<var> oneOfArr;
+
+		for (const auto& option : p.oneOfSchemas)
+			oneOfArr.add(paramToOpenApiSchema(option));
+
+		schema->setProperty("oneOf", var(oneOfArr));
+	}
 	// Object with properties
-	else if (p.type == RestHelpers::ParamType::Object && !p.properties.isEmpty())
+	else if (p.type == ParamType::Object && !p.properties.isEmpty())
 	{
 		schema->setProperty("type", "object");
 
@@ -697,17 +715,26 @@ static var paramToOpenApiSchema(const RestHelpers::RouteParameter& p)
 
 		schema->setProperty("properties", var(props.get()));
 
+		if (p.additionalPropertiesSchema)
+			schema->setProperty("additionalProperties", paramToOpenApiSchema(*p.additionalPropertiesSchema));
+
 		if (!requiredArr.isEmpty())
 			schema->setProperty("required", var(requiredArr));
 	}
+	// Dynamic object map
+	else if (p.type == ParamType::Object && p.additionalPropertiesSchema)
+	{
+		schema->setProperty("type", "object");
+		schema->setProperty("additionalProperties", paramToOpenApiSchema(*p.additionalPropertiesSchema));
+	}
 	// Array with item schema
-	else if (p.type == RestHelpers::ParamType::Array && p.itemSchema)
+	else if (p.type == ParamType::Array && p.itemSchema)
 	{
 		schema->setProperty("type", "array");
 		schema->setProperty("items", paramToOpenApiSchema(*p.itemSchema));
 	}
 	// Enum
-	else if (p.type == RestHelpers::ParamType::Enum && !p.enumValues.isEmpty())
+	else if (p.type == ParamType::Enum && !p.enumValues.isEmpty())
 	{
 		schema->setProperty("type", "string");
 
@@ -730,6 +757,9 @@ static var paramToOpenApiSchema(const RestHelpers::RouteParameter& p)
 	if (p.defaultValue.isNotEmpty())
 		schema->setProperty("default", p.defaultValue);
 
+	if (p.format.isNotEmpty())
+		schema->setProperty("format", p.format);
+
 	if (p.example.isNotEmpty())
 		schema->setProperty("example", p.example);
 
@@ -737,7 +767,7 @@ static var paramToOpenApiSchema(const RestHelpers::RouteParameter& p)
 }
 
 // Build the response schema for a route, wrapped in the standard envelope
-static var buildResponseSchema(const RestHelpers::RouteMetadata& route)
+var RestHelpers::buildResponseSchema(const RestHelpers::RouteMetadata& route)
 {
 	DynamicObject::Ptr envelope = new DynamicObject();
 	envelope->setProperty("type", "object");
@@ -824,6 +854,269 @@ static var buildResponseSchema(const RestHelpers::RouteMetadata& route)
 	return var(envelope.get());
 }
 
+var RestHelpers::buildOpenApiComponents()
+{
+	DynamicObject::Ptr components = new DynamicObject();
+	DynamicObject::Ptr schemas = new DynamicObject();
+
+	auto channelEntry = RouteParameter(Identifier("channel"), "Per-channel probe report")
+		.withType(ParamType::Object)
+		.withProperty(RouteParameter(RestApiIds::channelIndex, "Channel number")
+			.withType(ParamType::Int))
+		.withProperty(RouteParameter(RestApiIds::min, "Minimum sample value in the probed block")
+			.withType(ParamType::Float))
+		.withProperty(RouteParameter(RestApiIds::max, "Maximum sample value in the probed block")
+			.withType(ParamType::Float))
+		.withProperty(RouteParameter(RestApiIds::avg, "Average sample value across the probed block")
+			.withType(ParamType::Float))
+		.withProperty(RouteParameter(RestApiIds::peakIndex, "Sample index of the positive peak")
+			.withType(ParamType::Int))
+		.withProperty(RouteParameter(RestApiIds::silence, "Whether the probed block was silent")
+			.withType(ParamType::Bool));
+
+	auto specsReport = RouteParameter(RestApiIds::specs, "Processing specs for the captured report")
+		.withType(ParamType::Object)
+		.withProperty(RouteParameter(RestApiIds::sampleRate, "Processing sample rate used for the report")
+			.withType(ParamType::Float))
+		.withProperty(RouteParameter(RestApiIds::numChannels, "Number of processed channels")
+			.withType(ParamType::Int))
+		.withProperty(RouteParameter(RestApiIds::blockSize, "Processed block size")
+			.withType(ParamType::Int))
+		.withProperty(RouteParameter(RestApiIds::polyphonic, "True when the network was running with an enabled voice index")
+			.withType(ParamType::Bool))
+		.withProperty(RouteParameter(RestApiIds::processMidi, "True if the target container was in a MIDI-processing context")
+			.withType(ParamType::Bool));
+
+	auto childReport = RouteParameter(Identifier("child"), "Recursive child probe report")
+		.withType(ParamType::Object)
+		.withProperty(RouteParameter(RestApiIds::id, "Child node ID"))
+		.withProperty(RouteParameter(RestApiIds::factoryPath, "Child node factory path"))
+		.withProperty(RouteParameter(RestApiIds::signal, "Full or compact per-channel signal measurements")
+			.withOneOf(
+				RouteParameter(Identifier("fullSignal"), "Full per-channel signal measurements")
+					.withArrayItems(RouteParameter(Identifier("channel"), "Per-channel probe report")
+						.withRef("#/components/schemas/DspProbeChannelReport")),
+				RouteParameter(Identifier("compactSignal"), "Compact per-channel peak values")
+					.withArrayItems(RouteParameter(Identifier("peak"), "Compact per-channel peak value")
+						.withType(ParamType::Float))));
+
+	auto containerReport = RouteParameter(Identifier("container"), "Recursive container report")
+		.withType(ParamType::Object)
+		.withProperty(RouteParameter(RestApiIds::factoryPath, "Container factory path"))
+		.withProperty(RouteParameter(RestApiIds::numChildren, "Number of direct child nodes in the container")
+			.withType(ParamType::Int))
+		.withProperty(RouteParameter(RestApiIds::specs, "Processing specs for the captured report")
+			.withRef("#/components/schemas/DspProbeSpecsReport"))
+		.withProperty(RouteParameter(RestApiIds::children, "Per-child probe reports for this container")
+			.withArrayItems(RouteParameter(Identifier("child"), "Recursive child probe report")
+				.withRef("#/components/schemas/DspProbeChildReport")));
+
+	auto parameterReport = RouteParameter(Identifier("parameterReport"), "Full parameter report. Range fields are omitted for unscaled/raw reports.")
+		.withType(ParamType::Object)
+		.withProperty(RouteParameter(RestApiIds::value, "Captured parameter value")
+			.withType(ParamType::Float).asOptional())
+		.withProperty(RouteParameter(RestApiIds::testValue, "Injected test parameter value")
+			.withType(ParamType::Float).asOptional())
+		.withProperty(RouteParameter(RestApiIds::originalValue, "Value before the test injection")
+			.withType(ParamType::Float).asOptional())
+		.withProperty(RouteParameter(RestApiIds::normalizedValue, "Normalised parameter value. Omitted for unscaled/raw parameter reports.")
+			.withType(ParamType::Float).asOptional())
+		.withProperty(RouteParameter(RestApiIds::outOfRange, "Whether the captured value is outside the inclusive parameter range.")
+			.withType(ParamType::Bool).asOptional())
+		.withProperty(RouteParameter(RestApiIds::inverted, "Whether the parameter range is inverted")
+			.withType(ParamType::Bool).asOptional())
+		.withProperty(RouteParameter(RestApiIds::min, "Minimum parameter value")
+			.withType(ParamType::Float).asOptional())
+		.withProperty(RouteParameter(RestApiIds::max, "Maximum parameter value")
+			.withType(ParamType::Float).asOptional())
+		.withProperty(RouteParameter(RestApiIds::stepSize, "Parameter step size")
+			.withType(ParamType::Float).asOptional())
+		.withProperty(RouteParameter(RestApiIds::middlePosition, "Middle position after skew mapping")
+			.withType(ParamType::Float).asOptional());
+
+	auto edgeReport = RouteParameter(Identifier("edge"), "Touched parameter connection report")
+		.withType(ParamType::Object)
+		.withProperty(RouteParameter(RestApiIds::target, "Target parameter path in nodeId.parameterId format"))
+		.withProperty(RouteParameter(RestApiIds::connectionMode, "Connection scaling mode")
+			.withEnumValues({ "matched", "scaled", "unscaled" }))
+		.withProperty(RouteParameter(RestApiIds::sourceValue, "Captured source value, omitted when unavailable")
+			.withType(ParamType::Float).asOptional())
+		.withProperty(RouteParameter(RestApiIds::targetValue, "Captured target value")
+			.withType(ParamType::Float).asOptional());
+
+	schemas->setProperty("DspProbeChannelReport", paramToOpenApiSchema(channelEntry));
+	schemas->setProperty("DspProbeSpecsReport", paramToOpenApiSchema(specsReport));
+	schemas->setProperty("DspProbeChildReport", paramToOpenApiSchema(childReport));
+	schemas->setProperty("DspProbeContainerReport", paramToOpenApiSchema(containerReport));
+	schemas->setProperty("DspProbeParameterReport", paramToOpenApiSchema(parameterReport));
+	schemas->setProperty("DspProbeTouchedEdge", paramToOpenApiSchema(edgeReport));
+
+	auto scriptTreeLocation = RouteParameter(Identifier("location"), "Jump-to-definition location")
+		.withType(ParamType::Object)
+		.withProperty(RouteParameter(RestApiIds::file, "External file path, or empty for callback source"))
+		.withProperty(RouteParameter(RestApiIds::charNumber, "Character offset in the source document")
+			.withType(ParamType::Int))
+		.withProperty(RouteParameter(RestApiIds::available, "True if a usable source location is available")
+			.withType(ParamType::Bool));
+
+	auto scriptTreeNode = RouteParameter(Identifier("node"), "Script symbol tree node")
+		.withType(ParamType::Object)
+		.withProperty(RouteParameter(RestApiIds::id, "Local symbol ID"))
+		.withProperty(RouteParameter(RestApiIds::type, "HiseScript symbol type")
+			.withEnumValues({ "const var", "reg", "namespace", "inline function", "var", "global", "function", "undefined" }))
+		.withProperty(RouteParameter(RestApiIds::expression, "Fully qualified expression usable in REPL calls"))
+		.withProperty(RouteParameter(RestApiIds::dataType, "HiseScript / debug data type"))
+		.withProperty(RouteParameter(RestApiIds::value, "Watch-table debug value, omitted in compact mode").asOptional())
+		.withProperty(RouteParameter(RestApiIds::location, "Jump-to-definition location, omitted in compact mode")
+			.withRef("#/components/schemas/ScriptTreeLocation").asOptional())
+		.withProperty(RouteParameter(RestApiIds::children, "Nested script symbols")
+			.withArrayItems(RouteParameter(Identifier("child"), "Child script symbol")
+				.withRef("#/components/schemas/ScriptTreeNode")));
+
+	auto builderRouting = RouteParameter(Identifier("routing"), "RoutableProcessor routing metadata")
+		.withType(ParamType::Object)
+		.withProperty(RouteParameter(RestApiIds::matrix, "Routing matrix array, index=source channel, value=destination channel or -1")
+			.withArrayItems(RouteParameter(Identifier("dest"), "Destination channel index, or -1")
+				.withType(ParamType::Int)))
+		.withProperty(RouteParameter(RestApiIds::send, "Parallel send connection array, index=source channel, value=destination channel or -1")
+			.withArrayItems(RouteParameter(Identifier("dest"), "Destination channel index, or -1")
+				.withType(ParamType::Int)))
+		.withProperty(RouteParameter(Identifier("resizable"), "True if source channel count can be resized")
+			.withType(ParamType::Bool))
+		.withProperty(RouteParameter(Identifier("routable"), "True if arbitrary routing is allowed")
+			.withType(ParamType::Bool))
+		.withProperty(RouteParameter(Identifier("numDestinationChannels"), "Number of destination channels")
+			.withType(ParamType::Int));
+
+	auto builderTreeNode = RouteParameter(Identifier("node"), "Runtime module tree node")
+		.withType(ParamType::Object)
+		.withProperty(RouteParameter(Identifier("processorId"), "Runtime processor ID"))
+		.withProperty(RouteParameter(RestApiIds::id, "Metadata ID, when supplied by processor metadata").asOptional())
+		.withProperty(RouteParameter(RestApiIds::type, "Processor metadata type").asOptional())
+		.withProperty(RouteParameter(RestApiIds::bypassed, "Current bypass state")
+			.withType(ParamType::Bool))
+		.withProperty(RouteParameter(Identifier("colour"), "Processor colour as #RRGGBB"))
+		.withProperty(RouteParameter(RestApiIds::parameters, "Processor parameter metadata")
+			.withType(ParamType::Array).asOptional())
+		.withProperty(RouteParameter(Identifier("modulation"), "Modulation chain metadata")
+			.withType(ParamType::Array).asOptional())
+		.withProperty(RouteParameter(Identifier("midi"), "MIDI processor chain children")
+			.withArrayItems(RouteParameter(Identifier("child"), "Child module")
+				.withRef("#/components/schemas/BuilderTreeNode")).asOptional())
+		.withProperty(RouteParameter(Identifier("fx"), "FX chain children")
+			.withArrayItems(RouteParameter(Identifier("child"), "Child module")
+				.withRef("#/components/schemas/BuilderTreeNode")).asOptional())
+		.withProperty(RouteParameter(RestApiIds::children, "Nested module children")
+			.withArrayItems(RouteParameter(Identifier("child"), "Child module")
+				.withRef("#/components/schemas/BuilderTreeNode")).asOptional())
+		.withProperty(RouteParameter(Identifier("routing"), "RoutableProcessor routing metadata")
+			.withRef("#/components/schemas/BuilderRouting").asOptional());
+
+	auto uiTreeNode = RouteParameter(Identifier("node"), "UI component tree node")
+		.withType(ParamType::Object)
+		.withProperty(RouteParameter(RestApiIds::id, "Component ID"))
+		.withProperty(RouteParameter(RestApiIds::type, "Component type"))
+		.withProperty(RouteParameter(RestApiIds::visible, "Visibility flag")
+			.withType(ParamType::Bool))
+		.withProperty(RouteParameter(RestApiIds::enabled, "Enabled flag")
+			.withType(ParamType::Bool))
+		.withProperty(RouteParameter(RestApiIds::saveInPreset, "Whether value is saved in preset")
+			.withType(ParamType::Bool))
+		.withProperty(RouteParameter(RestApiIds::x, "X position")
+			.withType(ParamType::Int))
+		.withProperty(RouteParameter(RestApiIds::y, "Y position")
+			.withType(ParamType::Int))
+		.withProperty(RouteParameter(RestApiIds::width, "Width")
+			.withType(ParamType::Int))
+		.withProperty(RouteParameter(RestApiIds::height, "Height")
+			.withType(ParamType::Int))
+		.withProperty(RouteParameter(RestApiIds::childComponents, "Nested child components")
+			.withArrayItems(RouteParameter(Identifier("child"), "Child component")
+				.withRef("#/components/schemas/UiTreeNode")));
+
+	auto dspTreeParameter = RouteParameter(Identifier("parameter"), "DSP node parameter entry")
+		.withType(ParamType::Object)
+		.withProperty(RouteParameter(RestApiIds::parameterId, "Parameter ID"))
+		.withProperty(RouteParameter(RestApiIds::value, "Current parameter value")
+			.withType(ParamType::Float))
+		.withProperty(RouteParameter(RestApiIds::min, "Minimum value, verbose mode only")
+			.withType(ParamType::Float).asOptional())
+		.withProperty(RouteParameter(RestApiIds::max, "Maximum value, verbose mode only")
+			.withType(ParamType::Float).asOptional())
+		.withProperty(RouteParameter(RestApiIds::stepSize, "Step size, verbose mode only")
+			.withType(ParamType::Float).asOptional())
+		.withProperty(RouteParameter(RestApiIds::defaultValue, "Default value, verbose mode only")
+			.withType(ParamType::Float).asOptional())
+		.withProperty(RouteParameter(RestApiIds::middlePosition, "Middle position after skew mapping, verbose mode only")
+			.withType(ParamType::Float).asOptional());
+
+	auto dspTreeProperty = RouteParameter(Identifier("property"), "DSP node property entry")
+		.withType(ParamType::Object)
+		.withProperty(RouteParameter(RestApiIds::propertyId, "Property ID"))
+		.withProperty(RouteParameter(RestApiIds::value, "Property value")
+			.withOneOf(
+				RouteParameter(Identifier("stringValue"), "String property value"),
+				RouteParameter(Identifier("numberValue"), "Numeric property value")
+					.withType(ParamType::Float),
+				RouteParameter(Identifier("booleanValue"), "Boolean property value")
+					.withType(ParamType::Bool)));
+
+	auto dspTreeConnection = RouteParameter(Identifier("connection"), "DSP modulation connection entry")
+		.withType(ParamType::Object)
+		.withProperty(RouteParameter(RestApiIds::source, "Source node ID"))
+		.withProperty(RouteParameter(RestApiIds::sourceOutput, "Source output, parameter name, or output slot index")
+			.withOneOf(
+				RouteParameter(Identifier("sourceOutputName"), "Source output parameter name"),
+				RouteParameter(Identifier("sourceOutputIndex"), "Source output slot index")
+					.withType(ParamType::Int)))
+		.withProperty(RouteParameter(RestApiIds::target, "Target node ID"))
+		.withProperty(RouteParameter(RestApiIds::parameter, "Target parameter ID"));
+
+	auto dspTreeNode = RouteParameter(Identifier("node"), "Scriptnode DSP tree node")
+		.withType(ParamType::Object)
+		.withProperty(RouteParameter(RestApiIds::nodeId, "Node instance ID"))
+		.withProperty(RouteParameter(RestApiIds::factoryPath, "Node factory path"))
+		.withProperty(RouteParameter(RestApiIds::bypassed, "Current bypass state")
+			.withType(ParamType::Bool))
+		.withProperty(RouteParameter(RestApiIds::parameters, "Node parameters")
+			.withArrayItems(RouteParameter(Identifier("parameter"), "DSP node parameter entry")
+				.withRef("#/components/schemas/DspTreeParameter")))
+		.withProperty(RouteParameter(RestApiIds::properties, "Node properties")
+			.withArrayItems(RouteParameter(Identifier("property"), "DSP node property entry")
+				.withRef("#/components/schemas/DspTreeProperty")))
+		.withProperty(RouteParameter(RestApiIds::connections, "Container modulation connections")
+			.withArrayItems(RouteParameter(Identifier("connection"), "DSP modulation connection entry")
+				.withRef("#/components/schemas/DspTreeConnection")).asOptional())
+		.withProperty(RouteParameter(RestApiIds::children, "Nested DSP nodes")
+			.withArrayItems(RouteParameter(Identifier("child"), "Child DSP node")
+				.withRef("#/components/schemas/DspTreeNode")));
+
+	auto projectTreeNode = RouteParameter(Identifier("node"), "Project file or folder tree node")
+		.withType(ParamType::Object)
+		.withProperty(RouteParameter(RestApiIds::name, "File or folder name"))
+		.withProperty(RouteParameter(RestApiIds::type, "Node type")
+			.withEnumValues({ "file", "folder" }))
+		.withProperty(RouteParameter(RestApiIds::referenced, "True if a file is actively referenced by the runtime")
+			.withType(ParamType::Bool).asOptional())
+		.withProperty(RouteParameter(RestApiIds::children, "Child nodes for folder entries")
+			.withArrayItems(RouteParameter(Identifier("child"), "Child file tree node")
+				.withRef("#/components/schemas/ProjectTreeNode")).asOptional());
+
+	schemas->setProperty("ScriptTreeLocation", paramToOpenApiSchema(scriptTreeLocation));
+	schemas->setProperty("ScriptTreeNode", paramToOpenApiSchema(scriptTreeNode));
+	schemas->setProperty("BuilderRouting", paramToOpenApiSchema(builderRouting));
+	schemas->setProperty("BuilderTreeNode", paramToOpenApiSchema(builderTreeNode));
+	schemas->setProperty("UiTreeNode", paramToOpenApiSchema(uiTreeNode));
+	schemas->setProperty("DspTreeParameter", paramToOpenApiSchema(dspTreeParameter));
+	schemas->setProperty("DspTreeProperty", paramToOpenApiSchema(dspTreeProperty));
+	schemas->setProperty("DspTreeConnection", paramToOpenApiSchema(dspTreeConnection));
+	schemas->setProperty("DspTreeNode", paramToOpenApiSchema(dspTreeNode));
+	schemas->setProperty("ProjectTreeNode", paramToOpenApiSchema(projectTreeNode));
+
+	components->setProperty("schemas", var(schemas.get()));
+	return var(components.get());
+}
+
 RestServer::Response RestHelpers::handleListMethods(MainController* mc, RestServer::AsyncRequest::Ptr req)
 {
 	ignoreUnused(mc);
@@ -867,6 +1160,7 @@ RestServer::Response RestHelpers::handleListMethods(MainController* mc, RestServ
 	}
 
 	root->setProperty("tags", var(tags));
+	root->setProperty("components", buildOpenApiComponents());
 
 	// Paths
 	DynamicObject::Ptr paths = new DynamicObject();
@@ -1210,6 +1504,396 @@ RestServer::Response RestHelpers::handleGetScript(MainController* mc, RestServer
 		return req->waitForResponse();
 	}
 	
+	return req->fail(404, "moduleId is not a valid script processor");
+}
+
+namespace
+{
+struct ScriptTreeBuilder
+{
+	struct Options
+	{
+		String namespaceFilter;
+		String search;
+		String format = "tree";
+		StringArray typeFilters;
+		StringArray dataTypeFilters;
+		bool compact = false;
+		int maxDepth = 4;
+		int limit = 1000;
+	};
+
+	ScriptTreeBuilder(const Options& options_):
+		options(options_)
+	{}
+
+	static StringArray parseCsv(String s)
+	{
+		StringArray tokens;
+		tokens.addTokens(s, ",", "");
+		tokens.trim();
+		tokens.removeEmptyStrings();
+		return tokens;
+	}
+
+	static bool isValidTypeFilter(const String& type)
+	{
+		static const StringArray validTypes = { "const var", "reg", "namespace", "inline function",
+			"var", "global", "function", "undefined" };
+		return validTypes.contains(type);
+	}
+
+	static String getLocalId(const String& expression)
+	{
+		if (expression.containsChar('.'))
+			return expression.fromLastOccurrenceOf(".", false, false);
+
+		return expression;
+	}
+
+	static String getTypeName(DebugInformationBase::Ptr info)
+	{
+		if (auto typed = dynamic_cast<DebugInformation*>(info.get()))
+		{
+			switch ((DebugInformation::Type)typed->getType())
+			{
+				case DebugInformation::Type::RegisterVariable: return "reg";
+				case DebugInformation::Type::Variables:        return "var";
+				case DebugInformation::Type::Constant:         return "const var";
+				case DebugInformation::Type::InlineFunction:   return "inline function";
+				case DebugInformation::Type::Globals:          return "global";
+				case DebugInformation::Type::ExternalFunction: return "function";
+				case DebugInformation::Type::Namespace:        return "namespace";
+				case DebugInformation::Type::ApiClass:
+				case DebugInformation::Type::Callback:
+				case DebugInformation::Type::numTypes:         break;
+			}
+		}
+
+		return "undefined";
+	}
+
+	static bool shouldExclude(DebugInformationBase::Ptr info)
+	{
+		if (info == nullptr || !info->isWatchable())
+			return true;
+
+		static const StringArray defaultSymbols = { "isNaN", "isFinite", "AsyncNotification",
+			"AsyncHiPriorityNotification", "SyncNotification" };
+
+		if (defaultSymbols.contains(info->getTextForName()))
+			return true;
+
+		if (auto typed = dynamic_cast<DebugInformation*>(info.get()))
+		{
+			auto t = (DebugInformation::Type)typed->getType();
+			return t == DebugInformation::Type::ApiClass || t == DebugInformation::Type::Callback;
+		}
+
+		return false;
+	}
+
+	static DynamicObject::Ptr createLocation(DebugInformationBase::Ptr info)
+	{
+		auto loc = info->getLocation();
+
+		DynamicObject::Ptr o = new DynamicObject();
+		o->setProperty(RestApiIds::file, loc.fileName.replace("\\", "/"));
+		o->setProperty(RestApiIds::charNumber, loc.charNumber);
+		o->setProperty(RestApiIds::available, loc.fileName.isNotEmpty() || loc.charNumber != 0);
+		return o;
+	}
+
+	bool passesOwnFilters(const String& expression, const String& typeName, const String& dataType) const
+	{
+		if (options.typeFilters.size() != 0 && !options.typeFilters.contains(typeName))
+			return false;
+
+		if (options.dataTypeFilters.size() != 0)
+		{
+			bool found = false;
+
+			for (const auto& dt : options.dataTypeFilters)
+			{
+				if (dataType.equalsIgnoreCase(dt))
+				{
+					found = true;
+					break;
+				}
+			}
+
+			if (!found)
+				return false;
+		}
+
+		if (options.search.isNotEmpty())
+		{
+			auto id = getLocalId(expression);
+
+			if (!id.containsIgnoreCase(options.search) &&
+				!expression.containsIgnoreCase(options.search) &&
+				!dataType.containsIgnoreCase(options.search))
+				return false;
+		}
+
+		return true;
+	}
+
+	DynamicObject::Ptr createNode(DebugInformationBase::Ptr info, const String& expression, const String& typeName,
+		const String& dataType, const Array<var>& children) const
+	{
+		DynamicObject::Ptr o = new DynamicObject();
+		o->setProperty(RestApiIds::id, getLocalId(expression));
+		o->setProperty(RestApiIds::type, typeName);
+		o->setProperty(RestApiIds::expression, expression);
+		o->setProperty(RestApiIds::dataType, dataType);
+
+		if (!options.compact)
+		{
+			o->setProperty(RestApiIds::value, info->getTextForValue());
+			o->setProperty(RestApiIds::location, var(createLocation(info).get()));
+		}
+
+		o->setProperty(RestApiIds::children, children);
+		return o;
+	}
+
+	bool appendFlatNode(DebugInformationBase::Ptr info, const String& expression, const String& typeName,
+		const String& dataType)
+	{
+		if (!passesOwnFilters(expression, typeName, dataType))
+			return false;
+
+		totalMatches++;
+
+		if (returned >= options.limit)
+		{
+			truncated = true;
+			return true;
+		}
+
+		flatResult.add(var(createNode(info, expression, typeName, dataType, {}).get()));
+		returned++;
+		return true;
+	}
+
+	bool hasMatchingNode(DebugInformationBase::Ptr info, int depth, const String& parentExpression) const
+	{
+		if (info == nullptr || shouldExclude(info))
+			return false;
+
+		auto expression = info->getTextForName();
+		expression = DebugInformationBase::replaceParentWildcard(expression, parentExpression);
+
+		if (passesOwnFilters(expression, getTypeName(info), info->getTextForDataType()))
+			return true;
+
+		if (depth >= options.maxDepth)
+			return false;
+
+		for (int i = 0; i < info->getNumChildElements(); i++)
+		{
+			if (hasMatchingNode(info->getChildElement(i), depth + 1, expression))
+				return true;
+		}
+
+		return false;
+	}
+
+	DynamicObject::Ptr buildTreeNode(DebugInformationBase::Ptr info, int depth, bool forceInclude,
+		const String& parentExpression)
+	{
+		if (info == nullptr || shouldExclude(info))
+			return nullptr;
+
+		auto expression = info->getTextForName();
+		expression = DebugInformationBase::replaceParentWildcard(expression, parentExpression);
+		auto typeName = getTypeName(info);
+		auto dataType = info->getTextForDataType();
+		const bool ownMatch = passesOwnFilters(expression, typeName, dataType);
+		bool childMatch = false;
+
+		if (!ownMatch && !forceInclude && depth < options.maxDepth)
+		{
+			for (int i = 0; i < info->getNumChildElements(); i++)
+			{
+				if (hasMatchingNode(info->getChildElement(i), depth + 1, expression))
+				{
+					childMatch = true;
+					break;
+				}
+			}
+		}
+
+		if (!forceInclude && !ownMatch && !childMatch)
+			return nullptr;
+
+		totalMatches++;
+
+		if (returned >= options.limit)
+		{
+			truncated = true;
+			return nullptr;
+		}
+
+		returned++;
+		Array<var> children;
+
+		if (depth < options.maxDepth)
+		{
+			for (int i = 0; i < info->getNumChildElements(); i++)
+			{
+				auto child = info->getChildElement(i);
+
+				if (auto childObject = buildTreeNode(child, depth + 1, false, expression))
+					children.add(var(childObject.get()));
+			}
+		}
+		return createNode(info, expression, typeName, dataType, children);
+	}
+
+	void buildFlat(DebugInformationBase::Ptr info, int depth, const String& parentExpression)
+	{
+		if (info == nullptr || shouldExclude(info))
+			return;
+
+		auto expression = info->getTextForName();
+		expression = DebugInformationBase::replaceParentWildcard(expression, parentExpression);
+		auto typeName = getTypeName(info);
+		auto dataType = info->getTextForDataType();
+
+		appendFlatNode(info, expression, typeName, dataType);
+
+		if (depth >= options.maxDepth)
+			return;
+
+		for (int i = 0; i < info->getNumChildElements(); i++)
+			buildFlat(info->getChildElement(i), depth + 1, expression);
+	}
+
+	DebugInformationBase::Ptr findNamespace(DebugInformationBase::Ptr info, const String& namespaceId, int depth)
+	{
+		if (info == nullptr || shouldExclude(info) || depth > 64)
+			return nullptr;
+
+		if (getTypeName(info) == "namespace" && info->getTextForName() == namespaceId)
+			return info;
+
+		for (int i = 0; i < info->getNumChildElements(); i++)
+		{
+			if (auto match = findNamespace(info->getChildElement(i), namespaceId, depth + 1))
+				return match;
+		}
+
+		return nullptr;
+	}
+
+	Options options;
+	Array<var> flatResult;
+	int totalMatches = 0;
+	int returned = 0;
+	bool truncated = false;
+};
+}
+
+RestServer::Response RestHelpers::handleScriptTree(MainController* mc, RestServer::AsyncRequest::Ptr req)
+{
+	if (auto jp = getScriptProcessor(mc, req))
+	{
+		ScriptTreeBuilder::Options options;
+		options.namespaceFilter = req->getRequest()[RestApiIds::namespace_];
+		options.search = req->getRequest()[RestApiIds::search];
+		options.format = req->getRequest()[RestApiIds::format];
+
+		if (options.format.isEmpty())
+			options.format = "tree";
+
+		if (options.format != "tree" && options.format != "flat")
+			return req->fail(400, "format must be 'tree' or 'flat'");
+
+		options.compact = req->getRequest().getTrueValue(RestApiIds::compact);
+
+		if (auto maxDepthValue = req->getRequest()[RestApiIds::maxDepth]; maxDepthValue.isNotEmpty())
+			options.maxDepth = jlimit(0, 64, maxDepthValue.getIntValue());
+
+		if (auto limitValue = req->getRequest()[RestApiIds::limit]; limitValue.isNotEmpty())
+			options.limit = jlimit(0, 100000, limitValue.getIntValue());
+
+		options.typeFilters = ScriptTreeBuilder::parseCsv(req->getRequest()[RestApiIds::type]);
+		options.dataTypeFilters = ScriptTreeBuilder::parseCsv(req->getRequest()[RestApiIds::dataType]);
+
+		for (const auto& t : options.typeFilters)
+		{
+			if (!ScriptTreeBuilder::isValidTypeFilter(t))
+				return req->fail(400, "invalid type filter: " + t);
+		}
+
+		ScriptTreeBuilder builder(options);
+		Array<var> tree;
+
+		if (auto provider = jp->getProviderBase())
+		{
+			ScopedReadLock sl(jp->getDebugLock());
+
+			Array<DebugInformationBase::Ptr> roots;
+
+			if (options.namespaceFilter.isNotEmpty())
+			{
+				for (int i = 0; i < provider->getNumDebugObjects(); i++)
+				{
+					if (auto ns = builder.findNamespace(provider->getDebugInformation(i), options.namespaceFilter, 0))
+					{
+						roots.add(ns);
+						break;
+					}
+				}
+			}
+			else
+			{
+				for (int i = 0; i < provider->getNumDebugObjects(); i++)
+					roots.add(provider->getDebugInformation(i));
+			}
+
+			if (options.format == "flat")
+			{
+				for (auto r : roots)
+					builder.buildFlat(r, 0, {});
+
+				tree = builder.flatResult;
+			}
+			else
+			{
+				const bool forceNamespaceRoot = options.namespaceFilter.isNotEmpty();
+
+				for (auto r : roots)
+				{
+					if (auto node = builder.buildTreeNode(r, 0, forceNamespaceRoot, {}))
+						tree.add(var(node.get()));
+				}
+			}
+		}
+
+		auto processor = dynamic_cast<Processor*>(jp);
+		DynamicObject::Ptr result = new DynamicObject();
+		result->setProperty(RestApiIds::success, true);
+		result->setProperty(RestApiIds::moduleId, processor->getId());
+
+		if (options.namespaceFilter.isNotEmpty())
+			result->setProperty(RestApiIds::namespace_, options.namespaceFilter);
+
+		result->setProperty(RestApiIds::format, options.format);
+		result->setProperty(RestApiIds::compact, options.compact);
+		result->setProperty(RestApiIds::totalMatches, builder.totalMatches);
+		result->setProperty(RestApiIds::returned, builder.returned);
+		result->setProperty(RestApiIds::truncated, builder.truncated);
+		result->setProperty(RestApiIds::tree, tree);
+		result->setProperty(RestApiIds::logs, Array<var>());
+		result->setProperty(RestApiIds::errors, Array<var>());
+
+		req->complete(RestServer::Response::ok(var(result.get())));
+		return req->waitForResponse();
+	}
+
 	return req->fail(404, "moduleId is not a valid script processor");
 }
 
@@ -3422,6 +4106,10 @@ RestServer::Response RestHelpers::handleBuilderApply(MainController* mc,
 	
 	using ActionBase = RestServerUndoManager::ActionBase;
 	ActionBase::List actions;
+	RestServerUndoManager::PlanValidationState::Ptr batchValidationState;
+
+	if (um->getCurrentValidationState() == nullptr)
+		batchValidationState = new RestServerUndoManager::PlanValidationState(mc);
 	
 	for (int i = 0; i < ops.size(); i++)
 	{
@@ -3429,6 +4117,19 @@ RestServer::Response RestHelpers::handleBuilderApply(MainController* mc,
 
 		auto ad = um->createAction(RestServerUndoManager::Domain::Builder, op);
 		auto ok = ad->validate();
+
+		if (batchValidationState != nullptr)
+		{
+			const auto liveError = ok.getErrorMessage();
+			const auto canRetryWithBatchState = liveError.startsWith("Can't find parent") ||
+				liveError.startsWith("Can't find module");
+
+			if (ok || canRetryWithBatchState)
+			{
+				ad->planValidation = batchValidationState;
+				ok = ad->validate();
+			}
+		}
 
 		if (ok)
 			actions.add(ad);
@@ -5059,6 +5760,17 @@ static DspNetwork* getActiveNetwork(MainController* mc, const String& moduleId)
 	return nullptr;
 }
 
+static int getDspProbeErrorStatusCode(const String& message)
+{
+	if (message == "another inject call is pending")
+		return 409;
+
+	if (message.startsWith("Can't find container with id ") || message.startsWith("child with id `"))
+		return 404;
+
+	return 400;
+}
+
 static var buildDspNodeTree(const ValueTree& nodeTree, bool verbose, bool includeConnections)
 {
 	DynamicObject::Ptr obj = new DynamicObject();
@@ -5469,6 +6181,92 @@ RestServer::Response RestHelpers::handleDspApply(MainController* mc,
 				debugToConsole(mc->getMainSynthChain(), a->getHistoryMessage(undo));
 		}
 	});
+
+	return req->waitForResponse();
+}
+
+RestServer::Response RestHelpers::handleDspProbe(MainController* mc,
+	                                             RestServer::AsyncRequest::Ptr req)
+{
+	auto obj = req->getRequest().getJsonBody();
+	auto moduleId = obj[RestApiIds::moduleId].toString();
+
+	if (moduleId.isEmpty())
+		return req->fail(400, "moduleId is required");
+
+	if (obj[RestApiIds::parent].toString().isEmpty())
+		return req->fail(400, "parent is required");
+
+	auto signalType = obj.getProperty(RestApiIds::signalType, "silence").toString();
+	auto signalTypes = InjectHelpers::InjectData::getTestSignalNames();
+
+	if (!signalTypes.contains(signalType))
+		return req->fail(400, "signalType must be one of: silence, dirac, noise, dc");
+
+	if (getNetworkHolder(mc, moduleId) == nullptr)
+		return req->fail(404, "Module " + moduleId + " is not a DspNetwork holder");
+
+	auto network = getActiveNetwork(mc, moduleId);
+	if (network == nullptr)
+		return req->fail(404, "No active DspNetwork for module: " + moduleId);
+
+	auto injectId = obj.getProperty(RestApiIds::injectId, var()).toString();
+	auto probeId = obj.getProperty(RestApiIds::probeId, var()).toString();
+	auto hasInjectId = injectId.isNotEmpty();
+	auto hasProbeId = probeId.isNotEmpty();
+	auto delayMs = (double)obj.getProperty(RestApiIds::delayMs, 0.0);
+	auto timeoutMs = jmax(200, roundToInt(delayMs + 200.0));
+	auto finished = std::make_shared<std::atomic<bool>>(false);
+
+	auto completeSuccess = [req, finished, moduleId, hasInjectId, injectId, hasProbeId, probeId](const var::NativeFunctionArgs& args) -> var
+	{
+		if (finished->exchange(true))
+			return var();
+
+		auto report = args.numArguments > 0 ? args.arguments[0] : var();
+
+		DynamicObject::Ptr result = new DynamicObject();
+
+		if (auto reportObject = report.getDynamicObject())
+		{
+			for (const auto& p : reportObject->getProperties())
+				result->setProperty(p.name, p.value);
+		}
+
+		result->setProperty(RestApiIds::success, true);
+		result->setProperty(RestApiIds::moduleId, moduleId);
+
+		if (hasInjectId)
+			result->setProperty(RestApiIds::injectId, injectId);
+
+		if (hasProbeId)
+			result->setProperty(RestApiIds::probeId, probeId);
+
+		req->complete(RestServer::Response::ok(var(result.get())));
+		return var();
+	};
+
+	ReferenceCountedObjectPtr<InjectHelpers::InjectChecker> checker =
+		new InjectHelpers::InjectChecker(network, obj, var(var::NativeFunction(completeSuccess)));
+
+	if (!checker->injectOk.wasOk())
+		return req->fail(getDspProbeErrorStatusCode(checker->injectOk.getErrorMessage()), checker->injectOk.getErrorMessage());
+
+	auto start = Time::getMillisecondCounterHiRes();
+
+	while (!finished->load())
+	{
+		if (Time::getMillisecondCounterHiRes() - start > timeoutMs)
+			break;
+
+		Thread::sleep(10);
+	}
+
+	if (!finished->exchange(true))
+	{
+		checker->cleanup();
+		return RestServer::Response::error(504, "Probe timed out");
+	}
 
 	return req->waitForResponse();
 }

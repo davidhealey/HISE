@@ -475,26 +475,31 @@ void TextEditor::updateAfterTextChange(Range<int> rangeToInvalidate)
 {
 	if (!skipTextUpdate)
 	{
-		document.invalidate(rangeToInvalidate);
-		
-		if (languageManager != nullptr && rangeToInvalidate.getLength() > 1)
+		auto f = [rangeToInvalidate](TextEditor& te)
 		{
-			updateLineRanges();
-		}
+			te.document.invalidate(rangeToInvalidate);
 
-		updateSelections();
+			if (te.languageManager != nullptr && rangeToInvalidate.getLength() > 1)
+			{
+				te.updateLineRanges();
+			}
 
-		if(rangeToInvalidate.getLength() != 0 &&
-			rangeToInvalidate.getLength() != document.getNumRows())
-			autocompleteTimer.startAutocomplete();
-			
-		updateViewTransform();
+			te.updateSelections();
 
-		if(currentError != nullptr)
-			currentError->rebuild();
+			if (rangeToInvalidate.getLength() != 0 &&
+				rangeToInvalidate.getLength() != te.document.getNumRows())
+				te.autocompleteTimer.startAutocomplete();
 
-		for (auto w : warnings)
-			w->rebuild();
+			te.updateViewTransform();
+
+			if (te.currentError != nullptr)
+				te.currentError->rebuild();
+
+			for (auto w : te.warnings)
+				w->rebuild();
+		};
+
+		SafeAsyncCall::callAsyncIfNotOnMessageThread<TextEditor>(*this, f);
 	}
 }
 

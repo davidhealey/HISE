@@ -313,6 +313,9 @@ RestServer::Response BackendProcessor::onAsyncRequest(RestServer::AsyncRequest::
 
 		case RestHelpers::ApiRoute::GetScript:
 			return RestHelpers::handleGetScript(active, req);
+
+		case RestHelpers::ApiRoute::ScriptTree:
+			return RestHelpers::handleScriptTree(active, req);
 			
 		case RestHelpers::ApiRoute::SetScript:
 			return RestHelpers::handleSetScript(active, req);
@@ -421,6 +424,9 @@ RestServer::Response BackendProcessor::onAsyncRequest(RestServer::AsyncRequest::
 
 	case RestHelpers::ApiRoute::DspApply:
 		return RestHelpers::handleDspApply(active, req);
+
+	case RestHelpers::ApiRoute::DspProbe:
+		return RestHelpers::handleDspProbe(active, req);
 
 	case RestHelpers::ApiRoute::DspSave:
 		return RestHelpers::handleDspSave(active, req);

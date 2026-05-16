@@ -73,6 +73,14 @@ struct StyleSheet: public ReferenceCountedObject
 
 		void addComponentToSetup(Component* c);
 
+		void addAllStyleSheet()
+		{
+			for (auto l : list)
+			{
+				
+			}
+		}
+
 		void setPropertyVariable(Component* c, const Identifier& id, const var& newValue);
 
 		MarkdownLayout::StyleData getMarkdownStyleData(Component* c);

@@ -2631,12 +2631,15 @@ void ScriptingObjects::ScriptedLookAndFeel::setStyleSheetInternal(const String& 
 	currentStyleSheet = cssCode;
 	simple_css::Parser p(cssCode);
 
+	p.setAddAllStyleSheet(true);
+
 	auto ok = p.parse();
 
 	if(!ok.wasOk())
 		reportScriptError(ok.getErrorMessage());
 
 	auto newCollection = p.getCSSValues();
+
 	SimpleReadWriteLock::ScopedWriteLock sl(getMainController()->getJavascriptThreadPool().getLookAndFeelRenderLock());
 
 	graphics.clear();

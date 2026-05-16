@@ -626,6 +626,234 @@ struct remove : public ActionBase
 	}
 };
 
+struct move : public ActionBase
+{
+	BUILDER_ID(move);
+
+	static Error prevalidate(MainController*, const var& op)
+	{
+		if (op[RestApiIds::target].toString().isEmpty())
+			return Error().withError("move requires 'target'");
+
+		bool hasParent = op.hasProperty(RestApiIds::parent);
+		bool hasChain  = op.hasProperty(RestApiIds::chain);
+		bool hasIndex  = op.hasProperty(RestApiIds::index);
+
+		if (hasParent != hasChain)
+			return Error().withError("move requires both 'parent' and 'chain' (or neither for in-place reorder)");
+
+		if (!hasParent && !hasIndex)
+			return Error().withError("move requires either 'parent' + 'chain' or 'index'");
+
+		return {};
+	}
+
+	move(MainController* mc, const var& obj) :
+		ActionBase(mc),
+		targetProcessor(obj["target"].toString()),
+		explicitParent(obj.hasProperty(RestApiIds::parent)),
+		newParent(obj["parent"].toString()),
+		newChainIndex(obj.hasProperty(RestApiIds::chain) ? (int)obj["chain"] : -2),
+		insertIndex((int)obj.getProperty(RestApiIds::index, -1)),
+		oldParent({ ProcessorReference(""), -2 })
+	{}
+
+	ProcessorReference targetProcessor;
+	bool explicitParent;
+	ProcessorReference newParent;
+	int newChainIndex;
+	int insertIndex;
+
+	std::pair<ProcessorReference, int> oldParent;
+	int oldChildIndex = -1;
+
+	int getRebuildLevel(Domain d, bool) const override
+	{
+		if (d != Domain::Builder) return 0;
+		return RebuildLevel::UpdateUI;
+	}
+
+	bool needsKillVoice() const override { return true; }
+
+	void addToDiffList(std::vector<Diff>& diffList, bool) override
+	{
+		Diff d;
+		d.target = targetProcessor.getId();
+		d.domain = Domain::Builder;
+		d.type = Diff::Type::Modify;
+		diffList.push_back(d);
+	}
+
+	String getHistoryMessage(bool undo) const override
+	{
+		if (undo)
+			return "Restore " + targetProcessor.getId() + " to " + oldParent.first.getId();
+		return "Move " + targetProcessor.getId() + " to " + newParent.getId();
+	}
+
+	String getDescription() const override
+	{
+		String s;
+		s << "move " << targetProcessor.getId();
+		if (explicitParent)
+			s << " to " << newParent.getId() << "." << Helpers::getChainId(newChainIndex);
+		if (insertIndex >= 0)
+			s << " @" << String(insertIndex);
+		return s;
+	}
+
+	Error validate() override
+	{
+		if (!targetProcessor.initAtValidation(planValidation, getMainController()))
+			return Error().withError("Can't find module with ID " + targetProcessor.getId());
+
+		oldParent = Helpers::getParentSynthAndChainIndex(targetProcessor);
+
+		if (oldParent.second == -2)
+			return Error().withError("Can't determine current parent of " + targetProcessor.getId());
+
+		if (!explicitParent)
+		{
+			newParent = oldParent.first;
+			newChainIndex = oldParent.second;
+		}
+		else
+		{
+			if (!newParent.initAtValidation(planValidation, getMainController()))
+				return Error().withError("Can't find parent module with ID " + newParent.getId());
+
+			if (newParent.getId() == targetProcessor.getId())
+				return Error().withError("Cannot move '" + targetProcessor.getId() + "' into itself");
+		}
+
+		if (planValidation != nullptr)
+		{
+			auto v = planValidation->get(targetProcessor.getId());
+			if (!v.isValid())
+				return Error().withError("Plan model: target not found");
+
+			ValueTree copy = v.createCopy();
+
+			if (!planValidation->remove(targetProcessor.getId()))
+				return Error().withError("Plan model: remove failed");
+
+			if (!planValidation->add(newParent.getId(), copy, newChainIndex))
+				return Error().withError("Plan model: add to '" + newParent.getId() + "' chain " + String(newChainIndex) + " failed");
+		}
+
+		return {};
+	}
+
+	void perform() override
+	{
+		if (!targetProcessor.initAtPerform(getMainController()))
+			Helpers::throwProcessorDeleted(targetProcessor.getId());
+
+		auto* p = targetProcessor.get();
+		auto* oldChain = dynamic_cast<Chain*>(p->getParentProcessor(false));
+
+		if (oldChain == nullptr)
+			Helpers::throwRuntimeError(targetProcessor.getId() + " has no parent chain");
+
+		oldChildIndex = -1;
+		for (int i = 0; i < oldChain->getHandler()->getNumProcessors(); i++)
+		{
+			if (oldChain->getHandler()->getProcessor(i) == p)
+			{
+				oldChildIndex = i;
+				break;
+			}
+		}
+
+		Processor* newParentProc = nullptr;
+
+		if (explicitParent)
+		{
+			if (!newParent.initAtPerform(getMainController()))
+				Helpers::throwProcessorDeleted(newParent.getId());
+			newParentProc = newParent.get();
+		}
+		else
+		{
+			if (!oldParent.first.initAtPerform(getMainController()))
+				Helpers::throwProcessorDeleted(oldParent.first.getId());
+			newParent = oldParent.first;
+			newChainIndex = oldParent.second;
+			newParentProc = oldParent.first.get();
+		}
+
+		Chain* newChain = nullptr;
+		if (newChainIndex == -1)
+			newChain = dynamic_cast<Chain*>(newParentProc);
+		else
+			newChain = dynamic_cast<Chain*>(newParentProc->getChildProcessor(newChainIndex));
+
+		if (newChain == nullptr)
+			Helpers::throwRuntimeError("Invalid chain index " + String(newChainIndex) + " on " + newParent.getId());
+
+		if (newChain->getFactoryType()->getProcessorTypeIndex(p->getType()) == -1)
+			Helpers::throwRuntimeError(p->getType().toString() + " not allowed in " + newParent.getId() + "." + Helpers::getChainId(newChainIndex));
+
+		for (auto* anc = newParentProc; anc != nullptr; anc = anc->getParentProcessor(false))
+		{
+			if (anc == p)
+				Helpers::throwRuntimeError("Cannot move '" + targetProcessor.getId() + "' into its own descendant '" + newParent.getId() + "'");
+		}
+
+		oldChain->getHandler()->remove(p, false);
+
+		Processor* sibling = nullptr;
+		if (insertIndex >= 0 && insertIndex < newChain->getHandler()->getNumProcessors())
+			sibling = newChain->getHandler()->getProcessor(insertIndex);
+
+		newChain->getHandler()->add(p, sibling);
+
+		auto mc = getMainController();
+		mc->getProcessorChangeHandler().sendProcessorChangeMessage(
+			mc->getMainSynthChain(),
+			MainController::ProcessorChangeHandler::EventType::RebuildModuleList,
+			false);
+	}
+
+	void undo() override
+	{
+		if (!targetProcessor.initAtPerform(getMainController()))
+			Helpers::throwProcessorDeleted(targetProcessor.getId());
+
+		if (!oldParent.first.initAtPerform(getMainController()))
+			Helpers::throwProcessorDeleted(oldParent.first.getId());
+
+		auto* p = targetProcessor.get();
+		auto* currentChain = dynamic_cast<Chain*>(p->getParentProcessor(false));
+
+		if (currentChain == nullptr)
+			Helpers::throwRuntimeError(targetProcessor.getId() + " has no parent chain");
+
+		Chain* oldChainPtr = nullptr;
+		if (oldParent.second == -1)
+			oldChainPtr = dynamic_cast<Chain*>(oldParent.first.get());
+		else
+			oldChainPtr = dynamic_cast<Chain*>(oldParent.first.get()->getChildProcessor(oldParent.second));
+
+		if (oldChainPtr == nullptr)
+			Helpers::throwRuntimeError("Original chain no longer exists");
+
+		currentChain->getHandler()->remove(p, false);
+
+		Processor* sibling = nullptr;
+		if (oldChildIndex >= 0 && oldChildIndex < oldChainPtr->getHandler()->getNumProcessors())
+			sibling = oldChainPtr->getHandler()->getProcessor(oldChildIndex);
+
+		oldChainPtr->getHandler()->add(p, sibling);
+
+		auto mc = getMainController();
+		mc->getProcessorChangeHandler().sendProcessorChangeMessage(
+			mc->getMainSynthChain(),
+			MainController::ProcessorChangeHandler::EventType::RebuildModuleList,
+			false);
+	}
+};
+
 struct clone : public ActionBase
 {
 	BUILDER_ID(clone);
@@ -3391,8 +3619,6 @@ struct disconnect : public ActionBase
 
 	static Error prevalidate(MainController*, const var& op)
 	{
-		if (op[RestApiIds::source].toString().isEmpty())
-			return Error().withError("disconnect requires 'source'");
 		if (op[RestApiIds::target].toString().isEmpty())
 			return Error().withError("disconnect requires 'target'");
 		if (op[RestApiIds::parameter].toString().isEmpty())
@@ -3403,15 +3629,16 @@ struct disconnect : public ActionBase
 	disconnect(MainController* mc, const var& obj) :
 		ActionBase(mc),
 		moduleId(obj[RestApiIds::moduleId].toString()),
-		sourceId(obj[RestApiIds::source].toString()),
 		targetId(obj[RestApiIds::target].toString()),
 		parameterName(obj[RestApiIds::parameter].toString())
 	{}
 
 	String moduleId;
-	String sourceId;
 	String targetId;
 	String parameterName;
+
+	// Captured at perform/validate time so undo can rebuild the connection
+	String resolvedSourceId;
 	String oldSourceOutput;
 
 	int getRebuildLevel(Domain, bool) const override { return 0; }
@@ -3428,12 +3655,49 @@ struct disconnect : public ActionBase
 
 	String getHistoryMessage(bool undo) const override
 	{
-		return (undo ? "Reconnect " : "Disconnect ") + sourceId + " -> " + targetId + "." + parameterName;
+		auto src = resolvedSourceId.isNotEmpty() ? resolvedSourceId : String("?");
+		return (undo ? "Reconnect " : "Disconnect ") + src + " -> " + targetId + "." + parameterName;
 	}
 
 	String getDescription() const override
 	{
-		return "disconnect " + sourceId + " -> " + targetId + "." + parameterName;
+		return "disconnect -> " + targetId + "." + parameterName;
+	}
+
+	// Walk the entire network looking for the unique Connection child whose
+	// NodeId/ParameterId matches the target. Multiple matches are an error
+	// because the caller relies on uniqueness.
+	static ValueTree findUniqueConnection(const ValueTree& rv,
+	                                       const String& targetId,
+	                                       const String& parameterName,
+	                                       Error& outError)
+	{
+		ValueTree found;
+		bool ambiguous = false;
+
+		valuetree::Helpers::forEach(rv, [&](const ValueTree& c)
+		{
+			if (c.getType() == PropertyIds::Connection &&
+				c[PropertyIds::NodeId].toString() == targetId &&
+				c[PropertyIds::ParameterId].toString() == parameterName)
+			{
+				if (found.isValid())
+				{
+					ambiguous = true;
+					return true;
+				}
+				found = c;
+			}
+			return false;
+		});
+
+		if (ambiguous)
+		{
+			outError = Error().withError("Multiple connections match target='" + targetId + "' parameter='" + parameterName + "'; cannot disconnect unambiguously");
+			return {};
+		}
+
+		return found;
 	}
 
 	Error validate() override
@@ -3445,17 +3709,11 @@ struct disconnect : public ActionBase
 
 		if (dspValidation != nullptr)
 		{
-			auto sn = Helpers::findNode(rv, sourceId);
+			Error ambiguityErr;
+			auto con = findUniqueConnection(rv, targetId, parameterName, ambiguityErr);
 
-			if (!sn.isValid())
-				return Helpers::getErrorForNode404(rv, sourceId);
-
-			auto con = Helpers::findValueTree(sn, [&](const ValueTree& c)
-			{
-				return c.getType() == PropertyIds::Connection &&
-					c[PropertyIds::NodeId] == targetId &&
-					c[PropertyIds::ParameterId] == parameterName;
-			});
+			if (!ambiguityErr)
+				return ambiguityErr;
 
 			if (!con.isValid())
 				return Error().withError("Connection not found");
@@ -3471,21 +3729,22 @@ struct disconnect : public ActionBase
 	void perform() override
 	{
 		auto rv = Helpers::getRootTree(this, moduleId);
-		auto sn = Helpers::findNode(rv, sourceId);
 
-		if (!sn.isValid())
-			throw Helpers::getErrorForNode404(rv, sourceId);
+		Error ambiguityErr;
+		auto con = findUniqueConnection(rv, targetId, parameterName, ambiguityErr);
 
-		auto con = Helpers::findValueTree(sn, [&](const ValueTree& c)
-		{
-			return c.getType() == PropertyIds::Connection &&
-				c[PropertyIds::NodeId] == targetId &&
-				c[PropertyIds::ParameterId] == parameterName;
-		});
+		if (!ambiguityErr)
+			throw ambiguityErr;
 
 		if (!con.isValid())
 			throw Error().withError("Connection not found");
 
+		auto sourceNode = valuetree::Helpers::findParentWithType(con, PropertyIds::Node);
+
+		if (!sourceNode.isValid())
+			throw Error().withError("Could not resolve source node for connection");
+
+		resolvedSourceId = sourceNode[PropertyIds::ID].toString();
 		oldSourceOutput = Helpers::getSourceOutput(con);
 
 		con.getParent().removeChild(con, nullptr);
@@ -3494,10 +3753,10 @@ struct disconnect : public ActionBase
 	void undo() override
 	{
 		auto rv = Helpers::getRootTree(this, moduleId);
-		auto sn = Helpers::findNode(rv, sourceId);
+		auto sn = Helpers::findNode(rv, resolvedSourceId);
 
 		if (!sn.isValid())
-			throw Helpers::getErrorForNode404(rv, sourceId);
+			throw Helpers::getErrorForNode404(rv, resolvedSourceId);
 
 		auto tn = Helpers::findNode(rv, targetId);
 
