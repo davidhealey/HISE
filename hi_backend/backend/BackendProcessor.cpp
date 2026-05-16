@@ -428,6 +428,9 @@ RestServer::Response BackendProcessor::onAsyncRequest(RestServer::AsyncRequest::
 	case RestHelpers::ApiRoute::DspProbe:
 		return RestHelpers::handleDspProbe(active, req);
 
+	case RestHelpers::ApiRoute::DspRuntimeStatus:
+		return RestHelpers::handleDspRuntimeStatus(active, req);
+
 	case RestHelpers::ApiRoute::DspSave:
 		return RestHelpers::handleDspSave(active, req);
 

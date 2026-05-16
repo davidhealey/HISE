@@ -1685,6 +1685,41 @@ struct RestApiEndpoints
 			.withResponseExample(R"({"success": true, "moduleId": "DspTestFX", "parent": "test_network", "factoryPath": "container.chain", "injectIndex": 0, "probeIndex": 0, "signalType": "dirac", "gain": 1.0, "seed": 1234, "recursive": false, "specs": {"sampleRate": 44100.0, "numChannels": 2, "blockSize": 512, "polyphonic": false, "processMidi": false}, "signal": [{"channelIndex": 0, "min": 0.0, "max": 0.5, "avg": 0.001, "peakIndex": 0, "silence": false}], "parameters": {"injected": {"Gain1.Gain": 0.5}, "probed": {"Gain1.Gain": 0.5}, "touchedEdges": {}}, "logs": [], "errors": []})"));
 	}
 
+	static void dspRuntimeStatus(Array<RouteMetadata>& m)
+	{
+		m.add(RouteMetadata(ApiRoute::DspRuntimeStatus, "api/dsp/runtime_status")
+			.withCategory("dsp")
+			.withSummary("Query scriptnode runtime error status")
+			.withDescription("Returns whether the active or debugged DspNetwork for the given module currently has "
+				"runtime errors tracked by ScriptnodeExceptionHandler. Runtime scriptnode errors are returned as "
+				"HTTP 200 with success=false and the formatted scriptnode::Error message in the standard errors "
+				"array. If autofix=true, the endpoint mutates the graph by attempting the same built-in "
+				"ScriptnodeExceptionHandler autofix used by the UI Auto Fix button for the first autofixable "
+				"error before returning status. Request validation and missing module/network failures use "
+				"normal HTTP error envelopes.")
+			.withReturns("Runtime error status for the active or debugged DspNetwork")
+			.withModuleIdParam()
+			.withQueryParam(RouteParameter(RestApiIds::autofix,
+				"If true, attempts the built-in scriptnode autofix for the first autofixable runtime error before returning status")
+				.withType(ParamType::Bool).withDefault("false"))
+			.withResponseField(RouteParameter(RestApiIds::moduleId, "Module ID of the DspNetwork holder"))
+			.withResponseField(RouteParameter(RestApiIds::ok, "True if ScriptnodeExceptionHandler has no stored runtime errors")
+				.withType(ParamType::Bool))
+			.withResponseField(RouteParameter(RestApiIds::autofixRequested, "True if the request asked the endpoint to attempt an autofix")
+				.withType(ParamType::Bool))
+			.withResponseField(RouteParameter(RestApiIds::autofixApplied, "True if an autofixable error was found and the built-in autofix was attempted")
+				.withType(ParamType::Bool))
+			.withResponseField(RouteParameter(RestApiIds::fixedNodeId, "Node ID that received the autofix")
+				.asOptional())
+			.withResponseField(RouteParameter(RestApiIds::beforeError, "Formatted scriptnode error before autofix")
+				.asOptional())
+			.withResponseField(RouteParameter(RestApiIds::afterError, "Formatted remaining scriptnode error after autofix, if any")
+				.asOptional())
+			.withErrorCodes({ 400, 404 })
+			.withRequestExample(R"(GET /api/dsp/runtime_status?moduleId=DspTestFX&autofix=true)")
+			.withResponseExample(R"({"success": true, "moduleId": "DspTestFX", "ok": true, "autofixRequested": true, "autofixApplied": true, "fixedNodeId": "MidiNote", "beforeError": "MidiNote - Can't find suitable parent node", "logs": [], "errors": []})"));
+	}
+
 	static void dspSave(Array<RouteMetadata>& m)
 	{
 		m.add(RouteMetadata(ApiRoute::DspSave, "api/dsp/save")
@@ -2116,6 +2151,7 @@ const Array<RestHelpers::RouteMetadata>& RestHelpers::getRouteMetadata()
 			RestApiEndpoints::dspTree(m);
 			RestApiEndpoints::dspApply(m);
 			RestApiEndpoints::dspProbe(m);
+			RestApiEndpoints::dspRuntimeStatus(m);
 			RestApiEndpoints::dspSave(m);
 			RestApiEndpoints::dspScreenshot(m);
 			RestApiEndpoints::projectList(m);

@@ -121,6 +121,8 @@ public:
 
 	void autofix(NodeBase* node);
 
+	bool autofixFirstError(String& fixedNodeId, String& beforeError, String& afterError);
+
 	static String getErrorMessage(Error e);
 
 	String getErrorMessage(const NodeBase* n = nullptr) const;

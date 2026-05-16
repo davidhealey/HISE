@@ -6680,6 +6680,73 @@ private:
         expect(!(bool)errJson2[RestApiIds::success], "Should fail with invalid moduleId");
     }
 
+    void testDspRuntimeStatus()
+    {
+        /** Setup: ScriptFX with initialized network
+         *  Scenario: GET /api/dsp/runtime_status before and after adding a MIDI node
+         *            outside a container.midichain context
+         *  Expected: Clean network returns success=true / ok=true. The invalid MIDI
+         *            context is reported as success=false with the scriptnode error
+         *            folded into the standard errors array.
+         */
+        beginTest("GET /api/dsp/runtime_status");
+
+        resetDspState();
+
+        auto clean = ctx->parseJson(ctx->httpGet("/api/dsp/runtime_status?moduleId=DspTestFX"));
+        expect((bool)clean[RestApiIds::success], "Clean network should succeed");
+        expect((bool)clean[RestApiIds::ok], "Clean network should report ok=true");
+        expect(!(bool)clean[RestApiIds::autofixRequested],
+            "Clean status should report autofixRequested=false");
+        expect(!(bool)clean[RestApiIds::autofixApplied], "Clean status should report autofixApplied=false");
+        expect(clean[RestApiIds::errors].isArray(), "Clean response should include errors array");
+        expectEquals<int>(clean[RestApiIds::errors].size(), 0, "Clean response should have no errors");
+
+        auto missingModule = ctx->parseJson(ctx->httpGet("/api/dsp/runtime_status"));
+        expect(!(bool)missingModule[RestApiIds::success], "Should fail without moduleId");
+
+        auto invalidModule = ctx->parseJson(ctx->httpGet("/api/dsp/runtime_status?moduleId=NonExistent"));
+        expect(!(bool)invalidModule[RestApiIds::success], "Should fail with invalid moduleId");
+
+        Array<var> ops;
+        ops.add(makeDspAddOp("control.midi", "test_network", "MidiNote"));
+        expectDspSuccess(postDspOps(ops));
+
+        ctx->bp->prepareToPlay(44100.0, 512);
+
+        auto runtimeError = ctx->parseJson(ctx->httpGet("/api/dsp/runtime_status?moduleId=DspTestFX"));
+        expect(!(bool)runtimeError[RestApiIds::success], "Runtime error should mark success=false");
+        expect(!(bool)runtimeError[RestApiIds::ok], "Runtime error should report ok=false");
+        expect(!(bool)runtimeError[RestApiIds::autofixRequested],
+            "Runtime status without query should not request autofix");
+        expect(!(bool)runtimeError[RestApiIds::autofixApplied],
+            "Runtime status without query should not apply autofix");
+
+        auto errors = runtimeError[RestApiIds::errors];
+        expect(errors.isArray(), "Runtime error response should include errors array");
+        expect(errors.size() > 0, "Runtime error response should include an error entry");
+
+        if (errors.isArray() && errors.size() > 0)
+        {
+            auto message = errors[0][RestApiIds::errorMessage].toString();
+            expect(message.contains("MidiNote") || message.contains("Can't find suitable parent node"),
+                "Runtime error message should describe the invalid MIDI context");
+        }
+
+        auto autofixed = ctx->parseJson(ctx->httpGet("/api/dsp/runtime_status?moduleId=DspTestFX&autofix=true"));
+        expect((bool)autofixed[RestApiIds::autofixRequested], "Autofix query should report autofixRequested=true");
+        expect((bool)autofixed[RestApiIds::autofixApplied], "Autofix query should apply the MIDI context fix");
+        expectEquals(autofixed[RestApiIds::fixedNodeId].toString(), String("MidiNote"),
+            "Autofix should report the fixed node ID");
+        expect(autofixed[RestApiIds::beforeError].toString().contains("MidiNote") ||
+               autofixed[RestApiIds::beforeError].toString().contains("Can't find suitable parent node"),
+            "Autofix should report the original runtime error");
+        expect((bool)autofixed[RestApiIds::success], "Autofixed runtime status should be clean");
+        expect((bool)autofixed[RestApiIds::ok], "Autofixed runtime status should report ok=true");
+        expect(autofixed[RestApiIds::errors].isArray(), "Autofixed response should include errors array");
+        expectEquals<int>(autofixed[RestApiIds::errors].size(), 0, "Autofixed response should have no errors");
+    }
+
     void testDspApplyAdd()
     {
         /** Setup: Fresh DSP state
