@@ -232,6 +232,8 @@ struct HiseAssetInstaller: public ControlledObject
 
 		bool isLocalFolder() const { return m == Mode::LocalFolder; }
 
+		String getPackageId() const { return vendor + "::" + packageName; }
+
 		Mode m = Mode::Undefined;
 
 		File localFolder;
@@ -293,6 +295,8 @@ struct HiseAssetInstaller: public ControlledObject
 
 	bool install(const UninstallInfo& infoToUse);
 
+	bool canUpdateSharedFiles(const UninstallInfo& infoToUse);
+
 	struct UninstallResult
 	{
 		bool success = false;
@@ -327,6 +331,42 @@ struct HiseAssetInstaller: public ControlledObject
 private:
 
 	File getRootFolder() const;
+
+	static String getPackageId(const var& packageInfo);
+
+	static String getDisplayName(const var& packageInfo);
+
+	String getTargetPath(const File& f) const;
+
+	bool matchesWildcardList(const File& f, const StringArray& wildcards) const;
+
+	bool matchesSharedWildcard(const File& f) const;
+
+	static bool isTextFile(const File& f, int64 fileSize);
+
+	struct FileOwner
+	{
+		String packageId;
+		String displayName;
+		String version;
+		bool shared = false;
+		int64 hash = 0;
+		bool hashValid = false;
+	};
+
+	using FileOwnershipMap = std::map<String, Array<FileOwner>>;
+
+	FileOwnershipMap createOwnershipMap(const var& logData, const String& ignoredPackageId={}) const;
+
+	static bool packagesMatch(const var& a, const var& b);
+
+	bool runInstallPreflight(UndoableInstallAction::List& newSteps, const var& logData, const String& incomingPackageId,
+		const String& ignoredPackageId={});
+
+	bool runUpdatePreflight(UndoableInstallAction::List& newSteps, const var& logData, const String& currentPackageId,
+		const String& incomingPackageId);
+
+	bool isOwnedByOtherPackage(const File& targetFile, const String& packageId) const;
 
 	var toInstallLog(UndoableInstallAction::List installActions, UninstallInfo infoToUse) const;
 
@@ -623,6 +663,14 @@ private:
 
 		var toJSON() const override;
 
+		void setShared(bool shouldBeShared);
+
+		String getTargetPath() const
+		{
+			auto path = targetFile.getRelativePathFrom(getRootFolder());
+			return path.replaceCharacter('\\', '/');
+		}
+
 		bool wouldConflict(const Array<File>& claimedByLog) const
 		{
 			return targetFile.existsAsFile() && ! claimedByLog.contains(targetFile);
@@ -633,6 +681,8 @@ private:
 		Time modificationTime;
 		int64 hash = 0;
 		bool hashValid = false;
+		bool shared = false;
+		bool skipWrite = false;
 	};
 
 	struct ClipboardInstallAction: public UndoableInstallAction
@@ -739,6 +789,7 @@ private:
 
 	StringArray positiveWildcards;
 	StringArray negativeWildcards;
+	StringArray sharedWildcards;
 	StringArray preprocessorValues;
 	StringArray fileTypes;
 
