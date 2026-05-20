@@ -47,6 +47,43 @@ namespace PytorchIds
 
 #undef DECLARE_ID
 
+namespace NeuralJsonHelpers
+{
+	static var createMetadata(const Identifier& id, const String& modelType, const String& sourceFormat, int numInputs, int numOutputs)
+	{
+		auto obj = new DynamicObject();
+		obj->setProperty("format", "HiseCompiledNeuralNetwork");
+		obj->setProperty("version", 1);
+		obj->setProperty("id", id.toString());
+		obj->setProperty("modelType", modelType);
+		obj->setProperty("sourceFormat", sourceFormat);
+		obj->setProperty("createdBy", "ScriptNeuralNetwork.writeCompiledModelJSON");
+		obj->setProperty("numInputs", numInputs);
+		obj->setProperty("numOutputs", numOutputs);
+
+		return var(obj);
+	}
+
+	static var createRTNeuralJSON(const Identifier& id, const var& sourceData, const String& sourceFormat, int numInputs, int numOutputs)
+	{
+		auto obj = new DynamicObject();
+		obj->setProperty("hise", createMetadata(id, "rtneural", sourceFormat, numInputs, numOutputs));
+		obj->setProperty("in_shape", sourceData["in_shape"]);
+		obj->setProperty("layers", sourceData["layers"]);
+
+		return var(obj);
+	}
+
+	static var createNAMJSON(const Identifier& id, const var& sourceData)
+	{
+		auto obj = new DynamicObject();
+		obj->setProperty("hise", createMetadata(id, "nam", "NAM", 1, 1));
+		obj->setProperty("weights", sourceData["weights"]);
+
+		return var(obj);
+	}
+}
+
 class PytorchParser
 {
 	struct LayerInfo
@@ -446,6 +483,7 @@ NeuralNetwork::NeuralNetwork(const Identifier& id_, Factory* f):
     factory(f)
 {
     jassert(f != nullptr);
+	backendState = f->hasModel(id) ? BackendState::CompiledLinked : BackendState::Empty;
 	currentModels.add(f->create(id));
 }
 
@@ -462,6 +500,8 @@ NeuralNetwork::Ptr NeuralNetwork::clone(int numNetworks)
     nn->currentModels.clear();
     
     nn->context = context;
+	nn->backendState = backendState;
+	nn->compiledModelJSON = compiledModelJSON;
     
     for(int i = 0; i < numNetworks; i++)
         nn->currentModels.add(currentModels.getFirst()->clone());
@@ -486,7 +526,15 @@ Result NeuralNetwork::loadPytorchModel(const var& fullJson)
 	if(!ok.wasOk())
 		return ok;
 
-	return loadWeights(weightData);
+	auto weightsOk = loadWeights(weightData);
+
+	if(weightsOk.wasOk())
+	{
+		compiledModelJSON = var();
+		backendState = BackendState::Dynamic;
+	}
+
+	return weightsOk;
 }
 
 
@@ -594,6 +642,9 @@ Result NeuralNetwork::loadNAMModel(const var& jsonData)
 		SimpleReadWriteLock::ScopedMultiWriteLock sl(lock);
 		currentModels.swapWith(nm);
 	}
+
+	compiledModelJSON = NeuralJsonHelpers::createNAMJSON(id, jsonData);
+	backendState = BackendState::Dynamic;
 	
 	return Result::ok();
 }
@@ -609,6 +660,9 @@ void NeuralNetwork::clearModel()
 		SimpleReadWriteLock::ScopedMultiWriteLock sl(lock);
 		currentModels.swapWith(nm);
 	}
+
+	compiledModelJSON = var();
+	backendState = BackendState::Empty;
 }
 
 Result NeuralNetwork::build(const var& modelJSON)
@@ -631,6 +685,9 @@ Result NeuralNetwork::build(const var& modelJSON)
 		SimpleReadWriteLock::ScopedMultiWriteLock sl(lock);
 		currentModels.swapWith(nm);
 	}
+
+	compiledModelJSON = var();
+	backendState = BackendState::Dynamic;
 	
 	return Result::ok();
 }
@@ -662,6 +719,43 @@ var NeuralNetwork::getModelJSON() const
 	}
 
 	return {};
+}
+
+var NeuralNetwork::getCompiledModelJSON() const
+{
+	return compiledModelJSON;
+}
+
+Result NeuralNetwork::writeCompiledModelJSON(const File& targetDirectory) const
+{
+	if(compiledModelJSON.isVoid() || compiledModelJSON.isUndefined())
+		return Result::fail("The current neural network cannot be written as compiled model JSON");
+
+	if(!targetDirectory.isDirectory())
+	{
+		if(!targetDirectory.createDirectory())
+			return Result::fail("Can't create target directory: " + targetDirectory.getFullPathName());
+	}
+
+	auto targetFile = targetDirectory.getChildFile(id.toString()).withFileExtension("json");
+	auto text = JSON::toString(compiledModelJSON, true);
+
+	if(!targetFile.replaceWithText(text))
+		return Result::fail("Can't write compiled model JSON: " + targetFile.getFullPathName());
+
+	return Result::ok();
+}
+
+String NeuralNetwork::getBackendStateName() const
+{
+	switch(backendState)
+	{
+	case BackendState::Empty: return "empty";
+	case BackendState::Dynamic: return "dynamic";
+	case BackendState::CompiledLinked:
+	case BackendState::CompiledDll: return "compiled";
+	default: jassertfalse; return "empty";
+	}
 }
 
 void NeuralNetwork::setNumNetworks(int numNetworks, bool forceClone)
@@ -770,6 +864,9 @@ Result NeuralNetwork::loadTensorFlowModel(const var& jsonData)
 		SimpleReadWriteLock::ScopedMultiWriteLock sl(lock);
 		currentModels.swapWith(nt);
 	}
+
+	compiledModelJSON = NeuralJsonHelpers::createRTNeuralJSON(id, jsonData, "TensorFlow", getNumInputs(), getNumOutputs());
+	backendState = BackendState::Dynamic;
 	
 	return Result::ok();
 }
@@ -838,6 +935,17 @@ struct MyFunk: public CompiledModel<pimpl::MyFunk_t>
 NeuralNetwork::Factory::Factory()
 {
 	defaultFunction = [](){ return new EmptyModel(); };
+}
+
+bool NeuralNetwork::Factory::hasModel(const Identifier& id) const
+{
+	for(const auto& entry: registeredModels)
+	{
+		if(entry.first == id)
+			return true;
+	}
+
+	return false;
 }
 
 NeuralNetwork::ModelBase* NeuralNetwork::Factory::create(const Identifier& id)

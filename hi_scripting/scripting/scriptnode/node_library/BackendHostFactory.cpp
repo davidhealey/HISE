@@ -64,6 +64,23 @@ juce::Array<juce::File> BackendDllManager::getNetworkFiles(MainController* mc, b
 	return files;
 }
 
+juce::Array<juce::File> BackendDllManager::getNeuralNetworkFiles(MainController* mc)
+{
+	if (!mc->getCurrentFileHandler().getRootFolder().isDirectory())
+		return {};
+
+	auto neuralDirectory = getSubFolder(mc, FolderSubType::NeuralNetworks);
+	auto files = neuralDirectory.findChildFiles(File::findFiles, false, "*.json");
+
+	for (int i = 0; i < files.size(); i++)
+	{
+		if (files[i].getFileName().contains("autosave_"))
+			files.remove(i--);
+	}
+
+	return files;
+}
+
 Array<juce::File> BackendDllManager::getThirdPartyFiles(MainController* mc, bool getSrcDirectory)
 {
 	auto thirdPartyFolder = getSubFolder(mc, FolderSubType::ThirdParty);
@@ -314,6 +331,7 @@ juce::File BackendDllManager::getSubFolder(const MainController* mc, FolderSubTy
 	{
 	case FolderSubType::Root:					return createIfNotDirectory(f);
 	case FolderSubType::Networks:				return createIfNotDirectory(f.getChildFile("Networks"));
+	case FolderSubType::NeuralNetworks:			return createIfNotDirectory(f.getChildFile("NeuralNetworks"));
 	case FolderSubType::Tests:					return createIfNotDirectory(f.getChildFile("Tests"));
 	case FolderSubType::CustomNodes:			return createIfNotDirectory(f.getChildFile("CustomNodes"));
 	case FolderSubType::AdditionalCode:			return createIfNotDirectory(f.getChildFile("AdditionalCode"));

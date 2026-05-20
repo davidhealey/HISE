@@ -70,6 +70,14 @@ struct NeuralNetwork: public ReferenceCountedObject,
 	using Ptr = ReferenceCountedObjectPtr<NeuralNetwork>;
 	using List = ReferenceCountedArray<NeuralNetwork>;
 
+	enum class BackendState
+	{
+		Empty,
+		Dynamic,
+		CompiledLinked,
+		CompiledDll
+	};
+
 	struct ModelBase
 	{
         ModelBase() {};
@@ -106,6 +114,8 @@ struct NeuralNetwork: public ReferenceCountedObject,
 		{
 			registeredModels.add({T::getStaticId(), T::create});
 		}
+
+		bool hasModel(const Identifier& id) const;
 
 		ModelBase* create(const Identifier& id);
 
@@ -185,6 +195,10 @@ struct NeuralNetwork: public ReferenceCountedObject,
 	Result loadWeights(const String& jsonData);
 
 	var getModelJSON() const;
+	var getCompiledModelJSON() const;
+	Result writeCompiledModelJSON(const File& targetDirectory) const;
+	BackendState getBackendState() const noexcept { return backendState; }
+	String getBackendStateName() const;
 
 	/** This lets you create a number of copies of the same network that you then can address with the network index in both the reset and process call.
 	 *
@@ -210,6 +224,9 @@ private:
 	mutable hise::SimpleReadWriteLock lock;
 
 	const Identifier id;
+
+	BackendState backendState = BackendState::Empty;
+	var compiledModelJSON;
 
 	OwnedArray<ModelBase> currentModels;
 };

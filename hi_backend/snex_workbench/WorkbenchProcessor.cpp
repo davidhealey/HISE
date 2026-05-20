@@ -391,8 +391,9 @@ void DspNetworkCompileExporter::run()
 void DspNetworkCompileExporter::runStatic(Context& ctx)
 {
 	auto n = getNetwork(ctx);
+	auto neuralNetworkFiles = BackendDllManager::getNeuralNetworkFiles(ctx.getMainController());
 
-	if (n == nullptr && !ctx.skipCompilation)
+	if (n == nullptr && neuralNetworkFiles.isEmpty() && !ctx.skipCompilation)
 	{
 		ctx.ok = (ErrorCodes)(int)DspNetworkErrorCodes::NoNetwork;
 		ctx.errorMessage << "You need at least one active network for the export process.  \n";
@@ -400,7 +401,7 @@ void DspNetworkCompileExporter::runStatic(Context& ctx)
 		return;
 	}
 
-	if (!cppgen::CustomNodeProperties::isInitialised())
+	if (!cppgen::CustomNodeProperties::isInitialised() && !(n == nullptr && !neuralNetworkFiles.isEmpty()))
 	{
 		ctx.ok = ErrorCodes::CompileError;
 		ctx.errorMessage << "the node properties are not initialised. Load a DspNetwork at least once";
@@ -420,6 +421,9 @@ void DspNetworkCompileExporter::runStatic(Context& ctx)
 	auto unsortedList = BackendDllManager::getNetworkFiles(ctx.getMainController(), false);
 
 	auto unsortedListU = BackendDllManager::getNetworkFiles(ctx.getMainController(), true);
+
+	if(!neuralNetworkFiles.isEmpty())
+		ctx.logMessage("Found " + String(neuralNetworkFiles.size()) + " compiled neural network JSON file(s)");
 
 	for (auto s : unsortedList)
 		unsortedListU.removeAllInstancesOf(s);

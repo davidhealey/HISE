@@ -5802,6 +5802,9 @@ struct ScriptingObjects::ScriptNeuralNetwork::Wrapper
 	API_VOID_METHOD_WRAPPER_1(ScriptNeuralNetwork, loadPytorchModel);
 	API_VOID_METHOD_WRAPPER_1(ScriptNeuralNetwork, loadNAMModel);
 	API_METHOD_WRAPPER_1(ScriptNeuralNetwork, createModelJSONFromTextFile);
+	API_METHOD_WRAPPER_0(ScriptNeuralNetwork, writeCompiledModelJSON);
+	API_METHOD_WRAPPER_0(ScriptNeuralNetwork, getNetworkState);
+	API_METHOD_WRAPPER_0(ScriptNeuralNetwork, getNetworkInfo);
 	API_METHOD_WRAPPER_2(ScriptNeuralNetwork, loadOnnxModel);
 	API_METHOD_WRAPPER_3(ScriptNeuralNetwork, processFFTSpectrum);
 };
@@ -5819,6 +5822,9 @@ ScriptingObjects::ScriptNeuralNetwork::ScriptNeuralNetwork(ProcessorWithScriptin
 	ADD_API_METHOD_1(loadPytorchModel);
 	ADD_API_METHOD_1(loadNAMModel);
 	ADD_API_METHOD_0(getModelJSON);
+	ADD_API_METHOD_0(writeCompiledModelJSON);
+	ADD_API_METHOD_0(getNetworkState);
+	ADD_API_METHOD_0(getNetworkInfo);
 	ADD_API_METHOD_2(loadOnnxModel);
 	ADD_API_METHOD_3(processFFTSpectrum);
 
@@ -6116,6 +6122,75 @@ var ScriptingObjects::ScriptNeuralNetwork::getModelJSON()
 {
 #if HISE_INCLUDE_RT_NEURAL
 	return nn->getModelJSON();
+#else
+	reportScriptError("You must enable HISE_INCLUDE_RT_NEURAL");
+	RETURN_IF_NO_THROW(var());
+#endif
+}
+
+bool ScriptingObjects::ScriptNeuralNetwork::writeCompiledModelJSON()
+{
+#if HISE_INCLUDE_RT_NEURAL
+#if USE_BACKEND
+	auto dspFolder = getScriptProcessor()->getMainController_()->getCurrentFileHandler().getSubDirectory(FileHandlerBase::DspNetworks);
+	auto neuralFolder = dspFolder.getChildFile("NeuralNetworks");
+	auto r = nn->writeCompiledModelJSON(neuralFolder);
+
+	if(!r.wasOk())
+	{
+		reportScriptError(r.getErrorMessage());
+		return false;
+	}
+
+	return true;
+#else
+	reportScriptError("writeCompiledModelJSON() is only available in the HISE backend");
+	return false;
+#endif
+#else
+	reportScriptError("You must enable HISE_INCLUDE_RT_NEURAL");
+	return false;
+#endif
+}
+
+String ScriptingObjects::ScriptNeuralNetwork::getNetworkState() const
+{
+#if HISE_INCLUDE_RT_NEURAL
+	return nn->getBackendStateName();
+#else
+	reportScriptError("You must enable HISE_INCLUDE_RT_NEURAL");
+	RETURN_IF_NO_THROW(String());
+#endif
+}
+
+var ScriptingObjects::ScriptNeuralNetwork::getNetworkInfo() const
+{
+#if HISE_INCLUDE_RT_NEURAL
+	auto obj = new DynamicObject();
+	obj->setProperty("id", nn->getId().toString());
+	obj->setProperty("state", nn->getBackendStateName());
+	obj->setProperty("numInputs", nn->getNumInputs());
+	obj->setProperty("numOutputs", nn->getNumOutputs());
+	obj->setProperty("numNetworks", nn->getNumNetworks());
+	obj->setProperty("hasCompiledModelJSON", !(nn->getCompiledModelJSON().isVoid() || nn->getCompiledModelJSON().isUndefined()));
+
+	switch(nn->getBackendState())
+	{
+	case NeuralNetwork::BackendState::CompiledLinked: obj->setProperty("backend", "compiled-linked"); break;
+	case NeuralNetwork::BackendState::CompiledDll: obj->setProperty("backend", "compiled-dll"); break;
+	case NeuralNetwork::BackendState::Dynamic: obj->setProperty("backend", "dynamic"); break;
+	case NeuralNetwork::BackendState::Empty: obj->setProperty("backend", "empty"); break;
+	default: obj->setProperty("backend", "empty"); break;
+	}
+
+#if USE_BACKEND
+	auto dspFolder = getScriptProcessor()->getMainController_()->getCurrentFileHandler().getSubDirectory(FileHandlerBase::DspNetworks);
+	auto sourceFile = dspFolder.getChildFile("NeuralNetworks").getChildFile(nn->getId().toString()).withFileExtension("json");
+	obj->setProperty("source", sourceFile.getFullPathName());
+	obj->setProperty("sourceExists", sourceFile.existsAsFile());
+#endif
+
+	return var(obj);
 #else
 	reportScriptError("You must enable HISE_INCLUDE_RT_NEURAL");
 	RETURN_IF_NO_THROW(var());
