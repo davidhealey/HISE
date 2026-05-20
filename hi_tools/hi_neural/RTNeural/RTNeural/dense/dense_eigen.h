@@ -51,6 +51,19 @@ public:
     /** Returns the name of this layer. */
     std::string getName() const noexcept override { return "dense"; }
 
+    StaticLayerInfo getStaticTypeInfo(const StaticTypeOptions& options) const override
+    {
+        StaticLayerInfo info;
+        info.typeName = "RTNeural::DenseT<" + options.scalarType + ", " +
+            std::to_string(Layer<T>::in_size) + ", " +
+            std::to_string(Layer<T>::out_size) + ">";
+        info.supported = true;
+        info.weights.push_back({ "weights", { Layer<T>::in_size, Layer<T>::out_size },
+            (size_t)Layer<T>::in_size * (size_t)Layer<T>::out_size });
+        info.weights.push_back({ "bias", { Layer<T>::out_size }, (size_t)Layer<T>::out_size });
+        return info;
+    }
+
     /** Performs forward propagation for this layer. */
     RTNEURAL_REALTIME inline void forward(const T* input, T* out) noexcept override
     {
