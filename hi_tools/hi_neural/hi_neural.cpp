@@ -492,22 +492,32 @@ namespace NAMHelpers
 
 	static Result parseLayer(const nlohmann::json& layer, LayerInfo& info, int index)
 	{
+		auto layerName = "NAM WaveNet layer " + String(index);
+
 		if(!layer.contains("activation") || !layer["activation"].is_string())
-			return Result::fail("NAM WaveNet layer " + String(index) + " must use a string activation");
+			return Result::fail(layerName + " must use a string activation");
 
 		if(layer.value("activation", std::string()) != "Tanh")
 			return Result::fail("Unsupported NAM activation in layer " + String(index) + ": " +
 				String(layer.value("activation", std::string())));
 
 		if(layer.value("gated", false))
-			return Result::fail("Gated NAM WaveNet layers are not supported");
+			return Result::fail(layerName + " uses gated=true, which is not supported");
 
-		if(layer.contains("film_params") || layer.contains("packing") || layer.contains("slimmable") ||
-			layer.contains("head_1x1_config") || layer.contains("head1x1") ||
-			layer.contains("layer_1x1_config") || layer.contains("layer1x1") ||
-			layer.contains("bottleneck") || layer.value("groups_input", 1) != 1 ||
-			layer.value("groups_input_mixin", 1) != 1)
-			return Result::fail("Unsupported advanced NAM WaveNet option in layer " + String(index));
+		const char* unsupportedFields[] = { "film_params", "packing", "slimmable", "head_1x1_config", "head1x1",
+			"layer_1x1_config", "layer1x1", "bottleneck" };
+
+		for(auto field: unsupportedFields)
+		{
+			if(layer.contains(field))
+				return Result::fail(layerName + " uses unsupported field `" + String(field) + "`");
+		}
+
+		if(layer.value("groups_input", 1) != 1)
+			return Result::fail(layerName + " uses unsupported groups_input=" + String(layer.value("groups_input", 1)));
+
+		if(layer.value("groups_input_mixin", 1) != 1)
+			return Result::fail(layerName + " uses unsupported groups_input_mixin=" + String(layer.value("groups_input_mixin", 1)));
 
 		info.inputSize = layer.value("input_size", 0);
 		info.conditionSize = layer.value("condition_size", 0);
@@ -519,10 +529,10 @@ namespace NAMHelpers
 			const auto& head = layer["head"];
 
 			if(!head.is_object())
-				return Result::fail("NAM WaveNet layer " + String(index) + " head must be an object");
+				return Result::fail(layerName + " head must be an object");
 
 			if(head.value("kernel_size", 1) != 1)
-				return Result::fail("NAM layer-array head convolution kernels other than 1 are not supported");
+				return Result::fail(layerName + " uses unsupported head.kernel_size=" + String(head.value("kernel_size", 1)));
 
 			info.headSize = head.value("out_channels", 0);
 			info.headBias = head.value("bias", false);
@@ -535,10 +545,10 @@ namespace NAMHelpers
 
 		if(info.inputSize <= 0 || info.conditionSize != 1 || info.headSize <= 0 ||
 			info.channels <= 0 || info.kernelSize <= 0)
-			return Result::fail("Invalid NAM WaveNet layer dimensions in layer " + String(index));
+			return Result::fail("Invalid " + layerName + " dimensions: " + getLayerSignature(info));
 
 		if(!layer.contains("dilations") || !layer["dilations"].is_array() || layer["dilations"].empty())
-			return Result::fail("NAM WaveNet layer " + String(index) + " is missing dilations");
+			return Result::fail(layerName + " is missing dilations");
 
 		for(const auto& d: layer["dilations"])
 			info.dilations.push_back(d.get<int>());
@@ -549,15 +559,19 @@ namespace NAMHelpers
 	static Result parseModel(const nlohmann::json& data, ModelInfo& info)
 	{
 		if(data.contains("architecture") && data.value("architecture", std::string()) != "WaveNet")
-			return Result::fail("Only NAM WaveNet models are supported");
+			return Result::fail("Unsupported NAM architecture `" + String(data.value("architecture", std::string())) +
+				"`. Only plain WaveNet models are supported");
 
 		if(!data.contains("config") || !data["config"].is_object())
 			return Result::fail("NAM model is missing the config object");
 
 		const auto& config = data["config"];
 
-		if(config.contains("condition_dsp") || (config.contains("head") && !config["head"].is_null()))
-			return Result::fail("NAM condition_dsp and top-level heads are not supported");
+		if(config.contains("condition_dsp"))
+			return Result::fail("Unsupported NAM field `config.condition_dsp`");
+
+		if(config.contains("head") && !config["head"].is_null())
+			return Result::fail("Unsupported NAM top-level field `config.head`");
 
 		if(!config.contains("layers") || !config["layers"].is_array() || config["layers"].empty())
 			return Result::fail("NAM model is missing config.layers");
@@ -571,10 +585,12 @@ namespace NAMHelpers
 				return r;
 
 			if(i != 0 && l.inputSize != info.layers.back().channels)
-				return Result::fail("NAM WaveNet layer " + String((int)i) + " input size does not match previous channels");
+				return Result::fail("NAM WaveNet layer " + String((int)i) +
+					" input_size does not match previous channels. Detected " + getLayerSignature(l));
 
 			if(i != 0 && l.channels != info.layers.back().headSize)
-				return Result::fail("NAM WaveNet layer " + String((int)i) + " channels do not match previous head size");
+				return Result::fail("NAM WaveNet layer " + String((int)i) +
+					" channels do not match previous head size. Detected " + getLayerSignature(l));
 
 			info.layers.push_back(l);
 		}
@@ -1112,7 +1128,7 @@ static Result createCompiledNAMModelHeader(const File& sourceFile, const nlohman
 	}
 
 	if(validation.failed())
-		return validation;
+		return Result::fail("Could not compile NAM model " + sourceFile.getFileName() + ": " + validation.getErrorMessage());
 
 	auto className = NeuralJsonHelpers::getClassName(id, "default");
 
@@ -1534,7 +1550,7 @@ Result NeuralNetwork::loadNAMModel(const var& jsonData)
 	}
 
 	if(validation.failed())
-		return validation;
+		return Result::fail("Could not load NAM model: " + validation.getErrorMessage());
 
 	if(NAMHelpers::matchesRuntimeModel1(info))
 		nm.add(new NAMModel<NAMRuntimeModel1>(jsonData));
