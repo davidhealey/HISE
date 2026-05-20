@@ -1,10 +1,10 @@
 #define RTNEURAL_DEFAULT_ALIGNMENT 16
 #define RTNEURAL_USE_XSIMD 1
 
-#include "RTNeural/modules/xsimd/xsimd.hpp"
-#include "RTNeural/RTNeural/RTNeural.h"
-#include "RTNeural/modules/math_approx/math_approx.hpp"
-#include "RTNeural/RTNeural/wavenet/wavenet_model.hpp"
+#include <cstring>
+#include <functional>
+
+#include "CompiledRTNeuralIncludes.h"
 
 namespace hise
 {
@@ -49,6 +49,124 @@ namespace PytorchIds
 
 namespace NeuralJsonHelpers
 {
+	static Identifier getQualityConfigurationsId()
+	{
+		static const Identifier id("qualityConfigurations");
+		return id;
+	}
+
+	static bool isEmptyObject(const var& data)
+	{
+		if(auto obj = data.getDynamicObject())
+			return obj->getProperties().size() == 0;
+
+		return data.isVoid() || data.isUndefined();
+	}
+
+	static Result validateQualityConfiguration(const Identifier& qualityId, const var& data)
+	{
+		if(data.getDynamicObject() == nullptr)
+			return Result::fail("Quality configuration \"" + qualityId.toString() + "\" must be an object");
+
+		auto mathProvider = data["mathProvider"].toString();
+		if(mathProvider.isEmpty())
+			mathProvider = "default";
+
+		if(mathProvider != "default" && mathProvider != "fastMath")
+		{
+			return Result::fail("Unsupported mathProvider \"" + mathProvider +
+				"\" in quality configuration \"" + qualityId.toString() + "\"");
+		}
+
+		if(data.hasProperty("sampleRateCorrection"))
+		{
+			auto sampleRateCorrection = data["sampleRateCorrection"].toString();
+
+			if(sampleRateCorrection != "none" && sampleRateCorrection != "linear")
+			{
+				return Result::fail("Unsupported sampleRateCorrection \"" + sampleRateCorrection +
+					"\" in quality configuration \"" + qualityId.toString() + "\"");
+			}
+		}
+
+		return Result::ok();
+	}
+
+	static Result validateQualityConfigurations(const var& qualityConfigurations)
+	{
+		if(isEmptyObject(qualityConfigurations))
+			return Result::ok();
+
+		auto obj = qualityConfigurations.getDynamicObject();
+
+		if(obj == nullptr)
+			return Result::fail("writeCompiledModelJSON() expects an object with quality configurations");
+
+		for(const auto& nv: obj->getProperties())
+		{
+			if(!Identifier::isValidIdentifier(nv.name.toString()))
+				return Result::fail("Invalid quality configuration name: " + nv.name.toString());
+
+			auto r = validateQualityConfiguration(nv.name, nv.value);
+
+			if(r.failed())
+				return r;
+		}
+
+		return Result::ok();
+	}
+
+	static var withQualityConfigurations(const var& sourceData, const var& qualityConfigurations, Result& result)
+	{
+		result = validateQualityConfigurations(qualityConfigurations);
+
+		if(result.failed())
+			return {};
+
+		var target;
+		result = JSON::parse(JSON::toString(sourceData, true), target);
+
+		if(result.failed())
+			return {};
+
+		auto root = target.getDynamicObject();
+		auto hise = target["hise"].getDynamicObject();
+
+		if(root == nullptr || hise == nullptr)
+		{
+			result = Result::fail("Compiled model JSON is missing the HISE metadata object");
+			return {};
+		}
+
+		if(isEmptyObject(qualityConfigurations))
+		{
+			hise->removeProperty(getQualityConfigurationsId());
+			return target;
+		}
+
+		hise->setProperty(getQualityConfigurationsId(), qualityConfigurations);
+		return target;
+	}
+
+	static StringArray getQualityConfigurationsFromJSON(const var& sourceData)
+	{
+		StringArray ids;
+
+		if(auto hise = sourceData["hise"].getDynamicObject())
+		{
+			if(auto obj = hise->getProperty(getQualityConfigurationsId()).getDynamicObject())
+			{
+				for(const auto& nv: obj->getProperties())
+					ids.add(nv.name.toString());
+			}
+		}
+
+		if(ids.isEmpty())
+			ids.add("default");
+
+		return ids;
+	}
+
 	static var createMetadata(const Identifier& id, const String& modelType, const String& sourceFormat, int numInputs, int numOutputs)
 	{
 		auto obj = new DynamicObject();
@@ -81,6 +199,225 @@ namespace NeuralJsonHelpers
 		obj->setProperty("weights", sourceData["weights"]);
 
 		return var(obj);
+	}
+
+	static String getFloatBytes(const nlohmann::json& data)
+	{
+		String s;
+		bool first = true;
+
+		auto appendFloat = [&](float v)
+		{
+			uint32 bits = 0;
+			static_assert(sizeof(float) == sizeof(uint32), "Unexpected float size");
+			std::memcpy(&bits, &v, sizeof(float));
+
+			for(int i = 0; i < 4; i++)
+			{
+				if(!first)
+					s << ", ";
+
+				first = false;
+				auto byteValue = (int)((bits >> (i * 8)) & 0xFF);
+				s << "0x";
+
+				if(byteValue < 16)
+					s << "0";
+
+				s << String::toHexString(byteValue);
+			}
+		};
+
+		std::function<void(const nlohmann::json&)> walk = [&](const nlohmann::json& v)
+		{
+			if(v.is_array())
+			{
+				for(const auto& child: v)
+					walk(child);
+			}
+			else if(v.is_number())
+			{
+				appendFloat(v.get<float>());
+			}
+		};
+
+		walk(data);
+		return s;
+	}
+
+	static int getFlatNumElements(const nlohmann::json& data)
+	{
+		int numElements = 0;
+
+		std::function<void(const nlohmann::json&)> walk = [&](const nlohmann::json& v)
+		{
+			if(v.is_array())
+			{
+				for(const auto& child: v)
+					walk(child);
+			}
+			else if(v.is_number())
+			{
+				numElements++;
+			}
+		};
+
+		walk(data);
+		return numElements;
+	}
+
+	static String getClassName(const String& id, const String& qualityId)
+	{
+		return id + "_" + qualityId;
+	}
+
+	static RTNeural::StaticTypeOptions createStaticTypeOptions(const String& qualityId,
+		const nlohmann::json& qualityData)
+	{
+		RTNeural::StaticTypeOptions options;
+		options.qualityId = qualityId.toStdString();
+		options.scalarType = "float";
+		options.mathProvider = "default";
+		options.sampleRateCorrection = "none";
+
+		if(qualityData.is_object())
+		{
+			if(qualityData.contains("mathProvider"))
+			{
+				auto mathProvider = String(qualityData["mathProvider"].get<std::string>());
+				options.mathProvider = mathProvider == "fastMath" ?
+					"project::FastMathsProvider" : "default";
+			}
+
+			if(qualityData.contains("sampleRateCorrection"))
+				options.sampleRateCorrection = qualityData["sampleRateCorrection"].get<std::string>();
+		}
+
+		return options;
+	}
+
+	static Result getQualityConfigurations(const nlohmann::json& data,
+		std::vector<std::pair<String, nlohmann::json>>& configs)
+	{
+		if(!data.contains("hise") || !data["hise"].is_object())
+			return Result::fail("Compiled neural JSON is missing the hise metadata object");
+
+		const auto& hiseData = data["hise"];
+
+		if(!hiseData.contains("qualityConfigurations"))
+		{
+			configs.push_back({ "default", nlohmann::json::object() });
+			return Result::ok();
+		}
+
+		const auto& qualityData = hiseData["qualityConfigurations"];
+
+		if(!qualityData.is_object())
+			return Result::fail("hise.qualityConfigurations must be an object");
+
+		for(auto it = qualityData.begin(); it != qualityData.end(); ++it)
+		{
+			auto qualityId = String(it.key());
+
+			if(!Identifier::isValidIdentifier(qualityId))
+				return Result::fail("Invalid quality configuration name: " + qualityId);
+
+			if(!it.value().is_object())
+				return Result::fail("Quality configuration \"" + qualityId + "\" must be an object");
+
+			if(it.value().contains("mathProvider"))
+			{
+				auto mathProvider = String(it.value()["mathProvider"].get<std::string>());
+
+				if(mathProvider != "default" && mathProvider != "fastMath")
+					return Result::fail("Unsupported mathProvider in quality configuration \"" + qualityId + "\"");
+			}
+
+			if(it.value().contains("sampleRateCorrection"))
+			{
+				auto src = String(it.value()["sampleRateCorrection"].get<std::string>());
+
+				if(src != "none" && src != "linear")
+					return Result::fail("Unsupported sampleRateCorrection in quality configuration \"" + qualityId + "\"");
+			}
+
+			configs.push_back({ qualityId, it.value() });
+		}
+
+		if(configs.empty())
+			configs.push_back({ "default", nlohmann::json::object() });
+
+		return Result::ok();
+	}
+
+	static Result writeLayerWeights(String& code, const String& className,
+		const nlohmann::json& layer, int layerIndex)
+	{
+		if(!layer.contains("weights"))
+			return Result::fail("Layer " + String(layerIndex) + " is missing weights");
+
+		const auto& weights = layer["weights"];
+		auto type = String(layer["type"].get<std::string>());
+
+		for(size_t i = 0; i < weights.size(); i++)
+		{
+			auto arrayName = className + "_l" + String(layerIndex) + "_w" + String((int)i);
+			code << "alignas(16) static const unsigned char " << arrayName << "[] = { ";
+			code << getFloatBytes(weights[i]) << " };\n";
+			code << "static constexpr int " << arrayName << "NumFloats = ";
+			code << getFlatNumElements(weights[i]) << ";\n";
+		}
+
+		if(type == "lstm" && weights.size() != 3)
+			return Result::fail("LSTM layer " + String(layerIndex) + " must have three weight tensors");
+
+		if((type == "dense" || type == "time-distributed-dense") && weights.size() < 1)
+			return Result::fail("Dense layer " + String(layerIndex) + " must have at least one weight tensor");
+
+		return Result::ok();
+	}
+
+	static Result writeLoadLayerCall(String& code, const String& namespaceName, const String& className,
+		const nlohmann::json& layer, const RTNeural::StaticLayerInfo& info, int layerIndex)
+	{
+		auto type = String(layer["type"].get<std::string>());
+		auto prefix = namespaceName + "::" + className + "_l" + String(layerIndex) + "_w";
+
+		if(type == "lstm")
+		{
+			code << "\t\tobj.template get<" << String(layerIndex) << ">().setWVals(";
+			code << namespaceName << "::loadMatrix(";
+			code << prefix << "0, " << prefix << "0NumFloats, " << info.weights[0].shape[0];
+			code << ", " << info.weights[0].shape[1] << "));\n";
+			code << "\t\tobj.template get<" << String(layerIndex) << ">().setUVals(";
+			code << namespaceName << "::loadMatrix(";
+			code << prefix << "1, " << prefix << "1NumFloats, " << info.weights[1].shape[0];
+			code << ", " << info.weights[1].shape[1] << "));\n";
+			code << "\t\t{ auto b = " << namespaceName << "::loadVector(";
+			code << prefix << "2, " << prefix << "2NumFloats); ";
+			code << "obj.template get<" << String(layerIndex) << ">().setBVals(b); }\n";
+
+			return Result::ok();
+		}
+
+		if(type == "dense" || type == "time-distributed-dense")
+		{
+			code << "\t\tobj.template get<" << String(layerIndex) << ">().setWeights(";
+			code << namespaceName << "::loadMatrixTransposed(";
+			code << prefix << "0, " << prefix << "0NumFloats, " << info.weights[0].shape[0];
+			code << ", " << info.weights[0].shape[1] << "));\n";
+
+			if(layer["weights"].size() > 1)
+			{
+				code << "\t\t{ auto b = " << namespaceName << "::loadVector(";
+				code << prefix << "1, " << prefix << "1NumFloats); ";
+				code << "obj.template get<" << String(layerIndex) << ">().setBias(b.data()); }\n";
+			}
+
+			return Result::ok();
+		}
+
+		return Result::fail("Unsupported static neural layer: " + type);
 	}
 }
 
@@ -484,7 +821,16 @@ NeuralNetwork::NeuralNetwork(const Identifier& id_, Factory* f):
 {
     jassert(f != nullptr);
 	backendState = f->hasModel(id) ? BackendState::CompiledLinked : BackendState::Empty;
-	currentModels.add(f->create(id));
+
+	if(backendState == BackendState::CompiledLinked && !f->hasModel(id, activeQualityConfiguration))
+	{
+		auto ids = f->getQualityIds(id);
+
+		if(!ids.isEmpty())
+			activeQualityConfiguration = Identifier(ids[0]);
+	}
+
+	currentModels.add(f->create(id, activeQualityConfiguration));
 }
 
 NeuralNetwork::~NeuralNetwork()
@@ -501,6 +847,7 @@ NeuralNetwork::Ptr NeuralNetwork::clone(int numNetworks)
     
     nn->context = context;
 	nn->backendState = backendState;
+	nn->activeQualityConfiguration = activeQualityConfiguration;
 	nn->compiledModelJSON = compiledModelJSON;
     
     for(int i = 0; i < numNetworks; i++)
@@ -512,6 +859,191 @@ NeuralNetwork::Ptr NeuralNetwork::clone(int numNetworks)
 var NeuralNetwork::parseModelJSON(const File& modelFile)
 {
 	return PytorchParser::createJSONModel(modelFile.loadFileAsString());
+}
+
+Result NeuralNetwork::createCompiledModelHeader(const File& sourceFile, String& code)
+{
+	nlohmann::json jsonData;
+
+	try
+	{
+		jsonData = nlohmann::json::parse(sourceFile.loadFileAsString().toStdString());
+	}
+	catch(std::exception& e)
+	{
+		return Result::fail("Could not parse neural JSON file " + sourceFile.getFileName() + ": " + String(e.what()));
+	}
+
+	if(!jsonData.contains("hise") || !jsonData["hise"].is_object())
+		return Result::fail(sourceFile.getFileName() + " is missing the hise metadata object");
+
+	const auto& hiseData = jsonData["hise"];
+	auto modelType = hiseData.value("modelType", std::string());
+
+	if(modelType != "rtneural")
+		return Result::fail(sourceFile.getFileName() + " is not an RTNeural compiled model JSON file");
+
+	auto id = sourceFile.getFileNameWithoutExtension();
+	auto metadataId = String(hiseData.value("id", std::string()));
+
+	if(metadataId.isNotEmpty() && metadataId != id)
+		return Result::fail(sourceFile.getFileName() + " metadata ID does not match its filename");
+
+	if(!Identifier::isValidIdentifier(id))
+		return Result::fail("Invalid neural network ID: " + id);
+
+	std::unique_ptr<RTNeural::Model<float>> model;
+
+	try
+	{
+		model = RTNeural::json_parser::parseJson<float>(jsonData);
+	}
+	catch(std::exception& e)
+	{
+		return Result::fail("Could not build dynamic reference model for " + id + ": " + String(e.what()));
+	}
+
+	std::vector<std::pair<String, nlohmann::json>> qualityConfigurations;
+	auto qualityResult = NeuralJsonHelpers::getQualityConfigurations(jsonData, qualityConfigurations);
+
+	if(qualityResult.failed())
+		return qualityResult;
+
+	code.clear();
+	code << "#pragma once\n\n";
+	code << "#include <cmath>\n";
+	code << "#include <cstring>\n";
+	code << "#include <vector>\n";
+	code << "#include \"JuceHeader.h\"\n";
+	code << "#include \"hi_tools/hi_neural/CompiledRTNeuralIncludes.h\"\n";
+	code << "#include \"hi_tools/hi_neural/hi_neural.h\"\n";
+	code << "\n";
+	code << "namespace project\n{\n\n";
+	code << "namespace neural_" << id << "\n{\n\n";
+	code << "struct FastMathsProvider\n{\n";
+	code << "\ttemplate <typename T> static T tanh(T x) { return math_approx::tanh<3>(x); }\n";
+	code << "\ttemplate <typename T> static T sigmoid(T x) { return math_approx::sigmoid<3>(x); }\n";
+	code << "\ttemplate <typename T> static T exp(T x)\n\t{\n";
+	code << "\t\tusing std::exp;\n";
+	code << "#if RTNEURAL_USE_XSIMD\n\t\tusing xsimd::exp;\n#endif\n";
+	code << "\t\treturn exp(x);\n\t}\n";
+	code << "};\n\n";
+	code << "static std::vector<float> loadVector(const unsigned char* data, int numFloats)\n{\n";
+	code << "\tstatic_assert(sizeof(float) == 4, \"Unexpected float size\");\n";
+	code << "\tstd::vector<float> values((size_t)numFloats);\n";
+	code << "\tstd::memcpy(values.data(), data, values.size() * sizeof(float));\n";
+	code << "\treturn values;\n}\n\n";
+	code << "static std::vector<std::vector<float>> loadMatrix(const unsigned char* data, int numFloats, int rows, int cols)\n{\n";
+	code << "\tauto flat = loadVector(data, numFloats);\n";
+	code << "\tstd::vector<std::vector<float>> m((size_t)rows, std::vector<float>((size_t)cols, 0.0f));\n";
+	code << "\tfor(int r = 0; r < rows; r++) for(int c = 0; c < cols; c++) m[(size_t)r][(size_t)c] = flat[(size_t)(r * cols + c)];\n";
+	code << "\treturn m;\n}\n\n";
+	code << "static std::vector<std::vector<float>> loadMatrixTransposed(const unsigned char* data, int numFloats, int rows, int cols)\n{\n";
+	code << "\tauto flat = loadVector(data, numFloats);\n";
+	code << "\tstd::vector<std::vector<float>> m((size_t)cols, std::vector<float>((size_t)rows, 0.0f));\n";
+	code << "\tfor(int r = 0; r < rows; r++) for(int c = 0; c < cols; c++) m[(size_t)c][(size_t)r] = flat[(size_t)(r * cols + c)];\n";
+	code << "\treturn m;\n}\n\n";
+
+	for(const auto& qc: qualityConfigurations)
+	{
+		auto className = NeuralJsonHelpers::getClassName(id, qc.first);
+		auto options = NeuralJsonHelpers::createStaticTypeOptions(qc.first, qc.second);
+
+		if(options.mathProvider == "project::FastMathsProvider")
+			options.mathProvider = ("project::neural_" + id + "::FastMathsProvider").toStdString();
+
+		auto info = model->getStaticTypeInfo(options);
+
+		if(!info.supported)
+			return Result::fail(id + " cannot be statically compiled: " + String(info.error));
+
+		StringArray layerTypes;
+
+		for(size_t i = 0; i < info.layers.size(); i++)
+		{
+			layerTypes.add(String(info.layers[i].typeName));
+
+			auto r = NeuralJsonHelpers::writeLayerWeights(code, className, jsonData["layers"][(int)i], (int)i);
+
+			if(r.failed())
+				return r;
+		}
+
+		for(int i = 0; i < layerTypes.size(); i++)
+			code << "using " << className << "_l" << String(i) << "_t = " << layerTypes[i] << ";\n";
+
+		code << "using " << className << "_t = RTNeural::ModelT<float, ";
+		code << info.inputSize << ", " << info.outputSize;
+
+		for(int i = 0; i < layerTypes.size(); i++)
+			code << ", " << className << "_l" << String(i) << "_t";
+
+		code << ">;\n\n";
+	}
+
+	code << "} // namespace neural_" << id << "\n\n";
+
+	for(const auto& qc: qualityConfigurations)
+	{
+		auto className = NeuralJsonHelpers::getClassName(id, qc.first);
+		auto options = NeuralJsonHelpers::createStaticTypeOptions(qc.first, qc.second);
+
+		if(options.mathProvider == "project::FastMathsProvider")
+			options.mathProvider = ("project::neural_" + id + "::FastMathsProvider").toStdString();
+
+		auto info = model->getStaticTypeInfo(options);
+
+		code << "struct " << className << ": public hise::NeuralNetwork::ModelBase\n{\n";
+		code << "\t" << className << "() { loadBakedWeights(); reset(); }\n";
+		code << "\tstatic juce::Identifier getStaticId() { return juce::Identifier(\"" << id << "\"); }\n";
+		code << "\tstatic hise::NeuralNetwork::ModelBase* create() { return new " << className << "(); }\n";
+		code << "\tvoid reset() override { obj.reset(); }\n";
+		code << "\tint getNumInputs() const override { return " << info.inputSize << "; }\n";
+		code << "\tint getNumOutputs() const override { return " << info.outputSize << "; }\n";
+		code << "\thise::NeuralNetwork::ModelBase* clone() override { return new " << className << "(); }\n";
+		code << "\tjuce::Result loadWeights(const juce::String&) override\n\t{\n";
+		code << "\t\treturn juce::Result::fail(\"Compiled neural models use baked weights\");\n\t}\n";
+		code << "\tvoid process(const float* input, float* output) override\n\t{\n";
+		code << "\t\tobj.forward(input);\n";
+		code << "\t\tstd::memcpy(output, obj.getOutputs(), sizeof(float) * (size_t)getNumOutputs());\n\t}\n";
+		code << "\tvoid loadBakedWeights()\n\t{\n";
+
+		for(size_t i = 0; i < info.layers.size(); i++)
+		{
+			auto r = NeuralJsonHelpers::writeLoadLayerCall(code, "neural_" + id, className,
+				jsonData["layers"][(int)i], info.layers[i], (int)i);
+
+			if(r.failed())
+				return r;
+		}
+
+		if(options.sampleRateCorrection != "none")
+		{
+			for(size_t i = 0; i < info.layers.size(); i++)
+			{
+				if(String(jsonData["layers"][(int)i]["type"].get<std::string>()) == "lstm")
+					code << "\t\tobj.template get<" << String((int)i) << ">().prepare(1.0f);\n";
+			}
+		}
+
+		code << "\t}\n";
+		code << "\tneural_" << id << "::" << className << "_t obj;\n";
+		code << "};\n\n";
+	}
+
+	code << "inline void registerCompiledNeuralNetworks_" << id << "(hise::NeuralNetwork::Factory* f)\n{\n";
+
+	for(const auto& qc: qualityConfigurations)
+	{
+		auto className = NeuralJsonHelpers::getClassName(id, qc.first);
+		code << "\tf->registerModel<" << className << ">(juce::Identifier(\"" << id;
+		code << "\"), juce::Identifier(\"" << qc.first << "\"));\n";
+	}
+
+	code << "}\n\n";
+	code << "} // namespace project\n";
+
+	return Result::ok();
 }
 
 Result NeuralNetwork::loadPytorchModel(const var& fullJson)
@@ -531,6 +1063,7 @@ Result NeuralNetwork::loadPytorchModel(const var& fullJson)
 	if(weightsOk.wasOk())
 	{
 		compiledModelJSON = var();
+		activeQualityConfiguration = Identifier("default");
 		backendState = BackendState::Dynamic;
 	}
 
@@ -644,6 +1177,7 @@ Result NeuralNetwork::loadNAMModel(const var& jsonData)
 	}
 
 	compiledModelJSON = NeuralJsonHelpers::createNAMJSON(id, jsonData);
+	activeQualityConfiguration = Identifier("default");
 	backendState = BackendState::Dynamic;
 	
 	return Result::ok();
@@ -662,6 +1196,7 @@ void NeuralNetwork::clearModel()
 	}
 
 	compiledModelJSON = var();
+	activeQualityConfiguration = Identifier("default");
 	backendState = BackendState::Empty;
 }
 
@@ -687,6 +1222,7 @@ Result NeuralNetwork::build(const var& modelJSON)
 	}
 
 	compiledModelJSON = var();
+	activeQualityConfiguration = Identifier("default");
 	backendState = BackendState::Dynamic;
 	
 	return Result::ok();
@@ -726,7 +1262,7 @@ var NeuralNetwork::getCompiledModelJSON() const
 	return compiledModelJSON;
 }
 
-Result NeuralNetwork::writeCompiledModelJSON(const File& targetDirectory) const
+Result NeuralNetwork::writeCompiledModelJSON(const File& targetDirectory, const var& qualityConfigurations) const
 {
 	if(compiledModelJSON.isVoid() || compiledModelJSON.isUndefined())
 		return Result::fail("The current neural network cannot be written as compiled model JSON");
@@ -738,7 +1274,13 @@ Result NeuralNetwork::writeCompiledModelJSON(const File& targetDirectory) const
 	}
 
 	auto targetFile = targetDirectory.getChildFile(id.toString()).withFileExtension("json");
-	auto text = JSON::toString(compiledModelJSON, true);
+	Result jsonResult = Result::ok();
+	auto dataToWrite = NeuralJsonHelpers::withQualityConfigurations(compiledModelJSON, qualityConfigurations, jsonResult);
+
+	if(jsonResult.failed())
+		return jsonResult;
+
+	auto text = JSON::toString(dataToWrite, false);
 
 	if(!targetFile.replaceWithText(text))
 		return Result::fail("Can't write compiled model JSON: " + targetFile.getFullPathName());
@@ -756,6 +1298,62 @@ String NeuralNetwork::getBackendStateName() const
 	case BackendState::CompiledDll: return "compiled";
 	default: jassertfalse; return "empty";
 	}
+}
+
+StringArray NeuralNetwork::getQualityConfigurations() const
+{
+	if(backendState == BackendState::CompiledLinked || backendState == BackendState::CompiledDll)
+	{
+		auto ids = factory->getQualityIds(id);
+
+		if(ids.isEmpty())
+			ids.add("default");
+
+		return ids;
+	}
+
+	return NeuralJsonHelpers::getQualityConfigurationsFromJSON(compiledModelJSON);
+}
+
+Result NeuralNetwork::setQualityConfiguration(const Identifier& qualityId)
+{
+	if(backendState == BackendState::Empty)
+	{
+		return Result::fail("Neural network \"" + id.toString() +
+			"\" is not compiled. Quality configurations require a compiled model.");
+	}
+
+	if(backendState == BackendState::Dynamic)
+	{
+		return Result::fail("Neural network \"" + id.toString() +
+			"\" is dynamic. Quality configurations only apply to compiled models.");
+	}
+
+	if(!factory->hasModel(id, qualityId))
+	{
+		auto available = factory->getQualityIds(id);
+		return Result::fail("Unknown quality configuration \"" + qualityId.toString() +
+			"\" for neural network \"" + id.toString() + "\". Available configurations: " +
+			available.joinIntoString(", "));
+	}
+
+	OwnedArray<ModelBase> newModels;
+
+	newModels.add(factory->create(id, qualityId));
+
+	for(int i = 1; i < getNumNetworks(); i++)
+		newModels.add(newModels.getFirst()->clone());
+
+	for(auto m: newModels)
+		m->reset();
+
+	{
+		SimpleReadWriteLock::ScopedMultiWriteLock sl(lock);
+		currentModels.swapWith(newModels);
+	}
+
+	activeQualityConfiguration = qualityId;
+	return Result::ok();
 }
 
 void NeuralNetwork::setNumNetworks(int numNetworks, bool forceClone)
@@ -866,6 +1464,7 @@ Result NeuralNetwork::loadTensorFlowModel(const var& jsonData)
 	}
 
 	compiledModelJSON = NeuralJsonHelpers::createRTNeuralJSON(id, jsonData, "TensorFlow", getNumInputs(), getNumOutputs());
+	activeQualityConfiguration = Identifier("default");
 	backendState = BackendState::Dynamic;
 	
 	return Result::ok();
@@ -941,20 +1540,50 @@ bool NeuralNetwork::Factory::hasModel(const Identifier& id) const
 {
 	for(const auto& entry: registeredModels)
 	{
-		if(entry.first == id)
+		if(entry.id == id)
 			return true;
 	}
 
 	return false;
 }
 
-NeuralNetwork::ModelBase* NeuralNetwork::Factory::create(const Identifier& id)
+bool NeuralNetwork::Factory::hasModel(const Identifier& id, const Identifier& qualityId) const
 {
 	for(const auto& entry: registeredModels)
 	{
-		if(entry.first == id)
+		if(entry.id == id && entry.qualityId == qualityId)
+			return true;
+	}
+
+	return false;
+}
+
+StringArray NeuralNetwork::Factory::getQualityIds(const Identifier& id) const
+{
+	StringArray ids;
+
+	for(const auto& entry: registeredModels)
+	{
+		if(entry.id == id)
+			ids.addIfNotAlreadyThere(entry.qualityId.toString());
+	}
+
+	ids.sort(true);
+	return ids;
+}
+
+NeuralNetwork::ModelBase* NeuralNetwork::Factory::create(const Identifier& id)
+{
+	return create(id, Identifier("default"));
+}
+
+NeuralNetwork::ModelBase* NeuralNetwork::Factory::create(const Identifier& id, const Identifier& qualityId)
+{
+	for(const auto& entry: registeredModels)
+	{
+		if(entry.id == id && entry.qualityId == qualityId)
 		{
-			return entry.second();
+			return entry.create();
 		}
 	}
 

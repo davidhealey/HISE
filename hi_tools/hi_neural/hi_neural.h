@@ -107,23 +107,39 @@ struct NeuralNetwork: public ReferenceCountedObject,
 
 	struct Factory
 	{
+		using CreateFunction = std::function<ModelBase*()>;
+
+		struct Entry
+		{
+			Identifier id;
+			Identifier qualityId;
+			CreateFunction create;
+		};
+
 		Factory();
 
 		// Use this to register statically compiled models
 		template <typename T> void registerModel()
 		{
-			registeredModels.add({T::getStaticId(), T::create});
+			registerModel<T>(T::getStaticId(), T::getConfigId());
+		}
+
+		template <typename T> void registerModel(const Identifier& id, const Identifier& qualityId)
+		{
+			registeredModels.add(Entry { id, qualityId, T::create });
 		}
 
 		bool hasModel(const Identifier& id) const;
+		bool hasModel(const Identifier& id, const Identifier& qualityId) const;
+		StringArray getQualityIds(const Identifier& id) const;
 
 		ModelBase* create(const Identifier& id);
+		ModelBase* create(const Identifier& id, const Identifier& qualityId);
 
 	private:
 
-		using CreateFunction = std::function<ModelBase*()>;
 		CreateFunction defaultFunction;
-		Array<std::pair<Identifier, CreateFunction>> registeredModels;
+		Array<Entry> registeredModels;
 	};
 
 	struct Holder
@@ -170,6 +186,7 @@ struct NeuralNetwork: public ReferenceCountedObject,
 
 	/** Parses the model layout from the print() output of the Pytorch model. */
 	static var parseModelJSON(const File& modelFile);
+	static Result createCompiledModelHeader(const File& sourceFile, String& code);
 	
 	int getNumInputs() const;
 	int getNumOutputs() const;
@@ -196,9 +213,12 @@ struct NeuralNetwork: public ReferenceCountedObject,
 
 	var getModelJSON() const;
 	var getCompiledModelJSON() const;
-	Result writeCompiledModelJSON(const File& targetDirectory) const;
+	Result writeCompiledModelJSON(const File& targetDirectory, const var& qualityConfigurations) const;
 	BackendState getBackendState() const noexcept { return backendState; }
 	String getBackendStateName() const;
+	String getActiveQualityConfiguration() const { return activeQualityConfiguration.toString(); }
+	StringArray getQualityConfigurations() const;
+	Result setQualityConfiguration(const Identifier& qualityId);
 
 	/** This lets you create a number of copies of the same network that you then can address with the network index in both the reset and process call.
 	 *
@@ -226,6 +246,7 @@ private:
 	const Identifier id;
 
 	BackendState backendState = BackendState::Empty;
+	Identifier activeQualityConfiguration = Identifier("default");
 	var compiledModelJSON;
 
 	OwnedArray<ModelBase> currentModels;

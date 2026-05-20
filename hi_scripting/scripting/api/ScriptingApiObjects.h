@@ -1677,13 +1677,16 @@ namespace ScriptingObjects
 		var getModelJSON();
 
 		/** Writes the current model as canonical JSON for compiled neural export. */
-		bool writeCompiledModelJSON();
+		bool writeCompiledModelJSON(const var& qualityConfigurations);
 
 		/** Returns the active neural backend state. */
 		String getNetworkState() const;
 
 		/** Returns diagnostic information about the neural backend. */
 		var getNetworkInfo() const;
+
+		/** Swaps to a compiled quality configuration and resets the model. */
+		bool setQualityConfiguration(String qualityId);
 
 		// ================================================================================ API Methods
 

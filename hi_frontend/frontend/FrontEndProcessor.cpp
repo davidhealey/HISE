@@ -359,6 +359,10 @@ updater(*this)
 
 	getMacroManager().setMacroChain(synthChain);
 
+#if HISE_INCLUDE_RT_NEURAL
+	scriptnode::DspNetwork::registerStaticNeuralNetworks(getNeuralNetworks().getFactory());
+#endif
+
 #if USE_RAW_FRONTEND
 	rawDataHolder = createPresetRaw();
 #else

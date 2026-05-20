@@ -628,6 +628,10 @@ public:
 
 	static scriptnode::dll::FactoryBase* createStaticFactory();
 
+#if HISE_INCLUDE_RT_NEURAL
+	static void registerStaticNeuralNetworks(hise::NeuralNetwork::Factory* f);
+#endif
+
 	struct NetworkParameterHandler : public hise::ScriptParameterHandler
 	{
 		int getNumParameters() const final override { return root->getNumParameters(); }

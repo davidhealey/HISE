@@ -5802,9 +5802,10 @@ struct ScriptingObjects::ScriptNeuralNetwork::Wrapper
 	API_VOID_METHOD_WRAPPER_1(ScriptNeuralNetwork, loadPytorchModel);
 	API_VOID_METHOD_WRAPPER_1(ScriptNeuralNetwork, loadNAMModel);
 	API_METHOD_WRAPPER_1(ScriptNeuralNetwork, createModelJSONFromTextFile);
-	API_METHOD_WRAPPER_0(ScriptNeuralNetwork, writeCompiledModelJSON);
+	API_METHOD_WRAPPER_1(ScriptNeuralNetwork, writeCompiledModelJSON);
 	API_METHOD_WRAPPER_0(ScriptNeuralNetwork, getNetworkState);
 	API_METHOD_WRAPPER_0(ScriptNeuralNetwork, getNetworkInfo);
+	API_METHOD_WRAPPER_1(ScriptNeuralNetwork, setQualityConfiguration);
 	API_METHOD_WRAPPER_2(ScriptNeuralNetwork, loadOnnxModel);
 	API_METHOD_WRAPPER_3(ScriptNeuralNetwork, processFFTSpectrum);
 };
@@ -5822,9 +5823,10 @@ ScriptingObjects::ScriptNeuralNetwork::ScriptNeuralNetwork(ProcessorWithScriptin
 	ADD_API_METHOD_1(loadPytorchModel);
 	ADD_API_METHOD_1(loadNAMModel);
 	ADD_API_METHOD_0(getModelJSON);
-	ADD_API_METHOD_0(writeCompiledModelJSON);
+	ADD_API_METHOD_1(writeCompiledModelJSON);
 	ADD_API_METHOD_0(getNetworkState);
 	ADD_API_METHOD_0(getNetworkInfo);
+	ADD_API_METHOD_1(setQualityConfiguration);
 	ADD_API_METHOD_2(loadOnnxModel);
 	ADD_API_METHOD_3(processFFTSpectrum);
 
@@ -6128,13 +6130,13 @@ var ScriptingObjects::ScriptNeuralNetwork::getModelJSON()
 #endif
 }
 
-bool ScriptingObjects::ScriptNeuralNetwork::writeCompiledModelJSON()
+bool ScriptingObjects::ScriptNeuralNetwork::writeCompiledModelJSON(const var& qualityConfigurations)
 {
 #if HISE_INCLUDE_RT_NEURAL
 #if USE_BACKEND
 	auto dspFolder = getScriptProcessor()->getMainController_()->getCurrentFileHandler().getSubDirectory(FileHandlerBase::DspNetworks);
 	auto neuralFolder = dspFolder.getChildFile("NeuralNetworks");
-	auto r = nn->writeCompiledModelJSON(neuralFolder);
+	auto r = nn->writeCompiledModelJSON(neuralFolder, qualityConfigurations);
 
 	if(!r.wasOk())
 	{
@@ -6147,6 +6149,48 @@ bool ScriptingObjects::ScriptNeuralNetwork::writeCompiledModelJSON()
 	reportScriptError("writeCompiledModelJSON() is only available in the HISE backend");
 	return false;
 #endif
+#else
+	reportScriptError("You must enable HISE_INCLUDE_RT_NEURAL");
+	return false;
+#endif
+}
+
+bool ScriptingObjects::ScriptNeuralNetwork::setQualityConfiguration(String qualityId)
+{
+#if HISE_INCLUDE_RT_NEURAL
+	if(!Identifier::isValidIdentifier(qualityId))
+	{
+		reportScriptError("Invalid quality configuration name: " + qualityId);
+		return false;
+	}
+
+	Result result = Result::ok();
+	auto safeThis = WeakReference<ScriptNeuralNetwork>(this);
+
+	auto f = [safeThis, qualityId, &result](Processor*)
+	{
+		if(safeThis != nullptr)
+			result = safeThis->nn->setQualityConfiguration(Identifier(qualityId));
+
+		return SafeFunctionCall::OK;
+	};
+
+	auto p = dynamic_cast<Processor*>(getScriptProcessor());
+	auto& killStateHandler = getScriptProcessor()->getMainController_()->getKillStateHandler();
+
+	if(!killStateHandler.killVoicesAndCall(p, f, MainController::KillStateHandler::TargetThread::SampleLoadingThread))
+	{
+		reportScriptError("Could not switch neural network quality configuration");
+		return false;
+	}
+
+	if(result.failed())
+	{
+		reportScriptError(result.getErrorMessage());
+		return false;
+	}
+
+	return true;
 #else
 	reportScriptError("You must enable HISE_INCLUDE_RT_NEURAL");
 	return false;
@@ -6173,6 +6217,15 @@ var ScriptingObjects::ScriptNeuralNetwork::getNetworkInfo() const
 	obj->setProperty("numOutputs", nn->getNumOutputs());
 	obj->setProperty("numNetworks", nn->getNumNetworks());
 	obj->setProperty("hasCompiledModelJSON", !(nn->getCompiledModelJSON().isVoid() || nn->getCompiledModelJSON().isUndefined()));
+	obj->setProperty("activeQualityConfiguration", nn->getActiveQualityConfiguration());
+
+	Array<var> qualityConfigurations;
+	auto qualityIds = nn->getQualityConfigurations();
+
+	for(const auto& q: qualityIds)
+		qualityConfigurations.add(q);
+
+	obj->setProperty("qualityConfigurations", var(qualityConfigurations));
 
 	switch(nn->getBackendState())
 	{

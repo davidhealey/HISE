@@ -294,6 +294,12 @@ DspNetworkCompileExporter::CppFileLocationType DspNetworkCompileExporter::getLoc
 			return CompiledNetworkFile;
 	}
 
+	for(auto& neuralF: ctx.includedNeuralModelFiles)
+	{
+		if(neuralF.getFileNameWithoutExtension() == f.getFileNameWithoutExtension())
+			return CompiledNeuralModelFile;
+	}
+
 	for (auto& itf : ctx.includedThirdPartyFiles)
 	{
 		if (itf.getFileNameWithoutExtension() == f.getFileNameWithoutExtension())
@@ -468,6 +474,30 @@ void DspNetworkCompileExporter::runStatic(Context& ctx)
 	jassert(list.size() == unsortedList.size());
 
 	auto sourceDir = ctx.getFolder(BackendDllManager::FolderSubType::ProjucerSourceFolder);
+
+	for(auto neuralFile: neuralNetworkFiles)
+	{
+		String code;
+		auto r = NeuralNetwork::createCompiledModelHeader(neuralFile, code);
+
+		if(r.failed())
+		{
+			ctx.ok = ErrorCodes::CompileError;
+			ctx.errorMessage = r.getErrorMessage();
+			return;
+		}
+
+		auto target = sourceDir.getChildFile(neuralFile.getFileNameWithoutExtension() + "_neural").withFileExtension("h");
+
+		if(!target.replaceWithText(code))
+		{
+			ctx.ok = ErrorCodes::CompileError;
+			ctx.errorMessage = "Could not write generated neural model header: " + target.getFullPathName();
+			return;
+		}
+
+		ctx.includedNeuralModelFiles.add(target);
+	}
 
 
 
@@ -928,6 +958,25 @@ void DspNetworkCompileExporter::createIncludeFile(Context& ctx, const File& sour
 
 	somethingFound = false;
 
+	for(auto& f: fileList)
+	{
+		if(getLocationType(ctx, f) == CompiledNeuralModelFile)
+		{
+			if(!somethingFound)
+			{
+				i.addComment("Include compiled neural model files", cppgen::Base::CommentType::FillTo80Light);
+				somethingFound = true;
+			}
+
+			cppgen::Include m(i, sourceDir, f);
+		}
+	}
+
+	if(somethingFound)
+		i.addEmptyLine();
+
+	somethingFound = false;
+
 	for (auto& f : fileList)
 	{
 		if (getLocationType(ctx, f) == CompiledNetworkFile)
@@ -1347,6 +1396,25 @@ void DspNetworkCompileExporter::createMainCppFile(Context& ctx, bool isDllMainFi
 			StatementBlock sb(b);
 			b << "return new project::Factory();";
 		}
+
+		b.addEmptyLine();
+
+		b << "#if HISE_INCLUDE_RT_NEURAL";
+		b << "void scriptnode::DspNetwork::registerStaticNeuralNetworks(hise::NeuralNetwork::Factory* f)";
+		{
+			StatementBlock sb(b);
+
+			for(auto neuralFile: ctx.includedNeuralModelFiles)
+			{
+				auto id = neuralFile.getFileNameWithoutExtension();
+
+				if(id.endsWith("_neural"))
+					id = id.dropLastCharacters(7);
+
+				b << "project::registerCompiledNeuralNetworks_" + id + "(f);";
+			}
+		}
+		b << "#endif";
 	}
 
     b.addEmptyLine();
