@@ -71,6 +71,7 @@ juce::Array<juce::File> BackendDllManager::getNeuralNetworkFiles(MainController*
 
 	auto neuralDirectory = getSubFolder(mc, FolderSubType::NeuralNetworks);
 	auto files = neuralDirectory.findChildFiles(File::findFiles, false, "*.json");
+	files.addArray(neuralDirectory.findChildFiles(File::findFiles, false, "*.nam"));
 
 	for (int i = 0; i < files.size(); i++)
 	{

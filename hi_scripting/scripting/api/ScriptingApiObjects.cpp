@@ -6239,6 +6239,10 @@ var ScriptingObjects::ScriptNeuralNetwork::getNetworkInfo() const
 #if USE_BACKEND
 	auto dspFolder = getScriptProcessor()->getMainController_()->getCurrentFileHandler().getSubDirectory(FileHandlerBase::DspNetworks);
 	auto sourceFile = dspFolder.getChildFile("NeuralNetworks").getChildFile(nn->getId().toString()).withFileExtension("json");
+
+	if(!sourceFile.existsAsFile())
+		sourceFile = sourceFile.withFileExtension("nam");
+
 	obj->setProperty("source", sourceFile.getFullPathName());
 	obj->setProperty("sourceExists", sourceFile.existsAsFile());
 #endif

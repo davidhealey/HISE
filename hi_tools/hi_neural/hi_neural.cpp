@@ -196,6 +196,9 @@ namespace NeuralJsonHelpers
 	{
 		auto obj = new DynamicObject();
 		obj->setProperty("hise", createMetadata(id, "nam", "NAM", 1, 1));
+		obj->setProperty("version", sourceData["version"]);
+		obj->setProperty("architecture", sourceData["architecture"]);
+		obj->setProperty("config", sourceData["config"]);
 		obj->setProperty("weights", sourceData["weights"]);
 
 		return var(obj);
@@ -418,6 +421,222 @@ namespace NeuralJsonHelpers
 		return Result::fail("Unsupported static neural layer: " + type);
 	}
 #endif
+}
+
+namespace NAMHelpers
+{
+	struct LayerInfo
+	{
+		int inputSize = 0;
+		int conditionSize = 0;
+		int headSize = 0;
+		int channels = 0;
+		int kernelSize = 0;
+		std::vector<int> dilations;
+		bool headBias = false;
+	};
+
+	struct ModelInfo
+	{
+		std::vector<LayerInfo> layers;
+		int numWeights = 0;
+	};
+
+	static String getLayerSignature(const LayerInfo& l)
+	{
+		String s;
+		s << "input=" << l.inputSize << ", condition=" << l.conditionSize;
+		s << ", head=" << l.headSize << ", channels=" << l.channels;
+		s << ", kernel=" << l.kernelSize << ", dilations=[";
+
+		for(size_t i = 0; i < l.dilations.size(); i++)
+		{
+			if(i != 0)
+				s << ",";
+
+			s << l.dilations[i];
+		}
+
+		s << "], head_bias=" << (l.headBias ? "true" : "false");
+		return s;
+	}
+
+	static String getModelSignature(const ModelInfo& info)
+	{
+		String s;
+		s << info.layers.size() << " WaveNet layer array(s)";
+
+		for(size_t i = 0; i < info.layers.size(); i++)
+			s << "; layer " << (int)i << ": " << getLayerSignature(info.layers[i]);
+
+		return s;
+	}
+
+	static int getExpectedWeightCount(const ModelInfo& info)
+	{
+		int total = 0;
+
+		for(const auto& l: info.layers)
+		{
+			total += l.channels * l.inputSize;
+			total += (int)l.dilations.size() * (l.channels * l.channels * l.kernelSize + l.channels +
+				l.channels * l.conditionSize + l.channels * l.channels + l.channels);
+			total += l.headSize * l.channels;
+
+			if(l.headBias)
+				total += l.headSize;
+		}
+
+		return total + 1;
+	}
+
+	static Result parseLayer(const nlohmann::json& layer, LayerInfo& info, int index)
+	{
+		if(!layer.contains("activation") || !layer["activation"].is_string())
+			return Result::fail("NAM WaveNet layer " + String(index) + " must use a string activation");
+
+		if(layer.value("activation", std::string()) != "Tanh")
+			return Result::fail("Unsupported NAM activation in layer " + String(index) + ": " +
+				String(layer.value("activation", std::string())));
+
+		if(layer.value("gated", false))
+			return Result::fail("Gated NAM WaveNet layers are not supported");
+
+		if(layer.contains("film_params") || layer.contains("packing") || layer.contains("slimmable") ||
+			layer.contains("head_1x1_config") || layer.contains("head1x1") ||
+			layer.contains("layer_1x1_config") || layer.contains("layer1x1") ||
+			layer.contains("bottleneck") || layer.value("groups_input", 1) != 1 ||
+			layer.value("groups_input_mixin", 1) != 1)
+			return Result::fail("Unsupported advanced NAM WaveNet option in layer " + String(index));
+
+		info.inputSize = layer.value("input_size", 0);
+		info.conditionSize = layer.value("condition_size", 0);
+		info.channels = layer.value("channels", 0);
+		info.kernelSize = layer.value("kernel_size", 0);
+
+		if(layer.contains("head"))
+		{
+			const auto& head = layer["head"];
+
+			if(!head.is_object())
+				return Result::fail("NAM WaveNet layer " + String(index) + " head must be an object");
+
+			if(head.value("kernel_size", 1) != 1)
+				return Result::fail("NAM layer-array head convolution kernels other than 1 are not supported");
+
+			info.headSize = head.value("out_channels", 0);
+			info.headBias = head.value("bias", false);
+		}
+		else
+		{
+			info.headSize = layer.value("head_size", 0);
+			info.headBias = layer.value("head_bias", false);
+		}
+
+		if(info.inputSize <= 0 || info.conditionSize != 1 || info.headSize <= 0 ||
+			info.channels <= 0 || info.kernelSize <= 0)
+			return Result::fail("Invalid NAM WaveNet layer dimensions in layer " + String(index));
+
+		if(!layer.contains("dilations") || !layer["dilations"].is_array() || layer["dilations"].empty())
+			return Result::fail("NAM WaveNet layer " + String(index) + " is missing dilations");
+
+		for(const auto& d: layer["dilations"])
+			info.dilations.push_back(d.get<int>());
+
+		return Result::ok();
+	}
+
+	static Result parseModel(const nlohmann::json& data, ModelInfo& info)
+	{
+		if(data.contains("architecture") && data.value("architecture", std::string()) != "WaveNet")
+			return Result::fail("Only NAM WaveNet models are supported");
+
+		if(!data.contains("config") || !data["config"].is_object())
+			return Result::fail("NAM model is missing the config object");
+
+		const auto& config = data["config"];
+
+		if(config.contains("condition_dsp") || (config.contains("head") && !config["head"].is_null()))
+			return Result::fail("NAM condition_dsp and top-level heads are not supported");
+
+		if(!config.contains("layers") || !config["layers"].is_array() || config["layers"].empty())
+			return Result::fail("NAM model is missing config.layers");
+
+		for(size_t i = 0; i < config["layers"].size(); i++)
+		{
+			LayerInfo l;
+			auto r = parseLayer(config["layers"][(int)i], l, (int)i);
+
+			if(r.failed())
+				return r;
+
+			if(i != 0 && l.inputSize != info.layers.back().channels)
+				return Result::fail("NAM WaveNet layer " + String((int)i) + " input size does not match previous channels");
+
+			if(i != 0 && l.channels != info.layers.back().headSize)
+				return Result::fail("NAM WaveNet layer " + String((int)i) + " channels do not match previous head size");
+
+			info.layers.push_back(l);
+		}
+
+		if(!data.contains("weights") || !data["weights"].is_array())
+			return Result::fail("NAM model is missing the flat weights array");
+
+		info.numWeights = (int)data["weights"].size();
+		auto expected = getExpectedWeightCount(info);
+
+		if(info.numWeights != expected)
+			return Result::fail("NAM weight count mismatch. Expected " + String(expected) + ", got " +
+				String(info.numWeights) + " for " + getModelSignature(info));
+
+		return Result::ok();
+	}
+
+	static bool hasDilations(const LayerInfo& l, std::initializer_list<int> values)
+	{
+		if(l.dilations.size() != values.size())
+			return false;
+
+		int i = 0;
+
+		for(auto v: values)
+		{
+			if(l.dilations[(size_t)i++] != v)
+				return false;
+		}
+
+		return true;
+	}
+
+	static bool matchesRuntimeModel1(const ModelInfo& info)
+	{
+		return info.layers.size() == 2 &&
+			info.layers[0].inputSize == 1 && info.layers[0].conditionSize == 1 &&
+			info.layers[0].headSize == 8 && info.layers[0].channels == 16 &&
+			info.layers[0].kernelSize == 3 && !info.layers[0].headBias &&
+			hasDilations(info.layers[0], { 1, 2, 4, 8, 16, 32, 64, 128, 256, 512 }) &&
+			info.layers[1].inputSize == 16 && info.layers[1].conditionSize == 1 &&
+			info.layers[1].headSize == 1 && info.layers[1].channels == 8 &&
+			info.layers[1].kernelSize == 3 && info.layers[1].headBias &&
+			hasDilations(info.layers[1], { 1, 2, 4, 8, 16, 32, 64, 128, 256, 512 });
+	}
+
+	static bool matchesRuntimeModel2(const ModelInfo& info)
+	{
+		return info.layers.size() == 4 &&
+			info.layers[0].inputSize == 1 && info.layers[0].headSize == 8 &&
+			info.layers[0].channels == 8 && info.layers[0].kernelSize == 6 && !info.layers[0].headBias &&
+			hasDilations(info.layers[0], { 1, 3, 9, 27, 81, 243, 729 }) &&
+			info.layers[1].inputSize == 8 && info.layers[1].headSize == 8 &&
+			info.layers[1].channels == 8 && info.layers[1].kernelSize == 6 && !info.layers[1].headBias &&
+			hasDilations(info.layers[1], { 1, 3, 9, 27, 81, 243, 729 }) &&
+			info.layers[2].inputSize == 8 && info.layers[2].headSize == 8 &&
+			info.layers[2].channels == 8 && info.layers[2].kernelSize == 15 && !info.layers[2].headBias &&
+			hasDilations(info.layers[2], { 1, 16 }) &&
+			info.layers[3].inputSize == 8 && info.layers[3].headSize == 1 &&
+			info.layers[3].channels == 8 && info.layers[3].kernelSize == 6 && info.layers[3].headBias &&
+			hasDilations(info.layers[3], { 1, 3, 9, 27, 81, 243, 729 });
+	}
 }
 
 class PytorchParser
@@ -860,6 +1079,128 @@ var NeuralNetwork::parseModelJSON(const File& modelFile)
 	return PytorchParser::createJSONModel(modelFile.loadFileAsString());
 }
 
+#if USE_BACKEND
+static Result createCompiledNAMModelHeader(const File& sourceFile, const nlohmann::json& jsonData, String& code)
+{
+	auto id = sourceFile.getFileNameWithoutExtension();
+
+	if(!Identifier::isValidIdentifier(id))
+		return Result::fail("Invalid neural network ID: " + id);
+
+	if(jsonData.contains("hise") && jsonData["hise"].is_object())
+	{
+		const auto& hiseData = jsonData["hise"];
+		auto metadataId = String(hiseData.value("id", std::string()));
+
+		if(metadataId.isNotEmpty() && metadataId != id)
+			return Result::fail(sourceFile.getFileName() + " metadata ID does not match its filename");
+
+		if(hiseData.value("modelType", std::string()) != "nam")
+			return Result::fail(sourceFile.getFileName() + " is not a NAM compiled model JSON file");
+	}
+
+	NAMHelpers::ModelInfo info;
+	Result validation = Result::ok();
+
+	try
+	{
+		validation = NAMHelpers::parseModel(jsonData, info);
+	}
+	catch(std::exception& e)
+	{
+		return Result::fail("Could not validate NAM model " + sourceFile.getFileName() + ": " + String(e.what()));
+	}
+
+	if(validation.failed())
+		return validation;
+
+	auto className = NeuralJsonHelpers::getClassName(id, "default");
+
+	snex::cppgen::Base b(snex::cppgen::Base::OutputType::AddTabs);
+	b.setHeader([]() { return "#pragma once\n\n#include \"JuceHeader.h\"\n#include \"hi_tools/hi_neural/CompiledRTNeuralIncludes.h\""; });
+	b.addEmptyLine();
+
+	{
+		snex::cppgen::Namespace projectNamespace(b, "project", false);
+
+		{
+			snex::cppgen::Namespace neuralNamespace(b, "neural_" + id, false);
+
+			b << String("alignas(16) static const unsigned char ") + id + "_weights[] = { " +
+				NeuralJsonHelpers::getFloatBytes(jsonData["weights"]) + " };";
+			b << String("static constexpr int ") + id + "_weightsNumFloats = " + String(info.numWeights) + ";";
+			b.addEmptyLine();
+
+			for(size_t i = 0; i < info.layers.size(); i++)
+			{
+				const auto& l = info.layers[i];
+				String dilationType = id + "_dilations_" + String((int)i);
+				String layerType = id + "_layer_" + String((int)i) + "_t";
+				String dilations;
+
+				for(size_t j = 0; j < l.dilations.size(); j++)
+				{
+					if(j != 0)
+						dilations << ", ";
+
+					dilations << l.dilations[j];
+				}
+
+				b << String("using ") + dilationType + " = wavenet::Dilations<" + dilations + ">;";
+				b << String("using ") + layerType + " = wavenet::Layer_Array<float, " +
+					String(l.inputSize) + ", " + String(l.conditionSize) + ", " + String(l.headSize) + ", " +
+					String(l.channels) + ", " + String(l.kernelSize) + ", " + dilationType + ", " +
+					String(l.headBias ? "true" : "false") + ", hise::CompiledNeuralNetworkHelpers::FastMathsProvider>;";
+			}
+
+			b.addEmptyLine();
+			b << String("using ") + id + "_t = wavenet::Wavenet_Model<float, 1";
+
+			for(size_t i = 0; i < info.layers.size(); i++)
+				b.append(String(", ") + id + "_layer_" + String((int)i) + "_t");
+
+			b.append(">;");
+		}
+
+		b << String("struct ") + className + ": public hise::CompiledNeuralNetworkHelpers::ModelBase<1, 1>";
+
+		{
+			snex::cppgen::StatementBlock classBlock(b, true);
+			b << String("SN_NEURAL_NETWORK_ID(\"") + id + "\", \"default\");";
+			b << String("SN_NEURAL_CONSTRUCTOR(") + className + ");";
+			b << "void reset() override { obj.prewarm(); }";
+			b << "void process(const float* input, float* output) override";
+
+			{
+				snex::cppgen::StatementBlock processBlock(b);
+				b << "*output = obj.forward(*input);";
+			}
+
+			b << "void loadBakedWeights()";
+
+			{
+				snex::cppgen::StatementBlock weightBlock(b);
+				b << String("loadWavenetWeights(obj, neural_") + id + "::" + id + "_weights, neural_" +
+					id + "::" + id + "_weightsNumFloats);";
+			}
+
+			b << String("neural_") + id + "::" + id + "_t obj;";
+		}
+
+		b.addEmptyLine();
+		b << String("inline void registerCompiledNeuralNetworks_") + id + "(hise::NeuralNetwork::Factory* f)";
+
+		{
+			snex::cppgen::StatementBlock registerBlock(b);
+			b << String("f->registerModel<") + className + ">();";
+		}
+	}
+
+	code = b.toString();
+	return Result::ok();
+}
+#endif
+
 Result NeuralNetwork::createCompiledModelHeader(const File& sourceFile, String& code)
 {
 #if USE_BACKEND
@@ -875,10 +1216,18 @@ Result NeuralNetwork::createCompiledModelHeader(const File& sourceFile, String& 
 	}
 
 	if(!jsonData.contains("hise") || !jsonData["hise"].is_object())
+	{
+		if(sourceFile.hasFileExtension("nam"))
+			return createCompiledNAMModelHeader(sourceFile, jsonData, code);
+
 		return Result::fail(sourceFile.getFileName() + " is missing the hise metadata object");
+	}
 
 	const auto& hiseData = jsonData["hise"];
 	auto modelType = hiseData.value("modelType", std::string());
+
+	if(modelType == "nam")
+		return createCompiledNAMModelHeader(sourceFile, jsonData, code);
 
 	if(modelType != "rtneural")
 		return Result::fail(sourceFile.getFileName() + " is not an RTNeural compiled model JSON file");
@@ -1070,69 +1419,79 @@ Result NeuralNetwork::loadPytorchModel(const var& fullJson)
 
 
 
-struct NAMModel: public NeuralNetwork::ModelBase
+struct NAMMathsProvider
 {
-	using Dilations = wavenet::Dilations<1, 2, 4, 8, 16, 32, 64, 128, 256, 512>;
-
-	struct NAMMathsProvider
-	{
 	#if RTNEURAL_USE_EIGEN
-	    template <typename Matrix>
-	    static auto tanh (const Matrix& x)
-	    {
-	        // See: math_approx::tanh<3>
-	        const auto x_poly = x.array() * (1.0f + 0.183428244899f * x.array().square());
-	        return x_poly.array() * (x_poly.array().square() + 1.0f).array().rsqrt();
-	    }
+	template <typename Matrix> static auto tanh(const Matrix& x)
+	{
+		// See: math_approx::tanh<3>
+		const auto x_poly = x.array() * (1.0f + 0.183428244899f * x.array().square());
+		return x_poly.array() * (x_poly.array().square() + 1.0f).array().rsqrt();
+	}
 	#elif RTNEURAL_USE_XSIMD
-	    template <typename T>
-	    static T tanh (const T& x)
-	    {
-	        return math_approx::tanh<3> (x);
-	    }
+	template <typename T> static T tanh(const T& x)
+	{
+		return math_approx::tanh<3>(x);
+	}
 	#endif
-	};
+};
 
+using NAMRuntimeDilations10 = wavenet::Dilations<1, 2, 4, 8, 16, 32, 64, 128, 256, 512>;
+using NAMRuntimeDilations7 = wavenet::Dilations<1, 3, 9, 27, 81, 243, 729>;
+using NAMRuntimeDilations2 = wavenet::Dilations<1, 16>;
+
+using NAMRuntimeModel1 = wavenet::Wavenet_Model<float,
+	1,
+	wavenet::Layer_Array<float, 1, 1, 8, 16, 3, NAMRuntimeDilations10, false, NAMMathsProvider>,
+	wavenet::Layer_Array<float, 16, 1, 1, 8, 3, NAMRuntimeDilations10, true, NAMMathsProvider>>;
+
+using NAMRuntimeModel2 = wavenet::Wavenet_Model<float,
+	1,
+	wavenet::Layer_Array<float, 1, 1, 8, 8, 6, NAMRuntimeDilations7, false, NAMMathsProvider>,
+	wavenet::Layer_Array<float, 8, 1, 8, 8, 6, NAMRuntimeDilations7, false, NAMMathsProvider>,
+	wavenet::Layer_Array<float, 8, 1, 8, 8, 15, NAMRuntimeDilations2, false, NAMMathsProvider>,
+	wavenet::Layer_Array<float, 8, 1, 1, 8, 6, NAMRuntimeDilations7, true, NAMMathsProvider>>;
+
+template <typename ModelType> struct NAMModel: public NeuralNetwork::ModelBase
+{
 	NAMModel(const var& data_):
-	  ModelBase(),
-	  jsonData(data_)
+		ModelBase(),
+		jsonData(data_)
 	{
 		auto s = JSON::toString(jsonData, true);
 		loadWeights(s);
-	};
+	}
 
 	void reset() final
 	{
 		obj.prewarm();
-	};
+	}
 
 	void process(const float* input, float* output) final
 	{
 		*output = obj.forward(*input);
-	};
+	}
 
 	int getNumInputs() const final
 	{
 		return 1;
-	};
+	}
 
 	int getNumOutputs() const final
 	{
 		return 1;
-	};
+	}
 
 	ModelBase* clone() final
 	{
 		return new NAMModel(jsonData);
-	};
+	}
 
 	Result loadWeights(const String& jsonData) final
 	{
-		nlohmann::json model_json {};
-		auto j = nlohmann::json::parse(jsonData.toStdString());
-
 		try
 		{
+			auto j = nlohmann::json::parse(jsonData.toStdString());
 			obj.load_weights(j);
 		}
 		catch(std::exception& e)
@@ -1140,15 +1499,10 @@ struct NAMModel: public NeuralNetwork::ModelBase
 			return Result::fail(e.what());
 		}
         
-        return Result::ok();
-	};
+		return Result::ok();
+	}
 
-	wavenet::Wavenet_Model<float,
-                           1,
-                           wavenet::Layer_Array<float, 1, 1, 8, 16, 3, Dilations, false, NAMMathsProvider>,
-                           wavenet::Layer_Array<float, 16, 1, 1, 8, 3, Dilations, true, NAMMathsProvider>>
-
-	obj;
+	ModelType obj;
 
 	var jsonData;
 };
@@ -1156,11 +1510,41 @@ struct NAMModel: public NeuralNetwork::ModelBase
 Result NeuralNetwork::loadNAMModel(const var& jsonData)
 {
 	OwnedArray<ModelBase> nm;
+	nlohmann::json parsedJson;
+	NAMHelpers::ModelInfo info;
 
 	try
 	{
-		nm.add(new NAMModel(jsonData));
+		parsedJson = nlohmann::json::parse(JSON::toString(jsonData, true).toStdString());
+	}
+	catch(std::exception& e)
+	{
+		return Result::fail("Could not parse NAM model JSON: " + String(e.what()));
+	}
 
+	Result validation = Result::ok();
+
+	try
+	{
+		validation = NAMHelpers::parseModel(parsedJson, info);
+	}
+	catch(std::exception& e)
+	{
+		return Result::fail("Could not validate NAM model JSON: " + String(e.what()));
+	}
+
+	if(validation.failed())
+		return validation;
+
+	if(NAMHelpers::matchesRuntimeModel1(info))
+		nm.add(new NAMModel<NAMRuntimeModel1>(jsonData));
+	else if(NAMHelpers::matchesRuntimeModel2(info))
+		nm.add(new NAMModel<NAMRuntimeModel2>(jsonData));
+	else
+		return Result::fail("Unsupported runtime NAM WaveNet layout: " + NAMHelpers::getModelSignature(info));
+
+	try
+	{
 		for(int i = 1; i < getNumNetworks(); i++)
 			nm.add(nm.getFirst()->clone());
 	}

@@ -429,7 +429,7 @@ void DspNetworkCompileExporter::runStatic(Context& ctx)
 	auto unsortedListU = BackendDllManager::getNetworkFiles(ctx.getMainController(), true);
 
 	if(!neuralNetworkFiles.isEmpty())
-		ctx.logMessage("Found " + String(neuralNetworkFiles.size()) + " compiled neural network JSON file(s)");
+		ctx.logMessage("Found " + String(neuralNetworkFiles.size()) + " compiled neural network file(s)");
 
 	for (auto s : unsortedList)
 		unsortedListU.removeAllInstancesOf(s);
