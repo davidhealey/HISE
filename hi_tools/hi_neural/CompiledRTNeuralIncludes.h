@@ -18,9 +18,9 @@
 #include "RTNeural/RTNeural/wavenet/wavenet_model.hpp"
 #include "hi_neural.h"
 
-#define NEURAL_NETWORK_ID(id, config) SN_NODE_ID(id); static Identifier getConfigId() { return config; }
+#define SN_NEURAL_NETWORK_ID(id, config) SN_NODE_ID(id); static Identifier getConfigId() { return config; }
 
-#define NEURAL_CONSTRUCTOR(ClassName) ClassName() { loadBakedWeights(); reset(); }\
+#define SN_NEURAL_CONSTRUCTOR(ClassName) ClassName() { loadBakedWeights(); reset(); }\
 	static hise::NeuralNetwork::ModelBase* create() { return new ClassName(); } \
 	hise::NeuralNetwork::ModelBase* clone() override { return new ClassName(); }
 

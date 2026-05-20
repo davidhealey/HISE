@@ -286,7 +286,7 @@ namespace NeuralJsonHelpers
 			{
 				auto mathProvider = String(qualityData["mathProvider"].get<std::string>());
 				options.mathProvider = mathProvider == "fastMath" ?
-					"project::FastMathsProvider" : "default";
+					"hise::CompiledNeuralNetworkHelpers::FastMathsProvider" : "default";
 			}
 
 			if(qualityData.contains("sampleRateCorrection"))
@@ -350,9 +350,12 @@ namespace NeuralJsonHelpers
 		return Result::ok();
 	}
 
-	static Result writeLayerWeights(String& code, const String& className,
+#if USE_BACKEND
+	static Result writeLayerWeights(snex::cppgen::Base& code, const String& id,
 		const nlohmann::json& layer, int layerIndex)
 	{
+		code.addComment("Layer Weights", snex::cppgen::Base::CommentType::FillTo80Light);
+
 		if(!layer.contains("weights"))
 			return Result::fail("Layer " + String(layerIndex) + " is missing weights");
 
@@ -361,11 +364,11 @@ namespace NeuralJsonHelpers
 
 		for(size_t i = 0; i < weights.size(); i++)
 		{
-			auto arrayName = className + "_l" + String(layerIndex) + "_w" + String((int)i);
-			code << "alignas(16) static const unsigned char " << arrayName << "[] = { ";
-			code << getFloatBytes(weights[i]) << " };\n";
-			code << "static constexpr int " << arrayName << "NumFloats = ";
-			code << getFlatNumElements(weights[i]) << ";\n";
+			auto arrayName = id + "_l" + String(layerIndex) + "_w" + String((int)i);
+			code << String("alignas(16) static const unsigned char ") + arrayName + "[] = { " +
+				getFloatBytes(weights[i]) + " };";
+			code << String("static constexpr int ") + arrayName + "NumFloats = " +
+				String(getFlatNumElements(weights[i])) + ";";
 		}
 
 		if(type == "lstm" && weights.size() != 3)
@@ -377,41 +380,36 @@ namespace NeuralJsonHelpers
 		return Result::ok();
 	}
 
-	static Result writeLoadLayerCall(String& code, const String& namespaceName, const String& className,
+	static Result writeLoadLayerCall(snex::cppgen::Base& code, const String& id,
 		const nlohmann::json& layer, const RTNeural::StaticLayerInfo& info, int layerIndex)
 	{
 		auto type = String(layer["type"].get<std::string>());
-		auto prefix = namespaceName + "::" + className + "_l" + String(layerIndex) + "_w";
+		auto prefix = "neural_" + id + "::" + id + "_l" + String(layerIndex) + "_w";
 
 		if(type == "lstm")
 		{
-			code << "\t\tobj.template get<" << String(layerIndex) << ">().setWVals(";
-			code << namespaceName << "::loadMatrix(";
-			code << prefix << "0, " << prefix << "0NumFloats, " << info.weights[0].shape[0];
-			code << ", " << info.weights[0].shape[1] << "));\n";
-			code << "\t\tobj.template get<" << String(layerIndex) << ">().setUVals(";
-			code << namespaceName << "::loadMatrix(";
-			code << prefix << "1, " << prefix << "1NumFloats, " << info.weights[1].shape[0];
-			code << ", " << info.weights[1].shape[1] << "));\n";
-			code << "\t\t{ auto b = " << namespaceName << "::loadVector(";
-			code << prefix << "2, " << prefix << "2NumFloats); ";
-			code << "obj.template get<" << String(layerIndex) << ">().setBVals(b); }\n";
+			code << String("obj.template get<") + String(layerIndex) + ">().setWVals(" +
+				"loadMatrix(" + prefix + "0, " + prefix + "0NumFloats, " +
+				String(info.weights[0].shape[0]) + ", " + String(info.weights[0].shape[1]) + ")); ";
+			code << String("obj.template get<") + String(layerIndex) + ">().setUVals(" +
+				"loadMatrix(" + prefix + "1, " + prefix + "1NumFloats, " +
+				String(info.weights[1].shape[0]) + ", " + String(info.weights[1].shape[1]) + ")); ";
+			code << String("{ auto b = loadVector(") + prefix + "2, " + prefix + "2NumFloats); " +
+				"obj.template get<" + String(layerIndex) + ">().setBVals(b); }";
 
 			return Result::ok();
 		}
 
 		if(type == "dense" || type == "time-distributed-dense")
 		{
-			code << "\t\tobj.template get<" << String(layerIndex) << ">().setWeights(";
-			code << namespaceName << "::loadMatrixTransposed(";
-			code << prefix << "0, " << prefix << "0NumFloats, " << info.weights[0].shape[0];
-			code << ", " << info.weights[0].shape[1] << "));\n";
+			code << String("obj.template get<") + String(layerIndex) + ">().setWeights(" +
+				"loadMatrixTransposed(" + prefix + "0, " + prefix + "0NumFloats, " +
+				String(info.weights[0].shape[0]) + ", " + String(info.weights[0].shape[1]) + ")); ";
 
 			if(layer["weights"].size() > 1)
 			{
-				code << "\t\t{ auto b = " << namespaceName << "::loadVector(";
-				code << prefix << "1, " << prefix << "1NumFloats); ";
-				code << "obj.template get<" << String(layerIndex) << ">().setBias(b.data()); }\n";
+				code << String("{ auto b = loadVector(") + prefix + "1, " + prefix + "1NumFloats); " +
+					"obj.template get<" + String(layerIndex) + ">().setBias(b.data()); }";
 			}
 
 			return Result::ok();
@@ -419,6 +417,7 @@ namespace NeuralJsonHelpers
 
 		return Result::fail("Unsupported static neural layer: " + type);
 	}
+#endif
 }
 
 class PytorchParser
@@ -863,6 +862,7 @@ var NeuralNetwork::parseModelJSON(const File& modelFile)
 
 Result NeuralNetwork::createCompiledModelHeader(const File& sourceFile, String& code)
 {
+#if USE_BACKEND
 	nlohmann::json jsonData;
 
 	try
@@ -909,139 +909,137 @@ Result NeuralNetwork::createCompiledModelHeader(const File& sourceFile, String& 
 	if(qualityResult.failed())
 		return qualityResult;
 
-	code.clear();
-	code << "#pragma once\n\n";
-	code << "#include <cmath>\n";
-	code << "#include <cstring>\n";
-	code << "#include <vector>\n";
-	code << "#include \"JuceHeader.h\"\n";
-	code << "#include \"hi_tools/hi_neural/CompiledRTNeuralIncludes.h\"\n";
-	code << "#include \"hi_tools/hi_neural/hi_neural.h\"\n";
-	code << "\n";
-	code << "namespace project\n{\n\n";
-	code << "namespace neural_" << id << "\n{\n\n";
-	code << "struct FastMathsProvider\n{\n";
-	code << "\ttemplate <typename T> static T tanh(T x) { return math_approx::tanh<3>(x); }\n";
-	code << "\ttemplate <typename T> static T sigmoid(T x) { return math_approx::sigmoid<3>(x); }\n";
-	code << "\ttemplate <typename T> static T exp(T x)\n\t{\n";
-	code << "\t\tusing std::exp;\n";
-	code << "#if RTNEURAL_USE_XSIMD\n\t\tusing xsimd::exp;\n#endif\n";
-	code << "\t\treturn exp(x);\n\t}\n";
-	code << "};\n\n";
-	code << "static std::vector<float> loadVector(const unsigned char* data, int numFloats)\n{\n";
-	code << "\tstatic_assert(sizeof(float) == 4, \"Unexpected float size\");\n";
-	code << "\tstd::vector<float> values((size_t)numFloats);\n";
-	code << "\tstd::memcpy(values.data(), data, values.size() * sizeof(float));\n";
-	code << "\treturn values;\n}\n\n";
-	code << "static std::vector<std::vector<float>> loadMatrix(const unsigned char* data, int numFloats, int rows, int cols)\n{\n";
-	code << "\tauto flat = loadVector(data, numFloats);\n";
-	code << "\tstd::vector<std::vector<float>> m((size_t)rows, std::vector<float>((size_t)cols, 0.0f));\n";
-	code << "\tfor(int r = 0; r < rows; r++) for(int c = 0; c < cols; c++) m[(size_t)r][(size_t)c] = flat[(size_t)(r * cols + c)];\n";
-	code << "\treturn m;\n}\n\n";
-	code << "static std::vector<std::vector<float>> loadMatrixTransposed(const unsigned char* data, int numFloats, int rows, int cols)\n{\n";
-	code << "\tauto flat = loadVector(data, numFloats);\n";
-	code << "\tstd::vector<std::vector<float>> m((size_t)cols, std::vector<float>((size_t)rows, 0.0f));\n";
-	code << "\tfor(int r = 0; r < rows; r++) for(int c = 0; c < cols; c++) m[(size_t)c][(size_t)r] = flat[(size_t)(r * cols + c)];\n";
-	code << "\treturn m;\n}\n\n";
+	struct GeneratedQualityInfo
+	{
+		String qualityId;
+		String className;
+		RTNeural::StaticTypeOptions options;
+		RTNeural::StaticModelInfo info;
+	};
+
+	std::vector<GeneratedQualityInfo> generatedInfos;
 
 	for(const auto& qc: qualityConfigurations)
 	{
-		auto className = NeuralJsonHelpers::getClassName(id, qc.first);
-		auto options = NeuralJsonHelpers::createStaticTypeOptions(qc.first, qc.second);
+		GeneratedQualityInfo generatedInfo;
+		generatedInfo.qualityId = qc.first;
+		generatedInfo.className = NeuralJsonHelpers::getClassName(id, qc.first);
+		generatedInfo.options = NeuralJsonHelpers::createStaticTypeOptions(qc.first, qc.second);
+		generatedInfo.info = model->getStaticTypeInfo(generatedInfo.options);
 
-		if(options.mathProvider == "project::FastMathsProvider")
-			options.mathProvider = ("project::neural_" + id + "::FastMathsProvider").toStdString();
+		if(!generatedInfo.info.supported)
+			return Result::fail(id + " cannot be statically compiled: " + String(generatedInfo.info.error));
 
-		auto info = model->getStaticTypeInfo(options);
-
-		if(!info.supported)
-			return Result::fail(id + " cannot be statically compiled: " + String(info.error));
-
-		StringArray layerTypes;
-
-		for(size_t i = 0; i < info.layers.size(); i++)
-		{
-			layerTypes.add(String(info.layers[i].typeName));
-
-			auto r = NeuralJsonHelpers::writeLayerWeights(code, className, jsonData["layers"][(int)i], (int)i);
-
-			if(r.failed())
-				return r;
-		}
-
-		for(int i = 0; i < layerTypes.size(); i++)
-			code << "using " << className << "_l" << String(i) << "_t = " << layerTypes[i] << ";\n";
-
-		code << "using " << className << "_t = RTNeural::ModelT<float, ";
-		code << info.inputSize << ", " << info.outputSize;
-
-		for(int i = 0; i < layerTypes.size(); i++)
-			code << ", " << className << "_l" << String(i) << "_t";
-
-		code << ">;\n\n";
+		generatedInfos.push_back(generatedInfo);
 	}
 
-	code << "} // namespace neural_" << id << "\n\n";
+	snex::cppgen::Base b(snex::cppgen::Base::OutputType::AddTabs);
+	b.setHeader([]() { return "#pragma once\n\n#include \"JuceHeader.h\"\n#include \"hi_tools/hi_neural/CompiledRTNeuralIncludes.h\""; });
+	b.addEmptyLine();
 
-	for(const auto& qc: qualityConfigurations)
 	{
-		auto className = NeuralJsonHelpers::getClassName(id, qc.first);
-		auto options = NeuralJsonHelpers::createStaticTypeOptions(qc.first, qc.second);
+		snex::cppgen::Namespace projectNamespace(b, "project", false);
 
-		if(options.mathProvider == "project::FastMathsProvider")
-			options.mathProvider = ("project::neural_" + id + "::FastMathsProvider").toStdString();
-
-		auto info = model->getStaticTypeInfo(options);
-
-		code << "struct " << className << ": public hise::NeuralNetwork::ModelBase\n{\n";
-		code << "\t" << className << "() { loadBakedWeights(); reset(); }\n";
-		code << "\tstatic juce::Identifier getStaticId() { return juce::Identifier(\"" << id << "\"); }\n";
-		code << "\tstatic hise::NeuralNetwork::ModelBase* create() { return new " << className << "(); }\n";
-		code << "\tvoid reset() override { obj.reset(); }\n";
-		code << "\tint getNumInputs() const override { return " << info.inputSize << "; }\n";
-		code << "\tint getNumOutputs() const override { return " << info.outputSize << "; }\n";
-		code << "\thise::NeuralNetwork::ModelBase* clone() override { return new " << className << "(); }\n";
-		code << "\tjuce::Result loadWeights(const juce::String&) override\n\t{\n";
-		code << "\t\treturn juce::Result::fail(\"Compiled neural models use baked weights\");\n\t}\n";
-		code << "\tvoid process(const float* input, float* output) override\n\t{\n";
-		code << "\t\tobj.forward(input);\n";
-		code << "\t\tstd::memcpy(output, obj.getOutputs(), sizeof(float) * (size_t)getNumOutputs());\n\t}\n";
-		code << "\tvoid loadBakedWeights()\n\t{\n";
-
-		for(size_t i = 0; i < info.layers.size(); i++)
 		{
-			auto r = NeuralJsonHelpers::writeLoadLayerCall(code, "neural_" + id, className,
-				jsonData["layers"][(int)i], info.layers[i], (int)i);
+			snex::cppgen::Namespace neuralNamespace(b, "neural_" + id, false);
 
-			if(r.failed())
-				return r;
-		}
-
-		if(options.sampleRateCorrection != "none")
-		{
-			for(size_t i = 0; i < info.layers.size(); i++)
+			for(size_t i = 0; i < jsonData["layers"].size(); i++)
 			{
-				if(String(jsonData["layers"][(int)i]["type"].get<std::string>()) == "lstm")
-					code << "\t\tobj.template get<" << String((int)i) << ">().prepare(1.0f);\n";
+				auto r = NeuralJsonHelpers::writeLayerWeights(b, id, jsonData["layers"][(int)i], (int)i);
+
+				if(r.failed())
+					return r;
+			}
+
+			for(const auto& generatedInfo: generatedInfos)
+			{
+				StringArray layerTypes;
+
+				for(size_t i = 0; i < generatedInfo.info.layers.size(); i++)
+					layerTypes.add(String(generatedInfo.info.layers[i].typeName));
+
+				for(int i = 0; i < layerTypes.size(); i++)
+					b << String("using ") + generatedInfo.className + "_l" + String(i) + "_t = " + layerTypes[i] + ";";
+
+				b << String("using ") + generatedInfo.className + "_t = RTNeural::ModelT<float, ";
+				b.append(String(generatedInfo.info.inputSize) + ", " + String(generatedInfo.info.outputSize));
+
+				for(int i = 0; i < layerTypes.size(); i++)
+					b.append(String(", ") + generatedInfo.className + "_l" + String(i) + "_t");
+
+				b.append(">;");
+				b.addEmptyLine();
 			}
 		}
 
-		code << "\t}\n";
-		code << "\tneural_" << id << "::" << className << "_t obj;\n";
-		code << "};\n\n";
+		for(const auto& generatedInfo: generatedInfos)
+		{
+			const auto& className = generatedInfo.className;
+			const auto& info = generatedInfo.info;
+			const auto& options = generatedInfo.options;
+
+			b.addComment("Neural Network definition", snex::cppgen::Base::CommentType::FillTo80Light);
+
+			b << String("struct ") + className + ": public hise::CompiledNeuralNetworkHelpers::ModelBase<";
+			b.append(String(info.inputSize) + ", " + String(info.outputSize) + ">");
+
+			{
+				snex::cppgen::StatementBlock classBlock(b, true);
+				b << String("SN_NEURAL_NETWORK_ID(\"") + id + "\", \"" + generatedInfo.qualityId + "\");";
+				b << String("SN_NEURAL_CONSTRUCTOR(") + className + ");";
+				b << String("SN_DEFAULT_RESET(") + className + ");";
+				b << "void process(const float* input, float* output) override";
+
+				{
+					snex::cppgen::StatementBlock processBlock(b);
+					b << "obj.forward(input);";
+					b << "std::memcpy(output, obj.getOutputs(), sizeof(float) * (size_t)getNumOutputs());";
+				}
+
+				b << "void loadBakedWeights()";
+
+				{
+					snex::cppgen::StatementBlock weightBlock(b);
+
+					for(size_t i = 0; i < info.layers.size(); i++)
+					{
+						auto r = NeuralJsonHelpers::writeLoadLayerCall(b, id,
+							jsonData["layers"][(int)i], info.layers[i], (int)i);
+
+						if(r.failed())
+							return r;
+					}
+
+					if(options.sampleRateCorrection != "none")
+					{
+						for(size_t i = 0; i < info.layers.size(); i++)
+						{
+							if(String(jsonData["layers"][(int)i]["type"].get<std::string>()) == "lstm")
+								b << String("obj.template get<") + String((int)i) + ">().prepare(1.0f);";
+						}
+					}
+				}
+
+				b << String("neural_") + id + "::" + className + "_t obj;";
+			}
+
+			b.addEmptyLine();
+		}
+
+		b.addComment("Factory registration", snex::cppgen::Base::CommentType::FillTo80Light);
+
+		b << String("inline void registerCompiledNeuralNetworks_") + id + "(hise::NeuralNetwork::Factory* f)";
+
+		{
+			snex::cppgen::StatementBlock registerBlock(b);
+
+			for(const auto& generatedInfo: generatedInfos)
+				b << String("f->registerModel<") + generatedInfo.className + ">();";
+		}
 	}
 
-	code << "inline void registerCompiledNeuralNetworks_" << id << "(hise::NeuralNetwork::Factory* f)\n{\n";
-
-	for(const auto& qc: qualityConfigurations)
-	{
-		auto className = NeuralJsonHelpers::getClassName(id, qc.first);
-		code << "\tf->registerModel<" << className << ">(juce::Identifier(\"" << id;
-		code << "\"), juce::Identifier(\"" << qc.first << "\"));\n";
-	}
-
-	code << "}\n\n";
-	code << "} // namespace project\n";
+	code = b.toString();
+#endif
 
 	return Result::ok();
 }
