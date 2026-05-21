@@ -1624,7 +1624,12 @@ var ScriptExpansionReference::getImageList() const
 {
 	if (objectExists())
 	{
-		exp->pool->getImagePool().loadAllFilesFromProjectFolder();
+		// Only scan disk for FileBased expansions; for embedded types the DataProvider
+		// already knows about its resources and loadAllFilesFromProjectFolder() would
+		// clear the DataProvider (e.g. PublicIconProvider) that was set during initialise().
+		if (exp->getExpansionType() == Expansion::FileBased)
+			exp->pool->getImagePool().loadAllFilesFromProjectFolder();
+
 		auto refList = exp->pool->getImagePool().getListOfAllReferences(true);
 
 
@@ -2478,8 +2483,9 @@ void FullInstrumentExpansion::expansionPackLoaded(Expansion* e)
 
 struct PublicIconProvider : public PoolBase::DataProvider
 {
-	PublicIconProvider(PoolBase* pool, const String& baseString) :
-		DataProvider(pool)
+	PublicIconProvider(PoolBase* pool, const String& baseString, const String& expansionWildcard) :
+		DataProvider(pool),
+		wildcard(expansionWildcard)
 	{
 		mb.fromBase64Encoding(baseString);
 	}
@@ -2495,8 +2501,15 @@ struct PublicIconProvider : public PoolBase::DataProvider
 		return nullptr;
 	}
 
+	Array<PoolReference> getListOfAllEmbeddedReferences() const override
+	{
+		Array<PoolReference> refs;
+		refs.add(PoolReference(pool, wildcard + "Icon.png", pool->getFileType()));
+		return refs;
+	}
 
 	MemoryBlock mb;
+	String wildcard;
 };
 
 juce::Result FullInstrumentExpansion::initialise()
@@ -2539,7 +2552,7 @@ juce::Result FullInstrumentExpansion::initialise()
 		auto iconData = allData.getChildWithName(ExpansionIds::HeaderData).getChildWithName(ExpansionIds::Icon)[ExpansionIds::Data].toString();
 
 		if(iconData.isNotEmpty())
-			pool->getImagePool().setDataProvider(new PublicIconProvider(&pool->getImagePool(), iconData));
+			pool->getImagePool().setDataProvider(new PublicIconProvider(&pool->getImagePool(), iconData, getWildcard()));
 
 		fullyLoaded = false;
 
