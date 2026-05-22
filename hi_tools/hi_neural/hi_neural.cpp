@@ -1023,9 +1023,8 @@ struct DynamicModel: public NeuralNetwork::ModelBase
 	var layoutData;
 	String weightData;
 
-	JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(DynamicModel);
+JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(DynamicModel);
 };
-
 
 NeuralNetwork::Ptr NeuralNetwork::Holder::getOrCreate(const Identifier& id)
 {
@@ -1049,6 +1048,18 @@ StringArray NeuralNetwork::Holder::getIdList() const
 	return sa;
 }
 
+void NeuralNetwork::Holder::unloadCompiledModels()
+{
+	for(auto nn: networks)
+		nn->unloadCompiledModel();
+}
+
+void NeuralNetwork::Holder::refreshCompiledModels()
+{
+	for(auto nn: networks)
+		nn->refreshCompiledModel(BackendState::CompiledDll);
+}
+
 NeuralNetwork::NeuralNetwork(const Identifier& id_, Factory* f):
 	id(id_),
     factory(f)
@@ -1065,12 +1076,68 @@ NeuralNetwork::NeuralNetwork(const Identifier& id_, Factory* f):
 	}
 
 	currentModels.add(f->create(id, activeQualityConfiguration));
+
+	if(backendState == BackendState::CompiledLinked && currentModels.getFirst()->isDllModel())
+		backendState = BackendState::CompiledDll;
 }
 
 NeuralNetwork::~NeuralNetwork()
 {
     SimpleReadWriteLock::ScopedMultiWriteLock sl(lock);
+	for(auto model: currentModels)
+		model->unload();
     currentModels.clear();
+}
+
+void NeuralNetwork::unloadCompiledModel()
+{
+	if(backendState != BackendState::CompiledDll)
+		return;
+
+	OwnedArray<ModelBase> nm;
+
+	for(auto model: currentModels)
+		model->unload();
+
+	for(int i = 0; i < jmax(1, currentModels.size()); i++)
+		nm.add(new EmptyModel());
+
+	{
+		SimpleReadWriteLock::ScopedMultiWriteLock sl(lock);
+		currentModels.swapWith(nm);
+	}
+
+	backendState = BackendState::Empty;
+}
+
+void NeuralNetwork::refreshCompiledModel(BackendState compiledState)
+{
+	if(backendState == BackendState::Dynamic || !factory->hasModel(id))
+		return;
+
+	if(!factory->hasModel(id, activeQualityConfiguration))
+	{
+		auto ids = factory->getQualityIds(id);
+
+		if(!ids.isEmpty())
+			activeQualityConfiguration = Identifier(ids[0]);
+	}
+
+	OwnedArray<ModelBase> nm;
+	auto numModels = jmax(1, currentModels.size());
+
+	nm.add(factory->create(id, activeQualityConfiguration));
+
+	for(int i = 1; i < numModels; i++)
+		nm.add(nm.getFirst()->clone());
+
+	{
+		SimpleReadWriteLock::ScopedMultiWriteLock sl(lock);
+		currentModels.swapWith(nm);
+	}
+
+	backendState = compiledState;
+	reset(-1);
 }
 
 NeuralNetwork::Ptr NeuralNetwork::clone(int numNetworks)
@@ -1201,6 +1268,19 @@ static Result createCompiledNAMModelHeader(const File& sourceFile, const nlohman
 			}
 
 			b << String("neural_") + id + "::" + id + "_t obj;";
+		}
+
+		b.addEmptyLine();
+		b << String("inline int getNumCompiledNeuralModels_") + id + "() { return 1; }";
+		b << String("inline const char* getCompiledNeuralModelId_") + id + "(int) { return \"" + id + "\"; }";
+		b << String("inline const char* getCompiledNeuralModelQualityId_") + id + "(int) { return \"default\"; }";
+		b << String("inline int getCompiledNeuralModelNumInputs_") + id + "(int) { return 1; }";
+		b << String("inline int getCompiledNeuralModelNumOutputs_") + id + "(int) { return 1; }";
+		b << String("inline hise::NeuralNetwork::ModelBase* createCompiledNeuralModel_") + id + "(int index)";
+
+		{
+			snex::cppgen::StatementBlock createBlock(b);
+			b << String("return index == 0 ? new ") + className + "() : nullptr;";
 		}
 
 		b.addEmptyLine();
@@ -1392,6 +1472,53 @@ Result NeuralNetwork::createCompiledModelHeader(const File& sourceFile, String& 
 		}
 
 		b.addComment("Factory registration", snex::cppgen::Base::CommentType::FillTo80Light);
+		b << String("inline int getNumCompiledNeuralModels_") + id + "() { return " + String((int)generatedInfos.size()) + "; }";
+		b << String("inline const char* getCompiledNeuralModelId_") + id + "(int) { return \"" + id + "\"; }";
+		b << String("inline const char* getCompiledNeuralModelQualityId_") + id + "(int index)";
+
+		{
+			snex::cppgen::StatementBlock sb(b);
+
+			for(size_t i = 0; i < generatedInfos.size(); i++)
+				b << "if(index == " + String((int)i) + ") return \"" + generatedInfos[i].qualityId + "\";";
+
+			b << "return \"default\";";
+		}
+
+		b << String("inline int getCompiledNeuralModelNumInputs_") + id + "(int index)";
+
+		{
+			snex::cppgen::StatementBlock sb(b);
+
+			for(size_t i = 0; i < generatedInfos.size(); i++)
+				b << "if(index == " + String((int)i) + ") return " + String(generatedInfos[i].info.inputSize) + ";";
+
+			b << "return 0;";
+		}
+
+		b << String("inline int getCompiledNeuralModelNumOutputs_") + id + "(int index)";
+
+		{
+			snex::cppgen::StatementBlock sb(b);
+
+			for(size_t i = 0; i < generatedInfos.size(); i++)
+				b << "if(index == " + String((int)i) + ") return " + String(generatedInfos[i].info.outputSize) + ";";
+
+			b << "return 0;";
+		}
+
+		b << String("inline hise::NeuralNetwork::ModelBase* createCompiledNeuralModel_") + id + "(int index)";
+
+		{
+			snex::cppgen::StatementBlock sb(b);
+
+			for(size_t i = 0; i < generatedInfos.size(); i++)
+				b << "if(index == " + String((int)i) + ") return new " + generatedInfos[i].className + "();";
+
+			b << "return nullptr;";
+		}
+
+		b.addEmptyLine();
 
 		b << String("inline void registerCompiledNeuralNetworks_") + id + "(hise::NeuralNetwork::Factory* f)";
 
@@ -1932,6 +2059,17 @@ struct MyFunk: public CompiledModel<pimpl::MyFunk_t>
 NeuralNetwork::Factory::Factory()
 {
 	defaultFunction = [](){ return new EmptyModel(); };
+}
+
+void NeuralNetwork::Factory::registerModel(const Identifier& id, const Identifier& qualityId,
+	const CreateFunction& create)
+{
+	registeredModels.add(Entry { id, qualityId, create });
+}
+
+void NeuralNetwork::Factory::clearCompiledModels()
+{
+	registeredModels.clear();
 }
 
 bool NeuralNetwork::Factory::hasModel(const Identifier& id) const

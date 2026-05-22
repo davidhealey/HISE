@@ -1,5 +1,7 @@
 #pragma once
 
+namespace scriptnode { namespace dll { struct ProjectDll; } }
+
 namespace hise
 {
 using namespace juce;
@@ -89,6 +91,8 @@ struct NeuralNetwork: public ReferenceCountedObject,
 		virtual int getNumOutputs() const = 0;
 		virtual ModelBase* clone() = 0;
 		virtual Result loadWeights(const String& jsonData) = 0;
+		virtual void unload() {}
+		virtual bool isDllModel() const { return false; }
         
         JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(ModelBase);
 	};
@@ -118,6 +122,8 @@ struct NeuralNetwork: public ReferenceCountedObject,
 
 		Factory();
 
+		virtual ~Factory() {};
+
 		// Use this to register statically compiled models
 		template <typename T> void registerModel()
 		{
@@ -126,12 +132,14 @@ struct NeuralNetwork: public ReferenceCountedObject,
 
 		template <typename T> void registerModel(const Identifier& id, const Identifier& qualityId)
 		{
-			registeredModels.add(Entry { id, qualityId, T::create });
+			registerModel(id, qualityId, T::create);
 		}
 
 		bool hasModel(const Identifier& id) const;
 		bool hasModel(const Identifier& id, const Identifier& qualityId) const;
 		StringArray getQualityIds(const Identifier& id) const;
+		void clearCompiledModels();
+		void registerModel(const Identifier& id, const Identifier& qualityId, const CreateFunction& create);
 
 		ModelBase* create(const Identifier& id);
 		ModelBase* create(const Identifier& id, const Identifier& qualityId);
@@ -159,6 +167,9 @@ struct NeuralNetwork: public ReferenceCountedObject,
 
 		/** Returns a list of all created networks. */
 		StringArray getIdList() const;
+		void unloadCompiledModels();
+		void refreshCompiledModels();
+		void registerDllModels(scriptnode::dll::ProjectDll* dll);
 
         Factory* getFactory() { return f; }
         
@@ -219,6 +230,8 @@ struct NeuralNetwork: public ReferenceCountedObject,
 	String getActiveQualityConfiguration() const { return activeQualityConfiguration.toString(); }
 	StringArray getQualityConfigurations() const;
 	Result setQualityConfiguration(const Identifier& qualityId);
+	void unloadCompiledModel();
+	void refreshCompiledModel(BackendState compiledState);
 
 	/** This lets you create a number of copies of the same network that you then can address with the network index in both the reset and process call.
 	 *

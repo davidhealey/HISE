@@ -493,7 +493,7 @@ namespace dll
 	{
 		// This is just used to check whether the dll is deprecated and needs to be recompiled...
 		// (It will be bumped whenever a breaking change into the DLL API is introduced)...
-		static constexpr int DllUpdateCounter = 8;
+		static constexpr int DllUpdateCounter = 9;
 
 		using Ptr = ReferenceCountedObjectPtr<ProjectDll>;
 
@@ -510,6 +510,16 @@ namespace dll
 			ClearError,
 			IsThirdPartyNode,
 			GetDLLVersionCounter,
+			GetNumNeuralModels,
+			GetNeuralModelId,
+			GetNeuralModelQualityId,
+			GetNeuralModelNumInputs,
+			GetNeuralModelNumOutputs,
+			CreateNeuralModel,
+			CloneNeuralModel,
+			DestroyNeuralModel,
+			ResetNeuralModel,
+			ProcessNeuralModel,
 			numFunctions
 		};
 
@@ -526,6 +536,16 @@ namespace dll
 		typedef void(*ClearError)();
 		typedef bool(*IsThirdPartyNode)(int);
 		typedef int(*GetDllVersionCounter)();
+		typedef int(*GetNumNeuralModels)();
+		typedef size_t(*GetNeuralModelId)(int, char*);
+		typedef size_t(*GetNeuralModelQualityId)(int, char*);
+		typedef int(*GetNeuralModelNumInputs)(int);
+		typedef int(*GetNeuralModelNumOutputs)(int);
+		typedef void*(*CreateNeuralModel)(int);
+		typedef void*(*CloneNeuralModel)(void*);
+		typedef void(*DestroyNeuralModel)(void*);
+		typedef void(*ResetNeuralModel)(void*);
+		typedef void(*ProcessNeuralModel)(void*, const float*, float*);
 
 		int getWrapperType(int index) const;
 
@@ -557,6 +577,17 @@ namespace dll
 		String getInitError() const { return r.getErrorMessage(); }
 
 		int getHash(int index) const;
+
+		int getNumNeuralModels() const;
+		String getNeuralModelId(int index) const;
+		String getNeuralModelQualityId(int index) const;
+		int getNeuralModelNumInputs(int index) const;
+		int getNeuralModelNumOutputs(int index) const;
+		void* createNeuralModel(int index) const;
+		void* cloneNeuralModel(void* model) const;
+		void destroyNeuralModel(void* model) const;
+		void resetNeuralModel(void* model) const;
+		void processNeuralModel(void* model, const float* input, float* output) const;
 
         File getDllFile() const { return loadedFile; }
         
