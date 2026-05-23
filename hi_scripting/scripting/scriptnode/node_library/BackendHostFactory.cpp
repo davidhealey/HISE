@@ -42,7 +42,7 @@ namespace
 {
 struct EmptyDllNeuralModel: public NeuralNetwork::ModelBase
 {
-	ModelBase* clone() override { return new EmptyDllNeuralModel(); }
+	NeuralNetwork::ModelBase* clone() override { return new EmptyDllNeuralModel(); }
 	void process(const float*, float*) override {}
 	void reset() override {}
 	int getNumInputs() const override { return 0; }
@@ -109,7 +109,7 @@ struct DllCompiledNeuralModel: public NeuralNetwork::ModelBase
 	int getNumInputs() const override { return numInputs; }
 	int getNumOutputs() const override { return numOutputs; }
 
-	ModelBase* clone() override
+	NeuralNetwork::ModelBase* clone() override
 	{
 		if(handle != nullptr && dll != nullptr)
 		{
@@ -153,11 +153,13 @@ void NeuralNetwork::Holder::registerDllModels(scriptnode::dll::ProjectDll* dll)
 
 		auto id = Identifier(idString);
 		auto qualityId = Identifier(qualityString);
+		auto numInputs = dllToUse->getNeuralModelNumInputs(i);
+		auto numOutputs = dllToUse->getNeuralModelNumOutputs(i);
 
 		f->registerModel(id, qualityId, [dllToUse, i]() -> NeuralNetwork::ModelBase*
 		{
 			return new DllCompiledNeuralModel(dllToUse, i);
-		});
+		}, numInputs, numOutputs);
 	}
 }
 #endif
@@ -395,6 +397,21 @@ juce::var BackendDllManager::getStatistics()
 		}
 
 		obj->setProperty("Nodes", dllNodes);
+
+#if HISE_INCLUDE_RT_NEURAL
+		Array<var> neuralNetworks;
+
+		for(int i = 0; i < projectDll->getNumNeuralModels(); i++)
+		{
+			DynamicObject::Ptr neuralNetwork = new DynamicObject();
+			neuralNetwork->setProperty("Id", projectDll->getNeuralModelId(i));
+			neuralNetwork->setProperty("Configuration", projectDll->getNeuralModelQualityId(i));
+
+			neuralNetworks.add(var(neuralNetwork.get()));
+		}
+
+		obj->setProperty("NeuralNetworks", neuralNetworks);
+#endif
 	}
 
 	return var(obj.get());

@@ -1250,8 +1250,10 @@ static Result createCompiledNAMModelHeader(const File& sourceFile, const nlohman
 		{
 			snex::cppgen::StatementBlock classBlock(b, true);
 			b << String("SN_NEURAL_NETWORK_ID(\"") + id + "\", \"default\");";
-			b << String("SN_NEURAL_CONSTRUCTOR(") + className + ");";
-			b << "void reset() override { obj.prewarm(); }";
+			b << String(className) + "() { loadBakedWeights(); obj.prewarm(); }";
+			b << String("static hise::NeuralNetwork::ModelBase* create() { return new ") + className + "(); }";
+			b << String("hise::NeuralNetwork::ModelBase* clone() override { return new ") + className + "(); }";
+			b << "void reset() override { obj.reset(); }";
 			b << "void process(const float* input, float* output) override";
 
 			{
@@ -1602,12 +1604,14 @@ template <typename ModelType> struct NAMModel: public NeuralNetwork::ModelBase
 		jsonData(data_)
 	{
 		auto s = JSON::toString(jsonData, true);
-		loadWeights(s);
+
+		if(loadWeights(s).wasOk())
+			obj.prewarm();
 	}
 
 	void reset() final
 	{
-		obj.prewarm();
+		obj.reset();
 	}
 
 	void process(const float* input, float* output) final
@@ -2062,9 +2066,9 @@ NeuralNetwork::Factory::Factory()
 }
 
 void NeuralNetwork::Factory::registerModel(const Identifier& id, const Identifier& qualityId,
-	const CreateFunction& create)
+	const CreateFunction& create, int numInputs, int numOutputs)
 {
-	registeredModels.add(Entry { id, qualityId, create });
+	registeredModels.add(Entry { id, qualityId, create, numInputs, numOutputs });
 }
 
 void NeuralNetwork::Factory::clearCompiledModels()
@@ -2106,6 +2110,56 @@ StringArray NeuralNetwork::Factory::getQualityIds(const Identifier& id) const
 
 	ids.sort(true);
 	return ids;
+}
+
+int NeuralNetwork::Factory::getNumModels() const
+{
+	return registeredModels.size();
+}
+
+Identifier NeuralNetwork::Factory::getModelId(int index) const
+{
+	if(isPositiveAndBelow(index, registeredModels.size()))
+		return registeredModels[index].id;
+
+	jassertfalse;
+	return {};
+}
+
+Identifier NeuralNetwork::Factory::getModelQualityId(int index) const
+{
+	if(isPositiveAndBelow(index, registeredModels.size()))
+		return registeredModels[index].qualityId;
+
+	jassertfalse;
+	return {};
+}
+
+int NeuralNetwork::Factory::getModelNumInputs(int index) const
+{
+	if(isPositiveAndBelow(index, registeredModels.size()))
+		return registeredModels[index].numInputs;
+
+	jassertfalse;
+	return 0;
+}
+
+int NeuralNetwork::Factory::getModelNumOutputs(int index) const
+{
+	if(isPositiveAndBelow(index, registeredModels.size()))
+		return registeredModels[index].numOutputs;
+
+	jassertfalse;
+	return 0;
+}
+
+NeuralNetwork::ModelBase* NeuralNetwork::Factory::createByIndex(int index)
+{
+	if(isPositiveAndBelow(index, registeredModels.size()))
+		return registeredModels[index].create();
+
+	jassertfalse;
+	return nullptr;
 }
 
 NeuralNetwork::ModelBase* NeuralNetwork::Factory::create(const Identifier& id)

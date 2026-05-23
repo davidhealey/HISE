@@ -118,6 +118,8 @@ struct NeuralNetwork: public ReferenceCountedObject,
 			Identifier id;
 			Identifier qualityId;
 			CreateFunction create;
+			int numInputs = 0;
+			int numOutputs = 0;
 		};
 
 		Factory();
@@ -132,14 +134,22 @@ struct NeuralNetwork: public ReferenceCountedObject,
 
 		template <typename T> void registerModel(const Identifier& id, const Identifier& qualityId)
 		{
-			registerModel(id, qualityId, T::create);
+			registerModel(id, qualityId, T::create, T::StaticNumInputs, T::StaticNumOutputs);
 		}
 
 		bool hasModel(const Identifier& id) const;
 		bool hasModel(const Identifier& id, const Identifier& qualityId) const;
 		StringArray getQualityIds(const Identifier& id) const;
 		void clearCompiledModels();
-		void registerModel(const Identifier& id, const Identifier& qualityId, const CreateFunction& create);
+		void registerModel(const Identifier& id, const Identifier& qualityId, const CreateFunction& create,
+			int numInputs=0, int numOutputs=0);
+
+		int getNumModels() const;
+		Identifier getModelId(int index) const;
+		Identifier getModelQualityId(int index) const;
+		int getModelNumInputs(int index) const;
+		int getModelNumOutputs(int index) const;
+		ModelBase* createByIndex(int index);
 
 		ModelBase* create(const Identifier& id);
 		ModelBase* create(const Identifier& id, const Identifier& qualityId);

@@ -1267,11 +1267,86 @@ void DspNetworkCompileExporter::createMainCppFile(Context& ctx, bool isDllMainFi
 				b << def;
 			}
 		}
+
+		s.flushIfNot();
+
+		b.addEmptyLine();
+		b << "#if HISE_INCLUDE_RT_NEURAL";
+		{
+			DefinitionBase nbc(b, "hise::NeuralNetwork::Factory");
+			Struct ns(b, "NeuralFactory", { &nbc }, {});
+
+			b << "NeuralFactory()";
+
+			{
+				cppgen::StatementBlock bk(b);
+
+				for(auto neuralFile: ctx.includedNeuralModelFiles)
+				{
+					auto id = neuralFile.getFileNameWithoutExtension();
+
+					if(id.endsWith("_neural"))
+						id = id.dropLastCharacters(7);
+
+					b << "project::registerCompiledNeuralNetworks_" + id + "(this);";
+				}
+			}
+
+			b << "void* cloneModel(void* model) const";
+
+			{
+				cppgen::StatementBlock bk(b);
+				b << "if(auto m = static_cast<hise::NeuralNetwork::ModelBase*>(model))";
+
+				{
+					cppgen::StatementBlock ifBlock(b);
+					b << "return m->clone();";
+				}
+
+				b << "return nullptr;";
+			}
+
+			b << "void destroyModel(void* model) const";
+
+			{
+				cppgen::StatementBlock bk(b);
+				b << "delete static_cast<hise::NeuralNetwork::ModelBase*>(model);";
+			}
+
+			b << "void resetModel(void* model) const";
+
+			{
+				cppgen::StatementBlock bk(b);
+				b << "if(auto m = static_cast<hise::NeuralNetwork::ModelBase*>(model))";
+
+				{
+					cppgen::StatementBlock ifBlock(b);
+					b << "m->reset();";
+				}
+			}
+
+			b << "void processModel(void* model, const float* input, float* output) const";
+
+			{
+				cppgen::StatementBlock bk(b);
+				b << "if(auto m = static_cast<hise::NeuralNetwork::ModelBase*>(model))";
+
+				{
+					cppgen::StatementBlock ifBlock(b);
+					b << "m->process(input, output);";
+				}
+			}
+		}
+
+		b << "#endif";
 	}
 
 	if (isDllMainFile)
 	{
 		b << "project::Factory f;";
+		b << "#if HISE_INCLUDE_RT_NEURAL";
+		b << "project::NeuralFactory nf;";
+		b << "#endif";
 
 		b.addEmptyLine();
 
@@ -1395,129 +1470,53 @@ void DspNetworkCompileExporter::createMainCppFile(Context& ctx, bool isDllMainFi
 			b << "DLL_EXPORT int getNumNeuralModels()";
 			StatementBlock bk(b);
 			b << "#if HISE_INCLUDE_RT_NEURAL";
-
-			String def;
-			def << "return ";
-
-			if(ctx.includedNeuralModelFiles.isEmpty())
-			{
-				def << "0";
-			}
-			else
-			{
-				for(int i = 0; i < ctx.includedNeuralModelFiles.size(); i++)
-				{
-					auto id = ctx.includedNeuralModelFiles[i].getFileNameWithoutExtension();
-
-					if(id.endsWith("_neural"))
-						id = id.dropLastCharacters(7);
-
-					if(i != 0)
-						def << " + ";
-
-					def << "project::getNumCompiledNeuralModels_" << id << "()";
-				}
-			}
-
-			def << ";";
-			b << def;
+			b << "return nf.getNumModels();";
 			b << "#else";
 			b << "return 0;";
 			b << "#endif";
 		}
 
-		auto addNeuralStringGetter = [&b, &ctx](const String& methodName, const String& helperName)
+		auto addNeuralStringGetter = [&b](const String& methodName, const String& factoryMethodName)
 		{
 			b.addEmptyLine();
 			b << "DLL_EXPORT size_t " + methodName + "(int index, char* t)";
 			StatementBlock bk(b);
-			b << "if(index < 0) return HelperFunctions::writeString(t, \"\");";
 			b << "#if HISE_INCLUDE_RT_NEURAL";
-			b << "int localIndex = index;";
-
-			for(auto neuralFile: ctx.includedNeuralModelFiles)
-			{
-				auto id = neuralFile.getFileNameWithoutExtension();
-
-				if(id.endsWith("_neural"))
-					id = id.dropLastCharacters(7);
-
-				b << "if(localIndex < project::getNumCompiledNeuralModels_" + id + "())";
-				{
-					StatementBlock ifBlock(b);
-					String def;
-					def << "return HelperFunctions::writeString(t, String(project::" << helperName << "_" << id;
-					def << "(localIndex)).getCharPointer());";
-					b << def;
-				}
-
-				b << "localIndex -= project::getNumCompiledNeuralModels_" + id + "();";
-			}
-
+			b << "return HelperFunctions::writeString(t, nf." + factoryMethodName + "(index).toString().getCharPointer());";
+			b << "#else";
+			b << "ignoreUnused(index);";
 			b << "#endif";
 			b << "return HelperFunctions::writeString(t, \"\");";
 		};
 
-		addNeuralStringGetter("getNeuralModelId", "getCompiledNeuralModelId");
-		addNeuralStringGetter("getNeuralModelQualityId", "getCompiledNeuralModelQualityId");
+		addNeuralStringGetter("getNeuralModelId", "getModelId");
+		addNeuralStringGetter("getNeuralModelQualityId", "getModelQualityId");
 
-		auto addNeuralIntGetter = [&b, &ctx](const String& methodName, const String& helperName)
+		auto addNeuralIntGetter = [&b](const String& methodName, const String& factoryMethodName)
 		{
 			b.addEmptyLine();
 			b << "DLL_EXPORT int " + methodName + "(int index)";
 			StatementBlock bk(b);
-			b << "if(index < 0) return 0;";
 			b << "#if HISE_INCLUDE_RT_NEURAL";
-			b << "int localIndex = index;";
-
-			for(auto neuralFile: ctx.includedNeuralModelFiles)
-			{
-				auto id = neuralFile.getFileNameWithoutExtension();
-
-				if(id.endsWith("_neural"))
-					id = id.dropLastCharacters(7);
-
-				b << "if(localIndex < project::getNumCompiledNeuralModels_" + id + "())";
-				{
-					StatementBlock ifBlock(b);
-					b << "return project::" + helperName + "_" + id + "(localIndex);";
-				}
-
-				b << "localIndex -= project::getNumCompiledNeuralModels_" + id + "();";
-			}
-
+			b << "return nf." + factoryMethodName + "(index);";
+			b << "#else";
+			b << "ignoreUnused(index);";
 			b << "#endif";
 			b << "return 0;";
 		};
 
-		addNeuralIntGetter("getNeuralModelNumInputs", "getCompiledNeuralModelNumInputs");
-		addNeuralIntGetter("getNeuralModelNumOutputs", "getCompiledNeuralModelNumOutputs");
+		addNeuralIntGetter("getNeuralModelNumInputs", "getModelNumInputs");
+		addNeuralIntGetter("getNeuralModelNumOutputs", "getModelNumOutputs");
 
 		b.addEmptyLine();
 
 		{
 			b << "DLL_EXPORT void* createNeuralModel(int index)";
 			StatementBlock bk(b);
-			b << "if(index < 0) return nullptr;";
 			b << "#if HISE_INCLUDE_RT_NEURAL";
-			b << "int localIndex = index;";
-
-			for(auto neuralFile: ctx.includedNeuralModelFiles)
-			{
-				auto id = neuralFile.getFileNameWithoutExtension();
-
-				if(id.endsWith("_neural"))
-					id = id.dropLastCharacters(7);
-
-				b << "if(localIndex < project::getNumCompiledNeuralModels_" + id + "())";
-				{
-					StatementBlock ifBlock(b);
-					b << "return project::createCompiledNeuralModel_" + id + "(localIndex);";
-				}
-
-				b << "localIndex -= project::getNumCompiledNeuralModels_" + id + "();";
-			}
-
+			b << "return nf.createByIndex(index);";
+			b << "#else";
+			b << "ignoreUnused(index);";
 			b << "#endif";
 			b << "return nullptr;";
 		}
@@ -1528,13 +1527,9 @@ void DspNetworkCompileExporter::createMainCppFile(Context& ctx, bool isDllMainFi
 			b << "DLL_EXPORT void* cloneNeuralModel(void* model)";
 			StatementBlock bk(b);
 			b << "#if HISE_INCLUDE_RT_NEURAL";
-			b << "if(auto m = static_cast<hise::NeuralNetwork::ModelBase*>(model))";
-
-			{
-				StatementBlock ifBlock(b);
-				b << "return m->clone();";
-			}
-
+			b << "return nf.cloneModel(model);";
+			b << "#else";
+			b << "ignoreUnused(model);";
 			b << "#endif";
 			b << "return nullptr;";
 		}
@@ -1545,7 +1540,7 @@ void DspNetworkCompileExporter::createMainCppFile(Context& ctx, bool isDllMainFi
 			b << "DLL_EXPORT void destroyNeuralModel(void* model)";
 			StatementBlock bk(b);
 			b << "#if HISE_INCLUDE_RT_NEURAL";
-			b << "delete static_cast<hise::NeuralNetwork::ModelBase*>(model);";
+			b << "nf.destroyModel(model);";
 			b << "#else";
 			b << "ignoreUnused(model);";
 			b << "#endif";
@@ -1557,13 +1552,7 @@ void DspNetworkCompileExporter::createMainCppFile(Context& ctx, bool isDllMainFi
 			b << "DLL_EXPORT void resetNeuralModel(void* model)";
 			StatementBlock bk(b);
 			b << "#if HISE_INCLUDE_RT_NEURAL";
-			b << "if(auto m = static_cast<hise::NeuralNetwork::ModelBase*>(model))";
-
-			{
-				StatementBlock ifBlock(b);
-				b << "m->reset();";
-			}
-
+			b << "nf.resetModel(model);";
 			b << "#else";
 			b << "ignoreUnused(model);";
 			b << "#endif";
@@ -1575,13 +1564,7 @@ void DspNetworkCompileExporter::createMainCppFile(Context& ctx, bool isDllMainFi
 			b << "DLL_EXPORT void processNeuralModel(void* model, const float* input, float* output)";
 			StatementBlock bk(b);
 			b << "#if HISE_INCLUDE_RT_NEURAL";
-			b << "if(auto m = static_cast<hise::NeuralNetwork::ModelBase*>(model))";
-
-			{
-				StatementBlock ifBlock(b);
-				b << "m->process(input, output);";
-			}
-
+			b << "nf.processModel(model, input, output);";
 			b << "#else";
 			b << "ignoreUnused(model, input, output);";
 			b << "#endif";

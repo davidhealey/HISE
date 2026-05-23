@@ -52,6 +52,9 @@ namespace hise {
 
 		template <int NumInputs, int NumOutputs> struct ModelBase : public NeuralNetwork::ModelBase
 		{
+			static constexpr int StaticNumInputs = NumInputs;
+			static constexpr int StaticNumOutputs = NumOutputs;
+
 			int getNumInputs() const override { return NumInputs; }
 			int getNumOutputs() const override { return NumOutputs; }
 
