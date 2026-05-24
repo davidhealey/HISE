@@ -50,6 +50,7 @@ struct DspNetwork::Wrapper
 	API_METHOD_WRAPPER_2(DspNetwork, createFromJSON);
 	API_METHOD_WRAPPER_0(DspNetwork, undo);
 	API_METHOD_WRAPPER_0(DspNetwork, getNumChannels);
+	API_METHOD_WRAPPER_1(DspNetwork, deleteIfUnused);
 	//API_VOID_METHOD_WRAPPER_0(DspNetwork, disconnectAll);
 	//API_VOID_METHOD_WRAPPER_3(DspNetwork, injectAfter);
 };
@@ -173,6 +174,7 @@ DspNetwork::DspNetwork(hise::ProcessorWithScriptingContent* p, ValueTree data_, 
 	ADD_API_METHOD_2(createFromJSON);
 	ADD_API_METHOD_0(undo);
 	ADD_API_METHOD_0(getNumChannels);
+	ADD_API_METHOD_1(deleteIfUnused);
 	//ADD_API_METHOD_0(disconnectAll);
 	//ADD_API_METHOD_3(injectAfter);
 
