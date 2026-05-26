@@ -106,6 +106,8 @@ class ScriptnodeExceptionHandler
 
 public:
 
+	static bool isInMidiProcessingContext(NodeBase* b);
+
 	static void validateMidiProcessingContext(NodeBase* b);
 
 	bool isOk() const noexcept;
@@ -209,6 +211,8 @@ public:
 		StringArray getIdList();
 		void saveNetworks(ValueTree& d) const;
 		void restoreNetworks(const ValueTree& d);
+
+		ProcessorMetadata withDynamicParametersFromNetwork(const ProcessorMetadata& pn, int numMods, int offset) const;
 
 		virtual bool isPolyphonic() const;;
 
@@ -555,6 +559,9 @@ public:
 	/** Sets the parameters of this node according to the JSON data. */
 	bool setParameterDataFromJSON(var jsonData);
 
+	/** Injects a test signal to the given container and executes a callback when the next buffer was processed. */
+	bool injectAndProbe(const var& injectData, const var& reportCallback);
+
 	Array<Parameter*> getListOfProbedParameters();
 
 	String getId() const { return data[PropertyIds::ID].toString(); }
@@ -610,6 +617,8 @@ public:
 	SelectedItemSet<NodeBase::Ptr>& getRawSelection() { return selection; };
 
 	NodeBase::List getSelection() const { return selection.getItemArray(); }
+
+	static Image createScreenshot(Component* root, float scaleFactor);
 
     void zoomToSelection(Component* c);
 
@@ -723,7 +732,7 @@ public:
 
 	static void initKeyPresses(Component* root);
 
-
+	
 
     bool isSignalDisplayEnabled() const { return signalDisplayEnabled; }
     
@@ -734,6 +743,8 @@ public:
 	const modulation::ParameterProperties& getParameterProperties() const noexcept { return dynamicParameterProperties.data; }
 
 private:
+
+	var lastInjector;
 
 	struct DynamicParameterModulationProperties
 	{
@@ -876,6 +887,227 @@ struct HostHelpers
 	static void setNumDataObjectsFromValueTree(OpaqueNode& on, const ValueTree& v);
 };
 
+struct Parameter;
+
+struct InjectHelpers
+{
+	enum class State
+	{
+		WaitingForInjection,
+		WaitingForProbe,
+		WaitingForReport,
+		Done
+	};
+
+	struct ParameterInjector: public ReferenceCountedObject
+	{
+		using Ptr = ReferenceCountedObjectPtr<ParameterInjector>;
+
+		ParameterInjector(DspNetwork* n, const var& parameterData);
+
+		~ParameterInjector()
+		{
+			cleanUp();
+		}
+
+		void cleanUp();
+
+		bool isActive() const { return injectParameters.size() > 0 && currentState == State::WaitingForInjection; }
+
+		void processInject(ProcessDataDyn& data);
+
+		void processProbe(ProcessDataDyn& data);
+
+		bool reportReady() const
+		{
+			jassert(MessageManager::getInstance()->isThisTheMessageThread());
+			return currentState == State::WaitingForReport;
+		}
+
+		struct Report
+		{
+			Report(int numParameters)
+			{
+				for (int i = 0; i < numParameters; i++)
+				{
+					parameterValues.push_back({ nullptr, 0.0 });
+				}
+			}
+
+			var toJSON() const;
+
+			std::vector<std::pair<ReferenceCountedObject*, double>> parameterValues;
+		};
+
+		Parameter* getParameter(const String& path);
+
+		WeakReference<DspNetwork> network;
+
+		var poll(bool compact);
+
+		std::vector<std::pair<var, double>> injectParameters;
+		std::vector<var> probeParameters;
+		std::vector<Report> reports;
+
+		std::vector<std::pair<var, double>> cleanupValues;
+
+		bool probeAll;
+		Result injectOk;
+		State currentState = State::WaitingForInjection;
+	};
+
+	struct InjectData
+	{
+		
+
+		enum class TestSignal
+		{
+			Silence = 0,
+			Dirac,
+			Noise,
+			DC,
+			numTestSignals
+		};
+
+		static StringArray getTestSignalNames()
+		{
+			return
+			{
+				"silence",
+				"dirac",
+				"noise",
+				"dc"
+			};
+		}
+
+		struct Report
+		{
+			Report() = default;
+
+			operator bool() const { return specs; }
+
+			// Creates a DynamicObject with "specs" and "signal" fields
+			var toJSON(bool processMidi) const;
+
+			void process(ProcessDataDyn& data);
+
+			PrepareSpecs specs;
+
+			std::array<int, NUM_MAX_CHANNELS> indexOfPeak;
+			std::array<Range<float>, NUM_MAX_CHANNELS> peaks;
+			std::array<float, NUM_MAX_CHANNELS> avg;
+			std::array<bool, NUM_MAX_CHANNELS> silence;
+		};
+
+		using ReportFunction = std::function<void(const Report& r)>;
+
+		InjectData() = default;
+
+		InjectData(const var& data);
+
+		var toVar(NodeBase* parent) const;
+
+		void processInject(ProcessDataDyn& data, int currentIndex);
+		void processProbe(ProcessDataDyn& data, int currentIndex);
+
+		void checkEmpty(ProcessDataDyn& data);
+
+		bool reportReady() const;
+
+		var poll(NodeBase* parent);
+
+		bool isActive() const { return currentSpecs && currentState != State::Done; };
+
+		void prepare(PrepareSpecs specs);
+
+		void ensureStorageAllocated(int numNodes);
+
+		void reset()
+		{
+			currentState = State::Done;
+		}
+
+		TestSignal signal = TestSignal::Silence;
+		int injectIndex = 0;
+		int probeIndex = -1;
+		float gain = 1.0f;
+		int64 seed = -1;
+		double delayMs = 0.0;
+		bool processMidi = false;
+		bool recursive = false;
+
+		ParameterInjector::Ptr parameterInjector;
+
+	private:
+
+		String errorMessage;
+		PrepareSpecs currentSpecs;
+		std::vector<Report> reports;
+		int maxIndex = -1;
+
+		State currentState = State::WaitingForInjection;
+	};
+
+	
+
+	struct JSONFilter
+	{
+		JSONFilter(const var& filterData) :
+			specs(filterData.getProperty("specs", true)),
+			signal(filterData.getProperty("signal", true)),
+			compact(filterData.getProperty("compact", false)),
+			tree(filterData.getProperty("tree", false)),
+			wildcard(filterData.getProperty("wildcard", "*").toString())
+		{}
+
+		static var createTree(const ValueTree& root);
+
+		bool isNonStandard() const
+		{
+			return !specs && !signal && !compact && !tree && (wildcard != "*");
+		}
+
+		var apply(const var& fullData) const;
+
+		const bool specs = true; // include specs (samplerate, etc)
+		const bool signal = true; // include channel signals
+		const bool compact = false; // reduce verbosity (channels become array of peak)
+		const bool tree = true; // include dense topology tree
+		const String wildcard;
+	};
+
+	struct InjectChecker : public Timer,
+		public ReferenceCountedObject
+	{
+		InjectChecker(DspNetwork* parent_, const var& data, const var& reportCallback);
+
+		~InjectChecker();
+
+		void cleanup();
+
+		void timerCallback() override;
+
+		WeakCallbackHolder scriptCallback;
+		var nativeCallback;
+
+		Result injectOk;
+		InjectData d;
+		NodeBase::Ptr container;
+		NodeBase::List recursiveContainers;
+		NodeBase::List recursiveReadyContainers;
+		DynamicObject::Ptr recursiveReportData;
+
+		JSONFilter filter;
+
+		ParameterInjector::Ptr paramInjector;
+		var parameterData;
+
+		WeakReference<DspNetwork> parent;
+	};
+
+	
+};
+
 
 #if !USE_FRONTEND
 
@@ -947,7 +1179,7 @@ struct DspNetworkListeners
 						return false;
 				}
 
-				return !v[PropertyIds::Automated];
+				return !(v[PropertyIds::Automated] || v[PropertyIds::AutomatedExternal]);
 			}
 
 			return true;

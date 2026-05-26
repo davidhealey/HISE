@@ -204,15 +204,21 @@ public:
 		MethodItem(const ValueTree &methodTree_, const String &className_);
 
 		int getPopupHeight() const override
-		{ 
-			if (parser != nullptr) 
+		{
+            const_cast<MethodItem*>(this)->initialiseMarkdown();
+            
+			if (parser != nullptr)
 				return (int)parser->getHeightForWidth((float)extendedWidth);
 			else 
 				return 150; 
 		}
 
+		void initialiseMarkdown();
+
 		int getPopupWidth() const override
 		{
+            const_cast<MethodItem*>(this)->initialiseMarkdown();
+            
 			if (parser != nullptr)
 				return extendedWidth + 20;
 			else
@@ -240,6 +246,8 @@ public:
 
 		void paintPopupBox(Graphics &g) const
 		{
+
+            
 			if (parser != nullptr)
 			{
 				auto bounds = Rectangle<float>(10.0f, -8.0f, (float)extendedWidth, (float)getPopupHeight());
@@ -279,6 +287,7 @@ public:
 		String arguments;
 
 		ScopedPointer<MarkdownRenderer> parser;
+		bool markdownInitialised = false;
 
 		const ValueTree methodTree;
 	};
@@ -1159,7 +1168,7 @@ public:
 			this->rebuildModuleList(true);
 		});
         
-        colourUpdater.setCallback(networkTree, { PropertyIds::NodeColour, PropertyIds::Automated }, valuetree::AsyncMode::Asynchronously, [this](ValueTree, Identifier)
+        colourUpdater.setCallback(networkTree, { PropertyIds::NodeColour, PropertyIds::Automated, PropertyIds::AutomatedExternal }, valuetree::AsyncMode::Asynchronously, [this](ValueTree, Identifier)
         {
             this->selectionChanged({});
         });

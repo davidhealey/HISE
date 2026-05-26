@@ -37,7 +37,6 @@ namespace scriptnode
 using namespace juce;
 using namespace hise;
 
-
 struct NodeContainer : public AssignableObject
 {
 	struct MacroParameter : public NodeBase::Parameter,
@@ -60,6 +59,9 @@ struct NodeContainer : public AssignableObject
 
 		JUCE_DECLARE_WEAK_REFERENCEABLE(MacroParameter);
 	};
+
+	using InjectData = InjectHelpers::InjectData;
+	using InjectChecker = InjectHelpers::InjectChecker;
 
 	NodeContainer();
 
@@ -127,6 +129,146 @@ struct NodeContainer : public AssignableObject
 
 	bool forEachNode(const std::function<bool(NodeBase::Ptr)> & f);
 
+	struct ContainerInjector
+	{
+		ContainerInjector(NodeContainer& parent) :
+		  container(parent)
+		{};
+
+		InjectHelpers::InjectData data;
+		PrepareSpecs specs;
+		NodeContainer& container;
+
+		var poll()
+		{
+			InjectData nd;
+			bool ready = false;
+
+			{
+				SimpleReadWriteLock::ScopedWriteLock sl(lock);
+
+				ready = data.reportReady();
+
+				if (ready)
+					std::swap(nd, data);
+			}
+
+			if (ready)
+				return nd.poll(container.asNode());
+
+			return var();
+		}
+
+		void reset()
+		{
+			data.reset();
+		}
+
+		Result inject(const InjectData& d)
+		{
+			auto numNodes = container.getNodeList().size();
+
+			SimpleReadWriteLock::ScopedWriteLock sl(lock);
+
+			if (data.isActive())
+				return Result::fail("another inject call is pending");
+
+			data = d;
+			data.prepare(specs);
+			data.processMidi = ScriptnodeExceptionHandler::isInMidiProcessingContext(container.asNode());
+
+			data.ensureStorageAllocated(numNodes);
+
+			if (data.probeIndex == -1)
+				data.probeIndex = jmax(0, numNodes-1);
+
+			return Result::ok();
+		}
+
+		struct ScopedProcessor
+		{
+			ScopedProcessor(ContainerInjector& ci, ProcessDataDyn& pd) :
+				sl(ci.lock),
+				data(ci.data)
+			{
+				data.checkEmpty(pd);
+			}
+
+			void processBypassed(ProcessDataDyn& pd)
+			{
+				BACKEND_ONLY(data.processInject(pd, childIndex));
+				BACKEND_ONLY(data.processProbe(pd, childIndex++));
+			}
+
+			void process(NodeBase* n, ProcessDataDyn& pd)
+			{
+				BACKEND_ONLY(data.processInject(pd, childIndex));
+				n->process(pd);
+				BACKEND_ONLY(data.processProbe(pd, childIndex++));
+			}
+
+		private:
+
+			InjectData& data;
+			hise::SimpleReadWriteLock::ScopedReadLock sl;
+			int childIndex = 0;
+		};
+
+		void prepare(PrepareSpecs ps)
+		{
+			specs = ps;
+		}
+
+	private:
+
+		SimpleReadWriteLock lock;
+	};
+
+	/** Override this and call DynamicSerialProcessor::inject in each subclass if possible. */
+	Result injectNextBuffer(const InjectData& d) 
+	{ 
+		auto copy = d;
+		
+		copy.processMidi = ScriptnodeExceptionHandler::isInMidiProcessingContext(asNode());
+
+		auto ok = injector.inject(copy);
+
+		if (ok.failed())
+		{
+			injector.reset();
+			return ok;
+		}
+
+		if (d.recursive)
+		{
+			copy.signal = InjectHelpers::InjectData::TestSignal::Silence;
+			copy.injectIndex = 0;
+			copy.parameterInjector = nullptr;
+
+			for (auto n : nodes)
+			{
+				if (auto nc = dynamic_cast<NodeContainer*>(n.get()))
+				{
+					auto ok = nc->injectNextBuffer(copy);
+					
+					if (!ok.wasOk())
+					{
+						injector.reset();
+						return ok;
+					}
+						
+				}
+			}
+
+			return Result::ok();
+		}
+
+		return ok;
+	}
+
+	/** Override this and call DynamicSerialProcessor::poll. */
+	var pollInjectedBuffer() { return injector.poll(); };
+
 	// ===================================================================================
 
 	void clear();
@@ -169,6 +311,8 @@ struct NodeContainer : public AssignableObject
 		}
 	}
 
+	ContainerInjector injector;
+
 protected:
 
 	void initListeners(bool initParameterListener=true);
@@ -204,6 +348,8 @@ class SerialNode : public NodeBase,
 {
 public:
 
+	
+
 	class DynamicSerialProcessor: public HiseDspBase
 	{
 	public:
@@ -222,11 +368,13 @@ public:
 
 		template <typename ProcessDataType> void process(ProcessDataType& data) noexcept
 		{
+			int index = 0;
+			auto& dd = data.template as<ProcessDataDyn>();
+
+			ContainerInjector::ScopedProcessor sp(parent->injector, dd);
+
 			for (auto n : parent->getNodeList())
-			{
-				auto& dd = data.template as<ProcessDataDyn>();
-				n->process(dd);
-			}
+				sp.process(n, dd);
 		}
 
 		template <typename FrameDataType> void processFrame(FrameDataType& data) noexcept

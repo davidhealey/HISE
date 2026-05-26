@@ -135,6 +135,9 @@ void SplitNode::process(ProcessDataDyn& data)
 
 	NodeProfiler np(this, data.getNumSamples());
     ProcessDataPeakChecker pd(this, data);
+
+	ContainerInjector::ScopedProcessor sp(injector, data);
+
     TRACE_DSP();
     
 	float* ptrs[NUM_MAX_CHANNELS];
@@ -159,11 +162,14 @@ void SplitNode::process(ProcessDataDyn& data)
 	for (auto n : nodes)
 	{
 		if (n->isBypassed())
+		{
+			sp.processBypassed(data);
 			continue;
-
+		}
+		
 		if (channelCounter++ == 0)
 		{
-			n->process(data);
+			sp.process(n, data);
 		}
 		else
 		{
@@ -174,8 +180,8 @@ void SplitNode::process(ProcessDataDyn& data)
 
 			cp.copyNonAudioDataFrom(data);
 
-			n->process(cp);
-
+			sp.process(n, cp);
+			
 			int index = 0;
 			for (auto& c : data)
 				FloatVectorOperations::add(c.getRawWritePointer(), ptrs[index++], numSamples);
@@ -520,6 +526,7 @@ void MultiChannelNode::prepare(PrepareSpecs ps)
 	
 	NodeBase::prepare(ps);
 	NodeContainer::prepareContainer(ps);
+
 	int channelIndex = 0;
 
 	for (int i = 0; i < NUM_MAX_CHANNELS; i++)
@@ -535,6 +542,7 @@ void MultiChannelNode::prepare(PrepareSpecs ps)
 
 		ps.numChannels = numChannelsThisTime;
 
+		injector.prepare(ps);
 		nodes[i]->prepare(ps);
 
 		channelRanges[i] = { startChannel, endChannel };
@@ -580,6 +588,8 @@ void MultiChannelNode::process(ProcessDataDyn& d)
     ProcessDataPeakChecker pd(this, d);
     TRACE_DSP();
     
+	ContainerInjector::ScopedProcessor sp(injector, d);
+
 	int channelIndex = 0;
 
 	for (auto n : nodes)
@@ -595,7 +605,8 @@ void MultiChannelNode::process(ProcessDataDyn& d)
 
 			ProcessDataDyn td(currentChannelData, d.getNumSamples(), numChannelsThisTime);
 			td.copyNonAudioDataFrom(d);
-			n->process(td);
+
+			sp.process(n, td);
 		}
 
 		channelIndex += numChannelsThisTime;

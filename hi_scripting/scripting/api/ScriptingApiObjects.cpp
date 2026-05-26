@@ -2914,8 +2914,36 @@ struct ScriptingObjects::ScriptingModulator::Wrapper
 	API_VOID_METHOD_WRAPPER_1(ScriptingModulator, setMatrixProperties);
 };
 
+struct ModuleConstantInitialiser
+{
+	static int getFallbackCount(Processor* p)
+	{
+		if (p == nullptr)
+			return 0;
+
+		return (int)ProcessorMetadataRegistry::getFallbackIdForOldParameter(p->getType()).size();
+	}
+
+	static int getNumSlots(Processor* p)
+	{
+		if (p == nullptr)
+			return 1;
+
+		return p->getNumParameters() + 1 + getFallbackCount(p);
+	}
+
+	static void addFallbacksForTypos(ConstScriptingObject* obj, Processor* p)
+	{
+		if (p == nullptr)
+			return;
+
+		for (const auto& fb : ProcessorMetadataRegistry::getFallbackIdForOldParameter(p->getType()))
+			obj->addConstant(fb.first.toString(), var(fb.second));
+	}
+};
+
 ScriptingObjects::ScriptingModulator::ScriptingModulator(ProcessorWithScriptingContent *p, Modulator *m_) :
-ConstScriptingObject(p, m_ != nullptr ? m_->getNumParameters() + 1 : 1),
+ConstScriptingObject(p, ModuleConstantInitialiser::getNumSlots(m_)),
 mod(m_),
 m(nullptr),
 moduleHandler(m_, dynamic_cast<JavascriptProcessor*>(p))
@@ -2932,6 +2960,8 @@ moduleHandler(m_, dynamic_cast<JavascriptProcessor*>(p))
 		{
 			addConstant(mod->getIdentifierForParameterIndex(i).toString(), var(i));
 		}
+
+		ModuleConstantInitialiser::addFallbacksForTypos(this, mod);
 	}
 	else
 	{
@@ -3406,8 +3436,49 @@ struct ScriptingObjects::ScriptingEffect::Wrapper
 	API_METHOD_WRAPPER_0(ScriptingEffect, getDraggableFilterData);
 };
 
+// Special rule for CurveEQ: do not use the actual parameter names
+// but the hardcoded general parameter names + the band offset
+struct CurveEqHelpers
+{
+	static int getNumConstants(EffectProcessor* fx)
+	{
+		if (dynamic_cast<CurveEq*>(fx) != nullptr)
+		{
+			return ProcessorFilterStatistics::BandParameter::numBandParameters + 2;
+		}
+		else if (fx != nullptr)
+		{
+			return ModuleConstantInitialiser::getNumSlots(fx);
+		}
+
+		return 1;
+	}
+
+	static String getConstantId(EffectProcessor* fx, int index)
+	{
+		if (dynamic_cast<CurveEq*>(fx) != nullptr)
+		{
+			static const StringArray parameterNames({
+			"Gain",
+			"Freq",
+			"Q",
+			"Enabled",
+			"Type",
+			"BandOffset"
+			});
+
+			jassert(isPositiveAndBelow(index, parameterNames.size()));
+			return parameterNames[index];
+		}
+		else
+		{
+			return fx->getIdentifierForParameterIndex(index).toString();
+		}
+	}
+};
+
 ScriptingObjects::ScriptingEffect::ScriptingEffect(ProcessorWithScriptingContent *p, EffectProcessor *fx) :
-ConstScriptingObject(p, fx != nullptr ? fx->getNumParameters()+1 : 1),
+ConstScriptingObject(p, CurveEqHelpers::getNumConstants(fx)),
 effect(fx),
 moduleHandler(fx, dynamic_cast<JavascriptProcessor*>(p))
 {
@@ -3417,9 +3488,23 @@ moduleHandler(fx, dynamic_cast<JavascriptProcessor*>(p))
 
 		addScriptParameters(this, effect.get());
 
-		for (int i = 0; i < fx->getNumParameters(); i++)
+		if (dynamic_cast<CurveEq*>(fx) != nullptr)
 		{
-			addConstant(fx->getIdentifierForParameterIndex(i).toString(), var(i));
+			auto numToAdd = CurveEqHelpers::getNumConstants(fx) - 1;
+
+			for (int i = 0; i < numToAdd; i++)
+			{
+				addConstant(CurveEqHelpers::getConstantId(fx, i), var(i));
+			}
+		}
+		else
+		{
+			for (int i = 0; i < fx->getNumParameters(); i++)
+			{
+				addConstant(fx->getIdentifierForParameterIndex(i).toString(), var(i));
+			}
+
+			ModuleConstantInitialiser::addFallbacksForTypos(this, fx);
 		}
 	}
 	else
@@ -3768,7 +3853,7 @@ struct ScriptingObjects::ScriptingSlotFX::Wrapper
 };
 
 ScriptingObjects::ScriptingSlotFX::ScriptingSlotFX(ProcessorWithScriptingContent *p, Processor* fx) :
-ConstScriptingObject(p, fx != nullptr ? fx->getNumParameters()+1 : 1),
+ConstScriptingObject(p, ModuleConstantInitialiser::getNumSlots(fx)),
 slotFX(fx)
 {
     if (fx != nullptr)
@@ -3781,6 +3866,8 @@ slotFX(fx)
         {
             addConstant(fx->getIdentifierForParameterIndex(i).toString(), var(i));
         }
+
+        ModuleConstantInitialiser::addFallbacksForTypos(this, fx);
     }
     else
     {
@@ -4005,6 +4092,7 @@ struct ScriptingObjects::ScriptRoutingMatrix::Wrapper
 	API_METHOD_WRAPPER_0(ScriptRoutingMatrix, getNumDestinationChannels);
 	API_METHOD_WRAPPER_1(ScriptRoutingMatrix, getSourceChannelsForDestination);
 	API_METHOD_WRAPPER_1(ScriptRoutingMatrix, getDestinationChannelForSource);
+	API_VOID_METHOD_WRAPPER_1(ScriptRoutingMatrix, setForcePeakMeters);
 };
 
 ScriptingObjects::ScriptRoutingMatrix::ScriptRoutingMatrix(ProcessorWithScriptingContent *p, Processor *processor):
@@ -4022,6 +4110,7 @@ ScriptingObjects::ScriptRoutingMatrix::ScriptRoutingMatrix(ProcessorWithScriptin
 	ADD_API_METHOD_0(getNumDestinationChannels);
 	ADD_API_METHOD_1(getSourceChannelsForDestination);
 	ADD_API_METHOD_1(getDestinationChannelForSource);
+	ADD_API_METHOD_1(setForcePeakMeters);
 
 	if (auto r = dynamic_cast<RoutableProcessor*>(rp.get()))
 	{
@@ -4225,6 +4314,17 @@ var ScriptingObjects::ScriptRoutingMatrix::getDestinationChannelForSource(var so
 	return -1;
 }
 
+void ScriptingObjects::ScriptRoutingMatrix::setForcePeakMeters(bool shouldBeEnabled)
+{
+	if (checkValidObject())
+	{
+		if (auto r = dynamic_cast<RoutableProcessor*>(rp.get()))
+		{
+			return r->getMatrix().setForcePeakMeters(shouldBeEnabled);
+		}
+	}
+}
+
 // ScriptingSynth ==============================================================================================================
 
 struct ScriptingObjects::ScriptingSynth::Wrapper
@@ -4252,7 +4352,7 @@ struct ScriptingObjects::ScriptingSynth::Wrapper
 };
 
 ScriptingObjects::ScriptingSynth::ScriptingSynth(ProcessorWithScriptingContent *p, ModulatorSynth *synth_) :
-	ConstScriptingObject(p, synth_ != nullptr ? synth_->getNumParameters() + 1 : 1),
+	ConstScriptingObject(p, ModuleConstantInitialiser::getNumSlots(synth_)),
 	synth(synth_),
 	moduleHandler(synth_, dynamic_cast<JavascriptProcessor*>(p))
 {
@@ -4266,6 +4366,8 @@ ScriptingObjects::ScriptingSynth::ScriptingSynth(ProcessorWithScriptingContent *
 		{
 			addConstant(synth->getIdentifierForParameterIndex(i).toString(), var(i));
 		}
+
+		ModuleConstantInitialiser::addFallbacksForTypos(this, synth);
 	}
 	else
 	{
@@ -4595,7 +4697,7 @@ struct ScriptingObjects::ScriptingMidiProcessor::Wrapper
 };
 
 ScriptingObjects::ScriptingMidiProcessor::ScriptingMidiProcessor(ProcessorWithScriptingContent *p, MidiProcessor *mp_) :
-ConstScriptingObject(p, mp_ != nullptr ? mp_->getNumParameters()+1 : 1),
+ConstScriptingObject(p, ModuleConstantInitialiser::getNumSlots(mp_)),
 mp(mp_)
 {
 	if (mp != nullptr)
@@ -4608,6 +4710,8 @@ mp(mp_)
 		{
 			addConstant(mp->getIdentifierForParameterIndex(i).toString(), var(i));
 		}
+
+		ModuleConstantInitialiser::addFallbacksForTypos(this, mp);
 	}
 	else
 	{
@@ -4820,7 +4924,7 @@ struct ScriptingObjects::ScriptingAudioSampleProcessor::Wrapper
 
 
 ScriptingObjects::ScriptingAudioSampleProcessor::ScriptingAudioSampleProcessor(ProcessorWithScriptingContent *p, Processor *sampleProcessor) :
-ConstScriptingObject(p, dynamic_cast<Processor*>(sampleProcessor) != nullptr ? dynamic_cast<Processor*>(sampleProcessor)->getNumParameters() : 0),
+ConstScriptingObject(p, dynamic_cast<Processor*>(sampleProcessor) != nullptr ? dynamic_cast<Processor*>(sampleProcessor)->getNumParameters() + ModuleConstantInitialiser::getFallbackCount(dynamic_cast<Processor*>(sampleProcessor)) : 0),
 audioSampleProcessor(dynamic_cast<Processor*>(sampleProcessor))
 {
 	if (audioSampleProcessor != nullptr)
@@ -4831,6 +4935,8 @@ audioSampleProcessor(dynamic_cast<Processor*>(sampleProcessor))
 		{
 			addConstant(audioSampleProcessor->getIdentifierForParameterIndex(i).toString(), var(i));
 		}
+
+		ModuleConstantInitialiser::addFallbacksForTypos(this, audioSampleProcessor);
 	}
 	else
 	{
@@ -5066,7 +5172,7 @@ struct ScriptingObjects::ScriptingTableProcessor::Wrapper
 
 
 ScriptingObjects::ScriptingTableProcessor::ScriptingTableProcessor(ProcessorWithScriptingContent *p, ExternalDataHolder *tableProcessor_) :
-ConstScriptingObject(p, dynamic_cast<Processor*>(tableProcessor_) != nullptr ? dynamic_cast<Processor*>(tableProcessor_)->getNumParameters() : 0),
+ConstScriptingObject(p, dynamic_cast<Processor*>(tableProcessor_) != nullptr ? dynamic_cast<Processor*>(tableProcessor_)->getNumParameters() + ModuleConstantInitialiser::getFallbackCount(dynamic_cast<Processor*>(tableProcessor_)) : 0),
 tableProcessor(dynamic_cast<Processor*>(tableProcessor_))
 {
 	if (tableProcessor != nullptr)
@@ -5077,6 +5183,8 @@ tableProcessor(dynamic_cast<Processor*>(tableProcessor_))
 		{
 			addConstant(tableProcessor->getIdentifierForParameterIndex(i).toString(), var(i));
 		}
+
+		ModuleConstantInitialiser::addFallbacksForTypos(this, tableProcessor);
 	}
 	else
 	{
@@ -7013,6 +7121,25 @@ juce::Array<juce::Identifier> ApiHelpers::getGlobalApiClasses()
 	};
 	
 	return ids;
+}
+
+bool ApiHelpers::getMidPointValue(const var& midPointOrDisabledString, double& midPointValue)
+{
+	auto rv = RangeHelpers::parseMidPointValue(midPointOrDisabledString);
+	midPointValue = rv.second;
+	return rv.first;
+}
+
+bool ApiHelpers::shouldApplyMidPoint(double min, double max, const var& midPointOrDisabledString)
+{
+	double mp;
+
+	if (getMidPointValue(midPointOrDisabledString, mp))
+	{
+		return mp > min && mp < max;
+	}
+
+	return false;
 }
 
 void ApiHelpers::loadPathFromData(Path& p, var data)
@@ -9668,7 +9795,7 @@ struct ProcessorParameterTarget : public scriptnode::routing::GlobalRoutingManag
 
         id << processor->getId();
         id << "::";
-        id << processor->parameterNames[index].toString();
+		id << processor->getIdentifierForParameterIndex(index);
     };
 
     void selectCallback(Component* rootEditor)
@@ -9736,7 +9863,7 @@ void ScriptingObjects::GlobalCableReference::connectToModuleParameter(const Stri
         if(parameterIndex.isString())
         {
             Identifier pId(parameterIndex.toString());
-            indexToUse = p->parameterNames.indexOf(pId);
+			indexToUse = p->getParameterIndexForIdentifier(pId);
             
             if(indexToUse == -1)
                 reportScriptError("Can't find parameter ID " + pId.toString());
@@ -10343,16 +10470,8 @@ void ScriptingObjects::ScriptBuilder::createJSONConstants()
 		addConstant("InterfaceTypes", s);
 	}
 	{
-		var chainIds(new DynamicObject());
-
-		chainIds.getDynamicObject()->setProperty("Direct", raw::IDs::Chains::Direct);
-		chainIds.getDynamicObject()->setProperty("Midi", raw::IDs::Chains::Midi);
-		chainIds.getDynamicObject()->setProperty("Gain", raw::IDs::Chains::Gain);
-		chainIds.getDynamicObject()->setProperty("Pitch", raw::IDs::Chains::Pitch);
-		chainIds.getDynamicObject()->setProperty("FX", raw::IDs::Chains::FX);
-		chainIds.getDynamicObject()->setProperty("GlobalMod", raw::IDs::Chains::GlobalModulatorSlot);
-
-		addConstant("ChainIndexes", chainIds);
+		ProcessorMetadataRegistry rd;
+		addConstant("ChainIndexes", rd.getChainIndexList());
 	}
 }
 

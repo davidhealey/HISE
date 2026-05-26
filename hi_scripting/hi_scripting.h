@@ -36,7 +36,7 @@ BEGIN_JUCE_MODULE_DECLARATION
 
   ID:               hi_scripting
   vendor:           Hart Instruments
-  version:          4.1.0
+  version:          4.9.1
   name:             HISE Scripting Module
   description:      The scripting engine module for HISE
   website:          http://hise.audio
@@ -179,6 +179,7 @@ compile / debug cycle and don't need all nodes in scriptnode you might want to t
 #include "scripting/ScriptProcessor.h"
 #include "scripting/ScriptProcessorModules.h"
 #include "scripting/HardcodedScriptProcessor.h"
+#include "scripting/hardcoded_modules/Arpeggiator.h"
 
 #include "scripting/api/ScriptComponentWrappers.h"
 #include "scripting/components/ScriptingContentComponent.h"

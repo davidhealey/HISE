@@ -3243,7 +3243,7 @@ void HiseJavascriptEngine::RootObject::execute(const String& code, bool allowCon
 	}
 
 #if USE_BACKEND
-	// Post-compilation: check MIDI callback bodies for callScope warnings
+	// Post-compilation: check static realtime callback bodies for callScope warnings
 	{
 		using SL = RealtimeSafetyInfo::StrictnessLevel;
 		auto strictness = dynamic_cast<JavascriptProcessor*>(hiseSpecialData.processor)
@@ -3251,13 +3251,6 @@ void HiseJavascriptEngine::RootObject::execute(const String& code, bool allowCon
 
 		if (strictness > SL::Unsafe)
 		{
-			static const Identifier audioCallbacks[] = {
-				Identifier("onNoteOn"),
-				Identifier("onNoteOff"),
-				Identifier("onController"),
-				Identifier("onTimer")
-			};
-
 			for (auto c : hiseSpecialData.callbackNEW)
 			{
 				auto* info = c->getRealtimeSafetyInfo();
@@ -3265,18 +3258,7 @@ void HiseJavascriptEngine::RootObject::execute(const String& code, bool allowCon
 					continue;
 
 				auto cbName = c->getName();
-				bool isAudioThread = false;
-
-				for (auto& id : audioCallbacks)
-				{
-					if (cbName == id)
-					{
-						isAudioThread = true;
-						break;
-					}
-				}
-
-				if (!isAudioThread)
+				if (!isStaticRealtimeCallbackName(cbName))
 					continue;
 
 				auto* proc = dynamic_cast<Processor*>(hiseSpecialData.processor);

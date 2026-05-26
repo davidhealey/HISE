@@ -377,6 +377,10 @@ public:
 
 	void checkMouseClickProfiler(bool isDown);
 
+	Processor* getProcessor();;
+
+	const Processor* getProcessor() const;;
+
 protected:
 
 	ScopedPointer<dispatch::library::Processor::AttributeListener> valueListener;
@@ -396,9 +400,7 @@ protected:
 	*/
 	bool checkLearnMode();
 	
-	Processor *getProcessor();;
-
-	const Processor *getProcessor() const;;
+	
 
 	int parameter;
 
@@ -756,6 +758,20 @@ public:
 		numModes
 	};
 
+	static StringArray getModeList()
+	{
+		return {
+			"Frequency", 
+			"Decibel", 
+			"Time", 
+			"TempoSync", 
+			"Linear", 
+			"Discrete", 
+			"Pan", 
+			"NormalizedPercentage"
+		};
+	}
+
 	struct HoverPopupLookandFeel
 	{
 		virtual ~HoverPopupLookandFeel() = default;
@@ -785,6 +801,7 @@ public:
 			RectangleList<int> draggers;
 			Rectangle<int> labelArea;
 			int margin = 10;
+			bool alwaysOnTop = false;
 			SliderStyle s = SliderStyle::RotaryHorizontalVerticalDrag;
 			float sensitivity = 1.0f;
 		};

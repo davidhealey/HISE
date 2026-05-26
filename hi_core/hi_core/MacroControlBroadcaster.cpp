@@ -344,6 +344,23 @@ namespace hise { using namespace juce;
 		}
 	}
 
+	void MacroControlBroadcaster::rebuildMacroControlsAfterProjectSwitch()
+	{
+		auto mc = thisAsSynth->getMainController();
+
+		auto numMacros = HISE_GET_PREPROCESSOR(mc, HISE_NUM_MACROS);
+
+		if (numMacros != macroControls.size())
+		{
+			macroControls.clear();
+
+			for (int i = 0; i < numMacros; i++)
+			{
+				macroControls.add(new MacroControlData(i, *this, mc));
+			}
+		}
+	}
+
 	bool MacroControlBroadcaster::hasActiveParameters(int macroIndex)
 	{
 		return macroControls[macroIndex]->getNumParameters() != 0;
@@ -352,13 +369,7 @@ namespace hise { using namespace juce;
 MacroControlBroadcaster::MacroControlBroadcaster(ModulatorSynthChain *chain):
 	thisAsSynth(chain)
 {
-	auto mc = thisAsSynth->getMainController();
-	auto numMacros = HISE_GET_PREPROCESSOR(mc, HISE_NUM_MACROS);
-
-	for(int i = 0; i < numMacros; i++)
-	{
-		macroControls.add(new MacroControlData(i, *this, mc));
-	}
+	rebuildMacroControlsAfterProjectSwitch();
 }
 
 
@@ -877,7 +888,15 @@ void MacroControlBroadcaster::setMacroControl(int macroIndex, float newValue, No
 		if(macroIndex >= p->getNumParameters()) return;
 
 #if USE_BACKEND && !HISE_JUCE8
+#if HISE_MACROS_ARE_PLUGIN_PARAMETERS 
+		// note: previously HISE always routed macros to the plugin parameter slots
+		// in the backend. With the addition of live-plugin parameters within HISE
+		// (the April 2025 commit of death)
+		// this leads to a weird loop back from macro to first plugin parameter controlled
+		// processor unless this preprocessor is set to carve out space in the parameter list
+		// for the actual macros..
 		p->setParameterNotifyingHost(macroIndex, newValue / 127.0f);
+#endif
 #endif
 	}
 }

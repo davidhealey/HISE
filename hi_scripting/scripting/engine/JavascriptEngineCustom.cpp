@@ -1257,6 +1257,18 @@ struct FunctionInliner : public HiseJavascriptEngine::RootObject::OptimizationPa
 
 #if USE_BACKEND
 
+bool isStaticRealtimeCallbackName(const Identifier& id)
+{
+	return id == Identifier("onNoteOn")
+		|| id == Identifier("onNoteOff")
+		|| id == Identifier("onController")
+		|| id == Identifier("onTimer")
+		|| id == Identifier("onVoiceStart")
+		|| id == Identifier("onVoiceStop")
+		|| id == Identifier("prepareToPlay")
+		|| id == Identifier("processBlock");
+}
+
 struct CallScopeAnalyzer : public HiseJavascriptEngine::RootObject::OptimizationPass
 {
 	using RO = HiseJavascriptEngine::RootObject;
@@ -1437,6 +1449,9 @@ private:
 		if (ilCall->f == nullptr)
 			return;
 
+		if (!ilCall->f->realtimeSafetyInfoData.analyzed && ilCall->f->body != nullptr)
+			ilCall->f->performLazyCallScopeAnalysis();
+
 		auto* calleeInfo = ilCall->f->getRealtimeSafetyInfo();
 		if (calleeInfo == nullptr || calleeInfo->isEmpty())
 			return;
@@ -1560,6 +1575,20 @@ struct ApiValidationAnalyzer : public HiseJavascriptEngine::RootObject::Optimiza
 		}
 
 		return c->performDiagnostic(methodName, diagnosticArgs);
+	}
+
+	DR checkContentAddFunction(RO::FunctionCall* funcCall)
+	{
+		auto numArgs = funcCall->arguments.size();
+
+		if (numArgs != 1)
+		{
+			String msg;
+			msg << "omit the x, y arguments to avoid repositioning UI components after recompilation.";
+			return DR::fail(msg);
+		}
+
+		return DR::ok();
 	}
 
 	/** Check argument count against expected. Returns Error on mismatch, OK otherwise. */
@@ -1767,6 +1796,8 @@ private:
 		if (info == nullptr)
 			return; // Method not found in any API class — can't validate without knowing the object type
 
+		
+
 		// Method exists somewhere — check arg count if unambiguous
 		if (info->ambiguousArgCount)
 			return; // Different classes have different arg counts — can't validate
@@ -1780,11 +1811,17 @@ private:
 			queryDr = getQueryDiagnostic(proto, funcCall, Identifier(methodName));
 		}
 
-		auto argDr = checkArgCount(funcCall, info->numArgs);
+		auto isContentAddFunction = info->className == Identifier("Content") 
+								 && methodName.startsWith("add")
+								 && methodName != "addVisualGuide";
+
+		auto argDr = isContentAddFunction ? checkContentAddFunction(funcCall) : checkArgCount(funcCall, info->numArgs);
 
 		// Tier 3 arg count is Warning (not Error) — less certainty without type info
 		if (argDr.shouldReport())
 			argDr = argDr.withSeverity(DR::Severity::Warning);
+
+
 
 		auto best = DR::max(queryDr, argDr);
 

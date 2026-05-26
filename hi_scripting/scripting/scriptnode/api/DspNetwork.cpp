@@ -49,6 +49,7 @@ struct DspNetwork::Wrapper
 	API_METHOD_WRAPPER_3(DspNetwork, createAndAdd);
 	API_METHOD_WRAPPER_2(DspNetwork, createFromJSON);
 	API_METHOD_WRAPPER_0(DspNetwork, undo);
+	API_METHOD_WRAPPER_2(DspNetwork, injectAndProbe);
 	//API_VOID_METHOD_WRAPPER_0(DspNetwork, disconnectAll);
 	//API_VOID_METHOD_WRAPPER_3(DspNetwork, injectAfter);
 };
@@ -171,9 +172,9 @@ DspNetwork::DspNetwork(hise::ProcessorWithScriptingContent* p, ValueTree data_, 
 	ADD_API_METHOD_2(clear);
 	ADD_API_METHOD_2(createFromJSON);
 	ADD_API_METHOD_0(undo);
+	ADD_API_METHOD_2(injectAndProbe);
 	//ADD_API_METHOD_0(disconnectAll);
-	//ADD_API_METHOD_3(injectAfter);
-
+	
 	selectionUpdater = new SelectionUpdater(*this);
 
 	setEnableUndoManager(enableUndo);
@@ -241,11 +242,12 @@ DspNetwork::~DspNetwork()
 
 	stopTimer();
 
+	lastInjector = var();
 	root = nullptr;
 	selectionUpdater = nullptr;
 	nodes.clear();
     nodeFactories.clear();
-
+	
 	getMainController()->removeTempoListener(&tempoSyncer);
 }
 
@@ -351,8 +353,12 @@ void DspNetwork::createAllNodesOnce()
 
 			Namespace nh(header, "ScriptnodeDataBase", false);
 			
-			String hl1 = "static constexpr int scriptnode_database_datSize = " + String(compressed.getSize()) << ";";
-			String hl2 = "extern const char* scriptnode_database_dat;";
+			String hl1;
+			
+			hl1 << "static constexpr int scriptnode_database_datSize = " << String(compressed.getSize()) << ";";
+			String hl2;
+			
+			hl2 << "extern const char* scriptnode_database_dat;";
 
 			header << hl1;
 			header << hl2;
@@ -1019,6 +1025,40 @@ bool DspNetwork::setParameterDataFromJSON(var jsonData)
 	return true;
 }
 
+bool DspNetwork::injectAndProbe(const var& injectData, const var& reportCallback)
+{
+#if USE_BACKEND
+	using IC = NodeContainer::InjectChecker;
+
+	ReferenceCountedObjectPtr<IC> ptr, keepAlive;
+
+	ptr = new IC(this, injectData, reportCallback);
+
+	if (auto existing = dynamic_cast<IC*>(lastInjector.getObject()))
+		keepAlive = existing;
+
+	if (ptr->injectOk.wasOk())
+		lastInjector = ptr.get();
+	
+	if (keepAlive != nullptr)
+	{
+		MessageManager::callAsync([keepAlive]()
+		{
+			keepAlive->cleanup();
+		});
+	}
+
+	auto ok = ptr->injectOk.wasOk();
+
+	if (!ok)
+		reportScriptError(ptr->injectOk.getErrorMessage());
+
+	return ok;
+#else
+	return false;
+#endif
+}
+
 juce::Array<Parameter*> DspNetwork::getListOfProbedParameters()
 {
 	Array<Parameter*> list;
@@ -1216,6 +1256,23 @@ void DspNetwork::addToSelection(NodeBase* node, ModifierKeys mods)
 }
 
 
+juce::Image DspNetwork::createScreenshot(Component* root, float scaleFactor)
+{
+	Image img;
+
+#if USE_BACKEND
+	jassert(MessageManager::getInstance()->isThisTheMessageThread());
+
+	Component::callRecursive<scriptnode::DspNetworkGraph>(root, [&](scriptnode::DspNetworkGraph* ng)
+	{
+		img = ng->createComponentSnapshot(ng->getLocalBounds(), true, scaleFactor);
+		return true;
+	});
+#endif
+
+	return img;
+}
+
 void DspNetwork::zoomToSelection(Component* c)
 {
     using ButtonBase = DspNetworkGraph::ActionButton;
@@ -1336,6 +1393,10 @@ juce::ValueTree DspNetwork::cloneValueTreeWithNewIds(const ValueTree& treeToClon
 	{
 		if (v[PropertyIds::Automated])
 			v.removeProperty(PropertyIds::Automated, nullptr);
+
+		if (v[PropertyIds::AutomatedExternal])
+			v.removeProperty(PropertyIds::AutomatedExternal, nullptr);
+		
 
 		return false;
 	});
@@ -1855,6 +1916,34 @@ void DspNetwork::Holder::restoreNetworks(const ValueTree& d)
 			setActiveNetwork(newNetwork);
 		}
 	}
+}
+
+hise::ProcessorMetadata DspNetwork::Holder::withDynamicParametersFromNetwork(const ProcessorMetadata& pn, int numMods, int offset) const
+{
+	auto md = pn;
+
+	if (auto an = getActiveNetwork())
+	{
+		auto rn = an->getRootNode();
+
+		for (int i = 0; i < rn->getNumParameters(); i++)
+		{
+			NodeBase::Parameter* p = rn->getParameterFromIndex(i);
+
+			parameter::data pd;
+			pd.info = parameter::pod(p->data);
+			md = md.withDynamicParameter(pd);
+		}
+
+		auto modProperties = an->getParameterProperties();
+		md = md.withDynamicModulation(modProperties, numMods, offset);
+	}
+	else
+	{
+		md = md.withDynamicModulation({}, numMods, offset);
+	}
+
+	return md;
 }
 
 scriptnode::NodeBase* NodeFactory::createNode(ValueTree data, bool createPolyIfAvailable) const
@@ -2721,18 +2810,20 @@ void DspNetworkListeners::DspNetworkGraphRootListener::onChangeStatic(DspNetwork
 #endif
 
 
-void ScriptnodeExceptionHandler::validateMidiProcessingContext(NodeBase* b)
+bool ScriptnodeExceptionHandler::isInMidiProcessingContext(NodeBase* b)
 {
+	auto isInMidiChain = false;
+
 	if (b != nullptr)
 	{
-		auto pp = b->getParentNode();
-		auto isInMidiChain = b->getRootNetwork()->isPolyphonic();
+		auto pp = b;
+		isInMidiChain = b->getRootNetwork()->isPolyphonic();
 
 		while (pp != nullptr)
 		{
 			isInMidiChain |= pp->getValueTree()[PropertyIds::FactoryPath].toString().contains("midichain");
 
-			if(pp->getValueTree()[PropertyIds::FactoryPath].toString().contains("no_midi"))
+			if (pp->getValueTree()[PropertyIds::FactoryPath].toString().contains("no_midi"))
 			{
 				isInMidiChain = false;
 				break;
@@ -2740,8 +2831,16 @@ void ScriptnodeExceptionHandler::validateMidiProcessingContext(NodeBase* b)
 
 			pp = pp->getParentNode();
 		}
+	}
 
-		if (!isInMidiChain)
+	return isInMidiChain;
+}
+
+void ScriptnodeExceptionHandler::validateMidiProcessingContext(NodeBase* b)
+{
+	if (b != nullptr)
+	{
+		if (!isInMidiProcessingContext(b))
 		{
 			Error e;
 			e.error = Error::NoMatchingParent;
@@ -2987,6 +3086,7 @@ bool DspNetworkListeners::PatchAutosaver::stripValueTree(ValueTree& v)
 		removeIfDefault(v, id, PropertyIds::Helpers::getDefaultValue(id));
 
 	removeIfDefined(v, PropertyIds::Value, PropertyIds::Automated);
+	removeIfDefined(v, PropertyIds::Value, PropertyIds::AutomatedExternal);
 
 	if(v.hasProperty(PropertyIds::DefaultValue) && v[PropertyIds::DefaultValue] == v[PropertyIds::Value])
 		v.removeProperty(PropertyIds::DefaultValue, nullptr);
@@ -3127,7 +3227,6 @@ void DspNetwork::FaustManager::sendCompileMessage(const File& f, NotificationTyp
 	processor->getMainController()->getKillStateHandler().killVoicesAndCall(processor, pf, 
 		MainController::KillStateHandler::TargetThread::SampleLoadingThread);
 }
-
 
 
 
