@@ -2132,7 +2132,7 @@ void CompileExporter::ProjectTemplateHelpers::handleCompilerInfo(CompileExporter
 		if (exporter->useIpp)
 			REPLACE_WILDCARD_WITH_STRING("%FFT_LINKER_FLAGS%", "-lippcore -lippvm -lipps -lippi -lippcv");
 		else
-			REPLACE_WILDCARD_WITH_STRING("%FFT_LINKER_FLAGS%", useFFTW ? "-lfftw3f" : String());
+			REPLACE_WILDCARD_WITH_STRING("%FFT_LINKER_FLAGS%", useFFTW ? "-Wl,-Bstatic -lfftw3f -Wl,-Bdynamic" : String());
 
 	#endif
 
