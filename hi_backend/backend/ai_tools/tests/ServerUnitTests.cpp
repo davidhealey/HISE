@@ -644,6 +644,7 @@ private:
         // in-process without side effects on the user's current project.
         StringArray skipList;
         skipList.add("/api/dsp/save");
+        skipList.add("/api/dsp/runtime_status");
         skipList.add("/api/project/list");
         skipList.add("/api/project/tree");
         skipList.add("/api/project/files");
@@ -656,6 +657,7 @@ private:
         skipList.add("/api/project/import_snippet");
         skipList.add("/api/project/preprocessor/list");
         skipList.add("/api/project/preprocessor/set");
+        
 
         // Verify metadata count matches enum
         const auto& metadata = RestHelpers::getRouteMetadata();
