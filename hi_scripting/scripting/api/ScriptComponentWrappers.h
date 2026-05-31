@@ -992,9 +992,12 @@ public:
 
 		void zoomChanged(float newScalingFactor) override { scaleFactorChanged(newScalingFactor); }
 
+		hise::WebViewData::Ptr pendingData;
+
 		Component::SafePointer<ZoomableViewport> vp;
 
 		JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(WebViewWrapper);
+		JUCE_DECLARE_WEAK_REFERENCEABLE(WebViewWrapper);
 	};
 
 	class FloatingTileWrapper : public ScriptCreatedComponentWrapper

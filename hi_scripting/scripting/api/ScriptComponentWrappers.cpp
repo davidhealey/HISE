@@ -2908,10 +2908,23 @@ void ScriptCreatedComponentWrappers::AudioWaveformWrapper::updateColours(AudioDi
 ScriptCreatedComponentWrappers::WebViewWrapper::WebViewWrapper(ScriptContentComponent *content, ScriptingApi::Content::ScriptWebView *webview, int index) :
 	ScriptCreatedComponentWrapper(content, webview)
 {
-	auto wc = new hise::WebViewWrapper(webview->getData(), false);
-	dynamic_cast<GlobalSettingManager*>(getProcessor()->getMainController())->addScaleFactorListener(this);
-	component = wc;
-	
+	juce::PluginHostType hostType;
+
+	auto delayWebviewInitialisation = dynamic_cast<const Processor*>(content->getScriptProcessor())->getMainController()->isInterfaceBeingCreated()
+		&& hostType.isFruityLoops();
+
+	if (delayWebviewInitialisation)
+	{
+		pendingData = webview->getData();
+		component = new Component();
+	}
+	else
+	{
+		auto wc = new hise::WebViewWrapper(webview->getData(), false);
+		dynamic_cast<GlobalSettingManager*>(getProcessor()->getMainController())->addScaleFactorListener(this);
+		component = wc;
+	}
+
 	if ((vp = content->findParentComponentOfClass<ZoomableViewport>()))
 		vp->addZoomListener(this);
 }
@@ -2919,6 +2932,31 @@ ScriptCreatedComponentWrappers::WebViewWrapper::WebViewWrapper(ScriptContentComp
 void ScriptCreatedComponentWrappers::WebViewWrapper::postInit()
 {
 	auto wv = dynamic_cast<hise::WebViewWrapper*>(getComponent());
+
+	if (wv == nullptr)
+	{
+		WeakReference<WebViewWrapper> safeThis(this);
+
+		Timer::callAfterDelay(500, [safeThis]()
+		{
+			if (safeThis != nullptr)
+			{
+				auto wv = new hise::WebViewWrapper(safeThis->pendingData, false);
+				dynamic_cast<GlobalSettingManager*>(safeThis->getProcessor()->getMainController())->addScaleFactorListener(safeThis);
+
+				auto p = safeThis->component->getParentComponent();
+				auto pb = safeThis->component->getBoundsInParent();
+
+				safeThis->component = wv;
+				p->addAndMakeVisible(safeThis->component);
+				safeThis->component->setBounds(pb);
+				wv->refresh();
+			}
+		});
+
+		return;
+	}
+
 	wv->refresh();
 }
 
@@ -2927,7 +2965,6 @@ ScriptCreatedComponentWrappers::WebViewWrapper::~WebViewWrapper()
 	if(vp.getComponent() != nullptr)
 		vp->removeZoomListener(this);
 	
-
 	dynamic_cast<GlobalSettingManager*>(getProcessor()->getMainController())->removeScaleFactorListener(this);
 	component = nullptr;
 }

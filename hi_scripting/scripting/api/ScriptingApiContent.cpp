@@ -5989,7 +5989,7 @@ void ScriptingApi::Content::ScriptWebView::preRecompileCallback()
 
 		auto t = Thread::getCurrentThread();
 
-		while(!t->threadShouldExit() && data->hasWebViews())
+		while(t != nullptr && !t->threadShouldExit() && data->hasWebViews())
 		{
 			t->sleep(10);
 		}
