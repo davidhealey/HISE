@@ -1688,6 +1688,9 @@ namespace ScriptingObjects
 		/** Swaps to a compiled quality configuration and resets the model. */
 		bool setQualityConfiguration(String qualityId);
 
+		/** Sets NAM output gain compensation. Pass a mode string or an object with mode and inputCalibrationLevelDbu. */
+		bool setNAMGainMode(const var& modeOrOptions);
+
 		// ================================================================================ API Methods
 
 	private:

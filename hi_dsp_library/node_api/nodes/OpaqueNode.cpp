@@ -363,6 +363,7 @@ String ProjectDll::getFuncName(ExportedFunction f)
 	case ExportedFunction::GetNeuralModelQualityId: return "getNeuralModelQualityId";
 	case ExportedFunction::GetNeuralModelNumInputs: return "getNeuralModelNumInputs";
 	case ExportedFunction::GetNeuralModelNumOutputs: return "getNeuralModelNumOutputs";
+	case ExportedFunction::GetNeuralModelMetadata: return "getNeuralModelMetadata";
 	case ExportedFunction::CreateNeuralModel: return "createNeuralModel";
 	case ExportedFunction::CloneNeuralModel: return "cloneNeuralModel";
 	case ExportedFunction::DestroyNeuralModel: return "destroyNeuralModel";
@@ -510,6 +511,18 @@ int ProjectDll::getNeuralModelNumOutputs(int index) const
 		return DLL_FUNCTION(GetNeuralModelNumOutputs)(index);
 
 	return 0;
+}
+
+String ProjectDll::getNeuralModelMetadata(int index) const
+{
+	if(*this)
+	{
+		char buffer[512];
+		auto length = DLL_FUNCTION(GetNeuralModelMetadata)(index, buffer);
+		return String(buffer, length);
+	}
+
+	return {};
 }
 
 void* ProjectDll::createNeuralModel(int index) const

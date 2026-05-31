@@ -475,6 +475,7 @@ void DspNetworkCompileExporter::runStatic(Context& ctx)
 
 	auto sourceDir = ctx.getFolder(BackendDllManager::FolderSubType::ProjucerSourceFolder);
 
+#if HISE_INCLUDE_RT_NEURAL
 	for(auto neuralFile: neuralNetworkFiles)
 	{
 		String code;
@@ -498,8 +499,7 @@ void DspNetworkCompileExporter::runStatic(Context& ctx)
 
 		ctx.includedNeuralModelFiles.add(target);
 	}
-
-
+#endif
 
 	using namespace snex::cppgen;
 
@@ -830,9 +830,11 @@ void DspNetworkCompileExporter::threadFinished()
 		if(managerToUse == nullptr)
 			PresetHandler::showMessageWindow("Compilation OK", "Press OK to reload the DLL and refresh all compiled effect instances.");
 
-		auto f = [this](Processor*)
+		auto dllManager = getDllManager();
+
+		auto f = [dllManager](Processor*)
 		{
-			getDllManager()->loadDll(true);
+			dllManager->loadDll(true);
 			return SafeFunctionCall::OK;
 		};
 
@@ -1482,7 +1484,7 @@ void DspNetworkCompileExporter::createMainCppFile(Context& ctx, bool isDllMainFi
 			b << "DLL_EXPORT size_t " + methodName + "(int index, char* t)";
 			StatementBlock bk(b);
 			b << "#if HISE_INCLUDE_RT_NEURAL";
-			b << "return HelperFunctions::writeString(t, nf." + factoryMethodName + "(index).toString().getCharPointer());";
+			b << "return HelperFunctions::writeString(t, nf." + factoryMethodName + "(index).getCharPointer());";
 			b << "#else";
 			b << "ignoreUnused(index);";
 			b << "#endif";
@@ -1491,6 +1493,7 @@ void DspNetworkCompileExporter::createMainCppFile(Context& ctx, bool isDllMainFi
 
 		addNeuralStringGetter("getNeuralModelId", "getModelId");
 		addNeuralStringGetter("getNeuralModelQualityId", "getModelQualityId");
+		addNeuralStringGetter("getNeuralModelMetadata", "getModelMetadata");
 
 		auto addNeuralIntGetter = [&b](const String& methodName, const String& factoryMethodName)
 		{

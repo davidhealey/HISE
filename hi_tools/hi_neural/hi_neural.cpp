@@ -201,7 +201,17 @@ namespace NeuralJsonHelpers
 		obj->setProperty("config", sourceData["config"]);
 		obj->setProperty("weights", sourceData["weights"]);
 
+		if(!sourceData["metadata"].isVoid() && !sourceData["metadata"].isUndefined())
+			obj->setProperty("metadata", sourceData["metadata"]);
+
 		return var(obj);
+	}
+
+	static String escapeForStringLiteral(String s)
+	{
+		s = s.replace("\\", "\\\\");
+		s = s.replace("\"", "\\\"");
+		return s;
 	}
 
 	static String getFloatBytes(const nlohmann::json& data)
@@ -440,7 +450,124 @@ namespace NAMHelpers
 	{
 		std::vector<LayerInfo> layers;
 		int numWeights = 0;
+		NeuralNetwork::NAMMetadata metadata;
 	};
+
+	static void parseMetadata(const nlohmann::json& data, NeuralNetwork::NAMMetadata& metadata)
+	{
+		metadata = {};
+		metadata.isNAM = true;
+
+		const nlohmann::json* metadataObject = nullptr;
+
+		if(data.contains("metadata") && data["metadata"].is_object())
+			metadataObject = &data["metadata"];
+
+		if(metadataObject != nullptr && metadataObject->contains("loudness") && (*metadataObject)["loudness"].is_number())
+		{
+			metadata.hasLoudness = true;
+			metadata.loudnessDb = (*metadataObject)["loudness"].get<float>();
+		}
+
+		if(metadataObject != nullptr && metadataObject->contains("input_level_dbu") &&
+			(*metadataObject)["input_level_dbu"].is_number())
+		{
+			metadata.hasInputLevel = true;
+			metadata.inputLevelDbu = (*metadataObject)["input_level_dbu"].get<float>();
+		}
+
+		if(metadataObject != nullptr && metadataObject->contains("output_level_dbu") &&
+			(*metadataObject)["output_level_dbu"].is_number())
+		{
+			metadata.hasOutputLevel = true;
+			metadata.outputLevelDbu = (*metadataObject)["output_level_dbu"].get<float>();
+		}
+
+		const nlohmann::json* hiseObject = nullptr;
+
+		if(data.contains("hise") && data["hise"].is_object())
+			hiseObject = &data["hise"];
+		else if(metadataObject != nullptr)
+			hiseObject = metadataObject;
+
+		if(hiseObject != nullptr)
+		{
+			const auto& h = *hiseObject;
+			auto mode = h.value("namGainMode", std::string());
+
+			if(mode == "raw" || mode == "normalized" || mode == "calibrated")
+			{
+				metadata.hasPreferredGainMode = true;
+
+				if(mode == "normalized")
+					metadata.preferredGainMode = NeuralNetwork::NAMGainMode::Normalized;
+				else if(mode == "calibrated")
+					metadata.preferredGainMode = NeuralNetwork::NAMGainMode::Calibrated;
+				else
+					metadata.preferredGainMode = NeuralNetwork::NAMGainMode::Raw;
+			}
+
+			if(h.contains("namInputCalibrationLevelDbu") && h["namInputCalibrationLevelDbu"].is_number())
+				metadata.preferredInputCalibrationLevelDbu = h["namInputCalibrationLevelDbu"].get<float>();
+		}
+	}
+
+	static String createMetadataJSON(const NeuralNetwork::NAMMetadata& metadata)
+	{
+		if(!metadata.isNAM)
+			return {};
+
+		nlohmann::json data;
+		data["modelType"] = "nam";
+
+		if(metadata.hasLoudness)
+			data["loudness"] = metadata.loudnessDb;
+
+		if(metadata.hasInputLevel)
+			data["input_level_dbu"] = metadata.inputLevelDbu;
+
+		if(metadata.hasOutputLevel)
+			data["output_level_dbu"] = metadata.outputLevelDbu;
+
+		if(metadata.hasPreferredGainMode)
+		{
+			switch(metadata.preferredGainMode)
+			{
+			case NeuralNetwork::NAMGainMode::Normalized: data["namGainMode"] = "normalized"; break;
+			case NeuralNetwork::NAMGainMode::Calibrated: data["namGainMode"] = "calibrated"; break;
+			case NeuralNetwork::NAMGainMode::Raw:
+			default: data["namGainMode"] = "raw"; break;
+			}
+
+			data["namInputCalibrationLevelDbu"] = metadata.preferredInputCalibrationLevelDbu;
+		}
+
+		return String(data.dump());
+	}
+
+	static NeuralNetwork::NAMMetadata parseMetadataJSON(const String& metadataJSON)
+	{
+		NeuralNetwork::NAMMetadata metadata;
+
+		if(metadataJSON.isEmpty())
+			return metadata;
+
+		try
+		{
+			auto data = nlohmann::json::parse(metadataJSON.toStdString());
+
+			if(data.value("modelType", std::string()) != "nam")
+				return metadata;
+
+			parseMetadata(nlohmann::json { { "metadata", data } }, metadata);
+		}
+		catch(std::exception&)
+		{
+			jassertfalse;
+		}
+
+		return metadata;
+	}
 
 	static String getLayerSignature(const LayerInfo& l)
 	{
@@ -558,6 +685,8 @@ namespace NAMHelpers
 
 	static Result parseModel(const nlohmann::json& data, ModelInfo& info)
 	{
+		parseMetadata(data, info.metadata);
+
 		if(data.contains("architecture") && data.value("architecture", std::string()) != "WaveNet")
 			return Result::fail("Unsupported NAM architecture `" + String(data.value("architecture", std::string())) +
 				"`. Only plain WaveNet models are supported");
@@ -1076,6 +1205,7 @@ NeuralNetwork::NeuralNetwork(const Identifier& id_, Factory* f):
 	}
 
 	currentModels.add(f->create(id, activeQualityConfiguration));
+	setNAMMetadata(f->getNAMMetadata(id, activeQualityConfiguration));
 
 	if(backendState == BackendState::CompiledLinked && currentModels.getFirst()->isDllModel())
 		backendState = BackendState::CompiledDll;
@@ -1137,6 +1267,7 @@ void NeuralNetwork::refreshCompiledModel(BackendState compiledState)
 	}
 
 	backendState = compiledState;
+	setNAMMetadata(factory->getNAMMetadata(id, activeQualityConfiguration));
 	reset(-1);
 }
 
@@ -1146,10 +1277,13 @@ NeuralNetwork::Ptr NeuralNetwork::clone(int numNetworks)
     
     nn->currentModels.clear();
     
-    nn->context = context;
+	nn->context = context;
 	nn->backendState = backendState;
 	nn->activeQualityConfiguration = activeQualityConfiguration;
 	nn->compiledModelJSON = compiledModelJSON;
+	nn->namMetadata = namMetadata;
+	nn->namGainMode = namGainMode;
+	nn->namInputCalibrationLevelDbu = namInputCalibrationLevelDbu;
     
     for(int i = 0; i < numNetworks; i++)
         nn->currentModels.add(currentModels.getFirst()->clone());
@@ -1290,7 +1424,9 @@ static Result createCompiledNAMModelHeader(const File& sourceFile, const nlohman
 
 		{
 			snex::cppgen::StatementBlock registerBlock(b);
-			b << String("f->registerModel<") + className + ">();";
+			b << String("f->registerModel(") + className + "::getStaticId(), " + className + "::getConfigId(), " +
+				className + "::create, " + className + "::StaticNumInputs, " + className + "::StaticNumOutputs, \"" +
+				NeuralJsonHelpers::escapeForStringLiteral(NAMHelpers::createMetadataJSON(info.metadata)) + "\");";
 		}
 	}
 
@@ -1555,6 +1691,7 @@ Result NeuralNetwork::loadPytorchModel(const var& fullJson)
 	if(weightsOk.wasOk())
 	{
 		compiledModelJSON = var();
+		resetNAMMetadata();
 		activeQualityConfiguration = Identifier("default");
 		backendState = BackendState::Dynamic;
 	}
@@ -1706,6 +1843,18 @@ Result NeuralNetwork::loadNAMModel(const var& jsonData)
 	}
 
 	compiledModelJSON = NeuralJsonHelpers::createNAMJSON(id, jsonData);
+	setNAMMetadata(info.metadata);
+
+	if(auto hiseData = jsonData["hise"].getDynamicObject())
+	{
+		if(!hiseData->getProperty("namInputCalibrationLevelDbu").isVoid())
+			namInputCalibrationLevelDbu = (float)hiseData->getProperty("namInputCalibrationLevelDbu");
+
+		if(!hiseData->getProperty("namGainMode").isVoid())
+			setNAMGainMode(hiseData->getProperty("namGainMode"));
+	}
+
+	updateNAMGainMetadataInCompiledJSON();
 	activeQualityConfiguration = Identifier("default");
 	backendState = BackendState::Dynamic;
 	
@@ -1725,6 +1874,7 @@ void NeuralNetwork::clearModel()
 	}
 
 	compiledModelJSON = var();
+	resetNAMMetadata();
 	activeQualityConfiguration = Identifier("default");
 	backendState = BackendState::Empty;
 }
@@ -1751,6 +1901,7 @@ Result NeuralNetwork::build(const var& modelJSON)
 	}
 
 	compiledModelJSON = var();
+	resetNAMMetadata();
 	activeQualityConfiguration = Identifier("default");
 	backendState = BackendState::Dynamic;
 	
@@ -1882,7 +2033,123 @@ Result NeuralNetwork::setQualityConfiguration(const Identifier& qualityId)
 	}
 
 	activeQualityConfiguration = qualityId;
+	setNAMMetadata(factory->getNAMMetadata(id, qualityId));
 	return Result::ok();
+}
+
+Result NeuralNetwork::setNAMGainMode(const var& modeOrOptions)
+{
+	auto mode = modeOrOptions.toString();
+	float newInputCalibrationLevel = namInputCalibrationLevelDbu;
+
+	if(auto obj = modeOrOptions.getDynamicObject())
+	{
+		mode = obj->getProperty("mode").toString();
+
+		if(!obj->getProperty("inputCalibrationLevelDbu").isVoid())
+			newInputCalibrationLevel = (float)obj->getProperty("inputCalibrationLevelDbu");
+	}
+
+	NAMGainMode newMode = NAMGainMode::Raw;
+
+	if(mode == "raw")
+		newMode = NAMGainMode::Raw;
+	else if(mode == "normalized")
+		newMode = NAMGainMode::Normalized;
+	else if(mode == "calibrated")
+		newMode = NAMGainMode::Calibrated;
+	else
+		return Result::fail("Unsupported NAM gain mode: " + mode + ". Use raw, normalized or calibrated");
+
+	namGainMode = newMode;
+	namInputCalibrationLevelDbu = newInputCalibrationLevel;
+	namMetadata.hasPreferredGainMode = true;
+	namMetadata.preferredGainMode = namGainMode;
+	namMetadata.preferredInputCalibrationLevelDbu = namInputCalibrationLevelDbu;
+	updateNAMGainMetadataInCompiledJSON();
+	return Result::ok();
+}
+
+String NeuralNetwork::getNAMGainMode() const
+{
+	switch(namGainMode)
+	{
+	case NAMGainMode::Raw: return "raw";
+	case NAMGainMode::Normalized: return "normalized";
+	case NAMGainMode::Calibrated: return "calibrated";
+	default: jassertfalse; return "raw";
+	}
+}
+
+NeuralNetwork::NAMMetadata NeuralNetwork::getNAMMetadata() const
+{
+	return namMetadata;
+}
+
+float NeuralNetwork::getNAMInputGainDb() const noexcept
+{
+	return 0.0f;
+}
+
+float NeuralNetwork::getNAMOutputGainDb() const noexcept
+{
+	if(!namMetadata.isNAM)
+		return 0.0f;
+
+	switch(namGainMode)
+	{
+	case NAMGainMode::Normalized:
+		return namMetadata.hasLoudness ? (-18.0f - namMetadata.loudnessDb) : 0.0f;
+	case NAMGainMode::Calibrated:
+		return namMetadata.hasOutputLevel ? (namMetadata.outputLevelDbu - namInputCalibrationLevelDbu) : 0.0f;
+	case NAMGainMode::Raw:
+	default:
+		return 0.0f;
+	}
+}
+
+void NeuralNetwork::setNAMMetadata(const NAMMetadata& metadata)
+{
+	auto previousMode = namGainMode;
+	auto previousInputCalibrationLevel = namInputCalibrationLevelDbu;
+	auto previousHadPreferredMode = namMetadata.hasPreferredGainMode;
+	namMetadata = metadata;
+
+	if(metadata.hasPreferredGainMode)
+	{
+		namGainMode = metadata.preferredGainMode;
+		namInputCalibrationLevelDbu = metadata.preferredInputCalibrationLevelDbu;
+	}
+	else if(previousHadPreferredMode)
+	{
+		namGainMode = previousMode;
+		namInputCalibrationLevelDbu = previousInputCalibrationLevel;
+		namMetadata.hasPreferredGainMode = true;
+		namMetadata.preferredGainMode = namGainMode;
+		namMetadata.preferredInputCalibrationLevelDbu = namInputCalibrationLevelDbu;
+	}
+}
+
+void NeuralNetwork::resetNAMMetadata()
+{
+	namMetadata = {};
+	namGainMode = NAMGainMode::Raw;
+	namInputCalibrationLevelDbu = 12.0f;
+}
+
+void NeuralNetwork::updateNAMGainMetadataInCompiledJSON()
+{
+	if(compiledModelJSON.isVoid() || compiledModelJSON.isUndefined())
+		return;
+
+	if(auto obj = compiledModelJSON.getDynamicObject())
+	{
+		if(auto hiseData = obj->getProperty("hise").getDynamicObject())
+		{
+			hiseData->setProperty("namGainMode", getNAMGainMode());
+			hiseData->setProperty("namInputCalibrationLevelDbu", namInputCalibrationLevelDbu);
+		}
+	}
 }
 
 void NeuralNetwork::setNumNetworks(int numNetworks, bool forceClone)
@@ -1973,7 +2240,24 @@ void NeuralNetwork::process(int networkIndex, const float* input, float* output)
 	if(auto sl = SimpleReadWriteLock::ScopedTryReadLock(lock))
 	{
 		if(auto cm = currentModels[networkIndex])
+		{
+			if(namMetadata.isNAM && cm->getNumInputs() == 1 && cm->getNumOutputs() == 1)
+			{
+				const auto inputGain = Decibels::decibelsToGain(getNAMInputGainDb());
+				const auto outputGain = Decibels::decibelsToGain(getNAMOutputGainDb());
+
+				if(inputGain != 1.0f || outputGain != 1.0f)
+				{
+					float adjustedInput = input[0] * inputGain;
+					float modelOutput = 0.0f;
+					cm->process(&adjustedInput, &modelOutput);
+					output[0] = modelOutput * outputGain;
+					return;
+				}
+			}
+
 			cm->process(input, output);
+		}
 	}
 }
 
@@ -1993,6 +2277,7 @@ Result NeuralNetwork::loadTensorFlowModel(const var& jsonData)
 	}
 
 	compiledModelJSON = NeuralJsonHelpers::createRTNeuralJSON(id, jsonData, "TensorFlow", getNumInputs(), getNumOutputs());
+	resetNAMMetadata();
 	activeQualityConfiguration = Identifier("default");
 	backendState = BackendState::Dynamic;
 	
@@ -2066,9 +2351,10 @@ NeuralNetwork::Factory::Factory()
 }
 
 void NeuralNetwork::Factory::registerModel(const Identifier& id, const Identifier& qualityId,
-	const CreateFunction& create, int numInputs, int numOutputs)
+	const CreateFunction& create, int numInputs, int numOutputs, const String& namMetadataJSON)
 {
-	registeredModels.add(Entry { id, qualityId, create, numInputs, numOutputs });
+	registeredModels.add(Entry { id, qualityId, create, numInputs, numOutputs,
+		NAMHelpers::parseMetadataJSON(namMetadataJSON) });
 }
 
 void NeuralNetwork::Factory::clearCompiledModels()
@@ -2151,6 +2437,26 @@ int NeuralNetwork::Factory::getModelNumOutputs(int index) const
 
 	jassertfalse;
 	return 0;
+}
+
+String NeuralNetwork::Factory::getModelMetadata(int index) const
+{
+	if(isPositiveAndBelow(index, registeredModels.size()))
+		return NAMHelpers::createMetadataJSON(registeredModels[index].namMetadata);
+
+	jassertfalse;
+	return {};
+}
+
+NeuralNetwork::NAMMetadata NeuralNetwork::Factory::getNAMMetadata(const Identifier& id, const Identifier& qualityId) const
+{
+	for(const auto& entry: registeredModels)
+	{
+		if(entry.id == id && entry.qualityId == qualityId)
+			return entry.namMetadata;
+	}
+
+	return {};
 }
 
 NeuralNetwork::ModelBase* NeuralNetwork::Factory::createByIndex(int index)

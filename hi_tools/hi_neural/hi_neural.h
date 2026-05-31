@@ -80,6 +80,27 @@ struct NeuralNetwork: public ReferenceCountedObject,
 		CompiledDll
 	};
 
+	enum class NAMGainMode
+	{
+		Raw,
+		Normalized,
+		Calibrated
+	};
+
+	struct NAMMetadata
+	{
+		bool isNAM = false;
+		bool hasLoudness = false;
+		float loudnessDb = 0.0f;
+		bool hasInputLevel = false;
+		float inputLevelDbu = 0.0f;
+		bool hasOutputLevel = false;
+		float outputLevelDbu = 0.0f;
+		bool hasPreferredGainMode = false;
+		NAMGainMode preferredGainMode = NAMGainMode::Raw;
+		float preferredInputCalibrationLevelDbu = 12.0f;
+	};
+
 	struct ModelBase
 	{
         ModelBase() {};
@@ -120,6 +141,7 @@ struct NeuralNetwork: public ReferenceCountedObject,
 			CreateFunction create;
 			int numInputs = 0;
 			int numOutputs = 0;
+			NAMMetadata namMetadata;
 		};
 
 		Factory();
@@ -142,13 +164,15 @@ struct NeuralNetwork: public ReferenceCountedObject,
 		StringArray getQualityIds(const Identifier& id) const;
 		void clearCompiledModels();
 		void registerModel(const Identifier& id, const Identifier& qualityId, const CreateFunction& create,
-			int numInputs=0, int numOutputs=0);
+			int numInputs=0, int numOutputs=0, const String& namMetadataJSON=String());
 
 		int getNumModels() const;
 		Identifier getModelId(int index) const;
 		Identifier getModelQualityId(int index) const;
 		int getModelNumInputs(int index) const;
 		int getModelNumOutputs(int index) const;
+		String getModelMetadata(int index) const;
+		NAMMetadata getNAMMetadata(const Identifier& id, const Identifier& qualityId) const;
 		ModelBase* createByIndex(int index);
 
 		ModelBase* create(const Identifier& id);
@@ -240,6 +264,12 @@ struct NeuralNetwork: public ReferenceCountedObject,
 	String getActiveQualityConfiguration() const { return activeQualityConfiguration.toString(); }
 	StringArray getQualityConfigurations() const;
 	Result setQualityConfiguration(const Identifier& qualityId);
+	Result setNAMGainMode(const var& modeOrOptions);
+	String getNAMGainMode() const;
+	NAMMetadata getNAMMetadata() const;
+	float getNAMInputCalibrationLevelDbu() const noexcept { return namInputCalibrationLevelDbu; }
+	float getNAMInputGainDb() const noexcept;
+	float getNAMOutputGainDb() const noexcept;
 	void unloadCompiledModel();
 	void refreshCompiledModel(BackendState compiledState);
 
@@ -271,6 +301,13 @@ private:
 	BackendState backendState = BackendState::Empty;
 	Identifier activeQualityConfiguration = Identifier("default");
 	var compiledModelJSON;
+	NAMMetadata namMetadata;
+	NAMGainMode namGainMode = NAMGainMode::Raw;
+	float namInputCalibrationLevelDbu = 12.0f;
+
+	void setNAMMetadata(const NAMMetadata& metadata);
+	void resetNAMMetadata();
+	void updateNAMGainMetadataInCompiledJSON();
 
 	OwnedArray<ModelBase> currentModels;
 };

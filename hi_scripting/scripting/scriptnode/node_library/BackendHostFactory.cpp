@@ -155,11 +155,12 @@ void NeuralNetwork::Holder::registerDllModels(scriptnode::dll::ProjectDll* dll)
 		auto qualityId = Identifier(qualityString);
 		auto numInputs = dllToUse->getNeuralModelNumInputs(i);
 		auto numOutputs = dllToUse->getNeuralModelNumOutputs(i);
+		auto metadata = dllToUse->getNeuralModelMetadata(i);
 
 		f->registerModel(id, qualityId, [dllToUse, i]() -> NeuralNetwork::ModelBase*
 		{
 			return new DllCompiledNeuralModel(dllToUse, i);
-		}, numInputs, numOutputs);
+		}, numInputs, numOutputs, metadata);
 	}
 }
 #endif

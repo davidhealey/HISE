@@ -5806,6 +5806,7 @@ struct ScriptingObjects::ScriptNeuralNetwork::Wrapper
 	API_METHOD_WRAPPER_0(ScriptNeuralNetwork, getNetworkState);
 	API_METHOD_WRAPPER_0(ScriptNeuralNetwork, getNetworkInfo);
 	API_METHOD_WRAPPER_1(ScriptNeuralNetwork, setQualityConfiguration);
+	API_METHOD_WRAPPER_1(ScriptNeuralNetwork, setNAMGainMode);
 	API_METHOD_WRAPPER_2(ScriptNeuralNetwork, loadOnnxModel);
 	API_METHOD_WRAPPER_3(ScriptNeuralNetwork, processFFTSpectrum);
 };
@@ -5827,6 +5828,7 @@ ScriptingObjects::ScriptNeuralNetwork::ScriptNeuralNetwork(ProcessorWithScriptin
 	ADD_API_METHOD_0(getNetworkState);
 	ADD_API_METHOD_0(getNetworkInfo);
 	ADD_API_METHOD_1(setQualityConfiguration);
+	ADD_API_METHOD_1(setNAMGainMode);
 	ADD_API_METHOD_2(loadOnnxModel);
 	ADD_API_METHOD_3(processFFTSpectrum);
 
@@ -6197,6 +6199,42 @@ bool ScriptingObjects::ScriptNeuralNetwork::setQualityConfiguration(String quali
 #endif
 }
 
+bool ScriptingObjects::ScriptNeuralNetwork::setNAMGainMode(const var& modeOrOptions)
+{
+#if HISE_INCLUDE_RT_NEURAL
+	Result result = Result::ok();
+	auto safeThis = WeakReference<ScriptNeuralNetwork>(this);
+
+	auto f = [safeThis, modeOrOptions, &result](Processor*)
+	{
+		if(safeThis != nullptr)
+			result = safeThis->nn->setNAMGainMode(modeOrOptions);
+
+		return SafeFunctionCall::OK;
+	};
+
+	auto p = dynamic_cast<Processor*>(getScriptProcessor());
+	auto& killStateHandler = getScriptProcessor()->getMainController_()->getKillStateHandler();
+
+	if(!killStateHandler.killVoicesAndCall(p, f, MainController::KillStateHandler::TargetThread::SampleLoadingThread))
+	{
+		reportScriptError("Could not set NAM gain mode");
+		return false;
+	}
+
+	if(result.failed())
+	{
+		reportScriptError(result.getErrorMessage());
+		return false;
+	}
+
+	return true;
+#else
+	reportScriptError("You must enable HISE_INCLUDE_RT_NEURAL");
+	return false;
+#endif
+}
+
 String ScriptingObjects::ScriptNeuralNetwork::getNetworkState() const
 {
 #if HISE_INCLUDE_RT_NEURAL
@@ -6218,6 +6256,19 @@ var ScriptingObjects::ScriptNeuralNetwork::getNetworkInfo() const
 	obj->setProperty("numNetworks", nn->getNumNetworks());
 	obj->setProperty("hasCompiledModelJSON", !(nn->getCompiledModelJSON().isVoid() || nn->getCompiledModelJSON().isUndefined()));
 	obj->setProperty("activeQualityConfiguration", nn->getActiveQualityConfiguration());
+	obj->setProperty("namGainMode", nn->getNAMGainMode());
+	obj->setProperty("namInputCalibrationLevelDbu", nn->getNAMInputCalibrationLevelDbu());
+	obj->setProperty("namInputGainDb", nn->getNAMInputGainDb());
+	obj->setProperty("namOutputGainDb", nn->getNAMOutputGainDb());
+
+	auto namMetadata = nn->getNAMMetadata();
+	obj->setProperty("namIsModel", namMetadata.isNAM);
+	obj->setProperty("namHasLoudness", namMetadata.hasLoudness);
+	obj->setProperty("namLoudnessDb", namMetadata.loudnessDb);
+	obj->setProperty("namHasInputLevel", namMetadata.hasInputLevel);
+	obj->setProperty("namInputLevelDbu", namMetadata.inputLevelDbu);
+	obj->setProperty("namHasOutputLevel", namMetadata.hasOutputLevel);
+	obj->setProperty("namOutputLevelDbu", namMetadata.outputLevelDbu);
 
 	Array<var> qualityConfigurations;
 	auto qualityIds = nn->getQualityConfigurations();

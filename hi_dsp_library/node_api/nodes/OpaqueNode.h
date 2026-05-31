@@ -493,7 +493,7 @@ namespace dll
 	{
 		// This is just used to check whether the dll is deprecated and needs to be recompiled...
 		// (It will be bumped whenever a breaking change into the DLL API is introduced)...
-		static constexpr int DllUpdateCounter = 9;
+		static constexpr int DllUpdateCounter = 10;
 
 		using Ptr = ReferenceCountedObjectPtr<ProjectDll>;
 
@@ -515,6 +515,7 @@ namespace dll
 			GetNeuralModelQualityId,
 			GetNeuralModelNumInputs,
 			GetNeuralModelNumOutputs,
+			GetNeuralModelMetadata,
 			CreateNeuralModel,
 			CloneNeuralModel,
 			DestroyNeuralModel,
@@ -541,6 +542,7 @@ namespace dll
 		typedef size_t(*GetNeuralModelQualityId)(int, char*);
 		typedef int(*GetNeuralModelNumInputs)(int);
 		typedef int(*GetNeuralModelNumOutputs)(int);
+		typedef size_t(*GetNeuralModelMetadata)(int, char*);
 		typedef void*(*CreateNeuralModel)(int);
 		typedef void*(*CloneNeuralModel)(void*);
 		typedef void(*DestroyNeuralModel)(void*);
@@ -583,6 +585,7 @@ namespace dll
 		String getNeuralModelQualityId(int index) const;
 		int getNeuralModelNumInputs(int index) const;
 		int getNeuralModelNumOutputs(int index) const;
+		String getNeuralModelMetadata(int index) const;
 		void* createNeuralModel(int index) const;
 		void* cloneNeuralModel(void* model) const;
 		void destroyNeuralModel(void* model) const;
