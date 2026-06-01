@@ -349,6 +349,23 @@ String ScriptingObjects::ScriptFile::getHash()
 
 bool ScriptingObjects::ScriptFile::hasWriteAccess()
 {
+#if JUCE_WINDOWS
+	// CreateFileW goes through the full Windows security check including NTFS ACLs,
+	// unlike JUCE's File::hasWriteAccess() which only checks FILE_ATTRIBUTE_READONLY.
+	if (f.existsAsFile())
+	{
+		HANDLE h = CreateFileW(f.getFullPathName().toWideCharPointer(),
+		                       FILE_WRITE_ATTRIBUTES,
+		                       FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+		                       nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+		if (h != INVALID_HANDLE_VALUE)
+		{
+			CloseHandle(h);
+			return true;
+		}
+		return false;
+	}
+#endif
 	return f.hasWriteAccess();
 };
 
