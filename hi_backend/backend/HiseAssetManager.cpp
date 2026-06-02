@@ -264,7 +264,7 @@ hise::HiseAssetManager::Helpers::RequestData HiseAssetManager::Helpers::post(Bas
 		headers = "Authorization: Bearer " + token;
 	}
 
-	auto stream = url.createInputStream(options.withStatusCode(&d.statusCode).withExtraHeaders(headers));
+	auto stream = url.createInputStream(options.withStatusCode(&d.statusCode).withExtraHeaders(headers).withConnectionTimeoutMs(500));
 
 	if (stream != nullptr)
 	{
@@ -916,9 +916,11 @@ struct HiseAssetManager::ProductList::Row::UpdateAction : public RowAction,
 	{
 		currentManager = manager;
 
-		// Uninstall current version first if installed
-		if (installInfo.isInstalled())
+		auto uninstallCurrentVersion = [&]() -> bool
 		{
+			if (!installInfo.isInstalled())
+				return true;
+
 			manager->showStatusMessage("Uninstalling " + installInfo.packageName + " " + installInfo.installedVersion + "...");
 
 			try
@@ -934,6 +936,8 @@ struct HiseAssetManager::ProductList::Row::UpdateAction : public RowAction,
 
 				if (!result.success)
 					return false;
+
+				return true;
 			}
 			catch (HiseAssetInstaller::Error& e)
 			{
@@ -941,7 +945,7 @@ struct HiseAssetManager::ProductList::Row::UpdateAction : public RowAction,
 				manager->setError(e);
 				return false;
 			}
-		}
+		};
 
 		if (!installInfo.isLocalFolder())
 		{
@@ -961,10 +965,16 @@ struct HiseAssetManager::ProductList::Row::UpdateAction : public RowAction,
 
 			if (currentState == State::Success)
 			{
-				manager->showStatusMessage("Extracting...");
-
 				ScopedPointer<ZipFile> zf = new ZipFile(tf.getFile());
 				HiseAssetInstaller installer(currentManager->getMainController(), zf.get());
+
+				if(installInfo.isInstalled() && !installer.canUpdateSharedFiles(installInfo))
+					return false;
+
+				if(!uninstallCurrentVersion())
+					return false;
+
+				manager->showStatusMessage("Extracting...");
 				return installer.install(installInfo);
 			}
 
@@ -974,6 +984,13 @@ struct HiseAssetManager::ProductList::Row::UpdateAction : public RowAction,
 		else
 		{
 			HiseAssetInstaller installer(currentManager->getMainController(), installInfo);
+
+			if(installInfo.isInstalled() && !installer.canUpdateSharedFiles(installInfo))
+				return false;
+
+			if(!uninstallCurrentVersion())
+				return false;
+
 			return installer.install(installInfo);
 		}
 	}

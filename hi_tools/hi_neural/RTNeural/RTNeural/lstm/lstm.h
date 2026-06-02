@@ -47,6 +47,24 @@ public:
     /** Returns the name of this layer. */
     std::string getName() const noexcept override { return "lstm"; }
 
+    StaticLayerInfo getStaticTypeInfo(const StaticTypeOptions& options) const override
+    {
+        StaticLayerInfo info;
+        info.typeName = "RTNeural::LSTMLayerT<" + options.scalarType + ", " +
+            std::to_string(Layer<T>::in_size) + ", " +
+            std::to_string(Layer<T>::out_size) + ", " +
+            options.getSampleRateCorrectionTypeName() + ", " +
+            options.getMathProviderTypeName() + ">";
+        info.supported = true;
+        info.weights.push_back({ "kernel", { Layer<T>::in_size, 4 * Layer<T>::out_size },
+            (size_t)Layer<T>::in_size * (size_t)4 * (size_t)Layer<T>::out_size });
+        info.weights.push_back({ "recurrent", { Layer<T>::out_size, 4 * Layer<T>::out_size },
+            (size_t)Layer<T>::out_size * (size_t)4 * (size_t)Layer<T>::out_size });
+        info.weights.push_back({ "bias", { 4 * Layer<T>::out_size },
+            (size_t)4 * (size_t)Layer<T>::out_size });
+        return info;
+    }
+
     /** Performs forward propagation for this layer. */
     RTNEURAL_REALTIME inline void forward(const T* input, T* h) noexcept override
     {

@@ -98,6 +98,37 @@ public:
         return outs.back().data();
     }
 
+    /** Returns static code generation metadata for this model. */
+    StaticModelInfo getStaticTypeInfo(const StaticTypeOptions& options) const
+    {
+        StaticModelInfo info;
+
+        if(layers.empty())
+        {
+            info.error = "Cannot generate a static model without layers";
+            return info;
+        }
+
+        info.inputSize = getInSize();
+        info.outputSize = getOutSize();
+        info.supported = true;
+
+        for(auto* layer : layers)
+        {
+            auto layerInfo = layer->getStaticTypeInfo(options);
+
+            if(!layerInfo.supported)
+            {
+                info.supported = false;
+                info.error = layerInfo.error;
+            }
+
+            info.layers.push_back(layerInfo);
+        }
+
+        return info;
+    }
+
     /** A vector storing the network layers in sequential order. */
     std::vector<Layer<T>*> layers;
 

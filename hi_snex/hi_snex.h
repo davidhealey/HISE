@@ -36,7 +36,7 @@ BEGIN_JUCE_MODULE_DECLARATION
 
   ID:               hi_snex
   vendor:           HISE
-  version:          4.9.1
+  version:          4.9.2
   name:             Snex JIT compiler
   description:      A (more or less) C compiler based on ASMJit
   website:          http://hise.audio

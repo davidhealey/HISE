@@ -38,7 +38,8 @@
   "GlobalState": {
     "LoadSettings": "true",
     "PositiveWildcard": "*",
-    "NegativeWildcard": ""
+    "NegativeWildcard": "",
+    "SharedWildcard": ""
   },
   "Children": [
     {
@@ -123,6 +124,16 @@
               "EmptyText": "Add negative wildcards (one per line)",
               "Height": 80,
               "Help": "Use this wildcard to exclude files from being included in the payload.\n\nThese wildcards will be used to filter out all results that match the given wildcard, so eg. `*.txt` will prevent any file with the file extension `.txt` from being included in the payload.\n\n> Note that it will automatically exclude all build files, hidden files, special HISE files (eg. PooledResources). so you just need to add file filters that exclude files specific to your project.",
+              "Multiline": true
+            },
+            {
+              "Type": "TextInput",
+              "Text": "Shared Wildcards",
+              "ID": "SharedWildcard",
+              "UseInitValue": true,
+              "EmptyText": "Add shared wildcards (one per line)",
+              "Height": 80,
+              "Help": "Text / Code files that match that file wildcard are allowed to be shared by multiple assets. Use this to define common subset that you want to include in more than one asset.",
               "Multiline": true
             }
           ],

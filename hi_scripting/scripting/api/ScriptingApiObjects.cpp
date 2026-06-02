@@ -5802,6 +5802,11 @@ struct ScriptingObjects::ScriptNeuralNetwork::Wrapper
 	API_VOID_METHOD_WRAPPER_1(ScriptNeuralNetwork, loadPytorchModel);
 	API_VOID_METHOD_WRAPPER_1(ScriptNeuralNetwork, loadNAMModel);
 	API_METHOD_WRAPPER_1(ScriptNeuralNetwork, createModelJSONFromTextFile);
+	API_METHOD_WRAPPER_1(ScriptNeuralNetwork, writeCompiledModelJSON);
+	API_METHOD_WRAPPER_0(ScriptNeuralNetwork, getNetworkState);
+	API_METHOD_WRAPPER_0(ScriptNeuralNetwork, getNetworkInfo);
+	API_METHOD_WRAPPER_1(ScriptNeuralNetwork, setQualityConfiguration);
+	API_METHOD_WRAPPER_1(ScriptNeuralNetwork, setNAMGainMode);
 	API_METHOD_WRAPPER_2(ScriptNeuralNetwork, loadOnnxModel);
 	API_METHOD_WRAPPER_3(ScriptNeuralNetwork, processFFTSpectrum);
 };
@@ -5819,6 +5824,11 @@ ScriptingObjects::ScriptNeuralNetwork::ScriptNeuralNetwork(ProcessorWithScriptin
 	ADD_API_METHOD_1(loadPytorchModel);
 	ADD_API_METHOD_1(loadNAMModel);
 	ADD_API_METHOD_0(getModelJSON);
+	ADD_API_METHOD_1(writeCompiledModelJSON);
+	ADD_API_METHOD_0(getNetworkState);
+	ADD_API_METHOD_0(getNetworkInfo);
+	ADD_API_METHOD_1(setQualityConfiguration);
+	ADD_API_METHOD_1(setNAMGainMode);
 	ADD_API_METHOD_2(loadOnnxModel);
 	ADD_API_METHOD_3(processFFTSpectrum);
 
@@ -6116,6 +6126,179 @@ var ScriptingObjects::ScriptNeuralNetwork::getModelJSON()
 {
 #if HISE_INCLUDE_RT_NEURAL
 	return nn->getModelJSON();
+#else
+	reportScriptError("You must enable HISE_INCLUDE_RT_NEURAL");
+	RETURN_IF_NO_THROW(var());
+#endif
+}
+
+bool ScriptingObjects::ScriptNeuralNetwork::writeCompiledModelJSON(const var& qualityConfigurations)
+{
+#if HISE_INCLUDE_RT_NEURAL
+#if USE_BACKEND
+	auto dspFolder = getScriptProcessor()->getMainController_()->getCurrentFileHandler().getSubDirectory(FileHandlerBase::DspNetworks);
+	auto neuralFolder = dspFolder.getChildFile("NeuralNetworks");
+	auto r = nn->writeCompiledModelJSON(neuralFolder, qualityConfigurations);
+
+	if(!r.wasOk())
+	{
+		reportScriptError(r.getErrorMessage());
+		return false;
+	}
+
+	return true;
+#else
+	reportScriptError("writeCompiledModelJSON() is only available in the HISE backend");
+	return false;
+#endif
+#else
+	reportScriptError("You must enable HISE_INCLUDE_RT_NEURAL");
+	return false;
+#endif
+}
+
+bool ScriptingObjects::ScriptNeuralNetwork::setQualityConfiguration(String qualityId)
+{
+#if HISE_INCLUDE_RT_NEURAL
+	if(!Identifier::isValidIdentifier(qualityId))
+	{
+		reportScriptError("Invalid quality configuration name: " + qualityId);
+		return false;
+	}
+
+	Result result = Result::ok();
+	auto safeThis = WeakReference<ScriptNeuralNetwork>(this);
+
+	auto f = [safeThis, qualityId, &result](Processor*)
+	{
+		if(safeThis != nullptr)
+			result = safeThis->nn->setQualityConfiguration(Identifier(qualityId));
+
+		return SafeFunctionCall::OK;
+	};
+
+	auto p = dynamic_cast<Processor*>(getScriptProcessor());
+	auto& killStateHandler = getScriptProcessor()->getMainController_()->getKillStateHandler();
+
+	if(!killStateHandler.killVoicesAndCall(p, f, MainController::KillStateHandler::TargetThread::SampleLoadingThread))
+	{
+		reportScriptError("Could not switch neural network quality configuration");
+		return false;
+	}
+
+	if(result.failed())
+	{
+		reportScriptError(result.getErrorMessage());
+		return false;
+	}
+
+	return true;
+#else
+	reportScriptError("You must enable HISE_INCLUDE_RT_NEURAL");
+	return false;
+#endif
+}
+
+bool ScriptingObjects::ScriptNeuralNetwork::setNAMGainMode(const var& modeOrOptions)
+{
+#if HISE_INCLUDE_RT_NEURAL
+	Result result = Result::ok();
+	auto safeThis = WeakReference<ScriptNeuralNetwork>(this);
+
+	auto f = [safeThis, modeOrOptions, &result](Processor*)
+	{
+		if(safeThis != nullptr)
+			result = safeThis->nn->setNAMGainMode(modeOrOptions);
+
+		return SafeFunctionCall::OK;
+	};
+
+	auto p = dynamic_cast<Processor*>(getScriptProcessor());
+	auto& killStateHandler = getScriptProcessor()->getMainController_()->getKillStateHandler();
+
+	if(!killStateHandler.killVoicesAndCall(p, f, MainController::KillStateHandler::TargetThread::SampleLoadingThread))
+	{
+		reportScriptError("Could not set NAM gain mode");
+		return false;
+	}
+
+	if(result.failed())
+	{
+		reportScriptError(result.getErrorMessage());
+		return false;
+	}
+
+	return true;
+#else
+	reportScriptError("You must enable HISE_INCLUDE_RT_NEURAL");
+	return false;
+#endif
+}
+
+String ScriptingObjects::ScriptNeuralNetwork::getNetworkState() const
+{
+#if HISE_INCLUDE_RT_NEURAL
+	return nn->getBackendStateName();
+#else
+	reportScriptError("You must enable HISE_INCLUDE_RT_NEURAL");
+	RETURN_IF_NO_THROW(String());
+#endif
+}
+
+var ScriptingObjects::ScriptNeuralNetwork::getNetworkInfo() const
+{
+#if HISE_INCLUDE_RT_NEURAL
+	auto obj = new DynamicObject();
+	obj->setProperty("id", nn->getId().toString());
+	obj->setProperty("state", nn->getBackendStateName());
+	obj->setProperty("numInputs", nn->getNumInputs());
+	obj->setProperty("numOutputs", nn->getNumOutputs());
+	obj->setProperty("numNetworks", nn->getNumNetworks());
+	obj->setProperty("hasCompiledModelJSON", !(nn->getCompiledModelJSON().isVoid() || nn->getCompiledModelJSON().isUndefined()));
+	obj->setProperty("activeQualityConfiguration", nn->getActiveQualityConfiguration());
+	obj->setProperty("namGainMode", nn->getNAMGainMode());
+	obj->setProperty("namInputCalibrationLevelDbu", nn->getNAMInputCalibrationLevelDbu());
+	obj->setProperty("namInputGainDb", nn->getNAMInputGainDb());
+	obj->setProperty("namOutputGainDb", nn->getNAMOutputGainDb());
+
+	auto namMetadata = nn->getNAMMetadata();
+	obj->setProperty("namIsModel", namMetadata.isNAM);
+	obj->setProperty("namHasLoudness", namMetadata.hasLoudness);
+	obj->setProperty("namLoudnessDb", namMetadata.loudnessDb);
+	obj->setProperty("namHasInputLevel", namMetadata.hasInputLevel);
+	obj->setProperty("namInputLevelDbu", namMetadata.inputLevelDbu);
+	obj->setProperty("namHasOutputLevel", namMetadata.hasOutputLevel);
+	obj->setProperty("namOutputLevelDbu", namMetadata.outputLevelDbu);
+
+	Array<var> qualityConfigurations;
+	auto qualityIds = nn->getQualityConfigurations();
+
+	for(const auto& q: qualityIds)
+		qualityConfigurations.add(q);
+
+	obj->setProperty("qualityConfigurations", var(qualityConfigurations));
+
+	switch(nn->getBackendState())
+	{
+	case NeuralNetwork::BackendState::CompiledLinked: obj->setProperty("backend", "compiled-linked"); break;
+	case NeuralNetwork::BackendState::CompiledDll: obj->setProperty("backend", "compiled-dll"); break;
+	case NeuralNetwork::BackendState::Dynamic: obj->setProperty("backend", "dynamic"); break;
+	case NeuralNetwork::BackendState::Empty: obj->setProperty("backend", "empty"); break;
+	default: obj->setProperty("backend", "empty"); break;
+	}
+
+#if USE_BACKEND
+	auto dspFolder = getScriptProcessor()->getMainController_()->getCurrentFileHandler().getSubDirectory(FileHandlerBase::DspNetworks);
+	auto sourceFile = dspFolder.getChildFile("NeuralNetworks").getChildFile(nn->getId().toString()).withFileExtension("json");
+
+	if(!sourceFile.existsAsFile())
+		sourceFile = sourceFile.withFileExtension("nam");
+
+	obj->setProperty("source", sourceFile.getFullPathName());
+	obj->setProperty("sourceExists", sourceFile.existsAsFile());
+#endif
+
+	return var(obj);
 #else
 	reportScriptError("You must enable HISE_INCLUDE_RT_NEURAL");
 	RETURN_IF_NO_THROW(var());

@@ -22,7 +22,7 @@ struct Wavenet_Model
 
     Wavenet_Model() = default;
 
-    void prewarm()
+    void reset()
     {
         RTNeural::modelt_detail::forEachInTuple (
             [] (auto& layer, size_t)
@@ -30,6 +30,12 @@ struct Wavenet_Model
                 layer.reset();
             },
             layer_arrays);
+    }
+
+    void prewarm()
+    {
+        reset();
+
         for (int i = 0; i < 1 << 14; ++i)
             forward (0.0f);
     }

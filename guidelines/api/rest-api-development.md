@@ -556,7 +556,11 @@ expectEquals<int>(json["count"], 5, "Should have 5 items");
 | `/api/wizard/execute` | POST | wizard | `wizardExecute` |
 | `/api/wizard/status` | GET | wizard | `wizardStatus` |
 | `/api/testing/sequence` | POST | testing | `testingSequence` |
+| `/api/dsp/runtime_status` | GET | dsp | `dspRuntimeStatus` |
 | `/api/snippet_browser` | POST | status | `snippetBrowser` |
+
+`/api/dsp/runtime_status` accepts `autofix=true` to attempt the same built-in ScriptnodeExceptionHandler autofix used by the UI Auto Fix button for the first autofixable runtime error.
+This is intentionally a mutating GET endpoint for agent convenience.
 
 **Note:** The `diagnose_script` endpoint is consumed by the native LSP proxy binary at `tools/hise_lsp_server/`. The proxy forwards LSP `didSave` notifications to this endpoint and maps the response to standard LSP `publishDiagnostics`. See `tools/hise_lsp_server/README.md` for details.
 

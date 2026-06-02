@@ -6271,6 +6271,60 @@ RestServer::Response RestHelpers::handleDspProbe(MainController* mc,
 	return req->waitForResponse();
 }
 
+RestServer::Response RestHelpers::handleDspRuntimeStatus(MainController* mc,
+                                                         RestServer::AsyncRequest::Ptr req)
+{
+	auto moduleId = req->getRequest()[RestApiIds::moduleId];
+
+	if (moduleId.isEmpty())
+		return req->fail(400, "moduleId is required");
+
+	auto holder = getNetworkHolder(mc, moduleId);
+	if (holder == nullptr)
+		return req->fail(404, "Module " + moduleId + " is not a DspNetwork holder");
+
+	auto network = getActiveNetwork(mc, moduleId);
+	if (network == nullptr)
+		return req->fail(404, "No active DspNetwork for module: " + moduleId);
+
+	auto& exceptionHandler = network->getExceptionHandler();
+	auto autofixRequested = req->getRequest().getTrueValue(RestApiIds::autofix);
+	auto autofixApplied = false;
+	String fixedNodeId;
+	String beforeError;
+	String afterError;
+
+	if (autofixRequested && !exceptionHandler.isOk())
+		autofixApplied = exceptionHandler.autofixFirstError(fixedNodeId, beforeError, afterError);
+
+	auto ok = exceptionHandler.isOk();
+
+	DynamicObject::Ptr result = new DynamicObject();
+	result->setProperty(RestApiIds::success, ok);
+	result->setProperty(RestApiIds::moduleId, moduleId);
+	result->setProperty(RestApiIds::ok, ok);
+	result->setProperty(RestApiIds::autofixRequested, autofixRequested);
+	result->setProperty(RestApiIds::autofixApplied, autofixApplied);
+
+	if (autofixApplied)
+	{
+		result->setProperty(RestApiIds::fixedNodeId, fixedNodeId);
+		result->setProperty(RestApiIds::beforeError, beforeError);
+
+		if (afterError.isNotEmpty())
+			result->setProperty(RestApiIds::afterError, afterError);
+	}
+
+	result->setProperty(RestApiIds::logs, Array<var>());
+	result->setProperty(RestApiIds::errors, Array<var>());
+
+	if (!ok)
+		req->appendError(exceptionHandler.getErrorMessage(nullptr));
+
+	req->complete(RestServer::Response::ok(var(result.get())));
+	return req->waitForResponse();
+}
+
 RestServer::Response RestHelpers::handleDspSave(MainController* mc,
                                                  RestServer::AsyncRequest::Ptr req)
 {

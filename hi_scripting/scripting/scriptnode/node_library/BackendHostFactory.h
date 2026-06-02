@@ -70,6 +70,7 @@ struct BackendDllManager : public ReferenceCountedObject,
 	{
 		Root,
 		Networks,
+		NeuralNetworks,
 		Tests,
 		CustomNodes,
 		CodeLibrary,
@@ -93,6 +94,8 @@ struct BackendDllManager : public ReferenceCountedObject,
 
 	static Array<File> getNetworkFiles(MainController* mc, bool includeNoCompilers = true);
 
+	static Array<File> getNeuralNetworkFiles(MainController* mc);
+
 	static Array<File> getThirdPartyFiles(MainController* mc, bool getSrcDirectory);
 
 	int getDllHash(int index);
@@ -107,9 +110,10 @@ struct BackendDllManager : public ReferenceCountedObject,
 	{
 		auto hasCpp = !getThirdPartyFiles(getMainController(), false).isEmpty();
 		auto hasNetworks = !getNetworkFiles(getMainController(), false).isEmpty();
+		auto hasNeuralNetworks = !getNeuralNetworkFiles(getMainController()).isEmpty();
 		auto hasFaustFiles = getSubFolder(getMainController(), FolderSubType::FaustCode).getNumberOfChildFiles(File::findFiles, "*.dsp") != 0;
 
-		return hasCpp || hasNetworks || hasFaustFiles;
+		return hasCpp || hasNetworks || hasNeuralNetworks || hasFaustFiles;
 	}
 
 	bool unloadDll();

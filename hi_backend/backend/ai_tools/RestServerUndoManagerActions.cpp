@@ -3808,14 +3808,6 @@ struct set : public ActionBase
 			if (op.hasProperty(RestApiIds::skewFactor) && op.hasProperty(RestApiIds::middlePosition))
 				return Error().withError("set range-write: 'skewFactor' and 'middlePosition' are mutually exclusive");
 
-			if (op.hasProperty(RestApiIds::min) && op.hasProperty(RestApiIds::max))
-			{
-				const double mn = (double)op[RestApiIds::min];
-				const double mx = (double)op[RestApiIds::max];
-				if (!(mn < mx))
-					return Error().withError("set range-write: 'min' must be less than 'max'");
-			}
-
 			return {};
 		}
 

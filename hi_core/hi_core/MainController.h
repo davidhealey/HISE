@@ -511,7 +511,9 @@ public:
 		{
 			presetLoadListeners.addIfNotAlreadyThere(l);
 
+#if USE_BACKEND
 			l->newHisePresetLoaded();
+#endif
 		}
 
 		void removePresetLoadListener(PresetLoadListener* l)
@@ -1970,6 +1972,10 @@ public:
 
     ReferenceCountedObject* getGlobalPreprocessor();
 
+	bool& getInterfaceCreationFlag() { return interfaceIsCreated; }
+
+	bool isInterfaceBeingCreated() const { return interfaceIsCreated; }
+
 	bool isInsideAudioRendering() const;
 
 	bool shouldAbortMessageThreadOperation() const noexcept
@@ -2230,6 +2236,8 @@ private:
 	double previewBufferDelta = 1.0;
 	float fadeOutPreviewBufferGain = 1.0f;
 	bool fadeOutPreviewBuffer = false;
+
+	bool interfaceIsCreated = false;
 
 	bool flakyThreadingAllowed = false;
 

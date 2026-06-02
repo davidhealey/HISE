@@ -35,6 +35,8 @@ namespace hise { using namespace juce;
 FrontendProcessorEditor::FrontendProcessorEditor(FrontendProcessor *fp) :
 AudioProcessorEditor(fp)
 {
+	ScopedValueSetter<bool> svs(fp->getInterfaceCreationFlag(), true);
+
 	usesOpenGl = dynamic_cast<GlobalSettingManager*>(fp)->useOpenGL;
 	
 	if(usesOpenGl)
