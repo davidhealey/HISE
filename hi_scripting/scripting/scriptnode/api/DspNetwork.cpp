@@ -1098,8 +1098,9 @@ NodeBase* DspNetwork::createFromValueTree(bool createPolyIfAvailable, ValueTree 
 		if (n == nullptr)
 		{
 			String errorMessage;
-			errorMessage << "Error at node `" << id << "`:  \n> ";
-			errorMessage << "Can't create node with factory path `" << d[PropertyIds::FactoryPath].toString() << "`";
+			errorMessage << "Error in container `" << id << "`:  \n> ";
+			errorMessage << "Can't create node `" << c[PropertyIds::ID].toString() << "`";
+			errorMessage << " with factory path `" << c[PropertyIds::FactoryPath].toString() << "`";
 
 			if (MessageManager::getInstanceWithoutCreating()->isThisTheMessageThread())
 			{
