@@ -473,6 +473,14 @@ public:
 		refresh();
 	}
 
+	void parentHierarchyChanged() override
+	{
+		// Re-sync the disabled state whenever the component is (re)attached to a
+		// panel, so a UUID loaded from a reopened project stays disabled even if
+		// the value was populated after construction.
+		refresh();
+	}
+
 	void resized() override
 	{
 		// Use the same content area that a regular property component would use
