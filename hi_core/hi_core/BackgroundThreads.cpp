@@ -1068,7 +1068,7 @@ File SampleDataExporter::getTargetFile() const
 		}
 		else
 		{
-			fileName << expName + "_Samples.hr1";
+			fileName << expName + ".hr1";
 		}
 	}
 	else
