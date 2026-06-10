@@ -141,7 +141,10 @@ void Processor::restoreFromValueTree(const ValueTree &previouslyExportedProcesso
 
 	const ValueTree &v = previouslyExportedProcessorState;
 
-	jassert(Identifier(v.getProperty("Type", String()).toString().removeCharacters(" ")) == getType());
+	// Compare as strings rather than constructing an Identifier here: the "Type" value comes
+	// from a restored ValueTree and may be empty or contain characters that are invalid for an
+	// Identifier, which would trip the assertion inside the JUCE Identifier constructor.
+	jassert(v.getProperty("Type", String()).toString().removeCharacters(" ") == getType().toString());
 
 	jassert(v.getProperty("ID", String()) == getId());
 	setBypassed(v.getProperty("Bypassed", false));
