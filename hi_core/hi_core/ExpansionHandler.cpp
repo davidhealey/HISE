@@ -355,8 +355,6 @@ bool ExpansionHandler::setCurrentExpansion(const String& expansionName)
 		return true;
 	}
 
-	currentExpansion = nullptr;
-
 	for (auto e : expansionList)
 	{
 		if (e->getProperty(ExpansionIds::Name) == expansionName)
@@ -366,6 +364,7 @@ bool ExpansionHandler::setCurrentExpansion(const String& expansionName)
 		}
 	}
 
+	currentExpansion = nullptr;
 	return false;
 }
 
