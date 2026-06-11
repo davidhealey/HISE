@@ -4219,6 +4219,11 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawAlertBox(Graphics& g_, Aler
 {
 	if (functionDefined("drawAlertWindow"))
 	{
+		// Clear to fully transparent so the margin area has alpha=0 before the script
+		// draws its shadow. Required on Windows (layered windows retain stale pixels
+		// if the background is not explicitly cleared).
+		g_.fillAll(Colours::transparentBlack);
+
 		auto obj = new DynamicObject();
 
 		auto fullArea = w.getLocalBounds().toFloat();

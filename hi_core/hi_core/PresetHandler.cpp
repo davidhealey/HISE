@@ -562,6 +562,26 @@ void PresetHandler::copyProcessorToClipboard(Processor *p)
 
 void* PresetHandler::currentController = nullptr;
 
+// AlertWindow subclass that strips the OS drop-shadow peer flag when the window is
+// non-opaque. This mirrors the getMenuWindowFlags() fix used for popup menus (PR #915):
+// the flag must be removed at addToDesktop() time, not just via setDropShadowEnabled(),
+// because on Windows the two mechanisms are independent. Non-opaque alert windows with
+// a custom drawAlertWindow draw their own shadow inside the margin area.
+struct HiseAlertWindow : public AlertWindow
+{
+	HiseAlertWindow(const String& title, const String& message, AlertWindow::AlertIconType iconType)
+		: AlertWindow(title, message, iconType)
+	{}
+
+	int getDesktopWindowStyleFlags() const override
+	{
+		int flags = AlertWindow::getDesktopWindowStyleFlags();
+		if (!isOpaque())
+			flags &= ~ComponentPeer::windowHasDropShadow;
+		return flags;
+	}
+};
+
 static void applyAlertWindowMargin(AlertWindow* window, LookAndFeel* laf)
 {
 	if (auto alertLaf = dynamic_cast<AlertWindowLookAndFeel*>(laf))
@@ -570,6 +590,13 @@ static void applyAlertWindowMargin(AlertWindow* window, LookAndFeel* laf)
 
 		if (margin > 0)
 		{
+			// Make the window non-opaque here rather than at creation so that default
+			// alert windows (no custom drawAlertWindow) remain opaque and keep their
+			// OS drop shadow. HiseAlertWindow::getDesktopWindowStyleFlags() then strips
+			// windowHasDropShadow at peer-creation time because isOpaque() is false.
+			window->setOpaque(false);
+			window->setDropShadowEnabled(false);
+
 			// Save current child positions before resize triggers updateLayout
 			struct ChildPos { Component* comp; int x, y; };
 			Array<ChildPos> positions;
@@ -612,9 +639,8 @@ String PresetHandler::getCustomName(const String &typeName, const String& thisMe
 
 	ScopedPointer<MessageWithIcon> comp = new MessageWithIcon(PresetHandler::IconType::Question, laf, message);
 
-    ScopedPointer<AlertWindow> nameWindow = new AlertWindow(useCustomMessage ? ("Enter " + typeName) : ("Enter name for " + typeName), "", AlertWindow::AlertIconType::NoIcon);
+    ScopedPointer<AlertWindow> nameWindow = new HiseAlertWindow(useCustomMessage ? ("Enter " + typeName) : ("Enter name for " + typeName), "", AlertWindow::AlertIconType::NoIcon);
 
-	nameWindow->setOpaque(false);
 	nameWindow->setLookAndFeel(laf);
 
 	nameWindow->addCustomComponent(comp);
@@ -666,9 +692,8 @@ bool PresetHandler::showYesNoWindow(const String &title, const String &message, 
 	ScopedPointer<LookAndFeel> laf = createAlertWindowLookAndFeel();
 	ScopedPointer<MessageWithIcon> comp = new MessageWithIcon(type, laf, message);
 	
-	ScopedPointer<AlertWindow> nameWindow = new AlertWindow(title, "", AlertWindow::AlertIconType::NoIcon);
+	ScopedPointer<AlertWindow> nameWindow = new HiseAlertWindow(title, "", AlertWindow::AlertIconType::NoIcon);
 
-	nameWindow->setOpaque(false);
 	nameWindow->setLookAndFeel(laf);
 	nameWindow->addCustomComponent(comp);
 
@@ -716,9 +741,8 @@ void PresetHandler::showMessageWindow(const String &title, const String &message
 #else
 		ScopedPointer<LookAndFeel> laf = createAlertWindowLookAndFeel();
 		ScopedPointer<MessageWithIcon> comp = new MessageWithIcon(type, laf, message);
-		ScopedPointer<AlertWindow> nameWindow = new AlertWindow(title, "", AlertWindow::AlertIconType::NoIcon);
+		ScopedPointer<AlertWindow> nameWindow = new HiseAlertWindow(title, "", AlertWindow::AlertIconType::NoIcon);
 
-		nameWindow->setOpaque(false);
 		nameWindow->setLookAndFeel(laf);
 		nameWindow->addCustomComponent(comp);
 		nameWindow->addButton("OK", 1, KeyPress(KeyPress::returnKey));
