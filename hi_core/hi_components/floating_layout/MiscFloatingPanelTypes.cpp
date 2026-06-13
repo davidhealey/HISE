@@ -556,6 +556,7 @@ void ComplexDataEditorPanel::fillIndexList(StringArray& indexList)
 Component* PlotterPanel::createContentComponent(int)
 {
 	auto p = new Plotter(getMainController()->getGlobalUIUpdater());
+	p->setMainController(getMainController());
 	if (auto mod = dynamic_cast<Modulation*>(getConnectedProcessor()))
 	{
 		mod->setPlotter(p);
