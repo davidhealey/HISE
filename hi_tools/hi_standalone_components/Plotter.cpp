@@ -232,9 +232,9 @@ void Plotter::mouseDown(const MouseEvent& m)
 {
 	if (m.mods.isRightButtonDown())
 	{
-		PopupLookAndFeel plaf;
+		ScopedPointer<LookAndFeel> menuLaf = HiseColourScheme::createPopupMenuLookAndFeel(mainController, this);
 		PopupMenu menu;
-		menu.setLookAndFeel(&plaf);
+		menu.setLookAndFeel(menuLaf);
 
 
 		menu.addItem(1024, "Freeze", true, !active);
