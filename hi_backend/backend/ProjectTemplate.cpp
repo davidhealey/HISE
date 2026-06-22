@@ -114,10 +114,10 @@ static const unsigned char projectTemplate_jucer_lines[] = R"(
                extraLinkerFlags="%OSX_STATIC_LIBS%" extraDefs="%PLUGIN_CHANNEL_AMOUNT%&#10;%EXTRA_DEFINES_OSX%" hardenedRuntime="0" hardenedRuntimeOptions="com.apple.security.cs.allow-jit,com.apple.security.cs.allow-unsigned-executable-memory,com.apple.security.device.audio-input" xcodeValidArchs="%ARM_ARCH%"  externalLibraries="%BEATPORT_LIB_MACOS%;%OSX_EXTERNAL_LIBRARIES%">
                 
       <CONFIGURATIONS>
-        <CONFIGURATION name="Debug" osxSDK="default" osxCompatibility="11.0 SDK" osxArchitecture="%MACOS_ARCHITECTURE%"
+        <CONFIGURATION name="Debug" osxSDK="default" osxCompatibility="10.14 SDK" osxArchitecture="%MACOS_ARCHITECTURE%"
                        isDebug="1" optimisation="1" enablePluginBinaryCopyStep="%COPY_PLUGIN%" targetName="%NAME% Debug" headerPath="%FAUST_HEADER_PATH%"
                        libraryPath="%AAX_DEBUG_LIB%;%BEATPORT_DEBUG_LIB%;%OSC_STATIC_LIB_FOLDER_DEBUG%" cppLibType="libc++"/>
-        <CONFIGURATION name="Release" osxSDK="default" osxCompatibility="11.0 SDK" osxArchitecture="%MACOS_ARCHITECTURE%"
+        <CONFIGURATION name="Release" osxSDK="default" osxCompatibility="10.14 SDK" osxArchitecture="%MACOS_ARCHITECTURE%"
                        isDebug="0" optimisation="3" enablePluginBinaryCopyStep="%COPY_PLUGIN%" targetName="%NAME%" headerPath="%FAUST_HEADER_PATH%"
                        libraryPath="%AAX_RELEASE_LIB%;%BEATPORT_RELEASE_LIB%;%OSC_STATIC_LIB_FOLDER_RELEASE%" cppLibType="libc++" linkTimeOptimisation="%LINK_TIME_OPTIMISATION%"
                        %STRIP_SYMBOLS_MACOS%/>

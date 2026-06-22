@@ -102,11 +102,11 @@ static const unsigned char projectStandaloneTemplate_jucer_lines[] = R"(
     <XCODE_MAC targetFolder="Builds/MacOSX" vstFolder="%VSTSDK_FOLDER%" extraCompilerFlags="-Wno-reorder -Wno-inconsistent-missing-override -faligned-allocation -ffp-contract=off" %ICON_FILE% 
                extraLinkerFlags="%OSX_STATIC_LIBS%" extraDefs="%EXTRA_DEFINES_OSX%" hardenedRuntime="0" hardenedRuntimeOptions="com.apple.security.cs.allow-jit,com.apple.security.cs.allow-unsigned-executable-memory,com.apple.security.device.audio-input" xcodeValidArchs="arm64,arm64e,x86_64" externalLibraries="%BEATPORT_LIB_MACOS%;%OSX_EXTERNAL_LIBRARIES%">
       <CONFIGURATIONS>
-        <CONFIGURATION name="Debug" osxSDK="default" osxCompatibility="11.0 SDK" osxArchitecture="%MACOS_ARCHITECTURE%"
+        <CONFIGURATION name="Debug" osxSDK="default" osxCompatibility="10.14 SDK" osxArchitecture="%MACOS_ARCHITECTURE%"
                        isDebug="1" optimisation="1" targetName="%NAME% Debug"
                        headerPath="%FAUST_HEADER_PATH%" libraryPath="%BEATPORT_DEBUG_LIB%;%OSC_STATIC_LIB_FOLDER_DEBUG%"
                        cppLibType="libc++" binaryPath="Compiled/"/>
-        <CONFIGURATION name="Release" osxSDK="default" osxCompatibility="11.0 SDK" osxArchitecture="%MACOS_ARCHITECTURE%"
+        <CONFIGURATION name="Release" osxSDK="default" osxCompatibility="10.14 SDK" osxArchitecture="%MACOS_ARCHITECTURE%"
                        isDebug="0" optimisation="3" targetName="%NAME%" headerPath="%FAUST_HEADER_PATH%"
                        libraryPath="%BEATPORT_RELEASE_LIB%;%OSC_STATIC_LIB_FOLDER_RELEASE%" cppLibType="libc++" linkTimeOptimisation="%LINK_TIME_OPTIMISATION%"
                        binaryPath="Compiled/" %STRIP_SYMBOLS_MACOS%/>
