@@ -41,7 +41,8 @@ namespace hise { using namespace juce;
 
 class ScriptUserPresetHandler : public ConstScriptingObject,
 								public ControlledObject,
-								public MainController::UserPresetHandler::Listener
+								public MainController::UserPresetHandler::Listener,
+								public MainController::LockFreeDispatcher::PresetLoadListener
 {
 public:
 
@@ -68,6 +69,9 @@ public:
 
 	/** Sets a callback that will be executed after a preset has been saved. */
 	void setPostSaveCallback(var presetPostSaveCallback);
+
+	/** Sets a callback that will be executed after any patch, expansion or preset (re)load has finished, including loads that don't go through the regular user preset system (eg. loading a Full Instrument Expansion). Applies to instrument, effect and MIDI effect plugins alike. */
+	void setPatchLoadedCallback(var patchLoadedCallbackFunction);
 
 	/** Enables a preprocessing of every user preset that is being loaded. */
 	void setEnableUserPresetPreprocessing(bool processBeforeLoading, bool shouldUnpackComplexData);
@@ -148,6 +152,8 @@ public:
 	void presetListUpdated() override;
 	void loadCustomUserPreset(const var& dataObject) override;
 
+	void newHisePresetLoaded() override;
+
 	void onParameterGesture(bool startGesture, int parameterIndex) override;
 
 	var saveCustomUserPreset(const String& presetName) override;
@@ -185,6 +191,7 @@ private:
 	WeakCallbackHolder preCallback;
 	WeakCallbackHolder postCallback;
 	WeakCallbackHolder postSaveCallback;
+	WeakCallbackHolder patchLoadedCallback;
 
 	WeakCallbackHolder customLoadCallback;
 	WeakCallbackHolder customSaveCallback;
