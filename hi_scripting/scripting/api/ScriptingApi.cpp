@@ -5433,15 +5433,11 @@ ScriptingApi::Synth::Synth(ProcessorWithScriptingContent *p, Message* messageObj
 	moduleHandler(dynamic_cast<Processor*>(p), dynamic_cast<JavascriptProcessor*>(p)),
 	messageObject(messageObject_),
 	owner(ownerSynth),
-	numPressedKeys(0),
-	keyDown(0),
 	sustainState(false),
 	parentMidiProcessor(dynamic_cast<ScriptBaseMidiProcessor*>(p)),
 	jp(dynamic_cast<JavascriptMidiProcessor*>(p))
 {
 	jassert(owner != nullptr);
-
-	keyDown.setRange(0, 128, false);
 
 #if USE_BACKEND
 #define CHECK_MODULE(methodName, className) addDiagnostic(#methodName, ModuleDiagnoser::check<className>)
@@ -5639,6 +5635,21 @@ int ScriptingApi::Synth::playNoteWithStartOffset(int channel, int number, int ve
 	}
 
 	return internalAddNoteOn(channel, number, velocity, 0, offset); // the timestamp will be added from the current event
+}
+
+int ScriptingApi::Synth::getNumPressedKeys() const
+{
+	return owner->midiProcessorChain->getNumPressedKeys();
+}
+
+bool ScriptingApi::Synth::isLegatoInterval() const
+{
+	return owner->midiProcessorChain->isLegatoInterval();
+}
+
+bool ScriptingApi::Synth::isKeyDown(int noteNumber) const
+{
+	return owner->midiProcessorChain->isKeyDown(noteNumber);
 }
 
 bool ScriptingApi::Synth::attachNote(int originalNoteId, int artificialNoteId)

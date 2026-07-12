@@ -888,11 +888,19 @@ void MidiProcessorChain::renderNextHiseEventBuffer(HiseEventBuffer &buffer, int 
     }
     
 	HiseEventBuffer::Iterator it(buffer);
-	
+
 	jassert(buffer.timeStampsAreSorted());
 
 	while (HiseEvent* e = it.getNextEventPointer(true, false))
+	{
+		// Track the pressed key count here, before any MidiProcessor in the chain gets a
+		// chance to call Message.makeArtificial() on the event. Doing this per-processor
+		// (like the individual scripts used to) breaks as soon as one processor reclassifies
+		// a real event as artificial - downstream processors would then never see it as a
+		// real key press.
+		updatePressedKeyCount(*e);
 		processHiseEvent(*e);
+	}
 
 	buffer.sortTimestamps();
 	artificialEvents.sortTimestamps();
@@ -991,13 +999,16 @@ MidiProcessorChain::MidiProcessorChain(MainController *mc, const String &id, Pro
 		parentProcessor(ownerProcessor),
 		midiProcessorFactory(new MidiProcessorFactoryType(ownerProcessor)),
 		allNotesOffAtNextBuffer(false),
-		handler(this)
+		handler(this),
+		numPressedKeys(0)
 {
 	setOwnerSynth(dynamic_cast<ModulatorSynth*>(ownerProcessor));
 
 	setFactoryType(new MidiProcessorFactoryType(ownerProcessor));
 
 	setEditorState(Processor::Visible, false, dontSendNotification);
+
+	keyDown.setRange(0, 128, false);
 }
 
 MidiProcessorChain::~MidiProcessorChain()
@@ -1041,6 +1052,31 @@ void MidiProcessorChain::setFactoryType(FactoryType* newFactoryType)
 void MidiProcessorChain::sendAllNoteOffEvent()
 {
 	allNotesOffAtNextBuffer = true;
+}
+
+void MidiProcessorChain::updatePressedKeyCount(const HiseEvent& e) noexcept
+{
+	if (e.isArtificial())
+		return;
+
+	if (e.isNoteOn())
+	{
+		++numPressedKeys;
+		keyDown.setBit(e.getNoteNumber(), true);
+	}
+	else if (e.isNoteOff())
+	{
+		--numPressedKeys;
+		if (numPressedKeys.get() < 0)
+			numPressedKeys.set(0);
+
+		keyDown.setBit(e.getNoteNumber(), false);
+	}
+	else if (e.isAllNotesOff())
+	{
+		numPressedKeys.set(0);
+		keyDown.clear();
+	}
 }
 
 void MidiProcessorChain::processHiseEvent(HiseEvent& m)

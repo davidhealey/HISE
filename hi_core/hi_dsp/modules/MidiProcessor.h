@@ -229,8 +229,22 @@ public:
 	}
 
 	bool hasAttachedNoteBuffer() const noexcept { return attachedNoteBuffer != nullptr; }
-	
+
+	/** Returns the number of physically pressed keys for this synth. This is tracked once
+	    centrally for the whole chain (using the event's real/artificial state as it enters
+	    the chain), so it stays accurate no matter which MidiProcessor calls
+	    Message.makeArtificial() on the event, and no matter which processor queries it. */
+	int getNumPressedKeys() const noexcept { return numPressedKeys.get(); }
+
+	/** Returns true if two or more keys are currently pressed (see getNumPressedKeys()). */
+	bool isLegatoInterval() const noexcept { return numPressedKeys.get() > 1; }
+
+	/** Returns true if the given key is currently physically pressed. */
+	bool isKeyDown(int noteNumber) const noexcept { return keyDown[noteNumber]; }
+
 private:
+
+	void updatePressedKeyCount(const HiseEvent& e) noexcept;
 
 	struct AttachedNoteBuffer
 	{
@@ -341,6 +355,9 @@ private:
 	Array<WeakReference<MidiProcessor>> wholeBufferProcessors;
 
 	HiseEventBuffer artificialEvents;
+
+	Atomic<int> numPressedKeys;
+	BigInteger keyDown;
 };
 
 class HardcodedScriptFactoryType;

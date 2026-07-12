@@ -336,19 +336,16 @@ void JavascriptMidiProcessor::runScriptCallbacks()
 {
     if (currentEvent->isAllNotesOff())
     {
-		synthObject->handleNoteCounter(*currentEvent);
 		// All notes off are controller message, so they should not be processed, or it can lead to loop.
 		currentMidiMessage->onAllNotesOff();
         return;
     }
-    
+
 #if ENABLE_SCRIPTING_BREAKPOINTS
 	breakpointWasHit(-1);
 #endif
 
 	scriptEngine->maximumExecutionTime = HiseJavascriptEngine::getDefaultTimeOut();
-
-	synthObject->handleNoteCounter(*currentEvent);
 
 	switch (currentEvent->getType())
 	{
@@ -1233,8 +1230,6 @@ void JavascriptVoiceStartModulator::handleHiseEvent(const HiseEvent& m)
 {
 	currentMidiMessage->setHiseEvent(m);
 
-	synthObject->handleNoteCounter(m);
-
 	if (m.isNoteOff())
 	{
 		if (!onVoiceStopCallback->isSnippetEmpty())
@@ -1431,8 +1426,6 @@ void JavascriptTimeVariantModulator::handleHiseEvent(const HiseEvent &m)
 	}
 
 	currentMidiMessage->setHiseEvent(m);
-
-	synthObject->handleNoteCounter(m);
 
 	if (m.isNoteOn())
 	{

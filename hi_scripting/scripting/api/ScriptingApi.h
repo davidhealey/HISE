@@ -1241,14 +1241,14 @@ public:
 		/** Checks if the artificial event is active */
 		bool isArtificialEventActive(int eventId);
 
-		/** Returns the number of pressed keys (!= the number of playing voices!). */
-		int getNumPressedKeys() const {return numPressedKeys.get(); };
+		/** Returns the number of physically pressed keys (!= the number of playing voices!). */
+		int getNumPressedKeys() const;
 
-		/** Checks if any key is pressed. */
-		bool isLegatoInterval() const { return numPressedKeys.get() != 1; };
+		/** Returns true if two or more keys are currently pressed. */
+		bool isLegatoInterval() const;
 
 		/** Checks if the given key is pressed. */
-		bool isKeyDown(int noteNumber) { return keyDown[noteNumber]; };
+		bool isKeyDown(int noteNumber) const;
 
 		/** Adds a Modulator to the synth's chain. If it already exists, it returns the index. */
 		ScriptModulator* addModulator(int chainId, const String &type, const String &id);
@@ -1321,31 +1321,6 @@ public:
 
 		// ============================================================================================================
 
-		void handleNoteCounter(const HiseEvent& e) noexcept
-		{
-			if (e.isArtificial())
-				return;
-
-			if (e.isNoteOn())
-			{
-				++numPressedKeys;
-				keyDown.setBit(e.getNoteNumber(), true);
-			}
-			else if (e.isNoteOff())
-			{
-				--numPressedKeys; 
-				if (numPressedKeys.get() < 0) 
-					numPressedKeys.set(0);
-
-				keyDown.setBit(e.getNoteNumber(), false);
-			}
-			else if (e.isAllNotesOff())
-			{
-				numPressedKeys = 0;
-				keyDown.clear();
-			}
-		}
-
 		void setSustainPedal(bool shouldBeDown) { sustainState = shouldBeDown; };
 
 		struct Wrapper;
@@ -1359,8 +1334,6 @@ public:
 		WeakReference<Message> messageObject;
 
 		ModulatorSynth * const owner;
-		Atomic<int> numPressedKeys;
-		BigInteger keyDown;
 
 		ApiHelpers::ModuleHandler moduleHandler;
 

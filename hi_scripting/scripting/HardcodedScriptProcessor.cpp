@@ -248,7 +248,6 @@ void HardcodedScriptProcessor::processHiseEvent(HiseEvent &m)
 
 		Message.setHiseEvent(m);
 		Message.ignoreEvent(false);
-		Synth.handleNoteCounter(m);
 
 		switch (m.getType())
 		{
