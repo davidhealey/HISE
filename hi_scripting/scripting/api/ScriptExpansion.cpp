@@ -2602,6 +2602,11 @@ juce::Result FullInstrumentExpansion::initialise()
 
 		getMainController()->getExpansionHandler().addListener(this);
 
+		// The Samples subdirectory is not part of the embedded hxi data so it
+		// needs to be created on disk before checkSubDirectories() looks for it
+		// (otherwise it will hit the assertions in FileHandlerBase::checkSubDirectory()).
+		addMissingFolders();
+
 		checkSubDirectories();
 
 		return Result::ok();
