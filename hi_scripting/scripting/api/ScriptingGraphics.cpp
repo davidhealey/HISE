@@ -4245,8 +4245,10 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawAlertBox(Graphics& g_, Aler
 
 int ScriptingObjects::ScriptedLookAndFeel::Laf::getAlertWindowMargin()
 {
+#if HISE_ALERT_WINDOW_ALLOW_PADDING
 	if (functionDefined("drawAlertWindow"))
 		return 50;
+#endif
 
 	return 0;
 }

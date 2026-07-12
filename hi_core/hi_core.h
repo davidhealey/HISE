@@ -576,6 +576,16 @@ Note that this is a dynamic preprocessor so you don't need to recompile HISE to 
 #define HISE_USE_MIDI_CHANNELS_FOR_AUTOMATION 0
 #endif
 
+/** Config: HISE_ALERT_WINDOW_ALLOW_PADDING
+
+If enabled, a custom LookAndFeel with a drawAlertWindow callback can request extra padding
+around alert windows (via getAlertWindowMargin()) to draw drop shadows and rounded corners
+outside the window's normal bounds. Disabled by default so alert windows use their normal size.
+*/
+#ifndef HISE_ALERT_WINDOW_ALLOW_PADDING
+#define HISE_ALERT_WINDOW_ALLOW_PADDING 0
+#endif
+
 #ifndef HISE_INCLUDE_BEATPORT
 #define HISE_INCLUDE_BEATPORT 0
 #endif
