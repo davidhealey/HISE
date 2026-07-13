@@ -565,6 +565,21 @@ void CustomSettingsWindow::comboBoxChanged(ComboBox* comboBoxThatHasChanged)
 
 
 
+Rectangle<int> CustomSettingsWindow::getControlBounds(int y) const
+{
+	const int controlWidth = jmin(150, getWidth() / 2);
+	const int rightMargin = 10;
+	return { getWidth() - controlWidth - rightMargin, y, controlWidth, 30 };
+}
+
+Rectangle<int> CustomSettingsWindow::getLabelBounds(int y) const
+{
+	const int labelGap = 10;
+	const auto controlBounds = getControlBounds(y);
+	const int labelWidth = jmin(110, controlBounds.getX() - labelGap);
+	return { controlBounds.getX() - labelWidth - labelGap, y, labelWidth, 30 };
+}
+
 void CustomSettingsWindow::paint(Graphics& g)
 {
 	std::function<void(Properties, const char*)> drawLabel;
@@ -573,9 +588,7 @@ void CustomSettingsWindow::paint(Graphics& g)
 	{
 		css->drawComponentBackground(g, this, {});
 
-		auto b = getLocalBounds();
-		b.removeFromTop(10);
-		b.removeFromRight(getWidth() / 2 + 30);
+		int y = 10;
 
 		if(auto root = simple_css::CSSRootComponent::find(*this))
 		{
@@ -587,9 +600,9 @@ void CustomSettingsWindow::paint(Graphics& g)
 				{
 					if (isOn(id))
 					{
-						auto tb = b.removeFromTop(30).toFloat();
-						r.renderText(g, tb, text, ss);
-						b.removeFromTop(10);
+						auto tb = getLabelBounds(y).toFloat();
+						r.renderText(g, tb, text, ss, simple_css::PseudoElementType::None, Justification::centredRight);
+						y += 40;
 					}
 				};
 
@@ -610,16 +623,16 @@ void CustomSettingsWindow::paint(Graphics& g)
 	}
 
     g.setColour(findColour((int)ColourIds::textColour));
-    
+
 	g.setFont(font);
 
 	int y = 10;
 
 	drawLabel = [&](Properties id, const char* text)
 	{
-		if (isOn(id)) 
-		{ 
-			g.drawText(text, 0, y, getWidth() / 2 - 30, 30, Justification::centredLeft); 
+		if (isOn(id))
+		{
+			g.drawText(text, getLabelBounds(y), Justification::centredRight);
 			y += 40;
 		}
 	};
@@ -656,7 +669,7 @@ void CustomSettingsWindow::paint(Graphics& g)
 
 
 
-#define POSITION_COMBOBOX(id, comboBox) if (isOn(id)) {comboBox->setBounds(getWidth() / 2 - 20, y, getWidth() / 2 - 20, 30); y += 40; } else comboBox->setVisible(false);
+#define POSITION_COMBOBOX(id, comboBox) if (isOn(id)) {comboBox->setBounds(getControlBounds(y)); y += 40; } else comboBox->setVisible(false);
 #define POSITION_BUTTON(id, button) if (isOn(id)) {button->setBounds(10, y, getWidth() - 20, 30); y += 40; } else button->setVisible(false);
 
 void CustomSettingsWindow::resized()
