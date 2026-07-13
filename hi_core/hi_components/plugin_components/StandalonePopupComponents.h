@@ -180,6 +180,14 @@ public:
 
 private:
 
+	/** Returns the bounds for the control (combobox/button) of a settings row at the given y,
+	    anchored to the right edge of the window. */
+	Rectangle<int> getControlBounds(int y) const;
+
+	/** Returns the bounds for the label of a settings row at the given y, positioned directly
+	    to the left of the control returned by getControlBounds(). */
+	Rectangle<int> getLabelBounds(int y) const;
+
 	GlobalHiseLookAndFeel glaf;
 	friend class CustomSettingsWindowPanel;
 
