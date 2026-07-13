@@ -48,7 +48,7 @@ public:
         sf.addScrollBarToAnimate(sb);
         
 		pplaf.setFontForAll(GLOBAL_BOLD_FONT());
-		pplaf.setLabelWidth(190);
+		pplaf.setControlWidth(190);
 
 	}
 

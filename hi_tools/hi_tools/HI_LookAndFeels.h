@@ -252,8 +252,7 @@ public:
 
 	Rectangle<int> getPropertyComponentContentPosition(PropertyComponent& component);
 
-	void setLabelWidth(int newLabelWidth);
-
+	void setControlWidth(int newControlWidth);
 
 	void drawPropertyComponentLabel (Graphics& g, int /*width*/, int /*height*/, PropertyComponent& component) override;
 	;
@@ -278,7 +277,7 @@ public:
 
 	void drawButtonText(Graphics& g, TextButton& b, bool , bool );
 
-	int labelWidth = 110;
+	int controlWidth = 150;
 
 	Font comboBoxFont;
 	Font textButtonFont;

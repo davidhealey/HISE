@@ -1195,13 +1195,13 @@ void HiPropertyPanelLookAndFeel::drawPropertyPanelSectionHeader(Graphics& g, con
 
 Rectangle<int> HiPropertyPanelLookAndFeel::getPropertyComponentContentPosition(PropertyComponent& component)
 {
-	const int textW = jmin(labelWidth, component.getWidth() / 3);
-	return Rectangle<int>(textW, 1, component.getWidth() - textW - 1, component.getHeight() - 3);
+	const int cw = jmin(controlWidth, component.getWidth() / 2);
+	return Rectangle<int>(component.getWidth() - cw - 1, 1, cw, component.getHeight() - 3);
 }
 
-void HiPropertyPanelLookAndFeel::setLabelWidth(int newLabelWidth)
+void HiPropertyPanelLookAndFeel::setControlWidth(int newControlWidth)
 {
-	labelWidth = newLabelWidth;
+	controlWidth = newControlWidth;
 }
 
 void HiPropertyPanelLookAndFeel::drawPropertyComponentLabel(Graphics& g, int i, int i1, PropertyComponent& component)
