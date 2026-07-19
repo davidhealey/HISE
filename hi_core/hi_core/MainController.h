@@ -36,6 +36,7 @@
 namespace hise { using namespace juce;
 
 class ProjectDocDatabaseHolder;
+class ExternalControllerAssignmentHandler;
 
 /** The grand central station of HISE.
 *	@ingroup core
@@ -1546,6 +1547,17 @@ public:
 	ModuleStateManager& getModuleStateManager() noexcept { return moduleStateManager; };
 	const ModuleStateManager& getModuleStateManager() const noexcept { return moduleStateManager; };
 
+	/** Returns the handler that stores controller / macro / MPE assignments in an external file, or
+	    nullptr if the HISE_USE_EXTERNAL_ASSIGNMENT_FILE feature is not compiled in. */
+	ExternalControllerAssignmentHandler* getExternalAssignmentHandler()
+	{
+#if HISE_USE_EXTERNAL_ASSIGNMENT_FILE
+		return externalAssignmentHandler.get();
+#else
+		return nullptr;
+#endif
+	}
+
 	CodeHandler& getConsoleHandler() noexcept { return codeHandler; };
 	const CodeHandler& getConsoleHandler() const noexcept { return codeHandler; };
 
@@ -2276,6 +2288,9 @@ private:
 	LockFreeDispatcher lockfreeDispatcher;
 	ModuleStateManager moduleStateManager;
 	UserPresetHandler userPresetHandler;
+#if HISE_USE_EXTERNAL_ASSIGNMENT_FILE
+	ScopedPointer<ExternalControllerAssignmentHandler> externalAssignmentHandler;
+#endif
 	ProcessorChangeHandler processorChangeHandler;
 	GlobalAsyncModuleHandler globalAsyncModuleHandler;
 	

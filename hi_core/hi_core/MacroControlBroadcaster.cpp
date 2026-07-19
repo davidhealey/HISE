@@ -317,8 +317,13 @@ namespace hise { using namespace juce;
 	{ return controlledParameters.size(); }
 
 	void MacroControlBroadcaster::MacroControlData::setMidiController(int newControllerNumber)
-	{ 
-		midiController = newControllerNumber;	
+	{
+		midiController = newControllerNumber;
+
+#if HISE_USE_EXTERNAL_ASSIGNMENT_FILE
+		if (auto* h = getMainController()->getExternalAssignmentHandler())
+			h->notifyAssignmentChanged();
+#endif
 	}
 
 	int MacroControlBroadcaster::MacroControlData::getMidiController() const noexcept
@@ -568,6 +573,17 @@ void MacroControlBroadcaster::loadMacrosFromValueTree(const ValueTree &v, bool l
 {
 	ValueTree macroData = v.getChildWithName("macro_controls");
 
+#if HISE_USE_EXTERNAL_ASSIGNMENT_FILE
+	// A macro restore is always a programmatic operation, so suppress file writes while it runs.
+	ExternalControllerAssignmentHandler::ScopedRestoreSuspender restoreSuspender(thisAsSynth->getMainController());
+
+	// If the external assignment file is active and contains a macro section, use it instead of the
+	// macro data that was stored in the preset. When there is a value-carrying macro section left in
+	// the preset it is still applied afterwards via loadMacroValuesFromValueTree().
+	if (auto* h = thisAsSynth->getMainController()->getExternalAssignmentHandler())
+		macroData = h->getTreeToRestore(ExternalControllerAssignmentHandler::getMacroSectionId(), macroData);
+#endif
+
 	if(macroData.isValid())
 	{
 		sendMacroConnectionChangeMessageForAll(false);
@@ -710,8 +726,13 @@ void MacroControlBroadcaster::MacroControlData::removeParametersFromIndexList(co
             }
         }
     }
-    
+
     pendingDelete.clear();
+
+#if HISE_USE_EXTERNAL_ASSIGNMENT_FILE
+	if (auto* h = getMainController()->getExternalAssignmentHandler())
+		h->notifyAssignmentChanged();
+#endif
 }
 
 void MacroControlBroadcaster::MacroControlData::clearDanglingProcessors()
@@ -849,6 +870,11 @@ void MacroControlBroadcaster::MacroControlData::addParameter(Processor *p, int p
     }
     
 	parent.sendMacroConnectionChangeMessage(macroIndex, p, parameterId, true, n);
+
+#if HISE_USE_EXTERNAL_ASSIGNMENT_FILE
+	if (auto* h = getMainController()->getExternalAssignmentHandler())
+		h->notifyAssignmentChanged();
+#endif
 }
 
 Processor *MacroControlBroadcaster::findProcessor(Processor *p, const String &idToSearch)

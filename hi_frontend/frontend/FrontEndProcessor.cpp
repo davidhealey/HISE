@@ -458,6 +458,12 @@ void FrontendProcessor::createPreset(const ValueTree& synthData)
 
 	synthChain->loadMacrosFromValueTree(synthData);
 
+#if HISE_USE_EXTERNAL_ASSIGNMENT_FILE
+	// Make sure the assignments stored in the external file are applied when the plugin is loaded.
+	if (auto* h = getExternalAssignmentHandler())
+		h->applyExternalAssignments();
+#endif
+
 	getUserPresetHandler().initDefaultPresetManager({});
 
 	LOG_START("Adding plugin parameters");

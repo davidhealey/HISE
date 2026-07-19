@@ -110,7 +110,14 @@ void MidiControllerAutomationHandler::setUnlearndedMidiControlNumber(Key k, Noti
 	anyUsed = true;
 
 	if (notifyListeners)
+	{
 		sendChangeMessage();
+
+#if HISE_USE_EXTERNAL_ASSIGNMENT_FILE
+		if (auto* h = mc->getExternalAssignmentHandler())
+			h->notifyAssignmentChanged();
+#endif
+	}
 }
 
 MidiControllerAutomationHandler::Key MidiControllerAutomationHandler::getMidiControllerNumber(Processor *interfaceProcessor, int attributeIndex) const
@@ -184,7 +191,14 @@ void MidiControllerAutomationHandler::removeMidiControlledParameter(Processor *i
 	refreshAnyUsedState();
 
 	if (notifyListeners == sendNotification)
+	{
 		sendChangeMessage();
+
+#if HISE_USE_EXTERNAL_ASSIGNMENT_FILE
+		if (auto* h = mc->getExternalAssignmentHandler())
+			h->notifyAssignmentChanged();
+#endif
+	}
 }
 
 MidiControllerAutomationHandler::AutomationData::AutomationData() :
@@ -420,6 +434,13 @@ void MidiControllerAutomationHandler::MPEData::restoreFromValueTree(const ValueT
 {
 	pendingData = v;
 
+#if HISE_USE_EXTERNAL_ASSIGNMENT_FILE
+	// If the external assignment file is active and contains an MPE section, use it instead of the
+	// values that were stored in the preset.
+	if (auto* h = getMainController()->getExternalAssignmentHandler())
+		pendingData = h->getTreeToRestore(UserPresetIds::MPEData, v);
+#endif
+
 	auto f = [this](Processor* p)
 	{
 		LockHelpers::noMessageThreadBeyondInitialisation(p->getMainController());
@@ -541,9 +562,16 @@ void MidiControllerAutomationHandler::MPEData::addConnection(MPEModulator* mod, 
 		data->add(mod);
 
         mod->mpeModulatorAssigned(mod, true);
-        
+
 		if (notifyListeners == sendNotification)
+		{
             sendAsyncNotificationMessage(mod, EventType::MPEModConnectionAdded);
+
+#if HISE_USE_EXTERNAL_ASSIGNMENT_FILE
+			if (auto* h = getMainController()->getExternalAssignmentHandler())
+				h->notifyAssignmentChanged();
+#endif
+		}
 	}
 }
 
@@ -562,7 +590,14 @@ void MidiControllerAutomationHandler::MPEData::removeConnection(MPEModulator* mo
             mod->mpeModulatorAssigned(mod, false);
 
 		if (notifyListeners == sendNotification)
+		{
             sendAsyncNotificationMessage(mod, EventType::MPEModConnectionRemoved);
+
+#if HISE_USE_EXTERNAL_ASSIGNMENT_FILE
+			if (auto* h = getMainController()->getExternalAssignmentHandler())
+				h->notifyAssignmentChanged();
+#endif
+		}
 	}
 	else if (mod != nullptr)
 	{
@@ -668,6 +703,16 @@ void MidiControllerAutomationHandler::MPEData::setMpeMode(bool shouldBeOn)
 			if (l != nullptr)
 				l->mpeModeChanged(mpeEnabled);
 		}
+
+#if HISE_USE_EXTERNAL_ASSIGNMENT_FILE
+		// Only treat this as a user change when it happens on the message thread. The restore path
+		// calls setMpeMode from the sample loading thread, which must not create the file.
+		if (MessageManager::getInstance()->isThisTheMessageThread())
+		{
+			if (auto* h = getMainController()->getExternalAssignmentHandler())
+				h->notifyAssignmentChanged();
+		}
+#endif
 	}
 }
 
@@ -706,13 +751,22 @@ ValueTree MidiControllerAutomationHandler::exportAsValueTree() const
 
 void MidiControllerAutomationHandler::restoreFromValueTree(const ValueTree &v)
 {
-	if (v.getType() != Identifier("MidiAutomation")) return;
+	ValueTree treeToUse = v;
+
+#if HISE_USE_EXTERNAL_ASSIGNMENT_FILE
+	// If the external assignment file is active and contains a MIDI section, use it instead of the
+	// values that were stored in the preset.
+	if (auto* h = mc->getExternalAssignmentHandler())
+		treeToUse = h->getTreeToRestore(UserPresetIds::MidiAutomation, v);
+#endif
+
+	if (treeToUse.getType() != Identifier("MidiAutomation")) return;
 
 	clear(sendNotification);
 
-	for (int i = 0; i < v.getNumChildren(); i++)
+	for (int i = 0; i < treeToUse.getNumChildren(); i++)
 	{
-		ValueTree cc = v.getChild(i);
+		ValueTree cc = treeToUse.getChild(i);
 
 		int controller = cc.getProperty("Controller", 1);
 		int8 channel = (int)cc.getProperty("Channel", -1);
@@ -738,7 +792,24 @@ Identifier MidiControllerAutomationHandler::getUserPresetStateId() const
 { return UserPresetIds::MidiAutomation; }
 
 void MidiControllerAutomationHandler::resetUserPresetState()
-{ clear(sendNotification); }
+{
+#if HISE_USE_EXTERNAL_ASSIGNMENT_FILE
+	// If the preset does not contain a MIDI section (because it was excluded when saving with the
+	// external assignment file active), restore the assignments from that file instead of clearing.
+	if (auto* h = mc->getExternalAssignmentHandler())
+	{
+		auto ext = h->getExternalSection(UserPresetIds::MidiAutomation);
+
+		if (ext.isValid())
+		{
+			restoreFromValueTree(ext);
+			return;
+		}
+	}
+#endif
+
+	clear(sendNotification);
+}
 
 MidiControllerAutomationHandler::MPEData::Listener::~Listener()
 {}
@@ -750,7 +821,24 @@ Identifier MidiControllerAutomationHandler::MPEData::getUserPresetStateId() cons
 { return UserPresetIds::MPEData; }
 
 void MidiControllerAutomationHandler::MPEData::resetUserPresetState()
-{ reset(); }
+{
+#if HISE_USE_EXTERNAL_ASSIGNMENT_FILE
+	// If the preset does not contain an MPE section (because it was excluded when saving with the
+	// external assignment file active), restore the assignments from that file instead of clearing.
+	if (auto* h = getMainController()->getExternalAssignmentHandler())
+	{
+		auto ext = h->getExternalSection(UserPresetIds::MPEData);
+
+		if (ext.isValid())
+		{
+			restoreFromValueTree(ext);
+			return;
+		}
+	}
+#endif
+
+	reset();
+}
 
 bool MidiControllerAutomationHandler::MPEData::isMpeEnabled() const
 { return mpeEnabled; }
@@ -1033,12 +1121,22 @@ bool MidiControllerAutomationHandler::setNewRangeForParameter(int index, Normali
 {
 	if(!anyUsed)
 		return false;
-	
-	return createIterator().perform(index, [range](AutomationData& d)
+
+	auto ok = createIterator().perform(index, [range](AutomationData& d)
 	{
 		d.parameterRange = range;
 		return true;
 	});
+
+#if HISE_USE_EXTERNAL_ASSIGNMENT_FILE
+	if (ok)
+	{
+		if (auto* h = mc->getExternalAssignmentHandler())
+			h->notifyAssignmentChanged();
+	}
+#endif
+
+	return ok;
 }
 
 bool MidiControllerAutomationHandler::setParameterInverted(int index, bool value)
@@ -1046,11 +1144,21 @@ bool MidiControllerAutomationHandler::setParameterInverted(int index, bool value
 	if(!anyUsed)
 		return false;
 
-	return createIterator().perform(index, [value](AutomationData& d)
+	auto ok = createIterator().perform(index, [value](AutomationData& d)
 	{
 		d.inverted = value;
 		return true;
 	});
+
+#if HISE_USE_EXTERNAL_ASSIGNMENT_FILE
+	if (ok)
+	{
+		if (auto* h = mc->getExternalAssignmentHandler())
+			h->notifyAssignmentChanged();
+	}
+#endif
+
+	return ok;
 }
 
 void ConsoleLogger::logMessage(const String &message)

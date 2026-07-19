@@ -555,6 +555,10 @@ public:
 		/** Enables the macro system to be used by the end user. */
 		void setFrontendMacros(var nameList);
 
+		/** Enables or disables storing the MIDI / macro / MPE assignments in an external file
+		    (requires HISE_USE_EXTERNAL_ASSIGNMENT_FILE to be enabled). */
+		void setUseExternalControllerAssignments(bool shouldUseExternalFile);
+
 		/** Returns the current operating system ("OSX", "LINUX", or ("WIN"). */
 		String getOS();
 		

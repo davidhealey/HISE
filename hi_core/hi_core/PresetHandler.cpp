@@ -133,14 +133,26 @@ juce::ValueTree UserPresetHelpers::createUserPreset(ModulatorSynthChain* chain)
 	}
 #endif
 
-	chain->getMainController()->getUserPresetHandler().saveStateManager(preset, UserPresetIds::MidiAutomation);
-	chain->getMainController()->getUserPresetHandler().saveStateManager(preset, UserPresetIds::MPEData);
+	// When the external assignment file is active, the MIDI / MPE / macro assignments live in that
+	// file rather than in the preset.
+	bool excludeAssignments = false;
+
+#if HISE_USE_EXTERNAL_ASSIGNMENT_FILE
+	if (auto* h = chain->getMainController()->getExternalAssignmentHandler())
+		excludeAssignments = h->shouldExcludeFromPreset();
+#endif
+
+	if (!excludeAssignments)
+	{
+		chain->getMainController()->getUserPresetHandler().saveStateManager(preset, UserPresetIds::MidiAutomation);
+		chain->getMainController()->getUserPresetHandler().saveStateManager(preset, UserPresetIds::MPEData);
+	}
 
 	preset.setProperty("Version", getCurrentVersionNumber(chain), nullptr);
 
 	addRequiredExpansions(chain->getMainController(), preset);
 
-	if(chain->getMainController()->getMacroManager().isMacroEnabledOnFrontend())
+	if(!excludeAssignments && chain->getMainController()->getMacroManager().isMacroEnabledOnFrontend())
 		chain->saveMacrosToValueTree(preset);
 
 	// Store the rest...

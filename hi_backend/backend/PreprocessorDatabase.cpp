@@ -660,6 +660,15 @@ PreprocessorDataBase::PreprocessorDataBase()
 		.withCrossReference(LinkType::ScriptingApi, "TransportHandler", "host BPM reported through the transport handler is the value that gets persisted")
 		.withCrossReference(LinkType::ScriptingApi, "Engine.getHostBpm", "Engine.getHostBpm reflects the restored tempo after a project reload");
 
+	data["HISE_USE_EXTERNAL_ASSIGNMENT_FILE"] = Entry()
+		.withCategory(Category::PresetAndState)
+		.withBrief("Stores the MIDI controller, macro and MPE assignments of the GUI controls in an external JSON file instead of the preset.")
+		.withDescriptionLine("When enabled, the assignments (MIDI CC learn mappings, macro connections and MPE modulator connections) are no longer written into the preset or the DAW project state. Instead they are kept in a 'ControllerAssignments.json' file that sits in the root folder of the currently active file handler, so full instrument expansions each get their own assignment file. Whenever a preset is changed, a DAW session is loaded or the plugin / expansion is loaded, the assignments are restored from that file. As soon as the user changes an assignment, the file is created (and kept up to date from then on).")
+		.withDescriptionLine("If no assignment file exists yet, HISE falls back to the default behaviour of using the values stored in the preset. The feature can be toggled at runtime with Engine.setUseExternalControllerAssignments().")
+		.withDefault(0)
+		.withValue(HISE_USE_EXTERNAL_ASSIGNMENT_FILE)
+		.withCrossReference(LinkType::ScriptingApi, "Engine.setUseExternalControllerAssignments", "enables or disables the feature at runtime");
+
 	data["HISE_OVERWRITE_OLD_USER_PRESETS"] = Entry()
 		.withCategory(Category::PresetAndState)
 		.withBrief("Silently replaces shipped user presets on disk when the plugin version is newer than the one that wrote them.")

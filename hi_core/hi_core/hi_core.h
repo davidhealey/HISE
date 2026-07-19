@@ -102,6 +102,8 @@
 #include "MacroControlBroadcaster.h"
 #include "MacroControlledComponents.h"
 
+#include "ExternalControllerAssignmentHandler.h"
+
 #include "MiscComponents.h"
 #include "StandaloneProcessor.h"
 
