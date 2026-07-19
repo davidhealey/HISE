@@ -3098,7 +3098,9 @@ void ScriptingApi::Settings::setVoiceMultiplier(int newVoiceAmount)
 
 void ScriptingApi::Settings::clearMidiLearn()
 {
-	mc->getMacroManager().getMidiControlAutomationHandler()->clear(sendNotification);
+	auto handler = mc->getMacroManager().getMidiControlAutomationHandler();
+	handler->setLastChangeWasBulkRestore(false);
+	handler->clear(sendNotification);
 }
 
 var ScriptingApi::Settings::getMidiInputDevices()

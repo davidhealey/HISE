@@ -607,7 +607,14 @@ public:
 
 	String getCCName() const;
 
+	/** True if the last change was a bulk restore (eg. restoreFromValueTree) rather than a user action. */
+	bool wasLastChangeFromBulkRestore() const { return lastChangeWasBulkRestore; }
+
+	void setLastChangeWasBulkRestore(bool wasBulkRestore) { lastChangeWasBulkRestore = wasBulkRestore; }
+
 private:
+
+	bool lastChangeWasBulkRestore = false;
 
 	bool filterChannels = false;
 

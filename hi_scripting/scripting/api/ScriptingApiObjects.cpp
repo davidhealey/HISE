@@ -9972,6 +9972,12 @@ ScriptingObjects::ScriptedMacroHandler::~ScriptedMacroHandler()
 void ScriptingObjects::ScriptedMacroHandler::macroConnectionChanged(int macroIndex, Processor* p, int parameterIndex,
 	bool wasAdded)
 {
+	auto macroChain = getScriptProcessor()->getMainController_()->getMacroManager().getMacroChain();
+
+	if (HISE_GET_PREPROCESSOR(getScriptProcessor()->getMainController_(), HISE_SUPPRESS_AUTOMATION_CALLBACKS_ON_BULK_LOAD) &&
+		macroChain->wasLastChangeFromBulkRestore())
+		return;
+
 	triggerAsyncUpdate();
 }
 
@@ -10267,6 +10273,10 @@ ScriptingObjects::ScriptedMidiAutomationHandler::~ScriptedMidiAutomationHandler(
 
 void ScriptingObjects::ScriptedMidiAutomationHandler::changeListenerCallback(SafeChangeBroadcaster *b)
 {
+	if (HISE_GET_PREPROCESSOR(getScriptProcessor()->getMainController_(), HISE_SUPPRESS_AUTOMATION_CALLBACKS_ON_BULK_LOAD) &&
+		handler->wasLastChangeFromBulkRestore())
+		return;
+
 	if (updateCallback)
 		updateCallback.call1(getAutomationDataObject());
 }

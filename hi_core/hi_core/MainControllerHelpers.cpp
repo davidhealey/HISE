@@ -109,6 +109,8 @@ void MidiControllerAutomationHandler::setUnlearndedMidiControlNumber(Key k, Noti
 
 	anyUsed = true;
 
+	lastChangeWasBulkRestore = false;
+
 	if (notifyListeners)
 		sendChangeMessage();
 }
@@ -182,6 +184,8 @@ void MidiControllerAutomationHandler::removeMidiControlledParameter(Processor *i
 	}
 
 	refreshAnyUsedState();
+
+	lastChangeWasBulkRestore = false;
 
 	if (notifyListeners == sendNotification)
 		sendChangeMessage();
@@ -708,6 +712,8 @@ void MidiControllerAutomationHandler::restoreFromValueTree(const ValueTree &v)
 {
 	if (v.getType() != Identifier("MidiAutomation")) return;
 
+	lastChangeWasBulkRestore = true;
+
 	clear(sendNotification);
 
 	for (int i = 0; i < v.getNumChildren(); i++)
@@ -738,7 +744,10 @@ Identifier MidiControllerAutomationHandler::getUserPresetStateId() const
 { return UserPresetIds::MidiAutomation; }
 
 void MidiControllerAutomationHandler::resetUserPresetState()
-{ clear(sendNotification); }
+{
+	lastChangeWasBulkRestore = true;
+	clear(sendNotification);
+}
 
 MidiControllerAutomationHandler::MPEData::Listener::~Listener()
 {}

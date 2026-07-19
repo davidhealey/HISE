@@ -586,6 +586,21 @@ outside the window's normal bounds. Disabled by default so alert windows use the
 #define HISE_ALERT_WINDOW_ALLOW_PADDING 0
 #endif
 
+/** Config: HISE_SUPPRESS_AUTOMATION_CALLBACKS_ON_BULK_LOAD
+
+If enabled, the setUpdateCallback() callbacks on the scripted MIDI automation and macro
+handlers will not fire when their data is restored in bulk (preset/expansion load, DAW
+session restore) rather than by a genuine user action. Built-in listeners like the MIDI
+Control List panel are unaffected, since they don't go through this callback.
+
+Note that this is a dynamic preprocessor so you don't need to recompile HISE to use this
+functionality, but just add HISE_SUPPRESS_AUTOMATION_CALLBACKS_ON_BULK_LOAD=1 to your
+ExtraDefinitions.
+*/
+#ifndef HISE_SUPPRESS_AUTOMATION_CALLBACKS_ON_BULK_LOAD
+#define HISE_SUPPRESS_AUTOMATION_CALLBACKS_ON_BULK_LOAD 0
+#endif
+
 #ifndef HISE_INCLUDE_BEATPORT
 #define HISE_INCLUDE_BEATPORT 0
 #endif

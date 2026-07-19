@@ -344,14 +344,21 @@ public:
 	/** Checks if the macro control has any parameters. */
 	bool hasActiveParameters(int macroIndex);
 
+	/** True if the last change was a bulk restore (eg. loadMacrosFromValueTree) rather than a user action. */
+	bool wasLastChangeFromBulkRestore() const { return lastChangeWasBulkRestore; }
+
+	void setLastChangeWasBulkRestore(bool wasBulkRestore) { lastChangeWasBulkRestore = wasBulkRestore; }
+
 private:
 
+	bool lastChangeWasBulkRestore = false;
+
     CriticalSection listenerLock;
-    
+
 	Array<WeakReference<MacroConnectionListener>> macroListeners;
 
 	OwnedArray<MacroControlData> macroControls;
-	
+
 	ModulatorSynthChain *thisAsSynth;
 
 	JUCE_DECLARE_WEAK_REFERENCEABLE(MacroControlBroadcaster);

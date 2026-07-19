@@ -570,6 +570,8 @@ void MacroControlBroadcaster::loadMacrosFromValueTree(const ValueTree &v, bool l
 
 	if(macroData.isValid())
 	{
+		lastChangeWasBulkRestore = true;
+
 		sendMacroConnectionChangeMessageForAll(false);
 
 		auto numMacros = HISE_GET_PREPROCESSOR(thisAsSynth->getMainController(), HISE_NUM_MACROS);
@@ -688,7 +690,8 @@ void MacroControlBroadcaster::MacroControlData::removeParametersFromIndexList(co
                 continue;
             
             cp->getProcessor()->sendOtherChangeMessage(dispatch::library::ProcessorChangeEvent::Macro);
-            
+
+            parent.setLastChangeWasBulkRestore(false);
             parent.sendMacroConnectionChangeMessage(macroIndex, cp->getProcessor(), cp->getParameter(), false, n);
         }
     }
@@ -848,6 +851,7 @@ void MacroControlBroadcaster::MacroControlData::addParameter(Processor *p, int p
         controlledParameters.add(nd);
     }
     
+	parent.setLastChangeWasBulkRestore(false);
 	parent.sendMacroConnectionChangeMessage(macroIndex, p, parameterId, true, n);
 }
 
