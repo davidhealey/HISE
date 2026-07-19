@@ -1186,6 +1186,7 @@ struct ScriptingApi::Engine::Wrapper
 	API_METHOD_WRAPPER_1(Engine, getMidiNoteFromName);
 	API_METHOD_WRAPPER_1(Engine, getMacroName);
   API_VOID_METHOD_WRAPPER_1(Engine, setFrontendMacros)
+	API_VOID_METHOD_WRAPPER_1(Engine, setUseExternalAutomationData);
 	API_VOID_METHOD_WRAPPER_2(Engine, setKeyColour);
 	API_VOID_METHOD_WRAPPER_3(Engine, showMessageBox);
 	API_VOID_METHOD_WRAPPER_2(Engine, showErrorMessage);
@@ -1348,6 +1349,7 @@ parentMidiProcessor(dynamic_cast<ScriptBaseMidiProcessor*>(p))
 	ADD_API_METHOD_1(getMacroName);
 	ADD_API_METHOD_0(getWavetableList);
 	ADD_API_METHOD_1(setFrontendMacros);
+	ADD_API_METHOD_1(setUseExternalAutomationData);
 	ADD_API_METHOD_2(setKeyColour);
 	ADD_API_METHOD_2(showErrorMessage);
 	ADD_API_METHOD_1(showMessage);
@@ -1759,6 +1761,17 @@ void ScriptingApi::Engine::setFrontendMacros(var nameList)
 		mm.setEnableMacroOnFrontend(false);
 		reportScriptError("Expected an Array of Strings");
 	}
+}
+
+void ScriptingApi::Engine::setUseExternalAutomationData(bool shouldUseExternalFile)
+{
+#if HISE_USE_EXTERNAL_AUTOMATION_DATA
+	if (auto* h = getProcessor()->getMainController()->getExternalAutomationDataHandler())
+		h->setEnabled(shouldUseExternalFile);
+#else
+	ignoreUnused(shouldUseExternalFile);
+	reportScriptError("setUseExternalAutomationData requires HISE_USE_EXTERNAL_AUTOMATION_DATA to be enabled");
+#endif
 }
 
 String ScriptingApi::Engine::getOS()

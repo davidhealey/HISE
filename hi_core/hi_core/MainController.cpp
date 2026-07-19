@@ -177,6 +177,10 @@ bool MainController::unitTestMode = false;
 	getUserPresetHandler().addStateManager(&getMacroManager().getMidiControlAutomationHandler()->getMPEData());
 	getUserPresetHandler().addStateManager(&moduleStateManager);
 
+#if HISE_USE_EXTERNAL_AUTOMATION_DATA
+	externalAutomationDataHandler = new ExternalAutomationDataHandler(this);
+#endif
+
 	globalFont = GLOBAL_FONT();
 
 	BACKEND_ONLY(popupConsole = nullptr);
@@ -208,6 +212,11 @@ MainController::~MainController()
 	//getControlUndoManager()->clearUndoHistory();
 
 	PresetHandler::setCurrentMainController(nullptr);
+
+#if HISE_USE_EXTERNAL_AUTOMATION_DATA
+	// destroy before the expansion handler (it deregisters itself as a listener)
+	externalAutomationDataHandler = nullptr;
+#endif
 
 	notifyShutdownToRegisteredObjects();
 
@@ -572,11 +581,16 @@ void MainController::loadPresetInternal(const ValueTree& valueTreeToLoad)
 				prepareToPlay(processingSampleRate, processingBufferSize.get());
 			}
 
-			// We need to postpone this until after compilation in order to resolve the 
+			// We need to postpone this until after compilation in order to resolve the
 			// attribute indexes for the CC mappings
 			getMacroManager().getMidiControlAutomationHandler()->loadUnloadedData();
 
 			synthChain->loadMacrosFromValueTree(v);
+
+#if HISE_USE_EXTERNAL_AUTOMATION_DATA
+			if (auto* h = getExternalAutomationDataHandler())
+				h->applyExternalAutomationData();
+#endif
 
 #if USE_BACKEND
 			Processor::Iterator<ModulatorSynth> iter(synthChain, false);
@@ -2393,9 +2407,18 @@ void MainController::savePluginState(MemoryBlock& destData, int currentlyLoadedP
 
 	//synthChain->saveMacroValuesToValueTree(v);
 
+	// with the external file active the assignments live there, not in the plugin state
+	bool excludeAssignments = false;
+
+#if HISE_USE_EXTERNAL_AUTOMATION_DATA
+	if (auto* h = getExternalAutomationDataHandler())
+		excludeAssignments = h->shouldExcludeFromPreset();
+#endif
+
     getUserPresetHandler().saveStateManager(v, UserPresetIds::Modules);
-    
-    getUserPresetHandler().saveStateManager(v, UserPresetIds::MidiAutomation);
+
+	if (!excludeAssignments)
+	    getUserPresetHandler().saveStateManager(v, UserPresetIds::MidiAutomation);
 
 	if (getUserPresetHandler().isUsingCustomDataModel())
     {
@@ -2439,11 +2462,12 @@ void MainController::savePluginState(MemoryBlock& destData, int currentlyLoadedP
 	// Make sure to save the version string into the plugin state
 	v.setProperty("Version", version, nullptr);
 
-    getUserPresetHandler().saveStateManager(v, UserPresetIds::MPEData);
-	
+	if (!excludeAssignments)
+	    getUserPresetHandler().saveStateManager(v, UserPresetIds::MPEData);
+
 	// Reload the macro connections before restoring the preset values
 		// so that it will update the correct connections with `setMacroControl()` in a control callback
-	if (getMacroManager().isMacroEnabledOnFrontend())
+	if (!excludeAssignments && getMacroManager().isMacroEnabledOnFrontend())
 		getMacroManager().getMacroChain()->saveMacrosToValueTree(v);
 
 	v.writeToStream(output);

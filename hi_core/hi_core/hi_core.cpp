@@ -76,6 +76,7 @@
 #include "MiscComponents.cpp"
 #include "MacroControlledComponents.cpp"
 #include "MacroControlBroadcaster.cpp"
+#include "ExternalAutomationDataHandler.cpp"
 #include "StandaloneProcessor.cpp"
 #include "ProjectDocumentation.cpp"
 

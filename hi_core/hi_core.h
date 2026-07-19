@@ -405,9 +405,18 @@ If true then the plugin will complain about the buffer size not being a multiple
 
 /** If this is true, then HISE will store / restore the current tempo in the DAW project. This allows persistence of a custom tempo value but lead
  *  to subtle glitches in some use cases, so if you always follow the host's tempo in your plugin you can deactivate this.
- */  
+ */
 #ifndef HISE_INCLUDE_TEMPO_IN_PLUGIN_STATE
 #define HISE_INCLUDE_TEMPO_IN_PLUGIN_STATE 1
+#endif
+
+/** Config: HISE_USE_EXTERNAL_AUTOMATION_DATA
+
+If enabled, the MIDI controller, macro and MPE assignments are stored in an external JSON file
+(one per active file handler / expansion) instead of the preset. Can be toggled at runtime with
+Engine.setUseExternalAutomationData(). */
+#ifndef HISE_USE_EXTERNAL_AUTOMATION_DATA
+#define HISE_USE_EXTERNAL_AUTOMATION_DATA 0
 #endif
 
 /** Config: ENABLE_ALL_PEAK_METERS

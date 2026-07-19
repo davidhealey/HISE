@@ -458,6 +458,11 @@ void FrontendProcessor::createPreset(const ValueTree& synthData)
 
 	synthChain->loadMacrosFromValueTree(synthData);
 
+#if HISE_USE_EXTERNAL_AUTOMATION_DATA
+	if (auto* h = getExternalAutomationDataHandler())
+		h->applyExternalAutomationData();
+#endif
+
 	getUserPresetHandler().initDefaultPresetManager({});
 
 	LOG_START("Adding plugin parameters");

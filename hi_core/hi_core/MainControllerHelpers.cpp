@@ -110,7 +110,10 @@ void MidiControllerAutomationHandler::setUnlearndedMidiControlNumber(Key k, Noti
 	anyUsed = true;
 
 	if (notifyListeners)
+	{
 		sendChangeMessage();
+		notifyExternalAutomationDataChange(mc);
+	}
 }
 
 MidiControllerAutomationHandler::Key MidiControllerAutomationHandler::getMidiControllerNumber(Processor *interfaceProcessor, int attributeIndex) const
@@ -184,7 +187,10 @@ void MidiControllerAutomationHandler::removeMidiControlledParameter(Processor *i
 	refreshAnyUsedState();
 
 	if (notifyListeners == sendNotification)
+	{
 		sendChangeMessage();
+		notifyExternalAutomationDataChange(mc);
+	}
 }
 
 MidiControllerAutomationHandler::AutomationData::AutomationData() :
@@ -420,6 +426,11 @@ void MidiControllerAutomationHandler::MPEData::restoreFromValueTree(const ValueT
 {
 	pendingData = v;
 
+#if HISE_USE_EXTERNAL_AUTOMATION_DATA
+	if (auto* h = getMainController()->getExternalAutomationDataHandler())
+		pendingData = h->getTreeToRestore(UserPresetIds::MPEData, v);
+#endif
+
 	auto f = [this](Processor* p)
 	{
 		LockHelpers::noMessageThreadBeyondInitialisation(p->getMainController());
@@ -541,9 +552,12 @@ void MidiControllerAutomationHandler::MPEData::addConnection(MPEModulator* mod, 
 		data->add(mod);
 
         mod->mpeModulatorAssigned(mod, true);
-        
+
 		if (notifyListeners == sendNotification)
+		{
             sendAsyncNotificationMessage(mod, EventType::MPEModConnectionAdded);
+			notifyExternalAutomationDataChange(getMainController());
+		}
 	}
 }
 
@@ -562,7 +576,10 @@ void MidiControllerAutomationHandler::MPEData::removeConnection(MPEModulator* mo
             mod->mpeModulatorAssigned(mod, false);
 
 		if (notifyListeners == sendNotification)
+		{
             sendAsyncNotificationMessage(mod, EventType::MPEModConnectionRemoved);
+			notifyExternalAutomationDataChange(getMainController());
+		}
 	}
 	else if (mod != nullptr)
 	{
@@ -668,6 +685,12 @@ void MidiControllerAutomationHandler::MPEData::setMpeMode(bool shouldBeOn)
 			if (l != nullptr)
 				l->mpeModeChanged(mpeEnabled);
 		}
+
+#if HISE_USE_EXTERNAL_AUTOMATION_DATA
+		// only a user change on the message thread should create the file (restore runs on the loading thread)
+		if (MessageManager::getInstance()->isThisTheMessageThread())
+			notifyExternalAutomationDataChange(getMainController());
+#endif
 	}
 }
 
@@ -706,13 +729,20 @@ ValueTree MidiControllerAutomationHandler::exportAsValueTree() const
 
 void MidiControllerAutomationHandler::restoreFromValueTree(const ValueTree &v)
 {
-	if (v.getType() != Identifier("MidiAutomation")) return;
+	ValueTree treeToUse = v;
+
+#if HISE_USE_EXTERNAL_AUTOMATION_DATA
+	if (auto* h = mc->getExternalAutomationDataHandler())
+		treeToUse = h->getTreeToRestore(UserPresetIds::MidiAutomation, v);
+#endif
+
+	if (treeToUse.getType() != Identifier("MidiAutomation")) return;
 
 	clear(sendNotification);
 
-	for (int i = 0; i < v.getNumChildren(); i++)
+	for (int i = 0; i < treeToUse.getNumChildren(); i++)
 	{
-		ValueTree cc = v.getChild(i);
+		ValueTree cc = treeToUse.getChild(i);
 
 		int controller = cc.getProperty("Controller", 1);
 		int8 channel = (int)cc.getProperty("Channel", -1);
@@ -738,7 +768,23 @@ Identifier MidiControllerAutomationHandler::getUserPresetStateId() const
 { return UserPresetIds::MidiAutomation; }
 
 void MidiControllerAutomationHandler::resetUserPresetState()
-{ clear(sendNotification); }
+{
+#if HISE_USE_EXTERNAL_AUTOMATION_DATA
+	// use the external file if the preset has no MIDI section instead of clearing
+	if (auto* h = mc->getExternalAutomationDataHandler())
+	{
+		auto ext = h->getExternalSection(UserPresetIds::MidiAutomation);
+
+		if (ext.isValid())
+		{
+			restoreFromValueTree(ext);
+			return;
+		}
+	}
+#endif
+
+	clear(sendNotification);
+}
 
 MidiControllerAutomationHandler::MPEData::Listener::~Listener()
 {}
@@ -750,7 +796,23 @@ Identifier MidiControllerAutomationHandler::MPEData::getUserPresetStateId() cons
 { return UserPresetIds::MPEData; }
 
 void MidiControllerAutomationHandler::MPEData::resetUserPresetState()
-{ reset(); }
+{
+#if HISE_USE_EXTERNAL_AUTOMATION_DATA
+	// use the external file if the preset has no MPE section instead of clearing
+	if (auto* h = getMainController()->getExternalAutomationDataHandler())
+	{
+		auto ext = h->getExternalSection(UserPresetIds::MPEData);
+
+		if (ext.isValid())
+		{
+			restoreFromValueTree(ext);
+			return;
+		}
+	}
+#endif
+
+	reset();
+}
 
 bool MidiControllerAutomationHandler::MPEData::isMpeEnabled() const
 { return mpeEnabled; }
@@ -1033,12 +1095,17 @@ bool MidiControllerAutomationHandler::setNewRangeForParameter(int index, Normali
 {
 	if(!anyUsed)
 		return false;
-	
-	return createIterator().perform(index, [range](AutomationData& d)
+
+	auto ok = createIterator().perform(index, [range](AutomationData& d)
 	{
 		d.parameterRange = range;
 		return true;
 	});
+
+	if (ok)
+		notifyExternalAutomationDataChange(mc);
+
+	return ok;
 }
 
 bool MidiControllerAutomationHandler::setParameterInverted(int index, bool value)
@@ -1046,11 +1113,16 @@ bool MidiControllerAutomationHandler::setParameterInverted(int index, bool value
 	if(!anyUsed)
 		return false;
 
-	return createIterator().perform(index, [value](AutomationData& d)
+	auto ok = createIterator().perform(index, [value](AutomationData& d)
 	{
 		d.inverted = value;
 		return true;
 	});
+
+	if (ok)
+		notifyExternalAutomationDataChange(mc);
+
+	return ok;
 }
 
 void ConsoleLogger::logMessage(const String &message)

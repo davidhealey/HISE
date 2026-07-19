@@ -36,6 +36,7 @@
 namespace hise { using namespace juce;
 
 class ProjectDocDatabaseHolder;
+class ExternalAutomationDataHandler;
 
 /** The grand central station of HISE.
 *	@ingroup core
@@ -1546,6 +1547,16 @@ public:
 	ModuleStateManager& getModuleStateManager() noexcept { return moduleStateManager; };
 	const ModuleStateManager& getModuleStateManager() const noexcept { return moduleStateManager; };
 
+	/** Returns the external automation data handler, or nullptr if HISE_USE_EXTERNAL_AUTOMATION_DATA is off. */
+	ExternalAutomationDataHandler* getExternalAutomationDataHandler()
+	{
+#if HISE_USE_EXTERNAL_AUTOMATION_DATA
+		return externalAutomationDataHandler.get();
+#else
+		return nullptr;
+#endif
+	}
+
 	CodeHandler& getConsoleHandler() noexcept { return codeHandler; };
 	const CodeHandler& getConsoleHandler() const noexcept { return codeHandler; };
 
@@ -2276,6 +2287,9 @@ private:
 	LockFreeDispatcher lockfreeDispatcher;
 	ModuleStateManager moduleStateManager;
 	UserPresetHandler userPresetHandler;
+#if HISE_USE_EXTERNAL_AUTOMATION_DATA
+	ScopedPointer<ExternalAutomationDataHandler> externalAutomationDataHandler;
+#endif
 	ProcessorChangeHandler processorChangeHandler;
 	GlobalAsyncModuleHandler globalAsyncModuleHandler;
 	

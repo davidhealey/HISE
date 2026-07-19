@@ -317,8 +317,9 @@ namespace hise { using namespace juce;
 	{ return controlledParameters.size(); }
 
 	void MacroControlBroadcaster::MacroControlData::setMidiController(int newControllerNumber)
-	{ 
-		midiController = newControllerNumber;	
+	{
+		midiController = newControllerNumber;
+		notifyExternalAutomationDataChange(getMainController());
 	}
 
 	int MacroControlBroadcaster::MacroControlData::getMidiController() const noexcept
@@ -568,6 +569,14 @@ void MacroControlBroadcaster::loadMacrosFromValueTree(const ValueTree &v, bool l
 {
 	ValueTree macroData = v.getChildWithName("macro_controls");
 
+#if HISE_USE_EXTERNAL_AUTOMATION_DATA
+	// a restore must never create the file, so suppress writes while it runs
+	ExternalAutomationDataHandler::ScopedRestoreSuspender restoreSuspender(thisAsSynth->getMainController());
+
+	if (auto* h = thisAsSynth->getMainController()->getExternalAutomationDataHandler())
+		macroData = h->getTreeToRestore(ExternalAutomationDataHandler::getMacroSectionId(), macroData);
+#endif
+
 	if(macroData.isValid())
 	{
 		sendMacroConnectionChangeMessageForAll(false);
@@ -710,8 +719,10 @@ void MacroControlBroadcaster::MacroControlData::removeParametersFromIndexList(co
             }
         }
     }
-    
+
     pendingDelete.clear();
+
+	notifyExternalAutomationDataChange(getMainController());
 }
 
 void MacroControlBroadcaster::MacroControlData::clearDanglingProcessors()
@@ -849,6 +860,8 @@ void MacroControlBroadcaster::MacroControlData::addParameter(Processor *p, int p
     }
     
 	parent.sendMacroConnectionChangeMessage(macroIndex, p, parameterId, true, n);
+
+	notifyExternalAutomationDataChange(getMainController());
 }
 
 Processor *MacroControlBroadcaster::findProcessor(Processor *p, const String &idToSearch)
