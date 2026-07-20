@@ -1269,7 +1269,10 @@ void ScriptExpansionHandler::setExpansionCallback(var expansionLoadedCallback)
 		expansionCallback.incRefCount();
 		expansionCallback.addAsSource(this, "onExpansionLoad");
 		expansionCallback.setThisObject(this);
-		
+
+		// fire immediately like setUpdateCallback() does, so a reloaded script
+		// (e.g. after a full expansion swap) still sees the current expansion
+		expansionPackCreated(getMainController()->getExpansionHandler().getCurrentExpansion());
 	}
 
 	expansionCallback.setHighPriority();

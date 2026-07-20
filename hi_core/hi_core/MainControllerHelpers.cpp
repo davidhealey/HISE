@@ -528,8 +528,10 @@ void MidiControllerAutomationHandler::MPEData::sendAsyncNotificationMessage(MPEM
     
     getMainController()->getLockFreeDispatcher().callOnMessageThreadAfterSuspension(this, f);
 
+    // let setUpdateCallback() listeners see MPE changes too, not just CC
+    getMainController()->getMacroManager().getMidiControlAutomationHandler()->sendChangeMessage();
 }
-    
+
 void MidiControllerAutomationHandler::MPEData::addConnection(MPEModulator* mod, NotificationType notifyListeners/*=sendNotification*/)
 {
     jassert(mod->isOnAir());
