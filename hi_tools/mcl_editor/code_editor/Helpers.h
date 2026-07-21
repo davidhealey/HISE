@@ -195,6 +195,16 @@ private:
 	Callback f;
 };
 
+struct DiagnosticLines
+{
+	DiagnosticLines() = default;
+
+	operator bool() const { return errorLines.isEmpty() && warningLines.isEmpty(); }
+
+	juce::Array<int> errorLines;
+	juce::Array<int> warningLines;
+};
+
 
 struct TooltipWithArea : public Component,
 	public Timer

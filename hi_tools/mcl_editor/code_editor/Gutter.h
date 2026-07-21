@@ -69,6 +69,12 @@ public:
 
 	void setError(int lineNumber, const String& error);
 
+	void setDiagnostics(const DiagnosticLines& dl)
+	{
+		diagnosticLines = dl;
+		repaint();
+	}
+
 	void addBreakpointListener(BreakpointListener* l);
 
 	void removeBreakpointListener(BreakpointListener* l);
@@ -76,6 +82,8 @@ public:
 	void setCurrentBreakline(int n);
 
 private:
+
+	DiagnosticLines diagnosticLines;
 
 	struct Breakpoint: public ReferenceCountedObject
 	{

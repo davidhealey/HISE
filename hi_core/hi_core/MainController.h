@@ -426,6 +426,8 @@ public:
 		MidiControllerAutomationHandler *getMidiControlAutomationHandler();;
 		const MidiControllerAutomationHandler *getMidiControlAutomationHandler() const;;
 
+		UserPresetStateManager* getMacroPresetManager() { return macroPresetManager.get(); }
+
 		// ===========================================================================================================
 		
 		/** If true, then a macro can only be connected to a single target (and connecting it to another target will remove the old connection). */
@@ -435,7 +437,6 @@ public:
 		}
 
 		bool isExclusive() const { return exclusiveMode; }
-
 
 	private:
 
@@ -451,6 +452,7 @@ public:
 		bool enableMacroOnFrontend = false;
 
 		MidiControllerAutomationHandler midiControllerHandler;
+		ScopedPointer<UserPresetStateManager> macroPresetManager;
 
 		// ===========================================================================================================
 
@@ -584,6 +586,25 @@ public:
 		JUCE_DECLARE_WEAK_REFERENCEABLE(LockFreeDispatcher);
 	};
 
+#define USE_OLD_AUTOMATION_DISPATCH 0
+#define USE_NEW_AUTOMATION_DISPATCH 1
+
+#if USE_OLD_AUTOMATION_DISPATCH
+#define IF_OLD_AUTOMATION_DISPATCH(x) x
+#define OLD_AUTOMATION_WITH_COMMA(x) x,
+#else
+#define IF_OLD_AUTOMATION_DISPATCH(x)
+#define OLD_AUTOMATION_WITH_COMMA(x)
+#endif
+
+#if USE_NEW_AUTOMATION_DISPATCH
+#define IF_NEW_AUTOMATION_DISPATCH(x) x
+#define NEW_AUTOMATION_WITH_COMMA(x) x,
+#else
+#define IF_NEW_AUTOMATION_DISPATCH(x)
+#define NEW_AUTOMATION_WITH_COMMA(x)
+#endif
+
 	/** The handler class for user presets in HISE.
 	*
 	*	A user preset is a certain state of your plugin which is used
@@ -632,25 +653,6 @@ public:
             
             bool prevValue;
         };
-        
-#define USE_OLD_AUTOMATION_DISPATCH 0
-#define USE_NEW_AUTOMATION_DISPATCH 1
-
-#if USE_OLD_AUTOMATION_DISPATCH
-#define IF_OLD_AUTOMATION_DISPATCH(x) x
-#define OLD_AUTOMATION_WITH_COMMA(x) x,
-#else
-#define IF_OLD_AUTOMATION_DISPATCH(x)
-#define OLD_AUTOMATION_WITH_COMMA(x)
-#endif
-
-#if USE_NEW_AUTOMATION_DISPATCH
-#define IF_NEW_AUTOMATION_DISPATCH(x) x
-#define NEW_AUTOMATION_WITH_COMMA(x) x,
-#else
-#define IF_NEW_AUTOMATION_DISPATCH(x)
-#define NEW_AUTOMATION_WITH_COMMA(x)
-#endif
 
 		struct CustomAutomationData : public ReferenceCountedObject,
 			NEW_AUTOMATION_WITH_COMMA(public dispatch::SourceOwner)
@@ -1015,10 +1017,18 @@ public:
 
 		void removeStateManager(UserPresetStateManager* managerToRemove);
 
-		bool restoreStateManager(const ValueTree& presetRoot, const Identifier& stateId);
-		bool saveStateManager(ValueTree& preset, const Identifier& stateId);
+		bool restoreStateManager(const ValueTree& presetRoot, const Identifier& stateId, UserPresetStateManager::StateTarget eventSource);
+		bool saveStateManager(ValueTree& preset, const Identifier& stateId, UserPresetStateManager::StateTarget eventSource);
 
-		
+		Result setStateManagerProperties(const var& obj);
+
+		var getStateManagersForTarget(const String& targetId) const;
+
+		bool saveExternalPresetData();
+
+		bool loadExternalPresetData(const var& defaultValues);
+
+		File externalPresetDataFile;
 
 		UserPresetStateManager::List stateManagers;
 
@@ -1082,7 +1092,7 @@ public:
 		{
 			CustomStateManager(UserPresetHandler& parent_);
 
-			void resetUserPresetState() override
+			void resetUserPresetState(const var&) override
 			{
 
 			};
@@ -1115,7 +1125,7 @@ public:
 
 		uint32 timeOfLastPresetLoad = 0;
 
-        bool processStateManager(bool shouldSave, ValueTree& presetRoot, const Identifier& stateId);
+        bool processStateManager(bool shouldSave, ValueTree& presetRoot, const Identifier& stateId, UserPresetStateManager::StateTarget eventSource);
         
 		JUCE_DECLARE_WEAK_REFERENCEABLE(UserPresetHandler);
 	};

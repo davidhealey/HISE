@@ -318,7 +318,7 @@ private:
 	ScopedPointer<JavascriptTokeniser> tokeniser;
 
 #if USE_BACKEND
-	void shadowParse();
+	void shadowParse(bool printToConsole=true);
 #endif
 	
 	JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(PopupIncludeEditor);

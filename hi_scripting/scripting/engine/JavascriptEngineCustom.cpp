@@ -186,7 +186,7 @@ struct HiseJavascriptEngine::RootObject::ApiCall : public Expression
 		if (isDebugCall)
 		{
 			int unused;
-			l.fillColumnAndLines(unused, lineNumber);
+			l.fillColumnAndLines(unused, lineNumber, unused);
 			callbackName = l.getCallbackName(true);
 		}
 
@@ -1900,7 +1900,7 @@ private:
 	                   const StringArray& suggestions, SV severity, CS source)
 	{
 		ApiDiagnostic d;
-		loc.fillColumnAndLines(d.col, d.line);
+		loc.fillColumnAndLines(d.col, d.line, d.charIndex);
 		d.fileName = loc.externalFile;
 		d.message = message;
 		d.suggestions = suggestions;

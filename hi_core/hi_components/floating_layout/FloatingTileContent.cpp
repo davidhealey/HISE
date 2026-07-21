@@ -385,7 +385,7 @@ void FloatingTileContent::ColourHolder::fromDynamicObject(const var& object)
 				colours[i] = Colour((uint32)normal);
 			}
 		}
-		else if (colourVar.isInt64() || colourVar.isInt64())
+		else if (colourVar.isInt() || colourVar.isInt64())
 		{
 			colours[i] = Colour((uint32)(int64)colourVar);
 		}

@@ -38,7 +38,12 @@ namespace hise { using namespace juce;
 #if USE_COPY_PROTECTION
 
 #if USE_SCRIPT_COPY_PROTECTION
+
+#if HISE_USE_MOONBASE
+using Unlocker = hise::MoonbaseUnlocker;
+#else
 using Unlocker = hise::ScriptUnlocker;
+#endif
 #else
 
 

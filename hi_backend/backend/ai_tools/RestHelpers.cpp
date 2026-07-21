@@ -6431,6 +6431,9 @@ RestServer::Response RestHelpers::handleDspScreenshot(MainController* mc,
 		if (bpe != nullptr && bpe->getCurrentWorkspaceProcessor() != &p)
 			bpe->gotoIfWorkspace(&p);
 
+		if (auto* mm = MessageManager::getInstanceWithoutCreating())
+			mm->runDispatchLoopUntil(500);
+
 		if (bpe != nullptr)
 		{
 			capturedImage = scriptnode::DspNetwork::createScreenshot(bpe, scale);
@@ -6440,7 +6443,7 @@ RestServer::Response RestHelpers::handleDspScreenshot(MainController* mc,
 		captureComplete.signal();
 	});
 
-	if (!captureComplete.wait(1000))
+	if (!captureComplete.wait(1500))
 		return req->fail(500, "screenshot capture timed out");
 
 	if (!captureSuccess)

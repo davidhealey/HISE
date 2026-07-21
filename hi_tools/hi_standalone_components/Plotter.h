@@ -101,6 +101,8 @@ public:
 		cleanupFunction = cf;
 	}
 
+	void setMainController(void* mc) { mainController = mc; }
+
 	virtual void refresh() override
 	{
 		rebuildPath();
@@ -127,6 +129,8 @@ private:
 	bool stickPopup = false;
 
 	Table::ValueTextConverter yConverter;
+
+	void* mainController = nullptr;
 
 	Mode currentMode;
 

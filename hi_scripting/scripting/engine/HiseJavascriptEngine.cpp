@@ -209,8 +209,8 @@ HiseJavascriptEngine::RootObject::Error HiseJavascriptEngine::RootObject::Error:
 	Error e;
 
 	e.errorMessage = errorMessage;
-	location.fillColumnAndLines(e.columnNumber, e.lineNumber);
-	e.charIndex = location.getCharIndex();
+	location.fillColumnAndLines(e.columnNumber, e.lineNumber, e.charIndex);
+	
 	e.externalLocation = location.externalFile;
 
 	return e;
@@ -262,10 +262,11 @@ String HiseJavascriptEngine::RootObject::CodeLocation::getCallbackName(bool retu
 	}
 }
 
-void HiseJavascriptEngine::RootObject::CodeLocation::fillColumnAndLines(int& col, int& line) const
+void HiseJavascriptEngine::RootObject::CodeLocation::fillColumnAndLines(int& col, int& line, int& charIndex) const
 {
 	col = 1;
 	line = 1;
+	charIndex = getCharIndex();
 
 	for (String::CharPointerType i(program.getCharPointer()); i < location && !i.isEmpty(); ++i)
 	{
@@ -276,9 +277,9 @@ void HiseJavascriptEngine::RootObject::CodeLocation::fillColumnAndLines(int& col
 
 String HiseJavascriptEngine::RootObject::CodeLocation::getLocationString() const
 {
-	int col, line;
+	int col, line, charIndex;
 
-	fillColumnAndLines(col, line);
+	fillColumnAndLines(col, line, charIndex);
 
 	if (externalFile.isEmpty() || externalFile.contains("()"))
 	{
@@ -296,7 +297,6 @@ String HiseJavascriptEngine::RootObject::CodeLocation::getLocationString() const
 #endif
 
 		return fileName + " - Line " + String(line) + ", column " + String(col);
-
 	}
 }
 
@@ -1261,15 +1261,12 @@ juce::String HiseJavascriptEngine::toConsoleString(const ApiClass::DiagnosticRes
 	else
 		s << File(i.fileName).getFileName() << " (" << i.line << ")";
 
-	s << ": " << i.message;
-
-	if (!i.suggestions.isEmpty())
-		s << ". Use: " << i.suggestions.joinIntoString(", ");
-
+	s << ": ";
+	s << i.toEditorString();
 	s << " ";
 
 	// Append encoded location for double-click navigation
-	s << RootObject::Error::createEncodedLocation(p, i.fileName, 0, i.line, i.col);
+	s << RootObject::Error::createEncodedLocation(p, i.fileName, i.charIndex, i.line, i.col);
 
 	return s;
 }

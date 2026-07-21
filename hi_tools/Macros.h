@@ -378,6 +378,10 @@ struct HiseColourScheme
 	// Override this and return the look and feel to be used by all alert windows
 	static LookAndFeel* createAlertWindowLookAndFeel(void* mainController);
 
+	// Returns a ScriptedLookAndFeel::Laf if a script LAF is active, otherwise a PopupLookAndFeel.
+	// Pass the component that is showing the menu to check for a local script LAF first.
+	static LookAndFeel* createPopupMenuLookAndFeel(void* mainController, Component* c = nullptr);
+
 	static Colour getColour(ColourIds id)
 	{
 		switch (id)

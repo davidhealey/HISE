@@ -2493,7 +2493,7 @@ public:
 			// ================================================================= END OF API Methods
 
 			Identifier getUserPresetStateId() const override { return Identifier(componentData[dyncomp::dcid::id].toString()); }
-			void resetUserPresetState() override;
+			void resetUserPresetState(const var&) override;
 			ValueTree exportAsValueTree() const override;
 			void restoreFromValueTree(const ValueTree& v) override;
 

@@ -108,6 +108,8 @@ juce::ValueTree UserPresetHelpers::createUserPreset(ModulatorSynthChain* chain)
 {
 	ValueTree preset;
 
+	auto userPresetState = UserPresetStateManager::StateTarget::UserPreset;
+
 #if USE_RAW_FRONTEND
 	preset = dynamic_cast<FrontendProcessor*>(chain->getMainController())->getRawDataHolder()->exportAsValueTree();
 #else
@@ -118,7 +120,7 @@ juce::ValueTree UserPresetHelpers::createUserPreset(ModulatorSynthChain* chain)
 
 		if (chain->getMainController()->getUserPresetHandler().isUsingCustomDataModel())
 		{
-			chain->getMainController()->getUserPresetHandler().saveStateManager(preset, UserPresetIds::CustomJSON);
+			chain->getMainController()->getUserPresetHandler().saveStateManager(preset, UserPresetIds::CustomJSON, userPresetState);
 		}
 		else
 		{
@@ -128,23 +130,23 @@ juce::ValueTree UserPresetHelpers::createUserPreset(ModulatorSynthChain* chain)
 			preset.addChild(v, -1, nullptr);
 		}
 
-		chain->getMainController()->getUserPresetHandler().saveStateManager(preset, UserPresetIds::Modules);
+		chain->getMainController()->getUserPresetHandler().saveStateManager(preset, UserPresetIds::Modules, userPresetState);
 
 	}
 #endif
 
-	chain->getMainController()->getUserPresetHandler().saveStateManager(preset, UserPresetIds::MidiAutomation);
-	chain->getMainController()->getUserPresetHandler().saveStateManager(preset, UserPresetIds::MPEData);
+	chain->getMainController()->getUserPresetHandler().saveStateManager(preset, UserPresetIds::MidiAutomation, userPresetState);
+	chain->getMainController()->getUserPresetHandler().saveStateManager(preset, UserPresetIds::MPEData, userPresetState);
 
 	preset.setProperty("Version", getCurrentVersionNumber(chain), nullptr);
 
 	addRequiredExpansions(chain->getMainController(), preset);
 
 	if(chain->getMainController()->getMacroManager().isMacroEnabledOnFrontend())
-		chain->saveMacrosToValueTree(preset);
+		chain->getMainController()->getUserPresetHandler().saveStateManager(preset, UserPresetIds::macro_controls, userPresetState);
 
 	// Store the rest...
-	chain->getMainController()->getUserPresetHandler().saveStateManager(preset, UserPresetIds::AdditionalStates);
+	chain->getMainController()->getUserPresetHandler().saveStateManager(preset, UserPresetIds::AdditionalStates, userPresetState);
 
 	return preset;
 }
@@ -468,7 +470,7 @@ ModuleStateManager::StoredModuleData** ModuleStateManager::end()
 Identifier ModuleStateManager::getUserPresetStateId() const
 { return UserPresetIds::Modules; }
 
-void ModuleStateManager::resetUserPresetState()
+void ModuleStateManager::resetUserPresetState(const var&)
 {}
 
 void PresetHandler::saveProcessorAsPreset(Processor *p, const String &directoryPath/*=String()*/)

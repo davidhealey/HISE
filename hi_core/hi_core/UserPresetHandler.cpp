@@ -604,13 +604,19 @@ void MainController::UserPresetHandler::loadUserPresetInternal()
 
 		mc->getSampleManager().setShouldSkipPreloading(true);
 
+		auto userPresetState = isInternalPresetLoad() ?
+			UserPresetStateManager::StateTarget::PluginState :
+			UserPresetStateManager::StateTarget::UserPreset;
+
 		// Reload the macro connections before restoring the preset values
 		// so that it will update the correct connections with `setMacroControl()` in a control callback
 		if (mc->getMacroManager().isMacroEnabledOnFrontend())
 		{
 			// If we're in exclusive mode and using the macros as plugin parameter, we will only restore them in internal presets
 			if (!HISE_MACROS_ARE_PLUGIN_PARAMETERS || isInternalPresetLoad() || !mc->getMacroManager().isExclusive())
-				mc->getMacroManager().getMacroChain()->loadMacrosFromValueTree(userPresetToLoad, false);
+			{
+				restoreStateManager(userPresetToLoad, UserPresetIds::macro_controls, userPresetState);
+			}
 		}
 			
 
@@ -629,11 +635,11 @@ void MainController::UserPresetHandler::loadUserPresetInternal()
 			{
 				if (!sp->isFront()) continue;
 
-				restoreStateManager(userPresetToLoad, UserPresetIds::Modules);
+				restoreStateManager(userPresetToLoad, UserPresetIds::Modules, userPresetState);
 
 				if (mc->getUserPresetHandler().isUsingCustomDataModel())
 				{
-					restoreStateManager(userPresetToLoad, UserPresetIds::CustomJSON);
+					restoreStateManager(userPresetToLoad, UserPresetIds::CustomJSON, userPresetState);
 				}
 				else
 				{
@@ -662,8 +668,8 @@ void MainController::UserPresetHandler::loadUserPresetInternal()
 
 #endif
 
-		restoreStateManager(userPresetToLoad, UserPresetIds::MidiAutomation);
-		restoreStateManager(userPresetToLoad, UserPresetIds::MPEData);
+		restoreStateManager(userPresetToLoad, UserPresetIds::MidiAutomation, userPresetState);
+		restoreStateManager(userPresetToLoad, UserPresetIds::MPEData, userPresetState);
 
 		// Now we can restore the values of the macro controls
 		if (mc->getMacroManager().isMacroEnabledOnFrontend())
@@ -675,7 +681,7 @@ void MainController::UserPresetHandler::loadUserPresetInternal()
 		}
 
 		// restore the remaining state managers...
-		restoreStateManager(userPresetToLoad, UserPresetIds::AdditionalStates);
+		restoreStateManager(userPresetToLoad, UserPresetIds::AdditionalStates, userPresetState);
 
 		postPresetLoad();
 	}

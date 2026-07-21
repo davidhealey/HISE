@@ -6684,7 +6684,7 @@ void ScriptingApi::Content::ScriptDynamicContainer::ChildReference::addStateToUs
 	}
 }
 
-void ScriptingApi::Content::ScriptDynamicContainer::ChildReference::resetUserPresetState()
+void ScriptingApi::Content::ScriptDynamicContainer::ChildReference::resetUserPresetState(const var&)
 {
 	removeAllChildren();
 

@@ -100,7 +100,9 @@ static const unsigned char projectStandaloneTemplate_jucer_lines[] = R"(
       </MODULEPATHS>
     </%VS_VERSION%>
     <XCODE_MAC targetFolder="Builds/MacOSX" vstFolder="%VSTSDK_FOLDER%" extraCompilerFlags="-Wno-reorder -Wno-inconsistent-missing-override -faligned-allocation -ffp-contract=off" %ICON_FILE% 
-               extraLinkerFlags="%OSX_STATIC_LIBS%" extraDefs="%EXTRA_DEFINES_OSX%" hardenedRuntime="0" hardenedRuntimeOptions="com.apple.security.cs.allow-jit,com.apple.security.cs.allow-unsigned-executable-memory,com.apple.security.device.audio-input" xcodeValidArchs="arm64,arm64e,x86_64" externalLibraries="%BEATPORT_LIB_MACOS%;%OSX_EXTERNAL_LIBRARIES%">
+               extraLinkerFlags="%OSX_STATIC_LIBS%" extraDefs="%EXTRA_DEFINES_OSX%" hardenedRuntime="0" hardenedRuntimeOptions="com.apple.security.cs.allow-jit,com.apple.security.cs.allow-unsigned-executable-memory,com.apple.security.device.audio-input" xcodeValidArchs="arm64,arm64e,x86_64"
+                   extraFrameworks="Security"
+                   externalLibraries="%BEATPORT_LIB_MACOS%;%OSX_EXTERNAL_LIBRARIES%">
       <CONFIGURATIONS>
         <CONFIGURATION name="Debug" osxSDK="default" osxCompatibility="11.0 SDK" osxArchitecture="%MACOS_ARCHITECTURE%"
                        isDebug="1" optimisation="1" targetName="%NAME% Debug"
@@ -151,6 +153,7 @@ R"(    <MACOSX_MAKE targetFolder="Builds/MacOSXMakefile" vstLegacyFolder="%VSTSD
                  extraLinkerFlags="%OSX_STATIC_LIBS% -Wl,-ld_new"
                  extraDefs="%EXTRA_DEFINES_OSX%&#10;HISE_INCLUDE_LORIS=0"
                  externalLibraries="%BEATPORT_LIB_MACOS%;%OSX_EXTERNAL_LIBRARIES%"
+                 extraFrameworks="Security"
                  compileFirstPatterns="*hi_scripting_01*, *hi_tools_01*, *hi_scripting_03*"
                  featureGatedModules="hi_rlottie:HISE_INCLUDE_RLOTTIE, hi_loris:HISE_INCLUDE_LORIS">
       <CONFIGURATIONS>

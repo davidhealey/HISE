@@ -503,7 +503,7 @@ public:
 
 			String getCallbackName(bool returnExternalFileName = false) const;
 
-			void fillColumnAndLines(int& col, int& line) const;
+			void fillColumnAndLines(int& col, int& line, int& charIndex) const;
 
 			String getLocationString() const;
 

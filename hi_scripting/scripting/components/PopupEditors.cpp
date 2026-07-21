@@ -702,20 +702,30 @@ void PopupIncludeEditor::compileInternal()
 }
 
 #if USE_BACKEND
-void PopupIncludeEditor::shadowParse()
+void PopupIncludeEditor::shadowParse(bool printToConsole)
 {
-	if (externalFile == nullptr)
-		return;
+	String code;
+	String fileName;
+	
+	if (printToConsole)
+	{
+		if (externalFile == nullptr)
+			return;
 
-	auto mc = dynamic_cast<Processor*>(jp.get())->getMainController();
-	mc->saveAllExternalFiles();
-
-	auto code = externalFile->getFile().loadFileAsString();
-	auto fileName = externalFile->getFile().getFullPathName();
+		fileName = externalFile->getFile().getFullPathName();
+		auto mc = dynamic_cast<Processor*>(jp.get())->getMainController();
+		mc->saveAllExternalFiles();
+		code = externalFile->getFile().loadFileAsString();
+	}
+	else
+	{
+		fileName = "";
+		code = editor->editor.getDocument().getAllContent();
+	}
 
 	Component::SafePointer<PopupIncludeEditor> safeThis(this);
 
-	jp->shadowParseFile(code, fileName, [safeThis](const JavascriptProcessor::DiagnosticList& diagnostics)
+	jp->shadowParseFile(code, fileName, [printToConsole, safeThis](const JavascriptProcessor::DiagnosticList& diagnostics)
 	{
 		if (safeThis.getComponent() == nullptr)
 			return;
@@ -730,32 +740,51 @@ void PopupIncludeEditor::shadowParse()
 		int numWarnings = 0;
 		int numErrors = 0;
 
+		mcl::DiagnosticLines dl;
+
 		for (const auto& d : diagnostics)
 		{
 			auto consoleMsg = d.toConsoleString(p);
 
 			String editorMsg;
-			editorMsg << "Line " << d.line << "(" << d.col << "): " << d.message;
+			editorMsg << "Line " << d.line << "(" << d.col << "): " << d.toEditorString();
 
 			if (d.severity == Severity::Error)
 			{
-				ed.setError(editorMsg);
-				debugError(p, consoleMsg);
+				dl.errorLines.addIfNotAlreadyThere(d.line-1);
+				ed.addWarning(editorMsg, false);
+
+				if (printToConsole)
+				{
+					debugError(p, consoleMsg);
+				}
+				
 				numErrors++;
 			}
 			else if (d.severity == Severity::Hint)
 			{
-				// Hints go to console only — no editor marker
-				debugToConsole(p, consoleMsg);
+				if (printToConsole)
+				{
+					// Hints go to console only — no editor marker
+					debugToConsole(p, consoleMsg);
+				}
 			}
 			else
 			{
+				dl.warningLines.addIfNotAlreadyThere(d.line-1);
 				ed.addWarning(editorMsg, true);
-				debugToConsole(p, consoleMsg);
+
+				if (printToConsole)
+				{
+					debugToConsole(p, consoleMsg);
+				}
+
 				numWarnings++;
 			}
 		}
 
+		ed.setDiagnostics(dl);
+		
 		// Update bottom bar with summary
 		String summary;
 
@@ -775,7 +804,8 @@ void PopupIncludeEditor::shadowParse()
 			}
 		}
 
-		debugToConsole(p, "Shadow parse: " + summary);
+		if (printToConsole)
+			debugToConsole(p, "Shadow parse: " + summary);
 
 		// setError("") shows "Compiled OK", setError(text) shows text in error style
 		// For warnings-only we still want to show the count, so pass it as "error" text
@@ -783,7 +813,7 @@ void PopupIncludeEditor::shadowParse()
 			safeThis->bottomBar->setError(summary);
 		else
 			safeThis->bottomBar->setError("");
-	});
+	}, printToConsole ? sendNotificationAsync : sendNotificationSync);
 }
 #endif
 
@@ -837,8 +867,12 @@ void PopupIncludeEditor::addEditor(CodeDocument& d, bool isJavascript)
 	{
 		auto callbackToUse = callback;
 
-		if(callbackToUse.isNull() && externalFile != nullptr)
+		if (callbackToUse.isNull() && externalFile != nullptr)
+		{
 			callbackToUse = Identifier(externalFile->getFile().getFileName());
+		}
+		
+		
 
 		ed.setLanguageManager(new JavascriptLanguageManager(jp, callbackToUse, ed));
 	}
@@ -941,6 +975,15 @@ void PopupIncludeEditor::addEditor(CodeDocument& d, bool isJavascript)
 	});
 
 	getEditor()->loadSettings(getPropertyFile());
+
+	if (isJavascript)
+	{
+		ed.setDiagnosticsFunction([this]()
+		{
+			shadowParse(false);
+		});
+	}
+
 #else
 	asComponent->addAndMakeVisible(editor = new JavascriptCodeEditor(d, tokeniser, sp, callback));
 #endif

@@ -36,7 +36,7 @@ BEGIN_JUCE_MODULE_DECLARATION
 
   ID:               hi_tools
   vendor:           Hart Instruments
-  version:          4.9.2
+  version:          4.9.3
   name:             HISE Tools module
   description:      Contains all dependency free general purpose tool classes used in HISE
   website:          http://hise.audio

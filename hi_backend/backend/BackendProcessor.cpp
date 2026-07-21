@@ -710,6 +710,7 @@ BackendProcessor::~BackendProcessor()
 
 	clearPreset(dontSendNotification);
 
+	getMacroManager().setMacroChain(nullptr);
 	synthChain = nullptr;
 
 	dllManager->unloadDll();

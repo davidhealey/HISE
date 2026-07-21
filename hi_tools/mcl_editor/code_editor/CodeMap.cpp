@@ -650,6 +650,19 @@ void mcl::CodeMap::paint(Graphics& g)
 
 	RectangleList<float> selection;
 
+	RectangleList<float> errorLines, warningLines;
+
+	auto getRectangleForLineNumber = [&](int e)
+	{
+		float w = (float)getWidth();
+		float h = colouredRectangles.getFirst().area.getHeight();
+		float y = e * h - offsetY;
+			
+		return Rectangle<float>(0.0f, y, w, h);
+	};
+
+	
+
 	for (auto& a : colouredRectangles)
 	{
 		if (doc.getFoldableLineRangeHolder().isFolded(a.lineNumber))
@@ -665,10 +678,6 @@ void mcl::CodeMap::paint(Graphics& g)
 			shownLines.setBit(index, shown);
 
 			Colour c = a.c;
-
-
-
-
 
 			auto characterArea = a.area.translated(0.0f, -offsetY);
 
@@ -686,18 +695,42 @@ void mcl::CodeMap::paint(Graphics& g)
 			if (!a.upper)
 				characterArea.removeFromTop(characterArea.getHeight() * 0.33f);
 
-
-
 			g.fillRect(characterArea);
-
-
 		}
 
 		index++;
 	}
 
+	for (auto e : diagnosticLines.errorLines)
+	{
+		if (doc.getFoldableLineRangeHolder().isFolded(e))
+			continue;
+
+		if (!surrounding.contains(e))
+			continue;
+
+		errorLines.addWithoutMerging(getRectangleForLineNumber(e));
+	}
+
+	for (auto e : diagnosticLines.warningLines)
+	{
+		if (doc.getFoldableLineRangeHolder().isFolded(e))
+			continue;
+
+		if (!surrounding.contains(e))
+			continue;
+
+		warningLines.addWithoutMerging(getRectangleForLineNumber(e));
+	}
+
 	g.setColour(Colours::blue.withAlpha(0.4f));
 	g.fillRectList(selection);
+
+	g.setColour(Colour(HISE_ERROR_COLOUR).withAlpha(0.6f));
+	g.fillRectList(errorLines);
+
+	g.setColour(Colour(HISE_WARNING_COLOUR).withAlpha(0.6f));
+	g.fillRectList(warningLines);
 
 	auto y1 = lineToY(displayedLines.getStart());
 	auto y2 = lineToY(displayedLines.getEnd());

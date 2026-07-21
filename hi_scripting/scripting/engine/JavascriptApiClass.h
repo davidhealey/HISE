@@ -418,6 +418,7 @@ public:
         {
             int line = 0;
             int col = 0;
+            int charIndex = 0;
             String fileName;
             String message;
             StringArray suggestions;
@@ -429,6 +430,8 @@ public:
                 "locationString: message {{Base64(processorId|path|charIndex|line|col)}}"
                 This makes console output double-clickable and parseable by RestHelpers::parseError(). */
             String toConsoleString(Processor* p) const;
+
+            String toEditorString() const;
 
         };
 
