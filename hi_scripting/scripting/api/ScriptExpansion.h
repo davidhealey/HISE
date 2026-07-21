@@ -135,6 +135,12 @@ public:
 	/** Runs a few tests that catches data persistency issues. */
 	void runTest();
 
+	/** Defines which parts of the user preset is stored at which location (DAW preset, user preset, external file). */
+	void setStateManagerProperties(const var& obj);
+
+	/** Returns the IDs of all state managers that are saved / restored with the given target Id ("UserPreset", "PluginState", "External"). */
+	var getStateManagersForTarget(const String& targetId);
+
 	// ===============================================================================================
 
 	var convertToJson(const ValueTree& d);
@@ -603,6 +609,9 @@ struct ScriptUnlocker : public juce::OnlineUnlockStatus,
 		/** If you use the MuseHub SDK this will try to activate the plugin using their SDK. */
 		void checkMuseHub(var resultCallback);
 
+		/** Performs a Moonbase licensing op. */
+		void performMoonbaseOp(int opType, const var& args, const var& callback);
+
 		/** Sets a function that performs a product name check and expects to return true or false for a match. */
 		void setProductCheckFunction(var f);
 
@@ -677,6 +686,58 @@ struct ScriptUnlocker : public juce::OnlineUnlockStatus,
 
 	JUCE_DECLARE_WEAK_REFERENCEABLE(ScriptUnlocker);
 };
+
+#if HISE_USE_MOONBASE
+/** A drop in replacement for the script unlocker used in combination with the Moonbase Licensing system. */
+struct MoonbaseUnlocker : public UnlockerHandler,
+						  public ControlledObject
+{
+
+	MoonbaseUnlocker(MainController* mc) :
+		ControlledObject(mc)
+	{}
+
+	struct RefObject : public ConstScriptingObject,
+					   public Timer
+	{
+		RefObject(ProcessorWithScriptingContent* pwsc) :
+			ConstScriptingObject(pwsc, 0),
+			licensingCallback(pwsc, this, var(), 2)
+		{
+			ADD_API_METHOD_3(performMoonbaseOp);
+		}
+
+		Identifier getObjectName() const override { RETURN_STATIC_IDENTIFIER("Unlocker"); }
+
+		void performMoonbaseOp(int opType, const var& licensingOptions, const var& callback);
+
+		void timerCallback() override;
+
+		struct Wrapper
+		{
+			API_VOID_METHOD_WRAPPER_3(RefObject, performMoonbaseOp);
+		};
+
+		WeakCallbackHolder licensingCallback;
+	};
+
+	OnlineUnlockStatus* getUnlockerObject() final override { return unlocker; }
+
+	var isUnlocked() const
+	{
+		return unlocker != nullptr ? unlocker->isUnlocked() : var(false);
+	}
+
+	RSAKey getPublicKey();
+
+	bool loadKeyFile() const { return true; };
+
+private:
+
+	ScopedPointer<OnlineUnlockStatus> unlocker;
+};
+#endif
+
 
 /** A wrapper around the beatport authentication system. */
 class BeatportManager: public ConstScriptingObject

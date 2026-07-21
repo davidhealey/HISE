@@ -56,7 +56,20 @@ const ModulatorSynthChain* MainController::MacroManager::getMacroChain() const
 {return macroChain; }
 
 void MainController::MacroManager::setMacroChain(ModulatorSynthChain* chain)
-{ macroChain = chain; }
+{ 
+	macroChain = chain; 
+
+	if (chain != nullptr)
+	{
+		macroPresetManager = new MacroControlBroadcaster::MacroPresetManager(*chain);
+		mc->getUserPresetHandler().addStateManager(macroPresetManager);
+	}
+	else
+	{
+		mc->getUserPresetHandler().removeStateManager(macroPresetManager);
+		macroPresetManager = nullptr;
+	}
+}
 
 bool MainController::MacroManager::macroControlMidiLearnModeActive()
 { return macroIndexForCurrentMidiLearnMode != -1; }

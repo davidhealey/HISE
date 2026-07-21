@@ -214,6 +214,12 @@ public:
 
 	void displayedLineRangeChanged(Range<int> newRange) override;
 
+	void setDiagnostics(const DiagnosticLines& dl)
+	{
+		diagnosticLines = dl;
+		repaint();
+	}
+
 	void codeDocumentTextDeleted(int startIndex, int endIndex) override;
 
 	void codeDocumentTextInserted(const String& newText, int insertIndex) override;
@@ -303,7 +309,7 @@ public:
 	Range<int> surrounding;
 	int offsetY = 0;
 
-	
+	DiagnosticLines diagnosticLines;
 
 	AffineTransform defaultTransform;
 	AffineTransform& transformToUse;

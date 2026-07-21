@@ -576,7 +576,13 @@ void MainController::loadPresetInternal(const ValueTree& valueTreeToLoad)
 			// attribute indexes for the CC mappings
 			getMacroManager().getMidiControlAutomationHandler()->loadUnloadedData();
 
-			synthChain->loadMacrosFromValueTree(v);
+			auto macroPresetManager = getMacroManager().getMacroPresetManager();
+
+			if (macroPresetManager != nullptr &&
+				macroPresetManager->matchesStateTarget(UserPresetStateManager::StateTarget::PluginState))
+			{
+				synthChain->loadMacrosFromValueTree(v);
+			}
 
 #if USE_BACKEND
 			Processor::Iterator<ModulatorSynth> iter(synthChain, false);
@@ -1230,9 +1236,12 @@ void MainController::processBlockCommon(AudioSampleBuffer &buffer, MidiBuffer &m
     
     
 #if USE_BACKEND || USE_SCRIPT_COPY_PROTECTION
-	if (auto ul = dynamic_cast<ScriptUnlocker*>(getLicenseUnlocker()))
-	{
+#if HISE_USE_MOONBASE
+	if (auto ul = getLicenseUnlocker()) {
+#else
+	if (auto ul = dynamic_cast<ScriptUnlocker*>(getLicenseUnlocker())) {
 		if (ul->currentObject != nullptr && !ul->isUnlocked())
+#endif
 		{
 			getMainSynthChain()->resetAllVoices();
 			buffer.clear();
@@ -2393,13 +2402,15 @@ void MainController::savePluginState(MemoryBlock& destData, int currentlyLoadedP
 
 	//synthChain->saveMacroValuesToValueTree(v);
 
-    getUserPresetHandler().saveStateManager(v, UserPresetIds::Modules);
+	auto pluginState = UserPresetStateManager::StateTarget::PluginState;
+
+    getUserPresetHandler().saveStateManager(v, UserPresetIds::Modules, pluginState);
     
-    getUserPresetHandler().saveStateManager(v, UserPresetIds::MidiAutomation);
+    getUserPresetHandler().saveStateManager(v, UserPresetIds::MidiAutomation, pluginState);
 
 	if (getUserPresetHandler().isUsingCustomDataModel())
     {
-        getUserPresetHandler().saveStateManager(v, UserPresetIds::CustomJSON);
+        getUserPresetHandler().saveStateManager(v, UserPresetIds::CustomJSON, pluginState);
         
     }
 	else
@@ -2439,12 +2450,12 @@ void MainController::savePluginState(MemoryBlock& destData, int currentlyLoadedP
 	// Make sure to save the version string into the plugin state
 	v.setProperty("Version", version, nullptr);
 
-    getUserPresetHandler().saveStateManager(v, UserPresetIds::MPEData);
+    getUserPresetHandler().saveStateManager(v, UserPresetIds::MPEData, pluginState);
 	
 	// Reload the macro connections before restoring the preset values
-		// so that it will update the correct connections with `setMacroControl()` in a control callback
+	// so that it will update the correct connections with `setMacroControl()` in a control callback
 	if (getMacroManager().isMacroEnabledOnFrontend())
-		getMacroManager().getMacroChain()->saveMacrosToValueTree(v);
+		getUserPresetHandler().saveStateManager(v, UserPresetIds::macro_controls, pluginState);
 
 	v.writeToStream(output);
 }
@@ -2520,15 +2531,153 @@ void MainController::UserPresetHandler::removeStateManager(UserPresetStateManage
 	stateManagers.removeAllInstancesOf(managerToRemove);
 }
 
-bool MainController::UserPresetHandler::restoreStateManager(const ValueTree& newPreset, const Identifier& id)
+bool MainController::UserPresetHandler::restoreStateManager(const ValueTree& newPreset, const Identifier& id, UserPresetStateManager::StateTarget eventSource)
 {
 	auto unconst = const_cast<ValueTree*>(&newPreset);
-	return processStateManager(false, *unconst, id);
+
+	return processStateManager(false, *unconst, id, eventSource);
 }
 
-bool MainController::UserPresetHandler::saveStateManager(ValueTree& newPreset, const Identifier& id)
+bool MainController::UserPresetHandler::saveStateManager(ValueTree& newPreset, const Identifier& id, UserPresetStateManager::StateTarget eventSource)
 {
-	return processStateManager(true, newPreset, id);
+	return processStateManager(true, newPreset, id, eventSource);
+}
+
+Result MainController::UserPresetHandler::setStateManagerProperties(const var& obj)
+{
+	auto ef = obj.getProperty("ExternalFile", "").toString();
+
+	if (ef.isEmpty())
+	{
+		ef = NativeFileHandler::getAppDataDirectory(mc).getChildFile("ExternalPresetData.xml").getFullPathName();
+	}
+
+	externalPresetDataFile = File(ef);
+
+	auto targets = obj.getProperty("SubStates", var());
+
+	for (auto l : stateManagers)
+		l->setStateTarget(var());
+
+	static const Array<Identifier> legalTargets = {
+		UserPresetIds::MPEData,
+		UserPresetIds::MidiAutomation,
+		UserPresetIds::macro_controls
+	};
+
+	if (auto obj = targets.getDynamicObject())
+	{
+		for (auto& nv : obj->getProperties())
+		{
+			auto targetId = nv.name;
+
+			if (!legalTargets.contains(targetId))
+			{
+				String msg;
+				msg << "Illegal state " << targetId;
+				msg << ". Available: ";
+
+				for (auto t : legalTargets)
+					msg << t << " ";
+
+				return Result::fail(msg);
+			}
+
+			auto targetValues = nv.value;
+
+			for (auto l : stateManagers)
+			{
+				if (l->getUserPresetStateId() == targetId)
+				{
+					auto ok = l->setStateTarget(targetValues);
+
+					if (ok.failed())
+						return ok;
+
+					break;
+				}
+			}
+		}
+	}
+
+	auto midiHandler = mc->getMacroManager().getMidiControlAutomationHandler();
+
+	// clear the midi data when setting this to be external so that the initialisation
+	// doesn't wipe the persistent data
+	if (!midiHandler->matchesStateTarget(UserPresetStateManager::StateTarget::PluginState))
+		midiHandler->setUnloadedData({});
+
+	loadExternalPresetData(obj.getProperty("ExternalFileDefault", var()));
+
+	return Result::ok();
+}
+
+juce::var MainController::UserPresetHandler::getStateManagersForTarget(const String& targetId) const
+{
+	Array<var> states;
+
+	for (auto s : stateManagers)
+	{
+		if (s->matchesStateTarget(targetId))
+			states.add(s->getUserPresetStateId().toString());
+	}
+
+	return var(states);
+}
+
+bool MainController::UserPresetHandler::saveExternalPresetData()
+{
+	ValueTree v("ExternalPresetData");
+
+	for (auto s : stateManagers)
+	{
+		auto targetId = s->getUserPresetStateId();
+		processStateManager(true, v, targetId, UserPresetStateManager::StateTarget::External);
+	}
+
+	auto xml = v.createXml();
+	
+	return externalPresetDataFile.replaceWithText(xml->createDocument(""));
+}
+
+bool MainController::UserPresetHandler::loadExternalPresetData(const var& defaultValues)
+{
+	if (auto xml = XmlDocument::parse(externalPresetDataFile))
+	{
+		auto v = ValueTree::fromXml(*xml);
+
+		auto ok = false;
+
+		for (auto c : v)
+		{
+			auto targetId = c.getType();
+			ok |= processStateManager(false, v, targetId, UserPresetStateManager::StateTarget::External);
+		}
+
+		return ok;
+	}
+	else if (auto obj = defaultValues.getDynamicObject())
+	{
+		bool didSomething = false;
+
+		for (auto s : stateManagers)
+		{
+			auto value = obj->getProperty(s->getUserPresetStateId());
+
+			if (!value.isVoid() && !value.isUndefined() && s->matchesStateTarget(UserPresetStateManager::StateTarget::External))
+			{
+				s->resetUserPresetState(value);
+				didSomething = true;
+			}
+		}
+
+		if (didSomething)
+			saveExternalPresetData();
+
+		return didSomething;
+	}
+
+	return false;
 }
 
 double MainController::UserPresetHandler::getSecondsSinceLastPresetLoad() const
@@ -2540,7 +2689,7 @@ double MainController::UserPresetHandler::getSecondsSinceLastPresetLoad() const
 	return (double)delta / 1000.0;
 }
 
-bool MainController::UserPresetHandler::processStateManager(bool shouldSave, ValueTree& presetRoot, const Identifier& stateId)
+bool MainController::UserPresetHandler::processStateManager(bool shouldSave, ValueTree& presetRoot, const Identifier& stateId, UserPresetStateManager::StateTarget eventSource)
 {
 	for (int i = 0; i < stateManagers.size(); i++)
 	{
@@ -2548,14 +2697,17 @@ bool MainController::UserPresetHandler::processStateManager(bool shouldSave, Val
 			stateManagers.remove(i--);
 	}
 
-	jassert(presetRoot.getType() == Identifier("Preset") || presetRoot.getType() == Identifier("ControlData"));
+	jassert(presetRoot.getType() == Identifier("Preset") || 
+		    presetRoot.getType() == Identifier("ControlData") ||
+			presetRoot.getType() == Identifier("ExternalPresetData"));
 
 	static const Array<Identifier> specialStates =
 	{
 		UserPresetIds::MidiAutomation,
 		UserPresetIds::MPEData,
 		UserPresetIds::CustomJSON,
-		UserPresetIds::Modules
+		UserPresetIds::Modules,
+		UserPresetIds::macro_controls
 	};
 
 	auto wantsSpecialState = stateId != UserPresetIds::AdditionalStates;
@@ -2566,6 +2718,8 @@ bool MainController::UserPresetHandler::processStateManager(bool shouldSave, Val
 			s->getUserPresetStateId() == stateId :
 			!specialStates.contains(s->getUserPresetStateId());
 
+		shouldProcess &= s->matchesStateTarget(eventSource);
+
 		if (shouldProcess)
 		{
 			if (shouldSave)
@@ -2575,7 +2729,6 @@ bool MainController::UserPresetHandler::processStateManager(bool shouldSave, Val
 		}
 	}
 	
-
 	return true;
 }
 

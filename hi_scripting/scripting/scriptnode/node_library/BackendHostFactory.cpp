@@ -37,6 +37,134 @@ namespace hise
 {
 using namespace juce;
 
+#if HISE_INCLUDE_RT_NEURAL
+namespace
+{
+struct EmptyDllNeuralModel: public NeuralNetwork::ModelBase
+{
+	NeuralNetwork::ModelBase* clone() override { return new EmptyDllNeuralModel(); }
+	void process(const float*, float*) override {}
+	void reset() override {}
+	int getNumInputs() const override { return 0; }
+	int getNumOutputs() const override { return 0; }
+	Result loadWeights(const String&) override { return Result::fail("network is not initialised"); }
+};
+
+struct DllCompiledNeuralModel: public NeuralNetwork::ModelBase
+{
+	DllCompiledNeuralModel(scriptnode::dll::ProjectDll::Ptr dll_, int modelIndex_):
+		dll(dll_),
+		modelIndex(modelIndex_)
+	{
+		if(dll != nullptr)
+		{
+			numInputs = dll->getNeuralModelNumInputs(modelIndex);
+			numOutputs = dll->getNeuralModelNumOutputs(modelIndex);
+			handle = dll->createNeuralModel(modelIndex);
+		}
+	}
+
+	DllCompiledNeuralModel(scriptnode::dll::ProjectDll::Ptr dll_, int modelIndex_, void* handle_):
+		dll(dll_),
+		handle(handle_),
+		modelIndex(modelIndex_)
+	{
+		if(dll != nullptr)
+		{
+			numInputs = dll->getNeuralModelNumInputs(modelIndex);
+			numOutputs = dll->getNeuralModelNumOutputs(modelIndex);
+		}
+	}
+
+	~DllCompiledNeuralModel() override
+	{
+		unload();
+	}
+
+	void unload() override
+	{
+		if(handle != nullptr && dll != nullptr)
+			dll->destroyNeuralModel(handle);
+
+		handle = nullptr;
+		dll = nullptr;
+	}
+
+	bool isDllModel() const override { return true; }
+
+	void reset() override
+	{
+		if(handle != nullptr && dll != nullptr)
+			dll->resetNeuralModel(handle);
+	}
+
+	void process(const float* input, float* output) override
+	{
+		if(handle != nullptr && dll != nullptr)
+			dll->processNeuralModel(handle, input, output);
+		else if(output != nullptr)
+			FloatVectorOperations::clear(output, numOutputs);
+	}
+
+	int getNumInputs() const override { return numInputs; }
+	int getNumOutputs() const override { return numOutputs; }
+
+	NeuralNetwork::ModelBase* clone() override
+	{
+		if(handle != nullptr && dll != nullptr)
+		{
+			auto clonedHandle = dll->cloneNeuralModel(handle);
+			return new DllCompiledNeuralModel(dll, modelIndex, clonedHandle);
+		}
+
+		return new EmptyDllNeuralModel();
+	}
+
+	Result loadWeights(const String&) override
+	{
+		return Result::fail("Compiled neural models use baked weights");
+	}
+
+	scriptnode::dll::ProjectDll::Ptr dll;
+	void* handle = nullptr;
+	int modelIndex = -1;
+	int numInputs = 0;
+	int numOutputs = 0;
+};
+}
+
+void NeuralNetwork::Holder::registerDllModels(scriptnode::dll::ProjectDll* dll)
+{
+	if(dll == nullptr)
+		return;
+
+	scriptnode::dll::ProjectDll::Ptr dllToUse = dll;
+
+	for(int i = 0; i < dllToUse->getNumNeuralModels(); i++)
+	{
+		auto idString = dllToUse->getNeuralModelId(i);
+		auto qualityString = dllToUse->getNeuralModelQualityId(i);
+
+		if(!Identifier::isValidIdentifier(idString) || !Identifier::isValidIdentifier(qualityString))
+		{
+			jassertfalse;
+			continue;
+		}
+
+		auto id = Identifier(idString);
+		auto qualityId = Identifier(qualityString);
+		auto numInputs = dllToUse->getNeuralModelNumInputs(i);
+		auto numOutputs = dllToUse->getNeuralModelNumOutputs(i);
+		auto metadata = dllToUse->getNeuralModelMetadata(i);
+
+		f->registerModel(id, qualityId, [dllToUse, i]() -> NeuralNetwork::ModelBase*
+		{
+			return new DllCompiledNeuralModel(dllToUse, i);
+		}, numInputs, numOutputs, metadata);
+	}
+}
+#endif
+
 juce::Array<juce::File> BackendDllManager::getNetworkFiles(MainController* mc, bool includeNoCompilers)
 {
 	if (!mc->getCurrentFileHandler().getRootFolder().isDirectory())
@@ -59,6 +187,24 @@ juce::Array<juce::File> BackendDllManager::getNetworkFiles(MainController* mc, b
 			if (!allowCompilation(files[i]))
 				files.remove(i--);
 		}
+	}
+
+	return files;
+}
+
+juce::Array<juce::File> BackendDllManager::getNeuralNetworkFiles(MainController* mc)
+{
+	if (!mc->getCurrentFileHandler().getRootFolder().isDirectory())
+		return {};
+
+	auto neuralDirectory = getSubFolder(mc, FolderSubType::NeuralNetworks);
+	auto files = neuralDirectory.findChildFiles(File::findFiles, false, "*.json");
+	files.addArray(neuralDirectory.findChildFiles(File::findFiles, false, "*.nam"));
+
+	for (int i = 0; i < files.size(); i++)
+	{
+		if (files[i].getFileName().contains("autosave_"))
+			files.remove(i--);
 	}
 
 	return files;
@@ -168,6 +314,10 @@ bool BackendDllManager::unloadDll()
 {
 	if (projectDll != nullptr)
 	{
+#if HISE_INCLUDE_RT_NEURAL
+		getMainController()->getNeuralNetworks().unloadCompiledModels();
+		getMainController()->getNeuralNetworks().getFactory()->clearCompiledModels();
+#endif
 		projectDll = nullptr;
 		return true;
 	}
@@ -197,6 +347,14 @@ bool BackendDllManager::loadDll(bool forceUnload)
 		if (dllFile.existsAsFile())
 		{
 			projectDll = new scriptnode::dll::ProjectDll(dllFile);
+
+			if(*projectDll)
+			{
+#if HISE_INCLUDE_RT_NEURAL
+				getMainController()->getNeuralNetworks().registerDllModels(projectDll.get());
+				getMainController()->getNeuralNetworks().refreshCompiledModels();
+#endif
+			}
 
 			if(projectDll != nullptr && (oldDll == nullptr || oldDll->getDllFile() != projectDll->getDllFile()))
 			{
@@ -240,6 +398,21 @@ juce::var BackendDllManager::getStatistics()
 		}
 
 		obj->setProperty("Nodes", dllNodes);
+
+#if HISE_INCLUDE_RT_NEURAL
+		Array<var> neuralNetworks;
+
+		for(int i = 0; i < projectDll->getNumNeuralModels(); i++)
+		{
+			DynamicObject::Ptr neuralNetwork = new DynamicObject();
+			neuralNetwork->setProperty("Id", projectDll->getNeuralModelId(i));
+			neuralNetwork->setProperty("Configuration", projectDll->getNeuralModelQualityId(i));
+
+			neuralNetworks.add(var(neuralNetwork.get()));
+		}
+
+		obj->setProperty("NeuralNetworks", neuralNetworks);
+#endif
 	}
 
 	return var(obj.get());
@@ -314,6 +487,7 @@ juce::File BackendDllManager::getSubFolder(const MainController* mc, FolderSubTy
 	{
 	case FolderSubType::Root:					return createIfNotDirectory(f);
 	case FolderSubType::Networks:				return createIfNotDirectory(f.getChildFile("Networks"));
+	case FolderSubType::NeuralNetworks:			return createIfNotDirectory(f.getChildFile("NeuralNetworks"));
 	case FolderSubType::Tests:					return createIfNotDirectory(f.getChildFile("Tests"));
 	case FolderSubType::CustomNodes:			return createIfNotDirectory(f.getChildFile("CustomNodes"));
 	case FolderSubType::AdditionalCode:			return createIfNotDirectory(f.getChildFile("AdditionalCode"));

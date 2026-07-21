@@ -344,6 +344,33 @@ public:
 	/** Checks if the macro control has any parameters. */
 	bool hasActiveParameters(int macroIndex);
 
+	struct MacroPresetManager : public UserPresetStateManager,
+								public MacroConnectionListener
+	{
+		MacroPresetManager(MacroControlBroadcaster& parent_) :
+			parent(parent_)
+		{
+			parent.addMacroConnectionListener(this);
+		}
+
+		~MacroPresetManager()
+		{
+			parent.removeMacroConnectionListener(this);
+		}
+
+		void macroConnectionChanged(int macroIndex, Processor* p, int parameterIndex, bool wasAdded) override;
+
+		void restoreFromValueTree(const ValueTree& v) override;
+
+		ValueTree exportAsValueTree() const override;
+
+		void resetUserPresetState(const var& initDefaultValues) override;
+
+		Identifier getUserPresetStateId() const override { return UserPresetIds::macro_controls; }
+
+		MacroControlBroadcaster& parent;
+	};
+
 private:
 
     CriticalSection listenerLock;

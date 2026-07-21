@@ -40,7 +40,7 @@
     runtime field. Consumers read it off any response (or `/api/status`) to
     verify they are talking to a HISE build that matches their expected schema.
 */
-#define HISE_REST_API_VERSION "0.8.2"
+#define HISE_REST_API_VERSION "0.9.1"
 
 namespace hise { using namespace juce;
 
@@ -61,8 +61,15 @@ namespace RestApiIds
     DECLARE_ID(hierarchy);
 
     // Common response fields
-    DECLARE_ID(success);
-    DECLARE_ID(result);
+	DECLARE_ID(success);
+	DECLARE_ID(ok);
+	DECLARE_ID(autofix);
+	DECLARE_ID(autofixRequested);
+	DECLARE_ID(autofixApplied);
+	DECLARE_ID(fixedNodeId);
+	DECLARE_ID(beforeError);
+	DECLARE_ID(afterError);
+	DECLARE_ID(result);
     DECLARE_ID(logs);
     DECLARE_ID(errors);
     DECLARE_ID(errorMessage);

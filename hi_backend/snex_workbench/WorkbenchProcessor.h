@@ -111,6 +111,7 @@ public:
 	{
 		UnknownFileType,
 		CompiledNetworkFile,
+		CompiledNeuralModelFile,
 		ThirdPartyFile,
 		ThirdPartySourceFile,
 		EmbeddedDataFile
@@ -134,6 +135,7 @@ public:
 		StringArray nodesToCompile;
 		StringArray cppFilesToCompile;
 		Array<File> includedFiles;
+		Array<File> includedNeuralModelFiles;
 		Array<File> includedThirdPartyFiles;
 
 		// Outputs

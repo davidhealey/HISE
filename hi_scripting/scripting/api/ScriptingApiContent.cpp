@@ -6012,7 +6012,7 @@ void ScriptingApi::Content::ScriptWebView::preRecompileCallback()
 
 		auto t = Thread::getCurrentThread();
 
-		while(!t->threadShouldExit() && data->hasWebViews())
+		while(t != nullptr && !t->threadShouldExit() && data->hasWebViews())
 		{
 			t->sleep(10);
 		}
@@ -6707,7 +6707,7 @@ void ScriptingApi::Content::ScriptDynamicContainer::ChildReference::addStateToUs
 	}
 }
 
-void ScriptingApi::Content::ScriptDynamicContainer::ChildReference::resetUserPresetState()
+void ScriptingApi::Content::ScriptDynamicContainer::ChildReference::resetUserPresetState(const var&)
 {
 	removeAllChildren();
 

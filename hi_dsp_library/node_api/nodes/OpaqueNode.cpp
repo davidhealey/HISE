@@ -358,6 +358,17 @@ String ProjectDll::getFuncName(ExportedFunction f)
 	case ExportedFunction::ClearError:			 return "clearError";
 	case ExportedFunction::IsThirdPartyNode:	 return "isThirdPartyNode";
 	case ExportedFunction::GetDLLVersionCounter: return "getDllVersionCounter";
+	case ExportedFunction::GetNumNeuralModels: return "getNumNeuralModels";
+	case ExportedFunction::GetNeuralModelId: return "getNeuralModelId";
+	case ExportedFunction::GetNeuralModelQualityId: return "getNeuralModelQualityId";
+	case ExportedFunction::GetNeuralModelNumInputs: return "getNeuralModelNumInputs";
+	case ExportedFunction::GetNeuralModelNumOutputs: return "getNeuralModelNumOutputs";
+	case ExportedFunction::GetNeuralModelMetadata: return "getNeuralModelMetadata";
+	case ExportedFunction::CreateNeuralModel: return "createNeuralModel";
+	case ExportedFunction::CloneNeuralModel: return "cloneNeuralModel";
+	case ExportedFunction::DestroyNeuralModel: return "destroyNeuralModel";
+	case ExportedFunction::ResetNeuralModel: return "resetNeuralModel";
+	case ExportedFunction::ProcessNeuralModel: return "processNeuralModel";
 	default: jassertfalse; return "";
 	}
 }
@@ -452,6 +463,100 @@ int ProjectDll::getHash(int index) const
 
 	jassertfalse;
 	return 0;
+}
+
+int ProjectDll::getNumNeuralModels() const
+{
+	if(*this)
+		return DLL_FUNCTION(GetNumNeuralModels)();
+
+	return 0;
+}
+
+String ProjectDll::getNeuralModelId(int index) const
+{
+	if(*this)
+	{
+		char buffer[256];
+		auto length = DLL_FUNCTION(GetNeuralModelId)(index, buffer);
+		return String(buffer, length);
+	}
+
+	return {};
+}
+
+String ProjectDll::getNeuralModelQualityId(int index) const
+{
+	if(*this)
+	{
+		char buffer[256];
+		auto length = DLL_FUNCTION(GetNeuralModelQualityId)(index, buffer);
+		return String(buffer, length);
+	}
+
+	return {};
+}
+
+int ProjectDll::getNeuralModelNumInputs(int index) const
+{
+	if(*this)
+		return DLL_FUNCTION(GetNeuralModelNumInputs)(index);
+
+	return 0;
+}
+
+int ProjectDll::getNeuralModelNumOutputs(int index) const
+{
+	if(*this)
+		return DLL_FUNCTION(GetNeuralModelNumOutputs)(index);
+
+	return 0;
+}
+
+String ProjectDll::getNeuralModelMetadata(int index) const
+{
+	if(*this)
+	{
+		char buffer[512];
+		auto length = DLL_FUNCTION(GetNeuralModelMetadata)(index, buffer);
+		return String(buffer, length);
+	}
+
+	return {};
+}
+
+void* ProjectDll::createNeuralModel(int index) const
+{
+	if(*this)
+		return DLL_FUNCTION(CreateNeuralModel)(index);
+
+	return nullptr;
+}
+
+void* ProjectDll::cloneNeuralModel(void* model) const
+{
+	if(*this)
+		return DLL_FUNCTION(CloneNeuralModel)(model);
+
+	return nullptr;
+}
+
+void ProjectDll::destroyNeuralModel(void* model) const
+{
+	if(*this && model != nullptr)
+		DLL_FUNCTION(DestroyNeuralModel)(model);
+}
+
+void ProjectDll::resetNeuralModel(void* model) const
+{
+	if(*this && model != nullptr)
+		DLL_FUNCTION(ResetNeuralModel)(model);
+}
+
+void ProjectDll::processNeuralModel(void* model, const float* input, float* output) const
+{
+	if(*this && model != nullptr)
+		DLL_FUNCTION(ProcessNeuralModel)(model, input, output);
 }
 
 #undef DLL_FUNCTION

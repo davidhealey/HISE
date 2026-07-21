@@ -230,7 +230,7 @@ struct ScriptModulationMatrix : public ConstScriptingObject,
 
 	Identifier getUserPresetStateId() const override { return MatrixIds::MatrixData; }
 
-	void resetUserPresetState() override
+	void resetUserPresetState(const var&) override
 	{
 		clearAllConnections({});
 	}

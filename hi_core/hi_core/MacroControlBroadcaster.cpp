@@ -1010,4 +1010,52 @@ void MacroControlBroadcaster::MacroControlData::removeParameter(const String &pa
 	removeParameter(index, n);
 };
 
+void MacroControlBroadcaster::MacroPresetManager::macroConnectionChanged(int macroIndex, Processor* p, int parameterIndex, bool wasAdded)
+{
+	if (matchesStateTarget(UserPresetStateManager::StateTarget::External))
+	{
+		dynamic_cast<Processor*>(&parent)->getMainController()->getUserPresetHandler().saveExternalPresetData();
+	}
+}
+
+void MacroControlBroadcaster::MacroPresetManager::restoreFromValueTree(const ValueTree& v)
+{
+	parent.loadMacrosFromValueTree(v.getParent(), false);
+}
+
+juce::ValueTree MacroControlBroadcaster::MacroPresetManager::exportAsValueTree() const
+{
+	ValueTree v("parent");
+	parent.saveMacrosToValueTree(v);
+	auto c = v.getChildWithName(UserPresetIds::macro_controls);
+	c.getParent().removeChild(c, nullptr);
+	return c;
+}
+
+void MacroControlBroadcaster::MacroPresetManager::resetUserPresetState(const var& initDefaultValues)
+{
+	parent.clearAllMacroControls();
+
+	if (initDefaultValues.isArray())
+	{
+		if (auto jmp = JavascriptMidiProcessor::getFirstInterfaceScriptProcessor(dynamic_cast<Processor*>(&parent)->getMainController()))
+		{
+			// a little bit hacky, but we'll create a temporary scripting object for this.
+			// the proper solution would be to rip this out into a base class so that
+			// the JSON to macro control data logic is not tied to the scripting wrapper
+			// but that should do it for now...
+			hise::ScriptingObjects::ScriptedMacroHandler sm(jmp);
+
+			try
+			{
+				sm.setMacroDataFromObject(initDefaultValues);
+			}
+			catch (String& s)
+			{
+				debugError(jmp, s);
+			}
+		}
+	}
+}
+
 } // namespace hise

@@ -152,6 +152,11 @@ private:
 #define USE_FRONTEND 0
 #endif
 
+/** Enable this if you want to use the moonbase activation system. */
+#ifndef HISE_USE_MOONBASE
+#define HISE_USE_MOONBASE 0
+#endif
+
 } // namespace hise
 
 #endif

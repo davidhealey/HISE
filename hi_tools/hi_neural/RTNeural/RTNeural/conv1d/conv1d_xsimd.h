@@ -210,7 +210,8 @@ public:
     RTNEURAL_REALTIME inline void skip(const v_type (&ins)[v_in_size])
     {
         // insert input into a circular buffer
-        std::copy(std::begin(ins), std::end(ins), state[state_ptr].begin());
+        for(int i = 0; i < v_in_size; ++i)
+            state[state_ptr][i] = ins[i];
 
         // set state pointers to particular columns of the buffer
         setStatePointers();
@@ -224,7 +225,8 @@ public:
     forward(const v_type (&ins)[v_in_size]) noexcept
     {
         // insert input into a circular buffer
-        std::copy(std::begin(ins), std::end(ins), state[state_ptr].begin());
+        for(int i = 0; i < v_in_size; ++i)
+            state[state_ptr][i] = ins[i];
 
         // set state pointers to particular columns of the buffer
         setStatePointers();
@@ -246,8 +248,10 @@ public:
                     // @TODO: I'm not sure the reinterpret_casts are 100% safe here, but they seem to work in testing!
                     const auto& column = reinterpret_cast<std::array<T, in_size>&>(state[state_ptrs[j]]);
                     const auto column_begin = column.begin() + ii;
-                    const auto column_end = column_begin + filters_per_group;
-                    std::copy(column_begin, column_end, reinterpret_cast<std::array<T, filters_per_group>&>(state_cols[j]).begin());
+                    auto& stateCol = reinterpret_cast<std::array<T, filters_per_group>&>(state_cols[j]);
+
+                    for(int n = 0; n < filters_per_group; ++n)
+                        stateCol[n] = column_begin[n];
 
                     accum += std::inner_product(
                         subWeights[j].begin(),
@@ -270,7 +274,8 @@ public:
     forward(const v_type (&ins)[v_in_size]) noexcept
     {
         // insert input into a circular buffer
-        std::copy(std::begin(ins), std::end(ins), state[state_ptr].begin());
+        for(int i = 0; i < v_in_size; ++i)
+            state[state_ptr][i] = ins[i];
 
         // set state pointers to particular columns of the buffer
         setStatePointers();
@@ -279,7 +284,9 @@ public:
         for(int k = 0; k < kernel_size; ++k)
         {
             const auto& col = state[state_ptrs[k]];
-            std::copy(col.begin(), col.end(), state_cols[k].begin());
+
+            for(int i = 0; i < v_in_size; ++i)
+                state_cols[k][i] = col[i];
         }
 
         // perform multi-channel convolution
@@ -314,7 +321,8 @@ public:
     forward(const v_type (&ins)[v_in_size]) noexcept
     {
         // insert input into a circular buffer
-        std::copy(std::begin(ins), std::end(ins), state[state_ptr].begin());
+        for(int i = 0; i < v_in_size; ++i)
+            state[state_ptr][i] = ins[i];
 
         // set state pointers to particular columns of the buffer
         setStatePointers();

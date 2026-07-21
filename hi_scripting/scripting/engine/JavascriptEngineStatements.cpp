@@ -42,9 +42,9 @@ struct HiseJavascriptEngine::RootObject::ScopedBlockStatement: public Statement
 
 	void addInplaceDebugValue(JavascriptProcessor* jp, DebugInformationBase::Ptr info) const
 	{
-		int col, line;
+		int col, line, charIndex;
 		
-		location.fillColumnAndLines(col, line);
+		location.fillColumnAndLines(col, line, charIndex);
 		jp->addInplaceDebugValue(callback, line, info->getTextForName(), info);
 	}
 
@@ -348,7 +348,8 @@ struct HiseJavascriptEngine::RootObject::ScopedTracer: public HiseJavascriptEngi
 		dataSource = new DebugSession::ProfileDataSource();
 		dataSource->name = v;
 		dataSource->sourceType = DebugSession::ProfileDataSource::SourceType::Trace;
-		location.fillColumnAndLines(col, line);
+		int unused;
+		location.fillColumnAndLines(col, line, unused);
 #endif
 
 		n << v;
@@ -558,8 +559,9 @@ struct HiseJavascriptEngine::RootObject::ScopedProfiler: public HiseJavascriptEn
 
 		int col = 0;
 		int line = 0;
+		int charIndex = 0;
 
-		location.fillColumnAndLines(col, line);
+		location.fillColumnAndLines(col, line, charIndex);
 
 		auto id = callback;
 
@@ -768,8 +770,8 @@ struct HiseJavascriptEngine::RootObject::BlockStatement : public Statement
 
 	String getProfileName() const override
 	{
-		int line, col;
-		location.fillColumnAndLines(col, line);
+		int line, col, charIndex;
+		location.fillColumnAndLines(col, line, charIndex);
 
 		if(line == 1 && location.externalFile.isNotEmpty())
 		{
@@ -819,10 +821,10 @@ struct HiseJavascriptEngine::RootObject::BlockStatement : public Statement
 				CodeLocation e(location);
 				e.location = closeLocation;
 
-				int col, line;
-				e.fillColumnAndLines(col, line);
+				int col, line, charIndex;
+				e.fillColumnAndLines(col, line, charIndex);
 				auto endLine = line;
-				location.fillColumnAndLines(col, line);
+				location.fillColumnAndLines(col, line, charIndex);
 				auto startLine = line-1;
 				blockData->lineRange = { startLine, endLine };
 				blockData->locationString = location.getEncodedLocationString(pid, sf, col, line);
@@ -838,8 +840,8 @@ struct HiseJavascriptEngine::RootObject::BlockStatement : public Statement
 					statementData.getLast()->sourceType = DebugSession::ProfileDataSource::SourceType::Script;
 					statementData.getLast()->isLoop = st->getProfileName() == "loop {}";
 					
-					int col, line;
-					st->location.fillColumnAndLines(col, line);
+					int col, line, charIndex;
+					st->location.fillColumnAndLines(col, line, charIndex);
 
 					statementData.getLast()->locationString = st->location.getEncodedLocationString(pid, sf, col, line);
 
@@ -861,10 +863,10 @@ struct HiseJavascriptEngine::RootObject::BlockStatement : public Statement
 			{
 				Statement* st = statements.getUnchecked(i);
 				const auto& loc = st->location;
-				int col, line;
+				int col, line, charIndex;
 
-				loc.fillColumnAndLines(col, line);
-				Breakpoint bp = Breakpoint(st->breakpointReference.localScopeId, loc.externalFile, line, col, loc.getCharIndex(), st->breakpointReference.index);
+				loc.fillColumnAndLines(col, line, charIndex);
+				Breakpoint bp = Breakpoint(st->breakpointReference.localScopeId, loc.externalFile, line, col, charIndex, st->breakpointReference.index);
 
 				const bool hasRootScope = s.root.get() == s.scope.get();
 
@@ -998,8 +1000,8 @@ struct HiseJavascriptEngine::RootObject::IfStatement : public Statement
 
 	String getProfileName() const override
 	{
-		int col, line;
-		location.fillColumnAndLines(col, line);
+		int col, line, charIndex;
+		location.fillColumnAndLines(col, line, charIndex);
 		return "if(...) (line " + String(line) + ")";
 	}
 
@@ -1119,8 +1121,8 @@ struct HiseJavascriptEngine::RootObject::VarStatement : public Expression
 	String getProfileName() const override
 	{
 		String s;
-		int col, line;
-		location.fillColumnAndLines(col, line);
+		int col, line, charIndex;
+		location.fillColumnAndLines(col, line, charIndex);
 		s << "var " << name << " = [...] (line " << String(line) << ")";
 		return s;
 	}

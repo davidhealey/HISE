@@ -61,6 +61,8 @@ struct ScriptUserPresetHandler::Wrapper
 	API_VOID_METHOD_WRAPPER_1(ScriptUserPresetHandler, setPluginParameterGroupNames);
 	API_VOID_METHOD_WRAPPER_1(ScriptUserPresetHandler, setPluginParameterSortFunction);
 	API_VOID_METHOD_WRAPPER_0(ScriptUserPresetHandler, runTest);
+	API_VOID_METHOD_WRAPPER_1(ScriptUserPresetHandler, setStateManagerProperties);
+	API_METHOD_WRAPPER_1(ScriptUserPresetHandler, getStateManagersForTarget);
 };
 
 ScriptUserPresetHandler::ScriptUserPresetHandler(ProcessorWithScriptingContent* pwsc) :
@@ -106,6 +108,8 @@ ScriptUserPresetHandler::ScriptUserPresetHandler(ProcessorWithScriptingContent* 
 	ADD_API_METHOD_1(setPluginParameterGroupNames);
 	ADD_API_METHOD_3(sendParameterGesture);
 	ADD_API_METHOD_1(setPluginParameterSortFunction);
+	ADD_API_METHOD_1(setStateManagerProperties);
+	ADD_API_METHOD_1(getStateManagersForTarget);
 }
 
 ScriptUserPresetHandler::~ScriptUserPresetHandler()
@@ -938,6 +942,21 @@ void ScriptUserPresetHandler::runTest()
 	}
 
 	debugToConsole(dynamic_cast<Processor*>(getScriptProcessor()), report);
+}
+
+void ScriptUserPresetHandler::setStateManagerProperties(const var& obj)
+{
+	auto& uph = getScriptProcessor()->getMainController_()->getUserPresetHandler();
+	auto ok = uph.setStateManagerProperties(obj);
+
+	if (ok.failed())
+		reportScriptError(ok.getErrorMessage());
+}
+
+juce::var ScriptUserPresetHandler::getStateManagersForTarget(const String& targetId)
+{
+	auto& uph = getScriptProcessor()->getMainController_()->getUserPresetHandler();
+	return uph.getStateManagersForTarget(targetId);
 }
 
 var ScriptUserPresetHandler::convertToJson(const ValueTree& d)
@@ -3576,6 +3595,7 @@ struct ScriptUnlocker::RefObject::Wrapper
 	API_METHOD_WRAPPER_0(RefObject, loadExpansionList);
 	API_METHOD_WRAPPER_1(RefObject, unlockExpansionList);
 	API_METHOD_WRAPPER_1(RefObject, writeExpansionKeyFile);
+	API_VOID_METHOD_WRAPPER_3(RefObject, performMoonbaseOp);
 };
 
 ScriptUnlocker::RefObject::RefObject(ProcessorWithScriptingContent* p) :
@@ -3610,6 +3630,7 @@ ScriptUnlocker::RefObject::RefObject(ProcessorWithScriptingContent* p) :
 	ADD_API_METHOD_0(loadExpansionList);
 	ADD_API_METHOD_1(unlockExpansionList);
 	ADD_API_METHOD_1(writeExpansionKeyFile);
+	ADD_API_METHOD_3(performMoonbaseOp);
 }
 
 ScriptUnlocker::RefObject::~RefObject()
@@ -3676,6 +3697,126 @@ void ScriptUnlocker::RefObject::checkMuseHub(var resultCallback)
 		mcheck = WeakCallbackHolder(getScriptProcessor(), this, resultCallback, 1);
 		unlocker->checkMuseHub();
 	}
+}
+
+
+void ScriptUnlocker::RefObject::performMoonbaseOp(int opType, const var& args, const var& callback)
+{
+	auto p = dynamic_cast<Processor*>(getScriptProcessor());
+
+#if USE_BACKEND
+	if (opType == 99)
+	{
+		debugToConsole(p, "Create RSA.xml from public key, remove that call after the file has been created!");
+
+		auto data = args.toString().trim();
+
+		auto hasStart = data.startsWith("-----BEGIN RSA PUBLIC KEY-----");
+		auto hasEnd = data.endsWith("-----END RSA PUBLIC KEY-----");
+
+		if (!hasStart || !hasEnd)
+		{
+			reportScriptError("RSA public key needs BEGIN / END RSA string at start / end");
+		}
+
+		auto loadRsaPublicKeyFromPemLikeString = [&](juce::String pem)
+		{
+			pem = pem.replace("-----BEGIN RSA PUBLIC KEY-----", "")
+				.replace("-----END RSA PUBLIC KEY-----", "")
+				.removeCharacters(" \t\r\n");
+
+			juce::MemoryOutputStream der;
+			if (!juce::Base64::convertFromBase64(der, pem))
+				reportScriptError("Invalid RSA public key base64");
+
+			auto data = static_cast<const uint8_t*>(der.getData());
+			auto size = der.getDataSize();
+			size_t pos = 0;
+
+			auto readByte = [&]() -> uint8_t
+			{
+				if (pos >= size)
+					reportScriptError("Unexpected end of DER");
+				return data[pos++];
+			};
+
+			auto readLength = [&]() -> size_t
+				{
+					auto b = readByte();
+
+					if ((b & 0x80) == 0)
+						return b;
+
+					const int numBytes = b & 0x7f;
+					if (numBytes <= 0 || numBytes > 4)
+						reportScriptError("Unsupported DER length");
+
+					size_t len = 0;
+					for (int i = 0; i < numBytes; ++i)
+						len = (len << 8) | readByte();
+
+					return len;
+				};
+
+			auto readIntegerHex = [&]() -> juce::String
+				{
+					if (readByte() != 0x02)
+						reportScriptError("Expected ASN.1 INTEGER");
+
+					auto len = readLength();
+
+					if (pos + len > size)
+						reportScriptError("Invalid ASN.1 INTEGER length");
+
+					// RSA INTEGERs are positive. DER often prefixes modulus with 00.
+					if (len > 0 && data[pos] == 0x00)
+					{
+						++pos;
+						--len;
+					}
+
+					juce::String hex;
+					for (size_t i = 0; i < len; ++i)
+						hex << juce::String::toHexString((int)data[pos++]).paddedLeft('0', 2);
+
+					return hex;
+				};
+
+			if (readByte() != 0x30)
+				reportScriptError("Expected ASN.1 SEQUENCE");
+
+			auto sequenceLength = readLength();
+			if (pos + sequenceLength > size)
+				reportScriptError("Invalid ASN.1 SEQUENCE length");
+
+			const auto modulusHex = readIntegerHex();
+			const auto exponentHex = readIntegerHex();
+
+			return juce::RSAKey(exponentHex + "," + modulusHex);
+		};
+
+		auto rsa = loadRsaPublicKeyFromPemLikeString(data);
+
+		auto& fh = GET_PROJECT_HANDLER(p);
+
+		auto existingFile = fh.getWorkDirectory().getChildFile("RSA.xml");
+
+		ScopedPointer<XmlElement> xml = new XmlElement("KeyPair");
+
+		ScopedPointer<XmlElement> pub = new XmlElement("PublicKey");
+		ScopedPointer<XmlElement> pri = new XmlElement("PrivateKey");
+
+		pub->setAttribute("value", rsa.toString());
+		pri->setAttribute("value", "n.a.");
+
+		xml->addChildElement(pub.release());
+		xml->addChildElement(pri.release());
+
+		existingFile.replaceWithText(xml->createDocument(""));
+	}
+#endif
+
+	debugToConsole(p, "skip moonbase licensing op " + String(opType));
 }
 
 void ScriptUnlocker::RefObject::setProductCheckFunction(var f)

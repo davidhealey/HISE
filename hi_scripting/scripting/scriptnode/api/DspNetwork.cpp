@@ -2485,6 +2485,33 @@ void ScriptnodeExceptionHandler::autofix(NodeBase* node)
 	node->getRootNetwork()->prepareToPlay(sp.sampleRate, sp.blockSize);
 }
 
+bool ScriptnodeExceptionHandler::autofixFirstError(String& fixedNodeId, String& beforeError, String& afterError)
+{
+	fixedNodeId = {};
+	beforeError = {};
+	afterError = {};
+
+	for (int i = 0; i < items.size(); i++)
+	{
+		auto item = items[i];
+		auto node = item.node.get();
+
+		if (node == nullptr || item.error.error == Error::OK)
+			continue;
+
+		if (!canBeAutofixed(node, item.error))
+			continue;
+
+		fixedNodeId = node->getCurrentId();
+		beforeError = item.toString(customErrorMessage);
+		autofix(node);
+		afterError = getErrorMessage(nullptr);
+		return true;
+	}
+
+	return false;
+}
+
 String ScriptnodeExceptionHandler::getErrorMessage(Error e)
 {
 	String s;

@@ -2018,7 +2018,7 @@ Array<HiseJavascriptEngine::RootObject::ApiDiagnostic> HiseJavascriptEngine::sha
 						{
 							if (!w->callStack.isEmpty())
 							{
-								w->callStack[0].location.fillColumnAndLines(d.col, d.line);
+								w->callStack[0].location.fillColumnAndLines(d.col, d.line, d.charIndex);
 								d.fileName = w->callStack[0].location.externalFile;
 							}
 						}

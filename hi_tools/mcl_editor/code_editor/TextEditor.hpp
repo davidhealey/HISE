@@ -194,6 +194,12 @@ public:
 
 	bool setParameterSelection(int index, bool useUndo=true);
 
+	void setDiagnosticsFunction(const std::function<void(void)>& f)
+	{
+		diagnosticsTimer.diagnosticsFunction = f;
+		diagnosticsTimer.trigger();
+	}
+
 	void closeAutocomplete(bool async, const String& textToInsert, Array<Range<int>> selectRanges);
 
     void updateLineRanges();
@@ -283,6 +289,8 @@ public:
     LanguageManager* getLanguageManager();
 
 	ScrollBar& getVerticalScrollBar();
+
+	void setDiagnostics(const DiagnosticLines& dl);
 
 	void rebuildInplaceDebugValues();
 
@@ -455,6 +463,24 @@ private:
 
 	friend class Autocomplete;
 
+	struct LiveDiagnosticsTimer: public Timer
+	{
+		LiveDiagnosticsTimer(TextEditor& p) :
+			parent(p)
+		{};
+
+		void timerCallback() override;
+
+		void trigger()
+		{
+			if(parent.shadowParseAfterDelay && diagnosticsFunction)
+				startTimer(1000);
+		}
+
+		std::function<void()> diagnosticsFunction;
+		TextEditor& parent;
+	} diagnosticsTimer;
+
     struct AutocompleteTimer: public Timer
     {
         AutocompleteTimer(TextEditor& p);
@@ -596,6 +622,7 @@ private:
 
 	bool autocompleteEnabled = true;
     bool showAutocompleteAfterDelay = false;
+	bool shadowParseAfterDelay = false;
     bool showStickyLines = true;
     bool enableCmdScrollFontResize = true;
 	

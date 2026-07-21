@@ -3117,7 +3117,12 @@ void CompileExporter::HeaderHelpers::addStaticDspFactoryRegistration(String& plu
 	
 	// We need to add this function body or the linker will complain (if the file exists, it'll be defined
 	if(!nodeIncludeFile.existsAsFile())
+	{
 		pluginDataHeaderFile << "scriptnode::dll::FactoryBase* scriptnode::DspNetwork::createStaticFactory() { return nullptr; }\n";
+		pluginDataHeaderFile << "#if HISE_INCLUDE_RT_NEURAL\n";
+		pluginDataHeaderFile << "void scriptnode::DspNetwork::registerStaticNeuralNetworks(hise::NeuralNetwork::Factory*) {}\n";
+		pluginDataHeaderFile << "#endif\n";
+	}
 }
 
 void CompileExporter::HeaderHelpers::addCopyProtectionHeaderLines(const String &publicKey, String& pluginDataHeaderFile)

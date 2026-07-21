@@ -120,6 +120,93 @@ juce::File HiseAssetInstaller::getRootFolder() const
 	return getMainController()->getCurrentFileHandler().getRootFolder();
 }
 
+String HiseAssetInstaller::getPackageId(const var& packageInfo)
+{
+	return packageInfo[HiseSettings::User::Company].toString() + "::" + packageInfo[HiseSettings::Project::Name].toString();
+}
+
+String HiseAssetInstaller::getDisplayName(const var& packageInfo)
+{
+	auto company = packageInfo[HiseSettings::User::Company].toString();
+	auto name = packageInfo[HiseSettings::Project::Name].toString();
+
+	if(company.isEmpty())
+		return name;
+
+	return company + " " + name;
+}
+
+bool HiseAssetInstaller::packagesMatch(const var& a, const var& b)
+{
+	auto aName = a[HiseSettings::Project::Name].toString();
+	auto bName = b[HiseSettings::Project::Name].toString();
+
+	if(aName != bName)
+		return false;
+
+	auto aCompany = a[HiseSettings::User::Company].toString();
+	auto bCompany = b[HiseSettings::User::Company].toString();
+
+	return aCompany == bCompany || aCompany.isEmpty() || bCompany.isEmpty();
+}
+
+String HiseAssetInstaller::getTargetPath(const File& f) const
+{
+	auto path = f.getRelativePathFrom(getRootFolder());
+	return path.replaceCharacter('\\', '/');
+}
+
+bool HiseAssetInstaller::matchesWildcardList(const File& f, const StringArray& wildcards) const
+{
+	if(wildcards.isEmpty())
+		return false;
+
+	auto path = f.getRelativePathFrom(getRootFolder()).replaceCharacter('\\', '/');
+
+	for(auto& pw: wildcards)
+	{
+		if(pw.containsChar('*'))
+		{
+			if(juce::WildcardFileFilter(pw, {}, {}).isFileSuitable(f))
+				return true;
+		}
+		else if(path.contains(pw))
+			return true;
+	}
+
+	return false;
+}
+
+bool HiseAssetInstaller::matchesSharedWildcard(const File& f) const
+{
+	return matchesWildcardList(f, sharedWildcards);
+}
+
+bool HiseAssetInstaller::isTextFile(const File& f, int64 fileSize)
+{
+	static const StringArray textExtensions({
+		".h",
+		".cpp",
+		".dsp",
+		".js",
+		".xml",
+		".css",
+		".glsl",
+		".md",
+		".json",
+		".txt",
+		".hpp",
+		".c",
+		".hxx",
+		".cxx",
+		".inl"
+		});
+
+	static constexpr int FileSizeLimit = 500 * 1024;
+
+	return textExtensions.contains(f.getFileExtension()) && fileSize >= 0 && fileSize < FileSizeLimit;
+}
+
 hise::HiseAssetInstaller::UndoableInstallAction::List HiseAssetInstaller::createInstallList(const UninstallInfo& infoToUse)
 {
 	if(infoToUse)
@@ -164,12 +251,14 @@ hise::HiseAssetInstaller::UndoableInstallAction::List HiseAssetInstaller::create
 	}
 	
 	auto list = getFileList();
-	auto rootFolder = getMainController()->getCurrentFileHandler().getRootFolder();
-
 	for (auto& f : list)
 	{
 		if(zf != nullptr)
-			installActions.add(new FileInstallAction(getMainController(), f.second, getInputStream(f.first)));
+		{
+			auto action = new FileInstallAction(getMainController(), f.second, getInputStream(f.first));
+			action->setShared(matchesSharedWildcard(f.second));
+			installActions.add(action);
+		}
 		else
 		{
 			jassert(uninstallInfo.isLocalFolder());
@@ -178,7 +267,11 @@ hise::HiseAssetInstaller::UndoableInstallAction::List HiseAssetInstaller::create
 			auto targetFile = getRootFolder().getChildFile(relativePath);
 
 			if(auto is = createInputStreamFromSource(relativePath))
-				installActions.add(new FileInstallAction(getMainController(), targetFile, is));
+			{
+				auto action = new FileInstallAction(getMainController(), targetFile, is);
+				action->setShared(matchesSharedWildcard(targetFile));
+				installActions.add(action);
+			}
 		}
 	}
 	
@@ -199,15 +292,18 @@ juce::var HiseAssetInstaller::getInstallInfoFromLog(const UninstallInfo& info)
 		uninstallInfo = info;
 
 	String packageName;
+	String packageId;
 
 	if(uninstallInfo)
 	{
 		packageName = uninstallInfo.packageName;
+		packageId = uninstallInfo.getPackageId();
 	}
 	else if(info)
 	{
 		auto packageInfo = getProjectInfo(false);
 		packageName = packageInfo[HiseSettings::Project::Name];
+		packageId = packageInfo[HiseSettings::User::Company] + "::" + packageName;
 	}
 
 	var obj;
@@ -215,9 +311,15 @@ juce::var HiseAssetInstaller::getInstallInfoFromLog(const UninstallInfo& info)
 
 	if (auto ar = obj.getArray())
 	{
+		DynamicObject::Ptr query = new DynamicObject();
+		query->setProperty(HiseSettings::Project::Name, packageName);
+		query->setProperty(HiseSettings::User::Company, uninstallInfo.vendor);
+
 		for (auto& package : *ar)
 		{
-			if (package[HiseSettings::Project::Name].toString() == packageName)
+			auto existingId = getPackageId(package);
+
+			if (existingId == packageId || packagesMatch(package, var(query.get())))
 				return package;
 		}
 	}
@@ -245,6 +347,212 @@ hise::HiseAssetInstaller::UndoableInstallAction::List HiseAssetInstaller::fromIn
 	}
 
 	return installLog;
+}
+
+HiseAssetInstaller::FileOwnershipMap HiseAssetInstaller::createOwnershipMap(const var& logData, const String& ignoredPackageId) const
+{
+	FileOwnershipMap ownership;
+
+	if(auto ar = logData.getArray())
+	{
+		for(const auto& package: *ar)
+		{
+			if((bool)package["NeedsCleanup"])
+				continue;
+
+			auto packageId = getPackageId(package);
+
+			if(packageId == ignoredPackageId)
+				continue;
+
+			if(auto steps = package["Steps"].getArray())
+			{
+				for(const auto& step: *steps)
+				{
+					if(step["Type"].toString() != FileInstallAction::getStaticId().toString())
+						continue;
+
+					FileOwner owner;
+					owner.packageId = packageId;
+					owner.displayName = getDisplayName(package);
+					owner.version = package[HiseSettings::Project::Version].toString();
+
+					if(auto obj = step.getDynamicObject())
+					{
+						owner.shared = (bool)step.getProperty("Shared", false);
+
+						if(obj->hasProperty("Hash"))
+						{
+							auto hashVar = step["Hash"];
+							owner.hash = hashVar.isString() ? hashVar.toString().getLargeIntValue() : (int64)hashVar;
+							owner.hashValid = true;
+						}
+					}
+
+					auto target = step["Target"].toString().replaceCharacter('\\', '/');
+					ownership[target].add(owner);
+				}
+			}
+		}
+	}
+
+	return ownership;
+}
+
+bool HiseAssetInstaller::runInstallPreflight(UndoableInstallAction::List& newSteps, const var& logData,
+	const String&, const String& ignoredPackageId)
+{
+	auto ownership = createOwnershipMap(logData, ignoredPackageId);
+	StringArray conflicts;
+
+	for(auto a: newSteps)
+	{
+		auto fa = dynamic_cast<FileInstallAction*>(a);
+
+		if(fa == nullptr || !fa->targetFile.existsAsFile())
+			continue;
+
+		auto target = fa->getTargetPath();
+		auto it = ownership.find(target);
+
+		if(it == ownership.end())
+		{
+			conflicts.add(target + ": trying to overwrite a user file");
+			continue;
+		}
+
+		if(!fa->shared || !fa->hashValid)
+		{
+			conflicts.add(target + ": trying to overwrite a file from another package");
+			continue;
+		}
+
+		bool canShare = true;
+		StringArray owners;
+
+		for(const auto& owner: it->second)
+		{
+			owners.add(owner.displayName + " " + owner.version);
+
+			if(!owner.shared || !owner.hashValid)
+			{
+				conflicts.add(target + ": file conflict with existing package");
+				canShare = false;
+				break;
+			}
+
+			if(owner.hash != fa->hash)
+			{
+				conflicts.add(target + ": shared file content differs from existing package " + owners.joinIntoString(", "));
+				canShare = false;
+				break;
+			}
+		}
+
+		if(canShare)
+			fa->skipWrite = true;
+	}
+
+	if(conflicts.isEmpty())
+		return true;
+
+	writeToLog("FATAL: install has " + String(conflicts.size()) + " file conflict(s):");
+
+	for(const auto& c: conflicts)
+		writeToLog("  " + c);
+
+	writeToLog("Shared files can only be installed when every package marks them as shared and the file contents are identical.");
+	return false;
+}
+
+bool HiseAssetInstaller::runUpdatePreflight(UndoableInstallAction::List& newSteps, const var& logData,
+	const String& currentPackageId, const String& incomingPackageId)
+{
+	ignoreUnused(incomingPackageId);
+
+	auto currentOwnership = createOwnershipMap(logData);
+	auto otherOwnership = createOwnershipMap(logData, currentPackageId);
+	StringArray conflicts;
+
+	for(auto a: newSteps)
+	{
+		auto fa = dynamic_cast<FileInstallAction*>(a);
+
+		if(fa == nullptr)
+			continue;
+
+		auto target = fa->getTargetPath();
+		auto otherIt = otherOwnership.find(target);
+
+		if(otherIt == otherOwnership.end() || otherIt->second.isEmpty())
+			continue;
+
+		auto currentIt = currentOwnership.find(target);
+		bool currentOwnerIsShared = false;
+
+		if(currentIt != currentOwnership.end())
+		{
+			for(const auto& owner: currentIt->second)
+			{
+				if(owner.packageId == currentPackageId)
+				{
+					currentOwnerIsShared = owner.shared && owner.hashValid;
+					break;
+				}
+			}
+		}
+
+		if(!currentOwnerIsShared)
+		{
+			conflicts.add(target + ": installed package has inconsistent shared file ownership");
+			continue;
+		}
+
+		if(!fa->shared || !fa->hashValid)
+		{
+			conflicts.add(target + ": update would stop sharing a file still used by another package");
+			continue;
+		}
+
+		for(const auto& owner: otherIt->second)
+		{
+			if(!owner.shared || !owner.hashValid)
+			{
+				conflicts.add(target + ": file conflict with existing package");
+				break;
+			}
+
+			if(owner.hash != fa->hash)
+			{
+				conflicts.add(target + ": shared file content differs from existing package " + owner.displayName + " " + owner.version);
+				break;
+			}
+		}
+	}
+
+	if(conflicts.isEmpty())
+		return true;
+
+	writeToLog("FATAL: update changes shared files that are also used by other packages:");
+
+	for(const auto& c: conflicts)
+		writeToLog("  " + c);
+
+	writeToLog("Shared files must stay identical across all installed assets. Uninstall all affected packs first, then install compatible versions.");
+	return false;
+}
+
+bool HiseAssetInstaller::isOwnedByOtherPackage(const File& targetFile, const String& packageId) const
+{
+	var obj;
+
+	if(!JSON::parse(getLogFile().loadFileAsString(), obj).wasOk())
+		return false;
+
+	auto ownership = createOwnershipMap(obj, packageId);
+	auto it = ownership.find(getTargetPath(targetFile));
+
+	return it != ownership.end() && !it->second.isEmpty();
 }
 
 juce::var HiseAssetInstaller::toInstallLog(UndoableInstallAction::List installActions, UninstallInfo infoToUse) const
@@ -445,6 +753,7 @@ void HiseAssetInstaller::initialise(const var& jsonObject)
 {
 	positiveWildcards = (createArray(jsonObject, "PositiveWildcard"));
 	negativeWildcards = (createArray(jsonObject, "NegativeWildcard"));
+	sharedWildcards = (createArray(jsonObject, "SharedWildcard"));
 	preprocessorValues = (createArray(jsonObject, "Preprocessors"));
 	fileTypes = (createArray(jsonObject, "FileTypes"));
 	infoToShow = (jsonObject["InfoText"].toString());
@@ -518,32 +827,11 @@ bool HiseAssetInstaller::matchesFile(const File& f) const
 	if (getIllegalFilenames().contains(f.getFileName()))
 		return false;
 
-	auto includeFile = positiveWildcards.isEmpty();
-	auto path = f.getRelativePathFrom(getRootFolder()).replaceCharacter('\\', '/');
-
-	for (auto& pw : positiveWildcards)
-	{
-		if (pw.containsChar('*'))
-			includeFile |= juce::WildcardFileFilter(pw, {}, {}).isFileSuitable(f);
-		else
-			includeFile |= path.contains(pw);
-
-		if (includeFile)
-			break;
-	}
+	auto includeFile = positiveWildcards.isEmpty() || matchesWildcardList(f, positiveWildcards);
 
 	if (includeFile)
 	{
-		for (auto& pw : negativeWildcards)
-		{
-			if (pw.containsChar('*'))
-				includeFile &= !juce::WildcardFileFilter(pw, {}, {}).isFileSuitable(f);
-			else
-				includeFile &= !path.contains(pw);
-
-			if (!includeFile)
-				break;
-		}
+		includeFile = !matchesWildcardList(f, negativeWildcards);
 	}
 
 	return includeFile;
@@ -566,6 +854,7 @@ bool HiseAssetInstaller::install(const UninstallInfo& infoToUse)
 	auto packageInfo = getProjectInfo(false);
 
 	auto packageName = packageInfo[HiseSettings::Project::Name];
+	auto packageId = packageInfo[HiseSettings::User::Company] + "::" + packageName;
 	auto version = packageInfo[HiseSettings::Project::Version];
 
 	if(lf.existsAsFile())
@@ -580,9 +869,13 @@ bool HiseAssetInstaller::install(const UninstallInfo& infoToUse)
 
 		if (auto ar = obj.getArray())
 		{
+			DynamicObject::Ptr incomingInfo = new DynamicObject();
+			incomingInfo->setProperty(HiseSettings::Project::Name, packageName);
+			incomingInfo->setProperty(HiseSettings::User::Company, packageInfo[HiseSettings::User::Company]);
+
 			for(auto& v: *ar)
 			{
-				if(v[HiseSettings::Project::Name].toString() == packageName)
+				if(getPackageId(v) == packageId || packagesMatch(v, var(incomingInfo.get())))
 				{
 					writeToLog("FATAL: package " + packageName + " is already installed. Uninstall first.");
 					return false;
@@ -595,46 +888,8 @@ bool HiseAssetInstaller::install(const UninstallInfo& infoToUse)
 		obj = var(Array<var>());
 	}
 
-	if (! testMode)
-	{
-		Array<File> claimedByLog;
-		auto root = getRootFolder();
-
-		if (auto ar = obj.getArray())
-		{
-			for (const auto& pkg : *ar)
-			{
-				if (auto steps = pkg["Steps"].getArray())
-				{
-					for (const auto& step : *steps)
-					{
-						if (step["Type"].toString() == FileInstallAction::getStaticId().toString())
-							claimedByLog.add(root.getChildFile(step["Target"].toString()));
-					}
-				}
-			}
-		}
-
-		StringArray conflicts;
-
-		for (auto a : newSteps)
-		{
-			if (auto fa = dynamic_cast<FileInstallAction*>(a))
-			{
-				if (fa->wouldConflict(claimedByLog))
-					conflicts.add(fa->targetFile.getFullPathName());
-			}
-		}
-
-		if (! conflicts.isEmpty())
-		{
-			writeToLog("FATAL: install would overwrite " + String(conflicts.size()) + " untracked file(s):");
-			for (const auto& c : conflicts)
-				writeToLog("  " + c);
-			writeToLog("Backup or rename these files and retry.");
-			return false;
-		}
-	}
+	if (! testMode && !runInstallPreflight(newSteps, obj, packageId))
+		return false;
 
 	if (!newSteps.isEmpty())
 	{
@@ -671,6 +926,41 @@ bool HiseAssetInstaller::install(const UninstallInfo& infoToUse)
 	return false;
 }
 
+bool HiseAssetInstaller::canUpdateSharedFiles(const UninstallInfo& infoToUse)
+{
+	if (! isValid)
+	{
+		writeToLog("FATAL: installer is not valid (missing or invalid package_install.json)");
+		return false;
+	}
+
+	var obj;
+	auto lf = getLogFile();
+
+	if(lf.existsAsFile())
+	{
+		auto parseResult = JSON::parse(lf.loadFileAsString(), obj);
+
+		if (! parseResult.wasOk())
+		{
+			writeToLog("FATAL: install_packages_log.json is corrupted: " + parseResult.getErrorMessage());
+			return false;
+		}
+	}
+	else
+	{
+		obj = var(Array<var>());
+	}
+
+	auto newSteps = createInstallList(infoToUse);
+	auto packageInfo = getProjectInfo(false);
+	auto incomingPackageId = packageInfo[HiseSettings::User::Company] + "::" + packageInfo[HiseSettings::Project::Name];
+	auto currentLogInfo = getInstallInfoFromLog(infoToUse);
+	auto currentPackageId = currentLogInfo.getDynamicObject() != nullptr ? getPackageId(currentLogInfo) : infoToUse.getPackageId();
+
+	return runUpdatePreflight(newSteps, obj, currentPackageId, incomingPackageId);
+}
+
 HiseAssetInstaller::UninstallResult HiseAssetInstaller::uninstall(const Error& seekToError)
 {
 	UninstallResult result;
@@ -685,6 +975,10 @@ HiseAssetInstaller::UninstallResult HiseAssetInstaller::uninstall(const Error& s
 	}
 
 	auto uninstallSteps = fromInstallLog(logInfo);
+	auto packageId = getPackageId(logInfo);
+
+	if(packageId == "::" + uninstallInfo.packageName && uninstallInfo.vendor.isNotEmpty())
+		packageId = uninstallInfo.getPackageId();
 
 	if (!uninstallSteps.isEmpty())
 	{
@@ -707,6 +1001,15 @@ HiseAssetInstaller::UninstallResult HiseAssetInstaller::uninstall(const Error& s
 			}
 
 			writeToLog(msg);
+
+			if(auto f = dynamic_cast<FileInstallAction*>(uninstallSteps[i].get()))
+			{
+				if(isOwnedByOtherPackage(f->targetFile, packageId))
+				{
+					writeToLog("> Keep file owned by another package " + f->targetFile.getFullPathName().replaceCharacter('\\', '/'));
+					continue;
+				}
+			}
 
 			if(!uninstallSteps[i]->undo())
 			{
@@ -733,7 +1036,7 @@ HiseAssetInstaller::UninstallResult HiseAssetInstaller::uninstall(const Error& s
 	{
 		for (int i = 0; i < ar->size(); i++)
 		{
-			if ((*ar)[i][HiseSettings::Project::Name].toString() == uninstallInfo.packageName)
+			if (getPackageId((*ar)[i]) == packageId || packagesMatch((*ar)[i], logInfo))
 			{
 				if (result.hasSkippedFiles())
 				{
@@ -782,6 +1085,11 @@ bool HiseAssetInstaller::cleanup()
 	if (!(bool)logInfo["NeedsCleanup"])
 		return false;
 
+	auto packageId = getPackageId(logInfo);
+
+	if(packageId == "::" + uninstallInfo.packageName && uninstallInfo.vendor.isNotEmpty())
+		packageId = uninstallInfo.getPackageId();
+
 	StringArray remainingFiles;
 
 	if (auto skippedArray = logInfo["SkippedFiles"].getArray())
@@ -812,7 +1120,7 @@ bool HiseAssetInstaller::cleanup()
 	{
 		for (int i = 0; i < ar->size(); i++)
 		{
-			if ((*ar)[i][HiseSettings::Project::Name].toString() == uninstallInfo.packageName)
+			if (getPackageId((*ar)[i]) == packageId || packagesMatch((*ar)[i], logInfo))
 			{
 				if (remainingFiles.isEmpty())
 				{
@@ -974,6 +1282,8 @@ HiseAssetInstaller::FileInstallAction::FileInstallAction(MainController* mc, con
 	// extension was text-classified - treat as binary on uninstall).
 	if (auto obj = data.getDynamicObject())
 	{
+		shared = (bool)data.getProperty("Shared", false);
+
 		if (obj->hasProperty("Hash"))
 		{
 			const auto hashVar = data["Hash"];
@@ -988,8 +1298,28 @@ HiseAssetInstaller::FileInstallAction::FileInstallAction(MainController* mc, con
 	}
 }
 
+void HiseAssetInstaller::FileInstallAction::setShared(bool shouldBeShared)
+{
+	if(!shouldBeShared || is == nullptr)
+		return;
+
+	if(!HiseAssetInstaller::isTextFile(targetFile, is->getTotalLength()))
+		return;
+
+	shared = true;
+
+	auto pos = is->getPosition();
+	is->setPosition(0);
+	hash = is->readEntireStreamAsString().hashCode64();
+	hashValid = true;
+	is->setPosition(pos);
+}
+
 bool HiseAssetInstaller::FileInstallAction::perform()
 {
+	if(skipWrite)
+		return true;
+
 	if(is != nullptr && !targetFile.isDirectory() && is->getTotalLength() != 0)
 	{
 		targetFile.deleteFile();
@@ -1022,6 +1352,10 @@ bool HiseAssetInstaller::FileInstallAction::perform()
 String HiseAssetInstaller::FileInstallAction::toString(bool getUndoDescription) const
 {
 	auto path = targetFile.getFullPathName();
+
+	if(!getUndoDescription && skipWrite)
+		return "> Skip shared file " + path.replaceCharacter('\\', '/');
+
 	return (getUndoDescription ? "> Delete " : "> Extract ") + path.replaceCharacter('\\', '/');
 }
 
@@ -1042,6 +1376,13 @@ juce::var HiseAssetInstaller::FileInstallAction::toJSON() const
 		// precision when read by a standard JSON parser (e.g. JS JSON.parse).
 		obj->setProperty("Hash", String(hashToUse));
 	}
+	else if(shared && hashValid)
+	{
+		obj->setProperty("Hash", String(hash));
+	}
+
+	if(shared)
+		obj->setProperty("Shared", true);
 	
 	obj->setProperty("Modified", targetFile.getLastModificationTime().toISO8601(false));
 	return var(obj.get());

@@ -29,6 +29,7 @@ mcl::TextEditor::TextEditor(TextDocument& codeDoc)
 , tokenCollection()
 , tooltipManager(*this)
 , autocompleteTimer(*this)
+, diagnosticsTimer(*this)
 , plaf(new LookAndFeel_V3())
 {
 	//tokenCollection.addTokenProvider(new SimpleDocumentTokenProvider(docRef));
@@ -206,6 +207,8 @@ void TextEditor::setGotoFunction(const GotoFunction& f)
 
 void TextEditor::clearWarningsAndErrors()
 {
+	setDiagnostics({});
+	
 	autofixButton = nullptr;
 	currentError = nullptr;
 	warnings.clear();
@@ -610,6 +613,14 @@ LanguageManager* TextEditor::getLanguageManager()
 
 ScrollBar& TextEditor::getVerticalScrollBar()
 { return scrollBar; }
+
+void TextEditor::setDiagnostics(const DiagnosticLines& dl)
+{
+	gutter.setDiagnostics(dl);
+
+	if (auto p = dynamic_cast<FullEditor*>(getParentComponent()))
+		p->codeMap.setDiagnostics(dl);
+}
 
 TextEditor::InplaceDebugValueComponent::InplaceDebugValueComponent(TextEditor& parent_,
 	const LanguageManager::InplaceDebugValue::Ptr ipv):
@@ -2320,6 +2331,7 @@ void mcl::TextEditor::mouseDown (const MouseEvent& e)
 			Goto,
 			LineBreaks,
             AutoAutocomplete,
+			AutoShadowParse,
             ShowStickyLines,
             EnableCmdScrollFontResize,
 			BackgroundParsing,
@@ -2353,6 +2365,7 @@ void mcl::TextEditor::mouseDown (const MouseEvent& e)
 		menu.addItem(UnfoldAll, "Unfold all", true, false);
 		menu.addItem(LineBreaks, "Enable line breaks", true, linebreakEnabled);
         menu.addItem(AutoAutocomplete, "Autoshow Autocomplete", true, showAutocompleteAfterDelay);
+		menu.addItem(AutoShadowParse, "Enable live diagnostics", true, shadowParseAfterDelay);
         menu.addItem(ShowStickyLines, "Show sticky lines on top", true, showStickyLines);
         menu.addItem(EnableCmdScrollFontResize, "Enable Cmd+Scroll font resize", true, enableCmdScrollFontResize);
         
@@ -2394,6 +2407,9 @@ void mcl::TextEditor::mouseDown (const MouseEvent& e)
             case AutoAutocomplete:
 				FullEditor::saveSetting(this, TextEditorSettings::AutoAutocomplete, !showAutocompleteAfterDelay);
                 break;
+			case AutoShadowParse:
+				FullEditor::saveSetting(this, TextEditorSettings::EnableLiveDiagnostics, !shadowParseAfterDelay);
+				break;
             case ShowStickyLines:
                 FullEditor::saveSetting(this, TextEditorSettings::ShowStickyLines, !showStickyLines);
                 break;
@@ -3457,6 +3473,8 @@ bool mcl::TextEditor::insert (const juce::String& content)
     {
         abortAutocomplete();
     }
+
+	diagnosticsTimer.trigger();
     
     return true;
 }
@@ -3549,6 +3567,17 @@ void mcl::TextEditor::renderTextUsingGlyphArrangement (juce::Graphics& g)
         document.findGlyphsIntersecting (g.getClipBounds().toFloat()).draw (g);
     }
     g.restoreState();
+}
+
+void TextEditor::LiveDiagnosticsTimer::timerCallback()
+{
+	if (parent.getDocument().getNumLines() == 0)
+		return;
+
+	jassert(diagnosticsFunction);
+	diagnosticsFunction();
+
+	stopTimer();
 }
 
 }

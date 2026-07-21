@@ -2249,6 +2249,9 @@ Component* TableFloatingTileBase::refreshComponentForCell(int rowNumber, int col
 		slider->slider->textFromValueFunction = vtc;
 		slider->slider->valueFromTextFunction = vtc;
 
+		// setRowAndColumn() sets the value before the converter functions exist,
+		// so the text box must be refreshed to show the converted text
+		slider->slider->updateText();
 
 		return slider;
 	}

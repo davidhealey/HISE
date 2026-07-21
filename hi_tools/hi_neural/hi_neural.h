@@ -1,5 +1,7 @@
 #pragma once
 
+namespace scriptnode { namespace dll { struct ProjectDll; } }
+
 namespace hise
 {
 using namespace juce;
@@ -70,6 +72,35 @@ struct NeuralNetwork: public ReferenceCountedObject,
 	using Ptr = ReferenceCountedObjectPtr<NeuralNetwork>;
 	using List = ReferenceCountedArray<NeuralNetwork>;
 
+	enum class BackendState
+	{
+		Empty,
+		Dynamic,
+		CompiledLinked,
+		CompiledDll
+	};
+
+	enum class NAMGainMode
+	{
+		Raw,
+		Normalized,
+		Calibrated
+	};
+
+	struct NAMMetadata
+	{
+		bool isNAM = false;
+		bool hasLoudness = false;
+		float loudnessDb = 0.0f;
+		bool hasInputLevel = false;
+		float inputLevelDbu = 0.0f;
+		bool hasOutputLevel = false;
+		float outputLevelDbu = 0.0f;
+		bool hasPreferredGainMode = false;
+		NAMGainMode preferredGainMode = NAMGainMode::Raw;
+		float preferredInputCalibrationLevelDbu = 12.0f;
+	};
+
 	struct ModelBase
 	{
         ModelBase() {};
@@ -81,6 +112,8 @@ struct NeuralNetwork: public ReferenceCountedObject,
 		virtual int getNumOutputs() const = 0;
 		virtual ModelBase* clone() = 0;
 		virtual Result loadWeights(const String& jsonData) = 0;
+		virtual void unload() {}
+		virtual bool isDllModel() const { return false; }
         
         JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(ModelBase);
 	};
@@ -99,21 +132,56 @@ struct NeuralNetwork: public ReferenceCountedObject,
 
 	struct Factory
 	{
+		using CreateFunction = std::function<ModelBase*()>;
+
+		struct Entry
+		{
+			Identifier id;
+			Identifier qualityId;
+			CreateFunction create;
+			int numInputs = 0;
+			int numOutputs = 0;
+			NAMMetadata namMetadata;
+		};
+
 		Factory();
+
+		virtual ~Factory() {};
 
 		// Use this to register statically compiled models
 		template <typename T> void registerModel()
 		{
-			registeredModels.add({T::getStaticId(), T::create});
+			registerModel<T>(T::getStaticId(), T::getConfigId());
 		}
 
+		template <typename T> void registerModel(const Identifier& id, const Identifier& qualityId)
+		{
+			registerModel(id, qualityId, T::create, T::StaticNumInputs, T::StaticNumOutputs);
+		}
+
+		bool hasModel(const Identifier& id) const;
+		bool hasModel(const Identifier& id, const Identifier& qualityId) const;
+		StringArray getQualityIds(const Identifier& id) const;
+		void clearCompiledModels();
+		void registerModel(const Identifier& id, const Identifier& qualityId, const CreateFunction& create,
+			int numInputs=0, int numOutputs=0, const String& namMetadataJSON=String());
+
+		int getNumModels() const;
+		Identifier getModelId(int index) const;
+		Identifier getModelQualityId(int index) const;
+		int getModelNumInputs(int index) const;
+		int getModelNumOutputs(int index) const;
+		String getModelMetadata(int index) const;
+		NAMMetadata getNAMMetadata(const Identifier& id, const Identifier& qualityId) const;
+		ModelBase* createByIndex(int index);
+
 		ModelBase* create(const Identifier& id);
+		ModelBase* create(const Identifier& id, const Identifier& qualityId);
 
 	private:
 
-		using CreateFunction = std::function<ModelBase*()>;
 		CreateFunction defaultFunction;
-		Array<std::pair<Identifier, CreateFunction>> registeredModels;
+		Array<Entry> registeredModels;
 	};
 
 	struct Holder
@@ -133,6 +201,9 @@ struct NeuralNetwork: public ReferenceCountedObject,
 
 		/** Returns a list of all created networks. */
 		StringArray getIdList() const;
+		void unloadCompiledModels();
+		void refreshCompiledModels();
+		void registerDllModels(scriptnode::dll::ProjectDll* dll);
 
         Factory* getFactory() { return f; }
         
@@ -160,6 +231,7 @@ struct NeuralNetwork: public ReferenceCountedObject,
 
 	/** Parses the model layout from the print() output of the Pytorch model. */
 	static var parseModelJSON(const File& modelFile);
+	static Result createCompiledModelHeader(const File& sourceFile, String& code);
 	
 	int getNumInputs() const;
 	int getNumOutputs() const;
@@ -185,6 +257,21 @@ struct NeuralNetwork: public ReferenceCountedObject,
 	Result loadWeights(const String& jsonData);
 
 	var getModelJSON() const;
+	var getCompiledModelJSON() const;
+	Result writeCompiledModelJSON(const File& targetDirectory, const var& qualityConfigurations) const;
+	BackendState getBackendState() const noexcept { return backendState; }
+	String getBackendStateName() const;
+	String getActiveQualityConfiguration() const { return activeQualityConfiguration.toString(); }
+	StringArray getQualityConfigurations() const;
+	Result setQualityConfiguration(const Identifier& qualityId);
+	Result setNAMGainMode(const var& modeOrOptions);
+	String getNAMGainMode() const;
+	NAMMetadata getNAMMetadata() const;
+	float getNAMInputCalibrationLevelDbu() const noexcept { return namInputCalibrationLevelDbu; }
+	float getNAMInputGainDb() const noexcept;
+	float getNAMOutputGainDb() const noexcept;
+	void unloadCompiledModel();
+	void refreshCompiledModel(BackendState compiledState);
 
 	/** This lets you create a number of copies of the same network that you then can address with the network index in both the reset and process call.
 	 *
@@ -210,6 +297,17 @@ private:
 	mutable hise::SimpleReadWriteLock lock;
 
 	const Identifier id;
+
+	BackendState backendState = BackendState::Empty;
+	Identifier activeQualityConfiguration = Identifier("default");
+	var compiledModelJSON;
+	NAMMetadata namMetadata;
+	NAMGainMode namGainMode = NAMGainMode::Raw;
+	float namInputCalibrationLevelDbu = 12.0f;
+
+	void setNAMMetadata(const NAMMetadata& metadata);
+	void resetNAMMetadata();
+	void updateNAMGainMetadataInCompiledJSON();
 
 	OwnedArray<ModelBase> currentModels;
 };

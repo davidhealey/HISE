@@ -393,6 +393,19 @@ juce::String ApiClass::DiagnosticResult::Item::toConsoleString(Processor* p) con
 {
 	return HiseJavascriptEngine::toConsoleString(*this, p);
 }
+
+String ApiClass::DiagnosticResult::Item::toEditorString() const
+{
+	String s;
+
+	s << message;
+
+	if (!suggestions.isEmpty())
+		s << ". Use: " << suggestions.joinIntoString(", ");
+
+	return s;
+}
+
 #endif
 
 } // namespace hise

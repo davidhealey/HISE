@@ -93,10 +93,11 @@ struct RestHelpers
         TestingSequence,        ///< POST /api/testing/sequence - Run timed test sequence (MIDI, attributes, REPL, signals)
         DspList,                ///< GET  /api/dsp/list - List available DspNetwork names
         DspInit,                ///< POST /api/dsp/init - Create/load a DspNetwork
-        DspTree,                ///< GET  /api/dsp/tree - Get scriptnode network hierarchy
-        DspApply,               ///< POST /api/dsp/apply - Apply operations to scriptnode graph
-        DspProbe,               ///< POST /api/dsp/probe - Inject a test signal and return a probe report
-        DspSave,                ///< POST /api/dsp/save - Save DspNetwork to XML file
+		DspTree,                ///< GET  /api/dsp/tree - Get scriptnode network hierarchy
+		DspApply,               ///< POST /api/dsp/apply - Apply operations to scriptnode graph
+		DspProbe,               ///< POST /api/dsp/probe - Inject a test signal and return a probe report
+		DspRuntimeStatus,       ///< GET  /api/dsp/runtime_status - Query scriptnode runtime errors
+		DspSave,                ///< POST /api/dsp/save - Save DspNetwork to XML file
         DspScreenshot,          ///< GET  /api/dsp/screenshot - Capture screenshot of current DspNetwork graph
         ProjectList,            ///< GET  /api/project/list - List available HISE projects
         ProjectTree,            ///< GET  /api/project/tree - Project file tree with referenced flags
@@ -1055,11 +1056,15 @@ struct RestHelpers
     static RestServer::Response handleDspApply(MainController* mc,
                                                RestServer::AsyncRequest::Ptr req);
 
-    /** Handler for POST /api/dsp/probe - Inject a test signal and return a probe report */
-    static RestServer::Response handleDspProbe(MainController* mc,
-                                               RestServer::AsyncRequest::Ptr req);
+	/** Handler for POST /api/dsp/probe - Inject a test signal and return a probe report */
+	static RestServer::Response handleDspProbe(MainController* mc,
+	                                           RestServer::AsyncRequest::Ptr req);
 
-    /** Handler for POST /api/dsp/save - Save DspNetwork to XML file */
+	/** Handler for GET /api/dsp/runtime_status - Query scriptnode runtime errors */
+	static RestServer::Response handleDspRuntimeStatus(MainController* mc,
+	                                                   RestServer::AsyncRequest::Ptr req);
+
+	/** Handler for POST /api/dsp/save - Save DspNetwork to XML file */
     static RestServer::Response handleDspSave(MainController* mc,
                                               RestServer::AsyncRequest::Ptr req);
 

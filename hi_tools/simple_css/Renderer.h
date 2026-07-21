@@ -303,7 +303,7 @@ class Positioner
 
 	struct RemoveHelpers
 	{
-		template <Direction D> static Rectangle<float> slice(Rectangle<float>& area, float amount)
+		template <Direction D> static juce::Rectangle<float> slice(juce::Rectangle<float>& area, float amount)
 		{
 			switch(D)
 			{
@@ -314,13 +314,13 @@ class Positioner
 			}
 		}
 
-		template <Direction D> static Rectangle<float> shrink(Rectangle<float> area, float amount)
+		template <Direction D> static juce::Rectangle<float> shrink(juce::Rectangle<float> area, float amount)
 		{
 			return slice<D>(area, amount);
 		}
 	};
 
-	template <Direction D> Rectangle<float> slice(const Array<Selector>& s, float defaultValue)
+	template <Direction D> juce::Rectangle<float> slice(const Array<Selector>& s, float defaultValue)
 	{
 		if(auto ss = css.getWithAllStates(nullptr, s.getFirst()))
 		{
@@ -330,7 +330,7 @@ class Positioner
 			auto h = ss->getPixelValue(totalArea, { key, {} }, defaultValue);
 			auto positionType = ss->getPositionType({});
 
-			Rectangle<float> copy = totalArea;
+			juce::Rectangle<float> copy = totalArea;
 
 			auto shouldShrink = positionType == PositionType::absolute || positionType == PositionType::fixed;
 			auto& toUse = shouldShrink ? copy : totalArea;

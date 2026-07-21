@@ -3,9 +3,62 @@
 
 #include <cstddef>
 #include <string>
+#include <vector>
 
 namespace RTNEURAL_NAMESPACE
 {
+
+struct StaticWeightInfo
+{
+    std::string name;
+    std::vector<int> shape;
+    size_t flatNumElements = 0;
+};
+
+struct StaticTypeOptions
+{
+    std::string qualityId = "default";
+    std::string scalarType = "float";
+    std::string mathProvider = "default";
+    std::string sampleRateCorrection = "none";
+
+    std::string getMathProviderTypeName() const
+    {
+        if(mathProvider == "default")
+            return "RTNeural::DefaultMathsProvider";
+
+        return mathProvider;
+    }
+
+    std::string getSampleRateCorrectionTypeName() const
+    {
+        if(sampleRateCorrection == "linear")
+            return "RTNeural::SampleRateCorrectionMode::LinInterp";
+
+        if(sampleRateCorrection == "noInterp")
+            return "RTNeural::SampleRateCorrectionMode::NoInterp";
+
+        return "RTNeural::SampleRateCorrectionMode::None";
+    }
+};
+
+struct StaticLayerInfo
+{
+    std::string typeName;
+    std::vector<StaticWeightInfo> weights;
+    bool isActivation = false;
+    bool supported = false;
+    std::string error;
+};
+
+struct StaticModelInfo
+{
+    int inputSize = 0;
+    int outputSize = 0;
+    std::vector<StaticLayerInfo> layers;
+    bool supported = false;
+    std::string error;
+};
 
 /** Virtual base class for a generic neural network layer. */
 template <typename T>
@@ -23,6 +76,14 @@ public:
 
     /** Returns the name of this layer. */
     virtual std::string getName() const noexcept { return ""; }
+
+    /** Returns static code generation metadata for this layer. */
+    virtual StaticLayerInfo getStaticTypeInfo(const StaticTypeOptions&) const
+    {
+        StaticLayerInfo info;
+        info.error = "Layer \"" + getName() + "\" does not support static generation";
+        return info;
+    }
 
     /** Resets the state of this layer. */
     virtual void reset() { }

@@ -407,7 +407,7 @@ public:
 
 	Identifier getUserPresetStateId() const override;
 	
-	void resetUserPresetState() override;
+	void resetUserPresetState(const var& initValues) override;
 
 	bool isLearningActive(Processor *interfaceProcessor, int attributeIndex) const;
 	void deactivateMidiLearning();
@@ -422,6 +422,24 @@ public:
 	void handleParameterData(MidiBuffer &b);
 
 	bool handleControllerMessage(const HiseEvent& e);
+
+	struct ExternalSaver : public SafeChangeListener
+	{
+		ExternalSaver(MidiControllerAutomationHandler& handler) :
+			parent(handler)
+		{
+			parent.addChangeListener(this);
+		};
+
+		~ExternalSaver()
+		{
+			parent.removeChangeListener(this);
+		}
+
+		void changeListenerCallback(SafeChangeBroadcaster* b) override;
+
+		MidiControllerAutomationHandler& parent;
+	} externalSaver;
 		
 	class MPEData : public ControlledObject,
 					public UserPresetStateManager,
@@ -462,7 +480,7 @@ public:
         
 		Identifier getUserPresetStateId() const override;
 
-		void resetUserPresetState() override;
+		void resetUserPresetState(const var&) override;
 
 		void restoreFromValueTree(const ValueTree &previouslyExportedState) override;
 

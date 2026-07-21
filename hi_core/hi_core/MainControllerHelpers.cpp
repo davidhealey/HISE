@@ -38,7 +38,8 @@ MidiControllerAutomationHandler::MidiControllerAutomationHandler(MainController 
 anyUsed(false),
 mpeData(mc_),
 mc(mc_),
-ccName("MIDI CC")
+ccName("MIDI CC"),
+externalSaver(*this)
 {
 	filterChannels = HISE_GET_PREPROCESSOR(mc, HISE_USE_MIDI_CHANNELS_FOR_AUTOMATION);
 
@@ -86,6 +87,15 @@ void MidiControllerAutomationHandler::setUnlearndedMidiControlNumber(Key k, Noti
 	}
 
 	ScopedLock sl(mc->getLock());
+
+	auto iter = createIterator();
+	AutomationData a;
+
+	while (iter.next(&a))
+	{
+		if (a.processor == unlearnedData.processor && a.attribute == unlearnedData.attribute)
+			iter.eraseCurrentElement();
+	}
 
 	unlearnedData.k = k;
 
@@ -494,12 +504,17 @@ void MidiControllerAutomationHandler::MPEData::sendAsyncNotificationMessage(MPEM
 {
     WeakReference<MPEModulator> ref(mod);
     
-    auto f = [ref, type](Dispatchable* obj)
+	auto saveToExternal = matchesStateTarget(UserPresetStateManager::StateTarget::External);
+
+    auto f = [ref, type, saveToExternal](Dispatchable* obj)
     {
-        if(ref.get() == nullptr && (type == EventType::MPEModConnectionAdded || type == MPEModConnectionRemoved))
+		auto d = static_cast<MPEData*>(obj);
+
+		if (saveToExternal)
+			d->getMainController()->getUserPresetHandler().saveExternalPresetData();
+
+		if(ref.get() == nullptr && (type == EventType::MPEModConnectionAdded || type == MPEModConnectionRemoved))
             return Dispatchable::Status::OK;
-        
-        auto d = static_cast<MPEData*>(obj);
         
         jassert_message_thread;
         
@@ -737,8 +752,16 @@ void MidiControllerAutomationHandler::restoreFromValueTree(const ValueTree &v)
 Identifier MidiControllerAutomationHandler::getUserPresetStateId() const
 { return UserPresetIds::MidiAutomation; }
 
-void MidiControllerAutomationHandler::resetUserPresetState()
-{ clear(sendNotification); }
+void MidiControllerAutomationHandler::resetUserPresetState(const var& initDefaultValues)
+{ 
+	clear(sendNotification); 
+
+	if (initDefaultValues.isArray())
+	{
+		auto vt = ValueTreeConverters::convertVarArrayToFlatValueTree(initDefaultValues, "MidiAutomation", "Controller");
+		restoreFromValueTree(vt);
+	}
+}
 
 MidiControllerAutomationHandler::MPEData::Listener::~Listener()
 {}
@@ -749,7 +772,7 @@ void MidiControllerAutomationHandler::MPEData::Listener::mpeModulatorAmountChang
 Identifier MidiControllerAutomationHandler::MPEData::getUserPresetStateId() const
 { return UserPresetIds::MPEData; }
 
-void MidiControllerAutomationHandler::MPEData::resetUserPresetState()
+void MidiControllerAutomationHandler::MPEData::resetUserPresetState(const var&)
 { reset(); }
 
 bool MidiControllerAutomationHandler::MPEData::isMpeEnabled() const
@@ -1014,6 +1037,14 @@ hise::MidiControllerAutomationHandler::AutomationData MidiControllerAutomationHa
 		return {};
 
 	return createIterator().getDataFromIndex(index);
+}
+
+void MidiControllerAutomationHandler::ExternalSaver::changeListenerCallback(SafeChangeBroadcaster* b)
+{
+	if (parent.matchesStateTarget(UserPresetStateManager::StateTarget::External))
+	{
+		parent.mc->getUserPresetHandler().saveExternalPresetData();
+	}
 }
 
 int MidiControllerAutomationHandler::getIndexForKey(Key key) const

@@ -201,6 +201,7 @@ If you're familiar with `.gitignore`, the mental model here is inverted: a `.git
 | `FileTypes` | `string[]` | all directories | Restrict to specific project subdirectories. Valid values: `Scripts`, `AdditionalSourceCode`, `Samples`, `Images`, `AudioFiles`, `SampleMaps`, `MidiFiles`, `DspNetworks` |
 | `PositiveWildcard` | `string[]` | `["*"]` | Include patterns (files must match at least one). Patterns without `*` match as substrings against the path relative to the project root |
 | `NegativeWildcard` | `string[]` | `[]` | Exclude patterns. Matching files are removed from the included set |
+| `SharedWildcard` | `string[]` | `[]` | Optional safety marker for text files that may be co-owned by compatible packages. It uses the same matching rules as the include and exclude wildcards |
 | `Preprocessors` | `string[]` | `[]` | C++ preprocessor define names. Their values from the source project's `ExtraDefinitions` settings are applied to the target project on install |
 | `InfoText` | `string` | `""` | Markdown text shown to the user after installation |
 | `ClipboardContent` | `string` | `""` | Text copied to the system clipboard after installation |
@@ -222,6 +223,17 @@ If you're familiar with `.gitignore`, the mental model here is inverted: a `.git
   "NegativeWildcard": ["*_test.js", "*_debug*"]
 }
 ```
+
+**Shared text-code example** - include package files and allow compatible packages to share common text helpers:
+
+```json
+{
+  "PositiveWildcard": ["DspNetworks/ThirdParty/Vendor/"],
+  "SharedWildcard": ["DspNetworks/ThirdParty/Vendor/Common/*"]
+}
+```
+
+`SharedWildcard` does not install files globally and does not create dependencies between packages. It only marks included text files as safe to co-own. Binary files matched by `SharedWildcard` are not treated as shared.
 
 **Full example** - restrict to Scripts, filter by path, set preprocessors, show post-install instructions:
 
@@ -362,7 +374,8 @@ Each entry in the `Steps` array has a `Type` field and type-specific data:
 |-------|------|-------------|
 | `Type` | `"File"` | Step type identifier |
 | `Target` | string | Relative path from project root (forward slashes) |
-| `Hash` | int64 | Content hash at install time (text files only, used for modification detection) |
+| `Hash` | string | Content hash at install time (text files only, used for modification detection). Older logs may contain this as an int64 |
+| `Shared` | bool | Present and true only when this text file may be co-owned by compatible packages. Missing means false |
 | `Modified` | string | ISO 8601 timestamp of the file's last modification time at install |
 
 **`Preprocessor`** - C++ preprocessor definitions that were modified:

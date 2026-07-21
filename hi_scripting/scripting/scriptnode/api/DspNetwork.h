@@ -121,6 +121,8 @@ public:
 
 	void autofix(NodeBase* node);
 
+	bool autofixFirstError(String& fixedNodeId, String& beforeError, String& afterError);
+
 	static String getErrorMessage(Error e);
 
 	String getErrorMessage(const NodeBase* n = nullptr) const;
@@ -625,6 +627,10 @@ public:
 	void fillSnexObjects(StringArray& indexList);
 
 	static scriptnode::dll::FactoryBase* createStaticFactory();
+
+#if HISE_INCLUDE_RT_NEURAL
+	static void registerStaticNeuralNetworks(hise::NeuralNetwork::Factory* f);
+#endif
 
 	struct NetworkParameterHandler : public hise::ScriptParameterHandler
 	{

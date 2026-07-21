@@ -108,6 +108,7 @@ namespace UserPresetIds
 	DECLARE_ID(Preset);
 	DECLARE_ID(CustomJSON);
 	DECLARE_ID(AdditionalStates);
+	DECLARE_ID(macro_controls); // uggo...
 }
 
 #undef DECLARE_ID
@@ -116,6 +117,16 @@ class UserPresetStateManager: public RestorableObject
 {
 public:
 
+	enum class StateTarget
+	{
+		None =        0x00,
+		PluginState = 0x01, // Saved in the DAW plugin state
+		UserPreset  = 0x02, // Saved in the user preset
+		Default     = 0x03, // Saved in user preset & DAW plugin state
+		External    = 0x04, // Saved in a single external persistent file
+		numStateTargets
+	};
+
 	using Ptr = WeakReference<UserPresetStateManager>;
 	using List = Array<Ptr>;
 
@@ -123,14 +134,84 @@ public:
 
 	virtual Identifier getUserPresetStateId() const = 0;
 
-	/** Override this and reset the state (this is called when the user preset doesn't contain a matching child. */
-	virtual void resetUserPresetState() = 0;
+	/** Override this and reset the state (this is called when the user preset doesn't contain a matching child. 
+	*	You can optionally use the initDefaultValues that might contain values to be used...
+	*/
+	virtual void resetUserPresetState(const var& initDefaultValues = var()) = 0;
 
 	bool restoreUserPresetState(const ValueTree& root);
 
 	void saveUserPresetState(ValueTree& presetRoot) const;
 
+	bool matchesStateTarget(const String& t) const 
+	{ 
+		static const StringArray availableTargets = {
+			"None",
+			"PluginState",
+			"UserPreset",
+			"Default",
+			"External"
+		};
+
+		auto idx = availableTargets.indexOf(t);
+
+		if (idx != -1)
+			return matchesStateTarget((StateTarget)idx);
+
+		return false;
+	}
+
+	bool matchesStateTarget(StateTarget t) const { return (stateTarget & (int)t) != 0; }
+
+	Result setStateTarget(const var& targets)
+	{
+		static const StringArray availableTargets = {
+			"None",
+			"PluginState",
+			"UserPreset",
+			"Default",
+			"External"
+		};
+
+		if (targets.isString())
+		{
+			auto idx = availableTargets.indexOf(targets.toString());
+
+			if (idx == -1)
+				return Result::fail("Unknown state " + targets.toString() + ". Use: " + availableTargets.joinIntoString(";"));
+
+			stateTarget = idx;
+		}
+
+		else if (targets.isArray())
+		{
+			stateTarget = 0;
+
+			for (const auto& v : *targets.getArray())
+			{
+				auto idx = availableTargets.indexOf(v.toString());
+
+				if (idx == -1)
+				{
+					stateTarget = (int)StateTarget::Default;
+					return Result::fail("Unknown state " + targets.toString() + ". Use: " + availableTargets.joinIntoString(";"));
+				}
+
+				stateTarget |= jmax<int>(0, idx);
+			}
+		}
+		else
+			stateTarget = (int)StateTarget::Default;
+
+		if (matchesStateTarget(StateTarget::Default) && matchesStateTarget(StateTarget::External))
+			return Result::fail("Can't store " + getUserPresetStateId() + " to both external file & preset data");
+
+		return Result::ok();
+	}
+
 private:
+
+	int stateTarget = (int)StateTarget::Default;
 
 	JUCE_DECLARE_WEAK_REFERENCEABLE(UserPresetStateManager);
 };
@@ -592,7 +673,7 @@ struct ModuleStateManager : public UserPresetStateManager,
 
 	StoredModuleData::List modules;
 
-	void resetUserPresetState() override;;
+	void resetUserPresetState(const var& initValues) override;;
 
 	void restoreFromValueTree(const ValueTree &previouslyExportedState) override;
 };
