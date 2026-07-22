@@ -2465,7 +2465,9 @@ private:
 			return parseSuffixes(new RegisterName(location, parseIdentifier(), &vr, registerIndex, getRegisterData(registerIndex, ns), type));
 		}
 
-		return parseFactor(nullptr);
+		// Not found in this namespace, so it's undefined.
+		match(TokenTypes::identifier);
+		return parseSuffixes(new Expression(location));
 	}
 
 	Expression* parseFactor(JavascriptNamespace* ns=nullptr)
