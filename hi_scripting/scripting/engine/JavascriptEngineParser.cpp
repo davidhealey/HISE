@@ -1171,11 +1171,17 @@ private:
 	{
 
 #if USE_BACKEND
-		if (isDiagnosticMode() && getCurrentNamespace() != hiseSpecialData)
+		if (isDiagnosticMode())
 		{
-			String msg;
-			msg << "var declarations within a namespace will leak to the global namespace.";
-			recordDiagnostic(location, msg, { "reg", "const" }, SV::Warning, CS::Language);
+            auto inNamespace = getCurrentNamespace() != hiseSpecialData;
+            auto inDefaultFunctionBody = currentFunctionObject != nullptr;
+            
+            if(inNamespace && !inDefaultFunctionBody)
+            {
+                String msg;
+                msg << "var declarations within a namespace will leak to the global namespace.";
+                recordDiagnostic(location, msg, { "reg", "const" }, SV::Warning, CS::Language);
+            }
 		}
 #endif
 
@@ -1693,12 +1699,15 @@ private:
 
 	Expression* parseInlineFunctionCall(InlineFunction::Object *obj)
 	{
-		ScopedPointer<InlineFunction::FunctionCall> f = new InlineFunction::FunctionCall(location, obj);
+        ScopedPointer<InlineFunction::FunctionCall> f = new InlineFunction::FunctionCall(location, obj);
 
 		parseIdentifier();
 
 		if (currentType == TokenTypes::openParen)
 		{
+            if(currentInlineFunction == obj)
+                location.throwError("Recursive function call!");
+            
 			match(TokenTypes::openParen);
 
 			while (currentType != TokenTypes::closeParen)
