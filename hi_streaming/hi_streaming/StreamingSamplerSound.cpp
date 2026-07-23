@@ -1152,6 +1152,8 @@ void StreamingSamplerSound::FileReader::wakeSound()
 
 void StreamingSamplerSound::FileReader::openFileHandles(NotificationType notifyPool)
 {
+	ScopedWriteLock sl(fileAccessLock);
+
 	if (fileHandlesOpen)
 	{
 		jassert(memoryReader != nullptr || normalReader != nullptr);
@@ -1160,8 +1162,6 @@ void StreamingSamplerSound::FileReader::openFileHandles(NotificationType notifyP
 	else
 	{
 		jassert(memoryReader == nullptr || normalReader == nullptr);
-
-		ScopedWriteLock sl(fileAccessLock);
 
 		fileHandlesOpen = true;
 
