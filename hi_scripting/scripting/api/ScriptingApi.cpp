@@ -6594,6 +6594,9 @@ var ScriptingApi::Synth::getAllModulators(String regex)
 
 	while (auto m = iter.getNextProcessor())
 	{
+		if (m->getId().isEmpty())
+			continue;
+
 		if (RegexFunctions::matchesWildcard(regex, m->getId()))
 		{
 			auto sm = new ScriptingObjects::ScriptingModulator(getScriptProcessor(), m);
