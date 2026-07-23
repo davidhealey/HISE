@@ -3060,7 +3060,19 @@ juce::Result ExpansionEncodingWindow::performChecks()
 	exportMode = (ExportMode)getComboBoxComponent("rhapsody")->getSelectedItemIndex();
 
 	if (exportMode == ExportMode::HXI)
+	{
+		auto uuid = GET_HISE_SETTING(getMainController()->getMainSynthChain(), HiseSettings::ExpansionSettings::UUID).toString();
+
+		if (uuid.isEmpty())
+			return Result::fail("The expansion needs a UUID set in the project settings");
+
+		auto icon = getMainController()->getCurrentFileHandler().getSubDirectory(FileHandlerBase::Images).getChildFile("Icon.png");
+
+		if (!icon.existsAsFile())
+			return Result::fail("The project needs an Icon.png image");
+
 		return Result::ok();
+	}
 
 	if (getMainController()->getExpansionHandler().getEncryptionKey({}) != "1234")
 	{
