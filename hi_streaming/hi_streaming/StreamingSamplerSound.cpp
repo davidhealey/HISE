@@ -171,6 +171,8 @@ void StreamingSamplerSound::setPreloadSize(int newPreloadSize, bool forceReload)
 		entireSampleLoaded = false;
 		preloadBuffer = hlac::HiseSampleBuffer(!fileReader.isMonolithic(), fileReader.isStereo() ? 2 : 1, 0);
 
+		fileReader.closeFileHandles();
+
 		return;
 	}
 
@@ -224,6 +226,7 @@ void StreamingSamplerSound::setPreloadSize(int newPreloadSize, bool forceReload)
 
 	if (preloadBuffer.getNumSamples() == 0)
 	{
+		fileReader.closeFileHandles();
 		return;
 	}
 
@@ -308,6 +311,8 @@ void StreamingSamplerSound::setPreloadSize(int newPreloadSize, bool forceReload)
 #endif
 
 	applyCrossfadeToInternalBuffers();
+
+	fileReader.closeFileHandles();
 }
 
 
