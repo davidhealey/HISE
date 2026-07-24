@@ -488,10 +488,8 @@ void PresetHandler::saveProcessorAsPreset(Processor *p, const String &directoryP
 
 	if(!outputFile.existsAsFile() || showYesNoWindow("Overwrite File " + fileName, "Do you want to overwrite the Preset?"))
 	{
-		debugToConsole(p, "Save " + p->getId() + " to " + directory.getFullPathName());
-
 		ValueTree v = p->exportAsValueTree();
-        
+
         v.setProperty("BuildVersion", BUILD_SUB_VERSION, nullptr);
 
 #if USE_BACKEND
@@ -518,7 +516,22 @@ void PresetHandler::saveProcessorAsPreset(Processor *p, const String &directoryP
 
 		FileOutputStream fos(outputFile);
 
+		if (fos.failedToOpen())
+		{
+			debugError(p, "Failed to save preset to " + fileName + " (could not open file for writing, check disk space and open file handles)");
+			return;
+		}
+
 		v.writeToStream(fos);
+		fos.flush();
+
+		if (fos.getStatus().failed() || !outputFile.existsAsFile())
+		{
+			debugError(p, "Failed to save preset to " + fileName + " (write failed, check disk space and open file handles)");
+			return;
+		}
+
+		debugToConsole(p, "Save " + p->getId() + " to " + directory.getFullPathName());
 	}
 }
 
