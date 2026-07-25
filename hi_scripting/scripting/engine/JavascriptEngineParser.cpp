@@ -2474,6 +2474,12 @@ private:
 			return parseSuffixes(new RegisterName(location, parseIdentifier(), &vr, registerIndex, getRegisterData(registerIndex, ns), type));
 		}
 
+#if 0
+        // Breaking change: return undefined instead of ignoring the namespace qualifier...
+        match(TokenTypes::identifier);
+        return parseSuffixes(new Expression(location));
+#endif
+
 		return parseFactor(nullptr);
 	}
 
