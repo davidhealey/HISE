@@ -383,7 +383,7 @@ public:
     //==============================================================================
     struct RouteInfo
     {
-        Method method = GET;            // HTTP method
+        Method method = Method::GET;            // HTTP method
         String path;                    // Just the path (e.g., "/api/recompile")
         StringPairArray defaultParams;  // Default parameter values from route URL
         RouteHandler handler;
@@ -438,10 +438,10 @@ public:
 
             switch (method)
             {
-                case GET:    server->Get(pathStr, wrappedHandler); break;
-                case POST:   server->Post(pathStr, wrappedHandler); break;
-                case PUT:    server->Put(pathStr, wrappedHandler); break;
-                case DELETE: server->Delete(pathStr, wrappedHandler); break;
+                case Method::GET:    server->Get(pathStr, wrappedHandler); break;
+                case Method::POST:   server->Post(pathStr, wrappedHandler); break;
+                case Method::PUT:    server->Put(pathStr, wrappedHandler); break;
+                case Method::DELETE: server->Delete(pathStr, wrappedHandler); break;
             }
         }
 
@@ -524,10 +524,10 @@ private:
         String methodStr;
         switch (routeInfo.method)
         {
-            case GET:    methodStr = "GET"; break;
-            case POST:   methodStr = "POST"; break;
-            case PUT:    methodStr = "PUT"; break;
-            case DELETE: methodStr = "DELETE"; break;
+            case Method::GET:    methodStr = "GET"; break;
+            case Method::POST:   methodStr = "POST"; break;
+            case Method::PUT:    methodStr = "PUT"; break;
+            case Method::DELETE: methodStr = "DELETE"; break;
         }
         
         listeners.call(&RestServer::Listener::requestReceived, methodStr, String(req.path));
