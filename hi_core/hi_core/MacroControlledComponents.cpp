@@ -154,7 +154,7 @@ void MacroControlledObject::enableMidiLearnWithPopup()
 
 	auto ccName = handler->getCCName();
 
-	if (!isOnHiseModuleUI && getMacroIndex() == -1)
+	if (!isOnHiseModuleUI && !midiController.isValid())
 	{
 		auto addNumbersToMenu = [&](PopupMenu& mToUse)
 		{
