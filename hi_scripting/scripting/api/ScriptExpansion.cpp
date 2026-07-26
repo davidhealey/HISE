@@ -38,6 +38,7 @@ struct ScriptUserPresetHandler::Wrapper
 	API_VOID_METHOD_WRAPPER_1(ScriptUserPresetHandler, setPreCallback);
 	API_VOID_METHOD_WRAPPER_1(ScriptUserPresetHandler, setPostCallback);
 	API_VOID_METHOD_WRAPPER_1(ScriptUserPresetHandler, setPostSaveCallback);
+	API_VOID_METHOD_WRAPPER_1(ScriptUserPresetHandler, setPatchLoadedCallback);
 	API_VOID_METHOD_WRAPPER_2(ScriptUserPresetHandler, setEnableUserPresetPreprocessing);
 	API_VOID_METHOD_WRAPPER_1(ScriptUserPresetHandler, setCustomAutomation);
 	API_VOID_METHOD_WRAPPER_3(ScriptUserPresetHandler, setUseCustomUserPresetModel);
@@ -71,11 +72,13 @@ ScriptUserPresetHandler::ScriptUserPresetHandler(ProcessorWithScriptingContent* 
 	preCallback(pwsc, nullptr, var(), 1),
 	postCallback(pwsc, nullptr, var(), 1),
 	postSaveCallback(pwsc, nullptr, var(), 1),
+	patchLoadedCallback(pwsc, nullptr, var(), 0),
 	customLoadCallback(pwsc, nullptr, var(), 1),
 	customSaveCallback(pwsc, nullptr, var(), 1),
 	parameterGestureCallback(pwsc, nullptr, var(), 2)
 {
 	getMainController()->getUserPresetHandler().addListener(this);
+	getMainController()->getLockFreeDispatcher().addPresetLoadListener(this);
 
 	ADD_API_METHOD_1(isOldVersion);
     ADD_API_METHOD_0(isInternalPresetLoad);
@@ -84,6 +87,8 @@ ScriptUserPresetHandler::ScriptUserPresetHandler(ProcessorWithScriptingContent* 
 	ADD_CALLBACK_DIAGNOSTIC(postCallback, setPostCallback, 0);
 	ADD_TYPED_API_METHOD_1(setPostSaveCallback, VarTypeChecker::Function);
 	ADD_CALLBACK_DIAGNOSTIC(postSaveCallback, setPostSaveCallback, 0);
+	ADD_TYPED_API_METHOD_1(setPatchLoadedCallback, VarTypeChecker::Function);
+	ADD_CALLBACK_DIAGNOSTIC(patchLoadedCallback, setPatchLoadedCallback, 0);
 	ADD_TYPED_API_METHOD_1(setPreCallback, VarTypeChecker::Function);
 	ADD_CALLBACK_DIAGNOSTIC(preCallback, setPreCallback, 0);
 	ADD_API_METHOD_2(setEnableUserPresetPreprocessing);
@@ -116,6 +121,7 @@ ScriptUserPresetHandler::~ScriptUserPresetHandler()
 {
 	clearAttachedCallbacks();
 	getMainController()->getUserPresetHandler().removeListener(this);
+	getMainController()->getLockFreeDispatcher().removePresetLoadListener(this);
 }
 
 Identifier ScriptUserPresetHandler::getObjectName() const
@@ -226,6 +232,14 @@ void ScriptUserPresetHandler::setPostSaveCallback(var presetPostSaveCallback)
 	postSaveCallback.incRefCount();
 	postSaveCallback.addAsSource(this, "postCallback");
 	postSaveCallback.setThisObject(this);
+}
+
+void ScriptUserPresetHandler::setPatchLoadedCallback(var patchLoadedCallbackFunction)
+{
+	patchLoadedCallback = WeakCallbackHolder(getScriptProcessor(), this, patchLoadedCallbackFunction, 0);
+	patchLoadedCallback.incRefCount();
+	patchLoadedCallback.addAsSource(this, "patchLoadedCallback");
+	patchLoadedCallback.setThisObject(this);
 }
 
 void ScriptUserPresetHandler::setEnableUserPresetPreprocessing(bool processBeforeLoading, bool shouldUnpackComplexData)
@@ -1121,6 +1135,12 @@ void ScriptUserPresetHandler::presetChanged(const File& newPreset)
 
 		postCallback.call(&f, 1);
 	}
+}
+
+void ScriptUserPresetHandler::newHisePresetLoaded()
+{
+	if (patchLoadedCallback)
+		patchLoadedCallback.call(nullptr, 0);
 }
 
 

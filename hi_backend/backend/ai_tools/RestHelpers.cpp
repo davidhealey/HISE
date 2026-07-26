@@ -240,7 +240,7 @@ JavascriptProcessor* RestHelpers::getScriptProcessor(MainController* mc, RestSer
 {
 	String moduleId;
 	
-	if (req->getRequest().method == RestServer::POST)
+	if (req->getRequest().method == RestServer::Method::Post)
 	{
 		// For POST requests, read moduleId from JSON body
 		auto body = req->getRequest().getJsonBody();
@@ -1168,7 +1168,7 @@ RestServer::Response RestHelpers::handleListMethods(MainController* mc, RestServ
 	for (const auto& route : metadata)
 	{
 		String pathKey = "/" + route.path;
-		String methodKey = route.method == RestServer::GET ? "get" : "post";
+		String methodKey = route.method == RestServer::Method::Get ? "get" : "post";
 
 		DynamicObject::Ptr operation = new DynamicObject();
 

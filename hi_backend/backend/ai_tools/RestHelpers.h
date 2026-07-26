@@ -295,7 +295,7 @@ struct RestHelpers
     {
         ApiRoute id = ApiRoute::numRoutes;
         String path;              ///< e.g., "api/status" (without leading /)
-        RestServer::Method method = RestServer::GET;
+        RestServer::Method method = RestServer::Method::Get;
         String category;          ///< "status", "scripting", "ui"
         String summary;           ///< Short one-sentence summary (OpenAPI summary)
         String description;       ///< Detailed description with behavioral notes (OpenAPI description)

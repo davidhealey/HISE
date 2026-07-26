@@ -447,13 +447,13 @@ public:
     static constexpr int TestPort = 1901;
     
     //==============================================================================
-    enum Method { GET, POST, PUT, DELETE };
+    enum class Method { Get, Post, Put, Delete };
 
     //==============================================================================
     /** Represents an incoming HTTP request. */
     struct Request
     {
-        Method method = GET;            //< HTTP method (GET, POST, etc.)
+        Method method = Method::Get;            //< HTTP method (GET, POST, etc.)
         URL url;                        //< Full URL with path, query params, and POST data
         StringPairArray headers;        //< HTTP headers
 
@@ -726,7 +726,7 @@ public:
         Use this with getChildURL() and withParameter() to define routes.
         
         @code
-        server.addRoute(RestServer::GET, 
+        server.addRoute(RestServer::Method::Get, 
             server.getBaseURL()
                 .getChildURL("api/recompile")
                 .withParameter("moduleId", ""),
