@@ -712,7 +712,9 @@ void HiSlider::sliderValueChanged(Slider *s)
 	{
 		if (getSliderStyle() == Slider::TwoValueHorizontal)
 		{
-			//setMinAndMaxValues(minValue, maxValue, dontSendNotification);
+			// Range sliders have no single Processor attribute to push here; the
+			// two values are synced back to the ScriptSlider by ScriptCreatedComponentWrappers::SliderWrapper,
+			// which is also registered as a listener on this component.
 		}
 		else
 		{
