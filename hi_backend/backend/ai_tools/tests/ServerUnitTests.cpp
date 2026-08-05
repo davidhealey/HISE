@@ -2923,7 +2923,7 @@ private:
             if (route.path == "api/testing/e2e")
             {
                 found = true;
-                expect(route.method == RestServer::POST, "testing/e2e should be POST");
+                expect(route.method == RestServer::Method::Post, "testing/e2e should be POST");
                 break;
             }
         }
@@ -3694,7 +3694,7 @@ private:
             if (route.path == "api/shutdown")
             {
                 found = true;
-                expect(route.method == RestServer::POST, "shutdown should be POST");
+                expect(route.method == RestServer::Method::Post, "shutdown should be POST");
                 expect(route.category == "status", "shutdown should be in status category");
                 break;
             }
