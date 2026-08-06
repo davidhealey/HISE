@@ -2765,7 +2765,7 @@ Array<Identifier> ScriptingObjects::ScriptedLookAndFeel::getAllFunctionNames()
 		"drawModulationDragBackground",
 		"drawModulationDragger",
 		"drawFlexAhdsrBackground",
-		"drawFlexAhdsrBallPosition",
+		"drawFlexAhdsrBall",
 		"drawFlexAhdsrCurvePoint",
 		"drawFlexAhdsrDragPoint",
 		"drawFlexAhdsrFullPath",
@@ -6394,10 +6394,10 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawFlexAhdsrPosition(Graphics&
 	flex_ahdsr_base::FlexAhdsrGraph::LookAndFeelMethods::drawFlexAhdsrPosition(g_, graph, s, pointOnPath);
 }
 
-void ScriptingObjects::ScriptedLookAndFeel::Laf::drawFlexAhdsrBallPosition(Graphics& g_,
+void ScriptingObjects::ScriptedLookAndFeel::Laf::drawFlexAhdsrBall(Graphics& g_,
 	flex_ahdsr_base::FlexAhdsrGraph& graph, flex_ahdsr_base::State s, Point<float> pointOnPath)
 {
-	if (functionDefined("drawFlexAhdsrBallPosition"))
+	if (functionDefined("drawFlexAhdsrBall"))
     {
         auto obj = new DynamicObject();
 
@@ -6412,11 +6412,11 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawFlexAhdsrBallPosition(Graph
 		obj->setProperty("state", (int)s);
 		obj->setProperty("position", ApiHelpers::getVarFromPoint(pointOnPath));
 
-        if (get()->callWithGraphics(g_, "drawFlexAhdsrBallPosition", var(obj), &graph))
+        if (get()->callWithGraphics(g_, "drawFlexAhdsrBall", var(obj), &graph))
             return;
     }
 
-	flex_ahdsr_base::FlexAhdsrGraph::LookAndFeelMethods::drawFlexAhdsrBallPosition(g_, graph, s, pointOnPath);
+	flex_ahdsr_base::FlexAhdsrGraph::LookAndFeelMethods::drawFlexAhdsrBall(g_, graph, s, pointOnPath);
 }
 
 void ScriptingObjects::ScriptedLookAndFeel::Laf::drawFlexAhdsrSegment(Graphics& g_,

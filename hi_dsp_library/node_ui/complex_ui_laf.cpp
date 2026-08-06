@@ -570,7 +570,7 @@ void complex_ui_laf::drawFlexAhdsrPosition(Graphics& g, flex_ahdsr_base::FlexAhd
 	g.strokePath(graph.fullPath, PathStrokeType(3.0f));
 }
 
-void complex_ui_laf::drawFlexAhdsrBallPosition(Graphics& g, flex_ahdsr_base::FlexAhdsrGraph& graph,
+void complex_ui_laf::drawFlexAhdsrBall(Graphics& g, flex_ahdsr_base::FlexAhdsrGraph& graph,
 	flex_ahdsr_base::State s, Point<float> pointOnPath)
 {
 	if(s == flex_ahdsr_base::State::SUSTAIN || s == flex_ahdsr_base::State::IDLE)
