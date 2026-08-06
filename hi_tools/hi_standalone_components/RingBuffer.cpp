@@ -842,33 +842,31 @@ void flex_ahdsr_base::FlexAhdsrGraph::paint(Graphics& g)
 			s++;
 		}
 
-		if(isPositiveAndBelow((int)currentPlayState, boxes.size()))
+		Point<float> positionOnPath;
+		auto hasPositionOnPath = isPositiveAndBelow((int)currentPlayState, boxes.size()) && !boxes[(int)currentPlayState].isEmpty();
+
+		if(hasPositionOnPath)
 		{
 			auto b = boxes[(int)currentPlayState];
 
-			if(!b.isEmpty())
+			if(currentPlayState == State::SUSTAIN)
 			{
-				Point<float> pos;
-
-				if(currentPlayState == State::SUSTAIN)
-				{
-					pos = sustainPoint;
-				}
-				else
-				{
-					auto xPos = b.getX() + positionWithinState * b.getWidth();
-					auto yPos = Helpers::getYAt(segments[(int)currentPlayState], xPos);
-					pos = { xPos, yPos };
-				}
-				
-				laf->drawFlexAhdsrPosition(g, *this, currentPlayState, pos);
-
-				if(showBall)
-					laf->drawFlexAhdsrBall(g, *this, currentPlayState, pos);
+				positionOnPath = sustainPoint;
 			}
+			else
+			{
+				auto xPos = b.getX() + positionWithinState * b.getWidth();
+				auto yPos = Helpers::getYAt(segments[(int)currentPlayState], xPos);
+				positionOnPath = { xPos, yPos };
+			}
+
+			laf->drawFlexAhdsrPosition(g, *this, currentPlayState, positionOnPath);
 		}
 
 		laf->drawFlexAhdsrFullPath(g, *this);
+
+		if(hasPositionOnPath && showBall)
+			laf->drawFlexAhdsrBall(g, *this, currentPlayState, positionOnPath);
 
 		s = 0;
 
