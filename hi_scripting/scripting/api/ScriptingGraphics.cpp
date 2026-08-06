@@ -6365,6 +6365,31 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawFlexAhdsrPosition(Graphics&
 	flex_ahdsr_base::FlexAhdsrGraph::LookAndFeelMethods::drawFlexAhdsrPosition(g_, graph, s, pointOnPath);
 }
 
+void ScriptingObjects::ScriptedLookAndFeel::Laf::drawFlexAhdsrBallPosition(Graphics& g_,
+	flex_ahdsr_base::FlexAhdsrGraph& graph, flex_ahdsr_base::State s, Point<float> pointOnPath)
+{
+	if (functionDefined("drawFlexAhdsrBallPosition"))
+    {
+        auto obj = new DynamicObject();
+
+		writeId(obj, &graph);
+        obj->setProperty("area", ApiHelpers::getVarRectangle(useRectangleClass, graph.getLocalBounds().toFloat()));
+
+		setColourOrBlack(obj, "bgColour", graph, RingBufferComponentBase::ColourId::bgColour);
+		setColourOrBlack(obj, "itemColour", graph, RingBufferComponentBase::ColourId::fillColour);
+		setColourOrBlack(obj, "itemColour2", graph, RingBufferComponentBase::ColourId::lineColour);
+		setColourOrBlack(obj, "textColour", graph, HiseColourScheme::ColourIds::ComponentTextColourId);
+
+		obj->setProperty("state", (int)s);
+		obj->setProperty("position", ApiHelpers::getVarFromPoint(pointOnPath));
+
+        if (get()->callWithGraphics(g_, "drawFlexAhdsrBallPosition", var(obj), &graph))
+            return;
+    }
+
+	flex_ahdsr_base::FlexAhdsrGraph::LookAndFeelMethods::drawFlexAhdsrBallPosition(g_, graph, s, pointOnPath);
+}
+
 void ScriptingObjects::ScriptedLookAndFeel::Laf::drawFlexAhdsrSegment(Graphics& g_,
 	flex_ahdsr_base::FlexAhdsrGraph& graph, flex_ahdsr_base::State s, const Path& segment, bool hover, bool active)
 {
