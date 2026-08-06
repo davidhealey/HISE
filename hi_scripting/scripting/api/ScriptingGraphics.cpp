@@ -2728,7 +2728,9 @@ Array<Identifier> ScriptingObjects::ScriptedLookAndFeel::getAllFunctionNames()
 		"drawModulationDragBackground",
 		"drawModulationDragger",
 		"drawFlexAhdsrBackground",
+		"drawFlexAhdsrBallPosition",
 		"drawFlexAhdsrCurvePoint",
+		"drawFlexAhdsrDragPoint",
 		"drawFlexAhdsrFullPath",
 		"drawFlexAhdsrPosition",
 		"drawFlexAhdsrSegment",
@@ -5903,6 +5905,33 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawFlexAhdsrCurvePoint(Graphic
     }
 
 	flex_ahdsr_base::FlexAhdsrGraph::LookAndFeelMethods::drawFlexAhdsrCurvePoint(g_, graph, s, curvePoint, hover, down);
+}
+
+void ScriptingObjects::ScriptedLookAndFeel::Laf::drawFlexAhdsrDragPoint(Graphics& g_,
+	flex_ahdsr_base::FlexAhdsrGraph& graph, flex_ahdsr_base::State s, Point<float> dragPoint, bool hover, bool down)
+{
+	if (functionDefined("drawFlexAhdsrDragPoint"))
+    {
+        auto obj = new DynamicObject();
+
+		writeId(obj, &graph);
+        obj->setProperty("area", ApiHelpers::getVarRectangle(useRectangleClass, graph.getLocalBounds().toFloat()));
+
+		setColourOrBlack(obj, "bgColour", graph, RingBufferComponentBase::ColourId::bgColour);
+		setColourOrBlack(obj, "itemColour", graph, RingBufferComponentBase::ColourId::fillColour);
+		setColourOrBlack(obj, "itemColour2", graph, RingBufferComponentBase::ColourId::lineColour);
+		setColourOrBlack(obj, "textColour", graph, HiseColourScheme::ColourIds::ComponentTextColourId);
+
+		obj->setProperty("state", (int)s);
+		obj->setProperty("dragPoint", ApiHelpers::getVarFromPoint(dragPoint));
+		obj->setProperty("hover", hover);
+		obj->setProperty("down", down);
+
+        if (get()->callWithGraphics(g_, "drawFlexAhdsrDragPoint", var(obj), &graph))
+            return;
+    }
+
+	flex_ahdsr_base::FlexAhdsrGraph::LookAndFeelMethods::drawFlexAhdsrDragPoint(g_, graph, s, dragPoint, hover, down);
 }
 
 void ScriptingObjects::ScriptedLookAndFeel::Laf::drawFlexAhdsrFullPath(Graphics& g_,
