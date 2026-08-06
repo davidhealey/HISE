@@ -294,6 +294,7 @@ struct RingBufferComponentBase : public ComplexDataUIBase::EditorBase,
 		bgColour = 12,
 		fillColour,
 		lineColour,
+		outlineColour,
 		numColourIds
 	};
 
@@ -511,6 +512,7 @@ struct flex_ahdsr_base: public SimpleRingBuffer::WriterBase
 			setColour(RingBufferComponentBase::ColourId::bgColour, Colours::black.withAlpha(0.6f));
 			setColour(RingBufferComponentBase::ColourId::fillColour, Colours::white.withAlpha(0.2f));
 			setColour(RingBufferComponentBase::ColourId::lineColour, Colours::white);
+			setColour(RingBufferComponentBase::ColourId::outlineColour, Colours::black.withAlpha(0.3f));
 			setColour(HiseColourScheme::ColourIds::ComponentTextColourId, Colours::white);
 
 			setSpecialLookAndFeel(new DefaultLookAndFeel(), true);
