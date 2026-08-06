@@ -1134,12 +1134,25 @@ template <int NV, typename ParameterClass, typename DragHandler=flex_ahdsr_base:
 
 	template <typename T> void processFrame(T& data)
 	{
+		auto& s = state.get();
+
 		auto wasActive = isActive();
 		bool unused;
-		data[0] = state.get().calculateNewValue(unused);
+		data[0] = s.calculateNewValue(unused);
 
 		this->postProcess(*this, wasActive, 1.0f);
 
+		if(sendBallUpdate)
+		{
+			lastStartedVoiceIndex = state.getVoiceIndexForData(s);
+			auto modDisplay = (float)(int)s.s;
+
+			if(s.thisTime != 0.0)
+				modDisplay += s.counter / s.thisTime;
+
+			if(rb != nullptr)
+				rb->sendDisplayIndexMessage(modDisplay);
+		}
 	}
 
 	SimpleRingBuffer::Ptr rb;
