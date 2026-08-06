@@ -799,6 +799,17 @@ void flex_ahdsr_base::FlexAhdsrGraph::LookAndFeelMethods::drawFlexAhdsrPosition(
 	g.fillRect(0.0f, (float)Margin, (float)pointOnPath.getX(), (float)graph.getHeight() - 2.0f * (float)Margin);
 }
 
+void flex_ahdsr_base::FlexAhdsrGraph::LookAndFeelMethods::drawFlexAhdsrBallPosition(Graphics& g, FlexAhdsrGraph& graph,
+	State s, Point<float> pointOnPath)
+{
+	if(s == State::SUSTAIN || s == State::IDLE)
+		return;
+
+	auto circle = Rectangle<float>(pointOnPath, pointOnPath).withSizeKeepingCentre(6.0f, 6.0f);
+	g.setColour(graph.findColour(RingBufferComponentBase::lineColour).withAlpha(1.0f));
+	g.fillRoundedRectangle(circle, 2.0f);
+}
+
 void flex_ahdsr_base::FlexAhdsrGraph::LookAndFeelMethods::drawFlexAhdsrText(Graphics& g, FlexAhdsrGraph& graph,
 	const String& text)
 {
@@ -851,6 +862,9 @@ void flex_ahdsr_base::FlexAhdsrGraph::paint(Graphics& g)
 				}
 				
 				laf->drawFlexAhdsrPosition(g, *this, currentPlayState, pos);
+
+				if(showBall)
+					laf->drawFlexAhdsrBallPosition(g, *this, currentPlayState, pos);
 			}
 		}
 

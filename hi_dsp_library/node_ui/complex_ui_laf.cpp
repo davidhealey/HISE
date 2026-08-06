@@ -570,6 +570,22 @@ void complex_ui_laf::drawFlexAhdsrPosition(Graphics& g, flex_ahdsr_base::FlexAhd
 	g.strokePath(graph.fullPath, PathStrokeType(3.0f));
 }
 
+void complex_ui_laf::drawFlexAhdsrBallPosition(Graphics& g, flex_ahdsr_base::FlexAhdsrGraph& graph,
+	flex_ahdsr_base::State s, Point<float> pointOnPath)
+{
+	if(s == flex_ahdsr_base::State::SUSTAIN || s == flex_ahdsr_base::State::IDLE)
+		return;
+
+	LODManager::LODGraphics lg(g, graph);
+
+	if (lg.drawFullDetails())
+	{
+		g.setColour(getNodeColour(&graph).withAlpha(1.0f));
+		Rectangle<float> a(pointOnPath, pointOnPath);
+		g.fillEllipse(a.withSizeKeepingCentre(6.0f, 6.0f));
+	}
+}
+
 void complex_ui_laf::drawFlexAhdsrSegment(Graphics& g, flex_ahdsr_base::FlexAhdsrGraph& graph,
 	flex_ahdsr_base::State s, const Path& segment, bool hover, bool active)
 {
