@@ -864,6 +864,25 @@ void Chain::Handler::notifyPostEventListeners(Listener::EventType t, Processor* 
 Chain::~Chain()
 {}
 
+String Chain::getDynamicWildcard(const Identifier& classId) const
+{
+	if (auto f = getFactoryType())
+	{
+		if (auto con = f->getConstrainer())
+		{
+			auto wildcards = con->getWildcardFromObject();
+
+			for (auto w : wildcards)
+			{
+				if (w.first == classId)
+					return w.second;
+			}
+		}
+	}
+
+	return "*";
+}
+
 void Chain::Handler::clearAsync(Processor* parentThatShouldBeTakenOffAir)
 {
 	int numToClear = getNumProcessors();

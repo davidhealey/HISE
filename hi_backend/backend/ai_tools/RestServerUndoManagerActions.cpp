@@ -418,7 +418,7 @@ struct add : public ActionBase
 		{
 			return Error(*this)
 				.withError(r.getErrorMessage() + ": " + md.id.toString())
-				.withHint("Constrainer: " + wildcard);
+				.withHint(". Constrainer: " + wildcard);
 		}
 
 		return {};
@@ -434,7 +434,8 @@ struct add : public ActionBase
 		auto parentId = parentProcessor.getType();
 
 		ProcessorMetadataRegistry rd;
-		const ProcessorMetadata* pm = rd.get(parentId);
+
+		auto pm = *rd.get(parentId);
 		const ProcessorMetadata* md = rd.get(typeId);
 
 		if (md == nullptr)
@@ -469,7 +470,7 @@ struct add : public ActionBase
 			if (!e)
 				return e;
 
-			return expectWildcardMatch(*md, pm->fxConstrainerWildcard);
+			return expectWildcardMatch(*md, pm.fxConstrainerWildcard);
 		}
 		else if (md->type == ProcessorMetadataIds::SoundGenerator)
 		{
@@ -477,7 +478,7 @@ struct add : public ActionBase
 			if (!e)
 				return e;
 
-			e = expectWildcardMatch(*md, pm->constrainerWildcard);
+			e = expectWildcardMatch(*md, pm.constrainerWildcard);
 
 			if (!e)
 				return e;
@@ -486,7 +487,7 @@ struct add : public ActionBase
 		{
 			jassert(md->type == ProcessorMetadataIds::Modulator);
 
-			if (pm->type == ProcessorMetadataIds::SoundGenerator)
+			if (pm.type == ProcessorMetadataIds::SoundGenerator)
 			{
 				if(chainIndex == Chains::Direct || chainIndex == Chains::Midi || chainIndex == Chains::FX)
 				{
@@ -501,14 +502,22 @@ struct add : public ActionBase
 
 			bool found = false;
 
-			for (const auto& mod : pm->modulation)
+			for (const auto& mod : pm.modulation)
 			{
 				if (mod.chainIndex == chainIndex)
 				{
 					if (mod.disabled)
 						return Error(*this).withError(mod.id.toString() + " is disabled");
+				
+					auto wc = mod.constrainerWildcard;
+
+					if (wc == "*")
+					{
+						auto mc = dynamic_cast<Chain*>(parentProcessor.get()->getChildProcessor(mod.chainIndex));
+						wc = mc->getDynamicWildcard(ProcessorMetadataIds::Modulator);
+					}
 					
-					e = expectWildcardMatch(*md, mod.constrainerWildcard);
+					e = expectWildcardMatch(*md, wc);
 
 					if (!e)
 						return e;
@@ -2777,6 +2786,42 @@ struct Helpers
 		return {};
 	}
 
+	static void processTemplateNodeIds(ValueTree& tn)
+	{
+		auto rootId = tn[PropertyIds::ID].toString();
+
+		std::map<String, String> changedNames;
+
+		valuetree::Helpers::forEach(tn, [&](ValueTree& cn)
+		{
+			if (cn.getType() == PropertyIds::Node)
+			{
+				if (cn != tn)
+				{
+					auto cid = cn[PropertyIds::ID].toString();
+					auto nid = rootId + "_" + cid;
+					cn.setProperty(PropertyIds::ID, nid, nullptr);
+					changedNames[cid] = nid;
+				}
+			}
+
+			return false;
+		});
+
+		valuetree::Helpers::forEach(tn, [&](ValueTree& cn)
+		{
+			if (cn.getType() == PropertyIds::Connection)
+			{
+				auto oldNodeId = cn[PropertyIds::NodeId].toString();
+				auto newNodeId = changedNames[oldNodeId];
+				jassert(newNodeId.isNotEmpty());
+				cn.setProperty(PropertyIds::NodeId, newNodeId, nullptr);
+			}
+
+			return false;
+		});
+	}
+
 	static String makeUniqueId(const ValueTree& v, String id)
 	{
 		int trailingIndex = id.getTrailingIntValue();
@@ -3170,6 +3215,10 @@ struct add : public ActionBase
 		
 		nodeToAdd.setProperty(PropertyIds::ID, nodeId, nullptr);
 		
+		if (factoryPath.startsWith("template"))
+		{
+			Helpers::processTemplateNodeIds(nodeToAdd);
+		}
 
 		auto pn = Helpers::findValueTree(rn, [&](const ValueTree& c)
 		{

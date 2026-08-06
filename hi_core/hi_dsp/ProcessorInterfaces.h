@@ -912,6 +912,8 @@ public:
 	/** Returns the Factory type this processor is using. */
 	virtual FactoryType *getFactoryType() const = 0;
 
+	String getDynamicWildcard(const Identifier& classId) const;
+
 	// ================================================================================================================
 
 
