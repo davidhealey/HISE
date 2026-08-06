@@ -6271,6 +6271,7 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawFlexAhdsrBackground(Graphic
 		setColourOrBlack(obj, "bgColour", graph, RingBufferComponentBase::ColourId::bgColour);
 		setColourOrBlack(obj, "itemColour", graph, RingBufferComponentBase::ColourId::fillColour);
 		setColourOrBlack(obj, "itemColour2", graph, RingBufferComponentBase::ColourId::lineColour);
+		setColourOrBlack(obj, "itemColour3", graph, RingBufferComponentBase::ColourId::outlineColour);
 		setColourOrBlack(obj, "textColour", graph, HiseColourScheme::ColourIds::ComponentTextColourId);
 		
         if (get()->callWithGraphics(g_, "drawFlexAhdsrBackground", var(obj), &graph))
@@ -6293,6 +6294,7 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawFlexAhdsrCurvePoint(Graphic
 		setColourOrBlack(obj, "bgColour", graph, RingBufferComponentBase::ColourId::bgColour);
 		setColourOrBlack(obj, "itemColour", graph, RingBufferComponentBase::ColourId::fillColour);
 		setColourOrBlack(obj, "itemColour2", graph, RingBufferComponentBase::ColourId::lineColour);
+		setColourOrBlack(obj, "itemColour3", graph, RingBufferComponentBase::ColourId::outlineColour);
 		setColourOrBlack(obj, "textColour", graph, HiseColourScheme::ColourIds::ComponentTextColourId);
 
 		obj->setProperty("state", (int)s);
@@ -6320,6 +6322,7 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawFlexAhdsrDragPoint(Graphics
 		setColourOrBlack(obj, "bgColour", graph, RingBufferComponentBase::ColourId::bgColour);
 		setColourOrBlack(obj, "itemColour", graph, RingBufferComponentBase::ColourId::fillColour);
 		setColourOrBlack(obj, "itemColour2", graph, RingBufferComponentBase::ColourId::lineColour);
+		setColourOrBlack(obj, "itemColour3", graph, RingBufferComponentBase::ColourId::outlineColour);
 		setColourOrBlack(obj, "textColour", graph, HiseColourScheme::ColourIds::ComponentTextColourId);
 
 		obj->setProperty("state", (int)s);
@@ -6348,6 +6351,7 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawFlexAhdsrFullPath(Graphics&
 		setColourOrBlack(obj, "bgColour", graph, RingBufferComponentBase::ColourId::bgColour);
 		setColourOrBlack(obj, "itemColour", graph, RingBufferComponentBase::ColourId::fillColour);
 		setColourOrBlack(obj, "itemColour2", graph, RingBufferComponentBase::ColourId::lineColour);
+		setColourOrBlack(obj, "itemColour3", graph, RingBufferComponentBase::ColourId::outlineColour);
 		setColourOrBlack(obj, "textColour", graph, HiseColourScheme::ColourIds::ComponentTextColourId);
 
 		auto sp = new ScriptingObjects::PathObject(get()->getScriptProcessor());
@@ -6376,6 +6380,7 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawFlexAhdsrPosition(Graphics&
 		setColourOrBlack(obj, "bgColour", graph, RingBufferComponentBase::ColourId::bgColour);
 		setColourOrBlack(obj, "itemColour", graph, RingBufferComponentBase::ColourId::fillColour);
 		setColourOrBlack(obj, "itemColour2", graph, RingBufferComponentBase::ColourId::lineColour);
+		setColourOrBlack(obj, "itemColour3", graph, RingBufferComponentBase::ColourId::outlineColour);
 		setColourOrBlack(obj, "textColour", graph, HiseColourScheme::ColourIds::ComponentTextColourId);
 
 		obj->setProperty("state", (int)s);
@@ -6407,6 +6412,7 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawFlexAhdsrBall(Graphics& g_,
 		setColourOrBlack(obj, "bgColour", graph, RingBufferComponentBase::ColourId::bgColour);
 		setColourOrBlack(obj, "itemColour", graph, RingBufferComponentBase::ColourId::fillColour);
 		setColourOrBlack(obj, "itemColour2", graph, RingBufferComponentBase::ColourId::lineColour);
+		setColourOrBlack(obj, "itemColour3", graph, RingBufferComponentBase::ColourId::outlineColour);
 		setColourOrBlack(obj, "textColour", graph, HiseColourScheme::ColourIds::ComponentTextColourId);
 
 		obj->setProperty("state", (int)s);
@@ -6432,6 +6438,7 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawFlexAhdsrSegment(Graphics& 
 		setColourOrBlack(obj, "bgColour", graph, RingBufferComponentBase::ColourId::bgColour);
 		setColourOrBlack(obj, "itemColour", graph, RingBufferComponentBase::ColourId::fillColour);
 		setColourOrBlack(obj, "itemColour2", graph, RingBufferComponentBase::ColourId::lineColour);
+		setColourOrBlack(obj, "itemColour3", graph, RingBufferComponentBase::ColourId::outlineColour);
 		setColourOrBlack(obj, "textColour", graph, HiseColourScheme::ColourIds::ComponentTextColourId);
 
 		obj->setProperty("state", (int)s);
@@ -6464,6 +6471,7 @@ void ScriptingObjects::ScriptedLookAndFeel::Laf::drawFlexAhdsrText(Graphics& g_,
 		setColourOrBlack(obj, "bgColour", graph, RingBufferComponentBase::ColourId::bgColour);
 		setColourOrBlack(obj, "itemColour", graph, RingBufferComponentBase::ColourId::fillColour);
 		setColourOrBlack(obj, "itemColour2", graph, RingBufferComponentBase::ColourId::lineColour);
+		setColourOrBlack(obj, "itemColour3", graph, RingBufferComponentBase::ColourId::outlineColour);
 		setColourOrBlack(obj, "textColour", graph, HiseColourScheme::ColourIds::ComponentTextColourId);
 
 		obj->setProperty("text", text);
