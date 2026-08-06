@@ -799,7 +799,7 @@ void flex_ahdsr_base::FlexAhdsrGraph::LookAndFeelMethods::drawFlexAhdsrPosition(
 	g.fillRect(0.0f, (float)Margin, (float)pointOnPath.getX(), (float)graph.getHeight() - 2.0f * (float)Margin);
 }
 
-void flex_ahdsr_base::FlexAhdsrGraph::LookAndFeelMethods::drawFlexAhdsrBallPosition(Graphics& g, FlexAhdsrGraph& graph,
+void flex_ahdsr_base::FlexAhdsrGraph::LookAndFeelMethods::drawFlexAhdsrBall(Graphics& g, FlexAhdsrGraph& graph,
 	State s, Point<float> pointOnPath)
 {
 	if(s == State::SUSTAIN || s == State::IDLE)
@@ -864,7 +864,7 @@ void flex_ahdsr_base::FlexAhdsrGraph::paint(Graphics& g)
 				laf->drawFlexAhdsrPosition(g, *this, currentPlayState, pos);
 
 				if(showBall)
-					laf->drawFlexAhdsrBallPosition(g, *this, currentPlayState, pos);
+					laf->drawFlexAhdsrBall(g, *this, currentPlayState, pos);
 			}
 		}
 
