@@ -613,4 +613,16 @@ void complex_ui_laf::drawFlexAhdsrCurvePoint(Graphics& g, flex_ahdsr_base::FlexA
 	g.fillEllipse(curvePoint.x - margin * 0.5f, curvePoint.y - margin * 0.5f, margin, margin);
 }
 
+void complex_ui_laf::drawFlexAhdsrDragPoint(Graphics& g, flex_ahdsr_base::FlexAhdsrGraph& graph,
+	flex_ahdsr_base::State s, Point<float> dragPoint, bool hover, bool down)
+{
+	g.setColour(getNodeColour(&graph));
+	auto margin = hover ? 10.0f : 7.0f;
+
+	if (down)
+		margin -= 1.0f;
+
+	g.drawRect(dragPoint.x - margin * 0.5f, dragPoint.y - margin * 0.5f, margin, margin);
+}
+
 }
