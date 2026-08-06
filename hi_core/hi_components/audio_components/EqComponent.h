@@ -237,6 +237,8 @@ public:
 	void setUndoManager(UndoManager* newUndoManager);
 	void setEqAttribute(int b, int filterIndex, float value);
 
+	bool allBandsEnabled() const;
+
 protected:
 
 	ProcessorFilterStatistics::Ptr filterStats;
