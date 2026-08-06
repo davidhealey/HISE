@@ -131,6 +131,7 @@ void RestServerUndoManager::Factory::registerAllFunctions()
 	registerCreatorFunctionT<rest_undo::dsp::bypass>(Domain::DSP);
 	registerCreatorFunctionT<rest_undo::dsp::create_parameter>(Domain::DSP);
 	registerCreatorFunctionT<rest_undo::dsp::clear>(Domain::DSP);
+	registerCreatorFunctionT<rest_undo::dsp::set_complex_data>(Domain::DSP);
 }
 
 hise::RestServerUndoManager::Instance* RestServerUndoManager::Instance::getOrCreate(MainController* mc, RestHelpers::ApiRoute endpoint)

@@ -208,6 +208,7 @@ public:
         testDspApplyDisconnect();
         testDspApplyCreateParameter();
         testDspApplyClear();
+        testDspApplySetComplexData();
         testDspApplyValidation();
         
         testDspApplyBatchOps();
@@ -529,6 +530,46 @@ private:
         expect(itemsSchema["x-variants"].isArray(), "should have variant descriptions");
         expect(itemsSchema["properties"].isObject(), "items should have properties");
 
+		auto dspApplyPost = json["paths"]["/api/dsp/apply"]["post"];
+		auto dspItemsSchema = dspApplyPost["requestBody"]["content"]["application/json"]
+			["schema"]["properties"]["operations"]["items"];
+		expect(dspItemsSchema["oneOf"].isArray(), "DSP operations should have variant schemas");
+
+		bool globallyRequiresDataType = false;
+		bool globallyRequiresDataIndex = false;
+		if (auto* required = dspItemsSchema["required"].getArray())
+		{
+			for (const auto& field : *required)
+			{
+				globallyRequiresDataType |= field.toString() == "dataType";
+				globallyRequiresDataIndex |= field.toString() == "dataIndex";
+			}
+		}
+		expect(!globallyRequiresDataType, "dataType should only be required by set_complex_data");
+		expect(!globallyRequiresDataIndex, "dataIndex should only be required by set_complex_data");
+
+		bool foundComplexDataVariant = false;
+		if (auto* variants = dspItemsSchema["oneOf"].getArray())
+		{
+			for (const auto& variant : *variants)
+			{
+				auto opEnum = variant["properties"]["op"]["enum"];
+				if (!opEnum.isArray() || opEnum.size() == 0 || opEnum[0].toString() != "set_complex_data")
+					continue;
+
+				foundComplexDataVariant = true;
+				StringArray requiredFields;
+				if (auto* required = variant["required"].getArray())
+					for (const auto& field : *required)
+						requiredFields.add(field.toString());
+
+				expect(requiredFields.contains("nodeId"), "set_complex_data should require nodeId");
+				expect(requiredFields.contains("dataType"), "set_complex_data should require dataType");
+				expect(requiredFields.contains("dataIndex"), "set_complex_data should require dataIndex");
+			}
+		}
+		expect(foundComplexDataVariant, "OpenAPI should describe set_complex_data requirements");
+
         // Verify builder/apply has response schema with flat diff fields
         auto applyResp = applyPost["responses"]["200"]["content"]["application/json"]["schema"];
         auto respProps = applyResp["properties"];
@@ -568,6 +609,7 @@ private:
         expect(schemas["ScriptTreeNode"].isObject(), "OpenAPI should include ScriptTreeNode schema");
         expect(schemas["BuilderTreeNode"].isObject(), "OpenAPI should include BuilderTreeNode schema");
         expect(schemas["UiTreeNode"].isObject(), "OpenAPI should include UiTreeNode schema");
+		expect(schemas["DspTreeComplexData"].isObject(), "OpenAPI should include DspTreeComplexData schema");
         expect(schemas["DspTreeNode"].isObject(), "OpenAPI should include DspTreeNode schema");
         expect(schemas["ProjectTreeNode"].isObject(), "OpenAPI should include ProjectTreeNode schema");
 
@@ -580,6 +622,9 @@ private:
         expect(schemas["DspTreeNode"]["properties"]["children"]["items"]["$ref"].toString()
                == "#/components/schemas/DspTreeNode",
                "DspTreeNode children should be recursive refs");
+		expect(schemas["DspTreeNode"]["properties"]["complexData"]["items"]["$ref"].toString()
+			== "#/components/schemas/DspTreeComplexData",
+			"DspTreeNode complexData should reference DspTreeComplexData");
         expect(schemas["ProjectTreeNode"]["properties"]["children"]["items"]["$ref"].toString()
                == "#/components/schemas/ProjectTreeNode",
                "ProjectTreeNode children should be recursive refs");
@@ -6390,6 +6435,18 @@ private:
         return var(op.get());
     }
 
+    var makeDspSetComplexDataOp(const String& nodeId, const String& dataType,
+                                int dataIndex, int slotIndex = 0)
+    {
+        DynamicObject::Ptr op = new DynamicObject();
+        op->setProperty(RestApiIds::op, "set_complex_data");
+        op->setProperty(RestApiIds::nodeId, nodeId);
+        op->setProperty(RestApiIds::dataType, dataType);
+        op->setProperty(RestApiIds::slotIndex, slotIndex);
+        op->setProperty(RestApiIds::dataIndex, dataIndex);
+        return var(op.get());
+    }
+
     void expectDspSuccess(const var& json)
     {
         auto ok = (bool)json[RestApiIds::success];
@@ -6637,6 +6694,8 @@ private:
             "Root should be container.chain");
         expect(result[RestApiIds::children].isArray(), "Should have children");
         expectEquals<int>(result[RestApiIds::children].size(), 0, "Should be empty");
+		expect(result[RestApiIds::complexData].isArray(), "Root should have a complexData array");
+		expectEquals<int>(result[RestApiIds::complexData].size(), 0, "Root should have no complex data slots");
 
         // Add a node and re-read
         Array<var> ops;
@@ -6654,6 +6713,7 @@ private:
             "Should be core.oscillator");
         expect(child[RestApiIds::parameters].isArray(), "Should have parameters");
         expect(child[RestApiIds::parameters].size() > 0, "Oscillator should have parameters");
+		expect(child[RestApiIds::complexData].isArray(), "DSP nodes should have a complexData array");
 
         // Check parameter shape (compact mode)
         auto firstParam = child[RestApiIds::parameters][0];
@@ -6670,6 +6730,30 @@ private:
         expect(verboseParam.hasProperty(RestApiIds::max), "Verbose should have max");
         expect(verboseParam.hasProperty(RestApiIds::stepSize), "Verbose should have stepSize");
         expect(verboseParam.hasProperty(RestApiIds::defaultValue), "Verbose should have defaultValue");
+
+		ops.clear();
+		ops.add(makeDspAddOp("core.table", "test_network", "TreeTable"));
+		expectDspSuccess(postDspOps(ops));
+
+		json = getDspTree();
+		auto tableNode = findNodeInTree(json[RestApiIds::result], "TreeTable");
+		auto complexData = tableNode[RestApiIds::complexData];
+		expect(complexData.isArray(), "Table node should have a complexData array");
+		expectEquals<int>(complexData.size(), 1, "Table node should expose one complex data slot");
+		expectEquals(complexData[0][RestApiIds::dataType].toString(), String("Table"),
+			"Table slot should report its data type");
+		expectEquals<int>((int)complexData[0][RestApiIds::slotIndex], 0,
+			"Table slot should report slot index zero");
+		expectEquals<int>((int)complexData[0][RestApiIds::dataIndex], -1,
+			"New table slot should use embedded data");
+
+		ops.clear();
+		ops.add(makeDspSetComplexDataOp("TreeTable", "Table", 0));
+		expectDspSuccess(postDspOps(ops));
+		json = getDspTree();
+		tableNode = findNodeInTree(json[RestApiIds::result], "TreeTable");
+		expectEquals<int>((int)tableNode[RestApiIds::complexData][0][RestApiIds::dataIndex], 0,
+			"DSP tree should report the assigned external data index");
 
         // Error: missing moduleId
         auto errResponse = ctx->httpGet("/api/dsp/tree");
@@ -7446,6 +7530,110 @@ private:
         tree = getDspTree();
         expectEquals<int>(tree[RestApiIds::result][RestApiIds::children].size(), 0,
             "Should have no children after clear");
+    }
+
+    void testDspApplySetComplexData()
+    {
+        /** Setup: Network with a table node
+         *  Scenario: Assign external data, undo/redo, and validate invalid requests
+         *  Expected: The slot index is undoable and invalid fields fail during prevalidation
+         */
+        beginTest("POST /api/dsp/apply - set_complex_data");
+
+        resetDspState();
+
+        Array<var> ops;
+		ops.add(makeDspAddOp("core.table", "test_network", "TableNode"));
+		expectDspSuccess(postDspOps(ops));
+
+		auto getTableIndex = [this]()
+		{
+			auto processor = ProcessorHelpers::getFirstProcessorWithName(
+				ctx->bp->getMainSynthChain(), "DspTestFX");
+			auto holder = dynamic_cast<scriptnode::DspNetwork::Holder*>(processor);
+			if (holder == nullptr)
+				return -999;
+
+			auto network = holder->getActiveOrDebuggedNetwork();
+			if (network == nullptr)
+				return -999;
+
+			auto node = rest_undo::dsp::Helpers::findNode(network->getValueTree(), "TableNode");
+			auto slot = node.getChildWithName(scriptnode::PropertyIds::ComplexData)
+				.getChildWithName(snex::ExternalData::getDataTypeName(snex::ExternalData::DataType::Table, true))
+				.getChild(0);
+			return slot.isValid() ? (int)slot[scriptnode::PropertyIds::Index] : -999;
+		};
+
+		ops.clear();
+		ops.add(makeDspSetComplexDataOp("TableNode", "Table", 0));
+		expectDspSuccess(postDspOps(ops));
+		expectEquals(getTableIndex(), 0, "set_complex_data should update the slot index");
+
+		auto undoJson = ctx->parseJson(ctx->httpPost("/api/undo/back", "{}"));
+		expect((bool)undoJson[RestApiIds::success], "Undo should restore complex data");
+		expectEquals(getTableIndex(), -1, "Undo should restore the embedded data index");
+
+		auto redoJson = ctx->parseJson(ctx->httpPost("/api/undo/forward", "{}"));
+		expect((bool)redoJson[RestApiIds::success], "Redo should reassign complex data");
+		expectEquals(getTableIndex(), 0, "Redo should restore the external data index");
+
+		ops.clear();
+		DynamicObject::Ptr missingNodeId = new DynamicObject();
+        missingNodeId->setProperty(RestApiIds::op, "set_complex_data");
+        missingNodeId->setProperty(RestApiIds::dataType, "Table");
+        missingNodeId->setProperty(RestApiIds::slotIndex, 0);
+        missingNodeId->setProperty(RestApiIds::dataIndex, -1);
+        ops.add(var(missingNodeId.get()));
+        auto json = postDspOps(ops);
+        expect(!(bool)json[RestApiIds::success], "Missing nodeId should fail");
+
+        DynamicObject::Ptr missingDataIndex = new DynamicObject();
+        missingDataIndex->setProperty(RestApiIds::op, "set_complex_data");
+		missingDataIndex->setProperty(RestApiIds::nodeId, "TableNode");
+        missingDataIndex->setProperty(RestApiIds::dataType, "Table");
+        missingDataIndex->setProperty(RestApiIds::slotIndex, 0);
+        ops.clear();
+        ops.add(var(missingDataIndex.get()));
+        json = postDspOps(ops);
+        expect(!(bool)json[RestApiIds::success], "Missing dataIndex should fail");
+		expect(json[RestApiIds::errors][0][RestApiIds::errorMessage].toString().contains("dataIndex"),
+			"Missing dataIndex should report the required field");
+		expect(json[RestApiIds::errors][0][RestApiIds::callstack][1].toString() == "phase: prevalidate",
+			"Missing dataIndex should fail during prevalidation");
+
+		DynamicObject::Ptr invalidDataType = new DynamicObject();
+		invalidDataType->setProperty(RestApiIds::op, "set_complex_data");
+		invalidDataType->setProperty(RestApiIds::nodeId, "ExternalDataNode");
+		invalidDataType->setProperty(RestApiIds::dataType, "Filter");
+		invalidDataType->setProperty(RestApiIds::dataIndex, -1);
+		ops.clear();
+		ops.add(var(invalidDataType.get()));
+		json = postDspOps(ops);
+		expect(!(bool)json[RestApiIds::success], "Internal Filter spelling should fail");
+		expect(json[RestApiIds::errors][0][RestApiIds::errorMessage].toString().contains("dataType"),
+			"Invalid data type should report dataType");
+
+		ops.clear();
+		ops.add(makeDspSetComplexDataOp("ExternalDataNode", "FilterCoefficients", -1));
+		json = postDspOps(ops);
+		expect(!(bool)json[RestApiIds::success], "Missing target node should fail");
+		expect(!json[RestApiIds::errors][0][RestApiIds::errorMessage].toString().contains("dataType"),
+			"FilterCoefficients should pass data type prevalidation");
+
+		ops.clear();
+		ops.add(makeDspSetComplexDataOp("ExternalDataNode", "Table", -2));
+		json = postDspOps(ops);
+		expect(!(bool)json[RestApiIds::success], "dataIndex below -1 should fail");
+		expect(json[RestApiIds::errors][0][RestApiIds::errorMessage].toString().contains("-1 or greater"),
+			"Invalid dataIndex should report its range");
+
+		ops.clear();
+		ops.add(makeDspSetComplexDataOp("ExternalDataNode", "Table", -1, -1));
+		json = postDspOps(ops);
+		expect(!(bool)json[RestApiIds::success], "Negative slotIndex should fail");
+		expect(json[RestApiIds::errors][0][RestApiIds::errorMessage].toString().contains("slotIndex"),
+			"Invalid slotIndex should report its range");
     }
 
     void testDspApplyValidation()

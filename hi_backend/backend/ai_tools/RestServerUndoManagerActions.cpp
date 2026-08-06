@@ -513,8 +513,11 @@ struct add : public ActionBase
 
 					if (wc == "*")
 					{
-						auto mc = dynamic_cast<Chain*>(parentProcessor.get()->getChildProcessor(mod.chainIndex));
-						wc = mc->getDynamicWildcard(ProcessorMetadataIds::Modulator);
+						if (auto pp = ProcessorHelpers::getFirstProcessorWithName(getMainController()->getMainSynthChain(), parentProcessor.getId()))
+						{
+							if(auto mc = dynamic_cast<Chain*>(pp->getChildProcessor(mod.chainIndex)))
+								wc = mc->getDynamicWildcard(ProcessorMetadataIds::Modulator);
+						}
 					}
 					
 					e = expectWildcardMatch(*md, wc);
@@ -3822,6 +3825,178 @@ struct disconnect : public ActionBase
 		if (!Helpers::addConnection(conTree, targetId, parameterName))
 			throw Error().withError("Connection already exists");
 	}
+};
+
+struct set_complex_data : public ActionBase
+{
+	BUILDER_ID(set_complex_data);
+
+	static ExternalData::DataType getDataType(const String& id)
+	{
+		if (id == "Table")             return ExternalData::DataType::Table;
+		if (id == "SliderPack")        return ExternalData::DataType::SliderPack;
+		if (id == "AudioFile")         return ExternalData::DataType::AudioFile;
+		if (id == "FilterCoefficients") return ExternalData::DataType::FilterCoefficients;
+		if (id == "DisplayBuffer")     return ExternalData::DataType::DisplayBuffer;
+
+		return ExternalData::DataType::numDataTypes;
+	}
+
+	static Error prevalidate(MainController*, const var& op)
+	{
+		if (op[RestApiIds::nodeId].toString().isEmpty())
+			return Error().withError("set_complex_data requires 'nodeId'");
+
+		auto dataType = op[RestApiIds::dataType].toString();
+		if (getDataType(dataType) == ExternalData::DataType::numDataTypes)
+			return Error().withError("set_complex_data requires a valid 'dataType'");
+
+		if (!op.hasProperty(RestApiIds::dataIndex))
+			return Error().withError("set_complex_data requires 'dataIndex'");
+
+		auto dataIndex = op[RestApiIds::dataIndex];
+		if (!dataIndex.isInt() && !dataIndex.isInt64())
+			return Error().withError("set_complex_data requires 'dataIndex' to be an integer");
+
+		if ((int)dataIndex < -1)
+			return Error().withError("set_complex_data requires 'dataIndex' to be -1 or greater");
+
+		auto slotIndex = op.getProperty(RestApiIds::slotIndex, 0);
+		if (!slotIndex.isInt() && !slotIndex.isInt64())
+			return Error().withError("set_complex_data requires 'slotIndex' to be an integer");
+
+		if ((int)slotIndex < 0)
+			return Error().withError("set_complex_data requires 'slotIndex' to be zero or greater");
+
+		return {};
+	}
+
+	set_complex_data(MainController* mc, const var& op) :
+	  ActionBase(mc),
+	  moduleId(op[RestApiIds::moduleId].toString()),
+	  nodeId(op[RestApiIds::nodeId].toString()),
+	  slotIndex(op.getProperty(RestApiIds::slotIndex, 0)),
+	  newIndex(op[RestApiIds::dataIndex]),
+	  dt(getDataType(op[RestApiIds::dataType].toString()))
+	{}
+
+	int getRebuildLevel(Domain, bool) const override { return 0; }
+	bool needsKillVoice() const override { return false; }
+
+	void addToDiffList(std::vector<Diff>& diffList, bool) override
+	{
+		Diff d;
+		d.target = nodeId;
+		d.domain = Domain::DSP;
+		d.type = Diff::Type::Modify;
+		diffList.push_back(d);
+	}
+
+	String getHistoryMessage(bool undo) const override
+	{
+		return "Set complex data";
+	}
+
+	String getDescription() const override
+	{
+		return "set complex data";
+	}
+
+	String moduleId;
+	String nodeId;
+	int slotIndex = 0;
+
+	int newIndex;
+	int oldIndex;
+	ExternalData::DataType dt;
+
+	Error validate() override
+	{
+		auto rv = Helpers::getRootTree(this, moduleId);
+
+		if (!rv.isValid())
+			return Helpers::getErrorForModule404(getMainController(), moduleId);
+
+		if (dspValidation != nullptr)
+		{
+			auto n = Helpers::findNode(rv, nodeId);
+
+			if (!n.isValid())
+				return Helpers::getErrorForNode404(rv, nodeId);
+
+			auto id = ExternalData::getDataTypeName(dt, true);
+
+			auto datas = n.getChildWithName(PropertyIds::ComplexData).getChildWithName(id);
+
+			if (!datas.isValid())
+				return Error().withError("Node does not have " + id);
+
+			auto data = datas.getChild(slotIndex);
+
+			if (!data.isValid())
+				return Error().withError("illegal slot index for " + id);
+
+			data.setProperty(PropertyIds::Index, newIndex, nullptr);
+		}
+
+		return {};
+	}
+
+	void perform() override
+	{
+		auto rv = Helpers::getRootTree(this, moduleId);
+
+		if (!rv.isValid())
+			throw Helpers::getErrorForModule404(getMainController(), moduleId);
+
+		auto n = Helpers::findNode(rv, nodeId);
+
+		if (!n.isValid())
+			throw Helpers::getErrorForNode404(rv, nodeId);
+
+		auto id = ExternalData::getDataTypeName(dt, true);
+
+		auto datas = n.getChildWithName(PropertyIds::ComplexData).getChildWithName(id);
+
+		if (!datas.isValid())
+			throw Error().withError("Node does not have " + id);
+
+		auto data = datas.getChild(slotIndex);
+
+		if (!data.isValid())
+			throw Error().withError("illegal slot index for " + id);
+
+		oldIndex = (int)data.getProperty(PropertyIds::Index);
+		data.setProperty(PropertyIds::Index, newIndex, nullptr);
+	}
+
+	void undo() override
+	{
+		auto rv = Helpers::getRootTree(this, moduleId);
+
+		if (!rv.isValid())
+			throw Helpers::getErrorForModule404(getMainController(), moduleId);
+
+		auto n = Helpers::findNode(rv, nodeId);
+
+		if (!n.isValid())
+			throw Helpers::getErrorForNode404(rv, nodeId);
+
+		auto id = ExternalData::getDataTypeName(dt, true);
+
+		auto datas = n.getChildWithName(PropertyIds::ComplexData).getChildWithName(id);
+
+		if (!datas.isValid())
+			throw Error().withError("Node does not have " + id);
+
+		auto data = datas.getChild(slotIndex);
+
+		if (!data.isValid())
+			throw Error().withError("illegal slot index for " + id);
+
+		data.setProperty(PropertyIds::Index, oldIndex, nullptr);
+	}
+
 };
 
 struct set : public ActionBase

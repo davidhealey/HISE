@@ -134,6 +134,7 @@ struct RestHelpers
     {
         String discriminatorValue;  ///< e.g., "add", "remove", "set"
         String description;
+        StringArray requiredProperties;
     };
 
     /** Metadata for a REST API route parameter. Uses fluent builder pattern.
@@ -147,7 +148,9 @@ struct RestHelpers
     {
         Identifier name;
         String description;
-        String defaultValue;  ///< Empty = no default
+        var defaultValue;      ///< Void = no default
+        bool hasMinimum = false;
+        double minimum = 0.0;
         bool required = true;
         ParamType type = ParamType::String;
         StringArray enumValues;   ///< Valid values for Enum type
@@ -171,8 +174,21 @@ struct RestHelpers
         RouteParameter withDefault(const String& def) const
         {
             auto copy = *this;
-            copy.defaultValue = def;
+            if (copy.type == ParamType::Int)
+                copy.defaultValue = def.getIntValue();
+            else if (copy.type == ParamType::Float)
+                copy.defaultValue = def.getDoubleValue();
+            else
+                copy.defaultValue = def;
             copy.required = false;
+            return copy;
+        }
+
+        RouteParameter withMinimum(double value) const
+        {
+            auto copy = *this;
+            copy.hasMinimum = true;
+            copy.minimum = value;
             return copy;
         }
 
@@ -262,6 +278,16 @@ struct RestHelpers
         {
             auto copy = *this;
             copy.variants.add({ value, desc });
+            return copy;
+        }
+
+        RouteParameter withVariantRequired(const String& value, const String& desc,
+                                           const StringArray& required) const
+        {
+            auto copy = *this;
+            SchemaVariant variant { value, desc };
+            variant.requiredProperties = required;
+            copy.variants.add(variant);
             return copy;
         }
 

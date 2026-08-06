@@ -674,6 +674,39 @@ var RestHelpers::paramToOpenApiSchema(const RestHelpers::RouteParameter& p)
 		disc->setProperty("propertyName", p.discriminator);
 		schema->setProperty("discriminator", var(disc.get()));
 
+		bool hasVariantRequirements = false;
+		for (const auto& v : p.variants)
+			hasVariantRequirements |= !v.requiredProperties.isEmpty();
+
+		if (hasVariantRequirements)
+		{
+			Array<var> oneOfArr;
+
+			for (const auto& v : p.variants)
+			{
+				DynamicObject::Ptr variantSchema = new DynamicObject();
+				variantSchema->setProperty("type", "object");
+
+				DynamicObject::Ptr variantProperties = new DynamicObject();
+				DynamicObject::Ptr discriminatorSchema = new DynamicObject();
+				discriminatorSchema->setProperty("type", "string");
+				Array<var> discriminatorValues;
+				discriminatorValues.add(v.discriminatorValue);
+				discriminatorSchema->setProperty("enum", var(discriminatorValues));
+				variantProperties->setProperty(p.discriminator, var(discriminatorSchema.get()));
+				variantSchema->setProperty("properties", var(variantProperties.get()));
+
+				Array<var> required;
+				required.add(p.discriminator);
+				for (const auto& property : v.requiredProperties)
+					required.addIfNotAlreadyThere(property);
+				variantSchema->setProperty("required", var(required));
+				oneOfArr.add(var(variantSchema.get()));
+			}
+
+			schema->setProperty("oneOf", var(oneOfArr));
+		}
+
 		// Add variant descriptions as x-variants extension
 		Array<var> variantArr;
 
@@ -682,6 +715,15 @@ var RestHelpers::paramToOpenApiSchema(const RestHelpers::RouteParameter& p)
 			DynamicObject::Ptr vObj = new DynamicObject();
 			vObj->setProperty("value", v.discriminatorValue);
 			vObj->setProperty("description", v.description);
+
+			if (!v.requiredProperties.isEmpty())
+			{
+				Array<var> required;
+				for (const auto& property : v.requiredProperties)
+					required.add(property);
+				vObj->setProperty("required", var(required));
+			}
+
 			variantArr.add(var(vObj.get()));
 		}
 
@@ -754,8 +796,11 @@ var RestHelpers::paramToOpenApiSchema(const RestHelpers::RouteParameter& p)
 	if (p.description.isNotEmpty())
 		schema->setProperty("description", p.description);
 
-	if (p.defaultValue.isNotEmpty())
+	if (!p.defaultValue.isVoid())
 		schema->setProperty("default", p.defaultValue);
+
+	if (p.hasMinimum)
+		schema->setProperty("minimum", p.minimum);
 
 	if (p.format.isNotEmpty())
 		schema->setProperty("format", p.format);
@@ -1072,6 +1117,15 @@ var RestHelpers::buildOpenApiComponents()
 		.withProperty(RouteParameter(RestApiIds::target, "Target node ID"))
 		.withProperty(RouteParameter(RestApiIds::parameter, "Target parameter ID"));
 
+	auto dspTreeComplexData = RouteParameter(Identifier("complexDataSlot"), "DSP complex data slot entry")
+		.withType(ParamType::Object)
+		.withProperty(RouteParameter(RestApiIds::dataType, "Complex data type")
+			.withEnumValues({ "Table", "SliderPack", "AudioFile", "FilterCoefficients", "DisplayBuffer" }))
+		.withProperty(RouteParameter(RestApiIds::slotIndex, "Slot index within the selected data type")
+			.withType(ParamType::Int).withMinimum(0.0))
+		.withProperty(RouteParameter(RestApiIds::dataIndex, "External data index; -1 means embedded data")
+			.withType(ParamType::Int).withMinimum(-1.0));
+
 	auto dspTreeNode = RouteParameter(Identifier("node"), "Scriptnode DSP tree node")
 		.withType(ParamType::Object)
 		.withProperty(RouteParameter(RestApiIds::nodeId, "Node instance ID"))
@@ -1084,6 +1138,9 @@ var RestHelpers::buildOpenApiComponents()
 		.withProperty(RouteParameter(RestApiIds::properties, "Node properties")
 			.withArrayItems(RouteParameter(Identifier("property"), "DSP node property entry")
 				.withRef("#/components/schemas/DspTreeProperty")))
+		.withProperty(RouteParameter(RestApiIds::complexData, "Complex data slots used by the node")
+			.withArrayItems(RouteParameter(Identifier("complexDataSlot"), "DSP complex data slot entry")
+				.withRef("#/components/schemas/DspTreeComplexData")))
 		.withProperty(RouteParameter(RestApiIds::connections, "Container modulation connections")
 			.withArrayItems(RouteParameter(Identifier("connection"), "DSP modulation connection entry")
 				.withRef("#/components/schemas/DspTreeConnection")).asOptional())
@@ -1110,6 +1167,7 @@ var RestHelpers::buildOpenApiComponents()
 	schemas->setProperty("DspTreeParameter", paramToOpenApiSchema(dspTreeParameter));
 	schemas->setProperty("DspTreeProperty", paramToOpenApiSchema(dspTreeProperty));
 	schemas->setProperty("DspTreeConnection", paramToOpenApiSchema(dspTreeConnection));
+	schemas->setProperty("DspTreeComplexData", paramToOpenApiSchema(dspTreeComplexData));
 	schemas->setProperty("DspTreeNode", paramToOpenApiSchema(dspTreeNode));
 	schemas->setProperty("ProjectTreeNode", paramToOpenApiSchema(projectTreeNode));
 
@@ -5841,6 +5899,29 @@ static var buildDspNodeTree(const ValueTree& nodeTree, bool verbose, bool includ
 	}
 
 	obj->setProperty(RestApiIds::properties, var(properties));
+
+	Array<var> complexData;
+	auto complexDataTree = nodeTree.getChildWithName(PropertyIds::ComplexData);
+
+	snex::ExternalData::forEachType([&](snex::ExternalData::DataType dataType)
+	{
+		auto slots = complexDataTree.getChildWithName(snex::ExternalData::getDataTypeName(dataType, true));
+		auto typeName = dataType == snex::ExternalData::DataType::FilterCoefficients
+			? String("FilterCoefficients")
+			: snex::ExternalData::getDataTypeName(dataType);
+
+		for (int slotIndex = 0; slotIndex < slots.getNumChildren(); slotIndex++)
+		{
+			auto slot = slots.getChild(slotIndex);
+			DynamicObject::Ptr dataObj = new DynamicObject();
+			dataObj->setProperty(RestApiIds::dataType, typeName);
+			dataObj->setProperty(RestApiIds::slotIndex, slotIndex);
+			dataObj->setProperty(RestApiIds::dataIndex, slot.getProperty(PropertyIds::Index, -1));
+			complexData.add(var(dataObj.get()));
+		}
+	});
+
+	obj->setProperty(RestApiIds::complexData, var(complexData));
 
 	if (includeConnections)
 	{
