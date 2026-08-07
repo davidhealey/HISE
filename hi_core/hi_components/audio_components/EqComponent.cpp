@@ -858,8 +858,6 @@ void FilterDragOverlay::fillPopupMenu(PopupMenu& m, int handleIndex)
 			if(m.getNumItems() > 0)
 				m.addSeparator();
 
-			m.addSectionHeader("Select Type");
-
 			for (int i = 0; i < sa.size(); i++)
 			{
 				bool isSelected = (int)filterStats->getBandAttribute(handleIndex, CurveEq::BandParameter::Type) == i;
