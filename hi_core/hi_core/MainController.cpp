@@ -132,8 +132,7 @@ bool MainController::unitTestMode = false;
 	globalAsyncModuleHandler(this),
 	//presetLoadRampFlag(OldUserPresetHandler::Active),
 	controlUndoManager(new UndoManager()),
-	xyzPool(new MultiChannelAudioBuffer::XYZPool()),
-	defaultFont(GLOBAL_FONT().getTypefacePtr(), "Oxygen")
+	xyzPool(new MultiChannelAudioBuffer::XYZPool())
 {
 #if HISE_INCLUDE_PROFILING_TOOLKIT
 
@@ -1781,20 +1780,6 @@ MainController::CustomTypeFace::CustomTypeFace(ReferenceCountedObjectPtr<juce::T
 	typeface(tf),
 	id(id_)
 {
-	memset(characterWidths, 0, sizeof(float) * 128);
-
-	String s;
-	for(char i = 32; i < 127; i++)
-	{
-		s = String::fromUTF8((&i), 1);
-
-#if HISE_JUCE8
-	characterWidths[i] = tf->getStringWidth(TypefaceMetricsKind::legacy, s);
-#else
-	characterWidths[i] = tf->getStringWidth(s);
-#endif
-
-	}
 }
 
 void MainController::prepareToPlay(double sampleRate_, int samplesPerBlock)
@@ -2044,10 +2029,10 @@ float MainController::getStringWidthFromEmbeddedFont(const String& text, const S
 		auto nameToUse = tf.id.isValid() ? tf.id.toString() : tf.typeface->getName();
 
 		if (nameToUse == fontName || tf.typeface->getName() == fontName)
-			return tf.getStringWidthFloat(text, fontSize, kerningFactor);
+			return Font(tf.typeface).withHeight(fontSize).withExtraKerningFactor(kerningFactor).getStringWidthFloat(text);
 	}
 
-	return defaultFont.getStringWidthFloat(text, fontSize, kerningFactor);
+	return getFontFromString(fontName, fontSize).withExtraKerningFactor(kerningFactor).getStringWidthFloat(text);
 }
 
 Font MainController::getFontFromString(const String& fontName, float fontSize) const

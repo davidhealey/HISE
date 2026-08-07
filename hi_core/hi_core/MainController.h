@@ -2315,27 +2315,8 @@ private:
 	{
 		CustomTypeFace(ReferenceCountedObjectPtr<juce::Typeface> tf, Identifier id_);;
 
-		float getStringWidthFloat(const String& text, float fontSize, float kerning) const
-		{
-			auto pos = text.begin();
-			auto end = text.end();
-
-			float normalisedLength = 0.0f;
-
-			while(pos != end)
-			{
-				auto c = *pos++;
-				normalisedLength += characterWidths[jlimit<uint8>(31, 128, c)];
-				normalisedLength += kerning;
-			}
-
-			return normalisedLength * fontSize;
-		}
-
 		ReferenceCountedObjectPtr<juce::Typeface> typeface;
 		Identifier id;
-
-		float characterWidths[128];
 	};
 
 	ScopedPointer<juce::dsp::Oversampling<float>> oversampler;
@@ -2345,10 +2326,9 @@ private:
 
 	int originalBufferSize = 0;
 	double originalSampleRate = 0.0;
-	
+
 	Array<CustomTypeFace> customTypeFaces;
 
-	CustomTypeFace defaultFont;
 	ValueTree customTypeFaceData;
 	ValueTree embeddedMarkdownDocs;
 
