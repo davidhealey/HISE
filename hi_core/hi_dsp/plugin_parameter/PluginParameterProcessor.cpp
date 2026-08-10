@@ -750,30 +750,4 @@ void PluginParameterAudioProcessor::handleLatencyWhenBypassed(AudioSampleBuffer&
 	}
 }
 
-#if 0
-void PluginParameterAudioProcessor::setScriptedPluginParameter(Identifier id, float newValue)
-{
-	for (int i = 0; i < getNumParameters(); i++)
-	{
-
-#if HISE_MACROS_ARE_PLUGIN_PARAMETERS
-#define CAST dynamic_cast
-#else
-#define CAST static_cast
-#endif
-
-		if (ScriptedControlAudioParameter * sp = CAST<ScriptedControlAudioParameter*>(getParameters().getUnchecked(i)))
-		{
-			if (sp->getId() == id)
-			{
-				sp->setParameterNotifyingHost(i, newValue);
-
-			}
-		}
-	}
-
-#undef CAST
-}
-#endif
-
 } // namespace hise

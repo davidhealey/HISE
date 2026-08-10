@@ -72,22 +72,17 @@ public:
 
 	void setValue(float newValue) override
 	{
-		bool *enableUpdate = &getMainController()->getPluginParameterUpdateState();
+		ScopedValueSetter<bool> setter(getMainController()->getPluginParameterUpdateState(), false);
 
-		if (enableUpdate)
+		const float convertedValue = parameterRange.convertFrom0to1(newValue);
+		const float snappedValue = parameterRange.snapToLegalValue(convertedValue);
+
+		if (!lastValueInitialised || lastValue != snappedValue)
 		{
-			ScopedValueSetter<bool> setter(*enableUpdate, false, true);
+			lastValue = snappedValue;
+			lastValueInitialised = true;
 
-			const float convertedValue = parameterRange.convertFrom0to1(newValue);
-			const float snappedValue = parameterRange.snapToLegalValue(convertedValue);
-
-			if (!lastValueInitialised || lastValue != snappedValue)
-			{
-				lastValue = snappedValue;
-				lastValueInitialised = true;
-
-				FunctionType::load(p.get(), snappedValue);
-			}
+			FunctionType::load(p.get(), snappedValue);
 		}
 	}
 
