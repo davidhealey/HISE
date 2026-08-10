@@ -607,13 +607,14 @@ void MainController::UserPresetHandler::loadUserPresetInternal()
 		auto userPresetState = isInternalPresetLoad() ?
 			UserPresetStateManager::StateTarget::PluginState :
 			UserPresetStateManager::StateTarget::UserPreset;
+		auto useMacrosAsParameters = HISE_GET_PREPROCESSOR(mc, HISE_MACROS_ARE_PLUGIN_PARAMETERS);
 
 		// Reload the macro connections before restoring the preset values
 		// so that it will update the correct connections with `setMacroControl()` in a control callback
 		if (mc->getMacroManager().isMacroEnabledOnFrontend())
 		{
 			// If we're in exclusive mode and using the macros as plugin parameter, we will only restore them in internal presets
-			if (!HISE_MACROS_ARE_PLUGIN_PARAMETERS || isInternalPresetLoad() || !mc->getMacroManager().isExclusive())
+			if (!useMacrosAsParameters || isInternalPresetLoad() || !mc->getMacroManager().isExclusive())
 			{
 				restoreStateManager(userPresetToLoad, UserPresetIds::macro_controls, userPresetState);
 			}
@@ -674,7 +675,7 @@ void MainController::UserPresetHandler::loadUserPresetInternal()
 		// Now we can restore the values of the macro controls
 		if (mc->getMacroManager().isMacroEnabledOnFrontend())
 		{
-			if(!HISE_MACROS_ARE_PLUGIN_PARAMETERS || isInternalPresetLoad() || !mc->getMacroManager().isExclusive())
+			if(!useMacrosAsParameters || isInternalPresetLoad() || !mc->getMacroManager().isExclusive())
 			{
 				mc->getMacroManager().getMacroChain()->loadMacroValuesFromValueTree(userPresetToLoad);
 			}
