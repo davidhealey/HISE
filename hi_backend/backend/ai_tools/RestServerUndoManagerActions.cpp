@@ -2820,6 +2820,21 @@ struct Helpers
 				jassert(newNodeId.isNotEmpty());
 				cn.setProperty(PropertyIds::NodeId, newNodeId, nullptr);
 			}
+            
+            if(cn.getType() == PropertyIds::Property)
+            {
+                if(cn[PropertyIds::ID] == PropertyIds::Connection.toString())
+                {
+                    auto oldNodeId = cn[PropertyIds::Value].toString();
+                    
+                    if(oldNodeId.isNotEmpty())
+                    {
+                        auto newNodeId = changedNames[oldNodeId];
+                        jassert(newNodeId.isNotEmpty());
+                        cn.setProperty(PropertyIds::Value, newNodeId, nullptr);
+                    }
+                }
+            }
 
 			return false;
 		});
@@ -3422,6 +3437,25 @@ struct move : public ActionBase
 		return {};
 	}
 
+    void setNewParent(ValueTree& nodeToMove, ValueTree& newParent, int indexToUse)
+    {
+        // try to funnel it through the NodeBase method which preserves connections
+        if(auto an = Helpers::getNetworkFromModule(getMainController(), moduleId))
+        {
+            if(auto existingNode = an->getNodeForValueTree(nodeToMove))
+            {
+                if(auto pn = an->getNodeForValueTree(newParent))
+                {
+                    existingNode->setParent(var(pn), indexToUse);
+                    return;
+                }
+            }
+        }
+        
+        nodeToMove.getParent().removeChild(nodeToMove, nullptr);
+        newParent.getChildWithName(PropertyIds::Nodes).addChild(nodeToMove, indexToUse, nullptr);
+    }
+    
 	void perform() override
 	{
 		auto rv = Helpers::getRootTree(this, moduleId);
@@ -3441,10 +3475,7 @@ struct move : public ActionBase
 		oldIndex = n.getParent().indexOf(n);
 		oldParentId = n.getParent().getParent()[PropertyIds::ID].toString();
 
-		n.getParent().removeChild(n, nullptr);
-		np.getChildWithName(PropertyIds::Nodes).addChild(n, insertIndex, nullptr);
-
-		
+        setNewParent(n, np, insertIndex);
 	}
 
 	void undo() override
@@ -3463,8 +3494,7 @@ struct move : public ActionBase
 		if (!op.getChildWithName(PropertyIds::Nodes).isValid())
 			throw Error().withError(newParentId + " is not a container");
 
-		n.getParent().removeChild(n, nullptr);
-		op.getChildWithName(PropertyIds::Nodes).addChild(n, oldIndex, nullptr);
+        setNewParent(n, op, oldIndex);
 	}
 };
 
