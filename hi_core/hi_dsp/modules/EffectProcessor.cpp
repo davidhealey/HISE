@@ -111,6 +111,8 @@ void EffectProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
 
 	Processor::prepareToPlay(sampleRate, samplesPerBlock);
 
+    forceInactiveModRendering = HISE_GET_PREPROCESSOR(getMainController(), HISE_FORCE_INACTIVE_MOD_RENDERING);
+    
 	if (sampleRate >= 0.0)
 	{
 		auto suspensionTime = HISE_GET_PREPROCESSOR(getMainController(), HISE_SUSPENSION_TAIL_MS);
@@ -358,6 +360,9 @@ void MasterEffectProcessor::renderWholeBuffer(AudioSampleBuffer& buffer)
 					currentValues.outR = 0.0f;
 #endif
 
+                    if(shouldRenderInactiveMods())
+                        renderInactiveMods(stereoBuffer, 0, samplesToUse);
+                    
 					masterState.currentlySuspended = true;
 					return;
 				}
@@ -490,11 +495,15 @@ VoiceEffectProcessor::~VoiceEffectProcessor()
 
 void VoiceEffectProcessor::preRenderCallback(int startSample, int numSamples)
 {
+	voiceModulationCalculated = false;
+
 	for (auto& mb : modChains)
 		mb.calculateMonophonicModulationValues(startSample, numSamples);
 
 	if (forceMono)
 	{
+		voiceModulationCalculated = true;
+
 		for (auto& mb : modChains)
 		{
 			mb.calculateModulationValuesForCurrentVoice(0, startSample, numSamples);
@@ -504,6 +513,8 @@ void VoiceEffectProcessor::preRenderCallback(int startSample, int numSamples)
 
 void VoiceEffectProcessor::preVoiceRendering(int voiceIndex, int startSample, int numSamples)
 {
+	voiceModulationCalculated = true;
+
 	for (auto& mb : modChains)
 	{
 		mb.calculateModulationValuesForCurrentVoice(voiceIndex, startSample, numSamples);

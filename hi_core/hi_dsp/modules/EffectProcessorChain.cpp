@@ -113,7 +113,8 @@ void EffectProcessorChain::renderVoice(int voiceIndex, AudioSampleBuffer& b, int
 
 void EffectProcessorChain::preRenderCallback(int startSample, int numSamples)
 {
-	FOR_EACH_VOICE_EFFECT(preRenderCallback(startSample, numSamples));
+	if(!renderPolyFxAsMono)
+		FOR_EACH_VOICE_EFFECT(preRenderCallback(startSample, numSamples));
 }
 
 void EffectProcessorChain::resetMasterEffects()

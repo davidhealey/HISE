@@ -882,6 +882,23 @@ PreprocessorDataBase::PreprocessorDataBase()
 		.withCrossReference(LinkType::Module, "Delay", "delay tail needs a suspension window at least as long as the maximum delay time")
 		.withCrossReference(LinkType::ScriptingApi, "Effect.isSuspendedOnSilence", "isSuspendedOnSilence flag on effects uses this window to decide when to freeze processing");
 
+	data["HISE_FORCE_INACTIVE_MOD_RENDERING"] = Entry()
+		.withCategory(Category::AudioProcessing)
+		.withBrief("Keeps selected effect modulation targets updating while no voice is active or audio processing is suspended.")
+		.withDescriptionLine("By default, connected network parameters stop receiving modulation updates when a Hardcoded Master FX or Script FX suspends itself on silence, while Hardcoded Polyphonic FX, Polyphonic Script FX and Polyphonic Filter stop inactive voice updates after all voices end. Enabling this flag continues dispatching connected modulation values during those inactive blocks; the polyphonic effects use one retained voice and the filter refreshes its modulation-derived display state. This keeps free-running modulation in sync but consumes CPU during periods that would otherwise be idle, with the cost determined by the number and complexity of connected modulators.")
+		.withDescriptionLine("> Inactive rendering only dispatches modulation-derived parameter updates; it does not call the network's `process()` callback. Any display state that depends on audio processing rather than parameter updates will remain frozen, so enabling this flag will not affect its outcome.")
+		.withDescriptionLine("> Read from the project's Extra Definitions at runtime, so changing the value in HISE takes effect on the next prepareToPlay without a full rebuild. Exported plugins still require recompilation.")
+		.withDefault(0)
+		.withValue(HISE_FORCE_INACTIVE_MOD_RENDERING)
+		.withHotReload()
+		.withCrossReference(LinkType::Module, "HardcodedMasterFX", "connected network parameter targets continue updating during silence suspension")
+		.withCrossReference(LinkType::Module, "HardcodedPolyphonicFX", "last-voice modulation continues updating after all voices stop")
+		.withCrossReference(LinkType::Module, "ScriptFX", "connected scriptnode parameter targets continue updating during silence suspension")
+		.withCrossReference(LinkType::Module, "PolyScriptFX", "last-voice scriptnode modulation continues updating after all voices stop")
+		.withCrossReference(LinkType::Module, "PolyphonicFilter", "filter modulation and display state continue updating while its owner synth is idle")
+		.withCrossReference(LinkType::Scriptnode, "core.extra_mod", "network target that receives inactive modulation updates")
+		.withCrossReference(LinkType::Preprocessor, "HISE_SUSPENSION_TAIL_MS", "controls when a silent master effect enters the suspended path affected by this flag");
+
 	data["HI_DONT_SEND_ATTRIBUTE_UPDATES"] = Entry()
 		.withCategory(Category::AudioProcessing)
 		.withBrief("Suppresses the async UI notification when a script changes a module parameter in an exported plugin.")

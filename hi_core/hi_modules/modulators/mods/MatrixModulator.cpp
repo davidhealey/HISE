@@ -260,7 +260,7 @@ void MatrixModulator::onModulationDrop(int parameterIndex, int modulationSourceI
 	}
 }
 
-float MatrixModulator::getInactiveModValue() const
+float MatrixModulator::getValueWhenBypassed() const
 {
 
 	auto iv = rangeData.outputRange.convertFrom0to1(baseValue.targetValue, false);

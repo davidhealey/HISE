@@ -169,7 +169,9 @@ private:
 	FilterBank voiceFilters;
 	FilterBank monoFilters;
 
-	mutable WeakReference<Processor> ownerSynthForCoefficients;
+	ModulatorSynth* getOwnerSynthForDisplay() const;
+
+	WeakReference<Processor> ownerSynthForCoefficients;
 
 	JUCE_DECLARE_WEAK_REFERENCEABLE(PolyFilterEffect)
 };

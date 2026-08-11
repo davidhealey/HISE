@@ -410,6 +410,13 @@ If true then the plugin will complain about the buffer size not being a multiple
 #define HISE_INCLUDE_TEMPO_IN_PLUGIN_STATE 1
 #endif
 
+/** Config: HISE_FORCE_INACTIVE_MOD_RENDERING
+ Set this to 1 to enable modulators being rendered even if no voice is active or the effect processing is suspended.
+*/
+#ifndef HISE_FORCE_INACTIVE_MOD_RENDERING
+#define HISE_FORCE_INACTIVE_MOD_RENDERING 0
+#endif
+
 /** Config: ENABLE_ALL_PEAK_METERS
 
 Set this to 0 to deactivate peak collection for any other processor than the main synth chain

@@ -628,6 +628,7 @@ public:
 
 	void prepareToPlay(double sampleRate, int samplesPerBlock) override;
 	void applyEffect(AudioSampleBuffer &b, int startSample, int numSamples) override;
+	void renderInactiveMods(AudioSampleBuffer& b, int startSample, int numSamples) override;
 
 	ModulatorChain::ExtraModulatorRuntimeTargetSource* getExtraModulationHandler() override { return &extraModSources; }
 
@@ -748,7 +749,7 @@ public:
 
 	void startVoice(int voiceIndex, const HiseEvent& e) final override;
 
-	void stopVoice(int ) final override {}
+	void stopVoice(int voiceIndex) final override { VoiceEffectProcessor::stopVoice(voiceIndex); }
 
 	void reset(int voiceIndex) final override;
 
@@ -759,14 +760,11 @@ public:
 		jassertfalse;
 	}
 
-	void renderNextBlock(AudioSampleBuffer &, int , int ) final override
-	{
-
-	}
+	void renderNextBlock(AudioSampleBuffer& b, int startSample, int numSamples) final override;
 
     int getNumActiveVoices() const override
     {
-        return voiceData.voiceNoteOns.size();
+		return voiceData.getNumActiveVoices();
     }
 
 	bool isVoiceResetActive() const override

@@ -558,6 +558,7 @@ void ModulatorSynth::renderNextBlockWithModulators(AudioSampleBuffer& outputBuff
 	Profiler p(*this, 0);
 
 	int numSamples = outputBuffer.getNumSamples();
+	voiceRenderedInCurrentBlock = false;
 
 	const int numSamplesFixed = numSamples;
 
@@ -703,6 +704,8 @@ void ModulatorSynth::renderVoice(int startSample, int numThisTime)
 
 	for (auto v : activeVoices)
 	{
+		voiceRenderedInCurrentBlock = true;
+
 		// this is picked up by monophonic envelopes to only render the modulation signal
 		// for the first voice
 		v->setIsFirstRenderedVoice(first);
