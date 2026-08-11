@@ -2518,3 +2518,42 @@ If you discover that `forceSynchronousExecution: true` produces different result
 - Check the full callstack, not just the error message
 - The actual bug may be in a different file/function than where it manifests
 - Look at `externalFiles` to understand the include chain
+
+## DSP Tree Complex Data
+
+`GET /api/dsp/tree` includes a `complexData` array on every node. The array contains one entry for each complex data slot declared by that node:
+
+```json
+{
+  "nodeId": "Table1",
+  "complexData": [
+    {
+      "dataType": "Table",
+      "slotIndex": 0,
+      "dataIndex": 0
+    }
+  ]
+}
+```
+
+- `dataType`: `Table`, `SliderPack`, `AudioFile`, `FilterCoefficients`, or `DisplayBuffer`
+- `slotIndex`: slot index within the selected data type
+- `dataIndex`: external data index; `-1` means that the slot uses embedded data
+- Nodes without complex data slots return `"complexData": []`
+
+## DSP Apply External Data
+
+`POST /api/dsp/apply` supports the `set_complex_data` operation for replacing an external data slot on a scriptnode node.
+
+- Required fields: `moduleId`, `nodeId`, `dataType`, `dataIndex`
+- `dataType`: `Table`, `SliderPack`, `AudioFile`, `FilterCoefficients`, or `DisplayBuffer`
+- `slotIndex`: slot index within the selected data type, optional and defaults to `0`
+- `dataIndex`: external data index; `-1` means embedded data, otherwise the external object is registered at the given index
+
+The operation is undoable and rejects invalid targets, data types, slot indices, and payloads.
+
+```bash
+curl -X POST "http://localhost:1900/api/dsp/apply" \
+  -H "Content-Type: application/json" \
+  -d '{"moduleId":"Script FX1","operations":[{"op":"set_complex_data","nodeId":"TableNode","dataType":"Table","slotIndex":0,"dataIndex":-1}]}'
+```

@@ -119,57 +119,60 @@ namespace hise { using namespace juce;
             }
         }
         
-#if HISE_MACROS_ARE_PLUGIN_PARAMETERS
-		auto ap = dynamic_cast<AudioProcessor*>(dynamic_cast<ControlledObject*>(this)->getMainController());
+		auto mc = dynamic_cast<ControlledObject*>(this)->getMainController();
 
-		jassert(ap != nullptr);
-
-		AudioProcessorListener::ChangeDetails d;
-		ap->updateHostDisplay(d.withParameterInfoChanged(true));
-
-		auto md = getMacroControlData(macroIndex);
-
-        SimpleReadWriteLock::ScopedReadLock sl2(md->parameterLock);
-        
-		if(wasAdded && md->getNumParameters() == 1)
+		if(HISE_GET_PREPROCESSOR(mc, HISE_MACROS_ARE_PLUGIN_PARAMETERS))
 		{
-			float newValue;
+			auto ap = dynamic_cast<AudioProcessor*>(mc);
 
-			auto pd = md->getParameter(0);
+			jassert(ap != nullptr);
 
-			if(pd->isCustomAutomation())
+			AudioProcessorListener::ChangeDetails d;
+			ap->updateHostDisplay(d.withParameterInfoChanged(true));
+
+			auto md = getMacroControlData(macroIndex);
+
+			SimpleReadWriteLock::ScopedReadLock sl2(md->parameterLock);
+
+			if(wasAdded && md->getNumParameters() == 1)
 			{
-				auto& uph = dynamic_cast<ControlledObject*>(this)->getMainController()->getUserPresetHandler();
+				float newValue;
 
-				if (uph.getCustomAutomationIndex(Identifier(pd->getParameterName())) == pd->getParameter())
+				auto pd = md->getParameter(0);
+
+				if(pd->isCustomAutomation())
 				{
-					newValue = uph.getCustomAutomationData(pd->getParameter())->lastValue;
+					auto& uph = mc->getUserPresetHandler();
+
+					if (uph.getCustomAutomationIndex(Identifier(pd->getParameterName())) == pd->getParameter())
+					{
+						newValue = uph.getCustomAutomationData(pd->getParameter())->lastValue;
+					}
+					else
+						newValue = 0.0f;
 				}
 				else
-					newValue = 0.0f;
-			}
-			else
-			{
-				newValue = p->getAttribute(parameterIndex);
-				
-			}
-
-			newValue = pd->getParameterRange().convertTo0to1(newValue);
-
-			for(auto p: ap->getParameters())
-			{
-				if(auto typed = dynamic_cast<HisePluginParameterBase*>(p))
 				{
-					if(typed->getType() == HisePluginParameterBase::Type::Macro && typed->matchesIndex(macroIndex))
+					newValue = p->getAttribute(parameterIndex);
+				}
+
+				newValue = pd->getParameterRange().convertTo0to1(newValue);
+
+				for(auto parameter: ap->getParameters())
+				{
+					if(auto typed = dynamic_cast<HisePluginParameterBase*>(parameter))
 					{
-						p->setValueNotifyingHost(newValue);
-						break;
+						auto wrapped = typed->getWrappedParameter();
+
+						if(wrapped->getType() == HisePluginParameterBase::Type::Macro && wrapped->matchesIndex(macroIndex))
+						{
+							parameter->setValueNotifyingHost(newValue);
+							break;
+						}
 					}
 				}
 			}
 		}
-
-#endif
 	}
 
 	void MacroControlBroadcaster::sendMacroConnectionChangeMessageForAll(bool wasAdded)
@@ -880,23 +883,32 @@ void MacroControlBroadcaster::setMacroControl(int macroIndex, float newValue, No
 	{
 		thisAsSynth->sendOtherChangeMessage(dispatch::library::ProcessorChangeEvent::Macro);
 
-		AudioProcessor *p = dynamic_cast<AudioProcessor*>(thisAsSynth->getMainController());
-
-		jassert(p != nullptr);
-
-		// Skip sending parameter changes before everything is loaded
-		if(macroIndex >= p->getNumParameters()) return;
-
 #if USE_BACKEND && !HISE_JUCE8
-#if HISE_MACROS_ARE_PLUGIN_PARAMETERS 
-		// note: previously HISE always routed macros to the plugin parameter slots
-		// in the backend. With the addition of live-plugin parameters within HISE
-		// (the April 2025 commit of death)
-		// this leads to a weird loop back from macro to first plugin parameter controlled
-		// processor unless this preprocessor is set to carve out space in the parameter list
-		// for the actual macros..
-		p->setParameterNotifyingHost(macroIndex, newValue / 127.0f);
-#endif
+		auto mc = thisAsSynth->getMainController();
+
+		if(HISE_GET_PREPROCESSOR(mc, HISE_MACROS_ARE_PLUGIN_PARAMETERS))
+		{
+			auto ap = dynamic_cast<AudioProcessor*>(mc);
+
+			jassert(ap != nullptr);
+
+			if(ap == nullptr)
+				return;
+
+			for(auto parameter: ap->getParameters())
+			{
+				if(auto typed = dynamic_cast<HisePluginParameterBase*>(parameter))
+				{
+					auto wrapped = typed->getWrappedParameter();
+
+					if(wrapped->getType() == HisePluginParameterBase::Type::Macro && wrapped->matchesIndex(macroIndex))
+					{
+						parameter->setValueNotifyingHost(newValue / 127.0f);
+						break;
+					}
+				}
+			}
+		}
 #endif
 	}
 }

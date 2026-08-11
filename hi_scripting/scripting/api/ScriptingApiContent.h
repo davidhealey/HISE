@@ -377,17 +377,7 @@ public:
 		PROFILE_ONLY(int getProfilePropertyTrackId(const Identifier& id) const { return (int)propertyTrackIds[id]; })
 
 		virtual ValueTree exportAsValueTree() const override;
-		bool isScriptPluginParameter()
-		{
-			bool ok = isAutomatable();
-			ok &= (bool)getScriptObjectProperty(ScriptingApi::Content::ScriptComponent::Properties::isPluginParameter);
-
-#if HISE_MACROS_ARE_PLUGIN_PARAMETERS
-			ok |= isAdditionalPluginParameter;
-#endif
-
-			return ok;
-		}
+		bool isScriptPluginParameter();
 
 		virtual void restoreFromValueTree(const ValueTree &v) override;;
 

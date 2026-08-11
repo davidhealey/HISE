@@ -40,7 +40,7 @@
     runtime field. Consumers read it off any response (or `/api/status`) to
     verify they are talking to a HISE build that matches their expected schema.
 */
-#define HISE_REST_API_VERSION "0.9.1"
+#define HISE_REST_API_VERSION "0.9.2"
 
 namespace hise { using namespace juce;
 
@@ -195,7 +195,10 @@ namespace RestApiIds
 
     // script/tree
     DECLARE_ID(tree);                 // Hierarchical script symbol tree
-    DECLARE_ID(dataType);             // HiseScript / debug data type
+    DECLARE_ID(dataType);             // HiseScript / external data type
+    DECLARE_ID(dataIndex);            // External data index; -1 means embedded data
+    DECLARE_ID(slotIndex);            // Slot index within the selected data type
+    DECLARE_ID(complexData);           // External data slots used by a DSP node
     DECLARE_ID(search);               // Text search filter
     DECLARE_ID(available);            // Whether a location can be used for jump-to-definition
     DECLARE_ID(charNumber);           // Character offset for jump-to-definition

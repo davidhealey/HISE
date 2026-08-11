@@ -418,7 +418,7 @@ struct add : public ActionBase
 		{
 			return Error(*this)
 				.withError(r.getErrorMessage() + ": " + md.id.toString())
-				.withHint("Constrainer: " + wildcard);
+				.withHint(". Constrainer: " + wildcard);
 		}
 
 		return {};
@@ -434,7 +434,8 @@ struct add : public ActionBase
 		auto parentId = parentProcessor.getType();
 
 		ProcessorMetadataRegistry rd;
-		const ProcessorMetadata* pm = rd.get(parentId);
+
+		auto pm = *rd.get(parentId);
 		const ProcessorMetadata* md = rd.get(typeId);
 
 		if (md == nullptr)
@@ -469,7 +470,7 @@ struct add : public ActionBase
 			if (!e)
 				return e;
 
-			return expectWildcardMatch(*md, pm->fxConstrainerWildcard);
+			return expectWildcardMatch(*md, pm.fxConstrainerWildcard);
 		}
 		else if (md->type == ProcessorMetadataIds::SoundGenerator)
 		{
@@ -477,7 +478,7 @@ struct add : public ActionBase
 			if (!e)
 				return e;
 
-			e = expectWildcardMatch(*md, pm->constrainerWildcard);
+			e = expectWildcardMatch(*md, pm.constrainerWildcard);
 
 			if (!e)
 				return e;
@@ -486,7 +487,7 @@ struct add : public ActionBase
 		{
 			jassert(md->type == ProcessorMetadataIds::Modulator);
 
-			if (pm->type == ProcessorMetadataIds::SoundGenerator)
+			if (pm.type == ProcessorMetadataIds::SoundGenerator)
 			{
 				if(chainIndex == Chains::Direct || chainIndex == Chains::Midi || chainIndex == Chains::FX)
 				{
@@ -501,14 +502,25 @@ struct add : public ActionBase
 
 			bool found = false;
 
-			for (const auto& mod : pm->modulation)
+			for (const auto& mod : pm.modulation)
 			{
 				if (mod.chainIndex == chainIndex)
 				{
 					if (mod.disabled)
 						return Error(*this).withError(mod.id.toString() + " is disabled");
+				
+					auto wc = mod.constrainerWildcard;
+
+					if (wc == "*")
+					{
+						if (auto pp = ProcessorHelpers::getFirstProcessorWithName(getMainController()->getMainSynthChain(), parentProcessor.getId()))
+						{
+							if(auto mc = dynamic_cast<Chain*>(pp->getChildProcessor(mod.chainIndex)))
+								wc = mc->getDynamicWildcard(ProcessorMetadataIds::Modulator);
+						}
+					}
 					
-					e = expectWildcardMatch(*md, mod.constrainerWildcard);
+					e = expectWildcardMatch(*md, wc);
 
 					if (!e)
 						return e;
@@ -2777,6 +2789,57 @@ struct Helpers
 		return {};
 	}
 
+	static void processTemplateNodeIds(ValueTree& tn)
+	{
+		auto rootId = tn[PropertyIds::ID].toString();
+
+		std::map<String, String> changedNames;
+
+		valuetree::Helpers::forEach(tn, [&](ValueTree& cn)
+		{
+			if (cn.getType() == PropertyIds::Node)
+			{
+				if (cn != tn)
+				{
+					auto cid = cn[PropertyIds::ID].toString();
+					auto nid = rootId + "_" + cid;
+					cn.setProperty(PropertyIds::ID, nid, nullptr);
+					changedNames[cid] = nid;
+				}
+			}
+
+			return false;
+		});
+
+		valuetree::Helpers::forEach(tn, [&](ValueTree& cn)
+		{
+			if (cn.getType() == PropertyIds::Connection)
+			{
+				auto oldNodeId = cn[PropertyIds::NodeId].toString();
+				auto newNodeId = changedNames[oldNodeId];
+				jassert(newNodeId.isNotEmpty());
+				cn.setProperty(PropertyIds::NodeId, newNodeId, nullptr);
+			}
+            
+            if(cn.getType() == PropertyIds::Property)
+            {
+                if(cn[PropertyIds::ID] == PropertyIds::Connection.toString())
+                {
+                    auto oldNodeId = cn[PropertyIds::Value].toString();
+                    
+                    if(oldNodeId.isNotEmpty())
+                    {
+                        auto newNodeId = changedNames[oldNodeId];
+                        jassert(newNodeId.isNotEmpty());
+                        cn.setProperty(PropertyIds::Value, newNodeId, nullptr);
+                    }
+                }
+            }
+
+			return false;
+		});
+	}
+
 	static String makeUniqueId(const ValueTree& v, String id)
 	{
 		int trailingIndex = id.getTrailingIntValue();
@@ -3170,6 +3233,10 @@ struct add : public ActionBase
 		
 		nodeToAdd.setProperty(PropertyIds::ID, nodeId, nullptr);
 		
+		if (factoryPath.startsWith("template"))
+		{
+			Helpers::processTemplateNodeIds(nodeToAdd);
+		}
 
 		auto pn = Helpers::findValueTree(rn, [&](const ValueTree& c)
 		{
@@ -3370,6 +3437,25 @@ struct move : public ActionBase
 		return {};
 	}
 
+    void setNewParent(ValueTree& nodeToMove, ValueTree& newParent, int indexToUse)
+    {
+        // try to funnel it through the NodeBase method which preserves connections
+        if(auto an = Helpers::getNetworkFromModule(getMainController(), moduleId))
+        {
+            if(auto existingNode = an->getNodeForValueTree(nodeToMove))
+            {
+                if(auto pn = an->getNodeForValueTree(newParent))
+                {
+                    existingNode->setParent(var(pn), indexToUse);
+                    return;
+                }
+            }
+        }
+        
+        nodeToMove.getParent().removeChild(nodeToMove, nullptr);
+        newParent.getChildWithName(PropertyIds::Nodes).addChild(nodeToMove, indexToUse, nullptr);
+    }
+    
 	void perform() override
 	{
 		auto rv = Helpers::getRootTree(this, moduleId);
@@ -3389,10 +3475,7 @@ struct move : public ActionBase
 		oldIndex = n.getParent().indexOf(n);
 		oldParentId = n.getParent().getParent()[PropertyIds::ID].toString();
 
-		n.getParent().removeChild(n, nullptr);
-		np.getChildWithName(PropertyIds::Nodes).addChild(n, insertIndex, nullptr);
-
-		
+        setNewParent(n, np, insertIndex);
 	}
 
 	void undo() override
@@ -3411,8 +3494,7 @@ struct move : public ActionBase
 		if (!op.getChildWithName(PropertyIds::Nodes).isValid())
 			throw Error().withError(newParentId + " is not a container");
 
-		n.getParent().removeChild(n, nullptr);
-		op.getChildWithName(PropertyIds::Nodes).addChild(n, oldIndex, nullptr);
+        setNewParent(n, op, oldIndex);
 	}
 };
 
@@ -3773,6 +3855,178 @@ struct disconnect : public ActionBase
 		if (!Helpers::addConnection(conTree, targetId, parameterName))
 			throw Error().withError("Connection already exists");
 	}
+};
+
+struct set_complex_data : public ActionBase
+{
+	BUILDER_ID(set_complex_data);
+
+	static ExternalData::DataType getDataType(const String& id)
+	{
+		if (id == "Table")             return ExternalData::DataType::Table;
+		if (id == "SliderPack")        return ExternalData::DataType::SliderPack;
+		if (id == "AudioFile")         return ExternalData::DataType::AudioFile;
+		if (id == "FilterCoefficients") return ExternalData::DataType::FilterCoefficients;
+		if (id == "DisplayBuffer")     return ExternalData::DataType::DisplayBuffer;
+
+		return ExternalData::DataType::numDataTypes;
+	}
+
+	static Error prevalidate(MainController*, const var& op)
+	{
+		if (op[RestApiIds::nodeId].toString().isEmpty())
+			return Error().withError("set_complex_data requires 'nodeId'");
+
+		auto dataType = op[RestApiIds::dataType].toString();
+		if (getDataType(dataType) == ExternalData::DataType::numDataTypes)
+			return Error().withError("set_complex_data requires a valid 'dataType'");
+
+		if (!op.hasProperty(RestApiIds::dataIndex))
+			return Error().withError("set_complex_data requires 'dataIndex'");
+
+		auto dataIndex = op[RestApiIds::dataIndex];
+		if (!dataIndex.isInt() && !dataIndex.isInt64())
+			return Error().withError("set_complex_data requires 'dataIndex' to be an integer");
+
+		if ((int)dataIndex < -1)
+			return Error().withError("set_complex_data requires 'dataIndex' to be -1 or greater");
+
+		auto slotIndex = op.getProperty(RestApiIds::slotIndex, 0);
+		if (!slotIndex.isInt() && !slotIndex.isInt64())
+			return Error().withError("set_complex_data requires 'slotIndex' to be an integer");
+
+		if ((int)slotIndex < 0)
+			return Error().withError("set_complex_data requires 'slotIndex' to be zero or greater");
+
+		return {};
+	}
+
+	set_complex_data(MainController* mc, const var& op) :
+	  ActionBase(mc),
+	  moduleId(op[RestApiIds::moduleId].toString()),
+	  nodeId(op[RestApiIds::nodeId].toString()),
+	  slotIndex(op.getProperty(RestApiIds::slotIndex, 0)),
+	  newIndex(op[RestApiIds::dataIndex]),
+	  dt(getDataType(op[RestApiIds::dataType].toString()))
+	{}
+
+	int getRebuildLevel(Domain, bool) const override { return 0; }
+	bool needsKillVoice() const override { return false; }
+
+	void addToDiffList(std::vector<Diff>& diffList, bool) override
+	{
+		Diff d;
+		d.target = nodeId;
+		d.domain = Domain::DSP;
+		d.type = Diff::Type::Modify;
+		diffList.push_back(d);
+	}
+
+	String getHistoryMessage(bool undo) const override
+	{
+		return "Set complex data";
+	}
+
+	String getDescription() const override
+	{
+		return "set complex data";
+	}
+
+	String moduleId;
+	String nodeId;
+	int slotIndex = 0;
+
+	int newIndex;
+	int oldIndex;
+	ExternalData::DataType dt;
+
+	Error validate() override
+	{
+		auto rv = Helpers::getRootTree(this, moduleId);
+
+		if (!rv.isValid())
+			return Helpers::getErrorForModule404(getMainController(), moduleId);
+
+		if (dspValidation != nullptr)
+		{
+			auto n = Helpers::findNode(rv, nodeId);
+
+			if (!n.isValid())
+				return Helpers::getErrorForNode404(rv, nodeId);
+
+			auto id = ExternalData::getDataTypeName(dt, true);
+
+			auto datas = n.getChildWithName(PropertyIds::ComplexData).getChildWithName(id);
+
+			if (!datas.isValid())
+				return Error().withError("Node does not have " + id);
+
+			auto data = datas.getChild(slotIndex);
+
+			if (!data.isValid())
+				return Error().withError("illegal slot index for " + id);
+
+			data.setProperty(PropertyIds::Index, newIndex, nullptr);
+		}
+
+		return {};
+	}
+
+	void perform() override
+	{
+		auto rv = Helpers::getRootTree(this, moduleId);
+
+		if (!rv.isValid())
+			throw Helpers::getErrorForModule404(getMainController(), moduleId);
+
+		auto n = Helpers::findNode(rv, nodeId);
+
+		if (!n.isValid())
+			throw Helpers::getErrorForNode404(rv, nodeId);
+
+		auto id = ExternalData::getDataTypeName(dt, true);
+
+		auto datas = n.getChildWithName(PropertyIds::ComplexData).getChildWithName(id);
+
+		if (!datas.isValid())
+			throw Error().withError("Node does not have " + id);
+
+		auto data = datas.getChild(slotIndex);
+
+		if (!data.isValid())
+			throw Error().withError("illegal slot index for " + id);
+
+		oldIndex = (int)data.getProperty(PropertyIds::Index);
+		data.setProperty(PropertyIds::Index, newIndex, nullptr);
+	}
+
+	void undo() override
+	{
+		auto rv = Helpers::getRootTree(this, moduleId);
+
+		if (!rv.isValid())
+			throw Helpers::getErrorForModule404(getMainController(), moduleId);
+
+		auto n = Helpers::findNode(rv, nodeId);
+
+		if (!n.isValid())
+			throw Helpers::getErrorForNode404(rv, nodeId);
+
+		auto id = ExternalData::getDataTypeName(dt, true);
+
+		auto datas = n.getChildWithName(PropertyIds::ComplexData).getChildWithName(id);
+
+		if (!datas.isValid())
+			throw Error().withError("Node does not have " + id);
+
+		auto data = datas.getChild(slotIndex);
+
+		if (!data.isValid())
+			throw Error().withError("illegal slot index for " + id);
+
+		data.setProperty(PropertyIds::Index, oldIndex, nullptr);
+	}
+
 };
 
 struct set : public ActionBase

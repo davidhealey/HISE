@@ -1414,7 +1414,7 @@ struct RestApiEndpoints
 			.withResponseField(RouteParameter(RestApiIds::source, "whether the network was created or loaded").withEnumValues({"created", "loaded"}))
 			.withErrorCodes({ 400, 404, 409 })
 			.withRequestExample(R"({"moduleId": "Script FX1", "name": "MyDSP", "mode": "auto"})")
-			.withResponseExample("{\"success\": true, \"result\": {\"nodeId\": \"MyDSP\", \"factoryPath\": \"container.chain\", \"bypassed\": false, \"parameters\": [], \"connections\": [], \"children\": []}, \"source\": \"created\", \"filePath\": \"D:/Projects/MyPlugin/DspNetworks/MyDSP.xml\", \"logs\": [], \"errors\": []}"));
+			.withResponseExample("{\"success\": true, \"result\": {\"nodeId\": \"MyDSP\", \"factoryPath\": \"container.chain\", \"bypassed\": false, \"parameters\": [], \"properties\": [], \"complexData\": [], \"connections\": [], \"children\": []}, \"source\": \"created\", \"filePath\": \"D:/Projects/MyPlugin/DspNetworks/MyDSP.xml\", \"logs\": [], \"errors\": []}"));
 	}
 
 	static void dspTree(Array<RouteMetadata>& m)
@@ -1424,9 +1424,10 @@ struct RestApiEndpoints
 			.withSummary("Get scriptnode network hierarchy")
 			.withDescription("Returns the nested JSON tree of the active DspNetwork for the given "
 				"module. Each node contains its nodeId, factoryPath, bypass state, parameters, "
-				"properties, and child nodes. The parameters array lists objects with parameterId "
+				"properties, complex data slots, and child nodes. The parameters array lists objects with parameterId "
 				"and value (plus range metadata when verbose=true). The properties array lists "
-				"node-level properties as objects with propertyId and value fields. Container "
+				"node-level properties as objects with propertyId and value fields. The complexData array "
+				"lists dataType, slotIndex, and dataIndex for each slot; dataIndex=-1 means embedded data. Container "
 				"nodes also have a connections array listing all modulation edges within that "
 				"container (source, sourceOutput, target, parameter). "
 				"Use verbose=true to include full parameter range metadata "
@@ -1434,7 +1435,7 @@ struct RestApiEndpoints
 				"Use group=current inside an undo group (after push_group) to read the accumulated "
 				"plan-mode snapshot before the group is committed -- returns 400 if there is no "
 				"active DSP validation state, 501 for any group value other than 'current'.")
-			.withReturns("Recursive node tree with parameters, properties, connections on containers, and children")
+			.withReturns("Recursive node tree with parameters, properties, complex data slots, connections on containers, and children")
 			.withModuleIdParam()
 			.withQueryParam(RouteParameter(RestApiIds::verbose,
 				"Include full parameter range metadata")
@@ -1446,7 +1447,7 @@ struct RestApiEndpoints
 				.withRef("#/components/schemas/DspTreeNode"))
 			.withErrorCodes({ 400, 404, 501 })
 			.withRequestExample(R"(GET /api/dsp/tree?moduleId=Script%20FX1)")
-			.withResponseExample(R"({"success": true, "result": {"nodeId": "MyDSP", "factoryPath": "container.chain", "bypassed": false, "parameters": [], "properties": [], "connections": [{"source": "PMA1", "sourceOutput": 0, "target": "Osc1", "parameter": "Frequency"}], "children": [{"nodeId": "PMA1", "factoryPath": "control.pma", "bypassed": false, "parameters": [{"parameterId": "Value", "value": 0.0}], "properties": [], "children": []}, {"nodeId": "Osc1", "factoryPath": "core.oscillator", "bypassed": false, "parameters": [{"parameterId": "Frequency", "value": 440}], "properties": [{"propertyId": "UseFreqInput", "value": false}], "children": []}]}, "logs": [], "errors": []})"));
+			.withResponseExample(R"({"success": true, "result": {"nodeId": "MyDSP", "factoryPath": "container.chain", "bypassed": false, "parameters": [], "properties": [], "complexData": [], "connections": [{"source": "PMA1", "sourceOutput": 0, "target": "Osc1", "parameter": "Frequency"}], "children": [{"nodeId": "PMA1", "factoryPath": "control.pma", "bypassed": false, "parameters": [{"parameterId": "Value", "value": 0.0}], "properties": [], "complexData": [], "children": []}, {"nodeId": "Table1", "factoryPath": "core.table", "bypassed": false, "parameters": [{"parameterId": "Value", "value": 0.0}], "properties": [], "complexData": [{"dataType": "Table", "slotIndex": 0, "dataIndex": 0}], "children": []}]}, "logs": [], "errors": []})"));
 	}
 
 	static void dspApply(Array<RouteMetadata>& m)
@@ -1454,31 +1455,41 @@ struct RestApiEndpoints
 		auto opItem = RouteParameter(RestApiIds::op, "DSP operation object")
 			.withType(ParamType::Object)
 			.withDiscriminator("op")
-			.withVariant("add", "Add a node (factoryPath, parent, nodeId?, index?). "
+			.withVariantRequired("add", "Add a node (factoryPath, parent, nodeId?, index?). "
 				"If nodeId is provided, it must be unique - returns error if a node with that ID already exists. "
 				"If nodeId is omitted, it is derived from the factory path suffix with a unique trailing index "
-				"(e.g. container.chain => chain1, core.oscillator => oscillator1)")
-			.withVariant("remove", "Remove a node (nodeId)")
-			.withVariant("move", "Move a node to a different container (nodeId, parent, index?)")
-			.withVariant("connect", "Connect a modulation source to a parameter (source, target, parameter, sourceOutput?, matchRange?). "
+				"(e.g. container.chain => chain1, core.oscillator => oscillator1)",
+				{ RestApiIds::factoryPath.toString(), RestApiIds::parent.toString() })
+			.withVariantRequired("remove", "Remove a node (nodeId)",
+				{ RestApiIds::nodeId.toString() })
+			.withVariantRequired("move", "Move a node to a different container (nodeId, parent, index?)",
+				{ RestApiIds::nodeId.toString(), RestApiIds::parent.toString() })
+			.withVariantRequired("connect", "Connect a modulation source to a parameter (source, target, parameter, sourceOutput?, matchRange?). "
 				"sourceOutput is a parameter name (string) or output slot index (int) for multi-output mod nodes. "
 				"If matchRange is true, copies target parameter's range (min/max/skew/step) onto source after wiring "
-				"(mirrors the IDE normalize button: target is canonical, source adopts target's units, no remap occurs)")
-			.withVariant("disconnect", "Disconnect a modulation connection (target, parameter). The source is resolved automatically by searching the network for the unique connection that targets target.parameter. Errors if more than one match is found.")
-			.withVariant("set", "Set a parameter value or node property (nodeId, parameterId, value). "
+				"(mirrors the IDE normalize button: target is canonical, source adopts target's units, no remap occurs)",
+				{ RestApiIds::source.toString(), RestApiIds::target.toString() })
+			.withVariantRequired("disconnect", "Disconnect a modulation connection (target, parameter). The source is resolved automatically by searching the network for the unique connection that targets target.parameter. Errors if more than one match is found.",
+				{ RestApiIds::target.toString(), RestApiIds::parameter.toString() })
+			.withVariantRequired("set", "Set a parameter value or node property (nodeId, parameterId, value). "
 				"When nodeId is the root network node, also supports network-level properties: "
 				"AllowCompilation (bool), AllowPolyphonic (bool), CompileChannelAmount (int), "
 				"HasTail (bool), SuspendOnSilence (bool), ModulationBlockSize (power-of-2 int or 0). "
 				"Range-write variant: any subset of min/max/skewFactor/middlePosition/stepSize "
 				"may be sent without `value` to override individual range fields; omitted fields "
 				"keep their current value. skewFactor and middlePosition are mutually exclusive "
-				"(sending one clears the other). Mutually exclusive with value.")
-			.withVariant("bypass", "Set bypass state (nodeId, bypassed)")
-			.withVariant("create_parameter", "Create a dynamic parameter on a container (nodeId, parameterId, min?, max?, defaultValue?, stepSize?, middlePosition?, skewFactor?)")
+				"(sending one clears the other). Mutually exclusive with value.",
+				{ RestApiIds::nodeId.toString(), RestApiIds::parameterId.toString() })
+			.withVariantRequired("bypass", "Set bypass state (nodeId, bypassed)",
+				{ RestApiIds::nodeId.toString(), RestApiIds::bypassed.toString() })
+			.withVariantRequired("create_parameter", "Create a dynamic parameter on a container (nodeId, parameterId, min?, max?, defaultValue?, stepSize?, middlePosition?, skewFactor?)",
+				{ RestApiIds::nodeId.toString(), RestApiIds::parameterId.toString() })
 			.withVariant("clear", "Clear all nodes from the network")
+			.withVariantRequired("set_complex_data", "Assign an external data object to a node slot (nodeId, dataType, slotIndex?, dataIndex)",
+				{ RestApiIds::nodeId.toString(), RestApiIds::dataType.toString(), RestApiIds::dataIndex.toString() })
 			// All possible properties (union of all variants)
 			.withProperty(RouteParameter(RestApiIds::op, "Operation type")
-				.withEnumValues({ "add", "remove", "move", "connect", "disconnect", "set", "bypass", "create_parameter", "clear" }))
+				.withEnumValues({ "add", "remove", "move", "connect", "disconnect", "set", "bypass", "create_parameter", "clear", "set_complex_data" }))
 			.withProperty(RouteParameter(RestApiIds::factoryPath, "Factory path for add op (e.g. core.oscillator, filters.svf)")
 				.asOptional())
 			.withProperty(RouteParameter(RestApiIds::parent, "Parent container node ID for add/move ops")
@@ -1518,7 +1529,17 @@ struct RestApiEndpoints
 				.withType(ParamType::Float).asOptional())
 			.withProperty(RouteParameter(RestApiIds::matchRange,
 				"For connect op: copy target parameter's range onto source after wiring. Mirrors IDE normalize button")
-				.withType(ParamType::Bool).asOptional());
+				.withType(ParamType::Bool).asOptional())
+			.withProperty(RouteParameter(RestApiIds::dataType,
+				"External data type for set_complex_data: Table, SliderPack, AudioFile, FilterCoefficients, or DisplayBuffer")
+				.withEnumValues({ "Table", "SliderPack", "AudioFile", "FilterCoefficients", "DisplayBuffer" })
+				.asOptional())
+			.withProperty(RouteParameter(RestApiIds::dataIndex,
+				"External data index. Use -1 for embedded data, otherwise registers the external object at this index")
+				.withType(ParamType::Int).withMinimum(-1.0).asOptional())
+			.withProperty(RouteParameter(RestApiIds::slotIndex,
+				"Slot index within the selected data type. Defaults to 0.")
+				.withType(ParamType::Int).withDefault("0").withMinimum(0.0));
 
 		auto diffEntry = RouteParameter(Identifier("entry"), "Diff entry")
 			.withType(ParamType::Object)
@@ -1549,7 +1570,7 @@ struct RestApiEndpoints
 			.withResponseField(RouteParameter(RestApiIds::diff, "Array of diff entries")
 				.withArrayItems(diffEntry))
 			.withErrorCodes({ 400, 404 })
-			.withRequestExample(R"({"moduleId": "Script FX1", "operations": [{"op": "add", "factoryPath": "core.oscillator", "parent": "MyDSP", "nodeId": "Osc1", "index": 0}, {"op": "set", "nodeId": "Osc1", "parameterId": "Frequency", "value": 880}]})")
+			.withRequestExample(R"({"moduleId": "Script FX1", "operations": [{"op": "add", "factoryPath": "core.oscillator", "parent": "MyDSP", "nodeId": "Osc1", "index": 0}, {"op": "set", "nodeId": "Osc1", "parameterId": "Frequency", "value": 880}, {"op": "set_complex_data", "nodeId": "TableNode", "dataType": "Table", "slotIndex": 0, "dataIndex": -1}]})")
 			.withResponseExample(R"({"success": true, "scope": "group", "groupName": "root", "diff": [{"target": "Osc1", "action": "+", "domain": "dsp"}], "logs": [], "errors": []})"));
 	}
 
