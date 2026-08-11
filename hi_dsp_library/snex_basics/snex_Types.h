@@ -866,9 +866,11 @@ struct VoiceDataStack
 	}
 
 	int getNumActiveVoices() const { return voiceNoteOns.size(); }
+	int getLastStartedVoiceIndex() const { return lastStartedVoiceIndex; }
 
 	template <typename T> void startVoice(T& n, PolyHandler& ph, int voiceIndex, const HiseEvent& e)
 	{
+		lastStartedVoiceIndex = voiceIndex;
 		voiceNoteOns.insertWithoutSearch({ voiceIndex, e });
 		HiseEvent c(e);
 
@@ -886,6 +888,10 @@ struct VoiceDataStack
 	}
 
 	UnorderedStack<VoiceData, NUM_POLYPHONIC_VOICES> voiceNoteOns;
+
+private:
+
+	int lastStartedVoiceIndex = 0;
 };
 
 /** A data structure containing the processing details for the context.

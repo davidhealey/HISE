@@ -78,7 +78,7 @@ struct NodeUIUpdaterBase
 		if (prepareSpecs.voiceIndex != nullptr)
 		{
 			trackedVoiceIndex = prepareSpecs.voiceIndex->getVoiceIndex();
-			voiceTrackingEnabled = true;
+			voiceTrackingEnabled = prepareSpecs.voiceIndex->isEnabled();
 		}
 	}
 
@@ -90,13 +90,20 @@ protected:
 
 	/** Returns true if we should proceed with UI update/data post.
 	    Call this from audio thread methods (process, handleHiseEvent, etc.) */
-	bool shouldUpdateForCurrentVoice() const
+	bool shouldUpdateForCurrentVoice(bool returnTrueIfNoVoice = false) const
 	{
+        // skip updating before initialisation
+        if(!prepareSpecs)
+            return false;
+        
 		if (!voiceTrackingEnabled || prepareSpecs.voiceIndex == nullptr)
 			return true;  // No tracking, allow all
 
 		int currentVoice = prepareSpecs.voiceIndex->getVoiceIndex();
-
+        
+        if(currentVoice == -1 && returnTrueIfNoVoice)
+            return true;
+        
 		// If voice tracking is enabled, we expect to be called from voice rendering context.
 		// If currentVoice is -1 here, the user is calling from the wrong place.
 		jassert(currentVoice >= 0 && "shouldUpdateForCurrentVoice() called outside voice rendering context. "
