@@ -417,6 +417,13 @@ If true then the plugin will complain about the buffer size not being a multiple
 #define HISE_FORCE_INACTIVE_MOD_RENDERING 0
 #endif
 
+/** Config: HISE_LEGACY_INACTIVE_MOD_VALUES
+ Set this to 1 to restore neutral modulation values after the last voice has been reset.
+*/
+#ifndef HISE_LEGACY_INACTIVE_MOD_VALUES
+#define HISE_LEGACY_INACTIVE_MOD_VALUES 0
+#endif
+
 /** Config: ENABLE_ALL_PEAK_METERS
 
 Set this to 0 to deactivate peak collection for any other processor than the main synth chain

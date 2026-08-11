@@ -320,6 +320,9 @@ public:
 
 		bool manualExpansionPending = false;
 
+		int numActiveVoices = 0;
+		bool useLegacyInactiveModValues = HISE_LEGACY_INACTIVE_MOD_VALUES;
+
 		Options options;
 		
 		float currentConstantValue = 1.0f;

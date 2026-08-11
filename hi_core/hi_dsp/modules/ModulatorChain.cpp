@@ -687,6 +687,7 @@ ModulatorChain::ModChainWithBuffer::~ModChainWithBuffer()
 void ModulatorChain::ModChainWithBuffer::prepareToPlay(double sampleRate, int samplesPerBlock)
 {
 	c->useInactiveDisplayValue = false;
+	useLegacyInactiveModValues = HISE_GET_PREPROCESSOR(c->getMainController(), HISE_LEGACY_INACTIVE_MOD_VALUES);
 	c->prepareToPlay(sampleRate, samplesPerBlock);
 
 	if (type == Type::Normal)
@@ -697,11 +698,15 @@ void ModulatorChain::ModChainWithBuffer::handleHiseEvent(const HiseEvent& m)
 {
 	if (c->shouldBeProcessedAtAll())
 		c->handleHiseEvent(m);
+
+	if(m.isAllNotesOff())
+		numActiveVoices = 0;
 }
 
 void ModulatorChain::ModChainWithBuffer::resetVoice(int voiceIndex)
 {
 	c->useInactiveDisplayValue = false;
+	numActiveVoices = jmax(numActiveVoices - 1, 0);
 
 	if (c->hasActiveEnvelopesAtAll())
 	{
@@ -720,6 +725,7 @@ void ModulatorChain::ModChainWithBuffer::stopVoice(int voiceIndex)
 void ModulatorChain::ModChainWithBuffer::startVoice(int voiceIndex)
 {
 	c->useInactiveDisplayValue = false;
+	numActiveVoices++;
 
 	float firstDynamicValue = c->getInitialValueInternal();
 
@@ -1313,6 +1319,9 @@ float ModulatorChain::ModChainWithBuffer::getModValueForVoiceWithOffset(int star
 
 float ModulatorChain::ModChainWithBuffer::getOneModulationValue(int startSample) const
 {
+	if(useLegacyInactiveModValues && numActiveVoices == 0)
+		return getValueWhenNoVoiceIsActive();
+
 	// If you set this, you probably don't need this method...
 	jassert(!options.expandToAudioRate);
 

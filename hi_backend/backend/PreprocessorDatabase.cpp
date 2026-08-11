@@ -899,6 +899,19 @@ PreprocessorDataBase::PreprocessorDataBase()
 		.withCrossReference(LinkType::Scriptnode, "core.extra_mod", "network target that receives inactive modulation updates")
 		.withCrossReference(LinkType::Preprocessor, "HISE_SUSPENSION_TAIL_MS", "controls when a silent master effect enters the suspended path affected by this flag");
 
+	data["HISE_LEGACY_INACTIVE_MOD_VALUES"] = Entry()
+		.withCategory(Category::AudioProcessing)
+		.withBrief("Restores neutral master and monophonic effect modulation after the last voice has been reset.")
+		.withDescriptionLine("By default, master and monophonic effects continue using their rendered modulation values while processing effect tails after the last synth voice has been reset. Enabling this flag restores the previous behaviour, where these effects use each modulator's inactive fallback value until another voice starts. Use this compatibility option for projects whose sound design depends on modulation becoming neutral before an effect tail has ended.")
+		.withDescriptionLine("> Voice release modulation is unaffected because the inactive fallback begins on voice reset, not note-off.")
+		.withDescriptionLine("> If HISE_FORCE_INACTIVE_MOD_RENDERING is also enabled, this legacy fallback takes precedence when modulation values are read without an active voice.")
+		.withDescriptionLine("> Read from the project's Extra Definitions at runtime, so changing the value in HISE takes effect on the next prepareToPlay without a full rebuild. Exported plugins still require recompilation.")
+		.withDefault(0)
+		.withValue(HISE_LEGACY_INACTIVE_MOD_VALUES)
+		.withHotReload()
+		.withCrossReference(LinkType::Module, "Gain", "restores neutral modulation while processing upstream effect tails")
+		.withCrossReference(LinkType::Preprocessor, "HISE_FORCE_INACTIVE_MOD_RENDERING", "controls modulation target updates in suspended and inactive processing paths");
+
 	data["HI_DONT_SEND_ATTRIBUTE_UPDATES"] = Entry()
 		.withCategory(Category::AudioProcessing)
 		.withBrief("Suppresses the async UI notification when a script changes a module parameter in an exported plugin.")
