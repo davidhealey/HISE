@@ -499,16 +499,6 @@ void VoiceEffectProcessor::preRenderCallback(int startSample, int numSamples)
 
 	for (auto& mb : modChains)
 		mb.calculateMonophonicModulationValues(startSample, numSamples);
-
-	if (forceMono)
-	{
-		voiceModulationCalculated = true;
-
-		for (auto& mb : modChains)
-		{
-			mb.calculateModulationValuesForCurrentVoice(0, startSample, numSamples);
-		}
-	}
 }
 
 void VoiceEffectProcessor::preVoiceRendering(int voiceIndex, int startSample, int numSamples)
@@ -639,11 +629,6 @@ void VoiceEffectProcessor::handleHiseEvent(const HiseEvent& m)
 {
 	for (auto& mb : modChains)
 		mb.handleHiseEvent(m);
-}
-
-void VoiceEffectProcessor::setForceMonoMode(bool shouldUseMonoMode)
-{
-	forceMono = shouldUseMonoMode;
 }
 
 juce::Path VoiceEffectProcessor::getSpecialSymbol() const

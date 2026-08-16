@@ -706,7 +706,7 @@ void JavascriptPolyphonicEffect::renderVoice(int voiceIndex, AudioSampleBuffer &
 
 void JavascriptPolyphonicEffect::renderNextBlock(AudioSampleBuffer& b, int startSample, int numSamples)
 {
-	if(!forceMono && (getNumActiveVoices() != 0 || wasVoiceModulationCalculated()) || !shouldRenderInactiveMods())
+	if(getNumActiveVoices() != 0 || wasVoiceModulationCalculated() || !shouldRenderInactiveMods())
 		return;
 
 	if(auto n = getActiveNetwork())
@@ -721,11 +721,8 @@ void JavascriptPolyphonicEffect::renderNextBlock(AudioSampleBuffer& b, int start
 				RD rd(*rn, n->getParameterProperties(), nullptr, b.getArrayOfWritePointers(), b.getNumChannels(),
 					startSample, numSamples);
 
-				if(forceMono)
-					extraModSources.processInactiveVoiceModulation(rd, *n->getPolyHandler(), 0);
-				else
-					extraModSources.processInactiveVoiceModulation(rd, *n->getPolyHandler(),
-						voiceData.getLastStartedVoiceIndex());
+				extraModSources.processInactiveVoiceModulation(rd, *n->getPolyHandler(),
+					voiceData.getLastStartedVoiceIndex());
 			}
 		}
 	}

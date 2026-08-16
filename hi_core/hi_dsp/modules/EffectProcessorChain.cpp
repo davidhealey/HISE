@@ -113,8 +113,7 @@ void EffectProcessorChain::renderVoice(int voiceIndex, AudioSampleBuffer& b, int
 
 void EffectProcessorChain::preRenderCallback(int startSample, int numSamples)
 {
-	if(!renderPolyFxAsMono)
-		FOR_EACH_VOICE_EFFECT(preRenderCallback(startSample, numSamples));
+	FOR_EACH_VOICE_EFFECT(preRenderCallback(startSample, numSamples));
 }
 
 void EffectProcessorChain::resetMasterEffects()
@@ -133,14 +132,6 @@ void EffectProcessorChain::resetMasterEffects()
 void EffectProcessorChain::renderNextBlock(AudioSampleBuffer& buffer, int startSample, int numSamples)
 {
 	if(isBypassed()) return;
-
-	if (renderPolyFxAsMono)
-	{
-
-
-		// Make sure the modulation values get calculated...
-		FOR_EACH_VOICE_EFFECT(preRenderCallback(startSample, numSamples));
-	}
 
 	for(auto fx: allEffects)
 	{
@@ -260,11 +251,6 @@ EffectProcessorChain::EffectChainHandler::EffectChainHandler(EffectProcessorChai
 
 EffectProcessorChain::EffectChainHandler::~EffectChainHandler()
 {}
-
-void EffectProcessorChain::setForceMonophonicProcessingOfPolyphonicEffects(bool shouldProcessPolyFX)
-{
-	renderPolyFxAsMono = shouldProcessPolyFX;
-}
 
 void EffectProcessorChain::renderMasterEffects(AudioSampleBuffer &b)
 {
@@ -459,8 +445,6 @@ void EffectProcessorChain::EffectChainHandler::add(Processor *newProcessor, Proc
 		{
 			const int index = chain->voiceEffects.indexOf(dynamic_cast<VoiceEffectProcessor*>(siblingToInsertBefore));
 			chain->voiceEffects.insert(index, vep);
-			vep->setForceMonoMode(chain->renderPolyFxAsMono);
-
 		}
 		else if (MasterEffectProcessor* mep = dynamic_cast<MasterEffectProcessor*>(newProcessor))
 		{

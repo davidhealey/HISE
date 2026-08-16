@@ -333,6 +333,13 @@ void PolyFilterEffect::prepareToPlay(double sampleRate, int samplesPerBlock)
 {
 	VoiceEffectProcessor::prepareToPlay(sampleRate, samplesPerBlock);
 	ownerSynthForCoefficients = ProcessorHelpers::findParentProcessor(this, true);
+	processOnSummedBuffer = false;
+
+	if(auto chain = dynamic_cast<EffectProcessorChain*>(getParentProcessor(false, false)))
+	{
+		if(auto factory = chain->getFactoryType())
+			processOnSummedBuffer = dynamic_cast<NoMidiInputConstrainer*>(factory->getConstrainer()) != nullptr;
+	}
 
 	bipolarIntensity.reset(sampleRate / 64.0, 0.05);
 	voiceFilters.setSampleRate(sampleRate);
@@ -342,6 +349,19 @@ void PolyFilterEffect::prepareToPlay(double sampleRate, int samplesPerBlock)
 
 void PolyFilterEffect::renderNextBlock(AudioSampleBuffer &b, int startSample, int numSamples)
 {
+	if(processOnSummedBuffer)
+	{
+		voiceModulationCalculated = false;
+
+		for(auto& mb : modChains)
+			mb.calculateMonophonicModulationValues(startSample, numSamples);
+
+		voiceModulationCalculated = true;
+
+		for(auto& mb : modChains)
+			mb.calculateModulationValuesForCurrentVoice(0, startSample, numSamples);
+	}
+
 	if (auto sl = SimpleReadWriteLock::ScopedTryReadLock(getMatrix().getLock()))
 	{
 		AudioSampleBuffer cb;
@@ -350,7 +370,7 @@ void PolyFilterEffect::renderNextBlock(AudioSampleBuffer &b, int startSample, in
 		auto& bufferToUse = makeChannelBuffer(b, cb, ptrs);
 		bool useInactiveModValues = false;
 
-		if(!forceMono && !wasVoiceModulationCalculated())
+		if(!processOnSummedBuffer && !wasVoiceModulationCalculated())
 		{
 			if(auto ownerSynth = getOwnerSynthForDisplay())
 			{
@@ -381,7 +401,7 @@ void PolyFilterEffect::renderNextBlock(AudioSampleBuffer &b, int startSample, in
 				chain.getOneModulationValue(sampleOffset);
 		};
 
-		if (!forceMono && (hasPolyMods() || !blockIsActive))
+		if (!processOnSummedBuffer && (hasPolyMods() || !blockIsActive))
 		{
 			FilterHelpers::RenderData r(bufferToUse, startSample, numSamples);
 			r.voiceIndex = -1;

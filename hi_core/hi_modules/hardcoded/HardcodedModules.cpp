@@ -501,18 +501,15 @@ void HardcodedPolyphonicFX::renderInactiveMods(AudioSampleBuffer& b, int startSa
             setupChannelData(ch, b, 0);
             RD rd(*on, modProperties, nullptr, ch, numChannelsToRender, startSample, numSamples);
 
-            if(forceMono)
-                extraModSources.processInactiveVoiceModulation(rd, polyHandler, 0);
-            else
-                extraModSources.processInactiveVoiceModulation(rd, polyHandler,
-                    voiceStack.getLastStartedVoiceIndex());
+			extraModSources.processInactiveVoiceModulation(rd, polyHandler,
+				voiceStack.getLastStartedVoiceIndex());
         }
     }
 }
 
 void HardcodedPolyphonicFX::renderNextBlock(AudioSampleBuffer& b, int startSample, int numSamples)
 {
-	if(!forceMono && (getNumActiveVoices() != 0 || wasVoiceModulationCalculated()) || !shouldRenderInactiveMods())
+	if(getNumActiveVoices() != 0 || wasVoiceModulationCalculated() || !shouldRenderInactiveMods())
 		return;
 
     renderInactiveMods(b, startSample, numSamples);

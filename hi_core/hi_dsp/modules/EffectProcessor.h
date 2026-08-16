@@ -339,13 +339,10 @@ public:
 	void handleHiseEvent(const HiseEvent &m) override;;
 
 
-	void setForceMonoMode(bool shouldUseMonoMode);
-
 protected:
     
 	bool wasVoiceModulationCalculated() const { return voiceModulationCalculated; }
 
-	bool forceMono = false;
 	bool voiceModulationCalculated = false;
 
 	Array<SuspensionState> polyState;
