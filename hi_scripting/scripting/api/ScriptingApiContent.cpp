@@ -1215,7 +1215,8 @@ void ScriptingApi::Content::ScriptComponent::setValue(var controlValue)
     
     if (controlValue.isString())
     {
-        reportScriptError("You must not store Strings as value. Use either numbers or an Object");
+        reportScriptError("You must not store Strings as value for the " + getObjectName().toString() +
+                           " \"" + getId() + "\". Use either numbers or an Object");
     }
     
 #endif
