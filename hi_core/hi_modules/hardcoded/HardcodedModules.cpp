@@ -239,37 +239,11 @@ void HardcodedMasterFX::handleHiseEvent(const HiseEvent &m)
 
 void HardcodedMasterFX::applyEffect(AudioSampleBuffer &b, int startSample, int numSamples)
 {
-	SimpleReadWriteLock::ScopedReadLock sl(lock);
-
-
-	auto canBeSuspended = isSuspendedOnSilence();
-
-	if(getMainController()->getSampleManager().isNonRealtime())
-		canBeSuspended = false;
-
-	if (canBeSuspended)
-	{
-		if (masterState.numSilentBuffers > numSilentCallbacksToWait && startSample == 0)
-		{
-			auto silent = ProcessDataDyn(b.getArrayOfWritePointers(), b.getNumSamples(), b.getNumChannels()).isSilent();
-			
-			if (silent)
-			{
-				getMatrix().handleDisplayValues(b, b, false);
-				masterState.currentlySuspended = true;
-				return;
-			}
-			else
-			{
-				masterState.numSilentBuffers = 0;
-				masterState.currentlySuspended = false;
-			}
-		}
-	}
-
+    SimpleReadWriteLock::ScopedReadLock sl(lock);
+    
+    auto on = opaqueNode.get();
+    
 	masterState.currentlySuspended = false;
-
-	auto on = opaqueNode.get();
 
 	if(on != nullptr && channelCountMatches)
 	{
@@ -281,14 +255,6 @@ void HardcodedMasterFX::applyEffect(AudioSampleBuffer &b, int startSample, int n
 	}
 
 	getMatrix().handleDisplayValues(b, b, false);
-
-	if (canBeSuspended)
-	{
-		if (ProcessDataDyn(b.getArrayOfWritePointers(), numSamples, b.getNumChannels()).isSilent())
-			masterState.numSilentBuffers++;
-		else
-			masterState.numSilentBuffers = 0;
-	}
 }
 
 void HardcodedMasterFX::renderWholeBuffer(AudioSampleBuffer &buffer)
@@ -303,7 +269,45 @@ void HardcodedMasterFX::renderWholeBuffer(AudioSampleBuffer &buffer)
 	}
 	else
 	{
+		auto canBeSuspended = isSuspendedOnSilence();
+
+		if(getMainController()->getSampleManager().isNonRealtime())
+			canBeSuspended = false;
+
+		if (canBeSuspended && masterState.numSilentBuffers > numSilentCallbacksToWait)
+		{
+			auto silent = ProcessDataDyn(buffer.getArrayOfWritePointers(), buffer.getNumSamples(),
+				buffer.getNumChannels()).isSilent();
+
+			if (silent)
+			{
+				getMatrix().handleDisplayValues(buffer, buffer, false);
+				masterState.currentlySuspended = true;
+
+				if(shouldRenderInactiveMods())
+					renderInactiveMods(buffer, 0, buffer.getNumSamples());
+
+				return;
+			}
+
+			masterState.numSilentBuffers = 0;
+		}
+
+		masterState.currentlySuspended = false;
 		applyEffect(buffer, 0, buffer.getNumSamples());
+
+		if (canBeSuspended)
+		{
+			if (ProcessDataDyn(buffer.getArrayOfWritePointers(), buffer.getNumSamples(),
+				buffer.getNumChannels()).isSilent())
+				masterState.numSilentBuffers++;
+			else
+				masterState.numSilentBuffers = 0;
+		}
+		else
+		{
+			masterState.numSilentBuffers = 0;
+		}
 	}
 }
 
@@ -484,9 +488,31 @@ void HardcodedPolyphonicFX::renderData(ProcessDataDyn& data)
 	checkPostSuspension(voiceIndex, data);
 }
 
-void HardcodedPolyphonicFX::renderNextBlock(AudioSampleBuffer&, int, int)
+void HardcodedPolyphonicFX::renderInactiveMods(AudioSampleBuffer& b, int startSample, int numSamples)
 {
-		
+    if(auto sl = SimpleReadWriteLock::ScopedTryReadLock(lock))
+    {
+        auto on = opaqueNode.get();
+
+        if(on != nullptr && channelCountMatches)
+        {
+            using RD = ModulatorChain::ExtraModulatorRuntimeTargetSource::RenderData<OpaqueNode>;
+            auto ch = static_cast<float**>(alloca(numChannelsToRender * sizeof(float*)));
+            setupChannelData(ch, b, 0);
+            RD rd(*on, modProperties, nullptr, ch, numChannelsToRender, startSample, numSamples);
+
+			extraModSources.processInactiveVoiceModulation(rd, polyHandler,
+				voiceStack.getLastStartedVoiceIndex());
+        }
+    }
+}
+
+void HardcodedPolyphonicFX::renderNextBlock(AudioSampleBuffer& b, int startSample, int numSamples)
+{
+	if(getNumActiveVoices() != 0 || wasVoiceModulationCalculated() || !shouldRenderInactiveMods())
+		return;
+
+    renderInactiveMods(b, startSample, numSamples);
 }
 
 void HardcodedPolyphonicFX::reset(int voiceIndex)
@@ -536,7 +562,7 @@ void HardcodedPolyphonicFX::renderVoice(int voiceIndex, AudioSampleBuffer& b, in
 
 int HardcodedPolyphonicFX::getNumActiveVoices() const
 {
-	return voiceStack.voiceNoteOns.size();
+	return voiceStack.getNumActiveVoices();
 }
 
 bool HardcodedPolyphonicFX::isVoiceResetActive() const

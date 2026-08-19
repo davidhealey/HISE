@@ -363,6 +363,12 @@ ModulationDisplayValue ModulatorChain::getModulationDisplayValue(double pValue, 
 			auto rv = getCombinedOutputValues();
 			auto x = rv.first;
 
+			if(useInactiveDisplayValue)
+			{
+				x.first = getOutputValue();
+				x.second = 0.0f;
+			}
+
 			mv.scaledValue = jlimit(0.0, 1.0, (double)x.first);
 			mv.addValue = jlimit(0.0, 1.0, mv.scaledValue + x.second) - mv.scaledValue;
 
@@ -469,9 +475,9 @@ void ModulatorChain::updateInitialValueFromChildMods()
 		if(m->isBypassed())
 		{
 			auto mod = dynamic_cast<Modulation*>(m);
-			auto inactiveValue = m->getInactiveModValue();
-			m->setOutputValue(inactiveValue);
-			mod->applyModulationValue(inactiveValue, iv);
+			auto bypassedValue = m->getValueWhenBypassed();
+			m->setOutputValue(bypassedValue);
+			mod->applyModulationValue(bypassedValue, iv);
 		}
 	}
 
@@ -618,7 +624,7 @@ void ModulatorChain::ModChainWithBuffer::Buffer::updatePointers()
 
 void ModulatorChain::ModChainWithBuffer::applyMonophonicValuesToVoiceInternal(float* voiceBuffer, float* monoBuffer, int numSamples)
 {
-	if (c->getMode() == Modulation::PanMode)
+	if (c->getMode() == Modulation::PanMode || c->getMode() == Modulation::OffsetMode)
 	{
 		FloatVectorOperations::add(voiceBuffer, monoBuffer, numSamples);
 	}
@@ -680,12 +686,12 @@ ModulatorChain::ModChainWithBuffer::~ModChainWithBuffer()
 
 void ModulatorChain::ModChainWithBuffer::prepareToPlay(double sampleRate, int samplesPerBlock)
 {
+	c->useInactiveDisplayValue = false;
+	useLegacyInactiveModValues = HISE_GET_PREPROCESSOR(c->getMainController(), HISE_LEGACY_INACTIVE_MOD_VALUES);
 	c->prepareToPlay(sampleRate, samplesPerBlock);
 
 	if (type == Type::Normal)
 		modBuffer.setMaxSize(samplesPerBlock);
-
-	jassert(numActiveVoices == 0);
 }
 
 void ModulatorChain::ModChainWithBuffer::handleHiseEvent(const HiseEvent& m)
@@ -699,7 +705,8 @@ void ModulatorChain::ModChainWithBuffer::handleHiseEvent(const HiseEvent& m)
 
 void ModulatorChain::ModChainWithBuffer::resetVoice(int voiceIndex)
 {
-	numActiveVoices = jmax(numActiveVoices-1, 0);
+	c->useInactiveDisplayValue = false;
+	numActiveVoices = jmax(numActiveVoices - 1, 0);
 
 	if (c->hasActiveEnvelopesAtAll())
 	{
@@ -717,6 +724,7 @@ void ModulatorChain::ModChainWithBuffer::stopVoice(int voiceIndex)
 
 void ModulatorChain::ModChainWithBuffer::startVoice(int voiceIndex)
 {
+	c->useInactiveDisplayValue = false;
 	numActiveVoices++;
 
 	float firstDynamicValue = c->getInitialValueInternal();
@@ -816,6 +824,7 @@ void ModulatorChain::ModChainWithBuffer::setCurrentRampValueForVoice(int voiceIn
 
 void ModulatorChain::ModChainWithBuffer::setDisplayValue(float v)
 {
+	c->useInactiveDisplayValue = false;
 	c->setOutputValue(v);
 }
 
@@ -930,10 +939,7 @@ void ModulatorChain::ModChainWithBuffer::calculateMonophonicModulationValues(int
 		}
 		else
 		{
-			jassert(c->getMode() == Mode::CombinedMode ||
-					c->getMode() == Mode::GainMode ||
-					c->getMode() == Mode::PitchMode);
-			FloatVectorOperations::fill(modBuffer.monoValues + startSample_cr, 1.0f, numSamples_cr);
+			FloatVectorOperations::fill(modBuffer.monoValues + startSample_cr, c->getInitialValue(), numSamples_cr);
 		}
 	}
 
@@ -956,6 +962,8 @@ void ModulatorChain::ModChainWithBuffer::calculateMonophonicModulationValues(int
 
 void ModulatorChain::ModChainWithBuffer::calculateModulationValuesForCurrentVoice(int voiceIndex, int startSample, int numSamples)
 {
+	c->useInactiveDisplayValue = false;
+
 	if (c->isVoiceStartChain)
 	{
 		return;
@@ -1145,6 +1153,101 @@ void ModulatorChain::ModChainWithBuffer::calculateModulationValuesForCurrentVoic
 	c->polyManager.clearCurrentVoice();
 }
 
+void ModulatorChain::ModChainWithBuffer::calculateInactiveModulationValues(int voiceIndex, int startSample, int numSamples)
+{
+	c->useInactiveDisplayValue = false;
+
+	if(c->isVoiceStartChain)
+		return;
+
+	jassert(voiceIndex >= 0);
+	jassert(modBuffer.isInitialised());
+	jassert(startSample % HISE_CONTROL_RATE_DOWNSAMPLING_FACTOR == 0);
+
+	c->polyManager.setCurrentVoice(voiceIndex);
+
+	const auto startSample_cr = startSample / HISE_CONTROL_RATE_DOWNSAMPLING_FACTOR;
+	const auto numSamples_cr = numSamples / HISE_CONTROL_RATE_DOWNSAMPLING_FACTOR;
+	const auto useMonophonicData = options.includeMonophonicValues &&
+		(c->hasMonophonicTimeModulationMods() || options.forceProcessing);
+
+	auto voiceData = modBuffer.voiceValues;
+	const auto monoData = modBuffer.monoValues;
+
+	if(useMonophonicData)
+	{
+		if(c->hasActivePolyMods())
+		{
+			auto initialValue = c->getInitialValueInternal();
+
+			if(options.clampTo0to1)
+				initialValue = jlimit(0.0f, 1.0f, initialValue);
+
+			FloatVectorOperations::fill(voiceData + startSample_cr, initialValue, numSamples_cr);
+			applyMonophonicValuesToVoiceInternal(voiceData + startSample_cr, monoData + startSample_cr,
+				numSamples_cr);
+
+			if(c->getMode() == Modulation::Mode::CombinedMode)
+			{
+				auto addData = c->addBufferData->getReadPointer(startSample_cr, false);
+				FloatVectorOperations::add(voiceData + startSample_cr, addData, numSamples_cr);
+			}
+
+			setConstantVoiceValueInternal(voiceIndex, initialValue);
+			currentVoiceData = voiceData;
+		}
+		else if(options.voiceValuesReadOnly)
+		{
+			jassert(c->getMode() != Modulation::Mode::CombinedMode);
+			setConstantVoiceValueInternal(voiceIndex, c->getInitialValue());
+			currentVoiceData = monoData;
+		}
+		else
+		{
+			FloatVectorOperations::copy(voiceData + startSample_cr, monoData + startSample_cr, numSamples_cr);
+
+			if(c->getMode() == Modulation::Mode::CombinedMode)
+			{
+				auto addData = c->addBufferData->getReadPointer(startSample_cr, false);
+				FloatVectorOperations::add(voiceData + startSample_cr, addData, numSamples_cr);
+			}
+
+			setConstantVoiceValueInternal(voiceIndex, c->getInitialValue());
+			currentVoiceData = voiceData;
+		}
+	}
+	else
+	{
+		currentVoiceData = nullptr;
+		auto initialValue = c->getInitialValueInternal();
+
+		if(options.clampTo0to1)
+			initialValue = jlimit(0.0f, 1.0f, initialValue);
+
+		setConstantVoiceValueInternal(voiceIndex, initialValue);
+	}
+
+	DEBUG_ONLY(polyExpandChecker = false);
+
+	if(options.clampTo0to1 && currentVoiceData != nullptr)
+	{
+		auto dataToClip = const_cast<float*>(currentVoiceData);
+		FloatVectorOperations::clip(dataToClip + startSample_cr, dataToClip + startSample_cr, 0.0f, 1.0f,
+			numSamples_cr);
+	}
+
+	if(c->runtimeTargetSource.isEnabled())
+	{
+		c->runtimeTargetSource.copyModulationValues(currentVoiceData, getConstantModulationValue(), startSample_cr,
+			numSamples_cr);
+	}
+
+	const auto updatesDisplayValue = c->polyManager.getLastStartedVoice() == voiceIndex;
+	setDisplayValueInternal(voiceIndex, startSample_cr, numSamples_cr);
+	c->useInactiveDisplayValue = updatesDisplayValue;
+	c->polyManager.clearCurrentVoice();
+}
+
 void ModulatorChain::ModChainWithBuffer::applyMonophonicModulationValues(AudioSampleBuffer& b, int startSample, int numSamples)
 {
 	if (c->hasMonophonicTimeModulationMods())
@@ -1216,21 +1319,8 @@ float ModulatorChain::ModChainWithBuffer::getModValueForVoiceWithOffset(int star
 
 float ModulatorChain::ModChainWithBuffer::getOneModulationValue(int startSample) const
 {
-	if(numActiveVoices == 0)
-	{
-		ModIterator<Modulator> iter(c);
-
-		float m = 1.0f;
-
-		while(auto mod = iter.next())
-		{
-			auto mv = mod->getInactiveModValue();
-			m *= mv;
-		}
-
-		return m;
-	}
-		
+	if(useLegacyInactiveModValues && numActiveVoices == 0)
+		return getValueWhenNoVoiceIsActive();
 
 	// If you set this, you probably don't need this method...
 	jassert(!options.expandToAudioRate);
@@ -1240,6 +1330,17 @@ float ModulatorChain::ModChainWithBuffer::getOneModulationValue(int startSample)
 
 	const int downsampledOffset = startSample / HISE_CONTROL_RATE_DOWNSAMPLING_FACTOR;
 	return currentVoiceData[downsampledOffset];
+}
+
+float ModulatorChain::ModChainWithBuffer::getValueWhenNoVoiceIsActive() const
+{
+	ModIterator<Modulator> iter(c);
+	float value = 1.0f;
+
+	while(auto mod = iter.next())
+		value *= mod->getValueWhenBypassed();
+
+	return value;
 }
 
 float* ModulatorChain::ModChainWithBuffer::getScratchBuffer()
@@ -1260,6 +1361,7 @@ void ModulatorChain::ModChainWithBuffer::setIncludeMonophonicValuesInVoiceRender
 
 void ModulatorChain::ModChainWithBuffer::clear()
 {
+	c->useInactiveDisplayValue = false;
 	currentVoiceData = nullptr;
 	currentConstantValue = c->getInitialValueInternal();
 }

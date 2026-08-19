@@ -122,7 +122,6 @@ struct SendContainer : public ModulatorSynth
 		auto constrainer = new NoMidiInputConstrainer();
 
 		effectChain->getFactoryType()->setConstrainer(constrainer, true);
-		effectChain->setForceMonophonicProcessingOfPolyphonicEffects(true);
 	}
 	
 	void numSourceChannelsChanged() override

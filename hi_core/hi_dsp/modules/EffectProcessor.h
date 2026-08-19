@@ -95,8 +95,14 @@ public:
 
 	virtual void handleHiseEvent(const HiseEvent &m);;
 
+    bool shouldRenderInactiveMods() const { return forceInactiveModRendering; }
+    
 protected:
 
+    virtual void renderInactiveMods(AudioSampleBuffer& b, int startSample, int numSamples) {};
+    
+    bool forceInactiveModRendering = HISE_FORCE_INACTIVE_MOD_RENDERING;
+    
 	bool isTailing = false;
 
 	int numSilentCallbacksToWait = 86;
@@ -333,11 +339,11 @@ public:
 	void handleHiseEvent(const HiseEvent &m) override;;
 
 
-	void setForceMonoMode(bool shouldUseMonoMode);
-
 protected:
+    
+	bool wasVoiceModulationCalculated() const { return voiceModulationCalculated; }
 
-	bool forceMono = false;
+	bool voiceModulationCalculated = false;
 
 	Array<SuspensionState> polyState;
 };

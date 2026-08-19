@@ -92,7 +92,7 @@ public:
 
 	void onModulationDrop(int parameterIndex, int modulationSourceIndex) override;
 
-	float getInactiveModValue() const override;
+	float getValueWhenBypassed() const override;
 
 	String getModulationTargetId(int parameterIndex) const override;
 

@@ -717,6 +717,9 @@ public:
 
 	void prepareToPlay(double newSampleRate, int samplesPerBlock) override
 	{
+		forceInactiveTableModRendering = HISE_GET_PREPROCESSOR(getMainController(),
+			HISE_FORCE_INACTIVE_MOD_RENDERING);
+
 		if(newSampleRate > -1.0)
 		{
 			for(int i = 0; i < sounds.size(); i++)
@@ -850,12 +853,37 @@ public:
 	{
 		ModulatorSynth::renderNextBlockWithModulators(outputAudio, inputMidi);
 
-		if(getNumActiveVoices() == 0)
+		if(getNumActiveVoices() == 0 && !wasVoiceRenderedInCurrentBlock())
 		{
-			auto dv = getAttribute(SpecialParameters::TableIndexValue);
-			auto mv = modChains[(int)ChainIndex::TableIndex].getOneModulationValue(0);
-			dv *= mv;
-			jlimit(0.0f, 1.0f, dv);
+			auto& tableModulation = modChains[(int)ChainIndex::TableIndex];
+			auto& bipolarModulation = modChains[(int)ChainIndex::TableIndexBipolar];
+			float dv;
+
+			if(forceInactiveTableModRendering)
+			{
+				auto voiceIndex = 0;
+
+				if(auto voice = getLastStartedVoice())
+					voiceIndex = voice->getVoiceIndex();
+
+				tableModulation.calculateInactiveModulationValues(voiceIndex, 0,
+					outputAudio.getNumSamples());
+				bipolarModulation.calculateInactiveModulationValues(voiceIndex, 0,
+					outputAudio.getNumSamples());
+				auto gainMod = tableModulation.getOneModulationValue(0);
+				auto bipolarMod = bipolarModulation.getOneModulationValue(0);
+				bipolarMod *= (float)bipolarModulation.getChain()->shouldBeProcessedAtAll();
+				auto tableValue = getAttribute(SpecialParameters::TableIndexValue);
+				dv = jlimit(0.0f, 1.0f, tableValue * gainMod + bipolarMod);
+				dv = dv * (1.0f - reversed) + (1.0f - dv) * reversed;
+			}
+			else
+			{
+				auto gainMod = tableModulation.getValueWhenNoVoiceIsActive();
+				auto tableValue = getAttribute(SpecialParameters::TableIndexValue);
+				dv = jlimit(0.0f, 1.0f, tableValue * gainMod);
+			}
+
 			setDisplayTableValue(dv);
 		}
 	}
@@ -1076,6 +1104,7 @@ private:
 
 	bool hqMode = true;
 	bool refreshMipmap = false;
+	bool forceInactiveTableModRendering = HISE_FORCE_INACTIVE_MOD_RENDERING;
 
 	friend class WavetableSynthVoice;
 

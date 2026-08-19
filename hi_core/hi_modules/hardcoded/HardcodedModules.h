@@ -98,6 +98,22 @@ public:
 
 	void renderWholeBuffer(AudioSampleBuffer &buffer) override;
 
+    void renderInactiveMods(AudioSampleBuffer& b, int startSample, int numSamples) override
+    {
+        if(auto sl = SimpleReadWriteLock::ScopedTryReadLock(lock))
+        {
+            if(auto on = opaqueNode.get())
+            {
+                using RD = ModulatorChain::ExtraModulatorRuntimeTargetSource::RenderData<OpaqueNode>;
+                auto ch = static_cast<float**>(alloca(numChannelsToRender * sizeof(float*)));
+                setupChannelData(ch, b, 0);
+                RD rd(*on, modProperties, eventBuffer, ch, numChannelsToRender, startSample, numSamples);
+
+                extraMods.processChunkedWithModulation<false>(rd);
+            }
+        }
+    }
+    
 private:
 
 	ModulatorChain::ExtraModulatorRuntimeTargetSource extraMods;
@@ -153,6 +169,8 @@ public:
 	void handleHiseEvent(const HiseEvent &m) override;
 	void connectionChanged() override;;
 
+    void renderInactiveMods(AudioSampleBuffer& b, int startSample, int numSamples);
+    
 	void numSourceChannelsChanged() override {};
 	void numDestinationChannelsChanged() override {};
 

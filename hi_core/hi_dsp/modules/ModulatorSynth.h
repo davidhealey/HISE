@@ -479,9 +479,11 @@ protected:
 	virtual bool synthNeedsEnvelope() const;;
 	
 	void finaliseModChains();
+	bool wasVoiceRenderedInCurrentBlock() const { return voiceRenderedInCurrentBlock; }
 	
 
 	bool finalised = false;
+	bool voiceRenderedInCurrentBlock = false;
 
 	bool checkTimerCallback(int timerIndex, int numSamplesThisBlock) const noexcept;;
 	

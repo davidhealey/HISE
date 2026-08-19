@@ -166,6 +166,9 @@ public:
 		*/
 		void calculateModulationValuesForCurrentVoice(int voiceIndex, int startSample, int numSamples);
 
+		/** Calculates the parameter base value with monophonic modulation, excluding all polyphonic modulation. */
+		void calculateInactiveModulationValues(int voiceIndex, int startSample, int numSamples);
+
 		/** This multiplies the modulation values with the given AudioSampleBuffer. 
 		*
 		*	Make sure you've expanded the values before using this.
@@ -222,6 +225,9 @@ public:
 
 		/** Returns the first value in the modulation data or the constant value. */
 		float getOneModulationValue(int startSample) const;
+
+		/** Returns the combined fallback value without rendering a voice. */
+		float getValueWhenNoVoiceIsActive() const;
 
 		float getModValueForVoiceWithOffset(int startSample) const;
 
@@ -315,6 +321,7 @@ public:
 		bool manualExpansionPending = false;
 
 		int numActiveVoices = 0;
+		bool useLegacyInactiveModValues = HISE_LEGACY_INACTIVE_MOD_VALUES;
 
 		Options options;
 		
@@ -890,17 +897,22 @@ public:
 
 		/** Use this function to process the audio buffer and it will process all modulation chains and chunk
 		 *  the data according to the given modulation block size. */
-		template <typename RD> void processChunkedWithModulation(RD& rd)
+		template <bool ProcessAudio = true, typename RD> void processChunkedWithModulation(RD& rd)
 		{
 			auto thisBlockSize = rd.pp.getBlockSize(rd.pd.getNumSamples());
 
 			int startSample = rd.startOffset;
 
 
-			if(thisBlockSize == rd.pd.getNumSamples())
+			if(thisBlockSize == rd.pd.getNumSamples() || !ProcessAudio)
 			{
+                // note that if we don't process audio we can omit the chunking
+                // because the mod signal is created and updated once per block
+                // which is plenty enough to keep the UI synced...
 				handleModulation(rd, startSample);
-				rd.process(rd.pd);
+
+				if constexpr (ProcessAudio)
+					rd.process(rd.pd);
 			}
 			else
 			{
@@ -913,10 +925,32 @@ public:
 
 					handleModulation(rd, startSample);
 
-					rd.process(chunk.toData());
+					if constexpr (ProcessAudio)
+						rd.process(chunk.toData());
+					else
+						ignoreUnused(chunk);
+
 					startSample += numThisTime;
 				}
 			}
+		}
+
+		template <typename RD> void processInactiveVoiceModulation(RD& rd,
+			scriptnode::PolyHandler& polyHandler, int voiceIndex)
+		{
+			if(!rd.pp.isAnyConnected())
+				return;
+
+			int modSlot = 0;
+
+			for(auto mb : extraMods)
+			{
+				if(rd.pp.isUsed(modSlot++))
+					mb->calculateInactiveModulationValues(voiceIndex, rd.startOffset, rd.pd.getNumSamples());
+			}
+
+			scriptnode::PolyHandler::ScopedVoiceSetter setter(polyHandler, voiceIndex);
+			processChunkedWithModulation<false>(rd);
 		}
 
 		struct ParameterInitData
@@ -1052,6 +1086,7 @@ private:
 	};
 
 	ScopedPointer<AddBufferData> addBufferData;
+	bool useInactiveDisplayValue = false;
 
 	std::pair<std::pair<float, float>, Range<double>> getCombinedOutputValues() const;
 

@@ -704,6 +704,30 @@ void JavascriptPolyphonicEffect::renderVoice(int voiceIndex, AudioSampleBuffer &
 	}
 }
 
+void JavascriptPolyphonicEffect::renderNextBlock(AudioSampleBuffer& b, int startSample, int numSamples)
+{
+	if(getNumActiveVoices() != 0 || wasVoiceModulationCalculated() || !shouldRenderInactiveMods())
+		return;
+
+	if(auto n = getActiveNetwork())
+	{
+		if(auto s = SimpleReadWriteLock::ScopedTryReadLock(n->getConnectionLock()))
+		{
+			if(n->getExceptionHandler().isOk())
+			{
+				auto rn = n->getRootNode();
+
+				using RD = ModulatorChain::ExtraModulatorRuntimeTargetSource::RenderData<NodeBase>;
+				RD rd(*rn, n->getParameterProperties(), nullptr, b.getArrayOfWritePointers(), b.getNumChannels(),
+					startSample, numSamples);
+
+				extraModSources.processInactiveVoiceModulation(rd, *n->getPolyHandler(),
+					voiceData.getLastStartedVoiceIndex());
+			}
+		}
+	}
+}
+
 void JavascriptPolyphonicEffect::startVoice(int voiceIndex, const HiseEvent& e)
 {
 	VoiceEffectProcessor::startVoice(voiceIndex, e);
@@ -724,6 +748,8 @@ void JavascriptPolyphonicEffect::reset(int voiceIndex)
 
 void JavascriptPolyphonicEffect::handleHiseEvent(const HiseEvent &m)
 {
+	VoiceEffectProcessor::handleHiseEvent(m);
+
 	if (m.isNoteOn())
 		return;
 
@@ -1052,7 +1078,7 @@ void JavascriptMasterEffect::renderWholeBuffer(AudioSampleBuffer &buffer)
 	}
 	else
 	{
-		if (getActiveNetwork() != nullptr)
+		if (auto n = getActiveNetwork())
 		{
 			auto numChannels = channelIndexes.size();
 			auto numSamples = buffer.getNumSamples();
@@ -1062,9 +1088,54 @@ void JavascriptMasterEffect::renderWholeBuffer(AudioSampleBuffer &buffer)
 			for(int i = 0; i < numChannels; i++)
 				data[i] = buffer.getWritePointer(channelIndexes[i]);
 
-			ProcessDataDyn pd(data, numSamples, numChannels);
-			pd.setEventBuffer(*eventBuffer);
-			getActiveNetwork()->process(pd);
+			AudioSampleBuffer routedBuffer(data, numChannels, numSamples);
+			auto canBeSuspended = isSuspendedOnSilence();
+			const auto isRoutedBufferSilent = [&routedBuffer, numSamples]()
+			{
+				const auto silenceThreshold = Decibels::decibelsToGain(-90.0f);
+
+				for(int i = 0; i < routedBuffer.getNumChannels(); i++)
+				{
+					if(routedBuffer.getMagnitude(i, 0, numSamples) > silenceThreshold)
+						return false;
+				}
+
+				return true;
+			};
+
+			if(getMainController()->getSampleManager().isNonRealtime())
+				canBeSuspended = false;
+
+			if(canBeSuspended && masterState.numSilentBuffers > numSilentCallbacksToWait)
+			{
+				if(isRoutedBufferSilent())
+				{
+					masterState.currentlySuspended = true;
+
+					if(shouldRenderInactiveMods())
+						renderInactiveMods(routedBuffer, 0, numSamples);
+
+					return;
+				}
+
+				masterState.numSilentBuffers = 0;
+			}
+
+			masterState.currentlySuspended = false;
+			applyEffect(routedBuffer, 0, numSamples);
+
+			if(canBeSuspended)
+			{
+				if(isRoutedBufferSilent())
+					masterState.numSilentBuffers++;
+				else
+					masterState.numSilentBuffers = 0;
+			}
+			else
+			{
+				masterState.numSilentBuffers = 0;
+			}
+
 			return;
 		}
 
@@ -1101,8 +1172,6 @@ void JavascriptMasterEffect::renderWholeBuffer(AudioSampleBuffer &buffer)
 
 void JavascriptMasterEffect::applyEffect(AudioSampleBuffer &b, int startSample, int numSamples)
 {
-	ignoreUnused(startSample);
-
 	if (auto n = getActiveNetwork())
 	{
 		TRACE_DSP();
@@ -1114,8 +1183,6 @@ void JavascriptMasterEffect::applyEffect(AudioSampleBuffer &b, int startSample, 
 		{
 			if (n->getExceptionHandler().isOk())
 			{
-				ProcessDataDyn d(b.getArrayOfWritePointers(), b.getNumSamples(), b.getNumChannels());
-
 				const auto& pp = n->getParameterProperties();
 				auto rn = n->getRootNode();
 				using RD = ModulatorChain::ExtraModulatorRuntimeTargetSource::RenderData<NodeBase>;
@@ -1146,6 +1213,27 @@ void JavascriptMasterEffect::applyEffect(AudioSampleBuffer &b, int startSample, 
 		scriptEngine->executeCallback((int)Callback::processBlock, &lastResult);
 
 		BACKEND_ONLY(if (!lastResult.wasOk()) debugError(this, lastResult.getErrorMessage()));
+	}
+}
+
+void JavascriptMasterEffect::renderInactiveMods(AudioSampleBuffer& b, int startSample, int numSamples)
+{
+	if(auto n = getActiveNetwork())
+	{
+		if(!n->isInitialised())
+			return;
+
+		if(auto s = SimpleReadWriteLock::ScopedTryReadLock(n->getConnectionLock()))
+		{
+			if(n->getExceptionHandler().isOk())
+			{
+				auto rn = n->getRootNode();
+				using RD = ModulatorChain::ExtraModulatorRuntimeTargetSource::RenderData<NodeBase>;
+				RD rd(*rn, n->getParameterProperties(), eventBuffer, b.getArrayOfWritePointers(), b.getNumChannels(),
+					startSample, numSamples);
+				extraModSources.processChunkedWithModulation<false>(rd);
+			}
+		}
 	}
 }
 

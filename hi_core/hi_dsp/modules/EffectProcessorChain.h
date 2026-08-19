@@ -292,9 +292,6 @@ public:
 		EffectProcessorChain *chain;
 	};
 
-	/** Enable this to enforce the rendering of polyphonic effects (namely the filter in a container effect chain. */
-	void setForceMonophonicProcessingOfPolyphonicEffects(bool shouldProcessPolyFX);
-
 private:
 
 	template <typename T> struct FXIterator
@@ -322,8 +319,6 @@ private:
 
 		EffectProcessorChain& p;
 	};
-
-	bool renderPolyFxAsMono = false;
 
 	// Gives it a limit of 6 million years...
 	int64 resetCounter = -1;

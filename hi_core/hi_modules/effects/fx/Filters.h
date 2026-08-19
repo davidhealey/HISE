@@ -131,6 +131,7 @@ private:
 	friend class FilterEditor;
 
 	bool blockIsActive = false;
+	bool processOnSummedBuffer = false;
 	int polyWatchdog = 0;
 
 	BlockDivider<64> monoDivider;
@@ -169,7 +170,9 @@ private:
 	FilterBank voiceFilters;
 	FilterBank monoFilters;
 
-	mutable WeakReference<Processor> ownerSynthForCoefficients;
+	ModulatorSynth* getOwnerSynthForDisplay() const;
+
+	WeakReference<Processor> ownerSynthForCoefficients;
 
 	JUCE_DECLARE_WEAK_REFERENCEABLE(PolyFilterEffect)
 };
@@ -178,5 +181,4 @@ private:
 
 
 } // namespace hise
-
 
