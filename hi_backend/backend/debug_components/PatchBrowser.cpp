@@ -2557,8 +2557,27 @@ void PatchBrowser::MiniPeak::timerCallback()
 		{
 			auto& mat = rp->getMatrix();
 			thisNumChannels = mat.getNumSourceChannels();
-			
+
 			somethingChanged |= numChannels != thisNumChannels;
+
+			if (thisNumChannels != numChannels)
+			{
+				if (numChannels != 2)
+				{
+					Array<int> oldIndexes;
+					for (int i = 0; i < numChannels; i++)
+						oldIndexes.add(i);
+					mat.setEditorShown(oldIndexes, false);
+				}
+
+				if (thisNumChannels != 2)
+				{
+					Array<int> newIndexes;
+					for (int i = 0; i < thisNumChannels; i++)
+						newIndexes.add(i);
+					mat.setEditorShown(newIndexes, true);
+				}
+			}
 
 			if (thisNumChannels == 2)
 			{
