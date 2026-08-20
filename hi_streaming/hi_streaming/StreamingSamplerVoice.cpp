@@ -680,7 +680,7 @@ void StreamingSamplerVoice::startNote(int /*midiNoteNumber*/,
 
 void StreamingSamplerVoice::skipTimestretchSilenceAtStart()
 {
-	// Use roundToInt to match skipLatency's rounding — mismatched rounding causes a
+	// Use roundToInt to match skipLatency's rounding - mismatched rounding causes a
 	// one-sample buffer overread into uninitialised memory at certain stretch ratios.
 	auto numBeforeOutput = roundToInt(stretcher.getLatency(stretchRatio));
 
@@ -689,7 +689,15 @@ void StreamingSamplerVoice::skipTimestretchSilenceAtStart()
 	auto outL = (float*)alloca(sizeof(float) * numBeforeOutput);
 	auto outR = (float*)alloca(sizeof(float) * numBeforeOutput);
 
+	// interpolateFromStereoData sizes its normalisation scratch from pitchCounter, which holds
+	// the block length here, while the interpolation below reads numBeforeOutput samples.
+	// Restore it afterwards, the caller is mid block and still needs it.
+	const auto prevPitchCounter = pitchCounter;
+	pitchCounter = (double)numBeforeOutput;
+
 	interpolateFromStereoData(0, outL, outR, numBeforeOutput, nullptr, 1.0, 0.0, data, numBeforeOutput);
+
+	pitchCounter = prevPitchCounter;
 
 	float* inp[2] = { outL, outR };
 
@@ -932,7 +940,7 @@ void StreamingSamplerVoice::interpolateFromStereoData(int startSample, float* ou
 		}
 		else
 		{
-			interpolateStereoSamples<int16, false>(inL, inR, pitchData, outL, outR, startSample, indexInBuffer, thisUptimeDelta, numSamplesToCalculate, indexInBuffer + samplesAvailable);
+			interpolateStereoSamples<int16, false>(inL, inR, pitchDataToUse, outL, outR, startSample, indexInBuffer, thisUptimeDelta, numSamplesToCalculate, indexInBuffer + samplesAvailable);
 		}
 	}
 }
