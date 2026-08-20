@@ -215,8 +215,9 @@ void Processor::setAttribute(int parameterIndex, float newValue, dispatch::Dispa
 }
 
 float Processor::getDefaultValue(int parameterIndex) const
-{ 
-	jassert(hasInitialisedMetadata());
+{
+	SimpleReadWriteLock::ScopedReadLock rl(metadataLock);
+	jassert(hasInitialisedMetadataUnlocked());
 	jassert(isPositiveAndBelow(parameterIndex, metadata.second.parameters.size()));
 	return metadata.second.getDefaultValue(this, parameterIndex);
 }
@@ -545,7 +546,9 @@ void Processor::setConstrainerForAllInternalChains(BaseConstrainer *constrainer)
 
 Identifier Processor::getIdentifierForParameterIndex(int parameterIndex) const
 {
-	jassert(hasInitialisedMetadata());
+	SimpleReadWriteLock::ScopedReadLock rl(metadataLock);
+
+	jassert(hasInitialisedMetadataUnlocked());
 
 	for (const auto& pd : metadata.second.parameters)
 	{
@@ -559,14 +562,16 @@ Identifier Processor::getIdentifierForParameterIndex(int parameterIndex) const
 
 int Processor::getParameterIndexForIdentifier(const Identifier& id) const
 {
-	jassert(hasInitialisedMetadata());
+	SimpleReadWriteLock::ScopedReadLock rl(metadataLock);
+
+	jassert(hasInitialisedMetadataUnlocked());
 
 	for (const auto& p : metadata.second.parameters)
 	{
 		if (p.id == id)
 			return p.parameterIndex;
 	}
-	
+
 	if ((int)dispatcher.getNumAttributes() != metadata.second.parameters.size())
 	{
 		auto numParameters = metadata.second.parameters.size();
@@ -587,7 +592,8 @@ int Processor::getParameterIndexForIdentifier(const Identifier& id) const
 
 int Processor::getNumParameters() const
 {
-	jassert(hasInitialisedMetadata());
+	SimpleReadWriteLock::ScopedReadLock rl(metadataLock);
+	jassert(hasInitialisedMetadataUnlocked());
 	return jmax(metadata.second.parameters.size(), (int)dispatcher.getNumAttributes());
 }
 
@@ -1441,8 +1447,12 @@ void ProcessorHelpers::connectTableEditor(TableEditor& t, Processor* p, int inde
 
 ProcessorMetadata Processor::getMetadata() const
 {
-	if (hasInitialisedMetadata())
-		return metadata.second;
+	{
+		SimpleReadWriteLock::ScopedReadLock rl(metadataLock);
+
+		if (hasInitialisedMetadataUnlocked())
+			return metadata.second;
+	}
 
 	// All processors must call updateParameterSlots() during construction.
 	// If this fires, a processor subclass is missing its initialisation.

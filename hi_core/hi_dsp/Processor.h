@@ -748,15 +748,20 @@ public:
     bool updateParameterSlots(int numForced = -1)
 	{
         // Cache metadata from registry (virtual dispatch is safe here - called from derived constructors)
-        metadata.first = false;
-        metadata = { true, getMetadata() };
+        auto newMetadata = getMetadata();
+
+        {
+            // Guards against concurrent readers (message thread + sample loading thread)
+            SimpleReadWriteLock::ScopedMultiWriteLock wl(metadataLock);
+            metadata = { true, std::move(newMetadata) };
+        }
 
         if(numForced == -1)
             numForced = getNumAttributes();
 
 		NEW_PROCESSOR_DISPATCH(dispatcher.setNumAttributes(numForced));
 
-        return metadata.first;
+        return true;
 	}
 
     virtual void connectToRuntimeTargets(scriptnode::OpaqueNode& on, bool shouldAdd)
@@ -805,7 +810,11 @@ public:
 	/** Call this from the baseclass whenever you want its editor to display a value change. */
 	void setOutputValue(float newValue);;
 
-    bool hasInitialisedMetadata() const { return metadata.first && metadata.second.isValid(); }
+    bool hasInitialisedMetadata() const
+    {
+        SimpleReadWriteLock::ScopedReadLock rl(metadataLock);
+        return hasInitialisedMetadataUnlocked();
+    }
 
 protected:
 
@@ -839,6 +848,10 @@ protected:
 	NEW_PROCESSOR_DISPATCH(dispatch::library::Processor dispatcher);
 
 private:
+
+    bool hasInitialisedMetadataUnlocked() const noexcept { return metadata.first && metadata.second.isValid(); }
+
+    mutable SimpleReadWriteLock metadataLock;
 
     std::pair<bool, ProcessorMetadata> metadata;
 
