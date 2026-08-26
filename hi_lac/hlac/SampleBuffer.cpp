@@ -467,7 +467,7 @@ void HiseSampleBuffer::addWithGain(HiseSampleBuffer& dst, const HiseSampleBuffer
 		auto ld = dst.leftIntBuffer.getWritePointer(startSampleDst);
 		auto ls = source.leftIntBuffer.getReadPointer(startSampleSource);
 
-		CompressionHelpers::IntVectorOperations::add(ld, ls, numSamples);
+		CompressionHelpers::IntVectorOperations::addWithGain(ld, ls, numSamples, gainFactor);
 
 		if (dst.hasSecondChannel())
 		{
@@ -476,14 +476,14 @@ void HiseSampleBuffer::addWithGain(HiseSampleBuffer& dst, const HiseSampleBuffer
 				auto ld2 = dst.rightIntBuffer.getWritePointer(startSampleDst);
 				auto ls2 = source.rightIntBuffer.getReadPointer(startSampleSource);
 
-				CompressionHelpers::IntVectorOperations::add(ld2, ls2, numSamples);
+				CompressionHelpers::IntVectorOperations::addWithGain(ld2, ls2, numSamples, gainFactor);
 			}
 			else
 			{
 				auto ld2 = dst.rightIntBuffer.getWritePointer(startSampleDst);
 				auto ls2 = source.leftIntBuffer.getReadPointer(startSampleSource);
 
-				CompressionHelpers::IntVectorOperations::add(ld2, ls2, numSamples);
+				CompressionHelpers::IntVectorOperations::addWithGain(ld2, ls2, numSamples, gainFactor);
 			}
 		}
 	}
