@@ -2413,6 +2413,45 @@ void ScriptEncryptedExpansion::setCompressorForPool(SubDirectories fileType, boo
 	}
 }
 
+bool ScriptEncryptedExpansion::matchesVariation(const ValueTree& contentData) const
+{
+	if (variationToExport.isEmpty())
+		return true;
+
+	auto tagString = contentData.getProperty("Variations").toString();
+
+	// untagged content is always included
+	if (tagString.isEmpty())
+		return true;
+
+	auto variations = StringArray::fromTokens(tagString, ",", "");
+	variations.trim();
+	return variations.contains(variationToExport);
+}
+
+void ScriptEncryptedExpansion::pruneUserPresetsForVariation(ValueTree tree) const
+{
+	static const Identifier presetFile("PresetFile");
+
+	for (int i = tree.getNumChildren() - 1; i >= 0; i--)
+	{
+		auto child = tree.getChild(i);
+
+		if (child.getType() == presetFile)
+		{
+			if (!matchesVariation(child.getChild(0)))
+				tree.removeChild(i, nullptr);
+		}
+		else
+		{
+			pruneUserPresetsForVariation(child);
+
+			if (child.getNumChildren() == 0)
+				tree.removeChild(i, nullptr);
+		}
+	}
+}
+
 void ScriptEncryptedExpansion::addDataType(ValueTree& parent, SubDirectories fileType)
 {
 	MemoryBlock mb;
@@ -2423,7 +2462,21 @@ void ScriptEncryptedExpansion::addDataType(ValueTree& parent, SubDirectories fil
 
 	setCompressorForPool(fileType, true);
 
+	if (fileType == FileHandlerBase::SampleMaps && variationToExport.isNotEmpty())
+	{
+		auto& smPool = pool->getSampleMapPool();
+
+		p->getDataProvider()->setReferenceFilter([this, &smPool](const PoolReference& ref)
+		{
+			auto entry = smPool.loadFromReference(ref, PoolHelpers::LoadingType::DontCreateNewEntry);
+			return matchesVariation(entry->data);
+		});
+	}
+
 	p->getDataProvider()->writePool(mos.release());
+
+	if (fileType == FileHandlerBase::SampleMaps)
+		p->getDataProvider()->setReferenceFilter({});
 
 	auto id = getIdentifier(fileType).removeCharacters("/");
 
@@ -2456,6 +2509,9 @@ void ScriptEncryptedExpansion::restorePool(ValueTree encryptedTree, SubDirectori
 void ScriptEncryptedExpansion::addUserPresets(ValueTree encryptedTree)
 {
 	auto userPresets = UserPresetHelpers::collectAllUserPresets(getMainController()->getMainSynthChain(), this);
+
+	if (variationToExport.isNotEmpty())
+		pruneUserPresetsForVariation(userPresets);
 
 	MemoryBlock mb;
 
@@ -3037,6 +3093,34 @@ ExpansionEncodingWindow::ExpansionEncodingWindow(MainController* mc, Expansion* 
 		addComboBox("rhapsody", { "HXI Full Instrument Expansion", "Rhapsody Player Library", "HISE Project Archive" }, "Export Format");
 		getComboBoxComponent("rhapsody")->setSelectedItemIndex((int)exportMode, dontSendNotification);
 
+		{
+			// collect the "Variations" tags used in sample maps and user presets
+			StringArray variationTags;
+
+			Array<File> taggedFiles;
+			h.getSubDirectory(FileHandlerBase::SampleMaps).findChildFiles(taggedFiles, File::findFiles, true, "*.xml");
+			h.getSubDirectory(FileHandlerBase::UserPresets).findChildFiles(taggedFiles, File::findFiles, true, "*.preset");
+
+			for (auto f : taggedFiles)
+			{
+				if (auto xml = XmlDocument::parse(f))
+				{
+					auto tokens = StringArray::fromTokens(xml->getStringAttribute("Variations"), ",", "");
+					tokens.trim();
+
+					for (auto t : tokens)
+						variationTags.addIfNotAlreadyThere(t);
+				}
+			}
+
+			if (!variationTags.isEmpty())
+			{
+				variationTags.insert(0, "All");
+				addComboBox("variation", variationTags, "Variation to export");
+				getComboBoxComponent("variation")->setSelectedItemIndex(0, dontSendNotification);
+			}
+		}
+
 		if (mc->getExpansionHandler().getEncryptionKey({}).isEmpty())
 		{
 			auto k = dynamic_cast<GlobalSettingManager*>(mc)->getSettingsObject().getSetting(HiseSettings::Project::EncryptionKey).toString();
@@ -3152,6 +3236,16 @@ void ExpansionEncodingWindow::run()
 		auto& h = GET_PROJECT_HANDLER(getMainController()->getMainSynthChain());
 		auto f = Expansion::Helpers::getExpansionInfoFile(h.getWorkDirectory(), Expansion::FileBased);
 
+		String selectedVariation;
+
+		if (auto variationBox = getComboBoxComponent("variation"))
+		{
+			selectedVariation = variationBox->getText();
+
+			if (selectedVariation == "All")
+				selectedVariation = {};
+		}
+
 		ValueTree mData(ExpansionIds::ExpansionInfo);
 
 		auto projectName = GET_HISE_SETTING(getMainController()->getMainSynthChain(), HiseSettings::Project::Name).toString();
@@ -3165,6 +3259,9 @@ void ExpansionEncodingWindow::run()
 		mData.setProperty(ExpansionIds::UUID, GET_HISE_SETTING(getMainController()->getMainSynthChain(), HiseSettings::ExpansionSettings::UUID), nullptr);
 		mData.setProperty(ExpansionIds::RequiredPlayerVersion, GET_HISE_SETTING(getMainController()->getMainSynthChain(), HiseSettings::ExpansionSettings::RequiredPlayerVersion), nullptr);
 		mData.setProperty(ExpansionIds::HiseVersion, PresetHandler::getVersionString(), nullptr);
+
+		if (selectedVariation.isNotEmpty())
+			mData.setProperty(ExpansionIds::Variation, selectedVariation, nullptr);
 
 		if (exportMode == ExportMode::HiseProject)
 		{
@@ -3192,6 +3289,7 @@ void ExpansionEncodingWindow::run()
 		ScopedPointer<FullInstrumentExpansion> e = new FullInstrumentExpansion(getMainController(), h.getWorkDirectory());
 		e->initialise();
 		e->setIsProjectExporter();
+		e->variationToExport = selectedVariation;
 		encodeResult = e->encodeExpansion();
 
 		// This file is used by the FullInstrument Expansion so
