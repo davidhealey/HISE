@@ -535,6 +535,8 @@ private:
 
 	String getProjectVersion() const;
 
+	String getVariationFromHxi() const;
+
 	File getTargetFile() const;
 
 	ModulatorSynthChain* synthChain;

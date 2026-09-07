@@ -1069,6 +1069,29 @@ String SampleDataExporter::getProjectVersion() const
 #endif
 }
 
+String SampleDataExporter::getVariationFromHxi() const
+{
+	if (!hxiFile->getCurrentFile().existsAsFile())
+		return {};
+
+	if (Expansion::Helpers::isXmlFile(hxiFile->getCurrentFile()))
+	{
+		if (auto xml = XmlDocument::parse(hxiFile->getCurrentFile()))
+		{
+			if (auto c = xml->getChildByName(ExpansionIds::ExpansionInfo.toString()))
+				return c->getStringAttribute(ExpansionIds::Variation.toString());
+		}
+	}
+	else
+	{
+		FileInputStream fis(hxiFile->getCurrentFile());
+		auto v = ValueTree::readFromStream(fis);
+		return v.getChildWithName(ExpansionIds::ExpansionInfo)[ExpansionIds::Variation].toString();
+	}
+
+	return {};
+}
+
 File SampleDataExporter::getTargetFile() const
 {
 	auto currentFile = targetFile->getCurrentFile();
@@ -1081,6 +1104,11 @@ File SampleDataExporter::getTargetFile() const
 	{
 		auto archiveMode = (ArchiveMode)getComboBoxComponent("archiveMode")->getSelectedItemIndex();
 		String suffix = archiveMode != ArchiveMode::Combined ? "_Data.hr1" : "_Samples.hr1";
+
+		auto variation = getVariationFromHxi();
+
+		if (variation.isNotEmpty())
+			suffix = "_" + variation + suffix;
 
 		if (expName.isEmpty())
 		{
