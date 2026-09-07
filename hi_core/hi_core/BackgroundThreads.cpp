@@ -933,10 +933,14 @@ Array<File> SampleDataExporter::collectMonoliths()
 
 	auto& smPool = handler->pool->getSampleMapPool();
 	auto sampleDirectory = handler->getSubDirectory(FileHandlerBase::Samples);
+	auto variation = getVariationFromHxi();
 
 	for (int i = 0; i < smPool.getNumLoadedFiles(); i++)
 	{
 		auto entry = smPool.loadFromReference(smPool.getReference(i), PoolHelpers::DontCreateNewEntry);
+
+		if (!matchesVariation(entry->data, variation))
+			continue;
 
 		MonolithFileReference mref(entry->data);
 
@@ -1090,6 +1094,22 @@ String SampleDataExporter::getVariationFromHxi() const
 	}
 
 	return {};
+}
+
+bool SampleDataExporter::matchesVariation(const ValueTree& sampleMapData, const String& variation)
+{
+	if (variation.isEmpty())
+		return true;
+
+	auto tagString = sampleMapData.getProperty("Variations").toString();
+
+	// untagged content is always included
+	if (tagString.isEmpty())
+		return true;
+
+	auto variations = StringArray::fromTokens(tagString, ",", "");
+	variations.trim();
+	return variations.contains(variation);
 }
 
 File SampleDataExporter::getTargetFile() const
