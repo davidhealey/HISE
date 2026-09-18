@@ -432,6 +432,16 @@ Set this to 0 to deactivate peak collection for any other processor than the mai
 #define ENABLE_ALL_PEAK_METERS 1
 #endif
 
+/** Config: HISE_FLEX_AHDSR_PER_VOICE_PARAMETERS
+
+Set this to 1 to let each voice of the Flex AHDSR modulator capture its own copy of the
+envelope parameters when it starts. Already playing voices then ignore later parameter
+changes instead of picking them up mid-envelope.
+*/
+#ifndef HISE_FLEX_AHDSR_PER_VOICE_PARAMETERS
+#define HISE_FLEX_AHDSR_PER_VOICE_PARAMETERS 0
+#endif
+
 /** Config: READ_ONLY_FACTORY_PRESETS 
 
 Set this to 1 to enable read only presets that are shipped with the plugin / expansion.

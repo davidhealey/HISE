@@ -244,6 +244,19 @@ float FlexAhdsrEnvelope::startVoice(int voiceIndex)
 
 	if(restart)
 	{
+#if HISE_FLEX_AHDSR_PER_VOICE_PARAMETERS
+		obj.template setParameter<0>(parameters[0]);
+		obj.template setParameter<1>(parameters[1]);
+		obj.template setParameter<2>(parameters[2]);
+		obj.template setParameter<3>(parameters[3]);
+		obj.template setParameter<4>(parameters[4]);
+		obj.template setParameter<5>(parameters[5]);
+		obj.template setParameter<6>(parameters[6]);
+		obj.template setParameter<7>(parameters[7]);
+		obj.template setParameter<8>(parameters[8]);
+		obj.template setParameter<9>(parameters[9]);
+#endif
+
 		using STATE = flex_ahdsr_base::State;
 
 		constexpr auto TIME = hise::flex_ahdsr_base::ParameterType::Time;
@@ -494,6 +507,10 @@ void FlexAhdsrEnvelope::setInternalAttribute(int parameterIndex, float newValue)
 	parameterIndex -= getParameterOffset();
 	parameters[parameterIndex] = newValue;
 
+#if HISE_FLEX_AHDSR_PER_VOICE_PARAMETERS
+	// Voices snapshot parameters[] themselves in startVoice(), so already playing voices
+	// must not be touched here.
+#else
 	PolyHandler::ScopedAllVoiceSetter avs(polyHandler);
 
 	switch(parameterIndex)
@@ -509,6 +526,7 @@ void FlexAhdsrEnvelope::setInternalAttribute(int parameterIndex, float newValue)
 		case 8: obj.template setParameter<8>(newValue); break;
 		case 9: obj.template setParameter<9>(newValue); break;
 	}
+#endif
 }
 
 float FlexAhdsrEnvelope::getAttribute(int parameterIndex) const
