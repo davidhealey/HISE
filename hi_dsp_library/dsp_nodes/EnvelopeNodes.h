@@ -1004,17 +1004,16 @@ template <int NV, typename ParameterClass, typename DragHandler=flex_ahdsr_base:
 
 	void refreshUI(float* buffer) override
 	{
-		auto& activeVoice = state.getWithIndex(lastStartedVoiceIndex);
 		*buffer++ = parameterTimeValues[(int)State::ATTACK];
 		*buffer++ = parameterTimeValues[(int)State::HOLD];
 		*buffer++ = parameterTimeValues[(int)State::DECAY];
-		*buffer++ = activeVoice.getUIValue(State::SUSTAIN, ParameterType::Level);
+		*buffer++ = displayState.getUIValue(State::SUSTAIN, ParameterType::Level);
 		*buffer++ = parameterTimeValues[(int)State::RELEASE];
 		*buffer++ = 0.0f;
-		*buffer++ = activeVoice.getUIValue(State::ATTACK, ParameterType::Level);
-		*buffer++ = activeVoice.getUIValue(State::ATTACK, ParameterType::Curve);
-		*buffer++ = activeVoice.getUIValue(State::DECAY, ParameterType::Curve);
-		*buffer++ = activeVoice.getUIValue(State::RELEASE, ParameterType::Curve);
+		*buffer++ = displayState.getUIValue(State::ATTACK, ParameterType::Level);
+		*buffer++ = displayState.getUIValue(State::ATTACK, ParameterType::Curve);
+		*buffer++ = displayState.getUIValue(State::DECAY, ParameterType::Curve);
+		*buffer++ = displayState.getUIValue(State::RELEASE, ParameterType::Curve);
 
 	}
 
@@ -1451,6 +1450,9 @@ template <int NV, typename ParameterClass, typename DragHandler=flex_ahdsr_base:
 	double sr = 44100.0;
 	PolyData<PolyState, NV> state;
 
+	// Mirrors the current knob values for the UI graph, independent of any voice's own state.
+	PolyState displayState;
+
 	bool sendBallUpdate = true;
 
 	template<ParameterType T> double convert(double value)
@@ -1468,10 +1470,19 @@ template <int NV, typename ParameterClass, typename DragHandler=flex_ahdsr_base:
 		return value;
 	}
 
-	template <State S, ParameterType T> void setState(double newValue)
+	// Updates the values that drive the UI graph. Safe to call regardless of which (if any)
+	// voice is currently scoped, since displayState is never part of the per-voice pool.
+	template <State S, ParameterType T> void updateDisplayOnly(double newValue)
 	{
 		if(T == ParameterType::Time)
 			parameterTimeValues[(int)S] = newValue;
+
+		displayState.template set<S, T>(convert<T>((float)newValue));
+	}
+
+	template <State S, ParameterType T> void setState(double newValue)
+	{
+		updateDisplayOnly<S, T>(newValue);
 
 		float v = convert<T>((float)newValue);
 
@@ -1481,6 +1492,8 @@ template <int NV, typename ParameterClass, typename DragHandler=flex_ahdsr_base:
 
 	void setMode(double newValue)
 	{
+		displayState.m = (Mode)(int)newValue;
+
 		for(auto& s: state)
 			s.m = (Mode)(int)newValue;
 	}
@@ -1498,7 +1511,7 @@ template <int NV, typename ParameterClass, typename DragHandler=flex_ahdsr_base:
 			setState<State::DECAY, ParameterType::Level>(v);
 			setState<State::SUSTAIN, ParameterType::Level>(v);
 		}
-			
+
 		if(P == (int)SpecialParameters::Release)
 			setState<State::RELEASE, ParameterType::Time>(v);
 
@@ -1517,6 +1530,45 @@ template <int NV, typename ParameterClass, typename DragHandler=flex_ahdsr_base:
 			setState<State::DECAY, ParameterType::Curve>(v);
 		if(P == (int)SpecialParameters::ReleaseCurve)
 			setState<State::RELEASE, ParameterType::Curve>(v);
+
+		if(rb != nullptr)
+			rb->getUpdater().sendContentChangeMessage(sendNotificationAsync, P);
+	}
+
+	// Same parameter dispatch as setParameter(), but only updates the UI mirror - never a
+	// real voice's own state. Used for HISE_FLEX_AHDSR_PER_VOICE_PARAMETERS live edits.
+	template <int P> void setDisplayParameter(double v)
+	{
+		if (P == (int)SpecialParameters::Attack)
+			updateDisplayOnly<State::ATTACK, ParameterType::Time>(v);
+		if(P == (int)SpecialParameters::Hold)
+			updateDisplayOnly<State::HOLD, ParameterType::Time>(v);
+		if(P == (int)SpecialParameters::Decay)
+			updateDisplayOnly<State::DECAY, ParameterType::Time>(v);
+		if(P == (int)SpecialParameters::Sustain)
+		{
+			updateDisplayOnly<State::DECAY, ParameterType::Level>(v);
+			updateDisplayOnly<State::SUSTAIN, ParameterType::Level>(v);
+		}
+
+		if(P == (int)SpecialParameters::Release)
+			updateDisplayOnly<State::RELEASE, ParameterType::Time>(v);
+
+		if(P == (int)SpecialParameters::Mode)
+			displayState.m = (Mode)(int)v;
+
+		if(P == (int)SpecialParameters::AttackLevel)
+		{
+			updateDisplayOnly<State::ATTACK, ParameterType::Level>(v);
+			updateDisplayOnly<State::HOLD, ParameterType::Level>(v);
+		}
+
+		if(P == (int)SpecialParameters::AttackCurve)
+			updateDisplayOnly<State::ATTACK, ParameterType::Curve>(v);
+		if(P == (int)SpecialParameters::DecayCurve)
+			updateDisplayOnly<State::DECAY, ParameterType::Curve>(v);
+		if(P == (int)SpecialParameters::ReleaseCurve)
+			updateDisplayOnly<State::RELEASE, ParameterType::Curve>(v);
 
 		if(rb != nullptr)
 			rb->getUpdater().sendContentChangeMessage(sendNotificationAsync, P);

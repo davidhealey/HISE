@@ -509,7 +509,20 @@ void FlexAhdsrEnvelope::setInternalAttribute(int parameterIndex, float newValue)
 
 #if HISE_FLEX_AHDSR_PER_VOICE_PARAMETERS
 	// Voices snapshot parameters[] themselves in startVoice(), so already playing voices
-	// must not be touched here.
+	// must not be touched here - only the UI graph's mirror.
+	switch(parameterIndex)
+	{
+		case 0: obj.template setDisplayParameter<0>(newValue); break;
+		case 1: obj.template setDisplayParameter<1>(newValue); break;
+		case 2: obj.template setDisplayParameter<2>(newValue); break;
+		case 3: obj.template setDisplayParameter<3>(newValue); break;
+		case 4: obj.template setDisplayParameter<4>(newValue); break;
+		case 5: obj.template setDisplayParameter<5>(newValue); break;
+		case 6: obj.template setDisplayParameter<6>(newValue); break;
+		case 7: obj.template setDisplayParameter<7>(newValue); break;
+		case 8: obj.template setDisplayParameter<8>(newValue); break;
+		case 9: obj.template setDisplayParameter<9>(newValue); break;
+	}
 #else
 	PolyHandler::ScopedAllVoiceSetter avs(polyHandler);
 
