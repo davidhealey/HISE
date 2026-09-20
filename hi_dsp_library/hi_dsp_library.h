@@ -110,6 +110,9 @@ Set this to 1 if you want to embed the libraries created with this module into y
 	If enabled, it will use a logarithmic scale to apply the filter modulation. It's disabled
 	by default for old projects in order to keep the sound persistent, but you can enable it to
 	get a more natural modulation curve.
+
+	Sets the default for FilterHelpers::useLogFreqMod, which ExpansionHandler overrides per
+	expansion so old expansions keep their linear curve regardless of this setting.
 */
 #ifndef HISE_LOG_FILTER_FREQMOD
 #define HISE_LOG_FILTER_FREQMOD 0

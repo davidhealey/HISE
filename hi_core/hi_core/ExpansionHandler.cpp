@@ -402,6 +402,12 @@ void ExpansionHandler::setCurrentExpansion(Expansion* e, NotificationType notify
 			}
 		}
 
+		// Expansions without a LogFilterFreqMod property default to linear.
+		if (e != nullptr)
+			FilterHelpers::useLogFreqMod = (bool)e->getPropertyValueTree().getProperty(ExpansionIds::LogFilterFreqMod, false);
+		else
+			FilterHelpers::useLogFreqMod = HISE_LOG_FILTER_FREQMOD;
+
 		currentExpansion = e;
 		notifier.sendNotification(Notifier::EventType::ExpansionLoaded, notifyListeners);
 	}

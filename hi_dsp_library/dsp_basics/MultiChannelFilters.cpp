@@ -1609,9 +1609,13 @@ float StateVariableEqSubType::State::tick(float inp, const Coefficients& c)
 DEFINE_MULTI_CHANNEL_FILTER(StateVariableEqSubType);
 
 
+bool FilterHelpers::useLogFreqMod = HISE_LOG_FILTER_FREQMOD;
+
 double FilterHelpers::RenderData::applyModValue(double f) const
 {
-	bool calcModulation = !HISE_LOG_FILTER_FREQMOD || ((1.0 + bipolarDelta) * freqModValue != 1.0);
+	const bool useLog = FilterHelpers::useLogFreqMod;
+
+	bool calcModulation = !useLog || ((1.0 + bipolarDelta) * freqModValue != 1.0);
 
 	if (!calcModulation)
 		return f;
@@ -1619,21 +1623,20 @@ double FilterHelpers::RenderData::applyModValue(double f) const
 	f -= 20.0;
 	f *= 1.0 / 19980.0;
 
-#if HISE_LOG_FILTER_FREQMOD
 	const double skew = 0.2299045622348785;
-	f = hmath::pow(f, skew);
-#endif
+
+	if (useLog)
+		f = hmath::pow(f, skew);
 
 	f += bipolarDelta;
 	f *= freqModValue;
 
-#if HISE_LOG_FILTER_FREQMOD
-	f = hmath::pow(jmax(0.0, f), 1.0 / skew);
-#endif
+	if (useLog)
+		f = hmath::pow(jmax(0.0, f), 1.0 / skew);
 
 	f *= 19980.0;
 	f += 20.0;
-	
+
 	return f;
 }
 

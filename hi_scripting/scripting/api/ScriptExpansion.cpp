@@ -3257,6 +3257,9 @@ void ExpansionEncodingWindow::run()
 		mData.setProperty(ExpansionIds::RequiredPlayerVersion, GET_HISE_SETTING(getMainController()->getMainSynthChain(), HiseSettings::ExpansionSettings::RequiredPlayerVersion), nullptr);
 		mData.setProperty(ExpansionIds::HiseVersion, PresetHandler::getVersionString(), nullptr);
 
+		// Records which filter modulation curve this expansion was voiced against.
+		mData.setProperty(ExpansionIds::LogFilterFreqMod, (bool)HISE_LOG_FILTER_FREQMOD, nullptr);
+
 		if (selectedVariation.isNotEmpty())
 			mData.setProperty(ExpansionIds::Variation, selectedVariation, nullptr);
 
