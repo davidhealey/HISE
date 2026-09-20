@@ -4249,7 +4249,28 @@ int ScriptingObjects::ScriptedLookAndFeel::Laf::getAlertWindowMargin()
 {
 #if HISE_ALERT_WINDOW_ALLOW_PADDING
 	if (functionDefined("drawAlertWindow"))
+	{
+		// Expansions built with HISE 4.0.0 or older predate alert window padding, so their
+		// drawAlertWindow callback lays out its content for the full window bounds and
+		// would look wrong if we reduced it by the margin here.
+		if (auto e = getMainController()->getExpansionHandler().getCurrentExpansion())
+		{
+			auto hiseVersion = e->getProperty(ExpansionIds::HiseVersion);
+
+			if (hiseVersion.isEmpty())
+				return 0;
+
+			auto tokens = StringArray::fromTokens(hiseVersion, ".", "");
+			auto major = tokens[0].getIntValue();
+			auto minor = tokens[1].getIntValue();
+			auto patch = tokens[2].getIntValue();
+
+			if (major < 4 || (major == 4 && minor == 0 && patch == 0))
+				return 0;
+		}
+
 		return 50;
+	}
 #endif
 
 	return 0;
