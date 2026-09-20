@@ -58,6 +58,7 @@ DECLARE_ID(ProjectName);
 DECLARE_ID(ProjectVersion);
 DECLARE_ID(Version);
 DECLARE_ID(RequiredPlayerVersion);
+DECLARE_ID(LogFilterFreqMod);
 DECLARE_ID(Tags);
 DECLARE_ID(Variation);
 DECLARE_ID(Key);

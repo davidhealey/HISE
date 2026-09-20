@@ -101,6 +101,10 @@ public:
 		numFilterSubTypes
 	};
 
+	/** Per-expansion runtime override for HISE_LOG_FILTER_FREQMOD, set by ExpansionHandler
+		when the current expansion changes. Defaults to the compiled macro value. */
+	static bool useLogFreqMod;
+
 	struct RenderData
 	{
 		RenderData(AudioSampleBuffer& b_, int start_, int size_) :
