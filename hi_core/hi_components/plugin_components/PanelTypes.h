@@ -75,7 +75,8 @@ const var data = {
 "ClearMidiCC": true,
 "SampleLocation": true,
 "DebugMode": true,
-"ScaleFactorList": [0.5, 1, 2]
+"ScaleFactorList": [0.5, 1, 2],
+"LabelAlignment": "right"
 };
 ```
 
