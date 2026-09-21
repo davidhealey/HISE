@@ -262,7 +262,7 @@ static const unsigned char projectTemplate_jucer_lines[] = R"(
       </MODULEPATHS>
     </XCODE_IPHONE>)"
     R"(
-    <LINUX_MAKE targetFolder="Builds/LinuxMakefile" vstLegacyFolder="%VSTSDK_FOLDER%" extraLinkerFlags="-flto=auto&#10;-fuse-ld=gold&#10;%FFT_LINKER_FLAGS%" extraCompilerFlags="-fpermissive" extraDefs="%PLUGIN_CHANNEL_AMOUNT%&#10;%EXTRA_DEFINES_LINUX%&#10;JUCE_DISABLE_NATIVE_FILECHOOSERS=1" linuxExtraPkgConfig="%LINUX_GUI_LIBS%">
+    <LINUX_MAKE targetFolder="Builds/LinuxMakefile" vstLegacyFolder="%VSTSDK_FOLDER%" extraLinkerFlags="-flto=auto&#10;-fuse-ld=gold&#10;%FFT_LINKER_FLAGS%" extraCompilerFlags="-fpermissive -fno-strict-aliasing" extraDefs="%PLUGIN_CHANNEL_AMOUNT%&#10;%EXTRA_DEFINES_LINUX%&#10;JUCE_DISABLE_NATIVE_FILECHOOSERS=1" linuxExtraPkgConfig="%LINUX_GUI_LIBS%">
       <CONFIGURATIONS>
         <CONFIGURATION name="Debug" isDebug="1" optimisation="1" linkTimeOptimisation="0"
                        targetName="%NAME% Debug" headerPath="%FAUST_HEADER_PATH%" libraryPath=""/>

@@ -90,7 +90,7 @@ static const unsigned char projectDllTemplate_jucer_lines[] =
 "        <MODULEPATH id=\"hi_faust\" path=\"%HISE_PATH%\"/>\r\n"
 "      </MODULEPATHS>\r\n"
 "    </MACOSX_MAKE>\r\n"
-"<LINUX_MAKE targetFolder=\"Builds/LinuxMakefile\" extraDefs=\"%EXTRA_DEFINES_LINUX%\" extraLinkerFlags=\"\" extraCompilerFlags=\"-Wno-reorder -Wno-inconsistent-missing-override&#10;-fpermissive\"\r\n"
+"<LINUX_MAKE targetFolder=\"Builds/LinuxMakefile\" extraDefs=\"%EXTRA_DEFINES_LINUX%\" extraLinkerFlags=\"\" extraCompilerFlags=\"-Wno-reorder -Wno-inconsistent-missing-override&#10;-fpermissive&#10;-fno-strict-aliasing\"\r\n"
 "                extraLinkerFlags=\"-no-pie&#10;\" linuxExtraPkgConfig=\"x11 xinerama xext\">\r\n"
 "      <CONFIGURATIONS>\r\n"
 "        <CONFIGURATION isDebug=\"1\" name=\"Debug\" binaryPath=\"dll\" targetName=\"%NAME%_debug\" headerPath =\"%FAUST_HEADER_PATH%\"/>\r\n"

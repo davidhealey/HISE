@@ -202,7 +202,7 @@ R"(    <MACOSX_MAKE targetFolder="Builds/MacOSXMakefile" vstLegacyFolder="%VSTSD
         %LORIS_MODULEPATH%
       </MODULEPATHS>
     </MACOSX_MAKE>
-   <LINUX_MAKE targetFolder="Builds/LinuxMakefile" linuxExtraPkgConfig="%LINUX_GUI_LIBS%" extraLinkerFlags="-no-pie&#10;-flto=auto&#10;-fuse-ld=gold&#10;%FFT_LINKER_FLAGS%" extraCompilerFlags="-fpermissive" extraDefs="%EXTRA_DEFINES_LINUX%">
+   <LINUX_MAKE targetFolder="Builds/LinuxMakefile" linuxExtraPkgConfig="%LINUX_GUI_LIBS%" extraLinkerFlags="-no-pie&#10;-flto=auto&#10;-fuse-ld=gold&#10;%FFT_LINKER_FLAGS%" extraCompilerFlags="-fpermissive -fno-strict-aliasing" extraDefs="%EXTRA_DEFINES_LINUX%">
       <CONFIGURATIONS>
         <CONFIGURATION name="Debug" isDebug="1" optimisation="1" targetName="%NAME%" headerPath="%FAUST_HEADER_PATH%" libraryPath=""/>
         <CONFIGURATION name="Release" isDebug="0" optimisation="3" targetName="%NAME%" headerPath="%FAUST_HEADER_PATH%" libraryPath="" linkTimeOptimisation="%LINK_TIME_OPTIMISATION%"/>
