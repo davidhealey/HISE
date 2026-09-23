@@ -864,6 +864,9 @@ public:
 
 		addComboBox("normalise", sa2, "Normalization");
 
+		getComboBoxComponent("normalise")->setSelectedItemIndex(2, dontSendNotification);
+		getComboBoxComponent("normalise")->setEnabled(false);
+
 		addBasicComponents(true);
 	};
 

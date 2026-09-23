@@ -1143,12 +1143,12 @@ MonolithExporter::MonolithExporter(SampleMap* sampleMap_) :
 
 	addComboBox("normalise", sa2, "Normalization");
 
-	if (GET_HISE_SETTING(sampleMap->getSampler(), HiseSettings::Project::SupportFullDynamicsHLAC))
-		getComboBoxComponent("normalise")->setSelectedItemIndex(2, dontSendNotification);
+	getComboBoxComponent("normalise")->setSelectedItemIndex(2, dontSendNotification);
+	getComboBoxComponent("normalise")->setEnabled(false);
 
 	addComboBox("splitsize", { "200 MB", "500 MB", "1000 MB", "1500 MB", "1700 MB", "2000 MB" }, "Split size");
 
-	getComboBoxComponent("splitsize")->setSelectedItemIndex(1, dontSendNotification);
+	getComboBoxComponent("splitsize")->setSelectedItemIndex(5, dontSendNotification);
 
 	addBasicComponents(true);
 }
@@ -1714,25 +1714,18 @@ BatchReencoder::BatchReencoder(ModulatorSampler* s) :
 
 	StringArray sa2;
 
-
-	
-
 	sa2.add("No normalisation");
 	sa2.add("Normalise every sample");
 	sa2.add("Full Dynamics");
 
 	addComboBox("normalise", sa2, "Normalization");
 
-#if USE_FRONTEND && HI_SUPPORT_FULL_DYNAMICS_HLAC
 	getComboBoxComponent("normalise")->setSelectedItemIndex(2, dontSendNotification);
-#endif
-
-	if (GET_HISE_SETTING(s, HiseSettings::Project::SupportFullDynamicsHLAC))
-		getComboBoxComponent("normalise")->setSelectedItemIndex(2, dontSendNotification);
+	getComboBoxComponent("normalise")->setEnabled(false);
 
     addComboBox("splitsize", { "1500 MB", "1700 MB", "2000 MB" }, "Split size");
 
-    getComboBoxComponent("splitsize")->setSelectedItemIndex(1, dontSendNotification);
+    getComboBoxComponent("splitsize")->setSelectedItemIndex(2, dontSendNotification);
     
 	addProgressBarComponent(wholeProgress);
 

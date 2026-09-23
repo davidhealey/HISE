@@ -2743,7 +2743,7 @@ void BackendCommandTarget::Actions::exportWavetablesToMonolith(BackendRootWindow
 
 void BackendCommandTarget::Actions::exportHiseProject(BackendRootWindow * bpe)
 {
-	auto e = new ExpansionEncodingWindow(bpe->owner, nullptr, true);
+	auto e = new ExpansionEncodingWindow(bpe->owner, nullptr, true, false);
 
 	if (e->encodeResult.failed())
 	{
@@ -2756,7 +2756,7 @@ void BackendCommandTarget::Actions::exportHiseProject(BackendRootWindow * bpe)
 
 juce::Result BackendCommandTarget::Actions::exportInstrumentExpansion(BackendProcessor* bp)
 {
-	ScopedPointer<ExpansionEncodingWindow> ne = new ExpansionEncodingWindow(bp, nullptr, true);
+	ScopedPointer<ExpansionEncodingWindow> ne = new ExpansionEncodingWindow(bp, nullptr, true, false);
 
 	ne->runSynchronous(false);
 
