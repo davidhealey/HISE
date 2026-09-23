@@ -666,6 +666,8 @@ SampleDataExporter::SampleDataExporter(MainController* mc) :
 {
 	addComboBox("format", { "HR Archive (custom FLAC)", "LWZ (Rhapsody Sample Archive)" }, "Output format");
 
+	getComboBoxComponent("format")->setSelectedItemIndex(0, dontSendNotification);
+
 	StringArray sa2;
 
 	sa2.add("500 MB");
@@ -682,6 +684,9 @@ SampleDataExporter::SampleDataExporter(MainController* mc) :
 	sa3.add("No");
 
 	addComboBox("supportFull", sa3, "Support Full Dynamics range");
+
+	getComboBoxComponent("supportFull")->setSelectedItemIndex(0, dontSendNotification);
+	getComboBoxComponent("supportFull")->setEnabled(false);
 
 	StringArray sa4;
 
@@ -705,9 +710,6 @@ SampleDataExporter::SampleDataExporter(MainController* mc) :
 	{
 		getComboBoxComponent("expansions")->setSelectedItemIndex(activeExpansion + 1, dontSendNotification);
 	}
-
-	if (!GET_HISE_SETTING(synthChain, HiseSettings::Project::SupportFullDynamicsHLAC))
-		getComboBoxComponent("supportFull")->setSelectedItemIndex(1, dontSendNotification);
 
 #if USE_BACKEND
 	File f = GET_PROJECT_HANDLER(synthChain).getRootFolder();
@@ -878,7 +880,7 @@ void SampleDataExporter::run()
 			b->writeToStream(fos, &getProgressCounter());
 			b = nullptr;
 		}
-	}	
+	}
 }
 
 void SampleDataExporter::threadFinished()
@@ -1031,7 +1033,7 @@ String SampleDataExporter::getMetadataJSON() const
 	int index = getComboBoxComponent("supportFull")->getSelectedItemIndex();
 
 	d->setProperty("BitDepth", index == 0 ? 24 : 16);
-	
+
 
 	return JSON::toString(data, true);
 }
