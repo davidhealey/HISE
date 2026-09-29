@@ -35,7 +35,7 @@ jobs:
   build_windows:
     needs: check
     if: needs.check.outputs.changed == 'true'
-    runs-on: windows-latest
+    runs-on: windows-2025-vs2026
     steps:
       - uses: actions/checkout@v4
         with:
@@ -113,7 +113,9 @@ jobs:
             gh release download --repo grame-cncm/faust --pattern "Faust-*-$arch.dmg" --output faust-$arch.dmg
             hdiutil attach faust-$arch.dmg -mountpoint /Volumes/Faust-$arch -nobrowse -quiet
             mkdir faust-$arch
-            cp -R /Volumes/Faust-$arch/Faust-*/* faust-$arch/ 2>/dev/null || cp -R /Volumes/Faust-$arch/* faust-$arch/
+            root=$(dirname "$(dirname "$(find /Volumes/Faust-$arch -path '*/lib/libfaust.dylib' | head -1)")")
+            echo "Faust $arch root: $root"
+            cp -R "$root"/* faust-$arch/
             hdiutil detach /Volumes/Faust-$arch -quiet
           done
           cp -R faust-arm64/* tools/faust/
