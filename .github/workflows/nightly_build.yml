@@ -9,6 +9,16 @@ on:
         required: false
         default: false
         type: boolean
+      platform:
+        description: 'Platform to build'
+        required: false
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - windows
+          - macos
+          - linux
 
 env:
   JUCE_BRANCH: juce6
@@ -34,7 +44,7 @@ jobs:
 
   build_windows:
     needs: check
-    if: needs.check.outputs.changed == 'true'
+    if: needs.check.outputs.changed == 'true' && contains(fromJSON('["all","windows"]'), github.event.inputs.platform || 'all')
     runs-on: windows-2025-vs2026
     steps:
       - uses: actions/checkout@v4
@@ -75,7 +85,7 @@ jobs:
 
   build_macos:
     needs: check
-    if: needs.check.outputs.changed == 'true'
+    if: needs.check.outputs.changed == 'true' && contains(fromJSON('["all","macos"]'), github.event.inputs.platform || 'all')
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
@@ -110,7 +120,7 @@ jobs:
 
   build_linux:
     needs: check
-    if: needs.check.outputs.changed == 'true'
+    if: needs.check.outputs.changed == 'true' && contains(fromJSON('["all","linux"]'), github.event.inputs.platform || 'all')
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
