@@ -142,11 +142,11 @@ jobs:
       - name: Collect binary
         run: |
           mkdir dist
-          cp projects/standalone/Builds/MacOSX/build/ReleaseWithFaust/HISE.app/Contents/MacOS/HISE dist/HISE.mac
+          ditto -c -k --keepParent projects/standalone/Builds/MacOSX/build/ReleaseWithFaust/HISE.app dist/HISE.app.zip
       - uses: actions/upload-artifact@v4
         with:
           name: HISE-macos
-          path: dist/HISE.mac
+          path: dist/HISE.app.zip
           retention-days: 14
 
   build_linux:
@@ -202,11 +202,11 @@ jobs:
       - name: Collect binary
         run: |
           mkdir dist
-          cp projects/standalone/Builds/LinuxMakefile/build/HISE dist/HISE.linux
+          cp projects/standalone/Builds/LinuxMakefile/build/HISE dist/HISE
       - uses: actions/upload-artifact@v4
         with:
           name: HISE-linux-x64
-          path: dist/HISE.linux
+          path: dist/HISE
           retention-days: 14
 
   publish:
