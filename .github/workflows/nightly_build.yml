@@ -133,8 +133,8 @@ jobs:
         run: cd tools/SDK && unzip -q sdk.zip
       - name: Resave project
         run: |
-          chmod +x JUCE/Projucer/Projucer
-          JUCE/Projucer/Projucer --resave "projects/standalone/HISE Standalone.jucer"
+          chmod +x JUCE/projucer/Projucer
+          JUCE/projucer/Projucer --resave "projects/standalone/HISE Standalone.jucer"
       - name: Build HISE
         working-directory: projects/standalone/Builds/LinuxMakefile
         run: make CONFIG=Release AR=gcc-ar LDFLAGS="-Wl,--as-needed" -j$(nproc)
