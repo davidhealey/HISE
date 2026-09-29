@@ -108,14 +108,60 @@ jobs:
       - name: Build HISE
         run: |
           xcodebuild -project "projects/standalone/Builds/MacOSX/HISE Standalone.xcodeproj" -configuration Release ARCHS="arm64 x86_64" ONLY_ACTIVE_ARCH=NO
-      - name: Collect binary
+      - name: Package, sign and notarize
+        env:
+          P12: ${{ secrets.MACOS_CERT_P12 }}
+          P12_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+          API_KEY: ${{ secrets.APPLE_API_KEY_P8 }}
+          API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          API_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
         run: |
-          mkdir dist
-          ditto -c -k --keepParent projects/standalone/Builds/MacOSX/build/Release/HISE.app dist/HISE.app.zip
+          mkdir dist stage
+          cp -R projects/standalone/Builds/MacOSX/build/Release/HISE.app stage/
+          sign=false
+          if [ -n "$P12" ] && [ -n "$API_KEY" ]; then sign=true; fi
+
+          if [ "$sign" = true ]; then
+            keychain="$RUNNER_TEMP/build.keychain-db"
+            echo "$P12" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+            printf '%s' "$API_KEY" > "$RUNNER_TEMP/key.p8"
+            security create-keychain -p "$KEYCHAIN_PASSWORD" "$keychain"
+            security set-keychain-settings -lut 21600 "$keychain"
+            security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$keychain"
+            security import "$RUNNER_TEMP/cert.p12" -k "$keychain" -P "$P12_PASSWORD" -T /usr/bin/codesign
+            security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" "$keychain"
+            security list-keychains -d user -s "$keychain" login.keychain
+            identity=$(security find-identity -v -p codesigning "$keychain" | grep "Developer ID Application" | head -1 | awk -F'"' '{print $2}')
+            echo "Signing as: $identity"
+            codesign --force --options runtime --timestamp --entitlements tools/auto_build/HISE.entitlements --sign "$identity" stage/HISE.app
+            codesign --verify --strict --verbose=2 stage/HISE.app
+          fi
+
+          hdiutil create -volname "HISE" -srcfolder stage -ov -format UDZO dist/HISE.dmg
+
+          if [ "$sign" = true ]; then
+            codesign --force --timestamp --sign "$identity" dist/HISE.dmg
+            result=$(xcrun notarytool submit dist/HISE.dmg --key "$RUNNER_TEMP/key.p8" --key-id "$API_KEY_ID" --issuer "$API_ISSUER_ID" --wait --output-format json)
+            echo "$result"
+            status=$(echo "$result" | jq -r .status)
+            if [ "$status" != "Accepted" ]; then
+              xcrun notarytool log "$(echo "$result" | jq -r .id)" --key "$RUNNER_TEMP/key.p8" --key-id "$API_KEY_ID" --issuer "$API_ISSUER_ID"
+              echo "::error::Notarization failed: $status"
+              exit 1
+            fi
+            xcrun stapler staple dist/HISE.dmg
+            xcrun stapler validate dist/HISE.dmg
+            spctl -a -t open --context context:primary-signature -vv dist/HISE.dmg
+            security delete-keychain "$keychain"
+            rm -f "$RUNNER_TEMP/cert.p12" "$RUNNER_TEMP/key.p8"
+          else
+            echo "::warning::Signing secrets not set, publishing an unsigned DMG"
+          fi
       - uses: actions/upload-artifact@v4
         with:
           name: HISE-macos
-          path: dist/HISE.app.zip
+          path: dist/HISE.dmg
           retention-days: 14
 
   build_linux:
