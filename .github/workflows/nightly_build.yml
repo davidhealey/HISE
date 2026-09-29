@@ -52,35 +52,18 @@ jobs:
       - name: Extract SDKs
         shell: pwsh
         run: Expand-Archive -Path tools/SDK/sdk.zip -DestinationPath tools/SDK -Force
-      - name: Install Faust
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh release download --repo grame-cncm/faust --pattern "Faust-*-win64.exe" --output faust-installer.exe
-          Start-Process -FilePath .\faust-installer.exe -ArgumentList "/S" -Wait
-          if (-not (Test-Path "C:\Program Files\Faust\lib\faust.dll")) { throw "Faust installation failed" }
       - name: Resave project
         shell: cmd
         run: JUCE\projucer\Projucer.exe --resave "projects\standalone\HISE Standalone.jucer"
       - name: Build HISE
         shell: cmd
         run: |
-          for /d %%d in ("projects\standalone\Builds\VisualStudio*") do msbuild "%%d\HISE Standalone.sln" /t:Build /p:Configuration=ReleaseWithFaust /p:Platform=x64 /v:m
-      - name: Check Faust linkage
-        shell: pwsh
-        run: |
-          Get-ChildItem "C:\Program Files\Faust\lib" | Format-Table Name, Length
-          $exe = (Get-ChildItem projects/standalone/Builds/VisualStudio*/x64/ReleaseWithFaust/App/HISE.exe).FullName
-          $vs = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -property installationPath
-          $dumpbin = (Get-ChildItem "$vs\VC\Tools\MSVC\*\bin\Hostx64\x64\dumpbin.exe" | Select-Object -First 1).FullName
-          & $dumpbin /dependents $exe
-          if (& $dumpbin /dependents $exe | Select-String -Pattern "faust" -Quiet) { Write-Host "::warning::HISE.exe depends on faust.dll" }
+          for /d %%d in ("projects\standalone\Builds\VisualStudio*") do msbuild "%%d\HISE Standalone.sln" /t:Build /p:Configuration=Release /p:Platform=x64 /v:m
       - name: Collect binary
         shell: bash
         run: |
           mkdir dist
-          cp projects/standalone/Builds/VisualStudio*/x64/ReleaseWithFaust/App/HISE.exe dist/HISE.exe
+          cp projects/standalone/Builds/VisualStudio*/x64/Release/App/HISE.exe dist/HISE.exe
       - uses: actions/upload-artifact@v4
         with:
           name: HISE-windows-x64
@@ -105,46 +88,17 @@ jobs:
           git pull origin "$JUCE_BRANCH"
       - name: Extract SDKs
         run: cd tools/SDK && tar -xf sdk.zip
-      - name: Install Faust (universal)
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          for arch in arm64 x64; do
-            gh release download --repo grame-cncm/faust --pattern "Faust-*-$arch.dmg" --output faust-$arch.dmg
-            hdiutil attach faust-$arch.dmg -mountpoint /Volumes/Faust-$arch -nobrowse -quiet
-            mkdir faust-$arch
-            root=$(dirname "$(dirname "$(find /Volumes/Faust-$arch -path '*/lib/libfaust.dylib' | head -1)")")
-            echo "Faust $arch root: $root"
-            cp -R "$root"/* faust-$arch/
-            hdiutil detach /Volumes/Faust-$arch -quiet
-          done
-          cp -R faust-arm64/* tools/faust/
-          for lib in faust-arm64/lib/*.dylib faust-arm64/lib/*.a; do
-            if [ -f "$lib" ] && [ ! -L "$lib" ]; then
-              lipo -create "$lib" "faust-x64/lib/$(basename "$lib")" -output "tools/faust/lib/$(basename "$lib")"
-            fi
-          done
-          ls -la tools/faust/lib
-          lipo -info tools/faust/lib/libfaust.a
-          # drop the shared libs so the linker picks the static libfaust.a
-          rm -f tools/faust/lib/*.dylib
       - name: Resave project
         run: |
           chmod +x "JUCE/projucer/Projucer.app/Contents/MacOS/Projucer"
           "JUCE/projucer/Projucer.app/Contents/MacOS/Projucer" --resave "projects/standalone/HISE Standalone.jucer"
       - name: Build HISE
         run: |
-          xcodebuild -project "projects/standalone/Builds/MacOSX/HISE Standalone.xcodeproj" -configuration ReleaseWithFaust ARCHS="arm64 x86_64" ONLY_ACTIVE_ARCH=NO
-      - name: Verify Faust is linked statically
-        run: |
-          bin=projects/standalone/Builds/MacOSX/build/ReleaseWithFaust/HISE.app/Contents/MacOS/HISE
-          lipo -info "$bin"
-          otool -L "$bin"
-          if otool -L "$bin" | grep -qi faust; then echo "::error::HISE links libfaust dynamically"; exit 1; fi
+          xcodebuild -project "projects/standalone/Builds/MacOSX/HISE Standalone.xcodeproj" -configuration Release ARCHS="arm64 x86_64" ONLY_ACTIVE_ARCH=NO
       - name: Collect binary
         run: |
           mkdir dist
-          ditto -c -k --keepParent projects/standalone/Builds/MacOSX/build/ReleaseWithFaust/HISE.app dist/HISE.app.zip
+          ditto -c -k --keepParent projects/standalone/Builds/MacOSX/build/Release/HISE.app dist/HISE.app.zip
       - uses: actions/upload-artifact@v4
         with:
           name: HISE-macos
@@ -173,31 +127,17 @@ jobs:
           sudo apt-get -y install build-essential make llvm clang libfreetype6-dev libx11-dev libxinerama-dev \
             libxrandr-dev libxcursor-dev mesa-common-dev libasound2-dev freeglut3-dev libxcomposite-dev \
             libcurl4-gnutls-dev libgtk-3-dev libjack-jackd2-dev libwebkit2gtk-4.0-dev libpthread-stubs0-dev ladspa-sdk \
-            libfftw3-dev llvm-dev unzip
+            libfftw3-dev unzip
       - name: Extract SDKs
         run: cd tools/SDK && unzip -q sdk.zip
-      - name: Install Faust
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh release download --repo grame-cncm/faust --pattern "libfaust-ubuntu-x86_64.zip" --output libfaust.zip
-          unzip -q libfaust.zip -d libfaust
-          find libfaust -maxdepth 3 | head -30
-          inc=$(dirname "$(dirname "$(find libfaust -path '*faust/dsp/llvm-dsp.h' | head -1)")")
-          lib=$(dirname "$(find libfaust -name 'libfaust.so*' | head -1)")
-          echo "include: $inc  lib: $lib"
-          sudo cp -R "$inc"/* /usr/local/include/
-          ls -la "$lib"
-          # only the static lib, so the linker does not pick libfaust.so
-          sudo cp -a "$lib"/libfaust.a /usr/local/lib/
       - name: Resave project
         run: |
           chmod +x JUCE/Projucer/Projucer
           JUCE/Projucer/Projucer --resave "projects/standalone/HISE Standalone.jucer"
       - name: Build HISE
         working-directory: projects/standalone/Builds/LinuxMakefile
-        run: make CONFIG=ReleaseWithFaust AR=gcc-ar -j$(nproc)
-      - name: Verify Faust is linked statically
+        run: make CONFIG=Release AR=gcc-ar LDFLAGS="-Wl,--as-needed" -j$(nproc)
+      - name: Verify no Faust dependency
         run: |
           ldd projects/standalone/Builds/LinuxMakefile/build/HISE
           if ldd projects/standalone/Builds/LinuxMakefile/build/HISE | grep -qi faust; then echo "::error::HISE links libfaust dynamically"; exit 1; fi
