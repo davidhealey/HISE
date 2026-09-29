@@ -52,17 +52,27 @@ jobs:
       - name: Extract SDKs
         shell: bash
         run: cd tools/SDK && tar -xf sdk.zip
+      - name: Install Faust
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download --repo grame-cncm/faust --pattern "Faust-*-win64.exe" --output faust-installer.exe
+          Start-Process -FilePath .\faust-installer.exe -ArgumentList "/S" -Wait
+          if (-not (Test-Path "C:\Program Files\Faust\lib\faust.dll")) { throw "Faust installation failed" }
       - name: Resave project
         shell: cmd
         run: JUCE\projucer\Projucer.exe --resave "projects\standalone\HISE Standalone.jucer"
       - name: Build HISE
         shell: cmd
         run: |
-          for /d %%d in ("projects\standalone\Builds\VisualStudio*") do msbuild "%%d\HISE Standalone.sln" /t:Build /p:Configuration=Release /p:Platform=x64 /v:m
+          for /d %%d in ("projects\standalone\Builds\VisualStudio*") do msbuild "%%d\HISE Standalone.sln" /t:Build /p:Configuration=ReleaseWithFaust /p:Platform=x64 /v:m
       - uses: actions/upload-artifact@v4
         with:
           name: HISE-windows-x64
-          path: projects/standalone/Builds/VisualStudio*/x64/Release/App/HISE.exe
+          path: |
+            projects/standalone/Builds/VisualStudio*/x64/ReleaseWithFaust/App/HISE.exe
+            projects/standalone/Builds/VisualStudio*/x64/ReleaseWithFaust/App/faust.dll
           retention-days: 14
 
   build_macos:
@@ -83,15 +93,28 @@ jobs:
           git pull origin "$JUCE_BRANCH"
       - name: Extract SDKs
         run: cd tools/SDK && tar -xf sdk.zip
+      - name: Install Faust
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download --repo grame-cncm/faust --pattern "Faust-*-arm64.dmg" --output faust.dmg
+          hdiutil attach faust.dmg -mountpoint /Volumes/Faust -nobrowse -quiet
+          cp -R /Volumes/Faust/Faust-*/* tools/faust/ 2>/dev/null || cp -R /Volumes/Faust/* tools/faust/
+          hdiutil detach /Volumes/Faust -quiet
+          test -f tools/faust/lib/libfaust.dylib
       - name: Resave project
         run: |
           chmod +x "JUCE/projucer/Projucer.app/Contents/MacOS/Projucer"
           "JUCE/projucer/Projucer.app/Contents/MacOS/Projucer" --resave "projects/standalone/HISE Standalone.jucer"
       - name: Build HISE
         run: |
-          xcodebuild -project "projects/standalone/Builds/MacOSX/HISE Standalone.xcodeproj" -configuration Release
+          xcodebuild -project "projects/standalone/Builds/MacOSX/HISE Standalone.xcodeproj" -configuration ReleaseWithFaust ARCHS=arm64 ONLY_ACTIVE_ARCH=YES
       - name: Package
-        run: ditto -c -k --keepParent projects/standalone/Builds/MacOSX/build/Release/HISE.app HISE-macos.zip
+        run: |
+          mkdir dist
+          cp -R projects/standalone/Builds/MacOSX/build/ReleaseWithFaust/HISE.app dist/
+          cp -R tools/faust/lib dist/faust_lib
+          ditto -c -k dist HISE-macos.zip
       - uses: actions/upload-artifact@v4
         with:
           name: HISE-macos
@@ -119,7 +142,8 @@ jobs:
           sudo apt-get update
           sudo apt-get -y install build-essential make llvm clang libfreetype6-dev libx11-dev libxinerama-dev \
             libxrandr-dev libxcursor-dev mesa-common-dev libasound2-dev freeglut3-dev libxcomposite-dev \
-            libcurl4-gnutls-dev libgtk-3-dev libjack-jackd2-dev libwebkit2gtk-4.0-dev libpthread-stubs0-dev ladspa-sdk
+            libcurl4-gnutls-dev libgtk-3-dev libjack-jackd2-dev libwebkit2gtk-4.0-dev libpthread-stubs0-dev ladspa-sdk \
+            libfftw3-dev faust libfaust-dev llvm-dev
       - name: Extract SDKs
         run: cd tools/SDK && tar -xf sdk.zip
       - name: Resave project
@@ -128,7 +152,7 @@ jobs:
           JUCE/Projucer/Projucer --resave "projects/standalone/HISE Standalone.jucer"
       - name: Build HISE
         working-directory: projects/standalone/Builds/LinuxMakefile
-        run: make CONFIG=Release AR=gcc-ar -j$(nproc)
+        run: make CONFIG=ReleaseWithFaust AR=gcc-ar -j$(nproc)
       - name: Package
         run: tar -czf HISE-linux-x64.tar.gz -C projects/standalone/Builds/LinuxMakefile/build HISE
       - uses: actions/upload-artifact@v4
