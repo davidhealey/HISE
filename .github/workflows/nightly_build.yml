@@ -50,8 +50,8 @@ jobs:
           git checkout "$JUCE_BRANCH"
           git pull origin "$JUCE_BRANCH"
       - name: Extract SDKs
-        shell: bash
-        run: cd tools/SDK && tar -xf sdk.zip
+        shell: pwsh
+        run: Expand-Archive -Path tools/SDK/sdk.zip -DestinationPath tools/SDK -Force
       - name: Install Faust
         shell: pwsh
         env:
@@ -152,9 +152,15 @@ jobs:
           sudo apt-get -y install build-essential make llvm clang libfreetype6-dev libx11-dev libxinerama-dev \
             libxrandr-dev libxcursor-dev mesa-common-dev libasound2-dev freeglut3-dev libxcomposite-dev \
             libcurl4-gnutls-dev libgtk-3-dev libjack-jackd2-dev libwebkit2gtk-4.0-dev libpthread-stubs0-dev ladspa-sdk \
-            libfftw3-dev faust libfaust-dev llvm-dev
+            libfftw3-dev cmake llvm-dev libncurses-dev zlib1g-dev unzip
       - name: Extract SDKs
-        run: cd tools/SDK && tar -xf sdk.zip
+        run: cd tools/SDK && unzip -q sdk.zip
+      - name: Build and install Faust
+        run: |
+          git clone --depth 1 https://github.com/grame-cncm/faust.git
+          make -C faust dynamic -j$(nproc)
+          sudo make -C faust install
+          sudo ldconfig
       - name: Resave project
         run: |
           chmod +x JUCE/Projucer/Projucer
