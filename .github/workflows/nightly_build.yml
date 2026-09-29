@@ -58,6 +58,8 @@ jobs:
       - uses: microsoft/setup-msbuild@v2
       - name: Build HISE
         shell: cmd
+        env:
+          PreferredToolArchitecture: x64
         run: |
           for /d %%d in ("projects\standalone\Builds\VisualStudio*") do msbuild "%%d\HISE Standalone.sln" /t:Build /p:Configuration=Release /p:Platform=x64 /v:m
       - name: Collect binary
