@@ -67,12 +67,15 @@ jobs:
         shell: cmd
         run: |
           for /d %%d in ("projects\standalone\Builds\VisualStudio*") do msbuild "%%d\HISE Standalone.sln" /t:Build /p:Configuration=ReleaseWithFaust /p:Platform=x64 /v:m
+      - name: Collect binary
+        shell: bash
+        run: |
+          mkdir dist
+          cp projects/standalone/Builds/VisualStudio*/x64/ReleaseWithFaust/App/HISE.exe dist/HISE-windows-x64.exe
       - uses: actions/upload-artifact@v4
         with:
           name: HISE-windows-x64
-          path: |
-            projects/standalone/Builds/VisualStudio*/x64/ReleaseWithFaust/App/HISE.exe
-            projects/standalone/Builds/VisualStudio*/x64/ReleaseWithFaust/App/faust.dll
+          path: dist/HISE-windows-x64.exe
           retention-days: 14
 
   build_macos:
@@ -119,16 +122,14 @@ jobs:
       - name: Build HISE
         run: |
           xcodebuild -project "projects/standalone/Builds/MacOSX/HISE Standalone.xcodeproj" -configuration ReleaseWithFaust ARCHS="arm64 x86_64" ONLY_ACTIVE_ARCH=NO
-      - name: Package
+      - name: Collect binary
         run: |
           mkdir dist
-          cp -R projects/standalone/Builds/MacOSX/build/ReleaseWithFaust/HISE.app dist/
-          cp -R tools/faust/lib dist/faust_lib
-          ditto -c -k dist HISE-macos.zip
+          cp projects/standalone/Builds/MacOSX/build/ReleaseWithFaust/HISE.app/Contents/MacOS/HISE dist/HISE-macos
       - uses: actions/upload-artifact@v4
         with:
           name: HISE-macos
-          path: HISE-macos.zip
+          path: dist/HISE-macos
           retention-days: 14
 
   build_linux:
@@ -176,10 +177,36 @@ jobs:
       - name: Build HISE
         working-directory: projects/standalone/Builds/LinuxMakefile
         run: make CONFIG=ReleaseWithFaust AR=gcc-ar -j$(nproc)
-      - name: Package
-        run: tar -czf HISE-linux-x64.tar.gz -C projects/standalone/Builds/LinuxMakefile/build HISE
+      - name: Collect binary
+        run: |
+          mkdir dist
+          cp projects/standalone/Builds/LinuxMakefile/build/HISE dist/HISE-linux-x64
       - uses: actions/upload-artifact@v4
         with:
           name: HISE-linux-x64
-          path: HISE-linux-x64.tar.gz
+          path: dist/HISE-linux-x64
           retention-days: 14
+
+  publish:
+    needs: [build_windows, build_macos, build_linux]
+    if: ${{ !cancelled() && (needs.build_windows.result == 'success' || needs.build_macos.result == 'success' || needs.build_linux.result == 'success') }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: HISE-*
+          merge-multiple: true
+          path: dist
+      - name: Publish to the nightly release
+        run: |
+          gh release view nightly --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 || \
+            gh release create nightly --repo "$GITHUB_REPOSITORY" --prerelease --title "Nightly build" \
+              --notes "Latest nightly build of master" --target master
+          sha=$(gh api "repos/$GITHUB_REPOSITORY/commits/master" --jq .sha)
+          gh api -X PATCH "repos/$GITHUB_REPOSITORY/git/refs/tags/nightly" -f sha="$sha" -F force=true
+          gh release edit nightly --repo "$GITHUB_REPOSITORY" --notes "Nightly build of master at $sha ($(date -u +%Y-%m-%d))"
+          gh release upload nightly dist/* --repo "$GITHUB_REPOSITORY" --clobber
