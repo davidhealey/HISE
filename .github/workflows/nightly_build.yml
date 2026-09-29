@@ -9,17 +9,9 @@ on:
         required: false
         default: false
         type: boolean
-      juce_branch:
-        description: 'JUCE branch to use'
-        required: false
-        default: 'juce6'
-        type: choice
-        options:
-          - juce6
-          - juce8
 
 env:
-  JUCE_BRANCH: ${{ github.event.inputs.juce_branch || 'juce6' }}
+  JUCE_BRANCH: juce6
 
 jobs:
   check:
@@ -29,7 +21,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: develop
+          ref: master
       - id: detect
         run: |
           if [ "${{ github.event.inputs.force }}" = "true" ]; then
@@ -47,7 +39,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: develop
+          ref: master
           submodules: false
       - name: Checkout JUCE
         shell: bash
@@ -80,7 +72,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: develop
+          ref: master
           submodules: false
       - name: Checkout JUCE
         run: |
