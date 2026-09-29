@@ -131,10 +131,11 @@ jobs:
             libfftw3-dev unzip
       - name: Extract SDKs
         run: cd tools/SDK && unzip -q sdk.zip
+      - name: Build Projucer
+        working-directory: JUCE/extras/Projucer/Builds/LinuxMakefile
+        run: make CONFIG=Release -j$(nproc)
       - name: Resave project
-        run: |
-          chmod +x JUCE/projucer/Projucer
-          JUCE/projucer/Projucer --resave "projects/standalone/HISE Standalone.jucer"
+        run: JUCE/extras/Projucer/Builds/LinuxMakefile/build/Projucer --resave "projects/standalone/HISE Standalone.jucer"
       - name: Build HISE
         working-directory: projects/standalone/Builds/LinuxMakefile
         run: make CONFIG=Release AR=gcc-ar LDFLAGS="-Wl,--as-needed" -j$(nproc)
