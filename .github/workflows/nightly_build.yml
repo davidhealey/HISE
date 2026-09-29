@@ -105,12 +105,13 @@ jobs:
             hdiutil detach /Volumes/Faust-$arch -quiet
           done
           cp -R faust-arm64/* tools/faust/
-          for lib in faust-arm64/lib/*.dylib; do
+          for lib in faust-arm64/lib/*.dylib faust-arm64/lib/*.a; do
             if [ -f "$lib" ] && [ ! -L "$lib" ]; then
               lipo -create "$lib" "faust-x64/lib/$(basename "$lib")" -output "tools/faust/lib/$(basename "$lib")"
             fi
           done
           lipo -info tools/faust/lib/libfaust.dylib
+          [ -f tools/faust/lib/libfaust.a ] && lipo -info tools/faust/lib/libfaust.a || true
       - name: Resave project
         run: |
           chmod +x "JUCE/projucer/Projucer.app/Contents/MacOS/Projucer"
