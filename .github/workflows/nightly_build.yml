@@ -67,15 +67,24 @@ jobs:
         shell: cmd
         run: |
           for /d %%d in ("projects\standalone\Builds\VisualStudio*") do msbuild "%%d\HISE Standalone.sln" /t:Build /p:Configuration=ReleaseWithFaust /p:Platform=x64 /v:m
+      - name: Check Faust linkage
+        shell: pwsh
+        run: |
+          Get-ChildItem "C:\Program Files\Faust\lib" | Format-Table Name, Length
+          $exe = (Get-ChildItem projects/standalone/Builds/VisualStudio*/x64/ReleaseWithFaust/App/HISE.exe).FullName
+          $vs = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -property installationPath
+          $dumpbin = (Get-ChildItem "$vs\VC\Tools\MSVC\*\bin\Hostx64\x64\dumpbin.exe" | Select-Object -First 1).FullName
+          & $dumpbin /dependents $exe
+          if (& $dumpbin /dependents $exe | Select-String -Pattern "faust" -Quiet) { Write-Host "::warning::HISE.exe depends on faust.dll" }
       - name: Collect binary
         shell: bash
         run: |
           mkdir dist
-          cp projects/standalone/Builds/VisualStudio*/x64/ReleaseWithFaust/App/HISE.exe dist/HISE-windows-x64.exe
+          cp projects/standalone/Builds/VisualStudio*/x64/ReleaseWithFaust/App/HISE.exe dist/HISE.exe
       - uses: actions/upload-artifact@v4
         with:
           name: HISE-windows-x64
-          path: dist/HISE-windows-x64.exe
+          path: dist/HISE.exe
           retention-days: 14
 
   build_macos:
@@ -113,8 +122,10 @@ jobs:
               lipo -create "$lib" "faust-x64/lib/$(basename "$lib")" -output "tools/faust/lib/$(basename "$lib")"
             fi
           done
-          lipo -info tools/faust/lib/libfaust.dylib
-          [ -f tools/faust/lib/libfaust.a ] && lipo -info tools/faust/lib/libfaust.a || true
+          ls -la tools/faust/lib
+          lipo -info tools/faust/lib/libfaust.a
+          # drop the shared libs so the linker picks the static libfaust.a
+          rm -f tools/faust/lib/*.dylib
       - name: Resave project
         run: |
           chmod +x "JUCE/projucer/Projucer.app/Contents/MacOS/Projucer"
@@ -122,14 +133,20 @@ jobs:
       - name: Build HISE
         run: |
           xcodebuild -project "projects/standalone/Builds/MacOSX/HISE Standalone.xcodeproj" -configuration ReleaseWithFaust ARCHS="arm64 x86_64" ONLY_ACTIVE_ARCH=NO
+      - name: Verify Faust is linked statically
+        run: |
+          bin=projects/standalone/Builds/MacOSX/build/ReleaseWithFaust/HISE.app/Contents/MacOS/HISE
+          lipo -info "$bin"
+          otool -L "$bin"
+          if otool -L "$bin" | grep -qi faust; then echo "::error::HISE links libfaust dynamically"; exit 1; fi
       - name: Collect binary
         run: |
           mkdir dist
-          cp projects/standalone/Builds/MacOSX/build/ReleaseWithFaust/HISE.app/Contents/MacOS/HISE dist/HISE-macos
+          cp projects/standalone/Builds/MacOSX/build/ReleaseWithFaust/HISE.app/Contents/MacOS/HISE dist/HISE.mac
       - uses: actions/upload-artifact@v4
         with:
           name: HISE-macos
-          path: dist/HISE-macos
+          path: dist/HISE.mac
           retention-days: 14
 
   build_linux:
@@ -168,8 +185,9 @@ jobs:
           lib=$(dirname "$(find libfaust -name 'libfaust.so*' | head -1)")
           echo "include: $inc  lib: $lib"
           sudo cp -R "$inc"/* /usr/local/include/
-          sudo cp -a "$lib"/libfaust* /usr/local/lib/
-          sudo ldconfig
+          ls -la "$lib"
+          # only the static lib, so the linker does not pick libfaust.so
+          sudo cp -a "$lib"/libfaust.a /usr/local/lib/
       - name: Resave project
         run: |
           chmod +x JUCE/Projucer/Projucer
@@ -177,14 +195,18 @@ jobs:
       - name: Build HISE
         working-directory: projects/standalone/Builds/LinuxMakefile
         run: make CONFIG=ReleaseWithFaust AR=gcc-ar -j$(nproc)
+      - name: Verify Faust is linked statically
+        run: |
+          ldd projects/standalone/Builds/LinuxMakefile/build/HISE
+          if ldd projects/standalone/Builds/LinuxMakefile/build/HISE | grep -qi faust; then echo "::error::HISE links libfaust dynamically"; exit 1; fi
       - name: Collect binary
         run: |
           mkdir dist
-          cp projects/standalone/Builds/LinuxMakefile/build/HISE dist/HISE-linux-x64
+          cp projects/standalone/Builds/LinuxMakefile/build/HISE dist/HISE.linux
       - uses: actions/upload-artifact@v4
         with:
           name: HISE-linux-x64
-          path: dist/HISE-linux-x64
+          path: dist/HISE.linux
           retention-days: 14
 
   publish:
