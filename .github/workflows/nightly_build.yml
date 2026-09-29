@@ -55,6 +55,7 @@ jobs:
       - name: Resave project
         shell: cmd
         run: JUCE\projucer\Projucer.exe --resave "projects\standalone\HISE Standalone.jucer"
+      - uses: microsoft/setup-msbuild@v2
       - name: Build HISE
         shell: cmd
         run: |
