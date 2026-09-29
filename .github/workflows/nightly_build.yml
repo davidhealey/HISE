@@ -93,22 +93,31 @@ jobs:
           git pull origin "$JUCE_BRANCH"
       - name: Extract SDKs
         run: cd tools/SDK && tar -xf sdk.zip
-      - name: Install Faust
+      - name: Install Faust (universal)
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release download --repo grame-cncm/faust --pattern "Faust-*-arm64.dmg" --output faust.dmg
-          hdiutil attach faust.dmg -mountpoint /Volumes/Faust -nobrowse -quiet
-          cp -R /Volumes/Faust/Faust-*/* tools/faust/ 2>/dev/null || cp -R /Volumes/Faust/* tools/faust/
-          hdiutil detach /Volumes/Faust -quiet
-          test -f tools/faust/lib/libfaust.dylib
+          for arch in arm64 x64; do
+            gh release download --repo grame-cncm/faust --pattern "Faust-*-$arch.dmg" --output faust-$arch.dmg
+            hdiutil attach faust-$arch.dmg -mountpoint /Volumes/Faust-$arch -nobrowse -quiet
+            mkdir faust-$arch
+            cp -R /Volumes/Faust-$arch/Faust-*/* faust-$arch/ 2>/dev/null || cp -R /Volumes/Faust-$arch/* faust-$arch/
+            hdiutil detach /Volumes/Faust-$arch -quiet
+          done
+          cp -R faust-arm64/* tools/faust/
+          for lib in faust-arm64/lib/*.dylib; do
+            if [ -f "$lib" ] && [ ! -L "$lib" ]; then
+              lipo -create "$lib" "faust-x64/lib/$(basename "$lib")" -output "tools/faust/lib/$(basename "$lib")"
+            fi
+          done
+          lipo -info tools/faust/lib/libfaust.dylib
       - name: Resave project
         run: |
           chmod +x "JUCE/projucer/Projucer.app/Contents/MacOS/Projucer"
           "JUCE/projucer/Projucer.app/Contents/MacOS/Projucer" --resave "projects/standalone/HISE Standalone.jucer"
       - name: Build HISE
         run: |
-          xcodebuild -project "projects/standalone/Builds/MacOSX/HISE Standalone.xcodeproj" -configuration ReleaseWithFaust ARCHS=arm64 ONLY_ACTIVE_ARCH=YES
+          xcodebuild -project "projects/standalone/Builds/MacOSX/HISE Standalone.xcodeproj" -configuration ReleaseWithFaust ARCHS="arm64 x86_64" ONLY_ACTIVE_ARCH=NO
       - name: Package
         run: |
           mkdir dist
