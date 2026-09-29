@@ -1,0 +1,107 @@
+name: Nightly Build
+on:
+  schedule:
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+    inputs:
+      force:
+        description: 'Build even if there are no new commits'
+        required: false
+        default: false
+        type: boolean
+      juce_branch:
+        description: 'JUCE branch to use'
+        required: false
+        default: 'juce6'
+        type: choice
+        options:
+          - juce6
+          - juce8
+
+env:
+  JUCE_BRANCH: ${{ github.event.inputs.juce_branch || 'juce6' }}
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    outputs:
+      changed: ${{ steps.detect.outputs.changed }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: develop
+      - id: detect
+        run: |
+          if [ "${{ github.event.inputs.force }}" = "true" ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          elif [ -n "$(git log --since='24 hours ago' --format=%H -n 1)" ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  build_windows:
+    needs: check
+    if: needs.check.outputs.changed == 'true'
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: develop
+          submodules: false
+      - name: Checkout JUCE
+        shell: bash
+        run: |
+          git submodule update --init JUCE
+          cd JUCE
+          git fetch origin
+          git checkout "$JUCE_BRANCH"
+          git pull origin "$JUCE_BRANCH"
+      - name: Extract SDKs
+        shell: bash
+        run: cd tools/SDK && tar -xf sdk.zip
+      - name: Resave project
+        shell: cmd
+        run: JUCE\projucer\Projucer.exe --resave "projects\standalone\HISE Standalone.jucer"
+      - name: Build HISE
+        shell: cmd
+        run: |
+          for /d %%d in ("projects\standalone\Builds\VisualStudio*") do msbuild "%%d\HISE Standalone.sln" /t:Build /p:Configuration=Release /p:Platform=x64 /v:m
+      - uses: actions/upload-artifact@v4
+        with:
+          name: HISE-windows-x64
+          path: projects/standalone/Builds/VisualStudio*/x64/Release/App/HISE.exe
+          retention-days: 14
+
+  build_macos:
+    needs: check
+    if: needs.check.outputs.changed == 'true'
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: develop
+          submodules: false
+      - name: Checkout JUCE
+        run: |
+          git submodule update --init JUCE
+          cd JUCE
+          git fetch origin
+          git checkout "$JUCE_BRANCH"
+          git pull origin "$JUCE_BRANCH"
+      - name: Extract SDKs
+        run: cd tools/SDK && tar -xf sdk.zip
+      - name: Resave project
+        run: |
+          chmod +x "JUCE/projucer/Projucer.app/Contents/MacOS/Projucer"
+          "JUCE/projucer/Projucer.app/Contents/MacOS/Projucer" --resave "projects/standalone/HISE Standalone.jucer"
+      - name: Build HISE
+        run: |
+          xcodebuild -project "projects/standalone/Builds/MacOSX/HISE Standalone.xcodeproj" -configuration Release
+      - name: Package
+        run: ditto -c -k --keepParent projects/standalone/Builds/MacOSX/build/Release/HISE.app HISE-macos.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: HISE-macos
+          path: HISE-macos.zip
+          retention-days: 14
