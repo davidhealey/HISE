@@ -1,0 +1,236 @@
+name: Nightly Build
+on:
+  schedule:
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+    inputs:
+      force:
+        description: 'Build even if there are no new commits'
+        required: false
+        default: false
+        type: boolean
+      platform:
+        description: 'Platform to build'
+        required: false
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - windows
+          - macos
+          - linux
+
+env:
+  JUCE_BRANCH: juce6
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    outputs:
+      changed: ${{ steps.detect.outputs.changed }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: master
+      - id: detect
+        run: |
+          if [ "${{ github.event.inputs.force }}" = "true" ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          elif [ -n "$(git log --since='24 hours ago' --format=%H -n 1)" ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  build_windows:
+    needs: check
+    if: needs.check.outputs.changed == 'true' && contains(fromJSON('["all","windows"]'), github.event.inputs.platform || 'all')
+    runs-on: windows-2025-vs2026
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: master
+          submodules: false
+      - name: Checkout JUCE
+        shell: bash
+        run: |
+          git submodule update --init JUCE
+          cd JUCE
+          git fetch origin
+          git checkout "$JUCE_BRANCH"
+          git pull origin "$JUCE_BRANCH"
+      - name: Extract SDKs
+        shell: pwsh
+        run: Expand-Archive -Path tools/SDK/sdk.zip -DestinationPath tools/SDK -Force
+      - name: Resave project
+        shell: cmd
+        run: JUCE\projucer\Projucer.exe --resave "projects\standalone\HISE Standalone.jucer"
+      - uses: microsoft/setup-msbuild@v2
+      - name: Build HISE
+        shell: cmd
+        env:
+          PreferredToolArchitecture: x64
+        run: |
+          for /d %%d in ("projects\standalone\Builds\VisualStudio*") do msbuild "%%d\HISE Standalone.sln" /t:Build /p:Configuration=Release /p:Platform=x64 /v:m
+      - name: Collect binary
+        shell: bash
+        run: |
+          mkdir dist
+          cp projects/standalone/Builds/VisualStudio*/x64/Release/App/HISE.exe dist/HISE.exe
+      - uses: actions/upload-artifact@v4
+        with:
+          name: HISE-windows-x64
+          path: dist/HISE.exe
+          retention-days: 14
+
+  build_macos:
+    needs: check
+    if: needs.check.outputs.changed == 'true' && contains(fromJSON('["all","macos"]'), github.event.inputs.platform || 'all')
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: master
+          submodules: false
+      - name: Checkout JUCE
+        run: |
+          git submodule update --init JUCE
+          cd JUCE
+          git fetch origin
+          git checkout "$JUCE_BRANCH"
+          git pull origin "$JUCE_BRANCH"
+      - name: Extract SDKs
+        run: cd tools/SDK && tar -xf sdk.zip
+      - name: Resave project
+        run: |
+          chmod +x "JUCE/projucer/Projucer.app/Contents/MacOS/Projucer"
+          "JUCE/projucer/Projucer.app/Contents/MacOS/Projucer" --resave "projects/standalone/HISE Standalone.jucer"
+      - name: Build HISE
+        run: |
+          xcodebuild -project "projects/standalone/Builds/MacOSX/HISE Standalone.xcodeproj" -configuration Release ARCHS="arm64 x86_64" ONLY_ACTIVE_ARCH=NO
+      - name: Package, sign and notarize
+        env:
+          P12: ${{ secrets.MACOS_CERT_P12 }}
+          P12_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+          API_KEY: ${{ secrets.APPLE_API_KEY_P8 }}
+          API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          API_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
+        run: |
+          mkdir dist stage
+          cp -R projects/standalone/Builds/MacOSX/build/Release/HISE.app stage/
+          sign=false
+          if [ -n "$P12" ] && [ -n "$API_KEY" ]; then sign=true; fi
+
+          if [ "$sign" = true ]; then
+            keychain="$RUNNER_TEMP/build.keychain-db"
+            echo "$P12" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+            printf '%s' "$API_KEY" > "$RUNNER_TEMP/key.p8"
+            security create-keychain -p "$KEYCHAIN_PASSWORD" "$keychain"
+            security set-keychain-settings -lut 21600 "$keychain"
+            security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$keychain"
+            security import "$RUNNER_TEMP/cert.p12" -k "$keychain" -P "$P12_PASSWORD" -T /usr/bin/codesign
+            security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" "$keychain"
+            security list-keychains -d user -s "$keychain" login.keychain
+            identity=$(security find-identity -v -p codesigning "$keychain" | grep "Developer ID Application" | head -1 | awk -F'"' '{print $2}')
+            echo "Signing as: $identity"
+            codesign --force --options runtime --timestamp --entitlements tools/auto_build/HISE.entitlements --sign "$identity" stage/HISE.app
+            codesign --verify --strict --verbose=2 stage/HISE.app
+          fi
+
+          hdiutil create -volname "HISE" -srcfolder stage -ov -format UDZO dist/HISE.dmg
+
+          if [ "$sign" = true ]; then
+            codesign --force --timestamp --sign "$identity" dist/HISE.dmg
+            result=$(xcrun notarytool submit dist/HISE.dmg --key "$RUNNER_TEMP/key.p8" --key-id "$API_KEY_ID" --issuer "$API_ISSUER_ID" --wait --output-format json)
+            echo "$result"
+            status=$(echo "$result" | jq -r .status)
+            if [ "$status" != "Accepted" ]; then
+              xcrun notarytool log "$(echo "$result" | jq -r .id)" --key "$RUNNER_TEMP/key.p8" --key-id "$API_KEY_ID" --issuer "$API_ISSUER_ID"
+              echo "::error::Notarization failed: $status"
+              exit 1
+            fi
+            xcrun stapler staple dist/HISE.dmg
+            xcrun stapler validate dist/HISE.dmg
+            spctl -a -t open --context context:primary-signature -vv dist/HISE.dmg
+            security delete-keychain "$keychain"
+            rm -f "$RUNNER_TEMP/cert.p12" "$RUNNER_TEMP/key.p8"
+          else
+            echo "::warning::Signing secrets not set, publishing an unsigned DMG"
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: HISE-macos
+          path: dist/HISE.dmg
+          retention-days: 14
+
+  build_linux:
+    needs: check
+    if: needs.check.outputs.changed == 'true' && contains(fromJSON('["all","linux"]'), github.event.inputs.platform || 'all')
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: master
+          submodules: false
+      - name: Checkout JUCE
+        run: |
+          git submodule update --init JUCE
+          cd JUCE
+          git fetch origin
+          git checkout "$JUCE_BRANCH"
+          git pull origin "$JUCE_BRANCH"
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get -y install build-essential make llvm clang libfreetype6-dev libx11-dev libxinerama-dev \
+            libxrandr-dev libxcursor-dev mesa-common-dev libasound2-dev freeglut3-dev libxcomposite-dev \
+            libcurl4-gnutls-dev libgtk-3-dev libjack-jackd2-dev libwebkit2gtk-4.0-dev libpthread-stubs0-dev ladspa-sdk \
+            libfftw3-dev unzip
+      - name: Extract SDKs
+        run: cd tools/SDK && unzip -q sdk.zip
+      - name: Build Projucer
+        working-directory: JUCE/extras/Projucer/Builds/LinuxMakefile
+        run: make CONFIG=Release -j$(nproc)
+      - name: Resave project
+        run: JUCE/extras/Projucer/Builds/LinuxMakefile/build/Projucer --resave "projects/standalone/HISE Standalone.jucer"
+      - name: Build HISE
+        working-directory: projects/standalone/Builds/LinuxMakefile
+        run: make CONFIG=Release AR=gcc-ar LDFLAGS="-Wl,--as-needed" -j$(nproc)
+      - name: Verify no Faust dependency
+        run: |
+          ldd projects/standalone/Builds/LinuxMakefile/build/HISE
+          if ldd projects/standalone/Builds/LinuxMakefile/build/HISE | grep -qi faust; then echo "::error::HISE links libfaust dynamically"; exit 1; fi
+      - name: Collect binary
+        run: |
+          mkdir dist
+          cp projects/standalone/Builds/LinuxMakefile/build/HISE dist/HISE
+      - uses: actions/upload-artifact@v4
+        with:
+          name: HISE-linux-x64
+          path: dist/HISE
+          retention-days: 14
+
+  publish:
+    needs: [build_windows, build_macos, build_linux]
+    if: ${{ !cancelled() && (needs.build_windows.result == 'success' || needs.build_macos.result == 'success' || needs.build_linux.result == 'success') }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: HISE-*
+          merge-multiple: true
+          path: dist
+      - name: Publish to the nightly release
+        run: |
+          gh release view nightly --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 || \
+            gh release create nightly --repo "$GITHUB_REPOSITORY" --prerelease --title "Nightly build" \
+              --notes "Latest nightly build of master" --target master
+          sha=$(gh api "repos/$GITHUB_REPOSITORY/commits/master" --jq .sha)
+          gh api -X PATCH "repos/$GITHUB_REPOSITORY/git/refs/tags/nightly" -f sha="$sha" -F force=true
+          gh release edit nightly --repo "$GITHUB_REPOSITORY" --notes "Nightly build of master at $sha ($(date -u +%Y-%m-%d))"
+          gh release upload nightly dist/* --repo "$GITHUB_REPOSITORY" --clobber
