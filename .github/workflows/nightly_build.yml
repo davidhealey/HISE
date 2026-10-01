@@ -119,6 +119,9 @@ jobs:
         run: |
           mkdir dist stage
           cp -R projects/standalone/Builds/MacOSX/build/Release/HISE.app stage/
+          # free disk space: the DMG needs room for a temporary image
+          rm -rf projects/standalone/Builds/MacOSX/build ~/Library/Developer/Xcode/DerivedData
+          df -h /
           sign=false
           if [ -n "$P12" ] && [ -n "$API_KEY" ]; then sign=true; fi
 
