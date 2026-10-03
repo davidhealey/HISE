@@ -520,9 +520,13 @@ bool ExpansionHandler::installFromResourceFile(const File& resourceFile, const F
 
 	if (expRoot != File())
 	{
+		installCancelled = false;
+
 		auto f = [this, expRoot, resourceFile, sampleDirectoryToUse](Processor* p)
 		{
 			jassert(LockHelpers::freeToGo(getMainController()));
+
+			auto isNewInstall = !expRoot.isDirectory();
 
 			expRoot.createDirectory();
 			auto samplesDir = expRoot.getChildFile("Samples");
@@ -553,6 +557,7 @@ bool ExpansionHandler::installFromResourceFile(const File& resourceFile, const F
 			data.totalProgress = &totalProgress;
 			data.partProgress = &unused;
 			data.sourceFile = resourceFile;
+			data.cancelFlag = &installCancelled;
 
 			auto currentThread = Thread::getCurrentThread();
 
@@ -565,6 +570,9 @@ bool ExpansionHandler::installFromResourceFile(const File& resourceFile, const F
 			a.setListener(this);
 			if (!a.extractSampleData(data))
 			{
+				if (installCancelled && isNewInstall)
+					expRoot.deleteRecursively();
+
 				for (auto l : listeners)
 				{
 					if (l.get() != nullptr)
@@ -614,6 +622,16 @@ bool ExpansionHandler::installFromResourceFile(const File& resourceFile, const F
 	}
 
 	return false;
+}
+
+void ExpansionHandler::cancelInstallation()
+{
+	installCancelled = true;
+}
+
+bool ExpansionHandler::wasInstallationCancelled() const
+{
+	return installCancelled;
 }
 
 juce::File ExpansionHandler::getExpansionTargetFolder(const File& resourceFile)

@@ -338,6 +338,10 @@ public:
 
 	bool installFromResourceFile(const File& f, const File& sampleDirectoryToUse);
 
+	void cancelInstallation();
+
+	bool wasInstallationCancelled() const;
+
 	File getExpansionTargetFolder(const File& resourceFile);
 
 	PooledAudioFile loadAudioFileReference(const PoolReference& sampleId);
@@ -456,6 +460,7 @@ private:
 	var credentials;
 	bool installFullDynamics = false;
 	double totalProgress = 0.0;
+	std::atomic<bool> installCancelled { false };
 
 	void checkAllowedExpansions(Result& r, Expansion* e);
 
