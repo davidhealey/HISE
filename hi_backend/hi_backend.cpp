@@ -95,6 +95,7 @@
 #include "backend/ai_tools/tests/InteractionDispatcherTests.cpp"
 #include "backend/ai_tools/tests/InteractionAnalyzerTests.cpp"
 #include "backend/ai_tools/tests/ProcessorMetadataTests.cpp"
+#include "backend/ai_tools/tests/DelayedRendererTests.cpp"
 #endif
 
 #include "backend/BackendProcessor.cpp"

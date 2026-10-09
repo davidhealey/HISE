@@ -1610,8 +1610,8 @@ public:
 			UnitTestRunner runner;
 			//runner.setAssertOnFailure(false);
             
-			// If you're working on a unit test, just set this to the "Current" category
-			const String category = "";
+			// Optionally pass a category: HISE run_unit_tests DelayedRenderer
+			const String category = commandLine.fromFirstOccurrenceOf("run_unit_tests", false, false).trim();
 
             if(UnitTest::getTestsInCategory(category).isEmpty())
                 runner.runAllTests();
