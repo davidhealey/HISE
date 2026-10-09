@@ -64,6 +64,9 @@ public:
 				runContinuityScenario(sampleRate, hostBlock);
 			}
 		}
+
+		runHostInactivityScenario();
+		runPrepareResetsCarryOverScenario();
 	}
 
 private:
@@ -359,6 +362,77 @@ private:
 				return;
 			}
 		}
+	}
+
+	/** Setup: A short call leaves carry-over samples, then a second short call stashes a note on.
+	 *  Scenario: The host reactivates (prepareToPlay) and the next blocks contain no MIDI.
+	 *  Expected: The stashed note on is dropped and no sound is produced.
+	 */
+	void runPrepareResetsCarryOverScenario()
+	{
+		beginTest("prepareToPlay drops carry-over samples and stashed MIDI events");
+
+		TestContext ctx(44100.0, 512);
+		AudioSampleBuffer buffer(2, 512);
+		buffer.clear();
+
+		MidiBuffer empty;
+		ctx.process(buffer, 0, 3, empty);
+
+		MidiBuffer noteOn;
+		noteOn.addEvent(MidiMessage::noteOn(1, 60, (uint8)100), 0);
+		ctx.process(buffer, 0, 3, noteOn);
+
+		ctx.mc->getDelayedRenderer().prepareToPlayWrapped(44100.0, 512);
+
+		auto energy = 0.0f;
+
+		for (int i = 0; i < 4; i++)
+		{
+			ctx.process(buffer, 0, 512, empty);
+			energy += buffer.getMagnitude(0, 512);
+		}
+
+		expect(energy < 0.0001f, "the stashed note on was replayed after prepareToPlay");
+	}
+
+	/** Setup: Audio has been processed, then the host deactivates processing (VST3 setActive(false)).
+	 *  Scenario: The engine is asked whether audio is running, then the host reactivates while a function
+	 *            that was started during the inactive phase still holds its ticket.
+	 *  Expected: Not running while inactive (so loaders do not wait for a thread that is not called),
+	 *            silent after reactivation until the ticket is released, running again afterwards.
+	 */
+	void runHostInactivityScenario()
+	{
+		beginTest("Engine does not wait for the audio thread while the host is inactive");
+
+		TestContext ctx(44100.0, 512);
+		auto& killState = ctx.mc->getKillStateHandler();
+
+		AudioSampleBuffer buffer(2, 512);
+		buffer.clear();
+		MidiBuffer midi;
+
+		expect(killState.isAudioRunning(), "audio should be running after processing blocks");
+
+		killState.setHostProcessingActive(false);
+		expect(!killState.isAudioRunning(), "audio must not count as running while the host is inactive");
+		expect(killState.allowsDeferredCalls(), "deferred calls must be allowed while the host is inactive");
+
+		{
+			SuspendHelpers::ScopedTicket ticket(ctx.mc);
+
+			expect(!killState.allowsDeferredCalls(), "deferred calls must wait for pending tickets");
+
+			killState.setHostProcessingActive(true);
+			expect(!killState.isAudioRunning(), "must stay suspended while a ticket is pending");
+
+			ctx.process(buffer, 0, 512, midi);
+			expect(!killState.isAudioRunning(), "must stay suspended while a ticket is pending");
+		}
+
+		ctx.process(buffer, 0, 512, midi);
+		expect(killState.isAudioRunning(), "processing should resume after the ticket was released");
 	}
 };
 
