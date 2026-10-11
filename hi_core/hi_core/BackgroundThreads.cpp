@@ -1421,8 +1421,13 @@ void SampleDataImporter::threadFinished()
 
 		const bool deleteArchive = getComboBoxComponent("deleteArchive")->getSelectedItemIndex() != 0;
 
-		if (deleteArchive && archiveFile.existsAsFile())
-			archiveFile.deleteFile();
+		if (deleteArchive)
+		{
+			hlac::HlacArchiver archiver(nullptr);
+
+			for (auto part : archiver.getSourceFiles(getSourceFile()))
+				part.deleteFile();
+		}
 
 	}
 }
