@@ -2421,7 +2421,14 @@ void MainController::savePluginState(MemoryBlock& destData, int currentlyLoadedP
 	ValueTree v("ControlData");
 
 	if (auto e = getExpansionHandler().getCurrentExpansion())
+	{
 		v.setProperty("CurrentExpansion", e->getProperty(ExpansionIds::Name), nullptr);
+
+		auto uuid = e->getProperty(ExpansionIds::UUID);
+
+		if (uuid.isNotEmpty())
+			v.setProperty("CurrentExpansionUUID", uuid, nullptr);
+	}
 
 	//synthChain->saveMacroValuesToValueTree(v);
 
