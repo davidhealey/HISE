@@ -534,6 +534,38 @@ void FrontendProcessor::getStateInformation(MemoryBlock &destData)
 
 void FrontendProcessor::setStateInformation(const void *data, int sizeInBytes)
 {
+#if !USE_RAW_FRONTEND
+	if (!isRestoringDeferredState)
+	{
+		auto expansionName = ValueTree::readFromData(data, sizeInBytes).getProperty("CurrentExpansion", "").toString();
+		auto e = getExpansionHandler().getExpansionFromName(expansionName);
+
+		if (e != nullptr && e != getExpansionHandler().getCurrentExpansion() && FullInstrumentExpansion::isEnabled(this))
+		{
+			// The kill state handler runs everything inline until the first audio callback, so load
+			// the expansion on the sample loading thread instead of the host thread.
+			MemoryBlock state(data, (size_t)sizeInBytes);
+
+			auto f = [state, expansionName](Processor* p)
+			{
+				if (auto fp = dynamic_cast<FrontendProcessor*>(p->getMainController()))
+				{
+					auto& handler = fp->getExpansionHandler();
+					handler.setCurrentExpansion(handler.getExpansionFromName(expansionName), sendNotificationSync);
+
+					ScopedValueSetter<bool> svs(fp->isRestoringDeferredState, true);
+					fp->setStateInformation(state.getData(), (int)state.getSize());
+				}
+
+				return SafeFunctionCall::OK;
+			};
+
+			getSampleManager().addDeferredFunction(getMainSynthChain(), f);
+			return;
+		}
+	}
+#endif
+
 	bool suspendAfterLoad = false;
 
 	if (updater.suspendState)

@@ -222,6 +222,8 @@ public:
     
 private:
 
+	bool isRestoringDeferredState = false;
+
     struct SuspendUpdater: private Timer
     {
         SuspendUpdater(FrontendProcessor& parent_):
