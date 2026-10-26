@@ -141,7 +141,8 @@ jobs:
             codesign --verify --strict --verbose=2 stage/HISE.app
           fi
 
-          hdiutil create -volname "HISE" -srcfolder stage -ov -format UDZO dist/HISE.dmg
+          size=$(du -sm stage | cut -f1)
+          hdiutil create -volname "HISE" -srcfolder stage -size "$((size * 2 + 200))m" -ov -format UDZO dist/HISE.dmg
 
           if [ "$sign" = true ]; then
             codesign --force --timestamp --sign "$identity" dist/HISE.dmg
