@@ -2937,7 +2937,7 @@ double ScriptingApi::Settings::getZoomLevel() const
 
 void ScriptingApi::Settings::setZoomLevel(double newLevel)
 {
-	newLevel = jlimit(0.25, 2.0, newLevel);
+	newLevel = jlimit(0.25, 4.0, newLevel);
 	gm->setGlobalScaleFactor(newLevel, sendNotificationAsync);
 }
 
