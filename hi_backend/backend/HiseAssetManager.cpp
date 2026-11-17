@@ -960,7 +960,7 @@ struct HiseAssetManager::ProductList::Row::UpdateAction : public RowAction,
 
 			while (currentState.load() == State::Downloading)
 			{
-				Thread::getCurrentThread()->wait(500);
+				Thread::sleep(500);
 			}
 
 			if (currentState == State::Success)

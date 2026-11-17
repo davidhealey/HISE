@@ -417,7 +417,7 @@ void TestClass::run()
 				funkyItems.add({});
 		}
 
-		Thread::getCurrentThread()->wait(30);
+		Thread::sleep(30);
 
 		finished++;
 	};
@@ -440,7 +440,7 @@ void TestClass::run()
 				gm.sendMessage(e);
 			}
 			
-			Thread::getCurrentThread()->wait(30);
+			Thread::sleep(30);
 		}
 	});
 	*/

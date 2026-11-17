@@ -420,7 +420,7 @@ Result ScriptNetworkTest::CHandler::prepareTest(PrepareSpecs ps, const Array<Par
 	if (waitTimeMs > 0)
 	{
 		HiseJavascriptEngine::TimeoutExtender te(dynamic_cast<JavascriptProcessor*>(network->getScriptProcessor())->getScriptEngine());
-		Thread::getCurrentThread()->wait(waitTimeMs);
+		Thread::sleep(waitTimeMs);
 	}
 
 	currentTimestamp = 0;

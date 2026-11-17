@@ -683,7 +683,7 @@ int ScriptingObjects::ScriptShader::blockWhileWaiting()
 			if (delta > 2000)
 				break;
 
-			Thread::getCurrentThread()->wait(200);
+			Thread::sleep(200);
 		}
 
 		return delta;

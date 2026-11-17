@@ -258,7 +258,7 @@ SleepWait::SleepWait(MainController* mc):
 
 void SleepWait::perform()
 {
-	Thread::getCurrentThread()->wait(duration);
+	Thread::sleep(duration);
 }
 
 void SleepWait::fromJSON(const var& obj)

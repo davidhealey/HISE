@@ -3681,7 +3681,7 @@ var BeatportManager::validate()
 #else
 
 	// simulate waiting...
-	Thread::getCurrentThread()->wait(1500);
+	Thread::sleep(1500);
 
 	auto responseFile = getBeatportProjectFolder(getScriptProcessor()->getMainController_()).getChildFile("validate_response.json");
 
@@ -3710,7 +3710,7 @@ bool BeatportManager::isBeatportAccess()
 #else
 	auto t = Time::getMillisecondCounter();
 
-	Thread::getCurrentThread()->wait(500);
+	Thread::sleep(500);
 	auto responseFile = getBeatportProjectFolder(getScriptProcessor()->getMainController_()).getChildFile("validate_response.json");
 
 	auto now = Time::getMillisecondCounter();

@@ -2165,7 +2165,7 @@ Result CopySiblingFile::performTaskStatic(WaitJob& t)
     for(int i = 0; i < 30; i++)
     {
         t.getProgress() = (double)i / 30.0;
-        Thread::getCurrentThread()->sleep(30);
+        Thread::sleep(30);
     }
     
     return Result::ok();
