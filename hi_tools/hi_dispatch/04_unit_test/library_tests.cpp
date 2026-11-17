@@ -701,11 +701,11 @@ void LibraryTest::runEvents(const var& obj)
 	if(mc != nullptr)
 	{
 		TRACE_DISPATCH("run test");
-		Thread::getCurrentThread()->wait(500);
+		Thread::sleep(500);
 
 		while(!mc->isFinished())
 		{
-			Thread::getCurrentThread()->wait(500);
+			Thread::sleep(500);
 		}
 	}
 

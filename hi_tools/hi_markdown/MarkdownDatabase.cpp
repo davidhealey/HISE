@@ -95,7 +95,7 @@ void MarkdownDataBase::buildDataBase(bool useCache)
 			*progressCounter = (double)p++ / (double)numTotal;
 
 		if (!MessageManager::getInstance()->isThisTheMessageThread() &&
-			Thread::getCurrentThread()->threadShouldExit())
+			Thread::currentThreadShouldExit())
 		{
 			break;
 		}
@@ -741,7 +741,7 @@ void MarkdownDatabaseHolder::setForceCachedDataUse(bool shouldUseCachedData, boo
 bool MarkdownDatabaseHolder::shouldAbort() const
 {
 	if (!MessageManager::getInstance()->isThisTheMessageThread() &&
-		Thread::getCurrentThread()->threadShouldExit())
+		Thread::currentThreadShouldExit())
 	{
 		return true;
 	}

@@ -137,7 +137,7 @@ public:
 			while (!threadShouldExit())
 			{
                 {
-                    ScopedValueSetter<bool> svs(currentlyRendering, true);
+                    currentlyRendering.store(true);
                     
                     queue.callForEveryElementInQueue([this](MultithreadedConvolver::Ptr c)
                     {
@@ -149,6 +149,8 @@ public:
                         
                         return true;
                     });
+
+                    currentlyRendering.store(false);
                 }
                 
                 ReferenceCountedArray<MultithreadedConvolver> copy;
@@ -178,14 +180,14 @@ public:
 				soonToBeDeleted.add(c);
 			}
 
-			if(!isThreadRunning() && !currentlyRendering)
+			if(!isThreadRunning() && !currentlyRendering.load())
 			{
 				soonToBeDeleted.clear();
 			}
         }
         
-		bool isBusy() const { return currentlyRendering; }
-		bool currentlyRendering = false;
+		bool isBusy() const { return currentlyRendering.load(); }
+		std::atomic<bool> currentlyRendering { false };
 		
         int numRegisteredConvolvers = 0;
         

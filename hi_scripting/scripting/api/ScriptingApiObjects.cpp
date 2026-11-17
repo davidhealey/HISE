@@ -1042,7 +1042,7 @@ void ScriptingObjects::ScriptFile::extractZipFile(var targetDirectory, bool over
 
 		for (int i = 0; i < numEntries; i++)
 		{
-			if (Thread::getCurrentThread()->threadShouldExit())
+			if (Thread::currentThreadShouldExit())
 				return SafeFunctionCall::OK;
 
 			if (safeThis == nullptr)
@@ -10868,7 +10868,7 @@ void ScriptingObjects::ScriptBuilder::clear()
 			sp->getScriptingContent()->setIsRebuilding(true);
 		});
 
-		Thread::getCurrentThread()->wait(500);
+		Thread::sleep(500);
 		dynamic_cast<JavascriptProcessor*>(getScriptProcessor())->getScriptEngine()->extendTimeout(500);
 	}
 #endif
