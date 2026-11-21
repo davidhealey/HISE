@@ -57,6 +57,10 @@ public:
 
         voiceUptime = 0.0;
         uptimeDelta = 1.0;
+
+#if HI_RUN_UNIT_TESTS
+		lastUptime = -1.0;
+#endif
     }
 
 	void calculateBlock(int startSample, int numSamples) override;;
@@ -64,6 +68,10 @@ public:
 private:
 
 	inline float getNextValue() const { return 2.0f * ((float)(rand()) / (float)(RAND_MAX)) - 1.0f; };
+
+#if HI_RUN_UNIT_TESTS
+	double lastUptime = -1.0; // used by the DiracTrain test signal to detect the first sample
+#endif
 };
 
 /** A simple noise generator.
