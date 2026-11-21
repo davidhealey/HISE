@@ -374,6 +374,203 @@ private:
 	
 		testScriptPitchFade(false);
 		testScriptPitchFade(true);
+
+		for (auto useGroup : { false, true })
+		{
+			for (auto curve : { 0.0f, 0.5f, 1.0f })
+			{
+				testCurvedVolumeFade(useGroup, curve);
+				testCurvedPitchFade(useGroup, curve);
+			}
+
+			testCurvedVolumeFadeToSilence(useGroup);
+			testInterruptedCurvedVolumeFade(useGroup, false);
+			testInterruptedCurvedVolumeFade(useGroup, true);
+		}
+	}
+
+	static constexpr int curvedFadeSamples = 22050; // 500ms at 44.1kHz
+
+	/** Adds a script processor with the given callback bodies to the main synth chain. */
+	void addFadeScript(BackendProcessor* bp, const String& onInit, const String& onNoteOn, const String& onTimer = {})
+	{
+		const String code = onInit + "function onNoteOn(){" + onNoteOn + "}function onNoteOff(){}function onController(){}"
+		                    "function onTimer(){" + onTimer + "}function onControl(number, value){}";
+
+		auto jp = new JavascriptMidiProcessor(bp, "scripter");
+
+		auto mpc = dynamic_cast<MidiProcessorChain*>(bp->getMainSynthChain()->getChildProcessor(ModulatorSynth::MidiProcessor));
+		jp->setOwnerSynth(bp->getMainSynthChain());
+		jp->parseSnippetsFromString(code, true);
+		mpc->getHandler()->add(jp, nullptr);
+	}
+
+	/** Returns the output level of the DC test signal without any fade. */
+	float getDCReferenceLevel(bool useGroup)
+	{
+		ScopedProcessor bp = Helpers::createWithOptionalGroup(NoiseSynth::DC, useGroup);
+		Helpers::setAttribute<SimpleEnvelope>(bp, SimpleEnvelope::Attack, 0.0f);
+		Helpers::setAttribute<SimpleEnvelope>(bp, SimpleEnvelope::Release, 0.0f);
+
+		auto testData = Helpers::createTestDataWithOneSecondNote();
+		Helpers::process(bp, testData, 512);
+
+		auto level = testData.getSample(0, 10000);
+		bp = nullptr;
+		return level;
+	}
+
+	/** Setup: DC signal, script calls Synth.addVolumeFadeWithCurve(id, 500, -24, curve) on note on
+	 *  Scenario: render the note and sample the output during and after the fade
+	 *  Expected: the level follows the exponential fade curve in decibels and ends at -24 dB
+	 */
+	void testCurvedVolumeFade(bool useGroup, float curve)
+	{
+		beginTestWithOptionalGroup("Testing curved volume fade (curve " + String(curve, 1) + ")", useGroup);
+
+		const auto level = getDCReferenceLevel(useGroup);
+		expect(level > 0.1f, "DC reference level");
+
+		ScopedProcessor bp = Helpers::createWithOptionalGroup(NoiseSynth::DC, useGroup);
+		Helpers::setAttribute<SimpleEnvelope>(bp, SimpleEnvelope::Attack, 0.0f);
+		Helpers::setAttribute<SimpleEnvelope>(bp, SimpleEnvelope::Release, 0.0f);
+
+		addFadeScript(bp, {}, "Synth.addVolumeFadeWithCurve(Message.getEventId(), 500, -24, " + String(curve) + ");");
+
+		auto testData = Helpers::createTestDataWithOneSecondNote();
+		Helpers::process(bp, testData, 512);
+
+		for (auto n : { 2000, 5512, 11025, 16537, 20000 })
+		{
+			const auto y = CurvedEventFader::getShapedProgress((double)(n + 1) / (double)curvedFadeSamples, curve);
+			const auto expected = level * Decibels::decibelsToGain(-24.0f * (float)y);
+
+			expectResult(testData.isWithinErrorRange(n, expected, 0, -60.0f), "Fade value at sample " + String(n));
+		}
+
+		expectResult(testData.isWithinErrorRange(25000, level * Decibels::decibelsToGain(-24.0f), 0, -80.0f), "Fade end value");
+
+		bp = nullptr;
+	}
+
+	/** Setup: DC signal, script fades to -100 dB with a neutral curve
+	 *  Scenario: render the note
+	 *  Expected: the fade is even in decibels (-50 dB halfway), then the output is silent because the note was killed
+	 */
+	void testCurvedVolumeFadeToSilence(bool useGroup)
+	{
+		beginTestWithOptionalGroup("Testing curved volume fade to silence", useGroup);
+
+		const auto level = getDCReferenceLevel(useGroup);
+
+		ScopedProcessor bp = Helpers::createWithOptionalGroup(NoiseSynth::DC, useGroup);
+		Helpers::setAttribute<SimpleEnvelope>(bp, SimpleEnvelope::Attack, 0.0f);
+		Helpers::setAttribute<SimpleEnvelope>(bp, SimpleEnvelope::Release, 0.0f);
+
+		addFadeScript(bp, {}, "Synth.addVolumeFadeWithCurve(Message.getEventId(), 500, -100, 0.5);");
+
+		auto testData = Helpers::createTestDataWithOneSecondNote();
+		Helpers::process(bp, testData, 512);
+
+		expectResult(testData.isWithinErrorRange(curvedFadeSamples / 4 - 1, level * Decibels::decibelsToGain(-25.0f), 0, -60.0f), "Quarter point");
+		expectResult(testData.isWithinErrorRange(curvedFadeSamples / 2 - 1, level * Decibels::decibelsToGain(-50.0f), 0, -80.0f), "Halfway point");
+
+		for (int i = curvedFadeSamples + 1024; i < testData.audioBuffer.getNumSamples(); i += 512)
+			expectEquals<float>(testData.getSample(0, i), 0.0f, "Silent after fade");
+
+		bp = nullptr;
+	}
+
+	/** Setup: DC signal, a curved fade to -24 dB, interrupted after 250ms by a fade back to 0 dB
+	 *  Scenario: the second fade is either curved or the original linear fade
+	 *  Expected: the second fade starts from the current level (no jump) and ends at 0 dB
+	 */
+	void testInterruptedCurvedVolumeFade(bool useGroup, bool useLinearSecondFade)
+	{
+		beginTestWithOptionalGroup(String("Testing interrupted curved volume fade") + (useLinearSecondFade ? " (linear second fade)" : ""), useGroup);
+
+		const auto level = getDCReferenceLevel(useGroup);
+
+		ScopedProcessor bp = Helpers::createWithOptionalGroup(NoiseSynth::DC, useGroup);
+		Helpers::setAttribute<SimpleEnvelope>(bp, SimpleEnvelope::Attack, 0.0f);
+		Helpers::setAttribute<SimpleEnvelope>(bp, SimpleEnvelope::Release, 0.0f);
+
+		const String secondFade = useLinearSecondFade ? "Synth.addVolumeFade(id, 200, 0);"
+		                                              : "Synth.addVolumeFadeWithCurve(id, 200, 0, 0.0);";
+
+		addFadeScript(bp, "reg id = 0;",
+		              "id = Message.getEventId(); Synth.addVolumeFadeWithCurve(id, 500, -24, 1.0); Synth.startTimer(0.25);",
+		              "Synth.stopTimer();" + secondFade);
+
+		auto testData = Helpers::createTestDataWithOneSecondNote();
+		Helpers::process(bp, testData, 512);
+
+		float minValue = level;
+		float maxJump = 0.0f;
+
+		for (int i = 1000; i < 26000; i++)
+		{
+			minValue = jmin(minValue, testData.getSample(0, i));
+			maxJump = jmax(maxJump, std::abs(testData.getSample(0, i) - testData.getSample(0, i - 1)));
+		}
+
+		expect(minValue < level * Decibels::decibelsToGain(-12.0f), "First fade went down before the interruption");
+		expect(maxJump < level * 0.005f, "No jump at the interruption, max jump: " + String(maxJump));
+		expectResult(testData.isWithinErrorRange(26000, level, 0, -80.0f), "Second fade ends at 0 dB");
+
+		bp = nullptr;
+	}
+
+	/** Setup: dirac train, script calls Synth.addPitchFadeWithCurve(id, 500, 12, 0, curve) on note on
+	 *  Scenario: render the note and measure the distance between the diracs
+	 *  Expected: the pitch follows the exponential fade curve in semitones from 256 to 128 samples per dirac
+	 */
+	void testCurvedPitchFade(bool useGroup, float curve)
+	{
+		beginTestWithOptionalGroup("Testing curved pitch fade (curve " + String(curve, 1) + ")", useGroup);
+
+		ScopedProcessor bp = Helpers::createWithOptionalGroup(NoiseSynth::DiracTrain, useGroup);
+		Helpers::setAttribute<SimpleEnvelope>(bp, SimpleEnvelope::Attack, 0.0f);
+		Helpers::setAttribute<SimpleEnvelope>(bp, SimpleEnvelope::Release, 0.0f);
+
+		addFadeScript(bp, {}, "Synth.addPitchFadeWithCurve(Message.getEventId(), 500, 12, 0, " + String(curve) + ");");
+
+		auto testData = Helpers::createTestDataWithOneSecondNote();
+		Helpers::process(bp, testData, 512);
+
+		Helpers::DiracIterator di(testData.audioBuffer, 0, false);
+		expectResult(di.scan(), "Dirac scan");
+
+		auto& data = di.getData();
+
+		// Only the end is checked exactly: curved fades move per sample, so with a fast start
+		// the first dirac distance is already below 256 (the per-dirac check below covers it)
+		expectEquals(data.sampleDistances.getLast(), 128, "End distance");
+
+		int position = -1;
+		int numChecked = 0;
+
+		for (auto d : data.sampleDistances)
+		{
+			position += d;
+
+			const auto midPoint = (double)position - 0.5 * (double)d;
+
+			if (midPoint > 0.0 && midPoint < (double)curvedFadeSamples)
+			{
+				const auto y = CurvedEventFader::getShapedProgress(midPoint / (double)curvedFadeSamples, curve);
+				const auto expected = 256.0 / std::exp2(y);
+
+				expect(std::abs((double)d - expected) <= 3.0,
+				       "Dirac distance at " + String(position) + ": expected " + String(expected, 1) + ", actual " + String(d));
+
+				numChecked++;
+			}
+		}
+
+		expect(numChecked > 50, "Enough diracs inside the fade");
+
+		bp = nullptr;
 	}
 
 	void testPanModulation(bool useGroup)

@@ -57,6 +57,8 @@ public:
 		testPitchWheel();
 		testEventBuffer();
 		testFadeEvent();
+		testFadeCurve();
+		testCurvedEventFader();
 		testEventBufferCopyMethods();
 		testMidiBufferCopyMethods();
 		testMidiBufferIterators();
@@ -403,7 +405,127 @@ private:
 		expect(p.isArtificial(), "Pitch Artificial");
 		expect(!p.isVolumeFade(), "No Pitch Fade");
 
+		expect(!e.hasFadeCurve(), "Volume fade without curve");
+		expect(!p.hasFadeCurve(), "Pitch fade without curve");
+		expectEquals<float>(e.getFadeCurve(), 0.5f, "Default fade curve");
+	}
 
+	/** Setup: fade events created with and without a fade curve
+	 *  Scenario: read back the curve, including out-of-range and boundary values
+	 *  Expected: curve round-trips (0.5 exactly), is clamped to 0...1, and other fade data is unchanged
+	 */
+	void testFadeCurve()
+	{
+		beginTest("Testing fade curves");
+
+		auto e = HiseEvent::createVolumeFade(1292, 2000, -24, 0.5f);
+
+		expect(e.hasFadeCurve(), "Volume fade has curve");
+		expectEquals<float>(e.getFadeCurve(), 0.5f, "Neutral curve is exact");
+		expectEquals<int>(e.getFadeTime(), 2000, "Fade Time");
+		expectEquals<int>(e.getGain(), -24, "Gain");
+		expect(e.isArtificial(), "Artificial");
+
+		expectEquals<float>(HiseEvent::createVolumeFade(1, 10, 0, 0.0f).getFadeCurve(), 0.0f, "Curve 0");
+		expectEquals<float>(HiseEvent::createVolumeFade(1, 10, 0, 1.0f).getFadeCurve(), 1.0f, "Curve 1");
+		expectEquals<float>(HiseEvent::createVolumeFade(1, 10, 0, -3.0f).getFadeCurve(), 0.0f, "Clamped low");
+		expectEquals<float>(HiseEvent::createVolumeFade(1, 10, 0, 7.0f).getFadeCurve(), 1.0f, "Clamped high");
+		expect(HiseEvent::createVolumeFade(1, 10, 0, 0.0f).hasFadeCurve(), "Curve 0 is still a curve");
+
+		expect(std::abs(HiseEvent::createVolumeFade(1, 10, 0, 0.3f).getFadeCurve() - 0.3f) < 0.5f / 254.0f, "Curve resolution");
+
+		auto p = HiseEvent::createPitchFade(1298, 2100, -11, -100, 0.8f);
+
+		expect(p.hasFadeCurve(), "Pitch fade has curve");
+		expect(std::abs(p.getFadeCurve() - 0.8f) < 0.5f / 254.0f, "Pitch curve");
+		expectEquals<int>(p.getFadeTime(), 2100, "Fade Time");
+		expectEquals<int>(p.getCoarseDetune(), -11, "Coarse Detune");
+		expectEquals<int>(p.getFineDetune(), -100, "Fine Detune");
+	}
+
+	/** Runs the fader for the given number of samples and returns the last value. */
+	static double advance(CurvedEventFader& f, int numSamples)
+	{
+		double v = f.getCurrentValue();
+
+		for (int i = 0; i < numSamples; i++)
+			v = f.getNextValue();
+
+		return v;
+	}
+
+	/** Setup: CurvedEventFader in decibel and semitone domains
+	 *  Scenario: run fades with curves 0, 0.5 and 1, to and from silence, and with zero length
+	 *  Expected: values follow the exponential curve in the fade domain and land exactly on the target
+	 */
+	void testCurvedEventFader()
+	{
+		beginTest("Testing curved event fader");
+
+		using Domain = CurvedEventFader::Domain;
+
+		// Shape
+		expectWithinAbsoluteError(CurvedEventFader::getShapedProgress(0.3, 0.5f), 0.3, 1e-12, "Neutral curve is linear");
+		expectWithinAbsoluteError(CurvedEventFader::getShapedProgress(0.5, 0.0f), 0.1192029, 1e-6, "Curve 0 starts slow");
+		expectWithinAbsoluteError(CurvedEventFader::getShapedProgress(0.5, 1.0f), 0.8807971, 1e-6, "Curve 1 starts fast");
+		expectWithinAbsoluteError(CurvedEventFader::getShapedProgress(0.2, 0.0f),
+		                          1.0 - CurvedEventFader::getShapedProgress(0.8, 1.0f), 1e-12, "Curves 0 and 1 are mirror images");
+		expectWithinAbsoluteError(CurvedEventFader::getShapedProgress(1.0, 0.0f), 1.0, 1e-12, "Curve ends at 1");
+
+		// Neutral fade to silence is even in decibels and ends at exactly 0
+		{
+			CurvedEventFader f(Domain::Decibels);
+			f.start(1.0, 0.0, 1000, 0.5f);
+			expect(f.isActive(), "Active");
+			expectWithinAbsoluteError(advance(f, 500), (double)Decibels::decibelsToGain(-50.0f), 1e-6, "Halfway to silence is -50 dB");
+			expectEquals(advance(f, 500), 0.0, "Ends silent");
+			expect(!f.isActive(), "Inactive after the fade");
+			expectEquals(f.getNextValue(), 0.0, "Holds the target");
+		}
+
+		// Fade in from silence starts at -100 dB
+		{
+			CurvedEventFader f(Domain::Decibels);
+			f.start(0.0, 1.0, 1000, 0.5f);
+			expectWithinAbsoluteError(advance(f, 500), (double)Decibels::decibelsToGain(-50.0f), 1e-6, "Halfway from silence is -50 dB");
+			expectEquals(advance(f, 500), 1.0, "Ends at 0 dB");
+		}
+
+		// Curved volume fades follow the curve in decibels
+		for (auto curve : { 0.0f, 1.0f })
+		{
+			CurvedEventFader f(Domain::Decibels);
+			f.start(1.0, (double)Decibels::decibelsToGain(-24.0f), 1000, curve);
+
+			const auto expectedDb = -24.0 * CurvedEventFader::getShapedProgress(0.25, curve);
+			expectWithinAbsoluteError(advance(f, 250), std::pow(10.0, expectedDb / 20.0), 1e-6, "Quarter point, curve " + String(curve));
+		}
+
+		// Pitch fades are even in semitones
+		{
+			CurvedEventFader f(Domain::Semitones);
+			f.start(1.0, 2.0, 1000, 0.5f);
+			expectWithinAbsoluteError(advance(f, 500), std::sqrt(2.0), 1e-9, "Halfway up an octave is 6 semitones");
+			expectEquals(advance(f, 500), 2.0, "Ends at the octave");
+		}
+
+		// Restarting from the current value (what the voice does when a fade is interrupted)
+		{
+			CurvedEventFader f(Domain::Semitones);
+			f.start(1.0, 2.0, 1000, 1.0f);
+			const auto current = advance(f, 300);
+			f.start(f.getCurrentValue(), 0.5, 1000, 0.0f);
+			expectWithinAbsoluteError(f.getNextValue(), current, 1e-3, "No jump when restarting");
+			expectEquals(advance(f, 999), 0.5, "Second fade reaches its target");
+		}
+
+		// Zero length fades jump straight to the target
+		{
+			CurvedEventFader f(Domain::Decibels);
+			f.start(1.0, 0.5, 0, 0.3f);
+			expect(!f.isActive(), "Zero length fade is inactive");
+			expectEquals(f.getCurrentValue(), 0.5, "Zero length fade is at the target");
+		}
 	}
 
 	void testMidiBufferIterators()
@@ -872,4 +994,4 @@ private:
 
 //static CustomValueTreeUnitTests customValueTreeTestInstance;
 
-#endif
+#endif
