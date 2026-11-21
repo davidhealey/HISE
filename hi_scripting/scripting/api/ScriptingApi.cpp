@@ -5363,6 +5363,8 @@ struct ScriptingApi::Synth::Wrapper
 	API_VOID_METHOD_WRAPPER_1(Synth, setFixNoteOnAfterNoteOff);
 	API_VOID_METHOD_WRAPPER_3(Synth, addVolumeFade);
 	API_VOID_METHOD_WRAPPER_4(Synth, addPitchFade);
+	API_VOID_METHOD_WRAPPER_4(Synth, addVolumeFadeWithCurve);
+	API_VOID_METHOD_WRAPPER_5(Synth, addPitchFadeWithCurve);
 	API_VOID_METHOD_WRAPPER_4(Synth, addController);
 	API_METHOD_WRAPPER_1(Synth, addMessageFromHolder);
 	API_METHOD_WRAPPER_2(Synth, attachNote);
@@ -5487,6 +5489,8 @@ ScriptingApi::Synth::Synth(ProcessorWithScriptingContent *p, Message* messageObj
 	ADD_API_METHOD_3(addNoteOff);
 	ADD_API_METHOD_3(addVolumeFade);
 	ADD_API_METHOD_4(addPitchFade);
+	ADD_API_METHOD_4(addVolumeFadeWithCurve);
+	ADD_API_METHOD_5(addPitchFadeWithCurve);
 	ADD_API_METHOD_4(addController);
 	ADD_API_METHOD_1(addMessageFromHolder);
 	ADD_API_METHOD_2(setVoiceGainValue);
@@ -5682,13 +5686,41 @@ void ScriptingApi::Synth::setFixNoteOnAfterNoteOff(bool shouldBeFixed)
 
 void ScriptingApi::Synth::addVolumeFade(int eventId, int fadeTimeMilliseconds, int targetVolume)
 {
+	internalAddVolumeFade(eventId, fadeTimeMilliseconds, targetVolume, false, 0.5f);
+}
+
+void ScriptingApi::Synth::addVolumeFadeWithCurve(int eventId, int fadeTimeMilliseconds, int targetVolume, var curve)
+{
+	if (isValidFadeCurve(curve))
+		internalAddVolumeFade(eventId, fadeTimeMilliseconds, targetVolume, true, (float)curve);
+}
+
+void ScriptingApi::Synth::addPitchFadeWithCurve(int eventId, int fadeTimeMilliseconds, int targetCoarsePitch, int targetFinePitch, var curve)
+{
+	if (isValidFadeCurve(curve))
+		internalAddPitchFade(eventId, fadeTimeMilliseconds, targetCoarsePitch, targetFinePitch, true, (float)curve);
+}
+
+bool ScriptingApi::Synth::isValidFadeCurve(const var& curve)
+{
+	// The curve is a var so that a fade curve table can be supported later (see issue #26)
+	if (curve.isInt() || curve.isInt64() || curve.isDouble())
+		return true;
+
+	reportScriptError("curve must be a number (0...1)");
+	return false;
+}
+
+void ScriptingApi::Synth::internalAddVolumeFade(int eventId, int fadeTimeMilliseconds, int targetVolume, bool useCurve, float curve)
+{
 	if (parentMidiProcessor != nullptr)
 	{
 		if (eventId > 0)
 		{
 			if (fadeTimeMilliseconds >= 0)
 			{
-				HiseEvent e = HiseEvent::createVolumeFade((uint16)eventId, fadeTimeMilliseconds, (uint8)targetVolume);
+				HiseEvent e = useCurve ? HiseEvent::createVolumeFade((uint16)eventId, fadeTimeMilliseconds, (uint8)targetVolume, curve)
+				                       : HiseEvent::createVolumeFade((uint16)eventId, fadeTimeMilliseconds, (uint8)targetVolume);
 
 				if (const HiseEvent* current = parentMidiProcessor->getCurrentHiseEvent())
 				{
@@ -5744,13 +5776,19 @@ void ScriptingApi::Synth::addVolumeFade(int eventId, int fadeTimeMilliseconds, i
 
 void ScriptingApi::Synth::addPitchFade(int eventId, int fadeTimeMilliseconds, int targetCoarsePitch, int targetFinePitch)
 {
+	internalAddPitchFade(eventId, fadeTimeMilliseconds, targetCoarsePitch, targetFinePitch, false, 0.5f);
+}
+
+void ScriptingApi::Synth::internalAddPitchFade(int eventId, int fadeTimeMilliseconds, int targetCoarsePitch, int targetFinePitch, bool useCurve, float curve)
+{
 	if (parentMidiProcessor != nullptr)
 	{
 		if (eventId > 0)
 		{
 			if (fadeTimeMilliseconds >= 0)
 			{
-				HiseEvent e = HiseEvent::createPitchFade((uint16)eventId, fadeTimeMilliseconds, (uint8)targetCoarsePitch, (uint8)targetFinePitch);
+				HiseEvent e = useCurve ? HiseEvent::createPitchFade((uint16)eventId, fadeTimeMilliseconds, (uint8)targetCoarsePitch, (uint8)targetFinePitch, curve)
+				                       : HiseEvent::createPitchFade((uint16)eventId, fadeTimeMilliseconds, (uint8)targetCoarsePitch, (uint8)targetFinePitch);
 
 				if(auto ce = parentMidiProcessor->getCurrentHiseEvent())
 					e.setTimeStamp((int)ce->getTimeStamp());

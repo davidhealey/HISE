@@ -864,11 +864,17 @@ void ModulatorSynth::handleHiseEvent(const HiseEvent& m)
 	}
 	else if (c.isVolumeFade())
 	{
-		handleVolumeFade(c.getEventId(), c.getFadeTime(), c.getGainFactor());
+		if (c.hasFadeCurve())
+			handleCurvedVolumeFade(c.getEventId(), c.getFadeTime(), c.getGainFactor(), c.getFadeCurve());
+		else
+			handleVolumeFade(c.getEventId(), c.getFadeTime(), c.getGainFactor());
 	}
 	else if (c.isPitchFade())
 	{
-		handlePitchFade(c.getEventId(), c.getFadeTime(), c.getPitchFactorForEvent());
+		if (c.hasFadeCurve())
+			handleCurvedPitchFade(c.getEventId(), c.getFadeTime(), c.getPitchFactorForEvent(), c.getFadeCurve());
+		else
+			handlePitchFade(c.getEventId(), c.getFadeTime(), c.getPitchFactorForEvent());
 	}
 }
 
@@ -961,6 +967,30 @@ void ModulatorSynth::handlePitchFade(uint16 eventId, int fadeTimeMilliseconds, d
 		{
 			v->setPitchFade(fadeTimeSeconds, pitchFactor);
 		}
+	}
+}
+
+void ModulatorSynth::handleCurvedVolumeFade(uint16 eventId, int fadeTimeMilliseconds, float targetGain, float curve)
+{
+	const double fadeTimeSeconds = (double)fadeTimeMilliseconds / 1000.0;
+
+	for (auto v : activeVoices)
+	{
+		if (v->getCurrentHiseEvent().getEventId() == eventId)
+			v->setVolumeFadeWithCurve(fadeTimeSeconds, targetGain, curve);
+	}
+}
+
+void ModulatorSynth::handleCurvedPitchFade(uint16 eventId, int fadeTimeMilliseconds, double pitchFactor, float curve)
+{
+	const double fadeTimeSeconds = (double)fadeTimeMilliseconds / 1000.0;
+
+	for (int i = voices.size(); --i >= 0;)
+	{
+		ModulatorSynthVoice *v = static_cast<ModulatorSynthVoice*>(voices[i]);
+
+		if (!v->isInactive() && v->getCurrentHiseEvent().getEventId() == eventId)
+			v->setPitchFadeWithCurve(fadeTimeSeconds, pitchFactor, curve);
 	}
 }
 
@@ -1546,6 +1576,8 @@ void ModulatorSynthVoice::resetVoice()
 
 	gainFader.setValueWithoutSmoothing(1.0f);
 	pitchFader.setValueWithoutSmoothing(1.0);
+	curvedGainFader.stop();
+	curvedPitchFader.stop();
 
 	os->flagVoiceAsRemoved(this);
 
@@ -2094,12 +2126,26 @@ ModulatorSynthVoice::ModulatorSynthVoice(ModulatorSynth* ownerSynth_):
 
 bool ModulatorSynthVoice::isPitchFadeActive() const noexcept
 {
-	return pitchFader.isSmoothing();
+	return pitchFader.isSmoothing() || curvedPitchFader.isActive();
 }
 
 void ModulatorSynthVoice::applyScriptPitchFactors(float* voicePitchModulationData, int numSamples)
 {
-	jassert(pitchFader.isSmoothing());
+	jassert(isPitchFadeActive());
+
+	if (curvedPitchFader.isActive())
+	{
+		while (--numSamples >= 0)
+		{
+			eventPitchFactor = curvedPitchFader.getNextValue();
+			*voicePitchModulationData++ *= (float)eventPitchFactor;
+		}
+
+		if (!curvedPitchFader.isActive())
+			pitchFader.setValueWithoutSmoothing(eventPitchFactor);
+
+		return;
+	}
 
 	float eventPitchFactorFloat = (float)eventPitchFactor;
 
@@ -2220,6 +2266,24 @@ void ModulatorSynthVoice::applyEventVolumeFade(int startSample, int numSamples)
 	}
 }
 
+void ModulatorSynthVoice::applyCurvedEventVolumeFade(int startSample, int numSamples)
+{
+	while (--numSamples >= 0)
+	{
+		eventGainFactor = (float)curvedGainFader.getNextValue();
+
+		for (int i = 0; i < voiceBuffer.getNumChannels(); i++)
+		{
+			voiceBuffer.getWritePointer(i)[startSample] *= eventGainFactor;
+		}
+
+		startSample++;
+	}
+
+	if (!curvedGainFader.isActive())
+		gainFader.setValueWithoutSmoothing(eventGainFactor);
+}
+
 void ModulatorSynthVoice::applyEventVolumeFactor(int startSample, int numSamples)
 {
 	jassert(eventGainFactor >= 0.0f && eventGainFactor < 20.0f);
@@ -2292,6 +2356,13 @@ int ModulatorSynthVoice::getTransposeAmount() const noexcept
 
 void ModulatorSynthVoice::setVolumeFade(double fadeTimeSeconds, float targetVolume)
 {
+	if (curvedGainFader.isActive())
+	{
+		// Continue from wherever the curved fade currently is
+		curvedGainFader.stop();
+		gainFader.setValueWithoutSmoothing(eventGainFactor);
+	}
+
 	if (fadeTimeSeconds == 0.0)
 	{
 		eventGainFactor = targetVolume;
@@ -2305,6 +2376,13 @@ void ModulatorSynthVoice::setVolumeFade(double fadeTimeSeconds, float targetVolu
 
 void ModulatorSynthVoice::setPitchFade(double fadeTimeSeconds, double targetPitch)
 {
+	if (curvedPitchFader.isActive())
+	{
+		// Continue from wherever the curved fade currently is
+		curvedPitchFader.stop();
+		pitchFader.setValueWithoutSmoothing(eventPitchFactor);
+	}
+
 	if (fadeTimeSeconds == 0.0)
 	{
 		eventPitchFactor = targetPitch;
@@ -2313,6 +2391,43 @@ void ModulatorSynthVoice::setPitchFade(double fadeTimeSeconds, double targetPitc
 	else
 	{
 		pitchFader.setValueAndRampTime(targetPitch, getSampleRate(), fadeTimeSeconds);
+	}
+}
+
+void ModulatorSynthVoice::setVolumeFadeWithCurve(double fadeTimeSeconds, float targetVolume, float curve)
+{
+	// eventGainFactor holds the current value of any running fade, so stopping the linear fader is safe
+	gainFader.setValueWithoutSmoothing(eventGainFactor);
+
+	const int numSamples = (int)std::floor(fadeTimeSeconds * getSampleRate());
+
+	if (numSamples <= 0)
+	{
+		curvedGainFader.stop();
+		eventGainFactor = targetVolume;
+		gainFader.setValueWithoutSmoothing(targetVolume);
+	}
+	else
+	{
+		curvedGainFader.start(eventGainFactor, targetVolume, numSamples, curve);
+	}
+}
+
+void ModulatorSynthVoice::setPitchFadeWithCurve(double fadeTimeSeconds, double targetPitch, float curve)
+{
+	pitchFader.setValueWithoutSmoothing(eventPitchFactor);
+
+	const int numSamples = (int)std::floor(fadeTimeSeconds * getSampleRate());
+
+	if (numSamples <= 0)
+	{
+		curvedPitchFader.stop();
+		eventPitchFactor = targetPitch;
+		pitchFader.setValueWithoutSmoothing(targetPitch);
+	}
+	else
+	{
+		curvedPitchFader.start(eventPitchFactor, targetPitch, numSamples, curve);
 	}
 }
 
@@ -2345,7 +2460,11 @@ void ModulatorSynthVoice::renderNextBlock (AudioSampleBuffer& outputBuffer, int 
 
 		checkFixedLength();
 
-		if (gainFader.isSmoothing())
+		if (curvedGainFader.isActive())
+		{
+			applyCurvedEventVolumeFade(startSample, numSamples);
+		}
+		else if (gainFader.isSmoothing())
 		{
 			applyEventVolumeFade(startSample, numSamples);
 		}
@@ -2381,6 +2500,93 @@ void ModulatorSynthVoice::setCurrentHiseEvent(const HiseEvent &m)
 	eventPitchFactor = m.getPitchFactorForEvent();
 	gainFader.setValueWithoutSmoothing(eventGainFactor);
 	pitchFader.setValueWithoutSmoothing(eventPitchFactor);
+	curvedGainFader.stop();
+	curvedPitchFader.stop();
+}
+
+void CurvedEventFader::start(double current, double target, int numSamples, float curve) noexcept
+{
+	currentValue = current;
+	targetValue = target;
+
+	if (numSamples <= 0)
+	{
+		currentValue = target;
+		remaining = 0;
+		return;
+	}
+
+	startDomainValue = toDomain(current);
+	deltaDomainValue = toDomain(target) - startDomainValue;
+
+	remaining = numSamples;
+	progress = 0.0;
+	progressDelta = 1.0 / (double)numSamples;
+
+	const auto a = getCurveExponent(curve);
+	isLinear = std::abs(a) < 1e-6;
+
+	if (!isLinear)
+	{
+		// exp(-a * t) is advanced by multiplication, so there's only one exp() per sample (in fromDomain)
+		expState = 1.0;
+		expFactor = std::exp(-a / (double)numSamples);
+		normaliser = 1.0 / (1.0 - std::exp(-a));
+	}
+}
+
+double CurvedEventFader::getNextValue() noexcept
+{
+	if (remaining <= 0)
+		return currentValue;
+
+	if (--remaining == 0)
+	{
+		currentValue = targetValue;
+		return currentValue;
+	}
+
+	double y;
+
+	if (isLinear)
+	{
+		progress += progressDelta;
+		y = progress;
+	}
+	else
+	{
+		expState *= expFactor;
+		y = (1.0 - expState) * normaliser;
+	}
+
+	currentValue = fromDomain(startDomainValue + deltaDomainValue * y);
+	return currentValue;
+}
+
+double CurvedEventFader::getShapedProgress(double t, float curve) noexcept
+{
+	const auto a = getCurveExponent(curve);
+
+	if (std::abs(a) < 1e-6)
+		return t;
+
+	return (1.0 - std::exp(-a * t)) / (1.0 - std::exp(-a));
+}
+
+double CurvedEventFader::toDomain(double value) const noexcept
+{
+	if (domain == Domain::Decibels)
+		return Decibels::gainToDecibels(value, -100.0);
+
+	return 12.0 * std::log2(value);
+}
+
+double CurvedEventFader::fromDomain(double value) const noexcept
+{
+	if (domain == Domain::Decibels)
+		return Decibels::decibelsToGain(value, -100.0);
+
+	return std::exp2(value / 12.0);
 }
 
 bool ModulatorSynthSound::appliesToMessage(int midiChannel, const int midiNoteNumber, const int velocity)

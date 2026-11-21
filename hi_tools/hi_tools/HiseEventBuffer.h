@@ -243,6 +243,16 @@ public:
 	*/
 	static HiseEvent createPitchFade(uint16 eventId, int fadeTimeMilliseconds, int8 coarseTune, int8 fineTune);
 
+	/** Creates a curved volume fade. The fade is shaped in decibels using the fade curve
+		(0 = slow start, 0.5 = even in decibels, 1 = fast start). Values outside 0...1 are clamped.
+	*/
+	static HiseEvent createVolumeFade(uint16 eventId, int fadeTimeMilliseconds, int8 targetValue, float curve);
+
+	/** Creates a curved pitch fade. The fade is shaped in semitones using the fade curve
+		(0 = slow start, 0.5 = even in semitones, 1 = fast start). Values outside 0...1 are clamped.
+	*/
+	static HiseEvent createPitchFade(uint16 eventId, int fadeTimeMilliseconds, int8 coarseTune, int8 fineTune, float curve);
+
 	/** Creates a timer event.
 		@param timerIndex There are 4 timer slots per sound generator and this will
 		                  contain the index (0-3).
@@ -261,6 +271,14 @@ public:
 	
 	/** Returns the fade time for both pitch and volume fades. */
 	int getFadeTime() const noexcept{ return getPitchWheelValue(); };
+
+	/** Returns true if this VolumeFade or PitchFade event was created with a fade curve.
+		Fades without a curve use the original linear fade in gain factor / pitch factor.
+	*/
+	bool hasFadeCurve() const noexcept { return (isVolumeFade() || isPitchFade()) && startOffset != 0; }
+
+	/** Returns the fade curve (0...1) of a VolumeFade or PitchFade event. Returns 0.5 if the event has no fade curve. */
+	float getFadeCurve() const noexcept;
 
 	/** Returns true if the event is a timer event. */
 	bool isTimerEvent() const noexcept { return type == Type::TimerEvent; };

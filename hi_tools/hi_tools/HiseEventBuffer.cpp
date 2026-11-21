@@ -248,6 +248,30 @@ HiseEvent HiseEvent::createPitchFade(uint16 eventId, int fadeTimeMilliseconds, i
 	return e;
 }
 
+// Fade events don't use the start offset, so it stores the fade curve:
+// 0 = no curve (original linear fade), 1...255 = curve 0...1 in 254 steps (so 0.5 is exact).
+HiseEvent HiseEvent::createVolumeFade(uint16 eventId, int fadeTimeMilliseconds, int8 targetValue, float curve)
+{
+	auto e = createVolumeFade(eventId, fadeTimeMilliseconds, targetValue);
+	e.startOffset = (uint16)(1 + roundToInt(jlimit(0.0f, 1.0f, curve) * 254.0f));
+	return e;
+}
+
+HiseEvent HiseEvent::createPitchFade(uint16 eventId, int fadeTimeMilliseconds, int8 coarseTune, int8 fineTune, float curve)
+{
+	auto e = createPitchFade(eventId, fadeTimeMilliseconds, coarseTune, fineTune);
+	e.startOffset = (uint16)(1 + roundToInt(jlimit(0.0f, 1.0f, curve) * 254.0f));
+	return e;
+}
+
+float HiseEvent::getFadeCurve() const noexcept
+{
+	if (!hasFadeCurve())
+		return 0.5f;
+
+	return (float)(startOffset - 1) / 254.0f;
+}
+
 HiseEvent HiseEvent::createTimerEvent(uint8 timerIndex, int offset)
 {
 	HiseEvent e(Type::TimerEvent, 0, 0, timerIndex);

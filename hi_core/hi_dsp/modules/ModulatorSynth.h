@@ -218,6 +218,8 @@ public:
 	void handleHostInfoHiseEvents(int numSamples);
 	void handleVolumeFade(int eventId, int fadeTimeMilliseconds, float gain);
 	void handlePitchFade(uint16 eventId, int fadeTimeMilliseconds, double pitchFactor);
+	void handleCurvedVolumeFade(uint16 eventId, int fadeTimeMilliseconds, float gain, float curve);
+	void handleCurvedPitchFade(uint16 eventId, int fadeTimeMilliseconds, double pitchFactor, float curve);
 
 	virtual void preHiseEventCallback(HiseEvent &e);
 	virtual void preStartVoice(int voiceIndex, const HiseEvent& e);
@@ -579,6 +581,65 @@ private:
 *	Just copy the behaviour in the subclass and do what you like.
 *
 */
+
+/** A curved event fade for a single voice.
+
+	The fade is shaped in decibels (for gain) or semitones (for pitch) using an exponential curve
+	controlled by the fade curve (0 = slow start, 0.5 = even, 1 = fast start), see
+	docs/adr/0001-curved-fades-shape-in-perceptual-units.md. The values it produces are always gain
+	factors or pitch factors. -100 dB is treated as silence.
+*/
+class CurvedEventFader
+{
+public:
+
+	enum class Domain
+	{
+		Decibels,
+		Semitones
+	};
+
+	CurvedEventFader(Domain d) noexcept: domain(d) {}
+
+	/** Starts a fade from the current value to the target value over the given number of samples. */
+	void start(double currentValue, double targetValue, int numSamples, float curve) noexcept;
+
+	void stop() noexcept { remaining = 0; }
+
+	bool isActive() const noexcept { return remaining > 0; }
+
+	/** Advances the fade by one sample and returns the new value. */
+	double getNextValue() noexcept;
+
+	double getCurrentValue() const noexcept { return currentValue; }
+
+	/** Returns the shaped progress (0...1) for a linear progress t (0...1) and the given fade curve. */
+	static double getShapedProgress(double t, float curve) noexcept;
+
+private:
+
+	static double getCurveExponent(float curve) noexcept { return (2.0 * (double)curve - 1.0) * 4.0; }
+
+	double toDomain(double value) const noexcept;
+	double fromDomain(double value) const noexcept;
+
+	const Domain domain;
+
+	double currentValue = 1.0;
+	double targetValue = 1.0;
+	double startDomainValue = 0.0;
+	double deltaDomainValue = 0.0;
+
+	bool isLinear = true;
+	double progress = 0.0;
+	double progressDelta = 0.0;
+	double expState = 1.0;
+	double expFactor = 1.0;
+	double normaliser = 1.0;
+
+	int remaining = 0;
+};
+
 class ModulatorSynthVoice: public SynthesiserVoice
 {
 public:
@@ -638,6 +699,8 @@ public:
 
 	void applyEventVolumeFade(int startSample, int numSamples);
 
+	void applyCurvedEventVolumeFade(int startSample, int numSamples);
+
 	void applyEventVolumeFactor(int startSample, int numSamples);
 
 	/** This checks the envelopes of the gain modulation if any envelopes are tailing off. */
@@ -664,6 +727,12 @@ public:
 	void setVolumeFade(double fadeTimeSeconds, float targetVolume);
 
 	void setPitchFade(double fadeTimeSeconds, double targetPitch);
+
+	/** Starts a volume fade shaped in decibels with the given fade curve (0...1). */
+	void setVolumeFadeWithCurve(double fadeTimeSeconds, float targetVolume, float curve);
+
+	/** Starts a pitch fade shaped in semitones with the given fade curve (0...1). */
+	void setPitchFadeWithCurve(double fadeTimeSeconds, double targetPitch, float curve);
 
 	void saveStartUptimeDelta();
 
@@ -743,6 +812,12 @@ private:
 
 	LinearSmoothedValue<double> pitchFader;
 	LinearSmoothedValue<float> gainFader;
+
+	// Only one of these and the linear faders above is active at a time.
+	// eventGainFactor / eventPitchFactor always hold the current value, so a new fade
+	// of either kind starts from there.
+	CurvedEventFader curvedPitchFader { CurvedEventFader::Domain::Semitones };
+	CurvedEventFader curvedGainFader { CurvedEventFader::Domain::Decibels };
 
 	friend class ModulatorSynthGroupVoice;
 

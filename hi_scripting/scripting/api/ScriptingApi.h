@@ -1166,6 +1166,12 @@ public:
 		/** Adds a pitch fade to the given event ID. */
 		void addPitchFade(int eventId, int fadeTimeMilliseconds, int targetCoarsePitch, int targetFinePitch);
 
+		/** Fades all voices with the given event id to the target volume (in decibels) using a fade curve (0 = slow start, 0.5 = even in decibels, 1 = fast start). A target of -100 kills the note. */
+		void addVolumeFadeWithCurve(int eventId, int fadeTimeMilliseconds, int targetVolume, var curve);
+
+		/** Adds a pitch fade to the given event ID using a fade curve (0 = slow start, 0.5 = even in semitones, 1 = fast start). */
+		void addPitchFadeWithCurve(int eventId, int fadeTimeMilliseconds, int targetCoarsePitch, int targetFinePitch, var curve);
+
 		/** Adds the event from the given holder and returns a event id for note ons. */
 		int addMessageFromHolder(var messageHolder);
 
@@ -1356,6 +1362,13 @@ public:
 	private:
 
 		int internalAddNoteOn(int channel, int noteNumber, int velocity, int timestamp, int startOffset);
+
+		/** Shared implementation of the volume / pitch fade functions. If useCurve is false, the original linear fade is created. */
+		void internalAddVolumeFade(int eventId, int fadeTimeMilliseconds, int targetVolume, bool useCurve, float curve);
+		void internalAddPitchFade(int eventId, int fadeTimeMilliseconds, int targetCoarsePitch, int targetFinePitch, bool useCurve, float curve);
+
+		/** Returns true if the curve argument of the curved fade functions is a number, or reports a script error. */
+		bool isValidFadeCurve(const var& curve);
 
 		friend class ModuleHandler;
 
