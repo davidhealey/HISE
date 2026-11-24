@@ -86,7 +86,8 @@ jobs:
   build_macos:
     needs: check
     if: needs.check.outputs.changed == 'true' && contains(fromJSON('["all","macos"]'), github.event.inputs.platform || 'all')
-    runs-on: macos-latest
+    # Intel runner: arm64 runners often unavailable. Switch back to macos-latest when GitHub drops Intel macOS runners.
+    runs-on: macos-15-intel
     steps:
       - uses: actions/checkout@v4
         with:
