@@ -810,7 +810,7 @@ var HiseAudioExporter::onExport(const var::NativeFunctionArgs& args)
 			state->currentJob->setMessage("Render offline audio...");
 		}
 		
-		Thread::getCurrentThread()->wait(100);
+		Thread::sleep(100);
 	}
 	
 	return var();

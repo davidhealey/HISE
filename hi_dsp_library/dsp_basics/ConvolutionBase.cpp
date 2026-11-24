@@ -589,8 +589,8 @@ bool ConvolutionEffectBase::reloadInternal()
 		getImpulseBufferBase().getBuffer().getNumChannels() == 0|| 
 		getImpulseBufferBase().getBuffer().getNumSamples() == 0 )
 	{
-		while(backgroundThread.isBusy())
-            Thread::getCurrentThread()->wait(10);
+		while (backgroundThread.isBusy())
+			Thread::sleep(10);
 
 		SimpleReadWriteLock::ScopedMultiWriteLock sl(swapLock);
 
@@ -665,12 +665,7 @@ bool ConvolutionEffectBase::reloadInternal()
     
 	{
 		while (backgroundThread.isBusy())
-		{
-			auto currentThread = Thread::getCurrentThread();
-			
-			if(currentThread != nullptr)
-				currentThread->wait(10);
-		}
+			Thread::sleep(10);
 
 		SimpleReadWriteLock::ScopedMultiWriteLock sl(swapLock);
         
