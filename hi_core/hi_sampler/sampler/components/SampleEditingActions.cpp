@@ -1376,12 +1376,12 @@ class SampleStartTrimmer : public DialogWindowWithBackgroundThread
 
 			addAndMakeVisible(properties = new PropertyPanel());
 
-			endThreshhold.setValue(-80.0);
+			endThreshhold.setValue(-100.0);
 			endThreshhold.addListener(this);
 
-			threshhold.setValue(-40.0);
+			threshhold.setValue(-30.0);
 			
-			max = 1000.0;
+			max = 36482.0;
 			max.addListener(this);
 			threshhold.addListener(this);
 
@@ -1389,7 +1389,7 @@ class SampleStartTrimmer : public DialogWindowWithBackgroundThread
 
 			soundIndex.addListener(this);
 
-			snapToZero = 1;
+			snapToZero = 2;
 			snapToZero.addListener(this);
 			
 			zoomLevel = 1000.0;
