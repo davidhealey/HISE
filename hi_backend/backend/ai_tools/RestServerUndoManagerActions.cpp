@@ -30,6 +30,8 @@
 *   ===========================================================================
 */
 
+#include <cstdlib>
+
 namespace hise {
 namespace rest_undo {
 
@@ -1169,20 +1171,18 @@ struct set_attributes : public ActionBase
 					if (!p.vtc.itemList.isEmpty())
 					{
 						auto v = jsonParameter.value.toString().toLowerCase();
-
-						int idx = 1;
-
+						int idx = 0;
 						bool valueFound = false;
 
 						for (auto& it : p.vtc.itemList)
 						{
 							if (it.toLowerCase() == v)
 							{
-								value = (double)idx + 1;
+								value = p.range.rng.start + (double)idx;
 								valueFound = true;
 								break;
 							}
-	
+
 							idx++;
 						}
 
@@ -1192,9 +1192,6 @@ struct set_attributes : public ActionBase
 					}
 					else
 						value = (double)jsonParameter.value;
-
-					if (p.type == ProcessorMetadata::ParameterMetadata::Type::List)
-						value += 1.0;
 
 					if (p.range.getRange().contains(value - 0.001))
 					{
@@ -2759,6 +2756,15 @@ struct Helpers
 		return Error().withError(factoryPath + " not a valid node type. ").withHint(hint);
 	}
 
+	static String getConnectionParameterId(const ValueTree& targetNode, const String& parameterId)
+	{
+		if (parameterId == "Bypass" &&
+			targetNode[PropertyIds::FactoryPath].toString() == "container.soft_bypass")
+			return PropertyIds::Bypassed.toString();
+
+		return parameterId;
+	}
+
 	static Error getErrorForParameter404(const ValueTree& n, const String& parameterId)
 	{
 		StringArray ids;
@@ -2892,6 +2898,8 @@ struct Helpers
 		if (includeContainer)
 		{
 			ids.add(PropertyIds::ShowParameters);
+			ids.add(PropertyIds::ShowClones);
+			ids.add(PropertyIds::DisplayedClones);
 		}
 		    
 		return ids;
@@ -3356,6 +3364,104 @@ struct remove : public ActionBase
 	}
 };
 
+struct set_id : public ActionBase
+{
+	BUILDER_ID(set_id);
+
+	static Error prevalidate(MainController*, const var& op)
+	{
+		if (op[RestApiIds::target].toString().isEmpty())
+			return Error().withError("set_id requires 'target'");
+		if (op[RestApiIds::name].toString().isEmpty())
+			return Error().withError("set_id requires 'name'");
+		return {};
+	}
+
+	set_id(MainController* mc, const var& obj) :
+		ActionBase(mc),
+		moduleId(obj[RestApiIds::moduleId].toString()),
+		previousName(obj[RestApiIds::target].toString()),
+		newName(obj[RestApiIds::name].toString())
+	{}
+
+	String moduleId;
+	String previousName;
+	String newName;
+
+	int getRebuildLevel(Domain, bool) const override { return 0; }
+	bool needsKillVoice() const override { return false; }
+
+	void addToDiffList(std::vector<Diff>& diffList, bool undo) override
+	{
+		Diff d;
+		d.target = undo ? newName : previousName;
+		d.domain = Domain::DSP;
+		d.type = Diff::Type::Modify;
+		diffList.push_back(d);
+	}
+
+	String getHistoryMessage(bool undo) const override
+	{
+		return undo ? "Rename " + newName + " back to " + previousName
+		            : "Rename " + previousName + " to " + newName;
+	}
+
+	String getDescription() const override
+	{
+		return "set_id " + previousName + " -> " + newName;
+	}
+
+	Error validate() override
+	{
+		auto rv = Helpers::getRootTree(this, moduleId);
+		if (!rv.isValid())
+			return Helpers::getErrorForModule404(getMainController(), moduleId);
+
+		if (previousName == newName)
+			return {};
+
+		if (!Helpers::findNode(rv, previousName).isValid())
+			return Helpers::getErrorForNode404(rv, previousName);
+
+		if (Helpers::findNode(rv, newName).isValid())
+			return Error().withError("A node with the ID " + newName + " already exists");
+
+		if (dspValidation != nullptr && !dspValidation->setId(previousName, newName))
+			return Error().withError("Plan model update failed");
+
+		return {};
+	}
+
+	void renameNode(ValueTree node, const String& oldId, const String& newId)
+	{
+		if (auto network = Helpers::getNetworkFromModule(getMainController(), moduleId))
+		{
+			network->changeNodeId(node, oldId, newId, nullptr);
+
+			if (auto nodeInstance = network->getNodeForValueTree(node, false))
+				nodeInstance->setCurrentId(newId);
+		}
+
+		node.setProperty(PropertyIds::ID, newId, nullptr);
+	}
+
+	void perform() override
+	{
+		auto node = Helpers::findNode(Helpers::getRootTree(this, moduleId), previousName);
+		if (!node.isValid())
+			throw Helpers::getErrorForNode404(Helpers::getRootTree(this, moduleId), previousName);
+		renameNode(node, previousName, newName);
+	}
+
+	void undo() override
+	{
+		auto node = Helpers::findNode(Helpers::getRootTree(this, moduleId), newName);
+		if (!node.isValid())
+			throw Helpers::getErrorForNode404(Helpers::getRootTree(this, moduleId), newName);
+		renameNode(node, newName, previousName);
+	}
+};
+
 struct move : public ActionBase
 {
 	BUILDER_ID(move);
@@ -3534,10 +3640,17 @@ struct connect : public ActionBase
 
 	// Captured previous source range for undo when matchRange is true
 	bool capturedSourceRange = false;
-	scriptnode::InvertableParameterRange oldTargetRange;
+	scriptnode::InvertableParameterRange oldSourceRange;
+	String matchRangeWarning;
 
 	int getRebuildLevel(Domain, bool) const override { return 0; }
 	bool needsKillVoice() const override { return false; }
+
+	void addResponseLogs(Array<var>& logs, bool undo) const override
+	{
+		if (!undo && matchRangeWarning.isNotEmpty())
+			logs.add(matchRangeWarning);
+	}
 
 	void addToDiffList(std::vector<Diff>& diffList, bool) override
 	{
@@ -3588,7 +3701,8 @@ struct connect : public ActionBase
 			if (!tn.isValid())
 				throw Helpers::getErrorForNode404(rv, targetId);
 
-			auto pn = Helpers::findParameterOrProperty(tn, parameterName, false);
+			auto targetParameterId = Helpers::getConnectionParameterId(tn, parameterName);
+			auto pn = Helpers::findParameterOrProperty(tn, targetParameterId, false);
 
 			if (!pn.isValid())
 				throw Helpers::getErrorForParameter404(tn, parameterName);
@@ -3600,15 +3714,21 @@ struct connect : public ActionBase
 				if (!conTree.isValid())
 					return Error().withError("illegal connection source node");
 
+				auto sourceParameter = matchRange
+					? valuetree::Helpers::findParentWithType(conTree, PropertyIds::Parameter)
+					: ValueTree();
+				auto canMatchRange = sourceParameter.isValid() && pn.getType() == PropertyIds::Parameter;
+
 				// Mirror the connection onto the plan snapshot. conTree is already
 				// inside the snapshot via getRootTree, so addConnection mutates it.
-				if (!Helpers::addConnection(conTree, targetId, parameterName))
+				if (!Helpers::addConnection(conTree, targetId, targetParameterId))
 					return Error().withError("Connection already exists");
 
-				if (matchRange)
+				if (canMatchRange)
 				{
-					// TODO: mirror range copy (target.pn -> source parameter) onto the plan snapshot.
-					// Reject if source is not a parameter-bearing node with a settable range.
+					auto targetRange = RangeHelpers::getDoubleRange(pn);
+					RangeHelpers::storeDoubleRange(sourceParameter, targetRange, nullptr,
+						scriptnode::RangeHelpers::IdSet::scriptnode);
 				}
 
 				return {};
@@ -3635,30 +3755,38 @@ struct connect : public ActionBase
 		if (!tn.isValid())
 			throw Helpers::getErrorForNode404(rv, targetId);
 
-		auto pn = Helpers::findParameterOrProperty(tn, parameterName, false);
+		auto targetParameterId = Helpers::getConnectionParameterId(tn, parameterName);
+		auto pn = Helpers::findParameterOrProperty(tn, targetParameterId, false);
 
 		if (!pn.isValid())
 			throw Helpers::getErrorForParameter404(tn, parameterName);
 
 		auto conTree = Helpers::getConnectionParent(sn, sourceOutput);
+		auto sourceParameter = matchRange
+			? valuetree::Helpers::findParentWithType(conTree, PropertyIds::Parameter)
+			: ValueTree();
+		auto canMatchRange = sourceParameter.isValid() && pn.getType() == PropertyIds::Parameter;
 
-		if(!Helpers::addConnection(conTree, targetId, parameterName))
+		capturedSourceRange = false;
+		matchRangeWarning.clear();
+
+		if (!Helpers::addConnection(conTree, targetId, targetParameterId))
 			throw Error().withError("Connection already exists");
 
-		if (matchRange)
+		if (canMatchRange)
 		{
-			auto sourceParameter = valuetree::Helpers::findParentWithType(conTree, PropertyIds::Parameter);
-
-			if (!sourceParameter.isValid())
-				throw Error().withError("matchRange requires a parameter source");
-
-			if(pn.getType() != PropertyIds::Parameter)
-				throw Error().withError("matchRange requires a parameter target");
-
-			oldTargetRange = RangeHelpers::getDoubleRange(pn);
-			
-			RangeHelpers::storeDoubleRange(sourceParameter, oldTargetRange, nullptr, scriptnode::RangeHelpers::IdSet::scriptnode);
+			oldSourceRange = RangeHelpers::getDoubleRange(sourceParameter);
+			auto targetRange = RangeHelpers::getDoubleRange(pn);
+			RangeHelpers::storeDoubleRange(sourceParameter, targetRange, nullptr,
+				scriptnode::RangeHelpers::IdSet::scriptnode);
 			capturedSourceRange = true;
+		}
+		else if (matchRange)
+		{
+			matchRangeWarning = "Ignored matchRange for " + sourceId + "." + sourceOutput + " -> " +
+				targetId + "." + parameterName + (sourceParameter.isValid()
+					? " because target is not a parameter"
+					: " because source output is not a parameter");
 		}
 	}
 
@@ -3675,22 +3803,22 @@ struct connect : public ActionBase
 		if (!tn.isValid())
 			throw Helpers::getErrorForNode404(rv, targetId);
 
-		auto pn = Helpers::findParameterOrProperty(tn, parameterName, false);
+		auto targetParameterId = Helpers::getConnectionParameterId(tn, parameterName);
+		auto pn = Helpers::findParameterOrProperty(tn, targetParameterId, false);
 
 		if (!pn.isValid())
 			throw Helpers::getErrorForParameter404(tn, parameterName);
 
-		
-
 		auto conTree = Helpers::getConnectionParent(sn, sourceOutput);
 
-		if (!Helpers::removeConnection(conTree, targetId, parameterName))
+		if (!Helpers::removeConnection(conTree, targetId, targetParameterId))
 			throw Error().withError("Connection doesn't exist");
 
 		if (matchRange && capturedSourceRange)
 		{
 			auto sourceParameter = valuetree::Helpers::findParentWithType(conTree, PropertyIds::Parameter);
-			RangeHelpers::storeDoubleRange(sourceParameter, oldTargetRange, nullptr);
+			RangeHelpers::storeDoubleRange(sourceParameter, oldSourceRange, nullptr,
+				scriptnode::RangeHelpers::IdSet::scriptnode);
 		}
 	}
 };
@@ -3791,8 +3919,14 @@ struct disconnect : public ActionBase
 
 		if (dspValidation != nullptr)
 		{
+			auto tn = Helpers::findNode(rv, targetId);
+
+			if (!tn.isValid())
+				return Helpers::getErrorForNode404(rv, targetId);
+
+			auto targetParameterId = Helpers::getConnectionParameterId(tn, parameterName);
 			Error ambiguityErr;
-			auto con = findUniqueConnection(rv, targetId, parameterName, ambiguityErr);
+			auto con = findUniqueConnection(rv, targetId, targetParameterId, ambiguityErr);
 
 			if (!ambiguityErr)
 				return ambiguityErr;
@@ -3812,8 +3946,14 @@ struct disconnect : public ActionBase
 	{
 		auto rv = Helpers::getRootTree(this, moduleId);
 
+		auto tn = Helpers::findNode(rv, targetId);
+
+		if (!tn.isValid())
+			throw Helpers::getErrorForNode404(rv, targetId);
+
+		auto targetParameterId = Helpers::getConnectionParameterId(tn, parameterName);
 		Error ambiguityErr;
-		auto con = findUniqueConnection(rv, targetId, parameterName, ambiguityErr);
+		auto con = findUniqueConnection(rv, targetId, targetParameterId, ambiguityErr);
 
 		if (!ambiguityErr)
 			throw ambiguityErr;
@@ -3845,14 +3985,15 @@ struct disconnect : public ActionBase
 		if (!tn.isValid())
 			throw Helpers::getErrorForNode404(rv, targetId);
 
-		auto pn = Helpers::findParameterOrProperty(tn, parameterName, false);
+		auto targetParameterId = Helpers::getConnectionParameterId(tn, parameterName);
+		auto pn = Helpers::findParameterOrProperty(tn, targetParameterId, false);
 
 		if (!pn.isValid())
 			throw Helpers::getErrorForParameter404(tn, parameterName);
 
 		auto conTree = Helpers::getConnectionParent(sn, oldSourceOutput);
 
-		if (!Helpers::addConnection(conTree, targetId, parameterName))
+		if (!Helpers::addConnection(conTree, targetId, targetParameterId))
 			throw Error().withError("Connection already exists");
 	}
 };
@@ -4051,8 +4192,12 @@ struct set : public ActionBase
 			return Error().withError("set requires 'parameterId'");
 
 		const bool rangeWrite = isRangeWrite(op);
+		const bool hasExternalModulation = op.hasProperty(RestApiIds::externalModulation);
 		auto v = op[RestApiIds::value];
 		const bool hasValue = !(v.isVoid() || v.isUndefined());
+
+		if (hasExternalModulation && !op[RestApiIds::externalModulation].isString())
+			return Error().withError("set externalModulation must be a string");
 
 		if (rangeWrite)
 		{
@@ -4065,8 +4210,8 @@ struct set : public ActionBase
 			return {};
 		}
 
-		if (!hasValue)
-			return Error().withError("set requires 'value'");
+		if (!hasValue && !hasExternalModulation)
+			return Error().withError("set requires 'value' or 'externalModulation'");
 		return {};
 	}
 
@@ -4076,6 +4221,8 @@ struct set : public ActionBase
 		nodeId(obj[RestApiIds::nodeId].toString()),
 		parameterId(obj[RestApiIds::parameterId].toString()),
 		newValue(obj[RestApiIds::value]),
+		externalModulation(obj.getProperty(RestApiIds::externalModulation, var())),
+		hasExternalModulation(obj.hasProperty(RestApiIds::externalModulation)),
 		rangeWrite(isRangeWrite(obj))
 	{
 		if (rangeWrite)
@@ -4107,6 +4254,14 @@ struct set : public ActionBase
 	String parameterId;
 	var newValue;
 	var oldValue;
+	var externalModulation;
+	var oldExternalModulation;
+	bool hasExternalModulation = false;
+	bool isCloneCountSet = false;
+	bool cloneAmountChanged = false;
+	int newCloneCount = 0;
+	int oldCloneCount = 0;
+	Array<ValueTree> oldCloneTrees;
 
 	// Range-write state
 	bool rangeWrite = false;
@@ -4132,7 +4287,11 @@ struct set : public ActionBase
 	double oldMiddlePosition = 0.5;
 
 	int getRebuildLevel(Domain, bool) const override { return 0; }
-	bool needsKillVoice() const override { return false; }
+	bool needsKillVoice() const override
+	{
+		return !rangeWrite && !hasExternalModulation &&
+			parameterId == PropertyIds::NumClones.toString();
+	}
 
 	void addToDiffList(std::vector<Diff>& diffList, bool) override
 	{
@@ -4143,10 +4302,23 @@ struct set : public ActionBase
 		diffList.push_back(d);
 	}
 
+	void addResponseLogs(Array<var>& logs, bool undo) const override
+	{
+		if (cloneAmountChanged)
+		{
+			logs.add("Changed clone amount of " + nodeId + " to " +
+				String(undo ? oldCloneCount : newCloneCount) + " child nodes");
+		}
+	}
+
 	String getHistoryMessage(bool undo) const override
 	{
 		if (rangeWrite)
 			return (undo ? "Restore range of " : "Set range of ") + nodeId + "." + parameterId;
+
+		if (cloneAmountChanged)
+			return "Changed clone amount of " + nodeId + " to " +
+				String(undo ? oldCloneCount : newCloneCount) + " child nodes";
 
 		return (undo ? "Restore " : "Set ") + nodeId + "." + parameterId +
 			(undo ? "" : (" to " + newValue.toString()));
@@ -4181,6 +4353,126 @@ struct set : public ActionBase
 		return "set " + nodeId + "." + parameterId + " to " + newValue.toString();
 	}
 
+	Error configureCloneCountSet(const ValueTree& node)
+	{
+		isCloneCountSet = !rangeWrite && !hasExternalModulation &&
+			node[PropertyIds::FactoryPath].toString() == "container.clone" &&
+			parameterId == PropertyIds::NumClones.toString();
+
+		if (!isCloneCountSet)
+			return {};
+
+		if (!newValue.isInt() && !newValue.isInt64() && !newValue.isDouble())
+			return Error().withError("container.clone NumClones must be an integer between 1 and 128");
+
+		auto requestedCount = (double)newValue;
+		newCloneCount = roundToInt(requestedCount);
+
+		if ((double)newCloneCount != requestedCount || !isPositiveAndBelow(newCloneCount, 129))
+			return Error().withError("container.clone NumClones must be an integer between 1 and 128");
+
+		return {};
+	}
+
+	static void updateClonedTreeIds(ValueTree& tree, const ValueTree& root)
+	{
+		Array<DspNetwork::IdChange> changes;
+
+		valuetree::Helpers::forEach(tree, [&](ValueTree& child)
+		{
+			if (child.getType() == PropertyIds::Node)
+			{
+				auto oldId = child[PropertyIds::ID].toString();
+				auto newId = Helpers::makeUniqueId(root, oldId);
+				changes.add({ oldId, newId });
+				child.setProperty(PropertyIds::ID, newId, nullptr);
+			}
+
+			if (child[PropertyIds::Automated])
+				child.removeProperty(PropertyIds::Automated, nullptr);
+			if (child[PropertyIds::AutomatedExternal])
+				child.removeProperty(PropertyIds::AutomatedExternal, nullptr);
+
+			return false;
+		});
+
+		for (const auto& change : changes)
+		{
+			valuetree::Helpers::forEach(tree, [&](ValueTree& child)
+			{
+				if (child.getType() == PropertyIds::Connection ||
+					child.getType() == PropertyIds::ModulationTarget ||
+					child.getType() == PropertyIds::SwitchTarget)
+				{
+					if (child[PropertyIds::NodeId].toString() == change.oldId)
+						child.setProperty(PropertyIds::NodeId, change.newId, nullptr);
+				}
+				else if (child.getType() == PropertyIds::Property &&
+					child[PropertyIds::ID].toString() == PropertyIds::Connection.toString() &&
+					child[PropertyIds::Value].toString() == change.oldId)
+				{
+					child.setProperty(PropertyIds::Value, change.newId, nullptr);
+				}
+
+				return false;
+			});
+		}
+	}
+
+	static void resizeValidationCloneTree(ValueTree node, const ValueTree& root, int numClones)
+	{
+		auto childList = node.getChildWithName(PropertyIds::Nodes);
+
+		while (childList.getNumChildren() > numClones)
+			childList.removeChild(childList.getNumChildren() - 1, nullptr);
+
+		while (childList.getNumChildren() < numClones && childList.getNumChildren() > 0)
+		{
+			auto newTree = childList.getChild(0).createCopy();
+			updateClonedTreeIds(newTree, root);
+			childList.addChild(newTree, -1, nullptr);
+		}
+
+		auto parameter = Helpers::findParameterOrProperty(node, PropertyIds::NumClones.toString(), true);
+		if (parameter.isValid())
+			parameter.setProperty(PropertyIds::MaxValue, numClones, nullptr);
+	}
+
+	static Error normalizeStringValue(const ValueTree& parameter, var& value)
+	{
+		if (!value.isString())
+			return {};
+
+		auto text = value.toString().trim();
+		if (text.isEmpty())
+			return Error().withError("set value must be numeric or a valid text-converter value");
+
+		auto* start = text.toRawUTF8();
+		char* end = nullptr;
+		auto numericValue = std::strtod(start, &end);
+
+		if (end != start && *end == '\0')
+		{
+			value = numericValue;
+			return {};
+		}
+
+		auto converter = ValueToTextConverter::fromString(
+			parameter[PropertyIds::TextToValueConverter].toString());
+
+		if (!converter.active)
+			return Error().withError("set value is not numeric and the parameter has no active text converter");
+
+		if (!converter.itemList.isEmpty() && !converter.itemList.contains(text))
+		{
+			auto error = Error().withError("set value is not a valid value for the parameter text converter");
+			return error.withHint(" Available values: " + converter.itemList.joinIntoString(", ") + ".");
+		}
+
+		value = converter.getValueForText(text);
+		return {};
+	}
+
 	Error validate() override
 	{
 		auto rv = Helpers::getRootTree(this, moduleId);
@@ -4188,34 +4480,54 @@ struct set : public ActionBase
 		if (!rv.isValid())
 			return Helpers::getErrorForModule404(getMainController(), moduleId);
 
-		if (dspValidation != nullptr)
+		auto n = Helpers::findNode(rv, nodeId);
+
+		if (!n.isValid())
 		{
-			auto n = Helpers::findNode(rv, nodeId);
-
-			if (!n.isValid())
-				return Helpers::getErrorForNode404(rv, nodeId);
-
-			auto p = Helpers::findParameterOrProperty(n, parameterId, true);
-
-			if (!p.isValid())
-				return Helpers::getErrorForParameter404(n, parameterId);
-
-			if (rangeWrite)
-			{
-				return writeParameterRange(p, false);
-				// TODO: mirror range write onto plan snapshot (p inside rv).
-				// Reject if p is not a parameter value tree (e.g. discrete/enum property).
+			// Outside plan mode the node may be created by an earlier op in this batch.
+			if (dspValidation == nullptr)
 				return {};
-			}
 
-			// Mirror perform() onto the plan snapshot. rv here is the snapshot
-			// tree, so p is already inside it. The branch matches perform()'s
-			// (pre-existing) behavior for network-property vs regular paths.
-			if (p.getType() == PropertyIds::Network || p.getType() == PropertyIds::Node)
-				p.setProperty(parameterId, newValue, nullptr);
-			else
-				p.setProperty(PropertyIds::Value, newValue, nullptr);
+			return Helpers::getErrorForNode404(rv, nodeId);
 		}
+
+		auto p = Helpers::findParameterOrProperty(n, parameterId, true);
+
+		if (!p.isValid())
+			return Helpers::getErrorForParameter404(n, parameterId);
+
+        if(p.getType() == PropertyIds::Parameter)
+        {
+            auto normalizationError = normalizeStringValue(p, newValue);
+            if (!normalizationError)
+                return normalizationError;
+        }
+        
+		auto cloneCountError = configureCloneCountSet(n);
+		if (!cloneCountError)
+			return cloneCountError;
+		if (dspValidation == nullptr)
+			return {};
+
+		if (hasExternalModulation)
+			p.setProperty(PropertyIds::ExternalModulation, externalModulation, nullptr);
+
+		if (rangeWrite)
+			return writeParameterRange(p, false);
+
+		if (!hasExternalModulation && (newValue.isVoid() || newValue.isUndefined()))
+			return {};
+
+		if (isCloneCountSet)
+			resizeValidationCloneTree(n, rv, newCloneCount);
+
+		// Mirror perform() onto the plan snapshot. rv here is the snapshot
+		// tree, so p is already inside it. The branch matches perform()'s
+		// behavior for network-property vs regular paths.
+		if (p.getType() == PropertyIds::Network || p.getType() == PropertyIds::Node)
+			p.setProperty(parameterId, newValue, nullptr);
+		else
+			p.setProperty(PropertyIds::Value, newValue, nullptr);
 
 		return {};
 	}
@@ -4273,6 +4585,21 @@ struct set : public ActionBase
 		if (!p.isValid())
 			throw Helpers::getErrorForParameter404(n, parameterId);
 
+        if(p.getType() == PropertyIds::Parameter)
+        {
+            auto normalizationError = normalizeStringValue(p, newValue);
+            if (!normalizationError)
+                throw normalizationError;
+        }
+
+		auto cloneCountError = configureCloneCountSet(n);
+		if (!cloneCountError)
+			throw cloneCountError;
+		oldExternalModulation = p[PropertyIds::ExternalModulation];
+
+		if (hasExternalModulation)
+			p.setProperty(PropertyIds::ExternalModulation, externalModulation, nullptr);
+
 		if (rangeWrite)
 		{
 			auto ok = writeParameterRange(p, false);
@@ -4284,8 +4611,31 @@ struct set : public ActionBase
 		}
 
 		if (p.getType() == PropertyIds::Network || p.getType() == PropertyIds::Node)
-		{
 			oldValue = p[parameterId];
+		else
+			oldValue = p[PropertyIds::Value];
+
+		if (isCloneCountSet)
+		{
+			auto childList = n.getChildWithName(PropertyIds::Nodes);
+			oldCloneCount = childList.getNumChildren();
+			oldCloneTrees.clearQuick();
+
+			for (auto child : childList)
+				oldCloneTrees.add(child.createCopy());
+
+			auto network = Helpers::getNetworkFromModule(getMainController(), moduleId);
+
+			if (network == nullptr)
+				throw Error().withError("No active DSP network for " + moduleId);
+
+			auto result = network->setNumCloneNodes(nodeId, newCloneCount, cloneAmountChanged, nullptr);
+			if (result.failed())
+				throw Error().withError(result.getErrorMessage());
+		}
+
+		if (p.getType() == PropertyIds::Network || p.getType() == PropertyIds::Node)
+		{
 			p.setProperty(parameterId, newValue, nullptr);
 
 			if (parameterId == PropertyIds::Comment.toString())
@@ -4293,7 +4643,6 @@ struct set : public ActionBase
 		}
 		else
 		{
-			oldValue = p[PropertyIds::Value];
 			p.setProperty(PropertyIds::Value, newValue, nullptr);
 		}
 	}
@@ -4322,11 +4671,33 @@ struct set : public ActionBase
 			if (!ok)
 				throw ok;
 
-			
+			if (hasExternalModulation)
+				p.setProperty(PropertyIds::ExternalModulation, oldExternalModulation, nullptr);
+
 			return;
 		}
 
-		if (p.getType() == PropertyIds::Network)
+		if (hasExternalModulation)
+			p.setProperty(PropertyIds::ExternalModulation, oldExternalModulation, nullptr);
+
+		if (newValue.isVoid() || newValue.isUndefined())
+			return;
+
+		if (isCloneCountSet && cloneAmountChanged)
+		{
+			auto network = Helpers::getNetworkFromModule(getMainController(), moduleId);
+
+			if (network == nullptr)
+				throw Error().withError("No active DSP network for " + moduleId);
+
+			bool changed = false;
+			auto result = network->setNumCloneNodes(nodeId, oldCloneCount, changed, nullptr, &oldCloneTrees);
+			if (result.failed())
+				throw Error().withError(result.getErrorMessage());
+		}
+
+		if (p.getType() == PropertyIds::Network ||
+			p.getType() == PropertyIds::Node)
 			p.setProperty(parameterId, oldValue, nullptr);
 		else
 			p.setProperty(PropertyIds::Value, oldValue, nullptr);
@@ -4442,7 +4813,8 @@ struct create_parameter : public ActionBase
 		moduleId(obj[RestApiIds::moduleId].toString()),
 		nodeId(obj[RestApiIds::nodeId].toString()),
 		parameterId(obj[RestApiIds::parameterId].toString()),
-		defaultValue(obj.getProperty(RestApiIds::defaultValue, 0.0))
+		defaultValue(obj.getProperty(RestApiIds::defaultValue, 0.0)),
+		externalModulation(obj.getProperty(RestApiIds::externalModulation, var()))
 	{
 		auto minValue = (obj.getProperty(RestApiIds::min, 0.0));
 		auto maxValue = (obj.getProperty(RestApiIds::max, 1.0));
@@ -4465,6 +4837,7 @@ struct create_parameter : public ActionBase
 	String nodeId;
 	String parameterId;
 	double defaultValue;
+	var externalModulation;
 
 	int getRebuildLevel(Domain d, bool undo) const override 
 	{ 
@@ -4527,6 +4900,9 @@ struct create_parameter : public ActionBase
 			np.setProperty(PropertyIds::Value, defaultValue, nullptr);
 
 			pTree.addChild(np, -1, nullptr);
+
+			if (!externalModulation.isVoid() && !externalModulation.isUndefined())
+				np.setProperty(PropertyIds::ExternalModulation, externalModulation, nullptr);
 		}
 
 		return {};
@@ -4562,6 +4938,9 @@ struct create_parameter : public ActionBase
 		np.setProperty(PropertyIds::Value, defaultValue, nullptr);
 
 		pTree.addChild(np, -1, nullptr);
+
+		if (!externalModulation.isVoid() && !externalModulation.isUndefined())
+			np.setProperty(PropertyIds::ExternalModulation, externalModulation, nullptr);
 	}
 
 	void undo() override

@@ -670,6 +670,10 @@ public:
 
 	ValueTree cloneValueTreeWithNewIds(const ValueTree& treeToClone, Array<IdChange>& idChanges, bool changeIds);
 
+	/** Resizes a container.clone without exposing its implementation type outside this module. */
+	Result setNumCloneNodes(const String& nodeId, int numClones, bool& changed,
+		UndoManager* undoManager, const Array<ValueTree>* restoreTrees = nullptr);
+
 	void setEnableUndoManager(bool shouldBeEnabled);
 
 	ScriptnodeExceptionHandler& getExceptionHandler()
@@ -988,7 +992,13 @@ struct InjectHelpers
 
 		struct Report
 		{
-			Report() = default;
+			Report()
+			{
+				indexOfPeak.fill(0);
+				peaks.fill(Range<float>(0.0f, 0.0f));
+				avg.fill(0.0f);
+				silence.fill(true);
+			}
 
 			operator bool() const { return specs; }
 
@@ -1039,6 +1049,7 @@ struct InjectHelpers
 		float gain = 1.0f;
 		int64 seed = -1;
 		double delayMs = 0.0;
+		double predelayMs = 0.0;
 		bool processMidi = false;
 		bool recursive = false;
 

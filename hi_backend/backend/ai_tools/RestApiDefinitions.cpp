@@ -549,14 +549,18 @@ struct RestApiEndpoints
 			.withVariant("doubleClick", "Double-click (expands to two clicks)")
 			.withVariant("drag", "Drag using pixel delta from current position")
 			.withVariant("selectMenuItem", "Click a menu item by text")
-			.withVariant("screenshot", "Capture interface screenshot")
+			.withVariant("screenshot", "Capture interface screenshot and save PNG to project root")
+			.withVariant("repl", "Evaluate HISEScript against the interface script processor")
 			.withProperty(RouteParameter(RestApiIds::type, "Interaction type")
-				.withEnumValues({ "moveTo", "click", "doubleClick", "drag", "selectMenuItem", "screenshot" }))
+				.withEnumValues({ "moveTo", "click", "doubleClick", "drag", "selectMenuItem", "screenshot", "repl" }))
 			.withProperty(RouteParameter(RestApiIds::target, "Component ID to interact with").asOptional())
 			.withProperty(RouteParameter(Identifier("delay"), "Delay in ms before action")
 				.withType(ParamType::Int).asOptional())
+			.withProperty(RouteParameter(Identifier("duration"),
+				"Duration in ms. An explicit positive value makes moveTo, click, drag, and selectMenuItem run as a timed interaction")
+				.withType(ParamType::Int).asOptional())
 			.withProperty(RouteParameter(Identifier("normalizedPosition"), "Position within target (0-1, default center)")
-				.withType(ParamType::Float).asOptional())
+				.withType(ParamType::Object).asOptional())
 			.withProperty(RouteParameter(Identifier("pixelPosition"), "Absolute pixel position (takes precedence over normalized)")
 				.withType(ParamType::Object).asOptional())
 			.withProperty(RouteParameter(Identifier("delta"), "Pixel offset for drag {x, y}")
@@ -573,19 +577,42 @@ struct RestApiEndpoints
 			.withProperty(RouteParameter(Identifier("cmdDown"), "Hold cmd modifier")
 				.withType(ParamType::Bool).asOptional())
 			.withProperty(RouteParameter(Identifier("menuItemText"), "Menu item text for selectMenuItem").asOptional())
-			.withProperty(RouteParameter(RestApiIds::id, "Screenshot ID for screenshot type").asOptional())
+			.withProperty(RouteParameter(RestApiIds::id,
+				"Result ID (required for screenshot and repl types). Screenshot IDs are sanitized for the PNG filename").asOptional())
+			.withProperty(RouteParameter(RestApiIds::componentId,
+				"Optional component ID to crop the screenshot to").asOptional())
 			.withProperty(RouteParameter(RestApiIds::scale, "Scale factor for screenshot type")
-				.withType(ParamType::Float).asOptional());
+				.withType(ParamType::Float).asOptional())
+			.withProperty(RouteParameter(RestApiIds::expression,
+				"HISEScript expression for repl type").asOptional());
+
+		auto replResult = RouteParameter(Identifier("entry"), "REPL result entry")
+			.withType(ParamType::Object)
+			.withProperty(RouteParameter(RestApiIds::id, "Required tag from the repl interaction"))
+			.withProperty(RouteParameter(RestApiIds::expression, "The expression that was evaluated"))
+			.withProperty(RouteParameter(RestApiIds::moduleId, "Resolved interface script processor ID"))
+			.withProperty(RouteParameter(RestApiIds::timestamp, "Elapsed E2E sequence time in ms")
+				.withType(ParamType::Int))
+			.withProperty(RouteParameter(RestApiIds::success, "Whether evaluation succeeded")
+				.withType(ParamType::Bool))
+			.withProperty(RouteParameter(RestApiIds::value, "Evaluated result value"))
+			.withProperty(RouteParameter(RestApiIds::errorMessage, "Evaluation error message").asOptional())
+			.withProperty(RouteParameter(RestApiIds::location, "Source location of the error").asOptional())
+			.withProperty(RouteParameter(RestApiIds::callstack, "Script callstack entries")
+				.withArrayItems(RouteParameter(Identifier("frame"), "Callstack frame")).asOptional());
 
 		m.add(RouteMetadata(ApiRoute::TestingE2e, "api/testing/e2e")
 			.withMethod(RestServer::Method::Post)
 			.withCategory("testing")
-			.withSummary("Execute a sequence of UI interactions in a test window")
-			.withDescription("Execute mouse movements, clicks, drags, menu selections, and screenshots "
+			.withSummary("Execute UI interactions and REPL evaluations in a test window")
+			.withDescription("Execute mouse movements, clicks, drags, menu selections, screenshots, and REPL evaluations "
 				"in a dedicated test window. Auto-inserts moveTo events as needed for proper mouse "
 				"positioning. Mouse state persists across API calls. Blocks until all interactions "
-				"complete (30s timeout).")
-			.withReturns("Completion count, timing, execution log, captured screenshots, and optional mouseState")
+				"complete (20s timeout). Screenshots are saved as unique PNG files in the project root. "
+				"An explicitly supplied positive duration runs moveTo, click, drag, or selectMenuItem as a timed "
+				"interaction; only screenshots and REPL evaluations may run before it completes. "
+				"REPL failures are reported per result and do not stop or fail the sequence.")
+			.withReturns("Completion count, timing, execution log, captured screenshots, REPL results, and optional mouseState")
 			.withBodyParam(RouteParameter(RestApiIds::interactions, "Array of interaction objects")
 				.withArrayItems(interactionItem))
 			.withBodyParam(RouteParameter(RestApiIds::verbose,
@@ -597,8 +624,11 @@ struct RestApiEndpoints
 				.withType(ParamType::Int))
 			.withResponseField(RouteParameter(RestApiIds::executionLog, "Array of executed events with timing")
 				.withType(ParamType::Array))
-			.withResponseField(RouteParameter(RestApiIds::screenshots, "Object with screenshot id -> metadata")
+			.withResponseField(RouteParameter(RestApiIds::screenshots,
+				"Object with screenshot id -> moduleId, optional componentId, width, height, scale, sizeKB, and filePath")
 				.withType(ParamType::Object))
+			.withResponseField(RouteParameter(RestApiIds::replResults, "Ordered REPL evaluation results (when available)")
+				.withArrayItems(replResult).asOptional())
 			.withResponseField(RouteParameter(RestApiIds::mouseState,
 				"Final mouse state object (only when verbose=true)")
 				.withType(ParamType::Object).asOptional())
@@ -607,8 +637,8 @@ struct RestApiEndpoints
 			.withResponseField(RouteParameter(RestApiIds::selectedMenuItem, "Selected menu item info")
 				.withType(ParamType::Object).asOptional())
 			.withErrorCodes({ 400, 500, 503 })
-			.withRequestExample(R"({"interactions": [{"type": "click", "target": "Button1"}, {"type": "screenshot", "id": "after_click"}]})")
-			.withResponseExample(R"({"success": true, "interactionsCompleted": 2, "totalElapsedMs": 120, "executionLog": [], "screenshots": {"after_click": {"sizeKB": 12.5, "width": 600, "height": 400}}, "logs": [], "errors": []})"));
+			.withRequestExample("{\"interactions\": [{\"type\": \"click\", \"target\": \"Button1\"}, {\"type\": \"repl\", \"id\": \"buttonValue\", \"expression\": \"Content.getComponent('Button1').getValue()\"}, {\"type\": \"screenshot\", \"id\": \"after_click\", \"componentId\": \"Button1\"}]}")
+			.withResponseExample("{\"success\": true, \"interactionsCompleted\": 3, \"totalElapsedMs\": 120, \"executionLog\": [], \"replResults\": [{\"id\": \"buttonValue\", \"expression\": \"Content.getComponent('Button1').getValue()\", \"moduleId\": \"Interface\", \"timestamp\": 100, \"success\": true, \"value\": 1}], \"screenshots\": {\"after_click\": {\"id\": \"after_click\", \"moduleId\": \"Interface\", \"componentId\": \"Button1\", \"width\": 128, \"height\": 32, \"scale\": 1.0, \"sizeKB\": 2.5, \"filePath\": \"D:/Projects/MyPlugin/after_click.png\"}}, \"logs\": [], \"errors\": []}"));
 	}
 
 	/* POST /api/diagnose_script */
@@ -631,17 +661,27 @@ struct RestApiEndpoints
 		m.add(RouteMetadata(ApiRoute::DiagnoseScript, "api/diagnose_script")
 			.withMethod(RestServer::Method::Post)
 			.withCategory("scripting")
-			.withSummary("Run diagnostic-only shadow parse on a script file")
+			.withSummary("Run a diagnostic-only shadow parse on a script file or raw code string")
 			.withDescription("Returns structured diagnostics (API hallucinations, type mismatches, "
 				"language rule violations, audio-thread safety warnings) without modifying runtime "
-				"state - no recompilation, no execution. Requires at least one prior successful "
-				"compile. Always reads the file from disk - save pending edits before calling.")
+				"state - no recompilation, no execution. Two modes: (file) pass moduleId and/or "
+				"filePath to read a real file from disk and parse it against its owning processor - "
+				"requires a prior compile, save pending edits first; (code) pass a raw code string to "
+				"parse it directly against the first interface processor's API context, ideal for "
+				"unsaved or in-progress code. code is mutually exclusive with filePath.")
 			.withReturns("Array of diagnostics with line, column, severity, source, message, and suggestions")
 			.withBodyParam(RouteParameter(RestApiIds::moduleId,
-				"The script processor's module ID. Required if filePath is not provided.").asOptional())
+				"The script processor's module ID (file mode). Required if filePath is not provided. "
+				"Ignored when code is used.").asOptional())
 			.withBodyParam(RouteParameter(RestApiIds::filePath,
-				"Path to the external .js file (absolute or relative to Scripts folder). "
-				"Required if moduleId is not provided. When used alone, HISE resolves the owning processor.").asOptional())
+				"Path to the external .js file (file mode, absolute or relative to Scripts folder). "
+				"Required if moduleId is not provided. When used alone, HISE resolves the owning "
+				"processor. Mutually exclusive with code.").asOptional())
+			.withBodyParam(RouteParameter(RestApiIds::code,
+				"Raw HISEScript source to parse directly (standalone code mode). When present, the "
+				"code is shadow-parsed against the first interface processor's API context without "
+				"reading any file from disk or executing. Use it to validate unsaved or in-progress "
+				"code. Mutually exclusive with filePath (400 if both are set).").asOptional())
 			.withBodyParam(RouteParameter(RestApiIds::async,
 				"If true, defer the shadow parse to the scripting thread (slower, blocks audio). "
 				"Default is false: runs directly on the HTTP thread with a read lock.")
@@ -772,23 +812,42 @@ struct RestApiEndpoints
 			.withCategory("scripting")
 			.withSummary("Parse CSS code and return structured diagnostics")
 			.withDescription("Accepts either inline CSS code or a file path to a .css file. "
-				"Returns diagnostics with line/column/severity/message. Optionally resolves "
-				"properties for a set of selectors using CSS specificity rules.")
-			.withReturns("Diagnostics array, list of parsed selectors, and resolved properties when selectors provided")
+				"Returns diagnostics with line/column/severity/message. "
+				"Properties can be resolved using CSS specificity rules either by passing an explicit "
+				"selectors array, or by passing moduleId + componentId: in component mode the "
+				"component's own selectors are used, and width/height default to the component's "
+				"current bounds unless explicitly overridden. "
+				"In component mode the component's own stylesheet is fetched automatically, "
+				"but an explicit code or filePath takes precedence over the attached stylesheet. "
+				"Component mode requires the module to be a script processor with scripting content; "
+				"fails with 404 if the module or component cannot be found, or if no stylesheet is "
+				"attached to the component (and no code/filePath was given).")
+			.withReturns("Diagnostics array, list of parsed selectors, and resolved properties when selectors or component provided")
 			.withBodyParam(RouteParameter(RestApiIds::code,
 				"The CSS code to parse (provide this or filePath)").asOptional())
 			.withBodyParam(RouteParameter(RestApiIds::filePath,
 				"Path to a .css file. Relative paths resolve against the Scripts/ directory "
 				"(provide this or code)").asOptional())
+			.withBodyParam(RouteParameter(RestApiIds::moduleId,
+				"Module ID of a scripting-content module. Use together with componentId to "
+				"resolve the component's own selectors (alternative to the selectors array)")
+				.asOptional())
+			.withBodyParam(RouteParameter(RestApiIds::componentId,
+				"Component ID inside the module's scripting content. Use together with moduleId; "
+				"width/height default to the component's bounds unless given")
+				.asOptional())
 			.withBodyParam(RouteParameter(RestApiIds::selectors,
 				"Array of selector strings representing a component's selectors "
-				"(e.g. [\"button\", \".my-class\", \"#MyId\"]). Resolves properties using CSS specificity")
+				"(e.g. [\"button\", \".my-class\", \"#MyId\"]). Resolves properties using CSS specificity. "
+				"Ignored when moduleId + componentId are provided")
 				.withType(ParamType::Array).asOptional())
 			.withBodyParam(RouteParameter(RestApiIds::width,
-				"Reference width in pixels for resolving percentage and relative units")
+				"Reference width in pixels for resolving percentage and relative units. "
+				"Defaults to the component's bounds width in component mode")
 				.withType(ParamType::Int).asOptional())
 			.withBodyParam(RouteParameter(RestApiIds::height,
-				"Reference height in pixels for resolving percentage and relative units")
+				"Reference height in pixels for resolving percentage and relative units. "
+				"Defaults to the component's bounds height in component mode")
 				.withType(ParamType::Int).asOptional())
 			.withResponseField(RouteParameter(RestApiIds::diagnostics, "Array of diagnostic entries")
 				.withType(ParamType::Array))
@@ -799,8 +858,8 @@ struct RestApiEndpoints
 			.withResponseField(RouteParameter(RestApiIds::properties, "Resolved properties when selectors provided")
 				.withType(ParamType::Object).asOptional())
 			.withErrorCodes({ 400, 404 })
-			.withRequestExample(R"({"code": ".myClass { background: red; padding: 10px; }", "selectors": [".myClass"]})")
-			.withResponseExample(R"({"success": true, "diagnostics": [], "selectors": [".myClass"], "properties": {"background": "red", "padding": "10px"}, "logs": [], "errors": []})"));
+			.withRequestExample(R"({"code": ".myClass { background: red; padding: 10px; }", "moduleId": "Interface", "componentId": "MyButton"})")
+			.withResponseExample(R"({"success": true, "diagnostics": [], "selectors": [".MyButton"], "properties": {"background": "red", "padding": "10px"}, "logs": [], "errors": []})"));
 	}
 
 	/* POST /api/shutdown */
@@ -1328,7 +1387,11 @@ struct RestApiEndpoints
 				.withType(ParamType::Int))
 			.withProperty(RouteParameter(RestApiIds::success, "Whether evaluation succeeded")
 				.withType(ParamType::Bool))
-			.withProperty(RouteParameter(RestApiIds::value, "Evaluated result value").asOptional());
+			.withProperty(RouteParameter(RestApiIds::value, "Evaluated result value").asOptional())
+			.withProperty(RouteParameter(RestApiIds::errorMessage, "Evaluation error message").asOptional())
+			.withProperty(RouteParameter(RestApiIds::location, "Source location of the error").asOptional())
+			.withProperty(RouteParameter(RestApiIds::callstack, "Script callstack entries")
+				.withArrayItems(RouteParameter(Identifier("frame"), "Callstack frame")).asOptional());
 
 		m.add(RouteMetadata(ApiRoute::TestingSequence, "api/testing/sequence")
 			.withMethod(RestServer::Method::Post)
@@ -1423,8 +1486,11 @@ struct RestApiEndpoints
 			.withCategory("dsp")
 			.withSummary("Get scriptnode network hierarchy")
 			.withDescription("Returns the nested JSON tree of the active DspNetwork for the given "
-				"module. Each node contains its nodeId, factoryPath, bypass state, parameters, "
-				"properties, complex data slots, and child nodes. The parameters array lists objects with parameterId "
+				"module. Each node contains its nodeId, factoryPath, bypass state, calculated bounds, parameters, "
+				"properties, complex data slots, and child nodes. Bounds are local and include the complete subtree for "
+				"container nodes, so the root width and height describe the total network area. Use includeBounds=true "
+				"to calculate them on the message thread. Bounds are omitted by default and for non-instantiated "
+				"plan-mode nodes. The parameters array lists objects with parameterId "
 				"and value (plus range metadata when verbose=true). The properties array lists "
 				"node-level properties as objects with propertyId and value fields. The complexData array "
 				"lists dataType, slotIndex, and dataIndex for each slot; dataIndex=-1 means embedded data. Container "
@@ -1435,10 +1501,14 @@ struct RestApiEndpoints
 				"Use group=current inside an undo group (after push_group) to read the accumulated "
 				"plan-mode snapshot before the group is committed -- returns 400 if there is no "
 				"active DSP validation state, 501 for any group value other than 'current'.")
-			.withReturns("Recursive node tree with parameters, properties, complex data slots, connections on containers, and children")
+			.withReturns("Recursive node tree with bounds, parameters, properties, complex data slots, "
+				"connections on containers, and children")
 			.withModuleIdParam()
 			.withQueryParam(RouteParameter(RestApiIds::verbose,
 				"Include full parameter range metadata")
+				.withType(ParamType::Bool).withDefault("false"))
+			.withQueryParam(RouteParameter(RestApiIds::includeBounds,
+				"Calculate bounds for instantiated live nodes on the message thread")
 				.withType(ParamType::Bool).withDefault("false"))
 			.withQueryParam(RouteParameter(RestApiIds::group,
 				"Optional group selector. 'current' returns the active plan's validation tree "
@@ -1446,8 +1516,8 @@ struct RestApiEndpoints
 			.withResponseField(RouteParameter(RestApiIds::result, "Recursive scriptnode tree root")
 				.withRef("#/components/schemas/DspTreeNode"))
 			.withErrorCodes({ 400, 404, 501 })
-			.withRequestExample(R"(GET /api/dsp/tree?moduleId=Script%20FX1)")
-			.withResponseExample(R"({"success": true, "result": {"nodeId": "MyDSP", "factoryPath": "container.chain", "bypassed": false, "parameters": [], "properties": [], "complexData": [], "connections": [{"source": "PMA1", "sourceOutput": 0, "target": "Osc1", "parameter": "Frequency"}], "children": [{"nodeId": "PMA1", "factoryPath": "control.pma", "bypassed": false, "parameters": [{"parameterId": "Value", "value": 0.0}], "properties": [], "complexData": [], "children": []}, {"nodeId": "Table1", "factoryPath": "core.table", "bypassed": false, "parameters": [{"parameterId": "Value", "value": 0.0}], "properties": [], "complexData": [{"dataType": "Table", "slotIndex": 0, "dataIndex": 0}], "children": []}]}, "logs": [], "errors": []})"));
+			.withRequestExample(R"(GET /api/dsp/tree?moduleId=Script%20FX1&includeBounds=true)")
+			.withResponseExample(R"({"success": true, "result": {"nodeId": "MyDSP", "factoryPath": "container.chain", "bypassed": false, "bounds": {"x": 0, "y": 0, "width": 256, "height": 320}, "parameters": [], "properties": [], "complexData": [], "connections": [{"source": "PMA1", "sourceOutput": 0, "target": "Osc1", "parameter": "Frequency"}], "children": [{"nodeId": "PMA1", "factoryPath": "control.pma", "bypassed": false, "bounds": {"x": 0, "y": 0, "width": 128, "height": 100}, "parameters": [{"parameterId": "Value", "value": 0.0}], "properties": [], "complexData": [], "children": []}, {"nodeId": "Table1", "factoryPath": "core.table", "bypassed": false, "bounds": {"x": 0, "y": 0, "width": 128, "height": 100}, "parameters": [{"parameterId": "Value", "value": 0.0}], "properties": [], "complexData": [{"dataType": "Table", "slotIndex": 0, "dataIndex": 0}], "children": []}]}, "logs": [], "errors": []})"));
 	}
 
 	static void dspApply(Array<RouteMetadata>& m)
@@ -1464,10 +1534,14 @@ struct RestApiEndpoints
 				{ RestApiIds::nodeId.toString() })
 			.withVariantRequired("move", "Move a node to a different container (nodeId, parent, index?)",
 				{ RestApiIds::nodeId.toString(), RestApiIds::parent.toString() })
+			.withVariantRequired("set_id", "Rename a node (target, name)",
+				{ RestApiIds::target.toString(), RestApiIds::name.toString() })
 			.withVariantRequired("connect", "Connect a modulation source to a parameter (source, target, parameter, sourceOutput?, matchRange?). "
 				"sourceOutput is a parameter name (string) or output slot index (int) for multi-output mod nodes. "
-				"If matchRange is true, copies target parameter's range (min/max/skew/step) onto source after wiring "
-				"(mirrors the IDE normalize button: target is canonical, source adopts target's units, no remap occurs)",
+				"If matchRange is true and both endpoints are parameters, copies the target range (min/max/skew/step) "
+				"onto the source after wiring. Otherwise the connection succeeds without matching and adds an explanation "
+				"to the response logs (mirrors the IDE normalize button: target is canonical, source adopts target's units, "
+				"no remap occurs)",
 				{ RestApiIds::source.toString(), RestApiIds::target.toString() })
 			.withVariantRequired("disconnect", "Disconnect a modulation connection (target, parameter). The source is resolved automatically by searching the network for the unique connection that targets target.parameter. Errors if more than one match is found.",
 				{ RestApiIds::target.toString(), RestApiIds::parameter.toString() })
@@ -1476,25 +1550,30 @@ struct RestApiEndpoints
 				"AllowCompilation (bool), AllowPolyphonic (bool), CompileChannelAmount (int), "
 				"HasTail (bool), SuspendOnSilence (bool), ModulationBlockSize (power-of-2 int or 0). "
 				"Range-write variant: any subset of min/max/skewFactor/middlePosition/stepSize "
-				"may be sent without `value` to override individual range fields; omitted fields "
-				"keep their current value. skewFactor and middlePosition are mutually exclusive "
-				"(sending one clears the other). Mutually exclusive with value.",
+				"may be sent without `value` to override individual range fields; omitted fields keep "
+				"their current value. External modulation variant: send externalModulation without "
+				"`value` to set the root parameter's modulation mode. The externalModulation field "
+				"may also be combined with range fields. skewFactor and middlePosition are mutually exclusive "
+				"(sending one clears the other). Mutually exclusive with value. Setting NumClones on a "
+				"container.clone resizes its physical child nodes to exactly that amount (1 to 128).",
 				{ RestApiIds::nodeId.toString(), RestApiIds::parameterId.toString() })
 			.withVariantRequired("bypass", "Set bypass state (nodeId, bypassed)",
 				{ RestApiIds::nodeId.toString(), RestApiIds::bypassed.toString() })
-			.withVariantRequired("create_parameter", "Create a dynamic parameter on a container (nodeId, parameterId, min?, max?, defaultValue?, stepSize?, middlePosition?, skewFactor?)",
+			.withVariantRequired("create_parameter", "Create a dynamic parameter on a container (nodeId, parameterId, min?, max?, defaultValue?, stepSize?, middlePosition?, skewFactor?, externalModulation?)",
 				{ RestApiIds::nodeId.toString(), RestApiIds::parameterId.toString() })
 			.withVariant("clear", "Clear all nodes from the network")
 			.withVariantRequired("set_complex_data", "Assign an external data object to a node slot (nodeId, dataType, slotIndex?, dataIndex)",
 				{ RestApiIds::nodeId.toString(), RestApiIds::dataType.toString(), RestApiIds::dataIndex.toString() })
 			// All possible properties (union of all variants)
 			.withProperty(RouteParameter(RestApiIds::op, "Operation type")
-				.withEnumValues({ "add", "remove", "move", "connect", "disconnect", "set", "bypass", "create_parameter", "clear", "set_complex_data" }))
+				.withEnumValues({ "add", "remove", "move", "set_id", "connect", "disconnect", "set", "bypass", "create_parameter", "clear", "set_complex_data" }))
 			.withProperty(RouteParameter(RestApiIds::factoryPath, "Factory path for add op (e.g. core.oscillator, filters.svf)")
 				.asOptional())
 			.withProperty(RouteParameter(RestApiIds::parent, "Parent container node ID for add/move ops")
 				.asOptional())
 			.withProperty(RouteParameter(RestApiIds::nodeId, "Node instance ID")
+				.asOptional())
+			.withProperty(RouteParameter(RestApiIds::name, "New node ID for set_id op")
 				.asOptional())
 			.withProperty(RouteParameter(RestApiIds::parameterId, "Parameter name for set/create_parameter ops")
 				.asOptional())
@@ -1519,6 +1598,9 @@ struct RestApiEndpoints
 				.withType(ParamType::Float).asOptional())
 			.withProperty(RouteParameter(RestApiIds::defaultValue, "Default value for create_parameter")
 				.withType(ParamType::Float).asOptional())
+			.withProperty(RouteParameter(RestApiIds::externalModulation,
+				"External modulation mode for a root dynamic parameter, for example Combined")
+				.withEnumValues({ "Disabled", "Combined", "Gain", "Offset", "Pan", "Pitch" }).asOptional())
 			.withProperty(RouteParameter(RestApiIds::stepSize, "Step size for create_parameter (0 = continuous)")
 				.withType(ParamType::Float).asOptional())
 			.withProperty(RouteParameter(RestApiIds::middlePosition,
@@ -1528,7 +1610,7 @@ struct RestApiEndpoints
 				"Raw skew factor for create_parameter or set (range-write). Mutually exclusive with middlePosition")
 				.withType(ParamType::Float).asOptional())
 			.withProperty(RouteParameter(RestApiIds::matchRange,
-				"For connect op: copy target parameter's range onto source after wiring. Mirrors IDE normalize button")
+				"For connect op: copy the target range when both endpoints are parameters; otherwise log and ignore")
 				.withType(ParamType::Bool).asOptional())
 			.withProperty(RouteParameter(RestApiIds::dataType,
 				"External data type for set_complex_data: Table, SliderPack, AudioFile, FilterCoefficients, or DisplayBuffer")
@@ -1644,11 +1726,25 @@ struct RestApiEndpoints
 				.withType(ParamType::Object)
 				.withAdditionalProperties(touchedEdgeArray).asOptional());
 
+		auto triggerParam = RouteParameter(RestApiIds::trigger, "MIDI note that starts voice processing before the probe")
+			.withType(ParamType::Object)
+			.withProperty(RouteParameter(RestApiIds::type, "Trigger type")
+				.withEnumValues({ "note" }).withDefault("note"))
+			.withProperty(RouteParameter(RestApiIds::noteNumber, "MIDI note number (0-127)")
+				.withType(ParamType::Int).withDefault("60"))
+			.withProperty(RouteParameter(RestApiIds::velocity, "Normalised note velocity (0.0-1.0)")
+				.withType(ParamType::Float).withDefault("1.0"))
+			.withProperty(RouteParameter(RestApiIds::channel, "MIDI channel (1-16)")
+				.withType(ParamType::Int).withDefault("1"))
+			.withProperty(RouteParameter(RestApiIds::predelayMs,
+				"Processed audio time between note-on and test signal or parameter injection")
+				.withType(ParamType::Float).withDefault("0.0"));
+
 		m.add(RouteMetadata(ApiRoute::DspProbe, "api/dsp/probe")
 			.withMethod(RestServer::Method::Post)
 			.withCategory("dsp")
 			.withSummary("Inject signal and/or parameter test stimuli and return a DSP probe report")
-			.withDescription("Queues a one-shot signal and/or parameter injection into a supported scriptnode container and waits until the requested probe point has processed a buffer. injectId and probeId override injectIndex and probeIndex when present. Signal injection resolves before a child node and signal probing resolves after a child node, so injectIndex == probeIndex is valid. probeIndex=-1 or an omitted probeIndex resolves to the container output after the last child. recursive=true returns containers keyed by container ID. parameters.inject temporarily injects parameter values keyed by nodeId.parameterId. parameters.probe accepts '*' or an array of parameter paths. touchedEdges reports runtime parameter/control connections reached by the probe, not static graph reachability. Full mixed trace example: {\"moduleId\":\"ReproFX\",\"parent\":\"repro_probe\",\"signalType\":\"silence\",\"probeId\":\"gain\",\"parameters\":{\"inject\":{\"repro_probe.Parameter\":1.0},\"probe\":[\"repro_probe.Parameter\",\"gain.Gain\"]},\"filter\":{\"compact\":false}}. Wildcard parameter trace example: {\"moduleId\":\"ReproNullControlFX\",\"parent\":\"repro_null_control\",\"signalType\":\"silence\",\"probeId\":\"gain\",\"parameters\":{\"inject\":{\"repro_null_control.Parameter\":0.25},\"probe\":\"*\"},\"filter\":{\"compact\":false}}. Compact trace example: {\"moduleId\":\"DspTestFX\",\"parent\":\"test_network\",\"signalType\":\"dirac\",\"probeId\":\"gain\",\"parameters\":{\"probe\":\"*\"},\"filter\":{\"compact\":true}}. The optional filter object can remove specs or signal data, compact signal arrays and parameter reports, and include the recursive topology tree. The request blocks until the report is available or until the fixed timeout of delayMs + 200ms expires.")
+			.withDescription("Queues a one-shot signal and/or parameter injection into a supported scriptnode container and waits until the requested probe point has processed a buffer. injectId and probeId override injectIndex and probeIndex when present. Signal injection resolves before a child node and signal probing resolves after a child node, so injectIndex == probeIndex is valid. probeIndex=-1 or an omitted probeIndex resolves to the container output after the last child. recursive=true returns containers keyed by container ID. parameters.inject temporarily injects parameter values keyed by nodeId.parameterId. parameters.probe accepts '*' or an array of parameter paths. touchedEdges reports runtime parameter/control connections reached by the probe, not static graph reachability. Full mixed trace example: {\"moduleId\":\"ReproFX\",\"parent\":\"repro_probe\",\"signalType\":\"silence\",\"probeId\":\"gain\",\"parameters\":{\"inject\":{\"repro_probe.Parameter\":1.0},\"probe\":[\"repro_probe.Parameter\",\"gain.Gain\"]},\"filter\":{\"compact\":false}}. Wildcard parameter trace example: {\"moduleId\":\"ReproNullControlFX\",\"parent\":\"repro_null_control\",\"signalType\":\"silence\",\"probeId\":\"gain\",\"parameters\":{\"inject\":{\"repro_null_control.Parameter\":0.25},\"probe\":\"*\"},\"filter\":{\"compact\":false}}. Compact trace example: {\"moduleId\":\"DspTestFX\",\"parent\":\"test_network\",\"signalType\":\"dirac\",\"probeId\":\"gain\",\"parameters\":{\"probe\":\"*\"},\"filter\":{\"compact\":true}}. The optional filter object can remove specs or signal data, compact signal arrays and parameter reports, and include the recursive topology tree. Polyphonic DspNetworks require a trigger object so that a voice processes the probe. trigger.predelayMs waits in processed audio time after note-on before injection. The trigger note is released after success or failure. The request blocks until the report is available or until the timeout of trigger.predelayMs + delayMs + 200ms expires for ordinary probes, or 1000ms for recursive probes.")
 			.withReturns("Resolved probe configuration plus signal, recursive container, and optional parameter reports")
 			.withBodyParam(RouteParameter(RestApiIds::moduleId, "Module ID of the DspNetwork holder")
 				.withExample("DspTestFX"))
@@ -1670,13 +1766,20 @@ struct RestApiEndpoints
 				.withType(ParamType::Float).withDefault("1.0"))
 			.withBodyParam(RouteParameter(RestApiIds::seed, "Random seed used when signalType is noise")
 				.withType(ParamType::Int).withFormat("int64").asOptional())
-			.withBodyParam(RouteParameter(RestApiIds::delayMs, "Extra time to wait before capturing the probe result")
+			.withBodyParam(RouteParameter(RestApiIds::delayMs, "Processed audio time to wait after injection before capture")
 				.withType(ParamType::Float).withDefault("0.0"))
+			.withBodyParam(triggerParam.asOptional())
 			.withBodyParam(parameterProbeRequest.asOptional())
 			.withBodyParam(filterParam.asOptional())
 			.withResponseField(RouteParameter(RestApiIds::moduleId, "Module ID of the DspNetwork holder"))
-			.withResponseField(RouteParameter(RestApiIds::parent, "ID of the container node that handled the probe"))
-			.withResponseField(RouteParameter(RestApiIds::factoryPath, "Factory path of the container that handled the probe"))
+			.withResponseField(RouteParameter(RestApiIds::ok, "Low-level probe completion state")
+				.withType(ParamType::Bool).asOptional())
+			.withResponseField(RouteParameter(Identifier("error"), "Low-level probe error message")
+				.asOptional())
+			.withResponseField(RouteParameter(RestApiIds::parent, "ID of the container node that handled the probe")
+				.asOptional())
+			.withResponseField(RouteParameter(RestApiIds::factoryPath, "Factory path of the container that handled the probe")
+				.asOptional())
 			.withResponseField(RouteParameter(RestApiIds::injectId, "Injected child ID when the request used ID-based targeting")
 				.asOptional())
 			.withResponseField(RouteParameter(RestApiIds::probeId, "Probed child ID when the request used ID-based targeting")
@@ -1695,6 +1798,7 @@ struct RestApiEndpoints
 				.withType(ParamType::Int).withFormat("int64").asOptional())
 			.withResponseField(RouteParameter(RestApiIds::recursive, "True when recursive container probing was used")
 				.withType(ParamType::Bool))
+			.withResponseField(triggerParam.asOptional())
 			.withResponseField(specsReport.asOptional())
 			.withResponseField(signalReport.asOptional())
 			.withResponseField(containerReport.asOptional())
@@ -1702,7 +1806,7 @@ struct RestApiEndpoints
 			.withResponseField(RouteParameter(RestApiIds::tree, "Dense recursive topology tree when requested by filter.tree")
 				.withType(ParamType::Object).asOptional())
 			.withErrorCodes({ 400, 404, 409, 504 })
-			.withRequestExample(R"({"moduleId": "ReproFX", "parent": "repro_probe", "signalType": "silence", "probeId": "gain", "parameters": {"inject": {"repro_probe.Parameter": 1.0}, "probe": ["repro_probe.Parameter", "gain.Gain"]}, "filter": {"compact": false}})")
+			.withRequestExample(R"({"moduleId": "PolyFX", "parent": "repro_probe", "signalType": "dirac", "probeId": "gain", "trigger": {"type": "note", "noteNumber": 60, "velocity": 1.0, "channel": 1, "predelayMs": 100.0}, "filter": {"compact": false}})")
 			.withResponseExample(R"({"success": true, "moduleId": "DspTestFX", "parent": "test_network", "factoryPath": "container.chain", "injectIndex": 0, "probeIndex": 0, "signalType": "dirac", "gain": 1.0, "seed": 1234, "recursive": false, "specs": {"sampleRate": 44100.0, "numChannels": 2, "blockSize": 512, "polyphonic": false, "processMidi": false}, "signal": [{"channelIndex": 0, "min": 0.0, "max": 0.5, "avg": 0.001, "peakIndex": 0, "silence": false}], "parameters": {"injected": {"Gain1.Gain": 0.5}, "probed": {"Gain1.Gain": 0.5}, "touchedEdges": {}}, "logs": [], "errors": []})"));
 	}
 

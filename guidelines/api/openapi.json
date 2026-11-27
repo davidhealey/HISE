@@ -3,7 +3,7 @@
     "info": {
         "title": "HISE REST API",
         "description": "REST API for AI-assisted development in HISE",
-        "version": "0.9.2"
+        "version": "0.13.0"
     },
     "servers": [
         {
@@ -527,6 +527,18 @@
                         "type": "number",
                         "description": "Default value, verbose mode only"
                     },
+                    "externalModulation": {
+                        "type": "string",
+                        "enum": [
+                            "Disabled",
+                            "Combined",
+                            "Gain",
+                            "Offset",
+                            "Pan",
+                            "Pitch"
+                        ],
+                        "description": "External modulation mode for root parameters, verbose mode only"
+                    },
                     "middlePosition": {
                         "type": "number",
                         "description": "Middle position after skew mapping, verbose mode only"
@@ -638,6 +650,36 @@
                 ],
                 "description": "DSP complex data slot entry"
             },
+            "DspTreeBounds": {
+                "type": "object",
+                "properties": {
+                    "x": {
+                        "type": "integer",
+                        "description": "Local X position"
+                    },
+                    "y": {
+                        "type": "integer",
+                        "description": "Local Y position"
+                    },
+                    "width": {
+                        "type": "integer",
+                        "description": "Calculated canvas width",
+                        "minimum": 0.0
+                    },
+                    "height": {
+                        "type": "integer",
+                        "description": "Calculated canvas height",
+                        "minimum": 0.0
+                    }
+                },
+                "required": [
+                    "x",
+                    "y",
+                    "width",
+                    "height"
+                ],
+                "description": "Calculated DSP node canvas bounds"
+            },
             "DspTreeNode": {
                 "type": "object",
                 "properties": {
@@ -652,6 +694,9 @@
                     "bypassed": {
                         "type": "boolean",
                         "description": "Current bypass state"
+                    },
+                    "bounds": {
+                        "$ref": "#/components/schemas/DspTreeBounds"
                     },
                     "parameters": {
                         "type": "array",
@@ -759,7 +804,7 @@
                                         "apiVersion": {
                                             "type": "string",
                                             "description": "REST API contract version (semver). Bumped when the envelope or any route contract changes - clients should compare against the version they were built for.",
-                                            "example": "0.9.2"
+                                            "example": "0.13.0"
                                         },
                                         "result": {
                                             "type": "string",
@@ -833,7 +878,7 @@
                                         "apiVersion": {
                                             "type": "string",
                                             "description": "REST API contract version (semver). Bumped when the envelope or any route contract changes - clients should compare against the version they were built for.",
-                                            "example": "0.9.2"
+                                            "example": "0.13.0"
                                         },
                                         "activeIsSnippetBrowser": {
                                             "type": "boolean",
@@ -1058,7 +1103,7 @@
                                         "apiVersion": {
                                             "type": "string",
                                             "description": "REST API contract version (semver). Bumped when the envelope or any route contract changes - clients should compare against the version they were built for.",
-                                            "example": "0.9.2"
+                                            "example": "0.13.0"
                                         },
                                         "preprocessors": {
                                             "type": "object",
@@ -1163,7 +1208,7 @@
                                         "apiVersion": {
                                             "type": "string",
                                             "description": "REST API contract version (semver). Bumped when the envelope or any route contract changes - clients should compare against the version they were built for.",
-                                            "example": "0.9.2"
+                                            "example": "0.13.0"
                                         },
                                         "moduleId": {
                                             "type": "string",
@@ -1391,7 +1436,7 @@
                                         "apiVersion": {
                                             "type": "string",
                                             "description": "REST API contract version (semver). Bumped when the envelope or any route contract changes - clients should compare against the version they were built for.",
-                                            "example": "0.9.2"
+                                            "example": "0.13.0"
                                         },
                                         "moduleId": {
                                             "type": "string",
@@ -1577,7 +1622,7 @@
                                         "apiVersion": {
                                             "type": "string",
                                             "description": "REST API contract version (semver). Bumped when the envelope or any route contract changes - clients should compare against the version they were built for.",
-                                            "example": "0.9.2"
+                                            "example": "0.13.0"
                                         },
                                         "moduleId": {
                                             "type": "string",
@@ -1718,7 +1763,7 @@
                                         "apiVersion": {
                                             "type": "string",
                                             "description": "REST API contract version (semver). Bumped when the envelope or any route contract changes - clients should compare against the version they were built for.",
-                                            "example": "0.9.2"
+                                            "example": "0.13.0"
                                         },
                                         "moduleId": {
                                             "type": "string",
@@ -1855,7 +1900,7 @@
                                         "apiVersion": {
                                             "type": "string",
                                             "description": "REST API contract version (semver). Bumped when the envelope or any route contract changes - clients should compare against the version they were built for.",
-                                            "example": "0.9.2"
+                                            "example": "0.13.0"
                                         },
                                         "result": {
                                             "type": "string",
@@ -1976,7 +2021,7 @@
                                         "apiVersion": {
                                             "type": "string",
                                             "description": "REST API contract version (semver). Bumped when the envelope or any route contract changes - clients should compare against the version they were built for.",
-                                            "example": "0.9.2"
+                                            "example": "0.13.0"
                                         },
                                         "moduleId": {
                                             "type": "string",
@@ -2115,7 +2160,7 @@
                                         "apiVersion": {
                                             "type": "string",
                                             "description": "REST API contract version (semver). Bumped when the envelope or any route contract changes - clients should compare against the version they were built for.",
-                                            "example": "0.9.2"
+                                            "example": "0.13.0"
                                         },
                                         "moduleId": {
                                             "type": "string",
@@ -2278,7 +2323,7 @@
                                         "apiVersion": {
                                             "type": "string",
                                             "description": "REST API contract version (semver). Bumped when the envelope or any route contract changes - clients should compare against the version they were built for.",
-                                            "example": "0.9.2"
+                                            "example": "0.13.0"
                                         },
                                         "moduleId": {
                                             "type": "string",
@@ -2436,7 +2481,7 @@
                                         "apiVersion": {
                                             "type": "string",
                                             "description": "REST API contract version (semver). Bumped when the envelope or any route contract changes - clients should compare against the version they were built for.",
-                                            "example": "0.9.2"
+                                            "example": "0.13.0"
                                         },
                                         "moduleId": {
                                             "type": "string",
@@ -2600,7 +2645,7 @@
                                         "apiVersion": {
                                             "type": "string",
                                             "description": "REST API contract version (semver). Bumped when the envelope or any route contract changes - clients should compare against the version they were built for.",
-                                            "example": "0.9.2"
+                                            "example": "0.13.0"
                                         },
                                         "moduleId": {
                                             "type": "string",
@@ -2766,7 +2811,7 @@
                                         "apiVersion": {
                                             "type": "string",
                                             "description": "REST API contract version (semver). Bumped when the envelope or any route contract changes - clients should compare against the version they were built for.",
-                                            "example": "0.9.2"
+                                            "example": "0.13.0"
                                         },
                                         "moduleId": {
                                             "type": "string",
@@ -2896,7 +2941,7 @@
                                         "apiVersion": {
                                             "type": "string",
                                             "description": "REST API contract version (semver). Bumped when the envelope or any route contract changes - clients should compare against the version they were built for.",
-                                            "example": "0.9.2"
+                                            "example": "0.13.0"
                                         },
                                         "moduleId": {
                                             "type": "string",
@@ -2983,8 +3028,8 @@
                 "tags": [
                     "testing"
                 ],
-                "summary": "Execute a sequence of UI interactions in a test window",
-                "description": "Execute mouse movements, clicks, drags, menu selections, and screenshots in a dedicated test window. Auto-inserts moveTo events as needed for proper mouse positioning. Mouse state persists across API calls. Blocks until all interactions complete (30s timeout).",
+                "summary": "Execute UI interactions and REPL evaluations in a test window",
+                "description": "Execute mouse movements, clicks, drags, menu selections, screenshots, and REPL evaluations in a dedicated test window. Auto-inserts moveTo events as needed for proper mouse positioning. Mouse state persists across API calls. Blocks until all interactions complete (20s timeout). Screenshots are saved as unique PNG files in the project root. An explicitly supplied positive duration runs moveTo, click, drag, or selectMenuItem as a timed interaction; only screenshots and REPL evaluations may run before it completes. REPL failures are reported per result and do not stop or fail the sequence.",
                 "operationId": "testing_e2e",
                 "requestBody": {
                     "required": true,
@@ -3006,7 +3051,8 @@
                                                         "doubleClick",
                                                         "drag",
                                                         "selectMenuItem",
-                                                        "screenshot"
+                                                        "screenshot",
+                                                        "repl"
                                                     ],
                                                     "description": "Interaction type"
                                                 },
@@ -3018,8 +3064,12 @@
                                                     "type": "integer",
                                                     "description": "Delay in ms before action"
                                                 },
+                                                "duration": {
+                                                    "type": "integer",
+                                                    "description": "Duration in ms. An explicit positive value makes moveTo, click, drag, and selectMenuItem run as a timed interaction"
+                                                },
                                                 "normalizedPosition": {
-                                                    "type": "number",
+                                                    "type": "object",
                                                     "description": "Position within target (0-1, default center)"
                                                 },
                                                 "pixelPosition": {
@@ -3060,11 +3110,19 @@
                                                 },
                                                 "id": {
                                                     "type": "string",
-                                                    "description": "Screenshot ID for screenshot type"
+                                                    "description": "Result ID (required for screenshot and repl types). Screenshot IDs are sanitized for the PNG filename"
+                                                },
+                                                "componentId": {
+                                                    "type": "string",
+                                                    "description": "Optional component ID to crop the screenshot to"
                                                 },
                                                 "scale": {
                                                     "type": "number",
                                                     "description": "Scale factor for screenshot type"
+                                                },
+                                                "expression": {
+                                                    "type": "string",
+                                                    "description": "HISEScript expression for repl type"
                                                 }
                                             },
                                             "required": [
@@ -3096,7 +3154,11 @@
                                                 },
                                                 {
                                                     "value": "screenshot",
-                                                    "description": "Capture interface screenshot"
+                                                    "description": "Capture interface screenshot and save PNG to project root"
+                                                },
+                                                {
+                                                    "value": "repl",
+                                                    "description": "Evaluate HISEScript against the interface script processor"
                                                 }
                                             ],
                                             "description": "Interaction object"
@@ -3120,8 +3182,14 @@
                                         "target": "Button1"
                                     },
                                     {
+                                        "type": "repl",
+                                        "id": "buttonValue",
+                                        "expression": "Content.getComponent('Button1').getValue()"
+                                    },
+                                    {
                                         "type": "screenshot",
-                                        "id": "after_click"
+                                        "id": "after_click",
+                                        "componentId": "Button1"
                                     }
                                 ]
                             }
@@ -3143,7 +3211,7 @@
                                         "apiVersion": {
                                             "type": "string",
                                             "description": "REST API contract version (semver). Bumped when the envelope or any route contract changes - clients should compare against the version they were built for.",
-                                            "example": "0.9.2"
+                                            "example": "0.13.0"
                                         },
                                         "interactionsCompleted": {
                                             "type": "integer",
@@ -3159,7 +3227,65 @@
                                         },
                                         "screenshots": {
                                             "type": "object",
-                                            "description": "Object with screenshot id -> metadata"
+                                            "description": "Object with screenshot id -> moduleId, optional componentId, width, height, scale, sizeKB, and filePath"
+                                        },
+                                        "replResults": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "object",
+                                                "properties": {
+                                                    "id": {
+                                                        "type": "string",
+                                                        "description": "Required tag from the repl interaction"
+                                                    },
+                                                    "expression": {
+                                                        "type": "string",
+                                                        "description": "The expression that was evaluated"
+                                                    },
+                                                    "moduleId": {
+                                                        "type": "string",
+                                                        "description": "Resolved interface script processor ID"
+                                                    },
+                                                    "timestamp": {
+                                                        "type": "integer",
+                                                        "description": "Elapsed E2E sequence time in ms"
+                                                    },
+                                                    "success": {
+                                                        "type": "boolean",
+                                                        "description": "Whether evaluation succeeded"
+                                                    },
+                                                    "value": {
+                                                        "type": "string",
+                                                        "description": "Evaluated result value"
+                                                    },
+                                                    "errorMessage": {
+                                                        "type": "string",
+                                                        "description": "Evaluation error message"
+                                                    },
+                                                    "location": {
+                                                        "type": "string",
+                                                        "description": "Source location of the error"
+                                                    },
+                                                    "callstack": {
+                                                        "type": "array",
+                                                        "items": {
+                                                            "type": "string",
+                                                            "description": "Callstack frame"
+                                                        },
+                                                        "description": "Script callstack entries"
+                                                    }
+                                                },
+                                                "required": [
+                                                    "id",
+                                                    "expression",
+                                                    "moduleId",
+                                                    "timestamp",
+                                                    "success",
+                                                    "value"
+                                                ],
+                                                "description": "REPL result entry"
+                                            },
+                                            "description": "Ordered REPL evaluation results (when available)"
                                         },
                                         "mouseState": {
                                             "type": "object",
@@ -3214,14 +3340,29 @@
                                 },
                                 "example": {
                                     "success": true,
-                                    "interactionsCompleted": 2,
+                                    "interactionsCompleted": 3,
                                     "totalElapsedMs": 120,
                                     "executionLog": [],
+                                    "replResults": [
+                                        {
+                                            "id": "buttonValue",
+                                            "expression": "Content.getComponent('Button1').getValue()",
+                                            "moduleId": "Interface",
+                                            "timestamp": 100,
+                                            "success": true,
+                                            "value": 1
+                                        }
+                                    ],
                                     "screenshots": {
                                         "after_click": {
-                                            "sizeKB": 12.5,
-                                            "width": 600,
-                                            "height": 400
+                                            "id": "after_click",
+                                            "moduleId": "Interface",
+                                            "componentId": "Button1",
+                                            "width": 128,
+                                            "height": 32,
+                                            "scale": 1.0,
+                                            "sizeKB": 2.5,
+                                            "filePath": "D:/Projects/MyPlugin/after_click.png"
                                         }
                                     },
                                     "logs": [],
@@ -3247,8 +3388,8 @@
                 "tags": [
                     "scripting"
                 ],
-                "summary": "Run diagnostic-only shadow parse on a script file",
-                "description": "Returns structured diagnostics (API hallucinations, type mismatches, language rule violations, audio-thread safety warnings) without modifying runtime state - no recompilation, no execution. Requires at least one prior successful compile. Always reads the file from disk - save pending edits before calling.",
+                "summary": "Run a diagnostic-only shadow parse on a script file or raw code string",
+                "description": "Returns structured diagnostics (API hallucinations, type mismatches, language rule violations, audio-thread safety warnings) without modifying runtime state - no recompilation, no execution. Two modes: (file) pass moduleId and/or filePath to read a real file from disk and parse it against its owning processor - requires a prior compile, save pending edits first; (code) pass a raw code string to parse it directly against the first interface processor's API context, ideal for unsaved or in-progress code. code is mutually exclusive with filePath.",
                 "operationId": "diagnose_script",
                 "requestBody": {
                     "required": true,
@@ -3259,11 +3400,15 @@
                                 "properties": {
                                     "moduleId": {
                                         "type": "string",
-                                        "description": "The script processor's module ID. Required if filePath is not provided."
+                                        "description": "The script processor's module ID (file mode). Required if filePath is not provided. Ignored when code is used."
                                     },
                                     "filePath": {
                                         "type": "string",
-                                        "description": "Path to the external .js file (absolute or relative to Scripts folder). Required if moduleId is not provided. When used alone, HISE resolves the owning processor."
+                                        "description": "Path to the external .js file (file mode, absolute or relative to Scripts folder). Required if moduleId is not provided. When used alone, HISE resolves the owning processor. Mutually exclusive with code."
+                                    },
+                                    "code": {
+                                        "type": "string",
+                                        "description": "Raw HISEScript source to parse directly (standalone code mode). When present, the code is shadow-parsed against the first interface processor's API context without reading any file from disk or executing. Use it to validate unsaved or in-progress code. Mutually exclusive with filePath (400 if both are set)."
                                     },
                                     "async": {
                                         "type": "boolean",
@@ -3294,7 +3439,7 @@
                                         "apiVersion": {
                                             "type": "string",
                                             "description": "REST API contract version (semver). Bumped when the envelope or any route contract changes - clients should compare against the version they were built for.",
-                                            "example": "0.9.2"
+                                            "example": "0.13.0"
                                         },
                                         "moduleId": {
                                             "type": "string",
@@ -3463,7 +3608,7 @@
                                         "apiVersion": {
                                             "type": "string",
                                             "description": "REST API contract version (semver). Bumped when the envelope or any route contract changes - clients should compare against the version they were built for.",
-                                            "example": "0.9.2"
+                                            "example": "0.13.0"
                                         },
                                         "moduleId": {
                                             "type": "string",
@@ -3643,7 +3788,7 @@
                                         "apiVersion": {
                                             "type": "string",
                                             "description": "REST API contract version (semver). Bumped when the envelope or any route contract changes - clients should compare against the version they were built for.",
-                                            "example": "0.9.2"
+                                            "example": "0.13.0"
                                         },
                                         "recording": {
                                             "type": "boolean",
@@ -3784,7 +3929,7 @@
                     "scripting"
                 ],
                 "summary": "Parse CSS code and return structured diagnostics",
-                "description": "Accepts either inline CSS code or a file path to a .css file. Returns diagnostics with line/column/severity/message. Optionally resolves properties for a set of selectors using CSS specificity rules.",
+                "description": "Accepts either inline CSS code or a file path to a .css file. Returns diagnostics with line/column/severity/message. Properties can be resolved using CSS specificity rules either by passing an explicit selectors array, or by passing moduleId + componentId: in component mode the component's own selectors are used, and width/height default to the component's current bounds unless explicitly overridden. In component mode the component's own stylesheet is fetched automatically, but an explicit code or filePath takes precedence over the attached stylesheet. Component mode requires the module to be a script processor with scripting content; fails with 404 if the module or component cannot be found, or if no stylesheet is attached to the component (and no code/filePath was given).",
                 "operationId": "parse_css",
                 "requestBody": {
                     "required": true,
@@ -3801,25 +3946,32 @@
                                         "type": "string",
                                         "description": "Path to a .css file. Relative paths resolve against the Scripts/ directory (provide this or code)"
                                     },
+                                    "moduleId": {
+                                        "type": "string",
+                                        "description": "Module ID of a scripting-content module. Use together with componentId to resolve the component's own selectors (alternative to the selectors array)"
+                                    },
+                                    "componentId": {
+                                        "type": "string",
+                                        "description": "Component ID inside the module's scripting content. Use together with moduleId; width/height default to the component's bounds unless given"
+                                    },
                                     "selectors": {
                                         "type": "array",
-                                        "description": "Array of selector strings representing a component's selectors (e.g. [\"button\", \".my-class\", \"#MyId\"]). Resolves properties using CSS specificity"
+                                        "description": "Array of selector strings representing a component's selectors (e.g. [\"button\", \".my-class\", \"#MyId\"]). Resolves properties using CSS specificity. Ignored when moduleId + componentId are provided"
                                     },
                                     "width": {
                                         "type": "integer",
-                                        "description": "Reference width in pixels for resolving percentage and relative units"
+                                        "description": "Reference width in pixels for resolving percentage and relative units. Defaults to the component's bounds width in component mode"
                                     },
                                     "height": {
                                         "type": "integer",
-                                        "description": "Reference height in pixels for resolving percentage and relative units"
+                                        "description": "Reference height in pixels for resolving percentage and relative units. Defaults to the component's bounds height in component mode"
                                     }
                                 }
                             },
                             "example": {
                                 "code": ".myClass { background: red; padding: 10px; }",
-                                "selectors": [
-                                    ".myClass"
-                                ]
+                                "moduleId": "Interface",
+                                "componentId": "MyButton"
                             }
                         }
                     }
@@ -3839,7 +3991,7 @@
                                         "apiVersion": {
                                             "type": "string",
                                             "description": "REST API contract version (semver). Bumped when the envelope or any route contract changes - clients should compare against the version they were built for.",
-                                            "example": "0.9.2"
+                                            "example": "0.13.0"
                                         },
                                         "diagnostics": {
                                             "type": "array",
@@ -3900,7 +4052,7 @@
                                     "success": true,
                                     "diagnostics": [],
                                     "selectors": [
-                                        ".myClass"
+                                        ".MyButton"
                                     ],
                                     "properties": {
                                         "background": "red",
@@ -3944,7 +4096,7 @@
                                         "apiVersion": {
                                             "type": "string",
                                             "description": "REST API contract version (semver). Bumped when the envelope or any route contract changes - clients should compare against the version they were built for.",
-                                            "example": "0.9.2"
+                                            "example": "0.13.0"
                                         },
                                         "result": {
                                             "type": "string",
@@ -4068,7 +4220,7 @@
                                         "apiVersion": {
                                             "type": "string",
                                             "description": "REST API contract version (semver). Bumped when the envelope or any route contract changes - clients should compare against the version they were built for.",
-                                            "example": "0.9.2"
+                                            "example": "0.13.0"
                                         },
                                         "result": {
                                             "$ref": "#/components/schemas/BuilderTreeNode"
@@ -4364,7 +4516,7 @@
                                         "apiVersion": {
                                             "type": "string",
                                             "description": "REST API contract version (semver). Bumped when the envelope or any route contract changes - clients should compare against the version they were built for.",
-                                            "example": "0.9.2"
+                                            "example": "0.13.0"
                                         },
                                         "scope": {
                                             "type": "string",
@@ -4502,7 +4654,7 @@
                                         "apiVersion": {
                                             "type": "string",
                                             "description": "REST API contract version (semver). Bumped when the envelope or any route contract changes - clients should compare against the version they were built for.",
-                                            "example": "0.9.2"
+                                            "example": "0.13.0"
                                         },
                                         "result": {
                                             "type": "string",
@@ -4605,7 +4757,7 @@
                                         "apiVersion": {
                                             "type": "string",
                                             "description": "REST API contract version (semver). Bumped when the envelope or any route contract changes - clients should compare against the version they were built for.",
-                                            "example": "0.9.2"
+                                            "example": "0.13.0"
                                         },
                                         "scope": {
                                             "type": "string",
@@ -4750,7 +4902,7 @@
                                         "apiVersion": {
                                             "type": "string",
                                             "description": "REST API contract version (semver). Bumped when the envelope or any route contract changes - clients should compare against the version they were built for.",
-                                            "example": "0.9.2"
+                                            "example": "0.13.0"
                                         },
                                         "scope": {
                                             "type": "string",
@@ -4853,7 +5005,7 @@
                                         "apiVersion": {
                                             "type": "string",
                                             "description": "REST API contract version (semver). Bumped when the envelope or any route contract changes - clients should compare against the version they were built for.",
-                                            "example": "0.9.2"
+                                            "example": "0.13.0"
                                         },
                                         "scope": {
                                             "type": "string",
@@ -4950,7 +5102,7 @@
                                         "apiVersion": {
                                             "type": "string",
                                             "description": "REST API contract version (semver). Bumped when the envelope or any route contract changes - clients should compare against the version they were built for.",
-                                            "example": "0.9.2"
+                                            "example": "0.13.0"
                                         },
                                         "scope": {
                                             "type": "string",
@@ -5091,7 +5243,7 @@
                                         "apiVersion": {
                                             "type": "string",
                                             "description": "REST API contract version (semver). Bumped when the envelope or any route contract changes - clients should compare against the version they were built for.",
-                                            "example": "0.9.2"
+                                            "example": "0.13.0"
                                         },
                                         "scope": {
                                             "type": "string",
@@ -5261,7 +5413,7 @@
                                         "apiVersion": {
                                             "type": "string",
                                             "description": "REST API contract version (semver). Bumped when the envelope or any route contract changes - clients should compare against the version they were built for.",
-                                            "example": "0.9.2"
+                                            "example": "0.13.0"
                                         },
                                         "scope": {
                                             "type": "string",
@@ -5361,7 +5513,7 @@
                                         "apiVersion": {
                                             "type": "string",
                                             "description": "REST API contract version (semver). Bumped when the envelope or any route contract changes - clients should compare against the version they were built for.",
-                                            "example": "0.9.2"
+                                            "example": "0.13.0"
                                         },
                                         "scope": {
                                             "type": "string",
@@ -5475,7 +5627,7 @@
                                         "apiVersion": {
                                             "type": "string",
                                             "description": "REST API contract version (semver). Bumped when the envelope or any route contract changes - clients should compare against the version they were built for.",
-                                            "example": "0.9.2"
+                                            "example": "0.13.0"
                                         },
                                         "result": {
                                             "type": "string",
@@ -5601,7 +5753,7 @@
                                         "apiVersion": {
                                             "type": "string",
                                             "description": "REST API contract version (semver). Bumped when the envelope or any route contract changes - clients should compare against the version they were built for.",
-                                            "example": "0.9.2"
+                                            "example": "0.13.0"
                                         },
                                         "jobId": {
                                             "type": "string",
@@ -5699,7 +5851,7 @@
                                         "apiVersion": {
                                             "type": "string",
                                             "description": "REST API contract version (semver). Bumped when the envelope or any route contract changes - clients should compare against the version they were built for.",
-                                            "example": "0.9.2"
+                                            "example": "0.13.0"
                                         },
                                         "finished": {
                                             "type": "boolean",
@@ -5815,7 +5967,7 @@
                                         "apiVersion": {
                                             "type": "string",
                                             "description": "REST API contract version (semver). Bumped when the envelope or any route contract changes - clients should compare against the version they were built for.",
-                                            "example": "0.9.2"
+                                            "example": "0.13.0"
                                         },
                                         "result": {
                                             "$ref": "#/components/schemas/UiTreeNode"
@@ -6054,7 +6206,7 @@
                                         "apiVersion": {
                                             "type": "string",
                                             "description": "REST API contract version (semver). Bumped when the envelope or any route contract changes - clients should compare against the version they were built for.",
-                                            "example": "0.9.2"
+                                            "example": "0.13.0"
                                         },
                                         "scope": {
                                             "type": "string",
@@ -6364,7 +6516,7 @@
                                         "apiVersion": {
                                             "type": "string",
                                             "description": "REST API contract version (semver). Bumped when the envelope or any route contract changes - clients should compare against the version they were built for.",
-                                            "example": "0.9.2"
+                                            "example": "0.13.0"
                                         },
                                         "isPlaying": {
                                             "type": "boolean",
@@ -6418,6 +6570,22 @@
                                                     "value": {
                                                         "type": "string",
                                                         "description": "Evaluated result value"
+                                                    },
+                                                    "errorMessage": {
+                                                        "type": "string",
+                                                        "description": "Evaluation error message"
+                                                    },
+                                                    "location": {
+                                                        "type": "string",
+                                                        "description": "Source location of the error"
+                                                    },
+                                                    "callstack": {
+                                                        "type": "array",
+                                                        "items": {
+                                                            "type": "string",
+                                                            "description": "Callstack frame"
+                                                        },
+                                                        "description": "Script callstack entries"
                                                     }
                                                 },
                                                 "required": [
@@ -6519,7 +6687,7 @@
                                         "apiVersion": {
                                             "type": "string",
                                             "description": "REST API contract version (semver). Bumped when the envelope or any route contract changes - clients should compare against the version they were built for.",
-                                            "example": "0.9.2"
+                                            "example": "0.13.0"
                                         },
                                         "networks": {
                                             "type": "array",
@@ -6654,7 +6822,7 @@
                                         "apiVersion": {
                                             "type": "string",
                                             "description": "REST API contract version (semver). Bumped when the envelope or any route contract changes - clients should compare against the version they were built for.",
-                                            "example": "0.9.2"
+                                            "example": "0.13.0"
                                         },
                                         "filePath": {
                                             "type": "string",
@@ -6745,7 +6913,7 @@
                     "dsp"
                 ],
                 "summary": "Get scriptnode network hierarchy",
-                "description": "Returns the nested JSON tree of the active DspNetwork for the given module. Each node contains its nodeId, factoryPath, bypass state, parameters, properties, complex data slots, and child nodes. The parameters array lists objects with parameterId and value (plus range metadata when verbose=true). The properties array lists node-level properties as objects with propertyId and value fields. The complexData array lists dataType, slotIndex, and dataIndex for each slot; dataIndex=-1 means embedded data. Container nodes also have a connections array listing all modulation edges within that container (source, sourceOutput, target, parameter). Use verbose=true to include full parameter range metadata (min, max, stepSize, middlePosition, defaultValue). Use group=current inside an undo group (after push_group) to read the accumulated plan-mode snapshot before the group is committed -- returns 400 if there is no active DSP validation state, 501 for any group value other than 'current'.",
+                "description": "Returns the nested JSON tree of the active DspNetwork for the given module. Each node contains its nodeId, factoryPath, bypass state, calculated bounds, parameters, properties, complex data slots, and child nodes. Bounds are local and include the complete subtree for container nodes, so the root width and height describe the total network area. Use includeBounds=true to calculate them on the message thread. Bounds are omitted by default and for non-instantiated plan-mode nodes. The parameters array lists objects with parameterId and value (plus range metadata when verbose=true). The properties array lists node-level properties as objects with propertyId and value fields. The complexData array lists dataType, slotIndex, and dataIndex for each slot; dataIndex=-1 means embedded data. Container nodes also have a connections array listing all modulation edges within that container (source, sourceOutput, target, parameter). Use verbose=true to include full parameter range metadata (min, max, stepSize, middlePosition, defaultValue). Use group=current inside an undo group (after push_group) to read the accumulated plan-mode snapshot before the group is committed -- returns 400 if there is no active DSP validation state, 501 for any group value other than 'current'.",
                 "operationId": "dsp_tree",
                 "parameters": [
                     {
@@ -6766,6 +6934,17 @@
                         "schema": {
                             "type": "boolean",
                             "description": "Include full parameter range metadata",
+                            "default": "false"
+                        }
+                    },
+                    {
+                        "name": "includeBounds",
+                        "in": "query",
+                        "description": "Calculate bounds for instantiated live nodes on the message thread",
+                        "required": false,
+                        "schema": {
+                            "type": "boolean",
+                            "description": "Calculate bounds for instantiated live nodes on the message thread",
                             "default": "false"
                         }
                     },
@@ -6795,7 +6974,7 @@
                                         "apiVersion": {
                                             "type": "string",
                                             "description": "REST API contract version (semver). Bumped when the envelope or any route contract changes - clients should compare against the version they were built for.",
-                                            "example": "0.9.2"
+                                            "example": "0.13.0"
                                         },
                                         "result": {
                                             "$ref": "#/components/schemas/DspTreeNode"
@@ -6845,6 +7024,12 @@
                                         "nodeId": "MyDSP",
                                         "factoryPath": "container.chain",
                                         "bypassed": false,
+                                        "bounds": {
+                                            "x": 0,
+                                            "y": 0,
+                                            "width": 256,
+                                            "height": 320
+                                        },
                                         "parameters": [],
                                         "properties": [],
                                         "complexData": [],
@@ -6861,6 +7046,12 @@
                                                 "nodeId": "PMA1",
                                                 "factoryPath": "control.pma",
                                                 "bypassed": false,
+                                                "bounds": {
+                                                    "x": 0,
+                                                    "y": 0,
+                                                    "width": 128,
+                                                    "height": 100
+                                                },
                                                 "parameters": [
                                                     {
                                                         "parameterId": "Value",
@@ -6875,6 +7066,12 @@
                                                 "nodeId": "Table1",
                                                 "factoryPath": "core.table",
                                                 "bypassed": false,
+                                                "bounds": {
+                                                    "x": 0,
+                                                    "y": 0,
+                                                    "width": 128,
+                                                    "height": 100
+                                                },
                                                 "parameters": [
                                                     {
                                                         "parameterId": "Value",
@@ -6942,6 +7139,7 @@
                                                         "add",
                                                         "remove",
                                                         "move",
+                                                        "set_id",
                                                         "connect",
                                                         "disconnect",
                                                         "set",
@@ -6963,6 +7161,10 @@
                                                 "nodeId": {
                                                     "type": "string",
                                                     "description": "Node instance ID"
+                                                },
+                                                "name": {
+                                                    "type": "string",
+                                                    "description": "New node ID for set_id op"
                                                 },
                                                 "parameterId": {
                                                     "type": "string",
@@ -7008,6 +7210,18 @@
                                                     "type": "number",
                                                     "description": "Default value for create_parameter"
                                                 },
+                                                "externalModulation": {
+                                                    "type": "string",
+                                                    "enum": [
+                                                        "Disabled",
+                                                        "Combined",
+                                                        "Gain",
+                                                        "Offset",
+                                                        "Pan",
+                                                        "Pitch"
+                                                    ],
+                                                    "description": "External modulation mode for a root dynamic parameter, for example Combined"
+                                                },
                                                 "stepSize": {
                                                     "type": "number",
                                                     "description": "Step size for create_parameter (0 = continuous)"
@@ -7022,7 +7236,7 @@
                                                 },
                                                 "matchRange": {
                                                     "type": "boolean",
-                                                    "description": "For connect op: copy target parameter's range onto source after wiring. Mirrors IDE normalize button"
+                                                    "description": "For connect op: copy the target range when both endpoints are parameters; otherwise log and ignore"
                                                 },
                                                 "dataType": {
                                                     "type": "string",
@@ -7099,6 +7313,22 @@
                                                         "op",
                                                         "nodeId",
                                                         "parent"
+                                                    ]
+                                                },
+                                                {
+                                                    "type": "object",
+                                                    "properties": {
+                                                        "op": {
+                                                            "type": "string",
+                                                            "enum": [
+                                                                "set_id"
+                                                            ]
+                                                        }
+                                                    },
+                                                    "required": [
+                                                        "op",
+                                                        "target",
+                                                        "name"
                                                     ]
                                                 },
                                                 {
@@ -7238,8 +7468,16 @@
                                                     ]
                                                 },
                                                 {
+                                                    "value": "set_id",
+                                                    "description": "Rename a node (target, name)",
+                                                    "required": [
+                                                        "target",
+                                                        "name"
+                                                    ]
+                                                },
+                                                {
                                                     "value": "connect",
-                                                    "description": "Connect a modulation source to a parameter (source, target, parameter, sourceOutput?, matchRange?). sourceOutput is a parameter name (string) or output slot index (int) for multi-output mod nodes. If matchRange is true, copies target parameter's range (min/max/skew/step) onto source after wiring (mirrors the IDE normalize button: target is canonical, source adopts target's units, no remap occurs)",
+                                                    "description": "Connect a modulation source to a parameter (source, target, parameter, sourceOutput?, matchRange?). sourceOutput is a parameter name (string) or output slot index (int) for multi-output mod nodes. If matchRange is true and both endpoints are parameters, copies the target range (min/max/skew/step) onto the source after wiring. Otherwise the connection succeeds without matching and adds an explanation to the response logs (mirrors the IDE normalize button: target is canonical, source adopts target's units, no remap occurs)",
                                                     "required": [
                                                         "source",
                                                         "target"
@@ -7255,7 +7493,7 @@
                                                 },
                                                 {
                                                     "value": "set",
-                                                    "description": "Set a parameter value or node property (nodeId, parameterId, value). When nodeId is the root network node, also supports network-level properties: AllowCompilation (bool), AllowPolyphonic (bool), CompileChannelAmount (int), HasTail (bool), SuspendOnSilence (bool), ModulationBlockSize (power-of-2 int or 0). Range-write variant: any subset of min/max/skewFactor/middlePosition/stepSize may be sent without `value` to override individual range fields; omitted fields keep their current value. skewFactor and middlePosition are mutually exclusive (sending one clears the other). Mutually exclusive with value.",
+                                                    "description": "Set a parameter value or node property (nodeId, parameterId, value). When nodeId is the root network node, also supports network-level properties: AllowCompilation (bool), AllowPolyphonic (bool), CompileChannelAmount (int), HasTail (bool), SuspendOnSilence (bool), ModulationBlockSize (power-of-2 int or 0). Range-write variant: any subset of min/max/skewFactor/middlePosition/stepSize may be sent without `value` to override individual range fields; omitted fields keep their current value. External modulation variant: send externalModulation without `value` to set the root parameter's modulation mode. The externalModulation field may also be combined with range fields. skewFactor and middlePosition are mutually exclusive (sending one clears the other). Mutually exclusive with value. Setting NumClones on a container.clone resizes its physical child nodes to exactly that amount (1 to 128).",
                                                     "required": [
                                                         "nodeId",
                                                         "parameterId"
@@ -7271,7 +7509,7 @@
                                                 },
                                                 {
                                                     "value": "create_parameter",
-                                                    "description": "Create a dynamic parameter on a container (nodeId, parameterId, min?, max?, defaultValue?, stepSize?, middlePosition?, skewFactor?)",
+                                                    "description": "Create a dynamic parameter on a container (nodeId, parameterId, min?, max?, defaultValue?, stepSize?, middlePosition?, skewFactor?, externalModulation?)",
                                                     "required": [
                                                         "nodeId",
                                                         "parameterId"
@@ -7344,7 +7582,7 @@
                                         "apiVersion": {
                                             "type": "string",
                                             "description": "REST API contract version (semver). Bumped when the envelope or any route contract changes - clients should compare against the version they were built for.",
-                                            "example": "0.9.2"
+                                            "example": "0.13.0"
                                         },
                                         "scope": {
                                             "type": "string",
@@ -7462,7 +7700,7 @@
                     "dsp"
                 ],
                 "summary": "Inject signal and/or parameter test stimuli and return a DSP probe report",
-                "description": "Queues a one-shot signal and/or parameter injection into a supported scriptnode container and waits until the requested probe point has processed a buffer. injectId and probeId override injectIndex and probeIndex when present. Signal injection resolves before a child node and signal probing resolves after a child node, so injectIndex == probeIndex is valid. probeIndex=-1 or an omitted probeIndex resolves to the container output after the last child. recursive=true returns containers keyed by container ID. parameters.inject temporarily injects parameter values keyed by nodeId.parameterId. parameters.probe accepts '*' or an array of parameter paths. touchedEdges reports runtime parameter/control connections reached by the probe, not static graph reachability. Full mixed trace example: {\"moduleId\":\"ReproFX\",\"parent\":\"repro_probe\",\"signalType\":\"silence\",\"probeId\":\"gain\",\"parameters\":{\"inject\":{\"repro_probe.Parameter\":1.0},\"probe\":[\"repro_probe.Parameter\",\"gain.Gain\"]},\"filter\":{\"compact\":false}}. Wildcard parameter trace example: {\"moduleId\":\"ReproNullControlFX\",\"parent\":\"repro_null_control\",\"signalType\":\"silence\",\"probeId\":\"gain\",\"parameters\":{\"inject\":{\"repro_null_control.Parameter\":0.25},\"probe\":\"*\"},\"filter\":{\"compact\":false}}. Compact trace example: {\"moduleId\":\"DspTestFX\",\"parent\":\"test_network\",\"signalType\":\"dirac\",\"probeId\":\"gain\",\"parameters\":{\"probe\":\"*\"},\"filter\":{\"compact\":true}}. The optional filter object can remove specs or signal data, compact signal arrays and parameter reports, and include the recursive topology tree. The request blocks until the report is available or until the fixed timeout of delayMs + 200ms expires.",
+                "description": "Queues a one-shot signal and/or parameter injection into a supported scriptnode container and waits until the requested probe point has processed a buffer. injectId and probeId override injectIndex and probeIndex when present. Signal injection resolves before a child node and signal probing resolves after a child node, so injectIndex == probeIndex is valid. probeIndex=-1 or an omitted probeIndex resolves to the container output after the last child. recursive=true returns containers keyed by container ID. parameters.inject temporarily injects parameter values keyed by nodeId.parameterId. parameters.probe accepts '*' or an array of parameter paths. touchedEdges reports runtime parameter/control connections reached by the probe, not static graph reachability. Full mixed trace example: {\"moduleId\":\"ReproFX\",\"parent\":\"repro_probe\",\"signalType\":\"silence\",\"probeId\":\"gain\",\"parameters\":{\"inject\":{\"repro_probe.Parameter\":1.0},\"probe\":[\"repro_probe.Parameter\",\"gain.Gain\"]},\"filter\":{\"compact\":false}}. Wildcard parameter trace example: {\"moduleId\":\"ReproNullControlFX\",\"parent\":\"repro_null_control\",\"signalType\":\"silence\",\"probeId\":\"gain\",\"parameters\":{\"inject\":{\"repro_null_control.Parameter\":0.25},\"probe\":\"*\"},\"filter\":{\"compact\":false}}. Compact trace example: {\"moduleId\":\"DspTestFX\",\"parent\":\"test_network\",\"signalType\":\"dirac\",\"probeId\":\"gain\",\"parameters\":{\"probe\":\"*\"},\"filter\":{\"compact\":true}}. The optional filter object can remove specs or signal data, compact signal arrays and parameter reports, and include the recursive topology tree. Polyphonic DspNetworks require a trigger object so that a voice processes the probe. trigger.predelayMs waits in processed audio time after note-on before injection. The trigger note is released after success or failure. The request blocks until the report is available or until the timeout of trigger.predelayMs + delayMs + 200ms expires for ordinary probes, or 1000ms for recursive probes.",
                 "operationId": "dsp_probe",
                 "requestBody": {
                     "required": true,
@@ -7527,8 +7765,42 @@
                                     },
                                     "delayMs": {
                                         "type": "number",
-                                        "description": "Extra time to wait before capturing the probe result",
+                                        "description": "Processed audio time to wait after injection before capture",
                                         "default": 0.0
+                                    },
+                                    "trigger": {
+                                        "type": "object",
+                                        "properties": {
+                                            "type": {
+                                                "type": "string",
+                                                "enum": [
+                                                    "note"
+                                                ],
+                                                "description": "Trigger type",
+                                                "default": "note"
+                                            },
+                                            "noteNumber": {
+                                                "type": "integer",
+                                                "description": "MIDI note number (0-127)",
+                                                "default": 60
+                                            },
+                                            "velocity": {
+                                                "type": "number",
+                                                "description": "Normalised note velocity (0.0-1.0)",
+                                                "default": 1.0
+                                            },
+                                            "channel": {
+                                                "type": "integer",
+                                                "description": "MIDI channel (1-16)",
+                                                "default": 1
+                                            },
+                                            "predelayMs": {
+                                                "type": "number",
+                                                "description": "Processed audio time between note-on and test signal or parameter injection",
+                                                "default": 0.0
+                                            }
+                                        },
+                                        "description": "MIDI note that starts voice processing before the probe"
                                     },
                                     "parameters": {
                                         "type": "object",
@@ -7602,18 +7874,16 @@
                                 ]
                             },
                             "example": {
-                                "moduleId": "ReproFX",
+                                "moduleId": "PolyFX",
                                 "parent": "repro_probe",
-                                "signalType": "silence",
+                                "signalType": "dirac",
                                 "probeId": "gain",
-                                "parameters": {
-                                    "inject": {
-                                        "repro_probe.Parameter": 1.0
-                                    },
-                                    "probe": [
-                                        "repro_probe.Parameter",
-                                        "gain.Gain"
-                                    ]
+                                "trigger": {
+                                    "type": "note",
+                                    "noteNumber": 60,
+                                    "velocity": 1.0,
+                                    "channel": 1,
+                                    "predelayMs": 100.0
                                 },
                                 "filter": {
                                     "compact": false
@@ -7637,11 +7907,19 @@
                                         "apiVersion": {
                                             "type": "string",
                                             "description": "REST API contract version (semver). Bumped when the envelope or any route contract changes - clients should compare against the version they were built for.",
-                                            "example": "0.9.2"
+                                            "example": "0.13.0"
                                         },
                                         "moduleId": {
                                             "type": "string",
                                             "description": "Module ID of the DspNetwork holder"
+                                        },
+                                        "ok": {
+                                            "type": "boolean",
+                                            "description": "Low-level probe completion state"
+                                        },
+                                        "error": {
+                                            "type": "string",
+                                            "description": "Low-level probe error message"
                                         },
                                         "parent": {
                                             "type": "string",
@@ -7693,6 +7971,40 @@
                                         "recursive": {
                                             "type": "boolean",
                                             "description": "True when recursive container probing was used"
+                                        },
+                                        "trigger": {
+                                            "type": "object",
+                                            "properties": {
+                                                "type": {
+                                                    "type": "string",
+                                                    "enum": [
+                                                        "note"
+                                                    ],
+                                                    "description": "Trigger type",
+                                                    "default": "note"
+                                                },
+                                                "noteNumber": {
+                                                    "type": "integer",
+                                                    "description": "MIDI note number (0-127)",
+                                                    "default": 60
+                                                },
+                                                "velocity": {
+                                                    "type": "number",
+                                                    "description": "Normalised note velocity (0.0-1.0)",
+                                                    "default": 1.0
+                                                },
+                                                "channel": {
+                                                    "type": "integer",
+                                                    "description": "MIDI channel (1-16)",
+                                                    "default": 1
+                                                },
+                                                "predelayMs": {
+                                                    "type": "number",
+                                                    "description": "Processed audio time between note-on and test signal or parameter injection",
+                                                    "default": 0.0
+                                                }
+                                            },
+                                            "description": "MIDI note that starts voice processing before the probe"
                                         },
                                         "specs": {
                                             "$ref": "#/components/schemas/DspProbeSpecsReport"
@@ -7920,7 +8232,7 @@
                                         "apiVersion": {
                                             "type": "string",
                                             "description": "REST API contract version (semver). Bumped when the envelope or any route contract changes - clients should compare against the version they were built for.",
-                                            "example": "0.9.2"
+                                            "example": "0.13.0"
                                         },
                                         "moduleId": {
                                             "type": "string",
@@ -8047,7 +8359,7 @@
                                         "apiVersion": {
                                             "type": "string",
                                             "description": "REST API contract version (semver). Bumped when the envelope or any route contract changes - clients should compare against the version they were built for.",
-                                            "example": "0.9.2"
+                                            "example": "0.13.0"
                                         },
                                         "filePath": {
                                             "type": "string",
@@ -8166,7 +8478,7 @@
                                         "apiVersion": {
                                             "type": "string",
                                             "description": "REST API contract version (semver). Bumped when the envelope or any route contract changes - clients should compare against the version they were built for.",
-                                            "example": "0.9.2"
+                                            "example": "0.13.0"
                                         },
                                         "moduleId": {
                                             "type": "string",
@@ -8278,7 +8590,7 @@
                                         "apiVersion": {
                                             "type": "string",
                                             "description": "REST API contract version (semver). Bumped when the envelope or any route contract changes - clients should compare against the version they were built for.",
-                                            "example": "0.9.2"
+                                            "example": "0.13.0"
                                         },
                                         "projects": {
                                             "type": "array",
@@ -8393,7 +8705,7 @@
                                         "apiVersion": {
                                             "type": "string",
                                             "description": "REST API contract version (semver). Bumped when the envelope or any route contract changes - clients should compare against the version they were built for.",
-                                            "example": "0.9.2"
+                                            "example": "0.13.0"
                                         },
                                         "projectName": {
                                             "type": "string",
@@ -8499,7 +8811,7 @@
                                         "apiVersion": {
                                             "type": "string",
                                             "description": "REST API contract version (semver). Bumped when the envelope or any route contract changes - clients should compare against the version they were built for.",
-                                            "example": "0.9.2"
+                                            "example": "0.13.0"
                                         },
                                         "files": {
                                             "type": "array",
@@ -8630,7 +8942,7 @@
                                         "apiVersion": {
                                             "type": "string",
                                             "description": "REST API contract version (semver). Bumped when the envelope or any route contract changes - clients should compare against the version they were built for.",
-                                            "example": "0.9.2"
+                                            "example": "0.13.0"
                                         },
                                         "settings": {
                                             "type": "object",
@@ -8794,7 +9106,7 @@
                                         "apiVersion": {
                                             "type": "string",
                                             "description": "REST API contract version (semver). Bumped when the envelope or any route contract changes - clients should compare against the version they were built for.",
-                                            "example": "0.9.2"
+                                            "example": "0.13.0"
                                         },
                                         "result": {
                                             "type": "string",
@@ -8915,7 +9227,7 @@
                                         "apiVersion": {
                                             "type": "string",
                                             "description": "REST API contract version (semver). Bumped when the envelope or any route contract changes - clients should compare against the version they were built for.",
-                                            "example": "0.9.2"
+                                            "example": "0.13.0"
                                         },
                                         "path": {
                                             "type": "string",
@@ -9037,7 +9349,7 @@
                                         "apiVersion": {
                                             "type": "string",
                                             "description": "REST API contract version (semver). Bumped when the envelope or any route contract changes - clients should compare against the version they were built for.",
-                                            "example": "0.9.2"
+                                            "example": "0.13.0"
                                         },
                                         "result": {
                                             "type": "string",
@@ -9156,7 +9468,7 @@
                                         "apiVersion": {
                                             "type": "string",
                                             "description": "REST API contract version (semver). Bumped when the envelope or any route contract changes - clients should compare against the version they were built for.",
-                                            "example": "0.9.2"
+                                            "example": "0.13.0"
                                         },
                                         "result": {
                                             "type": "string",
@@ -9243,7 +9555,7 @@
                                         "apiVersion": {
                                             "type": "string",
                                             "description": "REST API contract version (semver). Bumped when the envelope or any route contract changes - clients should compare against the version they were built for.",
-                                            "example": "0.9.2"
+                                            "example": "0.13.0"
                                         },
                                         "snippet": {
                                             "type": "string",
@@ -9349,7 +9661,7 @@
                                         "apiVersion": {
                                             "type": "string",
                                             "description": "REST API contract version (semver). Bumped when the envelope or any route contract changes - clients should compare against the version they were built for.",
-                                            "example": "0.9.2"
+                                            "example": "0.13.0"
                                         },
                                         "result": {
                                             "type": "string",
@@ -9468,7 +9780,7 @@
                                         "apiVersion": {
                                             "type": "string",
                                             "description": "REST API contract version (semver). Bumped when the envelope or any route contract changes - clients should compare against the version they were built for.",
-                                            "example": "0.9.2"
+                                            "example": "0.13.0"
                                         },
                                         "preprocessors": {
                                             "type": "object",
@@ -9617,7 +9929,7 @@
                                         "apiVersion": {
                                             "type": "string",
                                             "description": "REST API contract version (semver). Bumped when the envelope or any route contract changes - clients should compare against the version they were built for.",
-                                            "example": "0.9.2"
+                                            "example": "0.13.0"
                                         },
                                         "result": {
                                             "type": "string",
@@ -9733,7 +10045,7 @@
                                         "apiVersion": {
                                             "type": "string",
                                             "description": "REST API contract version (semver). Bumped when the envelope or any route contract changes - clients should compare against the version they were built for.",
-                                            "example": "0.9.2"
+                                            "example": "0.13.0"
                                         },
                                         "exists": {
                                             "type": "boolean",

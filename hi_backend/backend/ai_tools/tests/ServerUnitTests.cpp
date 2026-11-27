@@ -118,6 +118,9 @@ public:
         testDiagnoseScriptSuccess();
         testDiagnoseScriptWithDiagnostics();
         testDiagnoseScriptFilePath();
+        testDiagnoseScriptCodeClean();
+        testDiagnoseScriptCodeWithDiagnostics();
+        testDiagnoseScriptCodeFilePathConflict();
         testTestingProfileRecord();
         testTestingProfileGetAfterRecord();
         testTestingProfileSummary();
@@ -138,6 +141,7 @@ public:
         testBuilderTree();
         testBuilderTreeRouting();
         testBuilderApply();
+        testBuilderSetListAttribute();
         testBuilderApplyMove();
         testBuilderSetRoutingPreset();
         testBuilderSetRoutingMatrix();
@@ -213,10 +217,14 @@ public:
         
         testDspApplyBatchOps();
         testDspProbeSuccess();
+        testDspProbeDelayRemainder();
         testDspProbeIdTargeting();
         testDspProbeRecursiveFilter();
+        testDspProbeEmptyRecursiveContainer();
         testDspProbeParameterReport();
         testDspProbeParameterCompactAndInjectOnly();
+        testDspProbePolyphonicTrigger();
+		testDspProbePolyphonicMultiReset();
         testDspProbeValidation();
         testDspProbeTimeout();
         testDspScreenshot();
@@ -610,6 +618,7 @@ private:
         expect(schemas["BuilderTreeNode"].isObject(), "OpenAPI should include BuilderTreeNode schema");
         expect(schemas["UiTreeNode"].isObject(), "OpenAPI should include UiTreeNode schema");
 		expect(schemas["DspTreeComplexData"].isObject(), "OpenAPI should include DspTreeComplexData schema");
+		expect(schemas["DspTreeBounds"].isObject(), "OpenAPI should include DspTreeBounds schema");
         expect(schemas["DspTreeNode"].isObject(), "OpenAPI should include DspTreeNode schema");
         expect(schemas["ProjectTreeNode"].isObject(), "OpenAPI should include ProjectTreeNode schema");
 
@@ -625,6 +634,9 @@ private:
 		expect(schemas["DspTreeNode"]["properties"]["complexData"]["items"]["$ref"].toString()
 			== "#/components/schemas/DspTreeComplexData",
 			"DspTreeNode complexData should reference DspTreeComplexData");
+		expect(schemas["DspTreeNode"]["properties"]["bounds"]["$ref"].toString()
+			== "#/components/schemas/DspTreeBounds",
+			"DspTreeNode bounds should reference DspTreeBounds");
         expect(schemas["ProjectTreeNode"]["properties"]["children"]["items"]["$ref"].toString()
                == "#/components/schemas/ProjectTreeNode",
                "ProjectTreeNode children should be recursive refs");
@@ -662,6 +674,10 @@ private:
         auto dspProbeProps = dspProbeResponse["properties"];
         expect(dspProbeProps["seed"]["format"].toString() == "int64", "dsp/probe seed should be int64");
         expect(dspProbeProps["signal"]["oneOf"].isArray(), "dsp/probe signal should describe full and compact shapes");
+        expect(dspProbeBody["properties"]["trigger"]["properties"]["predelayMs"]["type"].toString() == "number",
+            "dsp/probe trigger should expose predelayMs");
+        expect(dspProbeProps["trigger"]["properties"]["velocity"]["type"].toString() == "number",
+            "dsp/probe response should expose the resolved trigger");
         expect(dspProbeProps["containers"]["additionalProperties"]["$ref"].toString()
                == "#/components/schemas/DspProbeContainerReport",
                "dsp/probe containers should be a dynamic map of container reports");
@@ -3305,6 +3321,101 @@ private:
         tempFile.deleteFile();
     }
     
+    void testDiagnoseScriptCodeClean()
+    {
+        /** Setup: Compiled interface (provides the API context)
+         *  Scenario: POST /api/diagnose_script with a raw code string (standalone code mode)
+         *  Expected: Success, 0 diagnostics, moduleId=Interface, filePath empty
+         */
+        beginTest("POST /api/diagnose_script (code, clean)");
+        
+        ctx->reset();
+        ctx->compile("Content.makeFrontInterface(600, 400);");
+        
+        DynamicObject::Ptr bodyObj = new DynamicObject();
+        bodyObj->setProperty("code", "// Valid HISEScript\nConsole.print(\"hello\");\n");
+        
+        auto response = ctx->httpPost("/api/diagnose_script",
+                                      JSON::toString(var(bodyObj.get())));
+        var json = ctx->parseJson(response);
+        
+        expect((bool)json["success"], "Should succeed for clean code: " + response);
+        expect(json["moduleId"].toString() == "Interface",
+               "Should use the first interface processor as context");
+        expect(json.hasProperty("filePath"), "Should have filePath in response");
+        expect(json["filePath"].toString().isEmpty(), "filePath should be empty in code mode");
+        
+        auto diagnostics = json["diagnostics"];
+        expect(diagnostics.isArray(), "diagnostics should be array");
+        expectEquals<int>(diagnostics.size(), 0, "Clean code should have 0 diagnostics");
+    }
+    
+    void testDiagnoseScriptCodeWithDiagnostics()
+    {
+        /** Setup: Compiled interface (provides the API context)
+         *  Scenario: POST /api/diagnose_script with code containing a known API hallucination
+         *  Expected: Success (shadow parse reports diagnostics, not failure) with an
+         *            api-validation error and a 'print' suggestion for 'Console.prnt'
+         */
+        beginTest("POST /api/diagnose_script (code, with API error)");
+        
+        ctx->reset();
+        ctx->compile("Content.makeFrontInterface(600, 400);");
+        
+        DynamicObject::Ptr bodyObj = new DynamicObject();
+        bodyObj->setProperty("code", "Console.prnt(\"hello\");\n");
+        
+        auto response = ctx->httpPost("/api/diagnose_script",
+                                      JSON::toString(var(bodyObj.get())));
+        var json = ctx->parseJson(response);
+        
+        expect((bool)json["success"], "Shadow parse should succeed: " + response);
+        
+        auto diagnostics = json["diagnostics"];
+        expect(diagnostics.isArray(), "diagnostics should be array");
+        expect(diagnostics.size() >= 1, "Should have at least 1 diagnostic for 'Console.prnt'");
+        
+        if (diagnostics.size() > 0)
+        {
+            auto d = diagnostics[0];
+            auto severity = d["severity"].toString();
+            expect(severity == "error" || severity == "warning",
+                   "Severity should be error or warning, got: " + severity);
+            
+            if (d.hasProperty("suggestions"))
+            {
+                auto suggestions = d["suggestions"];
+                bool hasPrint = false;
+                for (int i = 0; i < suggestions.size(); i++)
+                    if (suggestions[i].toString() == "print")
+                        hasPrint = true;
+                expect(hasPrint, "Should suggest 'print' for 'prnt'");
+            }
+        }
+    }
+    
+    void testDiagnoseScriptCodeFilePathConflict()
+    {
+        /** Setup: Compiled interface
+         *  Scenario: POST /api/diagnose_script with both code and filePath
+         *  Expected: Failure (400) - the two modes are mutually exclusive
+         */
+        beginTest("POST /api/diagnose_script (code + filePath conflict)");
+        
+        ctx->reset();
+        ctx->compile("Content.makeFrontInterface(600, 400);");
+        
+        DynamicObject::Ptr bodyObj = new DynamicObject();
+        bodyObj->setProperty("code", "Console.print(\"x\");\n");
+        bodyObj->setProperty("filePath", "SomeFile.js");
+        
+        auto response = ctx->httpPost("/api/diagnose_script",
+                                      JSON::toString(var(bodyObj.get())));
+        var json = ctx->parseJson(response);
+        
+        expect(!(bool)json["success"], "Should fail when both code and filePath are set");
+    }
+    
     //==========================================================================
     // Profile endpoint tests
 
@@ -4291,6 +4402,44 @@ private:
         expectNoBuilderError(redoJson);
         expectBuilderProcessorAttribute("MySineRenamed", "SaturationAmount", 0.25f);
 
+    }
+
+    void testBuilderSetListAttribute()
+    {
+        /** Setup: A WaveSynth with a one-based waveform parameter
+         *  Scenario: Set WaveForm1 using its item label through builder/apply
+         *  Expected: The processor value and builder/tree display use the requested item
+         */
+        beginTest("POST /api/builder/apply list attribute");
+
+        resetBuilderState();
+
+        Array<var> addOps;
+        addOps.add(makeAddOp("WaveSynth", "ListWave"));
+        expectNoBuilderError(postBuilderOps(addOps));
+
+        NamedValueSet attrs;
+        attrs.set("WaveForm1", "Saw");
+        Array<var> setOps;
+        setOps.add(makeSetAttributesOp("ListWave", attrs));
+        expectNoBuilderError(postBuilderOps(setOps));
+        expectBuilderProcessorAttribute("ListWave", "WaveForm1", (float)WaveformComponent::WaveformType::Saw);
+
+        auto tree = ctx->parseJson(ctx->httpGet("/api/builder/tree?moduleId=ListWave"));
+        expect((bool)tree[RestApiIds::success], "Builder tree query should succeed");
+
+        auto parameters = tree[RestApiIds::result]["parameters"];
+        bool foundWaveForm = false;
+        for (int i = 0; i < parameters.size(); i++)
+        {
+            if (parameters[i]["id"].toString() == "WaveForm1")
+            {
+                foundWaveForm = true;
+                expectEquals(parameters[i]["valueAsString"].toString(), String("Saw"));
+                break;
+            }
+        }
+        expect(foundWaveForm, "Builder tree should include WaveForm1");
     }
 
     void testBuilderApplyMove()
@@ -6328,6 +6477,28 @@ private:
         ctx->parseJson(ctx->httpPost("/api/undo/clear", "{}"));
     }
 
+    void resetPolyDspState()
+    {
+        ctx->parseJson(ctx->httpPost("/api/builder/reset", "{}"));
+        ctx->parseJson(ctx->httpPost("/api/undo/clear", "{}"));
+
+        Array<var> ops;
+        ops.add(makeAddOp("SineSynth", "DspProbeSynth"));
+        ops.add(makeAddOp("PolyScriptFX", "DspPolyTestFX", "DspProbeSynth", 3));
+        auto builderJson = postBuilderOps(ops);
+        expect((bool)builderJson[RestApiIds::success], "Should add polyphonic DSP test processors");
+
+        DynamicObject::Ptr initBody = new DynamicObject();
+        initBody->setProperty(RestApiIds::moduleId, "DspPolyTestFX");
+        initBody->setProperty(RestApiIds::name, "poly_test_network");
+
+        auto initJson = ctx->parseJson(ctx->httpPost("/api/dsp/init",
+            JSON::toString(var(initBody.get()))));
+        expect((bool)initJson[RestApiIds::success], "Should init polyphonic network");
+
+        ctx->parseJson(ctx->httpPost("/api/undo/clear", "{}"));
+    }
+
     var postDspOps(const Array<var>& ops, const String& moduleId = "DspTestFX")
     {
         DynamicObject::Ptr bodyObj = new DynamicObject();
@@ -6392,7 +6563,7 @@ private:
     }
 
     var makeDspConnectOp(const String& source, const String& target,
-                         const String& parameter, const String& sourceOutput = {})
+                         const String& parameter, const String& sourceOutput = {}, bool matchRange = false)
     {
         DynamicObject::Ptr op = new DynamicObject();
         op->setProperty(RestApiIds::op, "connect");
@@ -6401,6 +6572,8 @@ private:
         op->setProperty(RestApiIds::parameter, parameter);
         if (sourceOutput.isNotEmpty())
             op->setProperty(RestApiIds::sourceOutput, sourceOutput);
+        if (matchRange)
+            op->setProperty(RestApiIds::matchRange, true);
         return var(op.get());
     }
 
@@ -6415,7 +6588,8 @@ private:
 
     var makeDspCreateParameterOp(const String& nodeId, const String& parameterId,
                                  double minVal = 0.0, double maxVal = 1.0,
-                                 double defaultVal = 0.0, double stepSize = 0.0)
+                                 double defaultVal = 0.0, double stepSize = 0.0,
+                                 const String& externalModulation = {})
     {
         DynamicObject::Ptr op = new DynamicObject();
         op->setProperty(RestApiIds::op, "create_parameter");
@@ -6425,6 +6599,8 @@ private:
         op->setProperty(RestApiIds::max, maxVal);
         op->setProperty(RestApiIds::defaultValue, defaultVal);
         op->setProperty(RestApiIds::stepSize, stepSize);
+        if (externalModulation.isNotEmpty())
+            op->setProperty(RestApiIds::externalModulation, externalModulation);
         return var(op.get());
     }
 
@@ -6464,11 +6640,13 @@ private:
         }
     }
 
-    var getDspTree(const String& moduleId = "DspTestFX", bool verbose = false)
+    var getDspTree(const String& moduleId = "DspTestFX", bool verbose = false, bool includeBounds = false)
     {
         auto url = "/api/dsp/tree?moduleId=" + URL::addEscapeChars(moduleId, true);
         if (verbose)
             url += "&verbose=true";
+        if (includeBounds)
+            url += "&includeBounds=true";
         auto response = ctx->httpGet(url);
         return ctx->parseJson(response);
     }
@@ -6694,6 +6872,13 @@ private:
             "Root should be container.chain");
         expect(result[RestApiIds::children].isArray(), "Should have children");
         expectEquals<int>(result[RestApiIds::children].size(), 0, "Should be empty");
+		expect(!result.hasProperty(RestApiIds::bounds), "Bounds should be omitted by default");
+		auto boundsResult = getDspTree("DspTestFX", false, true)[RestApiIds::result];
+		expect(boundsResult[RestApiIds::bounds].isObject(), "Live root should expose requested bounds");
+		expect((int)boundsResult[RestApiIds::bounds][RestApiIds::width] > 0,
+			"Root bounds should have positive width");
+		expect((int)boundsResult[RestApiIds::bounds][RestApiIds::height] > 0,
+			"Root bounds should have positive height");
 		expect(result[RestApiIds::complexData].isArray(), "Root should have a complexData array");
 		expectEquals<int>(result[RestApiIds::complexData].size(), 0, "Root should have no complex data slots");
 
@@ -6714,6 +6899,8 @@ private:
         expect(child[RestApiIds::parameters].isArray(), "Should have parameters");
         expect(child[RestApiIds::parameters].size() > 0, "Oscillator should have parameters");
 		expect(child[RestApiIds::complexData].isArray(), "DSP nodes should have a complexData array");
+		auto boundsChild = getDspTree("DspTestFX", false, true)[RestApiIds::result][RestApiIds::children][0];
+		expect(boundsChild[RestApiIds::bounds].isObject(), "Live child should expose requested bounds");
 
         // Check parameter shape (compact mode)
         auto firstParam = child[RestApiIds::parameters][0];
@@ -7095,6 +7282,43 @@ private:
         }
         expect(foundFreq, "Should find Frequency parameter");
 
+        /** Setup: Clone container with its generated child.
+         *  Scenario: Set NumClones through the REST DSP setter, shrink it, then undo.
+         *  Expected: Physical child count follows the value and resize messages are returned.
+         */
+        ops.clear();
+        ops.add(makeDspAddOp("container.clone", "test_network", "CloneSet"));
+        ops.add(makeDspSetOp("CloneSet", "NumClones", 4));
+        json = postDspOps(ops);
+        expectDspSuccess(json);
+        expectEquals(json[RestApiIds::logs][0].toString(),
+            String("Changed clone amount of CloneSet to 4 child nodes"));
+
+        tree = getDspTree();
+        auto cloneNode = findNodeInTree(tree[RestApiIds::result], "CloneSet");
+        expectEquals<int>(cloneNode[RestApiIds::children].size(), 4,
+            "NumClones REST set should create four physical children");
+
+        ops.clear();
+        ops.add(makeDspSetOp("CloneSet", "NumClones", 2));
+        json = postDspOps(ops);
+        expectDspSuccess(json);
+
+        tree = getDspTree();
+        cloneNode = findNodeInTree(tree[RestApiIds::result], "CloneSet");
+        expectEquals<int>(cloneNode[RestApiIds::children].size(), 2,
+            "Lowering NumClones through REST should remove trailing children");
+
+        auto cloneUndoJson = ctx->parseJson(ctx->httpPost("/api/undo/back", "{}"));
+        expectDspSuccess(cloneUndoJson);
+        expectEquals(cloneUndoJson[RestApiIds::logs][0].toString(),
+            String("Changed clone amount of CloneSet to 4 child nodes"));
+
+        tree = getDspTree();
+        cloneNode = findNodeInTree(tree[RestApiIds::result], "CloneSet");
+        expectEquals<int>(cloneNode[RestApiIds::children].size(), 4,
+            "Undo should restore removed clone children");
+
         // Set network-level property on root node
         ops.clear();
         ops.add(makeDspSetOp("test_network", "AllowPolyphonic", true));
@@ -7322,7 +7546,7 @@ private:
 
         // Connect BypassCtrl -> SoftBypass1.Bypass (synthetic parameter name)
         ops.clear();
-        ops.add(makeDspConnectOp("BypassCtrl", "SoftBypass1", "Bypassed"));
+        ops.add(makeDspConnectOp("BypassCtrl", "SoftBypass1", "Bypass"));
         json = postDspOps(ops);
         expectDspSuccess(json);
 
@@ -7365,6 +7589,41 @@ private:
                    hint.contains("Mode"),
                 "Error hint should include at least one valid parameter name from target node");
         }
+
+        /** Setup: A core.peak modulation source and a dynamic container parameter
+         *  Scenario: Connecting with matchRange when core.peak is not a parameter source
+         *  Expected: The connection succeeds without range matching and reports why it was ignored
+         */
+        ops.clear();
+        ops.add(makeDspAddOp("container.modchain", "test_network", "AtomicModChain"));
+        ops.add(makeDspAddOp("core.peak", "AtomicModChain", "AtomicPeak"));
+        ops.add(makeDspAddOp("container.chain", "test_network", "AtomicTarget"));
+        ops.add(makeDspCreateParameterOp("AtomicTarget", "Value"));
+        expectDspSuccess(postDspOps(ops));
+
+        ops.clear();
+        ops.add(makeDspConnectOp("AtomicPeak", "AtomicTarget", "Value", {}, true));
+        json = postDspOps(ops);
+        expectDspSuccess(json);
+        expectEquals(json[RestApiIds::logs][0].toString(),
+            String("Ignored matchRange for AtomicPeak.0 -> AtomicTarget.Value "
+                "because source output is not a parameter"));
+
+        tree = getDspTree();
+        connections = tree[RestApiIds::result][RestApiIds::connections];
+        bool connectionWasCreated = false;
+
+        if (auto connectionArray = connections.getArray())
+        {
+            for (const auto& connection : *connectionArray)
+            {
+                connectionWasCreated |= connection[RestApiIds::source].toString() == "AtomicPeak" &&
+                    connection[RestApiIds::target].toString() == "AtomicTarget" &&
+                    connection[RestApiIds::parameter].toString() == "Value";
+            }
+        }
+
+        expect(connectionWasCreated, "Ignored matchRange must not prevent the connection");
     }
 
     void testDspApplyDisconnect()
@@ -7457,6 +7716,27 @@ private:
             }
         }
         expect(found, "Should find MyParam in root parameters");
+
+        // ExternalModulation must be stored on the root parameter ValueTree so
+        // ParameterProperties can register the corresponding extra mod slot.
+        ops.clear();
+        ops.add(makeDspCreateParameterOp("test_network", "ModDepth", 0.0, 1.0, 0.5, 0.0, "Combined"));
+        json = postDspOps(ops);
+        expectDspSuccess(json);
+
+        auto modTree = getDspTree("DspTestFX", true);
+        auto modParams = modTree[RestApiIds::result][RestApiIds::parameters];
+        bool foundModDepth = false;
+        for (int i = 0; i < modParams.size(); i++)
+        {
+            if (modParams[i][RestApiIds::parameterId].toString() == "ModDepth")
+            {
+                foundModDepth = true;
+                expect(modParams[i][RestApiIds::externalModulation].toString() ==
+                             "Combined", "ExternalModulation should be stored");
+            }
+        }
+        expect(foundModDepth, "Should find ModDepth in root parameters");
 
         // Error: missing nodeId
         DynamicObject::Ptr badOp = new DynamicObject();
@@ -8597,6 +8877,25 @@ private:
         expectEquals<int>(signal.size(), 2, "Should contain two channel reports");
     }
 
+    void testDspProbeDelayRemainder()
+    {
+        beginTest("POST /api/dsp/probe - non-negative delay remainder");
+
+        resetDspState();
+
+        DynamicObject::Ptr body = new DynamicObject();
+        body->setProperty(RestApiIds::moduleId, "DspTestFX");
+        body->setProperty(RestApiIds::parent, "test_network");
+        body->setProperty(RestApiIds::signalType, "dirac");
+        body->setProperty(RestApiIds::delayMs, 20.0);
+
+        auto json = postDspProbeWhileProcessing(var(body.get()));
+
+        expect((bool)json[RestApiIds::success], "Delayed probe request should succeed");
+        expect((double)json[RestApiIds::delayMs] >= 0.0,
+            "Completed probe should not report a negative delay remainder");
+    }
+
     void testDspProbeIdTargeting()
     {
         beginTest("POST /api/dsp/probe - id targeting");
@@ -8661,6 +8960,43 @@ private:
         expect(rootReport[RestApiIds::children].isArray(), "Root container should include child reports");
     }
 
+    void testDspProbeEmptyRecursiveContainer()
+    {
+        beginTest("POST /api/dsp/probe - empty recursive container");
+
+        resetDspState();
+
+        Array<var> ops;
+        ops.add(makeDspAddOp("container.chain", "test_network", "EmptyChain"));
+        expectDspSuccess(postDspOps(ops));
+
+        DynamicObject::Ptr body = new DynamicObject();
+        body->setProperty(RestApiIds::moduleId, "DspTestFX");
+        body->setProperty(RestApiIds::parent, "test_network");
+        body->setProperty(RestApiIds::recursive, true);
+        body->setProperty(RestApiIds::signalType, "dc");
+        body->setProperty(RestApiIds::gain, 0.25);
+
+        auto json = postDspProbeWhileProcessing(var(body.get()));
+
+        expect((bool)json[RestApiIds::success], "Recursive probe should succeed");
+
+        auto root = json[RestApiIds::containers]["test_network"];
+        auto child = root[RestApiIds::children][0];
+        auto channel = child[RestApiIds::signal][0];
+
+        expectEquals((double)channel[RestApiIds::min], 0.25,
+            "Empty container should report the passed-through minimum");
+        expectEquals((double)channel[RestApiIds::max], 0.25,
+            "Empty container should report the passed-through maximum");
+        expectEquals((double)channel[RestApiIds::avg], 0.25,
+            "Empty container should report the passed-through average");
+        expectEquals<int>((int)channel[RestApiIds::peakIndex], 0,
+            "Peak index should be inside the captured buffer");
+        expect(!(bool)channel[RestApiIds::silence],
+            "A nonzero passthrough signal should not be silent");
+    }
+
     void testDspProbeParameterReport()
     {
         beginTest("POST /api/dsp/probe - parameter report");
@@ -8722,6 +9058,84 @@ private:
             "Inject-only report should include empty touchedEdges object");
     }
 
+    /** Setup: A polyphonic script FX network inside a synthesiser.
+     *  Scenario: Probe without a trigger, then probe with a delayed trigger note.
+     *  Expected: The first request explains the trigger requirement and the second completes and releases its note.
+     */
+    void testDspProbePolyphonicTrigger()
+    {
+        beginTest("POST /api/dsp/probe - polyphonic trigger");
+
+        resetPolyDspState();
+
+        Array<var> ops;
+        ops.add(makeDspAddOp("core.gain", "poly_test_network", "PolyProbeGain"));
+        expectDspSuccess(postDspOps(ops, "DspPolyTestFX"));
+
+        auto missingTrigger = ctx->parseJson(ctx->httpPost("/api/dsp/probe",
+            R"({"moduleId":"DspPolyTestFX","parent":"poly_test_network","signalType":"dirac"})"));
+        expectErrorMessageContains(missingTrigger, "requires a trigger note");
+
+        auto body = JSON::parse(R"({"moduleId":"DspPolyTestFX","parent":"poly_test_network","signalType":"dirac","trigger":{"type":"note","noteNumber":64,"velocity":0.75,"channel":1,"predelayMs":20.0}})");
+        auto json = postDspProbeWhileProcessing(body);
+
+        expect((bool)json[RestApiIds::success], "Triggered polyphonic probe should succeed");
+        expectEquals<int>((int)json[RestApiIds::trigger][RestApiIds::noteNumber], 64,
+            "Should echo the trigger note");
+        expectEquals((double)json[RestApiIds::trigger][RestApiIds::velocity], 0.75,
+            "Should echo the trigger velocity");
+        expectEquals((double)json[RestApiIds::trigger][RestApiIds::predelayMs], 20.0,
+            "Should echo the trigger predelay");
+        expect(!ctx->bp->getKeyboardState().isNoteOn(1, 64), "Trigger note should be released after probing");
+    }
+
+	/** Setup: A polyphonic network containing multi -> framex -> gain.
+	 *  Scenario: Arm a direct multi probe and a recursive root probe before triggering a voice.
+	 *  Expected: Voice-start resets preserve both probes and recursive reports include every container.
+	 */
+	void testDspProbePolyphonicMultiReset()
+	{
+		beginTest("POST /api/dsp/probe - polyphonic multi voice reset");
+
+		resetPolyDspState();
+
+		Array<var> ops;
+		ops.add(makeDspAddOp("container.multi", "poly_test_network", "PolyMulti"));
+		ops.add(makeDspAddOp("container.framex_block", "PolyMulti", "PolyFrames"));
+		ops.add(makeDspAddOp("core.gain", "PolyFrames", "PolyGain"));
+		expectDspSuccess(postDspOps(ops, "DspPolyTestFX"));
+
+		for (bool recursive : { false, true })
+		{
+			DynamicObject::Ptr trigger = new DynamicObject();
+			trigger->setProperty(RestApiIds::noteNumber, 64);
+			trigger->setProperty(RestApiIds::velocity, 0.75);
+			trigger->setProperty(RestApiIds::channel, 1);
+			trigger->setProperty(RestApiIds::predelayMs, 20.0);
+
+			DynamicObject::Ptr body = new DynamicObject();
+			body->setProperty(RestApiIds::moduleId, "DspPolyTestFX");
+			body->setProperty(RestApiIds::parent, recursive ? "poly_test_network" : "PolyMulti");
+			body->setProperty(RestApiIds::recursive, recursive);
+			body->setProperty(RestApiIds::signalType, "dirac");
+			body->setProperty(RestApiIds::trigger, var(trigger.get()));
+
+			auto json = postDspProbeWhileProcessing(var(body.get()), 2000);
+			expect((bool)json[RestApiIds::success], "Voice reset must not cancel the multi probe");
+			expect(!ctx->bp->getKeyboardState().isNoteOn(1, 64), "Trigger note must be released");
+
+			if (recursive)
+			{
+				auto containers = json[RestApiIds::containers];
+				expect(containers["poly_test_network"].isObject(), "Root must report");
+				expect(containers["PolyMulti"].isObject(), "Multi must report after voice reset");
+				expect(containers["PolyFrames"].isObject(), "Framex must report");
+				expectEquals<int>((int)containers["PolyFrames"][RestApiIds::specs][RestApiIds::blockSize], 1,
+					"Framex must report one-sample processing");
+			}
+		}
+	}
+
     void testDspProbeValidation()
     {
         beginTest("POST /api/dsp/probe - validation");
@@ -8756,6 +9170,34 @@ private:
         auto invalidParameter = ctx->parseJson(ctx->httpPost("/api/dsp/probe",
             R"({"moduleId": "DspTestFX", "parent": "test_network", "injectIndex": 0, "probeIndex": -1, "signalType": "dirac", "parameters": {"probe": ["Missing.Gain"]}})"));
         expectErrorMessageContains(invalidParameter, "parameter");
+
+        auto invalidTrigger = ctx->parseJson(ctx->httpPost("/api/dsp/probe",
+            R"({"moduleId":"DspTestFX","parent":"test_network","trigger":true})"));
+        expectErrorMessageContains(invalidTrigger, "trigger must be an object");
+
+        auto invalidTriggerType = ctx->parseJson(ctx->httpPost("/api/dsp/probe",
+            R"({"moduleId":"DspTestFX","parent":"test_network","trigger":{"type":"transport"}})"));
+        expectErrorMessageContains(invalidTriggerType, "trigger.type");
+
+        auto invalidNote = ctx->parseJson(ctx->httpPost("/api/dsp/probe",
+            R"({"moduleId":"DspTestFX","parent":"test_network","trigger":{"noteNumber":128}})"));
+        expectErrorMessageContains(invalidNote, "noteNumber");
+
+        auto invalidVelocity = ctx->parseJson(ctx->httpPost("/api/dsp/probe",
+            R"({"moduleId":"DspTestFX","parent":"test_network","trigger":{"velocity":127}})"));
+        expectErrorMessageContains(invalidVelocity, "velocity");
+
+        auto invalidChannel = ctx->parseJson(ctx->httpPost("/api/dsp/probe",
+            R"({"moduleId":"DspTestFX","parent":"test_network","trigger":{"channel":0}})"));
+        expectErrorMessageContains(invalidChannel, "channel");
+
+        auto invalidPredelay = ctx->parseJson(ctx->httpPost("/api/dsp/probe",
+            R"({"moduleId":"DspTestFX","parent":"test_network","trigger":{"predelayMs":-1}})"));
+        expectErrorMessageContains(invalidPredelay, "predelayMs");
+
+        auto invalidDelay = ctx->parseJson(ctx->httpPost("/api/dsp/probe",
+            R"({"moduleId":"DspTestFX","parent":"test_network","delayMs":-1})"));
+        expectErrorMessageContains(invalidDelay, "delayMs");
     }
 
     void testDspProbeTimeout()
@@ -8769,8 +9211,9 @@ private:
         expectDspSuccess(postDspOps(ops));
 
         auto json = ctx->parseJson(ctx->httpPost("/api/dsp/probe",
-            R"({"moduleId": "DspTestFX", "parent": "test_network", "injectIndex": 0, "probeIndex": -1, "signalType": "dirac"})"));
+            R"({"moduleId":"DspTestFX","parent":"test_network","injectIndex":0,"probeIndex":-1,"signalType":"dirac","trigger":{"noteNumber":65}})"));
         expectErrorMessageContains(json, "timed out");
+        expect(!ctx->bp->getKeyboardState().isNoteOn(1, 65), "Trigger note should be released after timeout");
     }
 
     //==========================================================================

@@ -82,4 +82,4 @@ private:
     ScopedPointer<timestretch_engine_base> engine;
 };
 
-}
+} // namespace hise

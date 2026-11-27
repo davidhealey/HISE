@@ -72,7 +72,38 @@ namespace TokenTypes
 #pragma warning (disable: 4702)
 #endif
 
+HiseJavascriptPreprocessor::ScopedBackendDeactivator::ScopedBackendDeactivator(JavascriptProcessor* jp_):
+  jp(jp_)
+{
+#if USE_BACKEND
+	auto& list = jp->getScriptEngine()->preprocessor->definitions;
 
+	for (auto& d : list)
+	{
+		if (d.name == "USE_BACKEND")
+		{
+			d.value = "0";
+			break;
+		}
+	}
+#endif
+}
+
+HiseJavascriptPreprocessor::ScopedBackendDeactivator::~ScopedBackendDeactivator()
+{
+#if USE_BACKEND
+	auto& list = jp->getScriptEngine()->preprocessor->definitions;
+
+	for (auto& d : list)
+	{
+		if (d.name == "USE_BACKEND")
+		{
+			d.value = "1";
+			break;
+		}
+	}
+#endif
+}
 
 HiseJavascriptEngine::~HiseJavascriptEngine()
 {

@@ -362,7 +362,10 @@ juce::var InjectHelpers::ParameterInjector::poll(bool compact)
 								{
 									if (auto modNode = dynamic_cast<ModulationSourceNode*>(network->getNodeForValueTree(sourceNode)))
 									{
-										con->setProperty("sourceValue", modNode->getParameterHolder()->getDisplayValue());
+                                        if(auto ph = modNode->getParameterHolder())
+                                        {
+                                            con->setProperty("sourceValue", ph->getDisplayValue());
+                                        }
 									}
 									
 									mode << (RangeHelpers::isIdentity(rng2) ? "matched" : "scaled");
@@ -484,6 +487,7 @@ InjectHelpers::InjectData::InjectData(const var& data) :
 	gain((float)data.getProperty("gain", 1.0f)),
 	seed((int64)data.getProperty("seed", Random::getSystemRandom().nextInt64())),
 	delayMs(data.getProperty("delayMs", 0.0)),
+	predelayMs(data.getProperty("trigger", var()).getProperty("predelayMs", 0.0)),
 	recursive(data.getProperty("recursive", false))
 {
 
@@ -516,6 +520,19 @@ void InjectHelpers::InjectData::processInject(ProcessDataDyn& data, int currentI
 
 	if (currentState == State::WaitingForInjection)
 	{
+		if (predelayMs > 0.0)
+		{
+			if (currentIndex == 0)
+			{
+				auto numThisTime = data.getNumSamples();
+				auto thisTimeMs = numThisTime / currentSpecs.sampleRate * 1000.0;
+				predelayMs -= thisTimeMs;
+			}
+
+			if (predelayMs > 0.0)
+				return;
+		}
+
 		if (parameterInjector != nullptr && currentIndex == 0)
 			parameterInjector->processInject(data);
 
@@ -575,7 +592,7 @@ void InjectHelpers::InjectData::processProbe(ProcessDataDyn& data, int currentIn
 				{
 					auto numThisTime = data.getNumSamples();
 					auto thisTimeMs = numThisTime / currentSpecs.sampleRate * 1000.0;
-					delayMs -= thisTimeMs;
+					delayMs = jmax(0.0, delayMs - thisTimeMs);
 				}
 			}
 
@@ -604,9 +621,11 @@ void InjectHelpers::InjectData::processProbe(ProcessDataDyn& data, int currentIn
 			{
 				auto numThisTime = data.getNumSamples();
 				auto thisTimeMs = numThisTime / currentSpecs.sampleRate * 1000.0;
-				delayMs -= thisTimeMs;
-				return;
+				delayMs = jmax(0.0, delayMs - thisTimeMs);
 			}
+
+			if (delayMs > 0.0)
+				return;
 
 			if (parameterInjector != nullptr)
 				parameterInjector->processProbe(data);
@@ -653,34 +672,37 @@ var InjectHelpers::InjectData::poll(NodeBase* parent)
 
 		if (list.isEmpty())
 		{
-			Report r;
-			r.specs = currentSpecs;
-			auto cd = r.toJSON(processMidi);
+			jassert(reports.size() == 1);
+			auto cd = reports[0].toJSON(processMidi);
 			v.getDynamicObject()->setProperty("specs", cd["specs"]);
 			v.getDynamicObject()->setProperty("signal", cd["signal"]);
 		}
 
-		for (const auto& r : reports)
+		if (!list.isEmpty())
 		{
-			
+			for (const auto& r : reports)
+			{
+				if (index >= list.size())
+					break;
 
-			auto id = list[index]->getId();
-			auto fp = list[index]->getValueTree()[PropertyIds::FactoryPath].toString();
+				auto id = list[index]->getId();
+				auto fp = list[index]->getValueTree()[PropertyIds::FactoryPath].toString();
 
-			index++;
+				index++;
 
-			auto cd = r.toJSON(processMidi);
-			
-			DynamicObject* child = new DynamicObject();
+				auto cd = r.toJSON(processMidi);
 
-			child->setProperty("id", id);
-			child->setProperty("factoryPath", fp);
-			child->setProperty("signal", cd["signal"]);
+				DynamicObject* child = new DynamicObject();
 
-			// move specs to outer report
-			v.getDynamicObject()->setProperty("specs", cd["specs"]);
-			
-			recursiveData.add(child);
+				child->setProperty("id", id);
+				child->setProperty("factoryPath", fp);
+				child->setProperty("signal", cd["signal"]);
+
+				// move specs to outer report
+				v.getDynamicObject()->setProperty("specs", cd["specs"]);
+
+				recursiveData.add(child);
+			}
 		}
 
 		v.getDynamicObject()->setProperty("children", recursiveData);
@@ -711,6 +733,12 @@ void InjectHelpers::InjectData::ensureStorageAllocated(int numNodes)
 		reports.reserve(numNodes);
 
 		for (int i = 0; i < numNodes; i++)
+			reports.push_back({});
+
+		// An empty recursive container still needs one report for its
+		// passthrough buffer. Otherwise poll() serializes an unprocessed,
+		// uninitialized Report instance.
+		if (numNodes == 0)
 			reports.push_back({});
 	}
 	else
@@ -861,6 +889,15 @@ InjectHelpers::InjectChecker::~InjectChecker()
 void InjectHelpers::InjectChecker::cleanup()
 {
 	stopTimer();
+
+	if (auto nc = dynamic_cast<NodeContainer*>(container.get()))
+		nc->injector.reset();
+
+	for (auto c : recursiveContainers)
+	{
+		if (auto nc = dynamic_cast<NodeContainer*>(c.get()))
+			nc->injector.reset();
+	}
 
 	recursiveContainers.clear();
 	container = nullptr;
@@ -1116,6 +1153,13 @@ void NodeContainer::resetNodes()
 {
 	for (auto n : nodes)
 		n->reset();
+
+#if USE_BACKEND
+	// Voice startup resets DSP state before delivering note-on. The injector
+	// is shared by all voices, so a per-voice reset must not cancel its probe.
+	if (asNode()->getRootNetwork()->isCurrentlyRenderingVoice())
+		return;
+#endif
 
 	injector.reset();
 }
@@ -1437,6 +1481,27 @@ bool NodeContainer::forEachNode(const std::function<bool(NodeBase::Ptr)> & f)
 	}
 
 	return false;
+}
+
+void NodeContainer::processInjectedBypass(ProcessDataDyn& data)
+{
+#if USE_BACKEND
+	if (injector.hasPendingProbe())
+	{
+		ContainerInjector::ScopedProcessor sp(injector, data);
+
+		for (int i = 0; i < nodes.size(); i++)
+			sp.processBypassed(data);
+	}
+
+	for (auto n : nodes)
+	{
+		if (auto nc = dynamic_cast<NodeContainer*>(n.get()))
+			nc->processInjectedBypass(data);
+	}
+#else
+	ignoreUnused(data);
+#endif
 }
 
 void NodeContainer::clear()

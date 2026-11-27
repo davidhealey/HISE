@@ -1092,6 +1092,9 @@ var RestHelpers::buildOpenApiComponents()
 			.withType(ParamType::Float).asOptional())
 		.withProperty(RouteParameter(RestApiIds::defaultValue, "Default value, verbose mode only")
 			.withType(ParamType::Float).asOptional())
+		.withProperty(RouteParameter(RestApiIds::externalModulation,
+			"External modulation mode for root parameters, verbose mode only")
+			.withEnumValues({ "Disabled", "Combined", "Gain", "Offset", "Pan", "Pitch" }).asOptional())
 		.withProperty(RouteParameter(RestApiIds::middlePosition, "Middle position after skew mapping, verbose mode only")
 			.withType(ParamType::Float).asOptional());
 
@@ -1126,12 +1129,27 @@ var RestHelpers::buildOpenApiComponents()
 		.withProperty(RouteParameter(RestApiIds::dataIndex, "External data index; -1 means embedded data")
 			.withType(ParamType::Int).withMinimum(-1.0));
 
+	auto dspTreeBounds = RouteParameter(Identifier("bounds"), "Calculated DSP node canvas bounds")
+		.withType(ParamType::Object)
+		.withProperty(RouteParameter(RestApiIds::x, "Local X position")
+			.withType(ParamType::Int))
+		.withProperty(RouteParameter(RestApiIds::y, "Local Y position")
+			.withType(ParamType::Int))
+		.withProperty(RouteParameter(RestApiIds::width, "Calculated canvas width")
+			.withType(ParamType::Int).withMinimum(0.0))
+		.withProperty(RouteParameter(RestApiIds::height, "Calculated canvas height")
+			.withType(ParamType::Int).withMinimum(0.0));
+
 	auto dspTreeNode = RouteParameter(Identifier("node"), "Scriptnode DSP tree node")
 		.withType(ParamType::Object)
 		.withProperty(RouteParameter(RestApiIds::nodeId, "Node instance ID"))
 		.withProperty(RouteParameter(RestApiIds::factoryPath, "Node factory path"))
 		.withProperty(RouteParameter(RestApiIds::bypassed, "Current bypass state")
 			.withType(ParamType::Bool))
+		.withProperty(RouteParameter(RestApiIds::bounds,
+			"Calculated local canvas bounds, including the complete subtree for container nodes. "
+			"Only available for instantiated live nodes")
+			.withRef("#/components/schemas/DspTreeBounds").asOptional())
 		.withProperty(RouteParameter(RestApiIds::parameters, "Node parameters")
 			.withArrayItems(RouteParameter(Identifier("parameter"), "DSP node parameter entry")
 				.withRef("#/components/schemas/DspTreeParameter")))
@@ -1168,6 +1186,7 @@ var RestHelpers::buildOpenApiComponents()
 	schemas->setProperty("DspTreeProperty", paramToOpenApiSchema(dspTreeProperty));
 	schemas->setProperty("DspTreeConnection", paramToOpenApiSchema(dspTreeConnection));
 	schemas->setProperty("DspTreeComplexData", paramToOpenApiSchema(dspTreeComplexData));
+	schemas->setProperty("DspTreeBounds", paramToOpenApiSchema(dspTreeBounds));
 	schemas->setProperty("DspTreeNode", paramToOpenApiSchema(dspTreeNode));
 	schemas->setProperty("ProjectTreeNode", paramToOpenApiSchema(projectTreeNode));
 
@@ -2758,6 +2777,9 @@ RestServer::Response RestHelpers::handleTestingE2e(BackendProcessor* bp, RestSer
 	result->setProperty(RestApiIds::interactionsCompleted, testResult.interactionsCompleted);
 	result->setProperty(RestApiIds::totalElapsedMs, testResult.totalElapsedMs);
 	result->setProperty(RestApiIds::executionLog, testResult.executionLog);
+
+	if (!testResult.replResults.isEmpty())
+		result->setProperty(RestApiIds::replResults, var(testResult.replResults));
 	
 	// Convert screenshots to JSON object with metadata (no base64 data)
 	DynamicObject::Ptr screenshotsObj = new DynamicObject();
@@ -2765,9 +2787,16 @@ RestServer::Response RestHelpers::handleTestingE2e(BackendProcessor* bp, RestSer
 	{
 		DynamicObject::Ptr ssInfo = new DynamicObject();
 		ssInfo->setProperty(RestApiIds::id, info.id);
+		ssInfo->setProperty(RestApiIds::moduleId, info.moduleId);
+
+		if (info.componentId.isNotEmpty())
+			ssInfo->setProperty(RestApiIds::componentId, info.componentId);
+
 		ssInfo->setProperty("sizeKB", info.sizeKB);
-		ssInfo->setProperty("width", info.width);
-		ssInfo->setProperty("height", info.height);
+		ssInfo->setProperty(RestApiIds::width, info.width);
+		ssInfo->setProperty(RestApiIds::height, info.height);
+		ssInfo->setProperty(RestApiIds::scale, info.scale);
+		ssInfo->setProperty(RestApiIds::filePath, info.filePath);
 		screenshotsObj->setProperty(Identifier(id), var(ssInfo.get()));
 	}
 	result->setProperty(RestApiIds::screenshots, var(screenshotsObj.get()));
@@ -2835,73 +2864,102 @@ RestServer::Response RestHelpers::handleDiagnoseScript(MainController* mc, RestS
 {
 	auto obj = req->getRequest().getJsonBody();
 	
+	auto codeStr = obj.getProperty(RestApiIds::code, "").toString();
 	auto filePathStr = obj.getProperty(RestApiIds::filePath, "").toString();
 	auto moduleIdStr = obj.getProperty(RestApiIds::moduleId, "").toString();
 	
-	// Resolve the target file
-	File targetFile;
-	
-	if (filePathStr.isNotEmpty())
-	{
-		if (File::isAbsolutePath(filePathStr))
-			targetFile = File(filePathStr);
-		else
-			targetFile = mc->getSampleManager().getProjectHandler()
-				.getSubDirectory(FileHandlerBase::Scripts)
-				.getChildFile(filePathStr);
-	}
-	
-	// Resolve the processor
+	// The source to parse, the file name handed to the parser (used for the
+	// preprocessor id + diagnostic locations), and the path reported in the
+	// response. Code mode parses a raw string directly (never touches disk and
+	// never executes); file mode reads a real file from disk.
+	String code;
+	String fileName;
+	String responsePath;
 	JavascriptProcessor* jp = nullptr;
 	
-	if (moduleIdStr.isNotEmpty())
+	if (codeStr.isNotEmpty())
 	{
-		// moduleId provided - use it to find the processor
-		jp = getScriptProcessor(mc, req);
+		// Standalone code mode: the caller supplies the source directly.
+		if (filePathStr.isNotEmpty())
+			return req->fail(400, "code and filePath are mutually exclusive "
+								  "(code is a standalone raw-string mode; omit filePath)");
 		
-		if (jp == nullptr)
-			return req->fail(404, "moduleId is not a valid script processor");
+		// Validate against the first interface processor's API context. This
+		// processor must already be compiled so its engine is live.
+		jp = JavascriptMidiProcessor::getFirstInterfaceScriptProcessor(mc);
 		
-		if (filePathStr.isEmpty())
-		{
-			// moduleId only, no filePath - need to pick a file
-			// Use the first external file if available
-			if (jp->getNumWatchedFiles() > 0)
-			{
-				targetFile = jp->getWatchedFile(0);
-			}
-			else
-			{
-				return req->fail(400, "filePath is required (this processor has no external files)");
-			}
-		}
-		else if (!targetFile.existsAsFile())
-		{
-			return req->fail(404, "File not found: " + targetFile.getFullPathName());
-		}
-	}
-	else if (filePathStr.isNotEmpty())
-	{
-		// filePath only - resolve the owning processor
-		if (!targetFile.existsAsFile())
-			return req->fail(404, "File not found: " + targetFile.getFullPathName());
+		if (jp == nullptr || jp->getScriptEngine() == nullptr)
+			return req->fail(404, "No compiled interface processor available to host the shadow parse. "
+								  "Compile the interface first (F5).");
 		
-		jp = findProcessorForFile(mc, targetFile);
-		
-		if (jp == nullptr)
-			return req->fail(404, "No script processor includes this file. "
-								  "Has it been compiled at least once (F5)?");
+		code = codeStr;
+		fileName = "";
+		responsePath = "";
 	}
 	else
 	{
-		return req->fail(400, "Either moduleId or filePath must be provided");
+		// File mode (existing behavior): resolve a real file from disk.
+		File targetFile;
+		
+		if (filePathStr.isNotEmpty())
+		{
+			if (File::isAbsolutePath(filePathStr))
+				targetFile = File(filePathStr);
+			else
+				targetFile = mc->getSampleManager().getProjectHandler()
+					.getSubDirectory(FileHandlerBase::Scripts)
+					.getChildFile(filePathStr);
+		}
+		
+		if (moduleIdStr.isNotEmpty())
+		{
+			// moduleId provided - use it to find the processor
+			jp = getScriptProcessor(mc, req);
+			
+			if (jp == nullptr)
+				return req->fail(404, "moduleId is not a valid script processor");
+			
+			if (filePathStr.isEmpty())
+			{
+				// moduleId only, no filePath - pick the first external file if any
+				if (jp->getNumWatchedFiles() > 0)
+				{
+					targetFile = jp->getWatchedFile(0);
+				}
+				else
+				{
+					return req->fail(400, "filePath is required (this processor has no external files)");
+				}
+			}
+			else if (!targetFile.existsAsFile())
+			{
+				return req->fail(404, "File not found: " + targetFile.getFullPathName());
+			}
+		}
+		else if (filePathStr.isNotEmpty())
+		{
+			// filePath only - resolve the owning processor
+			if (!targetFile.existsAsFile())
+				return req->fail(404, "File not found: " + targetFile.getFullPathName());
+			
+			jp = findProcessorForFile(mc, targetFile);
+			
+			if (jp == nullptr)
+				return req->fail(404, "No script processor includes this file. "
+									  "Has it been compiled at least once (F5)?");
+		}
+		else
+		{
+			return req->fail(400, "Either code, moduleId, or filePath must be provided");
+		}
+		
+		// Read file from disk
+		code = targetFile.loadFileAsString();
+		fileName = targetFile.getFullPathName();
+		responsePath = fileName.replace("\\", "/");
 	}
 	
-	// Read file from disk and run shadow parse
-	auto code = targetFile.loadFileAsString();
-	auto fileName = targetFile.getFullPathName();
 	auto resolvedModuleId = dynamic_cast<Processor*>(jp)->getId();
-	auto normalizedFilePath = fileName.replace("\\", "/");
 	
 	auto useAsync = getTrueValue(obj.getProperty(RestApiIds::async, false));
 	
@@ -2933,12 +2991,12 @@ RestServer::Response RestHelpers::handleDiagnoseScript(MainController* mc, RestS
 		return diagArray;
 	};
 	
-	auto buildResponse = [resolvedModuleId, normalizedFilePath](const Array<var>& diagArray)
+	auto buildResponse = [resolvedModuleId, responsePath](const Array<var>& diagArray)
 	{
 		DynamicObject::Ptr result = new DynamicObject();
 		result->setProperty(RestApiIds::success, true);
 		result->setProperty(RestApiIds::moduleId, resolvedModuleId);
-		result->setProperty(RestApiIds::filePath, normalizedFilePath);
+		result->setProperty(RestApiIds::filePath, responsePath);
 		result->setProperty(RestApiIds::diagnostics, var(diagArray));
 		result->setProperty(RestApiIds::logs, Array<var>());
 		result->setProperty(RestApiIds::errors, Array<var>());
@@ -3683,29 +3741,69 @@ RestServer::Response RestHelpers::handleParseCSS(MainController* mc,
 	auto obj = req->getRequest().getJsonBody();
 	auto code = obj.getProperty(RestApiIds::code, "").toString();
 	auto filePathStr = obj.getProperty(RestApiIds::filePath, "").toString();
-	
+	auto moduleId = obj.getProperty(RestApiIds::moduleId, "").toString();
+	auto componentId = obj.getProperty(RestApiIds::componentId, "").toString();
+	var selectorInput;
+	int widthVal = 0;
+	int heightVal = 0;
+
 	String resolvedFilePath;
 	
-	// Resolve CSS code from either inline code or file path
-	if (code.isEmpty() && filePathStr.isEmpty())
-		return req->fail(400, "Either code or filePath must be provided");
+	// Component mode: moduleId + componentId resolves the component's own stylesheet,
+	// selectors and bounds. An explicit code/filePath takes precedence over the
+	// stylesheet attached to the component.
+	if (moduleId.isNotEmpty() != componentId.isNotEmpty())
+		return req->fail(400, "moduleId and componentId must be given together");
+	
+	if (code.isEmpty() && filePathStr.isEmpty() && moduleId.isEmpty())
+		return req->fail(400, "Either code, filePath, or moduleId + componentId must be provided");
 	
 	if (code.isEmpty())
 	{
-		File targetFile;
-		
-		if (File::isAbsolutePath(filePathStr))
-			targetFile = File(filePathStr);
+		if (filePathStr.isNotEmpty())
+		{
+			File targetFile;
+			
+			if (File::isAbsolutePath(filePathStr))
+				targetFile = File(filePathStr);
+			else
+				targetFile = mc->getSampleManager().getProjectHandler()
+					.getSubDirectory(FileHandlerBase::Scripts)
+					.getChildFile(filePathStr);
+			
+			if (!targetFile.existsAsFile())
+				return req->fail(404, "File not found: " + targetFile.getFullPathName());
+			
+			code = targetFile.loadFileAsString();
+			resolvedFilePath = targetFile.getFullPathName().replace("\\", "/");
+		}
 		else
-			targetFile = mc->getSampleManager().getProjectHandler()
-				.getSubDirectory(FileHandlerBase::Scripts)
-				.getChildFile(filePathStr);
-		
-		if (!targetFile.existsAsFile())
-			return req->fail(404, "File not found: " + targetFile.getFullPathName());
-		
-		code = targetFile.loadFileAsString();
-		resolvedFilePath = targetFile.getFullPathName().replace("\\", "/");
+		{
+			auto jp = dynamic_cast<ProcessorWithScriptingContent*>(ProcessorHelpers::getFirstProcessorWithName(mc->getMainSynthChain(), moduleId));
+
+			if (jp == nullptr)
+				return req->fail(404, "moduleId not found");
+
+			auto sc = jp->getScriptingContent()->getComponentWithName(componentId);
+
+			if (sc == nullptr)
+				return req->fail(404, "Component with ID " + componentId + " not found.");
+
+			code = sc->getCSSFromLocalLookAndFeel();
+
+			widthVal = sc->getWidth();
+			heightVal = sc->getHeight();
+
+			selectorInput = sc->getCSSSelectors();
+
+
+			// Component mode: fetch the stylesheet attached to the component.
+			// (to be implemented: resolve the component, read its stylesheet path,
+			//  load it into 'code' and set 'resolvedFilePath')
+			if (code.isEmpty())
+				return req->fail(404, "No stylesheet attached to component " + componentId
+					+ " - specify code or filePath to parse a specific stylesheet");
+		}
 	}
 	
 	// Parse the CSS
@@ -3788,7 +3886,8 @@ RestServer::Response RestHelpers::handleParseCSS(MainController* mc,
 	}
 	
 	// Optional: resolve properties for given selectors using CSS specificity
-	auto selectorInput = obj.getProperty(RestApiIds::selectors, var());
+	if (!selectorInput.isArray())
+		selectorInput = obj.getProperty(RestApiIds::selectors, var());
 	
 	if (parseOk && selectorInput.isArray() && selectorInput.size() > 0)
 	{
@@ -3831,8 +3930,13 @@ RestServer::Response RestHelpers::handleParseCSS(MainController* mc,
 		if (auto resolved = collection.getForComponent(&dummy))
 		{
 			// Check if size was provided for pixel resolution
-			auto widthVal = (float)(double)obj.getProperty(RestApiIds::width, 0);
-			auto heightVal = (float)(double)obj.getProperty(RestApiIds::height, 0);
+
+			if(widthVal == 0)
+				widthVal = (float)(double)obj.getProperty(RestApiIds::width, 0);
+
+			if(heightVal == 0)
+				heightVal = (float)(double)obj.getProperty(RestApiIds::height, 0);
+
 			bool hasSize = widthVal > 0.0f || heightVal > 0.0f;
 			
 			if (hasSize)
@@ -4938,7 +5042,17 @@ var RestHelpers::buildModuleTree(const ProcessorOrValueTree& root, const TreeOpt
 			{
 				auto value = root.getAttribute(p.parameterIndex);
 				auto normValue = p.range.convertTo0to1(value, false);
-				String valueAsString = p.vtc.active ? p.vtc(value) : String(value);
+				String valueAsString;
+
+				if (!p.vtc.itemList.isEmpty())
+				{
+					const auto itemIndex = roundToInt(value - p.range.rng.start);
+					valueAsString = isPositiveAndBelow(itemIndex, p.vtc.itemList.size())
+						? p.vtc.itemList[itemIndex]
+						: String(value);
+				}
+				else
+					valueAsString = p.vtc.active ? p.vtc(value) : String(value);
 
 				po->setProperty("value", value);
 				po->setProperty("valueNormalized", normValue);
@@ -5829,13 +5943,27 @@ static int getDspProbeErrorStatusCode(const String& message)
 	return 400;
 }
 
-static var buildDspNodeTree(const ValueTree& nodeTree, bool verbose, bool includeConnections)
+static var buildDspNodeTree(DspNetwork* network, const ValueTree& nodeTree, bool verbose, bool includeConnections)
 {
 	DynamicObject::Ptr obj = new DynamicObject();
 
 	obj->setProperty(RestApiIds::nodeId, nodeTree[PropertyIds::ID].toString());
 	obj->setProperty(RestApiIds::factoryPath, nodeTree[PropertyIds::FactoryPath].toString());
 	obj->setProperty(RestApiIds::bypassed, (bool)nodeTree[PropertyIds::Bypassed]);
+
+	if (network != nullptr)
+	{
+		if (auto node = network->getNodeForValueTree(nodeTree, false))
+		{
+			auto bounds = node->getPositionInCanvas({ 0, 0 });
+			DynamicObject::Ptr boundsObj = new DynamicObject();
+			boundsObj->setProperty(RestApiIds::x, bounds.getX());
+			boundsObj->setProperty(RestApiIds::y, bounds.getY());
+			boundsObj->setProperty(RestApiIds::width, bounds.getWidth());
+			boundsObj->setProperty(RestApiIds::height, bounds.getHeight());
+			obj->setProperty(RestApiIds::bounds, var(boundsObj.get()));
+		}
+	}
 
 	// Parameters
 	Array<var> params;
@@ -5854,6 +5982,8 @@ static var buildDspNodeTree(const ValueTree& nodeTree, bool verbose, bool includ
 			paramObj->setProperty(RestApiIds::max, p.getProperty(PropertyIds::MaxValue, 1.0));
 			paramObj->setProperty(RestApiIds::stepSize, p.getProperty(PropertyIds::StepSize, 0.0));
 			paramObj->setProperty(RestApiIds::defaultValue, p.getProperty(PropertyIds::DefaultValue, 0.0));
+			paramObj->setProperty(RestApiIds::externalModulation,
+				p.getProperty(PropertyIds::ExternalModulation, "Disabled"));
 
 			auto skew = (double)p.getProperty(PropertyIds::SkewFactor, 1.0);
 			if (skew != 1.0)
@@ -5983,7 +6113,7 @@ static var buildDspNodeTree(const ValueTree& nodeTree, bool verbose, bool includ
 	auto nodesTree = nodeTree.getChildWithName(PropertyIds::Nodes);
 
 	for (int i = 0; i < nodesTree.getNumChildren(); i++)
-		children.add(buildDspNodeTree(nodesTree.getChild(i), verbose, false));
+		children.add(buildDspNodeTree(network, nodesTree.getChild(i), verbose, false));
 
 	obj->setProperty(RestApiIds::children, var(children));
 
@@ -6070,7 +6200,8 @@ RestServer::Response RestHelpers::handleDspInit(MainController* mc,
 	auto tree = network->getValueTree();
 	auto rootNode = tree.getChild(0); // First child is the root container node
 
-	var treeJson = buildDspNodeTree(rootNode, false, true);
+	// dsp/init may run off the message thread, so omit optional live-node bounds here.
+	var treeJson = buildDspNodeTree(nullptr, rootNode, false, true);
 
 	if (auto brw = dynamic_cast<BackendProcessor*>(mc)->currentRootWindow)
 	{
@@ -6112,9 +6243,11 @@ RestServer::Response RestHelpers::handleDspTree(MainController* mc,
 		return req->fail(400, "moduleId query parameter is required");
 
 	bool verbose = req->getRequest().getTrueValue(RestApiIds::verbose);
+	bool includeBounds = req->getRequest().getTrueValue(RestApiIds::includeBounds);
 	auto group = req->getRequest()[RestApiIds::group];
 
 	ValueTree rootNode;
+	DspNetwork* network = nullptr;
 
 	if (group.isNotEmpty())
 	{
@@ -6132,7 +6265,7 @@ RestServer::Response RestHelpers::handleDspTree(MainController* mc,
 	}
 	else
 	{
-		auto network = getActiveNetwork(mc, mid);
+		network = getActiveNetwork(mc, mid);
 		if (network == nullptr)
 			return req->fail(404, "No active DspNetwork for module: " + mid);
 
@@ -6140,15 +6273,28 @@ RestServer::Response RestHelpers::handleDspTree(MainController* mc,
 		rootNode = tree.getChild(0);
 	}
 
-	var treeJson = buildDspNodeTree(rootNode, verbose, true);
+	auto completeRequest = [req, rootNode, verbose](DspNetwork* liveNetwork)
+	{
+		auto treeJson = buildDspNodeTree(liveNetwork, rootNode, verbose, true);
 
-	DynamicObject::Ptr result = new DynamicObject();
-	result->setProperty(RestApiIds::success, true);
-	result->setProperty(RestApiIds::result, treeJson);
-	result->setProperty(RestApiIds::logs, Array<var>());
-	result->setProperty(RestApiIds::errors, Array<var>());
+		DynamicObject::Ptr result = new DynamicObject();
+		result->setProperty(RestApiIds::success, true);
+		result->setProperty(RestApiIds::result, treeJson);
+		result->setProperty(RestApiIds::logs, Array<var>());
+		result->setProperty(RestApiIds::errors, Array<var>());
+		req->complete(RestServer::Response::ok(var(result.get())));
+	};
 
-	req->complete(RestServer::Response::ok(var(result.get())));
+	if (network != nullptr && includeBounds)
+	{
+		// Some node bounds implementations create temporary Components.
+		MessageManager::callAsync([completeRequest, network]() { completeRequest(network); });
+	}
+	else
+	{
+		completeRequest(nullptr);
+	}
+
 	return req->waitForResponse();
 }
 
@@ -6291,18 +6437,88 @@ RestServer::Response RestHelpers::handleDspProbe(MainController* mc,
 	if (network == nullptr)
 		return req->fail(404, "No active DspNetwork for module: " + moduleId);
 
+	auto hasTrigger = obj.hasProperty(RestApiIds::trigger);
+	auto triggerData = obj.getProperty(RestApiIds::trigger, var());
+
+	if (network->isPolyphonic() && !hasTrigger)
+	{
+		return req->fail(400, "Polyphonic DspNetwork requires a trigger note. Add a trigger object with "
+			"noteNumber, velocity, channel, and optional predelayMs.");
+	}
+
+	if (hasTrigger && !triggerData.isObject())
+		return req->fail(400, "trigger must be an object");
+
+	auto triggerType = triggerData.getProperty(RestApiIds::type, "note").toString();
+	auto triggerNoteNumber = (int)triggerData.getProperty(RestApiIds::noteNumber, 60);
+	auto triggerVelocity = (double)triggerData.getProperty(RestApiIds::velocity, 1.0);
+	auto triggerChannel = (int)triggerData.getProperty(RestApiIds::channel, 1);
+	auto triggerPredelayMs = (double)triggerData.getProperty(RestApiIds::predelayMs, 0.0);
+
+	if (hasTrigger)
+	{
+		if (triggerType != "note")
+			return req->fail(400, "trigger.type must be note");
+
+		if (!isPositiveAndBelow(triggerNoteNumber, 128))
+			return req->fail(400, "trigger.noteNumber must be between 0 and 127");
+
+		if (!std::isfinite(triggerVelocity) || triggerVelocity < 0.0 || triggerVelocity > 1.0)
+			return req->fail(400, "trigger.velocity must be between 0.0 and 1.0");
+
+		if (!isPositiveAndBelow(triggerChannel - 1, 16))
+			return req->fail(400, "trigger.channel must be between 1 and 16");
+
+		if (!std::isfinite(triggerPredelayMs) || triggerPredelayMs < 0.0)
+			return req->fail(400, "trigger.predelayMs must be a finite non-negative number");
+	}
+
 	auto injectId = obj.getProperty(RestApiIds::injectId, var()).toString();
 	auto probeId = obj.getProperty(RestApiIds::probeId, var()).toString();
 	auto hasInjectId = injectId.isNotEmpty();
 	auto hasProbeId = probeId.isNotEmpty();
 	auto delayMs = (double)obj.getProperty(RestApiIds::delayMs, 0.0);
-	auto timeoutMs = jmax(200, roundToInt(delayMs + 200.0));
-	auto finished = std::make_shared<std::atomic<bool>>(false);
 
-	auto completeSuccess = [req, finished, moduleId, hasInjectId, injectId, hasProbeId, probeId](const var::NativeFunctionArgs& args) -> var
+	if (!std::isfinite(delayMs) || delayMs < 0.0)
+		return req->fail(400, "delayMs must be a finite non-negative number");
+
+	DynamicObject::Ptr resolvedTriggerObject;
+	var resolvedTrigger;
+
+	if (hasTrigger)
+	{
+		resolvedTriggerObject = new DynamicObject();
+		resolvedTriggerObject->setProperty(RestApiIds::type, triggerType);
+		resolvedTriggerObject->setProperty(RestApiIds::noteNumber, triggerNoteNumber);
+		resolvedTriggerObject->setProperty(RestApiIds::velocity, triggerVelocity);
+		resolvedTriggerObject->setProperty(RestApiIds::channel, triggerChannel);
+		resolvedTriggerObject->setProperty(RestApiIds::predelayMs, triggerPredelayMs);
+		resolvedTrigger = var(resolvedTriggerObject.get());
+	}
+
+	// Recursive probes can enter nested containers once per processing block
+	// and may need considerably longer than one audio block to produce the
+	// report when running in the interpreted backend. This also applies to
+	// Script FX networks containing a MIDI-aware container, where the first
+	// trace can include lazy wrapper setup.
+	auto processingAllowanceMs = (bool)obj[RestApiIds::recursive] ? 1000.0 : 200.0;
+	auto timeoutMs = jmax(200, roundToInt(triggerPredelayMs + delayMs + processingAllowanceMs));
+	auto finished = std::make_shared<std::atomic<bool>>(false);
+	auto noteReleased = std::make_shared<std::atomic<bool>>(!hasTrigger);
+
+	auto releaseTrigger = [mc, noteReleased, triggerChannel, triggerNoteNumber]()
+	{
+		if (!noteReleased->exchange(true))
+			mc->getKeyboardState().noteOff(triggerChannel, triggerNoteNumber, 1.0f);
+	};
+
+	auto completeSuccess = [req, finished, releaseTrigger, resolvedTrigger, moduleId, hasInjectId, injectId,
+		hasProbeId, probeId](const var::NativeFunctionArgs& args) -> var
 	{
 		if (finished->exchange(true))
 			return var();
+
+		releaseTrigger();
 
 		auto report = args.numArguments > 0 ? args.arguments[0] : var();
 
@@ -6323,6 +6539,9 @@ RestServer::Response RestHelpers::handleDspProbe(MainController* mc,
 		if (hasProbeId)
 			result->setProperty(RestApiIds::probeId, probeId);
 
+		if (resolvedTrigger.isObject())
+			result->setProperty(RestApiIds::trigger, resolvedTrigger);
+
 		req->complete(RestServer::Response::ok(var(result.get())));
 		return var();
 	};
@@ -6331,7 +6550,15 @@ RestServer::Response RestHelpers::handleDspProbe(MainController* mc,
 		new InjectHelpers::InjectChecker(network, obj, var(var::NativeFunction(completeSuccess)));
 
 	if (!checker->injectOk.wasOk())
+	{
+		releaseTrigger();
 		return req->fail(getDspProbeErrorStatusCode(checker->injectOk.getErrorMessage()), checker->injectOk.getErrorMessage());
+	}
+
+	// Arm the complete probe before starting its voice. Per-voice DSP resets
+	// must preserve the pending injectors until that voice processes them.
+	if (hasTrigger)
+		mc->getKeyboardState().noteOn(triggerChannel, triggerNoteNumber, (float)triggerVelocity);
 
 	auto start = Time::getMillisecondCounterHiRes();
 
@@ -6345,6 +6572,7 @@ RestServer::Response RestHelpers::handleDspProbe(MainController* mc,
 
 	if (!finished->exchange(true))
 	{
+		releaseTrigger();
 		checker->cleanup();
 		return RestServer::Response::error(504, "Probe timed out");
 	}

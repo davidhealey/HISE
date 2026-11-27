@@ -1,0 +1,141 @@
+name: Precompiled Binaries
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+concurrency:
+  group: precompiled-binaries-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    runs-on: [self-hosted, Windows]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      - name: Checkout JUCE submodule
+        shell: cmd
+        run: |
+          git submodule update --init --recursive
+          if errorlevel 1 exit /b 1
+          cd JUCE
+          git fetch origin
+          if errorlevel 1 exit /b 1
+          git checkout juce6
+          if errorlevel 1 exit /b 1
+          git pull origin juce6
+
+      - name: Determine release version on Windows
+        shell: cmd
+        run: |
+          for /f "delims=" %%V in ('JUCE\projucer\Projucer.exe --get-version "projects\standalone\HISE Standalone.jucer"') do set "VERSION=%%V"
+          if not defined VERSION exit /b 1
+          if "%GITHUB_REF_TYPE%"=="tag" if not "%GITHUB_REF_NAME%"=="v%VERSION%" (
+            echo Tag %GITHUB_REF_NAME% does not match project version v%VERSION%.
+            exit /b 1
+          )
+          >> "%GITHUB_ENV%" echo RELEASE_TAG=v%VERSION%
+          >> "%GITHUB_ENV%" echo WINDOWS_INSTALLER=HISE_%VERSION:.=_%_Windows.exe
+
+      - name: Build HISE on Windows
+        shell: cmd
+        working-directory: ${{ github.workspace }}/tools/auto_build/
+        run: call 01_BuildHISE.bat
+
+      - name: Build Windows installer
+        shell: cmd
+        working-directory: ${{ github.workspace }}
+        run: |
+          if exist "tools\auto_build\Output\%WINDOWS_INSTALLER%" del /q "tools\auto_build\Output\%WINDOWS_INSTALLER%"
+          if errorlevel 1 exit /b 1
+          call "%GITHUB_WORKSPACE%\tools\auto_build\02_BuildInstaller.bat"
+
+      - name: Upload Windows installer
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          target_commitish: ${{ github.sha }}
+          fail_on_unmatched_files: true
+          files: tools/auto_build/Output/${{ env.WINDOWS_INSTALLER }}
+
+  build-macos:
+    runs-on: [self-hosted, macOS]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      - name: Checkout JUCE submodule
+        run: |
+          set -e
+          git submodule update --init --recursive
+          cd JUCE
+          git fetch origin
+          git checkout juce6
+          git pull origin juce6
+
+      - name: Determine release version on macOS
+        run: |
+          set -euo pipefail
+          PROJUCER="JUCE/projucer/Projucer.app/Contents/MacOS/Projucer"
+          chmod +x "$PROJUCER"
+          VERSION="$("$PROJUCER" --get-version "projects/standalone/HISE Standalone.jucer")"
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Could not read the HISE project version: $VERSION"
+            exit 1
+          fi
+          TAG="v$VERSION"
+          if [[ "$GITHUB_REF_TYPE" == tag && "$GITHUB_REF_NAME" != "$TAG" ]]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match project version $TAG"
+            exit 1
+          fi
+          echo "RELEASE_TAG=$TAG" >> "$GITHUB_ENV"
+          echo "MACOS_INSTALLER=HISE_v${VERSION//./_}_macOS.pkg" >> "$GITHUB_ENV"
+
+      - name: Build macOS installer
+        env:
+          APPLE_APPLICATION_SIGNING_IDENTITY: ${{ secrets.APPLE_APPLICATION_SIGNING_IDENTITY }}
+          APPLE_INSTALLER_SIGNING_IDENTITY: ${{ secrets.APPLE_INSTALLER_SIGNING_IDENTITY }}
+          APPLE_NOTARY_PROFILE: notarize
+        run: |
+          rm -f "tools/auto_build/Output/$MACOS_INSTALLER"
+          bash tools/auto_build/01_BuildHISE.sh
+          bash tools/auto_build/02_BuildInstaller.sh
+
+      - name: Sign installer and notarize
+        env:
+          APPLE_INSTALLER_SIGNING_IDENTITY: ${{ secrets.APPLE_INSTALLER_SIGNING_IDENTITY }}
+          APPLE_NOTARY_PROFILE: notarize
+        run: |
+          set -euo pipefail
+          if [[ -z "$APPLE_INSTALLER_SIGNING_IDENTITY" || -z "$APPLE_NOTARY_PROFILE" ]]; then
+            echo "::error::Configure APPLE_INSTALLER_SIGNING_IDENTITY; the notary profile is set to notarize."
+            exit 1
+          fi
+
+          PKG="tools/auto_build/Output/$MACOS_INSTALLER"
+          SIGNED_PKG="${RUNNER_TEMP}/HISE_signed.pkg"
+
+          productsign --sign "$APPLE_INSTALLER_SIGNING_IDENTITY" \
+            "$PKG" "$SIGNED_PKG"
+          mv "$SIGNED_PKG" "$PKG"
+
+          xcrun notarytool submit "$PKG" \
+            --keychain-profile "$APPLE_NOTARY_PROFILE" --wait
+          xcrun stapler staple "$PKG"
+          spctl -a -vv -t install "$PKG"
+
+      - name: Upload macOS installer
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          target_commitish: ${{ github.sha }}
+          fail_on_unmatched_files: true
+          files: tools/auto_build/Output/${{ env.MACOS_INSTALLER }}

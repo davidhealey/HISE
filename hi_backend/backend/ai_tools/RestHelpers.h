@@ -938,8 +938,12 @@ struct RestHelpers
                                                   RestServer::AsyncRequest::Ptr req);
     
     /** Handler for POST /api/diagnose_script - Run diagnostic shadow parse.
-     *  Accepts moduleId and/or filePath. Reads file from disk, runs shadow parse,
-     *  returns structured diagnostics without modifying runtime state.
+     *  Two modes:
+     *    - code (standalone): a raw script string is shadow-parsed directly against the
+     *      first interface processor's API context. Never reads disk, never executes.
+     *    - file (default): accepts moduleId and/or filePath, reads the file from disk,
+     *      and shadow-parses it against the owning processor.
+     *  Both return structured diagnostics without modifying runtime state.
      */
     static RestServer::Response handleDiagnoseScript(MainController* mc, 
                                                      RestServer::AsyncRequest::Ptr req);
@@ -962,7 +966,10 @@ struct RestHelpers
     /** Handler for POST /api/parse_css - Parse CSS code and return diagnostics.
      *  HISE-agnostic: does not require a script processor.
      *  Accepts either inline code or a file path to a .css file.
-     *  Optionally resolves properties for a set of selectors using CSS specificity.
+     *  Optionally resolves properties using CSS specificity, either from an explicit
+     *  selectors array, or from moduleId + componentId (resolves the component's own
+     *  selectors; width/height default to the component's bounds unless given).
+     *  404 if the module is not a scripting-content module or the component is missing.
      */
     static RestServer::Response handleParseCSS(MainController* mc, 
                                                RestServer::AsyncRequest::Ptr req);

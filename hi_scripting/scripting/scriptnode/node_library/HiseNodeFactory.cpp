@@ -1517,7 +1517,7 @@ Factory::Factory(DspNetwork* network) :
     using mono_stretch_player = wrap::data<core::stretch_player<1>, data::dynamic::audiofile>;
     using poly_stretch_player = wrap::data<core::stretch_player<NUM_POLYPHONIC_VOICES>, data::dynamic::audiofile>;
 
-    registerPolyNode<mono_stretch_player, mono_stretch_player, data::ui::xyz_audio_editor>();
+    registerPolyNode<mono_stretch_player, poly_stretch_player, data::ui::xyz_audio_editor>();
     
 	registerNode   <wrap::data<core::recorder,    data::dynamic::audiofile>, data::ui::audiofile_editor>();
 
@@ -1551,6 +1551,11 @@ Factory::Factory(DspNetwork* network) :
 				ScriptnodeExceptionHandler::validateMidiProcessingContext(parentNode);
 		}
 
+        void checkIndexRecursive(ValueTree v, Identifier id)
+        {
+            checkIndex(id, v[id]);
+        }
+        
 		void checkIndex(const Identifier& id, const var& newValue)
 		{
 			if(parentNode != nullptr)
@@ -1577,15 +1582,23 @@ Factory::Factory(DspNetwork* network) :
 			{
 				auto ptree = parentNode->getParameterTree().getChildWithProperty(PropertyIds::ID, "Index");
 
-				indexListener.setCallback(ptree, 
+                auto rootParameters = parentNode->getRootNetwork()->getRootNode()->getParameterTree();
+                
+				indexListener.setCallback(ptree,
 									      { PropertyIds::Value }, 
 										  valuetree::AsyncMode::Asynchronously, 
 										  BIND_MEMBER_FUNCTION_2(ec::checkIndex));
+                
+                rootParameterListener.setCallback(rootParameters, { PropertyIds::ExternalModulation},                          valuetree::AsyncMode::Asynchronously,
+                                          BIND_MEMBER_FUNCTION_2(ec::checkIndexRecursive));
+                
+                checkIndex(PropertyIds::Value, ptree[PropertyIds::Value]);
 			}
 		}
 
 
 		valuetree::PropertyListener indexListener;
+        valuetree::RecursivePropertyListener rootParameterListener;
 		WeakReference<NodeBase> parentNode;
 	};
 

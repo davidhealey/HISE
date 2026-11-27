@@ -36,7 +36,7 @@ BEGIN_JUCE_MODULE_DECLARATION
 
   ID:               hi_backend
   vendor:           Hart Instruments
-  version:          4.9.4
+  version:          4.9.7
   name:             HISE Backend Module
   description:      The backend application classes for HISE
   website:          http://hise.audio
@@ -61,6 +61,14 @@ END_JUCE_MODULE_DECLARATION
 If true, the backend processor will create a workbench editor instead of the HISE app. */
 #ifndef USE_WORKBENCH_EDITOR
 #define USE_WORKBENCH_EDITOR 0
+#endif
+
+/** Config: HISE_DISABLE_EXPORT
+*
+* If enabled, plugin export commands are disabled in the backend.
+*/
+#ifndef HISE_DISABLE_EXPORT
+#define HISE_DISABLE_EXPORT 0
 #endif
 
 /** Config: HISE_PAINT_GLOBAL_MOD_CONNECTIONS
